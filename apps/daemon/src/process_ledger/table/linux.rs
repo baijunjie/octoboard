@@ -36,28 +36,55 @@ fn stat(pid: i32) -> Option<Stat> {
     })
 }
 
-/// Microseconds since the epoch at boot, and clock ticks per second: what a start time in ticks
-/// since boot is turned into one since the epoch with. Read once: neither changes while the
-/// system runs.
-fn clock() -> Option<(u64, u64)> {
-    static CLOCK: OnceLock<Option<(u64, u64)>> = OnceLock::new();
-    *CLOCK.get_or_init(|| {
-        let stat = std::fs::read_to_string("/proc/stat").ok()?;
-        let boot: u64 = stat
-            .lines()
-            .find_map(|line| line.strip_prefix("btime "))?
-            .trim()
-            .parse()
-            .ok()?;
+/// Clock ticks per second, what a start time in ticks since boot is turned into microseconds
+/// with. Read once: it does not change while the system runs.
+fn ticks_per_second() -> Option<u64> {
+    static TICKS: OnceLock<Option<u64>> = OnceLock::new();
+    *TICKS.get_or_init(|| {
         // SAFETY: `sysconf` only reads.
         let ticks = unsafe { libc::sysconf(libc::_SC_CLK_TCK) };
-        (ticks > 0).then_some((boot * 1_000_000, ticks as u64))
+        (ticks > 0).then_some(ticks as u64)
     })
 }
 
+/// A start time in ticks since boot, in microseconds since boot: the identity's start. Not turned
+/// into one since the epoch, since the boot time the system gives (`btime` in `/proc/stat`) is
+/// worked out from the wall clock and moves whenever that is stepped, which would change every
+/// identity from one run of the daemon to the next.
 fn start_micros(start_ticks: u64) -> Option<u64> {
-    let (boot, ticks) = clock()?;
-    Some(boot + start_ticks * 1_000_000 / ticks)
+    Some(start_ticks * 1_000_000 / ticks_per_second()?)
+}
+
+/// `clock` now, in microseconds, or 0 when it cannot be read.
+fn clock_micros(clock: libc::clockid_t) -> u64 {
+    let mut now = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+    // SAFETY: `clock_gettime` writes only the `timespec` it is given.
+    if unsafe { libc::clock_gettime(clock, &mut now) } != 0 {
+        return 0;
+    }
+    now.tv_sec as u64 * 1_000_000 + now.tv_nsec as u64 / 1_000
+}
+
+/// Now on the clock start times are on: since boot, the time asleep included, as the kernel
+/// counts a process's start.
+pub(super) fn now() -> u64 {
+    clock_micros(libc::CLOCK_BOOTTIME)
+}
+
+/// A start time in microseconds since the epoch, for showing: the wall clock now, less how long
+/// ago the process started.
+pub(super) fn epoch_micros(start: u64) -> u64 {
+    clock_micros(libc::CLOCK_REALTIME).saturating_sub(now().saturating_sub(start))
+}
+
+/// What tells this boot of the system from any other, since start times count from boot.
+pub(super) fn boot_id() -> Option<String> {
+    let id = std::fs::read_to_string("/proc/sys/kernel/random/boot_id").ok()?;
+    let id = id.trim();
+    (!id.is_empty()).then(|| id.to_string())
 }
 
 pub(super) fn list() -> Option<Vec<Proc>> {

@@ -1,5 +1,6 @@
 import { SquareActivity } from "lucide-react";
 import React, { useEffect, useId, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 
 import { afterCollectionFocus } from "../components/afterCollectionFocus";
 import { Button } from "../components/Button";
@@ -50,12 +51,12 @@ function ProcessesContent({ data }: { data: NonNullable<ReturnType<typeof usePro
   const scrollRegion = useFadeRegion({ label: t("panel.processes.name") });
   const bodyRef = useRef<HTMLDivElement>(null);
   const failed = trees === undefined && error !== undefined;
-  const [selected, setSelected] = useState<{ tree: ProcessTree; action: ProcessAction }>();
+  const [selected, setSelected] = useState<{ tree: ProcessTree; action: ProcessAction; nextId?: string }>();
   // A confirmed request that is on its way keeps its confirmation, and with it the success toast and the
   // hand-over of focus, even when a refresh has already taken the tree out of the list.
   const [pending, setPending] = useState(false);
   const listed = trees?.find((tree) => tree.id === selected?.tree.id);
-  if (selected !== undefined && !pending && trees !== undefined && listed === undefined) setSelected(undefined);
+  const vanished = selected !== undefined && !pending && trees !== undefined && listed === undefined;
 
   const rowOf = (id: string) => [...(bodyRef.current?.querySelectorAll<HTMLElement>("li[data-list-motion]") ?? [])].find((row) => row.dataset.listMotion === id);
   // Whether the pressed row's Stop or Keep held focus when its confirmation opened: a keyboard opening leaves it
@@ -75,17 +76,38 @@ function ProcessesContent({ data }: { data: NonNullable<ReturnType<typeof usePro
       if (next) next.focus();
       else if (region) focusLanding(region);
     });
+  // The tree went out of a refresh while its confirmation was open: the confirmation closes, and its dialog's
+  // return of focus finds the opening Stop or Keep gone.
+  useEffect(() => {
+    if (!vanished) return;
+    setSelected(undefined);
+    focusAfterAction(selected?.nextId);
+  }, [vanished]);
   const onDone = (tree: ProcessTree, action: ProcessAction, ids: string[]) => {
-    const following = rowOf(tree.id)?.nextElementSibling;
-    const nextId = following instanceof HTMLElement ? following.dataset.listMotion : undefined;
+    const nextId = nextIdOf(tree.id) ?? selected?.nextId;
     settle(ids);
     if (ids.length > 0) toastNotice(t(ACTIONS[action].done));
     setSelected(undefined);
     focusAfterAction(nextId);
   };
+  const nextIdOf = (id: string) => {
+    const following = rowOf(id)?.nextElementSibling;
+    return following instanceof HTMLElement ? following.dataset.listMotion : undefined;
+  };
+  // The failure gives way to the loading line when Try again starts, taking its button along: where the button held
+  // focus, focus goes to where F6 lands in the panel as the failure goes.
+  const retryList = (from: Element | null) => {
+    const held = from?.contains(document.activeElement) ?? false;
+    flushSync(retry);
+    const region = bodyRef.current?.closest("[data-region]");
+    if (held && region) {
+      ringForAutomaticFocus();
+      focusLanding(region);
+    }
+  };
   const ask = (action: ProcessAction, tree: ProcessTree) => {
     opener.current = rowOf(tree.id)?.contains(document.activeElement) ?? false;
-    setSelected({ tree, action });
+    setSelected({ tree, action, nextId: nextIdOf(tree.id) });
   };
   return (
     <>
@@ -94,7 +116,7 @@ function ProcessesContent({ data }: { data: NonNullable<ReturnType<typeof usePro
       <div ref={bodyRef} className={`flex min-h-0 flex-1 flex-col ${scrollRegion.focused ? "ring-2 ring-inset ring-focus" : ""}`}>
         <FadedScroller region={scrollRegion} className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-(--pane-inset)">
           {failed ? (
-            <PaneFailure title={t("processes.listFailedTitle")} summary={t("processes.listFailed")} details={errorDetails(error)} onRetry={retry} announce landing />
+            <PaneFailure title={t("processes.listFailedTitle")} summary={t("processes.listFailed")} details={errorDetails(error)} onRetry={retryList} announce announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} landing />
           ) : (
             <>
               <p className={NOTE_CLASS}>{t("processes.panelMessage")}</p>
@@ -132,15 +154,11 @@ function ProcessConfirmation({ action, tree, onCancel, onPending, onDone }: {
   return (
     <ConfirmDialog title={t(words.title)} destructive={action === "stop"} confirmLabel={t(words.confirm)} errorTitle={t(words.failedTitle)} resetKey={tree.id}
       message={<><p>{t(words.message)}</p><div className="flex min-w-0 flex-col gap-2"><ProcessCommand tree={tree} wrap leading={action === "stop" ? <StopGlyph /> : undefined} /><ProcessTreeDetails tree={tree} /></div></>}
-      onCancel={onCancel} onConfirm={async () => {
+      onCancel={onCancel} onConfirm={() => {
         onPending(true);
-        try {
-          onDone(await words.send(request, [tree.id]));
-        } catch (error) {
+        return words.send(request, [tree.id]).then(onDone, (error: unknown) => {
           if (live.current) throw error;
-        } finally {
-          onPending(false);
-        }
+        }).finally(() => onPending(false));
       }} />
   );
 }

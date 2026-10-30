@@ -59,14 +59,15 @@ export type Inspected = { items: SessionBranchItem[]; pending: boolean };
 
 /** Inspects the bound branches and worktrees of the whole archive or deletion scope for its
  * confirmation, and with `withProcesses` (an archive's) the process trees it would stop. `initial` is
- * an answer already in hand; only an exact match of its inspected sessions is reused.
+ * an answer already in hand; only an exact match of its inspected sessions is reused, and never a failed one,
+ * which says nothing of what the scope holds.
  * When the scope changes, the last answer stands until the new one arrives, and an answer that
  * arrives after a newer question is dropped. A failure clears branch-removal choices but retains
  * previously listed processes that still belong to the scope, so keep choices are not lost. */
 function useInspection(sessionIds: string[], initial: SessionInspection | undefined, withProcesses: boolean): Inspected & Pick<SessionInspection, "processes"> {
   const { request } = useDaemon();
   const key = JSON.stringify([...sessionIds].sort());
-  const [latest, setLatest] = useState<(SessionInspection & { key: string }) | undefined>(() => initial && { key: JSON.stringify([...initial.sessions].sort()), ...initial });
+  const [latest, setLatest] = useState<(SessionInspection & { key: string }) | undefined>(() => initial && !initial.failed ? { key: JSON.stringify([...initial.sessions].sort()), ...initial } : undefined);
   const known = latest?.key === key;
   useEffect(() => {
     if (known) return;

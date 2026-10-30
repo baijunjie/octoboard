@@ -68,8 +68,28 @@ pub(super) fn start_of(pid: i32) -> Option<u64> {
     bsd_info(pid).map(|info| start_micros(&info))
 }
 
+/// A process's start in microseconds since the epoch, as the system recorded it when the process
+/// started: a step of the wall clock since does not change it.
 fn start_micros(info: &libc::proc_bsdinfo) -> u64 {
     info.pbi_start_tvsec * 1_000_000 + info.pbi_start_tvusec
+}
+
+/// Now on the clock start times are on: the wall clock.
+pub(super) fn now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| since.as_micros() as u64)
+}
+
+/// A start time in microseconds since the epoch, for showing: what it is already.
+pub(super) fn epoch_micros(start: u64) -> u64 {
+    start
+}
+
+/// What tells this boot of the system from any other: not needed, since start times are on the
+/// wall clock and a process that started before a reboot did so earlier than any after it.
+pub(super) fn boot_id() -> Option<String> {
+    None
 }
 
 fn comm_of(info: &libc::proc_bsdinfo) -> String {

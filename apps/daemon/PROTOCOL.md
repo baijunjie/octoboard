@@ -1667,8 +1667,11 @@ otherwise ignored.
 
 What the ledger cannot follow: a helper that a kept process starts and that leaves both the kept process's terminal
 session and its parent (a double fork into a session of its own) between two reads of the process table, a couple of
-seconds apart, still carries the launch's tag and is stopped with the launch. A process that outlives `SIGKILL` (one in
-an uninterruptible sleep) is tried again only after a few minutes or when another launch ends.
+seconds apart, still carries the launch's tag and is stopped with the launch. A process whose environment cannot be read
+(an Apple platform binary on macOS, such as `/bin/sleep`) that a shell left running in the background is never
+attributed when that shell exits before a read of the table has seen it: neither listed nor stopped with the launch. A
+process that outlives `SIGKILL` (one in an uninterruptible sleep) is tried again only after a few minutes or when another
+launch ends.
 
 The archive confirmation lists the trees of every session the archive would end (the session alone, or the parent's
 group) that have run for at least 30 seconds, asked as `inspect_session_branches` with `processes`, and lets the user

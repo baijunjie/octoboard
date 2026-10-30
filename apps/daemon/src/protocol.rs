@@ -1992,17 +1992,21 @@ pub enum RequestBody {
         processes: bool,
     },
     /// The process trees a session's launch started, or those of every running session of a
-    /// project plus the project's leftovers. See `crate::process_requests`.
+    /// project followed by the project's processes, the trees no session owns: its leftovers and
+    /// the trees kept under it (`kept: true`). See `crate::process_requests`.
     ListProcesses {
         #[serde(flatten)]
         target: ProcessTarget,
     },
-    /// Stops the process trees `ids` name that the ledger still attributes (or still counts as a
-    /// leftover). See `crate::process_requests`.
+    /// Stops the process trees `ids` name that still qualify: a tree of a launch being followed,
+    /// a leftover of a local project, or a kept tree, which is the user's no more once stopped.
+    /// See `crate::process_requests`.
     StopProcesses {
         ids: Vec<String>,
     },
-    /// Makes the process trees `ids` name the user's: never listed or stopped by the daemon again.
+    /// Makes the process trees `ids` name the user's, with what descends from them: no session
+    /// owns them, and the daemon stops them only when `stop_processes` names them or their
+    /// project is removed. They are listed among their project's processes with `kept: true`.
     /// See `crate::process_requests`.
     KeepProcesses {
         ids: Vec<String>,
@@ -2426,7 +2430,8 @@ pub struct HistoryMessage {
 pub enum ProcessTarget {
     /// The trees of the session's current launch.
     Session { session_id: String },
-    /// The trees of every running session of the project, and the project's leftovers.
+    /// The trees of every running session of the project, then the project's processes: its
+    /// leftovers and the trees kept under it.
     Project { project_id: String },
 }
 

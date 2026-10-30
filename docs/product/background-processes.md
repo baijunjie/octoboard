@@ -48,9 +48,16 @@ includes its start time: a reused process ID is not permission to stop its repla
 `SIGKILL`, for example in an uninterruptible sleep, may remain; automatic cleanup retries it after **5 minutes**, or
 when another launch ends. Cleanup is not proof that every process has already disappeared.
 
+Octoboard cannot attribute a program whose environment macOS withholds (a system binary such as `/bin/sleep` or
+`/usr/bin/tail`) that a command left running in the background when the shell that started it exits within one
+process-table scan, about **2 seconds**: such a process is neither listed nor stopped with the launch.
+
 After a daemon restart, Octoboard uses its saved process records and launch identities to stop what its previous run
-left behind, while preserving kept processes. If those records cannot be read, it does not assume that a process was
-not kept: it leaves the processes identified only by their launch tag running and records them as kept.
+left behind, while preserving kept processes. A terminal session it saved, which reaches the processes in it that it
+never saw, is taken back only while a process it saved is still running in it: a session's ID is a process ID, and
+once every process of the session has exited it can pass to unrelated processes. Records written before the system
+last started name nothing. If those records cannot be read, it does not assume that a process was not kept: it leaves
+the processes identified only by their launch tag running and records them as kept.
 
 The daemon, its ancestors and its direct children are protected. The user's shell terminals and the processes in their
 terminal sessions are excluded from the background-process lists and cleanup described here; closing those terminals

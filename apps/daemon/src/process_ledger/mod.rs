@@ -31,6 +31,10 @@
 //! What it cannot do: a helper a kept process starts that leaves the kept process's terminal
 //! session (`setsid`) and its parent (a double fork) between two scans is reached neither by the
 //! chain nor by the session, and still carries the launch's tag; it is stopped with the launch.
+//! A process whose environment cannot be read (an Apple platform binary on macOS) that a shell
+//! left running in the background is never attributed when that shell exits before a scan has
+//! seen it: its chain no longer reaches the launch, the shell's session was never recorded, and
+//! there is no tag to read. It is neither listed nor stopped with the launch.
 //! A process that outlives `SIGKILL` (one in an uninterruptible sleep) is tried again only after
 //! [`STUBBORN_RETRY`] or once another launch ends.
 
@@ -146,6 +150,23 @@ fn settled() -> Duration {
         return settled;
     }
     SETTLED
+}
+
+#[cfg(test)]
+thread_local! {
+    /// What [`boot_id`] answers for a test, on the test's own thread: `Some(None)` for a system
+    /// that has no boot id.
+    static BOOT_ID_OVERRIDE: std::cell::RefCell<Option<Option<String>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// The boot of the system the ledger file is written in (`table::boot_id`).
+fn boot_id() -> Option<String> {
+    #[cfg(test)]
+    if let Some(id) = BOOT_ID_OVERRIDE.with_borrow(Clone::clone) {
+        return id;
+    }
+    table::boot_id()
 }
 
 /// What the scans keep between reads, held for the whole of one so two never interleave.
@@ -395,14 +416,16 @@ impl ProcessLedger {
             ledger: self,
             launch_id,
         };
-        for pass in 0..STOP_PASSES {
+        // A read after the last round of signals too, which drops the sessions they emptied
+        // before the file is written.
+        for pass in 0..=STOP_PASSES {
             let Some(table) = self.scan(false) else {
                 break;
             };
             // Read just before the signals, and never a kept process: a keep is refused once
             // the launch is ending, and a kept process is attributed to no launch.
             let members = self.book().members_of(launch_id, &table);
-            if members.is_empty() {
+            if members.is_empty() || pass == STOP_PASSES {
                 break;
             }
             if pass == 0 {
@@ -418,27 +441,60 @@ impl ProcessLedger {
 
     /// Stops what a previous run of this daemon's data directory left: every process its ledger
     /// file names that is still running with the same start time, what sits in the terminal
-    /// sessions it recorded, and every process carrying a tag of this instance whose launch is not
-    /// one being followed now. Kept processes, their descendants and what is in their sessions are
-    /// left alone. When the file cannot be read, what it kept is not known, so every process only
-    /// a tag would have stopped is kept instead, and written down as kept. **Blocks.**
+    /// sessions it recorded that are proven still the same (see `attribute.rs`), and every process
+    /// carrying a tag of this instance whose launch is not one being followed now. Kept processes,
+    /// their descendants and what is in their sessions are left alone. A file written in another
+    /// boot of the system names nothing. When the file cannot be read, or either its boot or this
+    /// run's is not known where the other is, what it kept is not known, so every process only a
+    /// tag would have stopped is kept instead, and written down as kept. **Blocks.**
     pub fn reconcile(&self) {
         let (persisted, readable) = match persist::load(&self.file) {
             persist::Loaded::Missing => (persist::Persisted::default(), true),
-            persist::Loaded::Read(persisted) => (persisted, true),
+            persist::Loaded::Read(persisted) => match (&persisted.boot, boot_id()) {
+                (written, current) if *written == current => (persisted, true),
+                // One of the two boots is not known: the file was written before it recorded a
+                // boot, or this run cannot read one (a restricted `/proc`). Whether its start
+                // times compare with this run's cannot be told, so no process it kept can be
+                // recognized.
+                (None, Some(_)) | (Some(_), None) => {
+                    tracing::info!(
+                        written = persisted.boot.is_some(),
+                        "the boot of the system the process ledger file was written in, or of this run's, is not known, so the processes it names cannot be recognized; what it kept is not known"
+                    );
+                    (persist::Persisted::default(), false)
+                }
+                // Nothing a file of another boot names is running, and on Linux its start times
+                // count from that boot, so they could match this one's.
+                _ => {
+                    tracing::info!(
+                        "the process ledger file was written in another boot of the system; nothing it names is running"
+                    );
+                    (persist::Persisted::default(), true)
+                }
+            },
             persist::Loaded::Unreadable => (persist::Persisted::default(), false),
         };
         // Into the book before anything that can fail: what the user kept must never be taken
         // for an ended launch's by a later scan. The first scan forgets what is gone, and drops
-        // what would never be attributed and the sessions that are no longer the ones recorded.
+        // what would never be attributed and the sessions it cannot prove are the ones recorded.
         let before: HashSet<Identity> = {
             let mut book = self.book();
             book.kept.extend(persisted.kept.iter().copied());
-            for session in &persisted.kept_sessions {
-                book.kept_sessions
-                    .entry(session.sid)
-                    .or_insert(session.leader_start);
-            }
+            let sessions = |sessions: &[persist::PersistedSession]| {
+                sessions
+                    .iter()
+                    .map(|session| (session.sid, session.leader_start))
+                    .collect::<Vec<_>>()
+            };
+            book.read_back_sessions(
+                sessions(&persisted.sessions),
+                sessions(&persisted.kept_sessions),
+                persisted
+                    .attributed
+                    .iter()
+                    .map(persist::PersistedProcess::identity)
+                    .chain(persisted.kept.iter().copied()),
+            );
             for kept in &persisted.kept_projects {
                 let id = Identity {
                     pid: kept.pid,
@@ -464,14 +520,6 @@ impl ProcessLedger {
                         launch: ENDED.to_string(),
                         sid: process.sid,
                     });
-                }
-            }
-            if let Some(ended) = book.launches.get_mut(ENDED) {
-                for session in &persisted.sessions {
-                    ended
-                        .sessions
-                        .entry(session.sid)
-                        .or_insert(session.leader_start);
                 }
             }
             book.dirty = true;
@@ -540,14 +588,16 @@ impl ProcessLedger {
         // no system call; they are read outside it, so that a launch being registered on the
         // runtime never waits behind them.
         let (horizon, wanted) = {
-            let book = self.book();
+            let mut book = self.book();
+            // What a session read back would decide is decided first, as `attribute` does.
+            attribute::prove_read_back(&mut book, &table);
             let horizon = if full { Some(0) } else { book.horizon };
             (
                 horizon,
                 attribute::tag_candidates(&book, &table, self.own, horizon),
             )
         };
-        let settled_before = now_micros().saturating_sub(settled().as_micros() as u64);
+        let settled_before = table::now().saturating_sub(settled().as_micros() as u64);
         let mut read: HashMap<Identity, EnvTag> = HashMap::new();
         for proc in wanted {
             if scans.tags.contains_key(&proc.id)
@@ -792,6 +842,7 @@ impl ProcessLedger {
             }
             book.dirty = false;
             persist::Persisted {
+                boot: boot_id(),
                 attributed: book
                     .attributed
                     .iter()
@@ -917,11 +968,4 @@ fn run_scanner(ledger: Weak<ProcessLedger>) {
         };
         ledger.tick();
     }
-}
-
-/// Now, in microseconds since the Unix epoch, as process start times are.
-fn now_micros() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |since| since.as_micros() as u64)
 }

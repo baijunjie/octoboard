@@ -549,6 +549,26 @@ it("asks before archiving an idle session that has left a process running, and s
   expect(daemon.request).toHaveBeenCalledWith({ type: "archive_session", session: "s-archive", keep_process_ids: ["4242:1"] });
 });
 
+it("inspects again for the confirmation the session's turning busy opened over a failed inspection, rather than reusing it", async () => {
+  const { daemon } = mountApp(false, undefined, true);
+  let inspections = 0;
+  let fail!: () => void;
+  const failed = new Promise<void>((_, reject) => { fail = () => reject(new Error("Connection lost")); });
+  failed.catch(() => {});
+  vi.mocked(daemon.request).mockImplementation(async (body) => {
+    if (body.type !== "inspect_session_branches") return { type: "ack" };
+    if (++inspections === 1) await failed;
+    return { type: "session_branches_inspected", items: [], processes: [TREE] } as never;
+  });
+  await archiveFromMenu();
+  await act(async () => daemon.store.setState((state) => ({
+    sessions: new Map(state.sessions).set("s-archive", { ...state.sessions.get("s-archive")!, status: "working" }),
+  })));
+  await act(async () => fail());
+  expect(sentOf(daemon, "inspect_session_branches")).toHaveLength(2);
+  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("npm run dev");
+});
+
 it("archives an idle session at once when no process it left running has run long enough to ask about", async () => {
   const { daemon } = mountApp(false, undefined, true);
   vi.mocked(daemon.request).mockImplementation(async (body) => body.type === "inspect_session_branches"

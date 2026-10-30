@@ -61,7 +61,8 @@ pub(super) async fn handover_processes(
                 named_session(session)
             );
         }
-        if !state.has_process(&session.id) {
+        // A live process, since the claims taken above count as launches for `has_process`.
+        if state.live_session(&session.id).is_none() {
             bail!(
                 "{} has no process running, so it {}; the processes a session started are \
                  stopped when its process ends",
@@ -471,7 +472,11 @@ mod tests {
             ),
             (
                 json!({ "processes": [tree], "from": "kid", "to": "asleep-kid" }),
-                "has no process running",
+                "has no process running, so it cannot take processes",
+            ),
+            (
+                json!({ "processes": [tree], "from": "asleep-kid", "to": "other-kid" }),
+                "has no process running, so it holds no process to hand over",
             ),
             (
                 json!({ "processes": [tree], "from": "kid", "to": "archived-of-a" }),
