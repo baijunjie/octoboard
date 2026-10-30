@@ -89,8 +89,8 @@ function RegionTab({ region }: { region: RegionPanel }): React.ReactElement {
       onHoverChange={setHovered}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
-      // Keep hovered labels at full opacity and use the foreground colour for clear feedback.
-      className="w-auto flex-none scroll-mx-1.5 gap-2 whitespace-nowrap hover:text-foreground hover:opacity-100"
+      // Hovered labels take the foreground colour for clear feedback.
+      className="w-auto flex-none scroll-mx-1.5 gap-2 whitespace-nowrap hover:text-foreground"
     >
       {region.label}
       {region.attention && (

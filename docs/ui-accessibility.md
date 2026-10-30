@@ -73,11 +73,10 @@ no grey rim. All other styles and component structure stay stock HeroUI 3, as sp
 content". The stock `Alert.Description` keeps its colour on that fill; where it measures below 4.5:1 it is HeroUI's own
 text on HeroUI's own fill, not recoloured.
 
-Tabs in Settings, the project pane's Files / Changes switch, the session dialog's New / Resume conversation switch, the
-agent tabs in the console dialog's Advanced section and the Launch settings / Git workflow tabs in the project dialog's
-Advanced section keep their labels fully opaque on hover and use the foreground colour instead of dimming. Preserve this
-shared visual treatment as an explicit product choice, while retaining the component's layout, selection and keyboard
-behaviour.
+Every unselected, enabled HeroUI tab keeps its label fully opaque on hover instead of dimming, by one shared rule in
+`packages/ui/src/style.css`; a tab's own opacity (a closing terminal tab's) still applies while hovered. The tab strips
+in the app also take the foreground colour on hover. Preserve this shared visual treatment as an explicit product
+choice, while retaining the component's layout, selection and keyboard behaviour.
 
 A status label such as "Not added", "Not installed" or "Logged in", and any other qualifier after a name (a session's
 account in its agent mark's tooltip where that names only the agent and its account, "Not in the list", a file's change

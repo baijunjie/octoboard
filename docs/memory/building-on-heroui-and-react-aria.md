@@ -53,7 +53,7 @@ Give any fixed-height row that holds such a control the height of its larger for
 narrower than 768px as well as a wide one. The pane the row sits in tells nothing: a narrow pane in a wide window
 still gets the small form.
 
-## A react-aria-components element owns its state `data-*` attributes: it writes over yours, and may never set its own
+## A react-aria-components element owns its state `data-*` attributes: it writes over yours, may never set its own, and clears `data-hovered` a frame late
 
 A react-aria-components element spreads the props it is given first and then sets the state attributes it owns —
 `data-selected`, `data-focused`, `data-hovered`, `data-pressed`, `data-expanded`, `data-disabled` and the like — so a
@@ -69,6 +69,15 @@ allows selection or has an action, so a tag that is only removable never gets `d
 on a state attribute, check in that same file that the hook setting it is not disabled for your configuration; where
 it is, use the CSS pseudo-class through Tailwind (`hover:`, `group-hover/<name>:`). The jsdom tests never hover, so
 only a real pointer in the running page shows the miss.
+
+Where it does set one, the attribute and the pseudo-class do not change together: when the pointer leaves,
+`data-hovered` clears a frame after `:hover` ends, since React commits pointer enter and leave at continuous
+priority. HeroUI's sheets key most hover and press looks on both forms (`&:hover, &[data-hovered="true"]`), so an
+override of such a look written only as `hover:` lets HeroUI's look back for that frame and starts its transition — a
+one-frame flicker, and inside a masked scroller in WKWebView a repaint that shook every tab in the strip. So when
+overriding a look HeroUI gives a state, match every selector its sheet under
+`packages/ui/node_modules/@heroui/styles/dist/components/` keys that state on, as the shared tab rule in
+`packages/ui/src/style.css` does.
 
 ## Inside a list or menu item, HeroUI's `Label` and `Description` take no pointer events
 

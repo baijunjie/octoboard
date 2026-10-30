@@ -70,7 +70,7 @@ export function AdvancedTabs({ tabs }: { tabs: AdvancedTab[] }): React.ReactElem
         <Tabs.ListContainer className="w-max max-w-full self-start" render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
           <Tabs.List aria-label={t("dialog.agentSettings.advanced")} className="w-max min-w-0 p-1.5">
             {tabs.map((tab) => (
-              <Tabs.Tab key={tab.id} id={tab.id} className="w-auto flex-none scroll-mx-1.5 whitespace-nowrap hover:text-foreground hover:opacity-100">
+              <Tabs.Tab key={tab.id} id={tab.id} className="w-auto flex-none scroll-mx-1.5 whitespace-nowrap hover:text-foreground">
                 {tab.label}
                 <Tabs.Indicator />
               </Tabs.Tab>

@@ -307,8 +307,8 @@ export function ProjectBrowser({
             <Tabs.ListContainer className="shrink-0 rounded-none bg-transparent" render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
               {/* The scroller clips outside this padding; leave room for the focus ring and its offset. */}
               <Tabs.List aria-label={t("browser.modes")} className="w-max min-w-0 p-1.5">
-                <Tabs.Tab id="files" className="h-6 scroll-mx-1.5 px-1.5 whitespace-nowrap hover:text-foreground hover:opacity-100">{t("browser.mode.files")}<Tabs.Indicator /></Tabs.Tab>
-                <Tabs.Tab id="changes" className="h-6 scroll-mx-1.5 px-1.5 whitespace-nowrap hover:text-foreground hover:opacity-100">{t("git.view.changes")}<Tabs.Indicator /></Tabs.Tab>
+                <Tabs.Tab id="files" className="h-6 scroll-mx-1.5 px-1.5 whitespace-nowrap hover:text-foreground">{t("browser.mode.files")}<Tabs.Indicator /></Tabs.Tab>
+                <Tabs.Tab id="changes" className="h-6 scroll-mx-1.5 px-1.5 whitespace-nowrap hover:text-foreground">{t("git.view.changes")}<Tabs.Indicator /></Tabs.Tab>
               </Tabs.List>
             </Tabs.ListContainer>
           </PanelHeader>
