@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 
+import { useLatest } from "../components/useLatest";
 import { DaemonRequestError } from "../daemon-client";
 import { errorPresentation, type ErrorPresentation } from "../errorPresentation";
+import { unexpectedFailureDiagnostic } from "../errorText";
 import { listProcesses, type ProcessTarget } from "../processes";
 import { SESSION_NOT_RUNNING, type ProcessTree } from "../protocol";
+import { sameValue } from "../sameValue";
 import { useDaemon, type Daemon } from "../store";
 
 /** How long the list waits after an answer before it asks again: `live` while the panel is on screen,
@@ -14,6 +17,11 @@ const POLL_MS = { live: 3000, background: 15000 };
 
 /** How often the list is asked for: not at all, now and then, or as the panel is watched. */
 export type ProcessPolling = "off" | "background" | "live";
+
+/** Error messages and stacks are not enumerable; compare the data the panel can show explicitly. */
+function failureValue(error: ErrorPresentation | undefined) {
+  return typeof error === "object" ? { code: error.code, params: error.params, message: error.message, diagnostic: unexpectedFailureDiagnostic(error) } : error;
+}
 
 /** One list request: the trees, or the failure. A session that has no process any more has no trees. */
 async function listOnce(request: Daemon["request"], target: ProcessTarget): Promise<{ trees: ProcessTree[] } | { error: unknown }> {
@@ -43,6 +51,7 @@ export function useProcessTrees(target: ProcessTarget | undefined, polling: Proc
   if (state.key !== key) {
     setState({ key });
   }
+  const latest = useLatest(state);
   const { trees, error } = state.key === key ? state : {};
   const [round, setRound] = useState(0);
   useEffect(() => {
@@ -55,11 +64,15 @@ export function useProcessTrees(target: ProcessTarget | undefined, polling: Proc
     const poll = async () => {
       const answer = await listOnce(request, JSON.parse(key) as ProcessTarget);
       if (!active) return;
+      // Even returning the previous state from an updater can invoke the hook's owner again.
+      // Only publish a changed answer, so an idle poll never schedules that render.
+      const current = latest.current;
       if ("trees" in answer) {
         hasList.current.value = true;
-        setState({ key, trees: answer.trees });
+        if (current.key !== key || current.error !== undefined || !sameValue(current.trees, answer.trees)) setState({ key, trees: answer.trees });
       } else {
-        setState((current) => ({ key, trees: current.trees, error: errorPresentation(answer.error) }));
+        const error = errorPresentation(answer.error);
+        if (current.key !== key || !sameValue(failureValue(current.error), failureValue(error))) setState({ key, trees: current.trees, error });
       }
       if (hasList.current.value) timer = setTimeout(due, POLL_MS[polling]);
     };
@@ -79,7 +92,7 @@ export function useProcessTrees(target: ProcessTarget | undefined, polling: Proc
       clearTimeout(timer);
       document.removeEventListener("visibilitychange", shown);
     };
-  }, [key, request, round, polling]);
+  }, [key, request, round, polling, latest]);
   return {
     trees,
     error,

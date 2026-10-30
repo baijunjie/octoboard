@@ -45,6 +45,16 @@ running, and nothing fails. Select the value such code waits for, so that its ch
 `ResizeObserver`). Code brought in from a branch that still reads the whole `sessions` map in such a component is
 rewritten the same way when it is merged, never given the map back.
 
+## Deduplicate polling answers before scheduling state
+
+For daemon polling whose hook runs in `App`, compare each answer with the latest committed state before calling
+the setter: returning the previous state from a functional updater can still execute `App` once after a changed
+update. Read that state through `useLatest`, never a ref assigned during render, and skip the setter for unchanged
+answers, repeated refresh failures included. Compare the error's message and displayed diagnostics explicitly:
+`sameValue` compares enumerable properties, which omit an Error's message and stack. A successful answer must still
+clear a previous failure even when its list is unchanged. Count executions of the hook's caller to verify this;
+unchanged DOM or a skipped child does not prove that `App` stayed idle.
+
 ## An empty collection means "nothing has arrived yet" until `hosts` is set
 
 The store starts with `consoles`, `projects` and `sessions` empty and `hosts` undefined, and only the first `snapshot`

@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { DaemonRequestError } from "../daemon-client";
 import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
 import type { AsideOwner } from "../layout/asideOwner";
 import type { Event, ProcessTree, RequestBody } from "../protocol";
@@ -27,7 +28,8 @@ async function mount(request: (body: RequestBody) => Promise<Event>, initialSele
   let selected: string | undefined = initialSelection;
   let polling: ProcessPolling = "live";
   let data!: ReturnType<typeof useProcessPanel>;
-  function Probe() { data = useProcessPanel(owner, selected, polling); return null; }
+  let renders = 0;
+  function Probe() { renders++; data = useProcessPanel(owner, selected, polling); return null; }
   const element = document.body.appendChild(document.createElement("div"));
   const root = createRoot(element);
   const render = async () => act(async () => root.render(<DaemonProvider value={daemon}><Probe /></DaemonProvider>));
@@ -36,6 +38,7 @@ async function mount(request: (body: RequestBody) => Promise<Event>, initialSele
   return {
     daemon,
     data: () => data,
+    renders: () => renders,
     select: async (id: string | undefined) => { selected = id; await render(); },
     owner: async (next: AsideOwner) => { owner = next; await render(); },
     polling: async (next: ProcessPolling) => { polling = next; await render(); },
@@ -57,6 +60,46 @@ it("defaults to all project trees, follows sidebar changes, and preserves a manu
   await panel.select(first.id);
   expect(panel.data().sessionId).toBe(first.id);
   expect(vi.mocked(panel.daemon.request).mock.calls).toHaveLength(1);
+});
+
+it("does not render again for an unchanged refresh failure, but shows changed diagnostics and clears a recovered warning", async () => {
+  let failure: { message: string; code: string; params: Record<string, string>; stack: string } | undefined;
+  const panel = await mount(async () => {
+    if (failure) {
+      const error = new DaemonRequestError(failure.message, failure.code, { ...failure.params });
+      error.stack = failure.stack;
+      throw error;
+    }
+    return { type: "processes_listed", trees: [tree("1", first.id)] };
+  });
+  const poll = () => act(async () => void vi.advanceTimersByTime(3000));
+  failure = { message: "unavailable", code: "unexpected_error", params: { detail: "offline" }, stack: "trace-a" };
+  await poll();
+  const renders = panel.renders();
+  const error = panel.data().error;
+  await poll();
+  await poll();
+  expect(panel.renders()).toBe(renders);
+  expect(panel.data().error).toBe(error);
+  for (const change of [
+    { message: "disconnected" },
+    { params: { detail: "timeout" } },
+    { stack: "trace-b" },
+    { code: "other_failure" },
+  ]) {
+    failure = { ...failure, ...change };
+    const before = panel.renders();
+    await poll();
+    expect(panel.renders()).toBeGreaterThan(before);
+    expect(panel.data().error).toMatchObject(failure);
+  }
+  failure = undefined;
+  await poll();
+  expect(panel.data().error).toBeUndefined();
+  expect(panel.data().trees).toHaveLength(1);
+  const recovered = panel.renders();
+  await poll();
+  expect(panel.renders()).toBe(recovered);
 });
 
 it("falls back to all when a manually selected session is deleted", async () => {
