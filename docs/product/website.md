@@ -27,12 +27,12 @@ The site has a homepage and a privacy page. Paths below are relative to the site
 - Simplified Chinese uses the route prefix `zh`, with the language identified as `zh-Hans` in page metadata.
   Traditional Chinese uses `zh-Hant` for both.
 
-All 17 languages have complete website translations, including navigation, account switching, agent handoff and
-usage features, preview controls, the illustrative workflow, the developer's motivation, questions and answers,
-privacy text, client error messages, and page metadata: Arabic, German, English, Spanish, French, Hindi, Indonesian,
-Italian, Japanese, Korean, Brazilian Portuguese, Russian, Thai, Turkish, Vietnamese, Simplified Chinese, and
-Traditional Chinese. This coverage is specific to the website; the application's translation coverage is described
-in `docs/product/language.md`, "What is translated so far".
+All 17 languages have complete website translations, including navigation, all 16 feature cards, preview
+controls, the illustrative workflow, the developer's motivation, questions and answers, privacy text, client
+error messages, and page metadata: Arabic, German, English, Spanish, French, Hindi, Indonesian, Italian,
+Japanese, Korean, Brazilian Portuguese, Russian, Thai, Turkish, Vietnamese, Simplified Chinese, and Traditional
+Chinese. This coverage is specific to the website; the application's translation coverage is described in
+`docs/product/language.md`, "What is translated so far".
 
 English is the default. On a normal site page that opens in English, the site checks the remembered language after
 the app mounts. If there is no remembered language, it matches the browser's preferred languages to the supported
@@ -43,7 +43,7 @@ privacy page. Arabic uses a right-to-left layout. Page URLs remain usable direct
 site remembers language changes for one year in a same-site cookie.
 The unlocalized static 404 page does not perform language matching.
 
-In the header and navigation dialog, the selected language's name fades where its single line is clipped. Hovering
+In the header, the selected language's name fades where its single line is clipped. Hovering
 anywhere on the language selector runs that name as a marquee with the timing described in
 `docs/product/labels-and-tooltips.md`, "Names too long for their space". It immediately resets to its beginning
 when the pointer leaves. The fade follows the name's own reading direction. Reduced motion leaves the name still.
@@ -111,8 +111,8 @@ is that language's homepage URL plus `#website`: the homepage URL, the applicati
 SEO description, and that page's language, published by the person.
 
 A homepage also includes an FAQ page and a software application. The FAQ page is that page's canonical
-URL plus `#webpage`. It contains the nine questions and, as part of that page, an item list of the three
-localized account switching, agent handoff and usage benefit titles. The software application is the origin plus
+URL plus `#webpage`. It contains the nine questions and, as part of that page, an item list of all 16
+localized feature titles, in feature-wall order. The software application is the origin plus
 `#app` on every language. Its category is `DeveloperApplication`, its operating system is `macOS`, and its URL is the
 deployment root, the English homepage, not the localized homepage. It names the repository and the MIT
 license linked from the site. Its image is the mascot file `logo.png` at the deployment root, not the
@@ -148,46 +148,54 @@ Each page file states `Canonical:` and then that page's HTML URL. A link from on
 another page of the site points at the Markdown file. Links that leave the site — the releases page,
 the repository, the license, the GitHub privacy statement, and email — stay on those targets.
 
-The Markdown carries the page's localized wording in the same section order. It includes the three feature titles
-and descriptions, the statement that Octoboard is free and open source under the MIT License, the preview scene
-names and sample-data explanation, and every workflow
-node's task and report. The developer's motivation follows the workflow in each homepage copy and in `llms-full.txt`,
-including its title, opening, three subsections, product purpose, invitation, and byline. It does not include the
-embedded application's sample screens. Release links are those in
-"Homepage and navigation" and sit beside the
+The Markdown carries the page's localized wording in the same section order. It includes all three feature
+groups and their 16 titles and descriptions, the statement that Octoboard is free and open source under the MIT
+License, the preview scene names and sample-data explanation, and every workflow node's task and report. The
+developer's motivation follows the workflow in each homepage copy and in `llms-full.txt`, including its title,
+opening, three subsections, product purpose, invitation, and byline. It does not include the embedded
+application's sample screens. Release links are those in "Homepage and navigation" and sit beside the
 early-prototype status. The workflow is identified as an illustration. The copies omit the header, the footer,
-decorative art and feature sample readings, the labels
-and numbers that mark a section, the scroll cue, the MIT badge, and interactive controls. The brand slogan stays,
-and the homepage Markdown also includes the sentence that states the slogan's two meanings. The privacy page's
-introductory line and the workflow's participant labels stay.
+decorative art, the labels and numbers that mark a section, the scroll cue, the MIT badge, and interactive
+controls. The brand slogan stays, and the homepage Markdown also includes the sentence that states the slogan's
+two meanings. The privacy page's introductory line and the workflow's participant labels stay.
 
 ## Homepage and navigation
 
 The homepage uses Octoboard's original silver mechanical octopus, red eyes, and pixel wordmark on a dark surface.
-The first screen introduces one workspace for native coding agents and their accounts: switching accounts,
-handing work to another agent, tracking usage, and coordinating projects when a task spans repositories. It offers
-links to view releases, visit its GitHub repository, and open the preview section.
+The first screen introduces one workspace for existing coding agents and their accounts: retaining a conversation
+when switching accounts of the same agent, handing work to another agent brand, and choosing an agent to coordinate
+tasks across projects. The coordinator is a role taken by the chosen agent. The first screen offers links to view
+releases, visit its GitHub repository, and open the preview section.
 
-The page continues through account and usage features, the product preview, one cross-project coordination
+The page continues through the grouped feature wall, the product preview, one cross-project coordination
 example, the developer's motivation, local data and open-source information with platform availability, and questions.
 These six sections share a numbered heading, a short label marked by a red square, and a title. Section and
 workflow-step numbers are prominent visual markers.
 
-The first numbered section presents three feature rows, in this order:
+The first numbered section presents 16 feature cards in three groups, in this order:
 
-- Multiple accounts: a session can move to another account of the same agent while keeping its saved conversation.
-  Optional automatic account selection starts new sessions with an eligible account whose weekly quota resets soonest.
-- Agent handoff: the coordinator can keep a managed session's work moving after quota exhaustion by automatically
-  switching it to an available account or handing its work to another agent brand. The user does not need to monitor
-  and restart each session individually. The supported agents are Claude Code, Codex, and Grok Build.
-- Usage and resets: account readings refresh automatically, with usage and reset countdowns shown together.
-  Optional automatic activation starts the next countdown after a reset, without waiting for the user to use the
-  account again.
+- Accounts and usage (six cards): managing accounts across agents; retaining the conversation when switching
+  accounts of the same agent; optional automatic selection of an available account when starting a session,
+  considering account status and usage reset times; usage readings and reset countdowns; optional automatic
+  switching after a usage limit; and waiting when no account of the same agent is available, then resuming limited
+  work when a fresh reading confirms an account's usage recovery.
+- Context and continuity (three cards): monitoring context size and agent-reported window usage to see how close
+  the conversation is to the length the agent can process, and moving later work to a fresh session before a long
+  conversation risks losing details through summary compression; passing work to a new session while the original
+  agent retains its conversation record for reviewing or resuming to ask about earlier decisions and implementation
+  details; and another agent brand taking over from a handoff record of the task, progress and remaining work.
+- Agents and projects (seven cards): coordinating different agents' strengths; organizing work across projects;
+  separate native project contexts; retaining existing CLI instructions, Skills, Hooks and MCP configuration;
+  entering a delegated project's session to guide its executing agent directly, without relaying every detail
+  through the coordinator; monitoring session statuses and requests for decisions; and reviewing files and Git diffs.
 
-Each row has a short category label, a title, a description, and a decorative illustration. The illustrations show
-an account change with a retained conversation, a handoff between agent brands, and a usage meter with a reset clock.
-They use fixed sample data, identified by a shared caption, and are hidden from assistive technology. Copy and
-illustration sit side by side on wide screens; the illustration follows the copy on narrow screens.
+Every card has a title and description. Cards form three columns on wide screens, two at widths of 1050 pixels or
+less, and one at 600 pixels or less. Each group has a numbered heading and decorative icon. The feature wall, the
+homepage Markdown and the homepage structured-data list present the same features in the same order.
+
+The coordination introduction identifies the restaurant promotion as a cross-project example. The HTML page also
+invites visitors to select a project in the illustration to inspect its assigned task and example report; the
+Markdown copy keeps the case introduction without instructions for interacting with the diagram.
 
 The workflow illustration places Octoboard's mascot and coordinating agent at the center of eight distinct
 project-agent nodes: Promotion console, Store management console, Customer ordering website, Restaurant order API,
@@ -250,8 +258,8 @@ receive a hover background; an expanded question and its answer share a uniform 
 - Data: application data stays local, and code and conversations are not uploaded to Octoboard's own servers.
   Visitors use their own accounts and subscriptions or configured services for Claude Code, Codex and Grok Build.
   Those tools manage credentials and native conversation records and send prompts, code and related context to the
-  configured providers under those providers' policies. These connections belong to the services visitors use,
-  independently of Octoboard.
+  configured providers under those providers' policies. Collaboration also passes task descriptions, progress and
+  relevant context to the participating agents.
 - Independent sessions: each project runs a native session in its own directory, loading local configuration through
   its agent's own mechanisms while the coordinator organizes the work. A single conversation can mix project context;
   changing directories or using subagents alone does not guarantee loading the target project's full configuration,
@@ -261,22 +269,23 @@ receive a hover background; an expanded question and its answer share a uniform 
   presents different brands' strengths as a reason to coordinate them.
 - Participation: visitors can enter a project session to add context, adjust requirements or review code. Sessions
   started by the coordinator continue reporting results, open items and decisions needed back to it.
-- Requirements and cost: visitors install and configure the agent CLIs themselves, including agents configured for
-  self-hosted models. Octoboard is free and open source under the MIT License.
-- Remote hosts: running project agents on a remote host is planned and unavailable.
+- Requirements and cost: visitors install and configure the agent CLIs themselves. Octoboard is free and open
+  source under the MIT License; agents and model services follow the chosen providers' subscriptions or billing
+  terms. Self-hosted model configurations remain usable when the chosen agent supports them.
+- Remote hosts: running project agents on another server or computer is planned and unavailable.
 - Parallel work: sessions share the project directory by default, so simultaneous edits to the same files can
-  conflict. Users can ask agents to work in separate Git worktrees and review their changes before merging.
+  conflict. Users can ask agents to work in separate Git worktrees, giving changes separate working directories,
+  and review those changes before merging.
 - Portability: project files remain in their original folders. Available native conversation records can be resumed
   through the original CLI; an additional account requires using that account's configuration directory.
 
-The primary action in the header, hero, menu, and closing section uses the same localized label for viewing releases
+The primary action in the header, hero, and closing section uses the same localized label for viewing releases
 and opens the repository's GitHub Releases page. It does not link directly to an installer file. The hero identifies
 macOS Apple Silicon and labels the app as an early prototype. The closing note repeats that status beside the MIT
 License. Other repository links open GitHub; the footer links to the developer's motivation at the localized
 homepage's `#developer-intent` and to the localized privacy page, explicitly names the
 MIT License in its license link, and provides the operator's email address. The hero, open-source section and footer
-use icon-only GitHub links with 44-by-44-pixel targets, accessible names and hover titles. The navigation menu retains
-its text repository link.
+use icon-only GitHub links with 44-by-44-pixel targets, accessible names and hover titles.
 
 The footer forms a compact centered group: the wordmark and localized tagline, followed by navigation links and
 copyright. Its navigation has an accessible name identifying it as footer navigation. On small screens, the wordmark
@@ -286,29 +295,37 @@ The closing section displays the mascot beside the wordmark, with the localized 
 wordmark, centered on the wordmark. Under that group, centered, is the sentence that states the slogan's two
 meanings (see "Brand slogan"). Decorative graphics do not act as slide or pagination controls.
 
-The floating header stays visible while scrolling. From either page, both the header and full-screen menu link to
-all six homepage sections in page order: account and usage features (`#benefits`), product preview
-(`#product-preview`), coordination explanation (`#how-it-works`), developer motivation (`#developer-intent`),
-local data, open source and platforms (`#local-workspace`), and questions (`#questions`). The menu numbers these
-links 01–06 to match the page; its external GitHub link has no number. Following a section link leaves space for
-the header above the destination. Its inline links identify the current homepage section as the visitor moves
-through the page.
+The floating header stays visible while scrolling. Its inline navigation contains only the feature wall
+(`#benefits`) and product preview (`#product-preview`), alongside language selection and the releases action.
+The inline links are hidden at widths of 1200 pixels or less. These links also lead from the privacy page to the
+localized homepage. The header has a glass surface with edge refraction where supported and a sheen that follows
+the pointer. Browsers without refraction support use blurred glass; those without backdrop blur use a more opaque
+surface.
 
-Inline links appear only when the header has room for all six labels and its other controls. Their visibility
-adapts to the window width, language and loaded fonts; the full menu remains available at every width. Hidden
-inline links cannot receive keyboard focus and are omitted from assistive technology. If they contain focus when
-they collapse, focus moves to the menu button. The header has a glass surface with edge
-refraction where supported and a sheen that follows the pointer. Browsers without refraction support use blurred glass;
-those without backdrop blur use a more opaque surface.
-A menu button opens a full-screen navigation dialog. The button changes into a close control, with an accessible name
-identifying the opening or closing action. The close control follows the language's reading direction: right in
-left-to-right languages and left in right-to-left languages. Long menu labels wrap on narrow screens without
-horizontal overflow. The header navigation, menu dialog
-and menu navigation have accessible names identifying main navigation. The background cannot be interacted with or
-scrolled while the menu is open. Tab and Shift+Tab stay within the dialog. Closing it with the button or Escape
-returns focus to the header's menu button. Choosing an internal destination or another language closes the dialog
-as well. Menu links turn red on hover with a 160-millisecond color transition and no delay. Their staggered
-entrance and exit motion does not delay the hover response.
+On the homepage, a separate page directory links to the overview (`#overview`), feature wall (`#benefits`), product
+preview (`#product-preview`), coordination explanation (`#how-it-works`), developer motivation (`#developer-intent`),
+local data and open source (`#local-workspace`), platform availability (`#platforms`), questions (`#questions`), and
+closing releases section (`#download`), in that order. Platform availability remains within the fifth numbered
+section; its separate directory entry does not change the six section numbers. Links leave space for the floating
+header above their destination. Scroll position identifies the active destination, and reaching the page bottom
+identifies the closing section.
+
+At widths of 1440 pixels or more, the directory is a fixed side rail outside the main content, on the right for
+left-to-right languages and the left for Arabic. It remains visible while scrolling and highlights the current
+section. The feature entry expands to show the three feature-group links while the feature section is active or
+its links have keyboard focus; the active group is highlighted as well.
+
+At narrower widths, a page-directory button in the header opens a nonmodal second-level navigation menu. It shows
+all section links and all three feature-group links. The button also identifies the current section, except at
+700 pixels or less, where only the page-directory label remains. Long labels wrap. The directory does not block
+interaction with the rest of the page or lock its scrolling, and keyboard focus is not trapped.
+
+Opening the directory focuses its first link. Selecting a destination closes the menu and moves focus to that
+region; Escape returns focus to the directory button. Clicking or moving focus outside closes it. Shift+Tab from
+the first link returns to the button; Tab from the last link closes the menu and continues to the language selector.
+If the window becomes narrow while a rail link has focus, focus moves to the directory button. If it becomes wide
+while the open menu holds focus, the menu closes and focus moves to the current page section. Both directory
+presentations have accessible page-directory names and identify the active links with `aria-current="location"`.
 
 ## Product preview
 
@@ -470,10 +487,10 @@ row.
 
 The hero text and mascot enter with a short motion. On both mobile and desktop, the mascot's eight tentacles
 swing independently, its body floats up and down and rocks from side to side, and its red eyes brighten and dim.
-Red and silver pixel particles move through the surrounding
-space without covering content or intercepting interaction. Sections reveal as they enter view, except the developer's
-motivation, whose text remains visible without a reveal transition, including at high zoom. Question expansion
-and control state changes also have visual transitions.
+Red and silver pixel particles move through the surrounding space without covering content or intercepting
+interaction. Sections reveal as they enter view, except the feature wall and the developer's motivation, whose
+text remains visible without a reveal transition, including at high zoom. Question expansion and control state
+changes also have visual transitions.
 
 A control beside the mascot pauses and resumes the homepage's decorative animation, including the mascot, particles and
 workflow signals. The mascot and particles pause when their area is offscreen or the page is in the background; workflow
@@ -481,13 +498,13 @@ signals do the same for the diagram. They resume when visible again unless the v
 signals repeat along the connections rather than implying a real task's progress; selecting a project remains
 available while motion is paused.
 
-A reduced-motion preference disables decorative animations and transitions, hides the particles and motion control,
-and leaves the content visible. The header keeps a static blurred glass surface without refraction or a moving sheen.
-Without JavaScript, the pre-rendered homepage and privacy content remain readable, and questions can still be expanded
-and collapsed; section reveals never leave that content hidden. The diagram retains its initial selection and,
-on wide screens, static connections. Selecting another node, the product preview and opening the menu require
-JavaScript. The header provides a skip link to the main content, and interactive controls, including questions and
-project nodes, show keyboard focus.
+A reduced-motion preference disables decorative animations and transitions, hides the particles and motion
+control, and leaves the content visible. The header keeps a static blurred glass surface without refraction or a
+moving sheen. Without JavaScript, the pre-rendered homepage and privacy content remain readable, and questions
+can still be expanded and collapsed; section reveals never leave that content hidden. The diagram retains its
+initial selection and, on wide screens, static connections. Selecting another node, the product preview and
+opening the page-directory menu require JavaScript. The header provides a skip link to the main content, and
+interactive controls, including questions and project nodes, show keyboard focus.
 
 ## Missing pages and errors
 
@@ -521,7 +538,8 @@ website terms page; the software's license is linked separately from the privacy
 
 ## Remote host support
 
-Status: not implemented. The privacy page says that remote host support is planned and does not describe a workflow.
+Status: not implemented. The privacy page identifies remote host support as running agents on another server or
+computer, says it is planned and unavailable, and excludes it from the policy's scope.
 
 Remote host support runs in one direction only: the daemon the user is talking to reaching a second machine to run
 sessions there. The server form runs the other way — one daemon, on a server, with the user's browser on another machine

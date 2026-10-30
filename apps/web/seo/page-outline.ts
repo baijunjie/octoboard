@@ -1,10 +1,30 @@
 // Sections the homepage, the privacy page, and the agent Markdown all walk.
 // Adding a visible section means adding it here; the pages iterate these lists.
 
-export const homeFeatures = [
-  { key: "account" },
-  { key: "handoff" },
-  { key: "usage" },
+export const featureGroups = [
+  { id: "feature-accounts", key: "featureAccountsTitle", icon: "terminal-window", features: [
+    "managedAccounts", "switchAccount", "smartAccount", "usageMonitor", "autoSwitch", "quotaRecovery",
+  ] },
+  { id: "feature-context", key: "featureContextTitle", icon: "chat-circle-dots", features: [
+    "contextWindow", "conversationRelay", "agentHandoff",
+  ] },
+  { id: "feature-collaboration", key: "featureCollaborationTitle", icon: "tree-structure", features: [
+    "teamCoordination", "projectCoordination", "separateProjectContext", "existingWorkflow", "directParticipation", "sessionStatus", "reviewChanges",
+  ] },
+] as const;
+
+export const homeFeatures = featureGroups.flatMap((group) => group.features.map((key) => ({ key })));
+
+export const homeSections = [
+  { id: "overview", key: "navOverview" },
+  { id: "benefits", key: "navFeatures" },
+  { id: "product-preview", key: "previewEyebrow" },
+  { id: "how-it-works", key: "navHow" },
+  { id: "developer-intent", key: "developerEyebrow" },
+  { id: "local-workspace", key: "localEyebrow" },
+  { id: "platforms", key: "platformsTitle" },
+  { id: "questions", key: "navFaq" },
+  { id: "download", key: "heroCta" },
 ] as const;
 
 export const homeSteps = ["One", "Two", "Three"] as const;
@@ -13,14 +33,14 @@ export const developerSections = ["Shift", "Context", "Quality"] as const;
 
 export const homeQuestions = [
   "Setup",
-  "Providers",
+  "DataFlow",
   "Subagents",
   "Brands",
   "Participation",
-  "Requirements",
-  "Remote",
-  "Parallel",
-  "Portability",
+  "SetupCosts",
+  "RemoteExecution",
+  "ParallelWork",
+  "CliResume",
 ] as const;
 
 export const developedPlatform = {
@@ -83,7 +103,7 @@ export const privacySections = [
   "Sharing",
   "Website",
   "Contact",
-  "Future",
+  "RemoteExecution",
 ] as const;
 
 export const githubPrivacyUrl =

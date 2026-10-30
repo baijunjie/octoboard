@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { featureGroups, homeFeatures } from "../seo/page-outline.ts";
 import { readLocaleMessages, renderAgentFiles } from "../seo/agent-documents.ts";
 import {
   buildJsonLd,
@@ -162,17 +163,15 @@ test("agent documents follow the pages and do not publish a download that does n
   assert.match(home, /macOS on Apple Silicon · Early prototype/);
   assert.match(home, /Octoboard is free and open source under the MIT License\./);
   assert.equal(home.includes("Awaiting instructions"), false);
-  assert.match(home, /Switch accounts\. Keep the conversation\./);
+  assert.match(home, /Switch accounts\. Continue the task\./);
   assert.match(home, /Do I need to set up my projects and CLI configuration again\?/);
   assert.equal(home.includes("What is Octoboard useful for?"), false);
   for (const locale of locales) {
     const body = files[markdownFile(locale.code === "en" ? "/" : `/${locale.code}/`)];
     const catalog = messages[locale.code];
     const headings = [
-      "continuityTitle",
-      "accountFeatureTitle",
-      "handoffFeatureTitle",
-      "usageFeatureTitle",
+      "featureWallTitle",
+      ...featureGroups.flatMap((group) => [group.key, ...group.features.map((key) => `${key}FeatureTitle`)]),
       "previewTitle",
       "coordinationTitle",
       "developerTitle",
@@ -190,7 +189,7 @@ test("agent documents follow the pages and do not publish a download that does n
       previous = position;
     }
     for (const key of [
-      "accountFeatureDescription", "handoffFeatureDescription", "usageFeatureDescription",
+      "featureWallDescription", ...homeFeatures.map(({ key }) => `${key}FeatureDescription`),
       "developerIntro", "developerShiftBody", "developerContextBody", "developerQualityBody",
       "developerPurpose", "developerInvitation", "developerByline",
     ]) {
