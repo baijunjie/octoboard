@@ -134,18 +134,11 @@ macro_rules! started_by_a_session {
          own console) runs on that session's own agent unless it chooses another, and one a \
          console session starts for a project (`new_session` or `request_session`) on the \
          project's default agent; a console session's request for a console session runs on the \
-         requester's own agent. While `auto_select_account` is on, a left-out account is the one \
-         of that agent whose weekly quota resets soonest and that can still open a session. When \
-         none does, the starting session's own account is used only when it is the same agent and \
-         can still open a session; otherwise the account is the project's for the agent, else the \
-         console's. When automatic selection is on and neither agent nor account is named, an \
-         agent with no usable accounts falls back to other installed, added agents in added \
-         order. Within each agent, use its weekly pick, inherited account, then first usable \
-         account; no quota reading is still usable. An explicit agent prevents crossing agents; \
-         an explicit account preserves both. If no usable account is found, an exhausted account \
-         of the initial agent that becomes usable soonest is chosen when one qualifies, ahead of \
-         the inherited account. Unspecified model and effort use the final agent. A console \
-         session names another agent or account only when the user asked for it."
+         requester's own agent. A left-out account is selected by the server according to the \
+         configured policy. Automatic selection may choose another agent when neither agent nor \
+         account is named; an explicit agent limits selection to it, and an explicit account \
+         preserves both. Unspecified model and effort follow the final agent. A console session \
+         names another agent or account only when the user asked for it."
     };
 }
 
@@ -429,18 +422,13 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                     },
                     "auto_select_account": {
                         "type": "boolean",
-                        "description": "When on, `new_session`, `request_session` and \
-                                        `handoff_session` whose account was left out use the \
-                                        account of that session's agent whose weekly quota resets \
-                                        soonest, among accounts that can still open a session. \
-                                        When none does, the account is the one used while the \
-                                        setting is off. New sessions with no explicit agent or \
-                                        account also try other usable accounts, then other \
-                                        installed, added agents in added order; handoffs stay on \
-                                        their chosen agent. If no usable account is found, an \
-                                        exhausted account of the initial agent that becomes \
-                                        usable soonest is chosen when one qualifies, ahead of the \
-                                        inherited account.",
+                        "description": "Whether omitted accounts are selected automatically \
+                                        using availability and quota. When off, selection uses \
+                                        the caller's applicable account or project/console \
+                                        defaults. Applies to `new_session`, `request_session` \
+                                        and `handoff_session`. For new sessions, selection may \
+                                        cross agents only when neither agent nor account is \
+                                        named; handoffs stay on their chosen agent.",
                     },
                     "sidebar_order_by_status": {
                         "type": "boolean",
@@ -479,31 +467,23 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     ToolDef {
         name: "new_session",
         description: "Start a session in one of this console's projects and hand it a task. It is \
-                      yours for its whole life: it reports to this console session, its owner, \
-                      and you instruct it with `instruct_session`, archive it once it is done and \
-                      reopen it with `reopen_session` when it has another task. Needs no \
-                      approval. Returns the new session's id, its agent, the account it opened on \
+                      yours for its whole life: it reports to this console session, its owner, and \
+                      you instruct it with `instruct_session`, archive it once it is done and \
+                      reopen it with `reopen_session` when it has another task. Needs no approval. \
+                      Returns the new session's id, its agent, the account it opened on \
                       (`account`, `account_name`) and the `model` and `effort` it was launched \
                       with (`null` is the agent's own default). The brief is rendered into the \
                       session's opening prompt; `title` names the session in the user's language. \
-                      When automatic selection is on and neither agent nor account is named, an \
-                      agent with no usable accounts falls back to other installed, added agents \
-                      in added order. Within each agent, use its weekly pick, inherited account, \
-                      then first usable account; no quota reading is still usable. An explicit \
-                      agent prevents crossing agents; an explicit account preserves both. If no \
-                      usable account is found, an exhausted account of the initial agent that \
-                      becomes usable soonest is chosen when one qualifies, and the refusal names \
-                      it. Unspecified model and effort use the final agent. It prefers the \
-                      project's default agent. While `auto_select_account` is on, a left-out \
-                      account is the one of the session's agent whose weekly quota resets soonest \
-                      and that can still open a session. When none does, your own account is used \
-                      only when the session's agent is your own and that account can still open a \
-                      session; any other takes the account its project, else its console, sets. \
-                      Name another only when the user asked for it. Use this when you should keep \
-                      directing the session and receiving its reports. To hand your own work to a \
-                      peer in the next session, use `request_session`; if the user only wants \
-                      handover notes and an end, leave the notes and end. Ask the user if their \
-                      intent is unclear.",
+                      It prefers the project's default agent. A left-out account is selected by \
+                      the server according to the configured policy. Automatic selection may \
+                      choose another agent when neither agent nor account is named; an explicit \
+                      agent limits selection to it, and an explicit account preserves both. \
+                      Unspecified model and effort follow the final agent. A refusal explains why \
+                      the session could not start. Name another agent or account only when the \
+                      user asked for it. Use this when you should keep directing the session and \
+                      receiving its reports. To hand your own work to a peer in the next session, \
+                      use `request_session`; if the user only wants handover notes and an end, \
+                      leave the notes and end. Ask the user if their intent is unclear.",
         schema: || new_session_schema(true),
     },
     INSTRUCT_SESSION,
@@ -942,18 +922,9 @@ const HANDOFF_SESSION: ToolDef = ToolDef {
                     "type": "string",
                     "description": "The new session's account: an account's id or name, or \
                                     `default` for the agent's default account. It must belong to \
-                                    `agent`. Left out while `auto_select_account` is on, it is \
-                                    the account of `agent` whose weekly quota resets soonest and \
-                                    that can still open a session. When no account of `agent` \
-                                    can, it is an exhausted account that becomes usable soonest \
-                                    when one qualifies. With automatic approval the refusal names \
-                                    it; otherwise the approval form starts on it. When none \
-                                    qualifies, or while automatic selection is off, it is your \
-                                    own account when `agent` is your own agent and that account \
-                                    can still open a session (it is not disabled, is logged in \
-                                    and its quota is not used up); otherwise the account the \
-                                    session's project (else its console) sets for `agent`; a \
-                                    project session reads it in `get_project`'s \
+                                    `agent`. Left out, the server selects it according to the \
+                                    configured policy, staying on `agent`. A project session reads \
+                                    its project's account settings in `get_project`'s \
                                     `effective.accounts`.",
                 },
                 "title": {
@@ -1853,7 +1824,7 @@ const GET_PROJECT: ToolDef = ToolDef {
          unset, and `effective`, those three resolved against the console's settings: the \
          project's default agent, the account id (or `default`) and the model and effort \
          (`null` is the agent's own default) a session of each agent gets when nothing names \
-         otherwise, before the picks described below, and `git_workflow` (the project's own \
+         otherwise, before session-specific selection, and `git_workflow` (the project's own \
          `override` of the git workflow settings, `null` following the application-wide value, \
          and the `effective` resolved values; `rebase_before_merge` and `delivery` apply only \
          while `development` is not `in_place`), and `git_status`. ",
@@ -1995,38 +1966,28 @@ const REQUEST_SESSION: ToolDef = ToolDef {
                   owner's: it reports to the user, and you and it can only exchange information \
                   (`send_message`). It can be a project session in any project of any console, or \
                   a console session. A session you want to drive yourself is one `new_session` \
-                  starts, where you have it. The user is asked first, and the call waits for \
-                  their answer, for several minutes at most — unless the user has chosen to have \
-                  such requests approved automatically, in which case the result says so and the \
-                  call does not wait. On approval Octoboard starts it with your brief as its \
-                  opening prompt; follow the user's direction on whether your own work ends after \
-                  the handover. Use this for a peer to continue your current work in the next \
-                  session. If the user only wants handover notes and an end, leave the notes and \
-                  end without starting a session. If their intent is unclear, ask before acting. \
-                  A refusal, or no answer in time, comes back as an error and changes nothing. \
-                  When handing over work on a branch you are responsible for, pass it in \
-                  `branches`: the user is shown them, and on approval the new session becomes \
-                  responsible for them in your place. Leave `branches` out when you are only \
-                  working on whatever branch is checked out. `title` names the session in the \
-                  user's language. In your own console it runs on your own agent, or on the \
-                  project's default agent when a project is named from a console session. While \
-                  `auto_select_account` is on, a left-out account is the one of the session's \
-                  agent whose weekly quota resets soonest and that can still open a session. When \
-                  none does, your own account is used in your own console only for your own agent \
-                  when that account can still open a session; any other session takes the account \
-                  its project, else its console, sets. Otherwise a session in your own console of \
-                  your own agent runs on your own account, unless that account can no longer open \
-                  a session (it is disabled, not logged in or used up), and any other takes the \
-                  account its project, else its console, sets (a project session reads its own \
-                  project's in `get_project`'s `effective.accounts`). Pass an account only when \
-                  the user asked for one. With automatic selection on and no named agent or \
-                  account, if no account of the preferred agent is usable, other installed, added \
-                  agents are tried in added order. Within each agent, the weekly pick, inherited \
-                  account, then first usable account in saved order are tried. No quota reading \
-                  is still usable. A named agent limits selection to it; a named account \
-                  preserves both. If no usable account is found, an exhausted account of the \
-                  initial agent that becomes usable soonest is chosen when one qualifies, and the \
-                  refusal names it. Unspecified model and effort follow the final agent.",
+                  starts, where you have it. The user is asked first, and the call waits for their \
+                  answer, for several minutes at most — unless the user has chosen to have such \
+                  requests approved automatically, in which case the result says so and the call \
+                  does not wait. On approval Octoboard starts it with your brief as its opening \
+                  prompt; follow the user's direction on whether your own work ends after the \
+                  handover. Use this for a peer to continue your current work in the next session. \
+                  If the user only wants handover notes and an end, leave the notes and end \
+                  without starting a session. If their intent is unclear, ask before acting. A \
+                  refusal, or no answer in time, comes back as an error and changes nothing. When \
+                  handing over work on a branch you are responsible for, pass it in `branches`: \
+                  the user is shown them, and on approval the new session becomes responsible for \
+                  them in your place. Leave `branches` out when you are only working on whatever \
+                  branch is checked out. `title` names the session in the user's language. In your \
+                  own console it runs on your own agent, or on the project's default agent when a \
+                  project is named from a console session. For a session in another console, the \
+                  default agent is the one that console (and its project) sets. A left-out account \
+                  is selected by the server according to the configured policy. Automatic \
+                  selection may choose another agent when neither agent nor account is named; a \
+                  named agent limits selection to it, and a named account preserves both. \
+                  Unspecified model and effort follow the final agent. Pass an agent or account \
+                  only when the user asked for one. Read the result for the actual session \
+                  started; a refusal explains why nothing was started.",
     schema: request_session_schema,
 };
 
@@ -2078,9 +2039,8 @@ const GET_ACCOUNT_QUOTAS: ToolDef = ToolDef {
                   it is not exhausted or the reset time is unknown). `can_open` says a session \
                   could be opened on the account now; when it is false `cannot_open_reason` says \
                   why (used up, not logged in, or a change of its sharing settings is running). \
-                  `auto_select_account` is whether a session opened without naming an account is \
-                  put on one Octoboard chooses (the account of the agent whose weekly quota resets \
-                  soonest and still has some left, among those with `can_open`). Only agents a \
+                  `auto_select_account` says whether automatic account selection is enabled for \
+                  sessions opened without naming an account. Only agents a \
                   session could be opened on are listed: one that is not installed or not added \
                   lists no accounts. These are the readings Octoboard last took, refreshed about \
                   every five minutes, and this call takes a new one only when `refresh` is true, \
@@ -2146,37 +2106,28 @@ const COORDINATOR_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
                       whole life: it reports to this session, its owner, and you instruct it with \
                       `instruct_session`, archive it once it is done and reopen it with \
                       `reopen_session` when it has another closely related task and room for it. \
-                      Needs no approval. When automatic selection is on and neither agent nor \
-                      account is named, an agent with no usable accounts falls back to other \
-                      installed, added agents in added order. Within each agent, use its weekly \
-                      pick, inherited account, then first usable account; no quota reading is \
-                      still usable. An explicit agent prevents crossing agents; an explicit \
-                      account preserves both. If no usable account is found, an exhausted account \
-                      of the initial agent that becomes usable soonest is chosen when one \
-                      qualifies, and the refusal names it. Unspecified model and effort use the \
-                      final agent. It prefers your own agent. While `auto_select_account` is on, \
-                      a left-out account is the one of that agent whose weekly quota resets \
-                      soonest and that can still open a session. When none does, your own account \
-                      is used only when it is your own agent and can still open a session; \
-                      otherwise the account is the project's, else the console's (`get_project` \
-                      gives it in `effective.accounts`). Name another account only when the user \
-                      asked for it, or when it is the way to reach another agent. Name another \
-                      agent only when the user asked for it or when you judge it fits the work \
-                      better and an account of it can open a session. Returns the new session's \
-                      id, its agent, the account it opened on (`account`, `account_name`) and the \
-                      `model` and `effort` it was launched with (`null` is the agent's own \
-                      default), and with `branches` the ones that moved and a `note` on how the \
-                      handover went. The brief is rendered into the session's opening prompt; \
-                      `title` names the session in the user's language. A session started this \
-                      way cannot start sessions of its own, and only this project is available; a \
-                      session elsewhere, or one that should not report to you, is one \
-                      `request_session` asks the user for. To give the new session a branch you \
-                      are responsible for, pass it in `branches`; `handover_branches` moves the \
-                      branches of any session of yours later. Use this only when you should keep \
-                      directing the session and receiving its reports. To hand your own work to a \
-                      peer in the next session, use `request_session`; if the user only wants \
-                      handover notes and an end, leave the notes and end. Ask the user if their \
-                      intent is unclear.",
+                      Needs no approval. It prefers your own agent. A left-out account is selected \
+                      by the server according to the configured policy. Automatic selection may \
+                      choose another agent when neither agent nor account is named; an explicit \
+                      agent limits selection to it, and an explicit account preserves both. \
+                      Unspecified model and effort follow the final agent. A refusal explains why \
+                      the session could not start. Name another account only when the user asked \
+                      for it, or when it is the way to reach another agent. Name another agent \
+                      only when the user asked for it or when you judge it fits the work better \
+                      and an account of it can open a session. Returns the new session's id, its \
+                      agent, the account it opened on (`account`, `account_name`) and the `model` \
+                      and `effort` it was launched with (`null` is the agent's own default), and \
+                      with `branches` the ones that moved and a `note` on how the handover went. \
+                      The brief is rendered into the session's opening prompt; `title` names the \
+                      session in the user's language. A session started this way cannot start \
+                      sessions of its own, and only this project is available; a session \
+                      elsewhere, or one that should not report to you, is one `request_session` \
+                      asks the user for. To give the new session a branch you are responsible for, \
+                      pass it in `branches`; `handover_branches` moves the branches of any session \
+                      of yours later. Use this only when you should keep directing the session and \
+                      receiving its reports. To hand your own work to a peer in the next session, \
+                      use `request_session`; if the user only wants handover notes and an end, \
+                      leave the notes and end. Ask the user if their intent is unclear.",
         schema: || new_session_schema(false),
     },
     INSTRUCT_SESSION,
@@ -2243,23 +2194,10 @@ fn request_session_schema() -> Value {
     );
     schema["properties"]["account"]["description"] = json!(
         "The account the session runs on: an account's id or name, or `default` for the agent's \
-         default account. It must belong to the session's agent. While `auto_select_account` is \
-         on, a left-out account is the one of the session's agent whose weekly quota resets \
-         soonest, among accounts that can still open a session (not disabled, logged in, quota \
-         not used up). Your own account, for a session in your own console of your own agent that \
-         can still open a session, or the account its project (else its console) sets, is used \
-         only when none does. If no usable account is found, an exhausted account of the initial \
-         agent that becomes usable soonest is chosen when one qualifies, and the refusal names \
-         it. Otherwise a session in your own console of your own agent runs on your own account, \
-         unless that account can no longer open a session (it is disabled, not logged in or used \
-         up), and any other takes the account its project (else its console) sets for the agent \
-         (a project session reads its own project's in `get_project`'s `effective.accounts`). \
-         When automatic selection is on and neither agent nor account is named, an agent with no \
-         usable accounts falls back to other installed, added agents in added order. Within each \
-         agent, use its weekly pick, inherited account, then first usable account; no quota \
-         reading is still usable. An explicit agent prevents crossing agents; an explicit account \
-         preserves both. Unspecified model and effort use the final agent. Pass one only when the \
-         user asked for it."
+         default account. It must belong to the session's agent. Left out, the server selects it \
+         according to the configured policy. An explicit agent limits selection to it; an explicit \
+         account preserves both. A project session reads its own project's in `get_project`'s \
+         `effective.accounts`. Pass one only when the user asked for it."
     );
     schema["properties"]["model"]["description"] = json!(
         "Overrides the model for this one session; blank is the agent's own default. \
@@ -2386,23 +2324,10 @@ fn new_session_schema(with_project: bool) -> Value {
             "description": format!(
                 "The account the session runs on: an account's id or name{pick_from}, or \
                  `default` for the agent's default account. It must belong to the session's \
-                 agent. While `auto_select_account` is on, a left-out account is the one of the \
-                 session's agent whose weekly quota resets soonest, among accounts that can still \
-                 open a session (not disabled, logged in, quota not used up). Your own account, \
-                 for a session of your own agent that can still open a session, or the account \
-                 its project (else its console) sets, is used only when none does. If no usable \
-                 account is found, an exhausted account of the initial agent that becomes usable \
-                 soonest is chosen when one qualifies, and the refusal names it. Otherwise a \
-                 session of your own agent runs on your own account, unless that account can no \
-                 longer open a session (it is disabled, not logged in or used up), and any other \
-                 takes the account its project (else its console) sets for the agent{pointer}. \
-                 When automatic selection is on and neither agent nor account is named, an agent \
-                 with no usable accounts falls back to other installed, added agents in added \
-                 order. Within each agent, use its weekly pick, inherited account, then first \
-                 usable account; no quota reading is still usable. An explicit agent prevents \
-                 crossing agents; an explicit account preserves both. Unspecified model and \
-                 effort use the final agent. Pass one only when the user asked for \
-                 it{other_agent}.",
+                 agent. Left out, the server selects it according to the configured policy \
+                 for the agent{pointer}. An explicit agent limits selection to it; an explicit \
+                 account preserves both. Unspecified model and effort follow the final agent. \
+                 Pass one only when the user asked for it{other_agent}.",
                 pick_from = if with_project { " (see `get_settings`)" } else { "" },
                 pointer = if with_project {
                     ""
@@ -3046,7 +2971,7 @@ mod tests {
                 "{account}"
             );
             assert!(
-                account.contains("other installed, added agents in added order"),
+                account.contains("the server selects it according to the configured policy"),
                 "{account}"
             );
         }
@@ -3061,7 +2986,7 @@ mod tests {
         for field in ["account", "model", "effort"] {
             let text = text(&request, field);
             assert!(
-                text.contains("a project session reads its own project's in `get_project`'s"),
+                text.contains("project session reads its own project's in `get_project`'s"),
                 "{text}"
             );
         }
