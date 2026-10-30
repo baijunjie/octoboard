@@ -78,18 +78,13 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            and `context`, `acceptance` and `constraints` wherever you actually have something to \
            say; an empty field is omitted from the session's opening prompt rather than sent \
            blank. Name it with `title`, in the user's language, not \
-           that of the project, its docs and code. It runs on the project's default agent. While \
-           **Automatically select an account** is on (an application setting; see `get_settings`), \
-           a left-out account is the one of the session's agent whose weekly quota resets \
-           soonest and that can still open a session. When none does, your own account is used \
-           only when the session's agent is your own and that account can still open a session; \
-           any other takes the account its project, else its console, sets. Name another agent \
-           or account only when the user asked for them. Returns the session's id. The session is \
-           yours for its whole life. With automatic selection on and no named agent or \
-           account, if no account of the preferred agent is usable, other installed, added \
-           agents are tried in added order. Within each agent, the weekly pick, inherited \
-           account, then first usable account are tried; no quota reading is still usable. \
-           A named agent limits selection to it; a named account preserves both. Unspecified \
+           that of the project, its docs and code. It runs on the project's default agent. A \
+           left-out account is selected by the server according to the configured policy. Name \
+           another agent or account only when the user asked for them. The result gives the \
+           session's id and the agent, account, model and effort it actually started with; a \
+           refusal explains why it could not start. The session is yours for its whole life. \
+           Automatic selection may choose another agent when neither agent nor account is named; \
+           a named agent limits selection to it, and a named account preserves both. Unspecified \
            model and effort follow the final agent.\n\
          - `instruct_session` — the next instruction for a session already running.\n\
          - `interrupt_session` — stop the turn a session of yours is in the middle of, when it \

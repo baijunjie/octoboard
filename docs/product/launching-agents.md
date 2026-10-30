@@ -87,8 +87,11 @@ the launch environment described below:
   the project's own MCP servers keep working alongside it. Claude Code and Codex are told to run its tools without
   asking (see "Claude Code" and "Codex" in `docs/product/per-agent-launch-specifics.md`).
 - **A role description** — whether this is a console or project session, and, for a project session, its coordinator or
-  worker role and separate reporting relationship. It includes the reporting conventions that go with them. A console
-  session's is short: it is the console session, it decomposes requests on its console's projects, dispatches them,
+  worker role and separate reporting relationship. Every project session's description opens with its responsibility
+  for the current project's tasks under the project's own instructions, conventions and configuration. It then explains
+  its reporting relationship; an independent session's coordination capabilities follow in a separate section.
+  The description includes the corresponding reporting conventions. A console session's is short: it is the console
+  session, it decomposes requests on its console's projects, dispatches them,
   follows up and summarizes, does itself any work that touches no project, and does not change a project itself, and the
   rest is in its instruction file, which may end with the user's own instructions, which take precedence over the rest
   of the file wherever they disagree but never let it change a project itself (see "The console session's instruction
@@ -120,8 +123,13 @@ the launch environment described below:
   development rule (see "The development rule" in `docs/product/git-workflow-settings.md`), where **Ask questions as
   choices** is on at the launch, the guidance on asking the user after it (see "The guidance on asking the user" below),
   and where the language the daemon holds is not English, the guidance on the user's language after that (see "The
-  guidance on the user's language" below). Every project session's text ends by saying that everything else is the
-  ordinary work of the project, under its own instructions, conventions and configuration. The text is written from who
+  guidance on the user's language" below). Every project session's text then says that everything else is the ordinary
+  work of the project, under its own instructions, conventions and configuration. Every role description, for console
+  and project sessions alike, ends with a separated section on the scope of host instructions: they govern the
+  assistant's behavior without establishing the user's task context. Requests are interpreted through the current
+  project, where applicable, and the conversation; a concept mentioned in the host instructions alone does not make a
+  request about the host unless the user explicitly refers to it. Instruction priority resolves conflicts without
+  determining what the user's request refers to. The text is written from who
   the session reports to when it launches, and says that what Octoboard tells it of a later change of owner replaces
   what it says (see "When a binding changes while a session runs" in `docs/product/changing-session-owners.md`); a
   change made while the session was not running is told at its next launch, ahead of that launch's own instruction (see
@@ -253,7 +261,7 @@ session:
   project's own conventions instead.
 
 In a project session's role description it comes after the guidance on asking the user, where that is given, and
-before the closing sentence on the project's ordinary work. A project session is given the section only when a language
+before the sentence on the project's ordinary work. A project session is given the section only when a language
 other than English is held at that launch; as with the guidance on asking the user, a change to it is
 sure to reach only project sessions begun after it, since Claude Code and Grok Build keep the role text a conversation
 was first given, so a session begun earlier may keep the section, its absence or the language it named, even when

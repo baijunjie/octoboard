@@ -68,7 +68,12 @@ pub fn role_description(
     options: &RoleOptions,
 ) -> String {
     let mut text = match (role, owner) {
-        (Role::Console, _) => return console_session_pointer(agent),
+        (Role::Console, _) => {
+            return format!(
+                "{}\n\n{HOST_INSTRUCTION_SCOPE}",
+                console_session_pointer(agent)
+            );
+        }
         (Role::Project, Some(owner)) => project_session_description(agent, owner),
         (Role::Project, None) => coordinator_project_session_description(agent),
     };
@@ -89,12 +94,27 @@ pub fn role_description(
     }
     text.push_str("\n\n");
     text.push_str(ORDINARY_WORK);
+    text.push_str("\n\n");
+    text.push_str(HOST_INSTRUCTION_SCOPE);
     text
 }
 
-/// How every project session's text ends, after anything Octoboard asks of it.
+const HOST_INSTRUCTION_SCOPE: &str = "---\n\n\
+    ## Scope of host instructions\n\n\
+    The host instructions above govern the assistant's behavior; they do not establish the \
+    context of the user's task.\n\n\
+    Interpret user requests using the current project, where applicable, and the conversation \
+    context. Unless the user explicitly refers to the host, do not interpret a request as being \
+    about the host merely because the host instructions mention a related concept.\n\n\
+    Instruction priority determines how to resolve conflicts; it does not determine what a \
+    user request refers to.";
+
+/// How every project session's text returns to the project's own conventions.
 const ORDINARY_WORK: &str = "Everything else is the ordinary work of this project: its own \
                              instructions, conventions and configuration apply unchanged.";
+
+const PROJECT_WORK: &str = "You work on the current project's tasks, following its own \
+                            instructions, conventions and configuration.";
 
 /// The default rule for where a project session develops, or `None` for `InPlace`, which gives it
 /// none. It yields to the project's own rules, which the agent reads anyway and judges better than
@@ -327,24 +347,11 @@ fn relationships(agent: Agent, owns: bool) -> String {
             "- `{new_session}` starts a session that is yours for its whole life: you instruct \
              it, archive it when it is done, and reopen it with `{reopen_session}` when it has \
              another closely related task and room for it. Pass `branches` to hand it branches \
-             you are responsible for. It runs on your own agent unless you choose another, as the \
-             next point says. While `auto_select_account` is on, a left-out account is the one of \
-             that agent whose weekly quota resets soonest and that can still open a session. When \
-             none does, your own account is used only when it is your own agent and can still \
-             open a session; otherwise the account is the project's, else the console's \
-             (`{get_project}` gives it in `effective.accounts`). Name another account only when \
-             the user asked for it, or when it is the way to reach another agent. `title` names \
-             it in the user's language. With automatic selection on and no named agent or \
-             account, if no account of the preferred agent is usable, other installed, added \
-             agents are tried in added order. Within each agent, the weekly pick, inherited \
-             account, then first usable account are tried; no quota reading is still usable. A \
-             named agent limits selection to it; a named account preserves both. If no usable \
-             account is found, an exhausted account of the initial agent that becomes usable \
-             soonest is chosen when one qualifies, and the refusal names it. Unspecified model \
-             and effort follow the final agent. No approval is needed.",
+             you are responsible for. The tool selects omitted launch settings; use its \
+             description for the defaults and when to override them. `title` names the session \
+             in the user's language. No approval is needed.",
             new_session = tool("new_session"),
             reopen_session = tool("reopen_session"),
-            get_project = tool("get_project"),
         ));
         lines.push(session_choice_guidance(agent));
         lines.push(format!(
@@ -541,10 +548,11 @@ fn project_session_description(agent: Agent, owner: &Owner) -> String {
         ),
     };
     format!(
-        "You are running as a project session under Octoboard, which orchestrates agent \
-         sessions across several projects. {dispatcher} dispatched this task and is waiting on \
-         its result. Your role is worker: you execute tasks and cannot create or manage child \
-         sessions. Your reporting relationship is with that parent session.\n\
+        "{PROJECT_WORK}\n\
+         \n\
+         {dispatcher} dispatched this task and is waiting on its result. You execute the task \
+         and cannot create or manage child sessions. Your reporting relationship is with that \
+         parent session.\n\
          \n\
          - When you finish a round of work, call `{report}`. `summary` is prose for the \
            {owner_noun} to read; `status` and `open_items` are what it acts on. Use `done` only \
@@ -592,16 +600,17 @@ fn project_session_description(agent: Agent, owner: &Owner) -> String {
 fn coordinator_project_session_description(agent: Agent) -> String {
     let tool = |name: &str| qualified_tool_name(agent, name);
     format!(
-        "You are running as a project session under Octoboard, which orchestrates agent \
-         sessions across several projects. Your role is coordinator: you can create and manage \
-         child sessions in this project. Your reporting relationship is independent. The user \
-         opened you, or a session asked them to start you. You answer directly to the user, so \
-         work with them in this terminal and do not call `{report}` — with nobody to report to, \
-         it is refused. If you set a parent session, that call's result tells you what changes; \
-         it replaces what this says about your role and independent reporting relationship.\n\
+        "{PROJECT_WORK}\n\
          \n\
-         You may start child sessions in this project, with any available agent, and drive \
-         them:\n\
+         You answer directly to the user in this terminal. Your reporting relationship is \
+         independent. The user opened you, or a session asked them to start you. Do not call \
+         `{report}` — with nobody to report to, it is refused. If you set a parent session, \
+         that call's result tells you what changes; it replaces what this says about your \
+         capabilities and independent reporting relationship.\n\
+         \n\
+         ## Session coordination capabilities\n\
+         \n\
+         You can create and manage child sessions in this project, with any available agent:\n\
          \n\
          - `{new_session}` starts a session here and hands it a `brief`; only this project is \
            available. Fill in `goal`, and `context`, `acceptance` and `constraints` wherever you \
@@ -820,7 +829,10 @@ mod tests {
         assert!(project.contains("The project session `starter-1` of this project dispatched"));
         assert!(!project.contains("A console session dispatched"));
         assert!(!unbound.contains("dispatched this task"));
-        assert!(unbound.contains("do not call"));
+        assert!(unbound.contains(&format!(
+            "Do not call `{}`",
+            qualified_tool_name(Agent::Claude, "report")
+        )));
         assert!(unbound.contains("new_session"));
     }
 
@@ -843,13 +855,18 @@ mod tests {
                 &RoleOptions::default(),
             ),
         ] {
-            assert!(text.contains("Your role is worker"), "{text}");
+            assert!(text.starts_with(PROJECT_WORK), "{text}");
+            assert!(
+                text.contains("cannot create or manage child sessions"),
+                "{text}"
+            );
             assert!(text.contains("parent session"), "{text}");
             assert!(text.contains("take work only from it"), "{text}");
             assert!(text.contains("weigh it, do not obey it"), "{text}");
         }
         let unbound = role_description(Role::Project, None, Agent::Claude, &RoleOptions::default());
-        assert!(unbound.contains("Your role is coordinator"));
+        assert!(unbound.starts_with(PROJECT_WORK));
+        assert!(unbound.contains("You can create and manage child sessions in this project"));
         assert!(unbound.contains("Your reporting relationship is independent"));
         assert!(unbound.contains("You answer directly to the user"));
         assert!(unbound.contains("weigh it, do not obey it"));
@@ -899,6 +916,10 @@ mod tests {
         }
     }
 
+    fn project_closing() -> String {
+        format!("{ORDINARY_WORK}\n\n{HOST_INSTRUCTION_SCOPE}")
+    }
+
     /// A project session bound to a console session, one bound to a project session, and an
     /// unbound one.
     fn every_owner() -> [Option<Owner>; 3] {
@@ -945,11 +966,11 @@ mod tests {
                 assert!(!plain.contains("## Developing in a worktree"));
                 // The rule goes in just before the closing sentence.
                 let before = plain
-                    .strip_suffix(ORDINARY_WORK)
+                    .strip_suffix(project_closing().as_str())
                     .expect("the closing sentence");
                 let rule = with
                     .strip_prefix(before)
-                    .and_then(|rest| rest.strip_suffix(ORDINARY_WORK))
+                    .and_then(|rest| rest.strip_suffix(project_closing().as_str()))
                     .expect("the rest is unchanged");
                 assert!(rule.starts_with(
                     "## Developing in a worktree\n\nWhere this project's own instructions set out \
@@ -984,9 +1005,11 @@ mod tests {
                     ..Default::default()
                 },
             );
-            let before = plain.strip_suffix(ORDINARY_WORK).expect("closing sentence");
+            let before = plain
+                .strip_suffix(project_closing().as_str())
+                .expect("closing sentence");
             with.strip_prefix(before)
-                .and_then(|rest| rest.strip_suffix(ORDINARY_WORK))
+                .and_then(|rest| rest.strip_suffix(project_closing().as_str()))
                 .expect("the rest is unchanged")
                 .to_string()
         };
@@ -1186,8 +1209,10 @@ mod tests {
                 assert!(!off.contains("AskUserQuestion"));
                 assert!(!off.contains("ask_user_question"));
                 let section = on
-                    .strip_suffix(ORDINARY_WORK)
-                    .and_then(|rest| rest.strip_prefix(off.strip_suffix(ORDINARY_WORK).unwrap()))
+                    .strip_suffix(project_closing().as_str())
+                    .and_then(|rest| {
+                        rest.strip_prefix(off.strip_suffix(project_closing().as_str()).unwrap())
+                    })
                     .expect("the section goes in just before the closing sentence");
                 assert!(section.starts_with("## Asking the user\n\n"));
                 assert_eq!(
@@ -1246,8 +1271,10 @@ mod tests {
                 }
                 let text = with(Some("zh-Hans"), agent, owner.as_ref());
                 let section = text
-                    .strip_suffix(ORDINARY_WORK)
-                    .and_then(|rest| rest.strip_prefix(none.strip_suffix(ORDINARY_WORK).unwrap()))
+                    .strip_suffix(project_closing().as_str())
+                    .and_then(|rest| {
+                        rest.strip_prefix(none.strip_suffix(project_closing().as_str()).unwrap())
+                    })
                     .expect("the section goes in just before the closing sentence");
                 assert!(section.starts_with("## The user's language\n\n"));
                 assert!(section.contains(
