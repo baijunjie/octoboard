@@ -100,17 +100,18 @@ Then come the fields:
   "Which agent a session uses" in `docs/product/opening-sessions.md`) when that is another agent and can be picked (see
   "Which agents the agent pickers list" in `docs/product/consoles.md`), otherwise on the first other agent that can, in
   the order of the added agents. The session dialog's rule leaving out an agent whose accounts are all turned off,
-  including its fallback when the selected agent's last enabled account is turned off, applies here too. The account
-  it opens on for that agent — and for any other agent the user switches to without having picked one of its accounts
-  — is the one the new-session dialog would open on: while **Automatically
-  select an account** is on, the agent's account whose weekly quota resets soonest; otherwise, or when none ranks, the
-  account the project or console resolves (see "Which account a session uses" in `docs/product/opening-sessions.md`).
-  The account the field shows is sent as the receiving session's own account choice. Used-up accounts are treated as in
-  the session dialog's field: listed with a usage bar but not pickable, passed over when the field opens, and, when the
-  chosen account is used up all the same, the field says why under it, marked invalid, and **Hand off** cannot be
-  pressed. An account whose sharing of the default configuration is being changed is treated the same way while the
-  change runs, and so is an account that is not logged in; a turned-off account is left out unless the field ends on
-  it, as in the session dialog.
+  including its fallback when the selected agent's last enabled account is turned off, applies here too.
+  The account it opens on for that agent — and for any other agent the user switches to without having picked one of its
+  accounts — is the one the new-session dialog would open on: while **Automatically select an account** is on, the
+  agent's account ranked as in "Which account a session uses" in `docs/product/opening-sessions.md`, or, when none of
+  its accounts can be used, the one that becomes usable soonest; otherwise, or when none ranks, the account the project
+  or console resolves (see "Which account a session uses" in `docs/product/opening-sessions.md`). The account the field
+  shows is sent as the receiving session's own account choice. Used-up accounts are treated as in the session dialog's
+  field: listed with a usage bar but not pickable, passed over when the field opens, and, when the chosen account is
+  used up all the same, the field says why under it, marked invalid, and **Hand off** cannot be pressed. An account
+  whose sharing of the default configuration is being changed is treated the same way while the change runs, and so is
+  an account that is not logged in; a turned-off account is left out unless the field ends on it, as in the session
+  dialog.
 - The collapsed **Advanced** section — the receiving session's model and reasoning effort, showing what a new session of
   the chosen agent and account would inherit, as in the session dialog (see "The Advanced section" in
   `docs/product/model-and-reasoning-effort.md`). Only values the user changed are sent with the request; the rest are

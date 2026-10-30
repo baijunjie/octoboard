@@ -24,6 +24,17 @@ use crate::term::{Launch, LaunchRequest};
 /// back onto that account.
 const LEFT_FOR_LIMIT_FOR: Duration = Duration::from_secs(30 * 60);
 
+/// How soon a used-up quota window must reset for a session to wait on its account instead of
+/// being moved. A switch relaunches the agent and carries the conversation over, which costs more
+/// than waiting a few minutes for the account to come back.
+const HOLD_FOR_RESET: Duration = Duration::from_secs(5 * 60);
+
+/// How long past the reset a held session waits for its own account to be read as recovered before
+/// it is judged as any other: the grace before the account is read again, a tick of the poller and
+/// the reading itself, which can take up to a minute and queue behind the readings of other
+/// accounts.
+const HOLD_SLACK: Duration = Duration::from_secs(3 * 60);
+
 /// How long a failed turn waits for another claim on its session to end before it is judged. A
 /// switch keeps its claim past the relaunch until the process has stayed up a few seconds, and the
 /// turn it continues may fail within that time.
@@ -66,10 +77,17 @@ pub(crate) struct PendingRecovery {
     session: Session,
     live: Arc<crate::session::LiveSession>,
     generation: Arc<()>,
+    /// Tells this trigger from another of the same session (the clones of one share it), which the
+    /// generation does not: a session's later failed turn replaces the trigger parked for an
+    /// earlier one.
+    token: Arc<()>,
     input_writes: u64,
     turn_ends: u64,
     since: i64,
     verified: Option<(Option<String>, Option<String>, i64)>,
+    /// While set and not yet passed (milliseconds since the epoch), the trigger is held for its
+    /// own account's reset and only a reading of that account resumes it.
+    hold_until: Option<i64>,
 }
 
 impl RecoveryState {
@@ -111,10 +129,12 @@ impl RecoveryState {
             session,
             live,
             generation,
+            token: Arc::new(()),
             input_writes,
             turn_ends,
             since: crate::protocol::now_millis(),
             verified: None,
+            hold_until: None,
         }))
     }
 }
@@ -169,6 +189,29 @@ impl PendingRecovery {
     }
 }
 
+/// The shell environment snapshot and the launch that a recovery run in the background uses: the
+/// real ones, or in a test the stand-ins its fixture installed (none installed, none returned).
+fn recovery_env(
+    state: &Arc<AppState>,
+) -> Option<(
+    impl Fn() -> Result<HashMap<String, String>> + Clone + Send + 'static,
+    impl Fn(LaunchRequest) -> Result<Launch> + Clone + Send + 'static,
+)> {
+    #[cfg(not(test))]
+    {
+        let _ = state;
+        Some((crate::env_shell::launch_snapshot, crate::term::launch))
+    }
+    #[cfg(test)]
+    {
+        let hook = state.quota_recovery.launch.lock().unwrap().clone()?;
+        Some((
+            move || Ok(hook.env.clone()),
+            move |request| (hook.launch)(request),
+        ))
+    }
+}
+
 /// Only a newly recorded, successful probe is a reason to reconsider the waits.
 pub(crate) fn after_quota_refresh(
     state: &Arc<AppState>,
@@ -177,16 +220,7 @@ pub(crate) fn after_quota_refresh(
     config_dir: Option<String>,
     started_at: i64,
 ) -> Option<tokio::task::JoinHandle<()>> {
-    #[cfg(not(test))]
-    let (snapshot, launch) = (crate::env_shell::launch_snapshot, crate::term::launch);
-    #[cfg(test)]
-    let (snapshot, launch) = {
-        let hook = state.quota_recovery.launch.lock().unwrap().clone()?;
-        (
-            move || Ok(hook.env.clone()),
-            move |request| (hook.launch)(request),
-        )
-    };
+    let (snapshot, launch) = recovery_env(state)?;
     let state = state.clone();
     Some(tokio::spawn(async move {
         let _slot = state.quota_recovery.slots.acquire().await;
@@ -225,30 +259,19 @@ async fn recover_after_refresh(
         .expect("quota recovery lock poisoned")
         .waiting
         .values()
-        .filter(|wait| wait.session.agent == agent && started_at > wait.since)
+        .filter(|wait| {
+            wait.session.agent == agent
+                && started_at > wait.since
+                && wait.hold_until.is_none_or(|until| {
+                    until <= crate::protocol::now_millis() || wait.session.account_id == account
+                })
+        })
         .cloned()
         .collect();
     for mut wait in candidates {
         let id = wait.session.id.clone();
         // Claim before inspecting launch state: another callback may already be restarting it.
-        let claimed = {
-            let mut inner = state
-                .quota_recovery
-                .inner
-                .lock()
-                .expect("quota recovery lock poisoned");
-            if inner
-                .waiting
-                .get(&id)
-                .is_some_and(|pending| Arc::ptr_eq(&pending.generation, &wait.generation))
-            {
-                inner.waiting.remove(&id);
-                true
-            } else {
-                false
-            }
-        };
-        if !claimed {
+        if !claim(state, &wait) {
             continue;
         }
         if !wait.still_due(state) {
@@ -290,6 +313,24 @@ async fn recover_after_refresh(
             keep_waiting(state, wait);
         }
     }
+}
+
+/// Takes `wait` out of the waits if it is the trigger waiting for its session, not one parked over
+/// it since; true when it was.
+fn claim(state: &Arc<AppState>, wait: &PendingRecovery) -> bool {
+    let mut inner = state
+        .quota_recovery
+        .inner
+        .lock()
+        .expect("quota recovery lock poisoned");
+    let is_waiting = inner
+        .waiting
+        .get(&wait.session.id)
+        .is_some_and(|pending| Arc::ptr_eq(&pending.token, &wait.token));
+    if is_waiting {
+        inner.waiting.remove(&wait.session.id);
+    }
+    is_waiting
 }
 
 fn keep_waiting(state: &Arc<AppState>, wait: PendingRecovery) {
@@ -382,8 +423,10 @@ async fn switch_after_failed_turn_captured(
 /// it is in a state to be switched and an account qualifies, and tells those concerned. Nothing
 /// when not. The turn's stop on the usage limit is waited for here, ahead of any claim: a failed
 /// turn that did not stop on it (an overload, a network error) must not leave the session shown as
-/// switching and refuse everything else meanwhile. With no target, the same confirmation
-/// authorizes a wait for a fresh quota probe. A claim held on the session is
+/// switching and refuse everything else meanwhile. With no target, the same confirmation authorizes
+/// a wait for a fresh quota probe; so does a blocking window of the session's own account that
+/// resets within [`HOLD_FOR_RESET`], though that wait is held for the account itself until
+/// [`HOLD_SLACK`] after the reset (see [`end_hold`]). A claim held on the session is
 /// waited for first ([`wait_for_claim`]); a trigger from a turn on one account is dropped if the
 /// session was moved to another during that wait. What was decided on the records read here is
 /// held to under the switch's claim as well: the account the limit was found on (the session is
@@ -451,22 +494,125 @@ async fn try_switch_captured(
     if waited.account_id != session.account_id || !trigger.still_due(state) {
         return Ok(());
     }
+    // A trigger that has been held once is judged as any other when its hold ends.
+    if trigger.hold_until.is_none() {
+        if let Some(until) = hold_deadline(state, &waited)? {
+            let token = trigger.token.clone();
+            let held = PendingRecovery {
+                hold_until: Some(until),
+                ..trigger
+            };
+            if park(state, id, held) {
+                schedule_end_hold(state, id, token, until);
+            }
+            return Ok(());
+        }
+    }
     let Some(target) = pick_target(state, &waited)? else {
+        park(state, id, trigger);
+        return Ok(());
+    };
+    switch_to_with_recovery(state, &waited, target, snapshot, launch, Some(&trigger)).await
+}
+
+/// Leaves `trigger` waiting for a successful quota probe, which reconsiders it, unless the session
+/// has had a newer trigger since; true when it was left. It replaces a wait already there, where
+/// [`keep_waiting`] keeps one, because this trigger is the newest judgement of the session.
+fn park(state: &Arc<AppState>, id: &str, trigger: PendingRecovery) -> bool {
+    let mut inner = state
+        .quota_recovery
+        .inner
+        .lock()
+        .expect("quota recovery lock poisoned");
+    if inner
+        .generations
+        .get(id)
+        .is_some_and(|generation| Arc::ptr_eq(generation, &trigger.generation))
+    {
+        inner.waiting.insert(id.to_string(), trigger);
+        return true;
+    }
+    false
+}
+
+/// When a trigger held for the reset of `reset_at` stops being held: [`HOLD_SLACK`] after it.
+fn hold_end(reset_at: i64) -> i64 {
+    reset_at + HOLD_SLACK.as_millis() as i64
+}
+
+/// Whether a window that resets at `reset_at` is close enough at `now` to wait for.
+fn within_hold(reset_at: i64, now: i64) -> bool {
+    reset_at - now <= HOLD_FOR_RESET.as_millis() as i64
+}
+
+/// When the hold ends, if the window that keeps the account `session` is on from running a turn
+/// resets within [`HOLD_FOR_RESET`], going by the reading held. A missing reading, one that failed
+/// to be read again (its windows are out of date, so it is not trusted to say when the account
+/// recovers), an account that is not used up in it, and a window that does not say when it resets
+/// are none of them a reason to wait.
+fn hold_deadline(state: &Arc<AppState>, session: &Session) -> Result<Option<i64>> {
+    let config_dir = state.store.account_dir(&session.account_id)?;
+    let account = session.account_id.as_deref();
+    let readable = state
+        .account_quotas
+        .held(session.agent, account, config_dir.as_deref())
+        .is_some_and(|quota| quota.unavailable.is_none());
+    if !readable {
+        return Ok(None);
+    }
+    let now = crate::protocol::now_millis();
+    Ok(state
+        .account_quotas
+        .exhausted(session.agent, account, config_dir.as_deref(), now)
+        .and_then(|exhausted| exhausted.resets_at)
+        .filter(|reset_at| within_hold(*reset_at, now))
+        .map(hold_end))
+}
+
+/// Runs [`end_hold`] for the trigger `token` of the session `id` at `until`, the deadline it was
+/// held to. A plain function, so that the spawned future does not make the switch's own future
+/// depend on itself.
+fn schedule_end_hold(state: &Arc<AppState>, id: &str, token: Arc<()>, until: i64) {
+    let (state, id) = (state.clone(), id.to_string());
+    let delay = Duration::from_millis((until - crate::protocol::now_millis()).max(0) as u64);
+    tokio::spawn(async move {
+        tokio::time::sleep(delay).await;
+        end_hold(&state, &id, &token, until).await;
+    });
+}
+
+/// Ends the hold of the trigger `token` of the session `id`, held until `until`, once that
+/// deadline has passed without its own account having been read as recovered, and judges it as an
+/// ordinary failed turn: moved to another account if one qualifies, else left waiting for any
+/// account's recovery. Nothing unless that very trigger is still waiting and held to that very
+/// deadline: it may have recovered, been cancelled, or been replaced by a later one.
+async fn end_hold(state: &Arc<AppState>, id: &str, token: &Arc<()>, until: i64) {
+    let trigger = {
         let mut inner = state
             .quota_recovery
             .inner
             .lock()
             .expect("quota recovery lock poisoned");
-        if inner
-            .generations
+        let held = inner
+            .waiting
             .get(id)
-            .is_some_and(|generation| Arc::ptr_eq(generation, &trigger.generation))
-        {
-            inner.waiting.insert(id.to_string(), trigger);
+            .is_some_and(|wait| Arc::ptr_eq(&wait.token, token) && wait.hold_until == Some(until));
+        if held {
+            inner.waiting.remove(id)
+        } else {
+            None
         }
-        return Ok(());
     };
-    switch_to_with_recovery(state, &waited, target, snapshot, launch, Some(&trigger)).await
+    let Some(mut trigger) = trigger else {
+        return;
+    };
+    // Held no longer, but not to be held again.
+    trigger.hold_until = Some(crate::protocol::now_millis());
+    let Some((snapshot, launch)) = recovery_env(state) else {
+        keep_waiting(state, trigger);
+        return;
+    };
+    switch_after_failed_turn_captured(state, id, Some(trigger), snapshot, launch).await;
 }
 
 /// Waits up to [`CLAIM_WAIT`] for the claim on the session `id` to be released, so that a turn that
@@ -1105,6 +1251,12 @@ mod tests {
                 .waiting
                 .contains_key("w"));
             assert_eq!(self.launched(), 0);
+            self.install_recovery_launch().await;
+        }
+
+        /// Gives the recovery a relaunch that starts a stand-in, and lets a moment pass: a probe
+        /// that started before the wait is not evidence of recovery.
+        async fn install_recovery_launch(&self) {
             let (started, launches) = (self.started.clone(), self.launches.clone());
             *self.state.quota_recovery.launch.lock().unwrap() = Some(RecoveryLaunch {
                 env: self.env(),
@@ -1112,8 +1264,19 @@ mod tests {
                     stand_in_launch(&started, &launches, || {})(request)
                 }),
             });
-            // A probe that started before the wait is not evidence of recovery.
             tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+
+        /// Whether the worker's trigger is parked, and the token it was parked under.
+        fn parked(&self) -> Option<(Arc<()>, Option<i64>)> {
+            self.state
+                .quota_recovery
+                .inner
+                .lock()
+                .unwrap()
+                .waiting
+                .get("w")
+                .map(|wait| (wait.token.clone(), wait.hold_until))
         }
 
         fn refresh_quota(&self, account: Option<&str>, used: f64) -> tokio::task::JoinHandle<()> {
@@ -1639,6 +1802,235 @@ mod tests {
             assert_eq!(told[0].1["session"], "w");
             assert!(!told[0].1.contains_key("from_id"));
         }
+    }
+
+    /// Holds a used-up weekly window of the default account, the worker's, that resets in
+    /// `minutes`.
+    fn hold_used_up_resetting_in(fixture: &Fixture, minutes: i64) {
+        let window = QuotaWindow {
+            kind: QuotaWindowKind::Weekly,
+            label: None,
+            used_percent: 100.0,
+            resets_at: Some(now_millis() + minutes * 60_000),
+            window_minutes: None,
+        };
+        fixture.hold_reading(None, vec![window], None);
+    }
+
+    /// The window that blocks the session's account resetting within minutes is waited out: the
+    /// session stays put and its trigger is parked for the recovery after the reset. A later reset
+    /// is not worth waiting for, and the session moves.
+    #[tokio::test]
+    async fn a_window_about_to_reset_is_waited_out_instead_of_switching() {
+        let soon = Fixture::new("auto-switch-hold-soon", SessionStatus::Idle);
+        hold_used_up_resetting_in(&soon, 4);
+
+        soon.failed_turn().await;
+
+        assert_eq!(soon.worker().account_id, None);
+        assert_eq!(soon.launched(), 0);
+        assert!(soon
+            .state
+            .quota_recovery
+            .inner
+            .lock()
+            .unwrap()
+            .waiting
+            .contains_key("w"));
+
+        let later = Fixture::new("auto-switch-hold-later", SessionStatus::Idle);
+        hold_used_up_resetting_in(&later, 10);
+
+        later.failed_turn().await;
+
+        assert_eq!(later.worker().account_id.as_deref(), Some("claude-a"));
+        assert_eq!(later.launched(), 1);
+    }
+
+    /// The window that blocks the account being the worker's own, held to resume it: another
+    /// account's successful reading in the meantime does not move the session, the own account's
+    /// reading after the reset resumes it where it was.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_held_session_resumes_only_on_its_own_account() {
+        let fixture = Fixture::new("auto-switch-hold-own", SessionStatus::Idle);
+        hold_used_up_resetting_in(&fixture, 4);
+        fixture.failed_turn().await;
+        assert!(fixture.parked().unwrap().1.is_some());
+        fixture.install_recovery_launch().await;
+
+        fixture.refresh_quota(Some("claude-a"), 20.0).await.unwrap();
+
+        assert_eq!(fixture.worker().account_id, None);
+        assert_eq!(fixture.launched(), 0);
+        assert!(fixture.parked().is_some());
+
+        fixture.refresh_quota(None, 10.0).await.unwrap();
+        fixture.recovered().await;
+
+        assert_eq!(fixture.worker().account_id, None);
+        assert!(fixture
+            .prompt_of(0)
+            .unwrap()
+            .contains("usage quota has recovered"));
+    }
+
+    /// When the hold ends without the own account having recovered, the session is judged as any
+    /// other: moved if an account qualifies, else left waiting for any account's recovery.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn the_end_of_a_hold_judges_the_session_as_usual() {
+        let fixture = Fixture::new("auto-switch-hold-end", SessionStatus::Idle);
+        hold_used_up_resetting_in(&fixture, 4);
+        fixture.failed_turn().await;
+        fixture.install_recovery_launch().await;
+        let (token, until) = fixture.parked().unwrap();
+
+        end_hold(&fixture.state, "w", &token, until.unwrap()).await;
+
+        assert_eq!(fixture.worker().account_id.as_deref(), Some("claude-a"));
+        assert_eq!(fixture.launched(), 1);
+
+        let stuck = Fixture::new("auto-switch-hold-end-none", SessionStatus::Idle);
+        hold_used_up_resetting_in(&stuck, 4);
+        stuck.hold(Some("claude-a"), 100.0);
+        stuck.failed_turn().await;
+        stuck.install_recovery_launch().await;
+        let (token, until) = stuck.parked().unwrap();
+
+        end_hold(&stuck.state, "w", &token, until.unwrap()).await;
+
+        assert_eq!(stuck.launched(), 0);
+        let (_, hold_until) = stuck.parked().expect("left waiting");
+        assert!(hold_until.is_some_and(|until| until <= now_millis()));
+        // Any account's reading may resume it now.
+        stuck.refresh_quota(Some("claude-a"), 20.0).await.unwrap();
+        stuck.recovered().await;
+        assert_eq!(stuck.worker().account_id.as_deref(), Some("claude-a"));
+    }
+
+    /// A hold ends for a trigger that is no longer parked (recovered, cancelled) without doing
+    /// anything.
+    #[tokio::test]
+    async fn the_end_of_a_hold_does_nothing_for_a_trigger_that_is_gone() {
+        let fixture = Fixture::new("auto-switch-hold-gone", SessionStatus::Idle);
+        hold_used_up_resetting_in(&fixture, 4);
+        fixture.failed_turn().await;
+        fixture.install_recovery_launch().await;
+        let (token, until) = fixture.parked().unwrap();
+        fixture.state.quota_recovery.cancel("w");
+
+        end_hold(&fixture.state, "w", &token, until.unwrap()).await;
+
+        assert_eq!(fixture.launched(), 0);
+        assert!(fixture.parked().is_none());
+    }
+
+    /// A trigger parked over another, by a later failed turn of the session, is not taken for the
+    /// first one: claiming the first leaves the second waiting.
+    #[tokio::test]
+    async fn a_trigger_parked_over_another_is_not_claimed_as_the_first() {
+        let fixture = Fixture::new("auto-switch-replaced", SessionStatus::Idle);
+        hold_used_up_resetting_in(&fixture, 4);
+        fixture.failed_turn().await;
+        let first = fixture.state.quota_recovery.inner.lock().unwrap().waiting["w"].clone();
+        let second = fixture
+            .state
+            .quota_recovery
+            .capture(&fixture.state, "w")
+            .unwrap()
+            .unwrap();
+        assert!(park(&fixture.state, "w", second.clone()));
+
+        assert!(!claim(&fixture.state, &first));
+        assert!(Arc::ptr_eq(&fixture.parked().unwrap().0, &second.token));
+        assert!(claim(&fixture.state, &second));
+        assert!(fixture.parked().is_none());
+    }
+
+    /// The timer of an earlier hold does not end the hold of a trigger parked since, nor one that
+    /// was held to another deadline.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_stale_timer_does_not_end_another_hold() {
+        let fixture = Fixture::new("auto-switch-stale-timer", SessionStatus::Idle);
+        hold_used_up_resetting_in(&fixture, 4);
+        fixture.failed_turn().await;
+        fixture.install_recovery_launch().await;
+        let (token, until) = fixture.parked().unwrap();
+        let until = until.unwrap();
+
+        end_hold(&fixture.state, "w", &token, until - 1).await;
+        end_hold(&fixture.state, "w", &Arc::new(()), until).await;
+
+        assert_eq!(fixture.launched(), 0);
+        assert_eq!(fixture.parked().unwrap().1, Some(until));
+    }
+
+    /// The timer set when a trigger is held ends the hold at its deadline.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn the_scheduled_end_of_a_hold_switches_the_session() {
+        let fixture = Fixture::new("auto-switch-timer", SessionStatus::Idle);
+        hold_used_up_resetting_in(&fixture, 4);
+        fixture.failed_turn().await;
+        fixture.install_recovery_launch().await;
+        let past = now_millis() - 1;
+        let token = {
+            let mut inner = fixture.state.quota_recovery.inner.lock().unwrap();
+            let wait = inner.waiting.get_mut("w").unwrap();
+            wait.hold_until = Some(past);
+            wait.token.clone()
+        };
+
+        schedule_end_hold(&fixture.state, "w", token, past);
+        fixture.recovered().await;
+
+        assert_eq!(fixture.worker().account_id.as_deref(), Some("claude-a"));
+    }
+
+    #[test]
+    fn a_window_resetting_in_exactly_five_minutes_is_waited_for() {
+        let limit = HOLD_FOR_RESET.as_millis() as i64;
+        assert!(within_hold(1_000 + limit, 1_000));
+        assert!(!within_hold(1_000 + limit + 1, 1_000));
+    }
+
+    /// Nothing is waited for without a reading that can be trusted to say when the account
+    /// recovers: none held, one that failed to be read again, a window with no reset time, or one
+    /// that is not used up.
+    #[tokio::test]
+    async fn no_hold_without_a_trustworthy_reset_time() {
+        let fixture = Fixture::new("auto-switch-hold-none", SessionStatus::Idle);
+        let session = fixture.worker();
+        hold_used_up_resetting_in(&fixture, 4);
+        assert!(hold_deadline(&fixture.state, &session).unwrap().is_some());
+
+        let unreadable = Session {
+            account_id: Some("claude-b".to_string()),
+            ..session.clone()
+        };
+        assert!(hold_deadline(&fixture.state, &unreadable)
+            .unwrap()
+            .is_none());
+
+        let window = |used, resets_at| QuotaWindow {
+            kind: QuotaWindowKind::Weekly,
+            label: None,
+            used_percent: used,
+            resets_at,
+            window_minutes: None,
+        };
+        fixture.hold_reading(None, vec![window(100.0, None)], None);
+        assert!(hold_deadline(&fixture.state, &session).unwrap().is_none());
+        fixture.hold_reading(None, vec![window(50.0, Some(now_millis() + 60_000))], None);
+        assert!(hold_deadline(&fixture.state, &session).unwrap().is_none());
+        fixture.hold_reading(
+            None,
+            vec![window(100.0, Some(now_millis() + 60_000))],
+            Some(crate::protocol::QuotaUnavailable::new(
+                "timed_out",
+                "x",
+                &[("agent", "Claude Code")],
+            )),
+        );
+        assert!(hold_deadline(&fixture.state, &session).unwrap().is_none());
     }
 
     /// A reading never moves a session: one whose turn did not stop on the limit stays on an

@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { accountOpenedOn, avoidUnavailableAccount, choiceChangingSharing, choiceDisabled, choiceExhaustion, choiceGroups, choiceSignedOut, choiceKey, currentChoice, findEntry, openingChoice, type AccountChoice, type ChoiceGroup } from "../accountChoices";
+import { agentOpeningChoice, choiceChangingSharing, choiceDisabled, choiceExhaustion, choiceGroups, choiceSignedOut, choiceKey, currentChoice, findEntry, openingChoice, type AccountChoice, type ChoiceGroup } from "../accountChoices";
 import { AGENT_LABEL, agentsInListingOrder, defaultAccountName, inheritedSessionLaunch, launchWithOverrides, pickableAgents, projectSessionAgent } from "../agents";
 import { agentIconPickerOptions } from "../components/AgentIcon";
 import { isolate } from "../i18n/isolate";
@@ -46,8 +46,9 @@ export function useChoiceGroups(): ChoiceGroup[] {
  * agent's only one), says why it cannot be used, for the dialog to refuse its submit with.
  *
  * With automatic account selection on, the account a new session (a handoff's included) opens on is
- * the one whose weekly quota resets soonest rather than the one the project or console resolves to.
- * With no usable account of that agent, the initial choice tries other agents in added order.
+ * the one whose quota is to be spent first (mostly the soonest weekly reset) rather than the one the project or
+ * console resolves to. With no usable account of that agent, the initial choice tries other agents in added order,
+ * and when no agent has one, opens on the agent's account that becomes usable soonest.
  * A forced choice that can still be picked wins over that. Switching to an agent whose remembered
  * account is no longer an entry falls back the same way.
  *
@@ -85,14 +86,12 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
     setTouched(true);
     setPickedAgentValue(agent);
   };
-  const openingAccount = (agent: Agent): string | null =>
-    accountOpenedOn(parentConsole, project, agent, accounts, groups, autoSelect ? { now } : undefined);
   const pickedAccount = pickedAgent ? pickedAccounts[pickedAgent] : undefined;
   const pickedEntry = groups.find((group) => group.agent === pickedAgent)?.entries.find((entry) => entry.account === pickedAccount);
   const picked = pickedAgent
     ? pickedEntry
       ? { agent: pickedAgent, account: pickedEntry.account }
-      : avoidUnavailableAccount({ agent: pickedAgent, account: openingAccount(pickedAgent) }, groups)
+      : agentOpeningChoice(parentConsole, project, pickedAgent, accounts, groups, autoSelect ? { now } : undefined)
     : undefined;
 
   const selectable = pickableAgents(agentAvailability, addedAgents).filter((agent) => groups.some((group) => group.agent === agent && group.selectable));

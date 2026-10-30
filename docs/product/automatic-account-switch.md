@@ -49,7 +49,7 @@ switch does neither. A session left alone for any of these reasons is left as it
 ## Which account it is switched to
 
 The account a new session of that agent would be given while **Automatically select an account** is on — the account
-whose weekly quota resets soonest, ranked as in "Which account a session uses" in `docs/product/opening-sessions.md` —
+whose quota is to be spent first, ranked as in "Which account a session uses" in `docs/product/opening-sessions.md` —
 whether or not that setting is on, with these left out:
 
 - the account the session is on;
@@ -63,6 +63,22 @@ whether or not that setting is on, with these left out:
 
 No minimum of quota left is asked for. When no account qualifies, nothing is switched and nobody is told; the
 session waits as described below.
+
+**A reset that is about to happen is waited for.** A switch relaunches the agent and carries the conversation over,
+which costs more than waiting a few minutes. So when the window that keeps the session's own account from running a
+turn (the one that resets last, if several are used up) resets within **5 minutes** (exactly 5 included), going by the
+reading held, nothing is switched, whatever other accounts are available: the session waits as when no account
+qualifies. Without a trustworthy reading there is no such wait: no reading held, one whose last attempt to read the
+account failed, a used-up window that gives no reset time, or an account that is not used up all leave the switch as
+described above.
+
+While the session is held, only a reading of its **own** account resumes it; another account's successful reading
+does not move it. Octoboard reads an account again about 30 seconds after a held reset time and the poller looks every
+15 seconds, so the session continues on its own account roughly 30 to 45 seconds after the reset, plus the time the
+reading takes. If its own account has not been read as recovered **3 minutes** after the reset (the re-read failed
+and is backing off, or the window that blocked it was out of date and another still does), the hold ends and the
+session is judged as any other: switched to another account if one qualifies, else left waiting as below, where a
+successful reading of any account of the agent can resume it. A hold is never taken twice for the same failed turn.
 
 ## When no account qualifies
 

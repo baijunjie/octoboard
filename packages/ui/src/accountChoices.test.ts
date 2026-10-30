@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { avoidUnavailableAccount, choiceSignedOut, choiceChangingSharing, switchEntryBlock, choiceDisabled, choiceExhaustion, choiceGroups, choiceKey, consoleAccount, currentChoice, expiringWeekly, handoffBlock, incompleteAccount, inheritedAccount, preferExpiringWeekly, projectAccount, settledInitialChoice, switchEntries, type QuotaReadings } from "./accountChoices";
+import { agentOpeningChoice, avoidUnavailableAccount, choiceSignedOut, choiceChangingSharing, switchEntryBlock, choiceDisabled, choiceExhaustion, choiceGroups, choiceKey, consoleAccount, currentChoice, expiringWeekly, handoffBlock, incompleteAccount, inheritedAccount, preferExpiringWeekly, projectAccount, settledInitialChoice, switchEntries, type QuotaReadings } from "./accountChoices";
 import { consoleOf, projectOf, sessionOf } from "./gallery/fixtures/builders";
 import { format } from "./i18n/catalog";
 import type { Translate } from "./i18n/catalog";
@@ -370,6 +370,121 @@ describe("preferExpiringWeekly", () => {
   it("returns nothing when no window ranks", () => {
     expect(preferExpiringWeekly(entries([]), NOW)).toBeUndefined();
     expect(expiringWeekly(undefined, NOW)).toBeUndefined();
+  });
+});
+
+describe("preferExpiringWeekly and the session window", () => {
+  const stored = [account("w", "claude", "Work"), account("soon", "claude", "Soon")];
+  const session = (patch: Partial<QuotaWindow> = {}) => windowOf({ kind: "session", window_minutes: 300, used_percent: 10, resets_at: NOW + 3 * HOUR, ...patch });
+  const pick = (quotas: AccountQuota[]) =>
+    preferExpiringWeekly(choiceGroups(stored, availability({}), null, () => "Default", { quotas, now: NOW }).find((group) => group.agent === "claude")!.entries, NOW)?.account;
+
+  it("prefers a running session window when the weekly resets are within a session window of each other", () => {
+    expect(pick([
+      reading("w", [windowOf({ resets_at: NOW + 24 * HOUR })]),
+      reading("soon", [windowOf({ resets_at: NOW + 26 * HOUR }), session()]),
+    ])).toBe("soon");
+  });
+
+  it("leaves a weekly reset that is far later out of the tie", () => {
+    expect(pick([
+      reading("w", [windowOf({ resets_at: NOW + 4 * HOUR })]),
+      reading("soon", [windowOf({ resets_at: NOW + 6 * DAY }), session()]),
+    ])).toBe("w");
+  });
+
+  it("ties a weekly reset less than a session window after the soonest, but not exactly one", () => {
+    const soonest = reading("w", [windowOf({ resets_at: NOW + 24 * HOUR })]);
+    expect(pick([soonest, reading("soon", [windowOf({ resets_at: NOW + 29 * HOUR - 1 }), session()])])).toBe("soon");
+    expect(pick([soonest, reading("soon", [windowOf({ resets_at: NOW + 29 * HOUR }), session()])])).toBe("w");
+  });
+
+  it("measures the tie against the soonest reset rather than chaining", () => {
+    const third = [...stored, account("far", "claude", "Far")];
+    const entries = choiceGroups(third, availability({}), null, () => "Default", {
+      quotas: [
+        reading("w", [windowOf({ resets_at: NOW + 24 * HOUR })]),
+        reading("soon", [windowOf({ resets_at: NOW + 27 * HOUR })]),
+        reading("far", [windowOf({ resets_at: NOW + 31 * HOUR }), session()]),
+      ],
+      now: NOW,
+    }).find((group) => group.agent === "claude")!.entries;
+    expect(preferExpiringWeekly(entries, NOW)?.account).toBe("w");
+  });
+
+  it("ranks the sooner session reset first, then the sooner weekly reset", () => {
+    expect(pick([
+      reading("w", [windowOf({ resets_at: NOW + 24 * HOUR }), session({ resets_at: NOW + 3 * HOUR })]),
+      reading("soon", [windowOf({ resets_at: NOW + 25 * HOUR }), session({ resets_at: NOW + 2 * HOUR })]),
+    ])).toBe("soon");
+    expect(pick([
+      reading("w", [windowOf({ resets_at: NOW + 25 * HOUR })]),
+      reading("soon", [windowOf({ resets_at: NOW + 24 * HOUR })]),
+    ])).toBe("soon");
+  });
+
+  it.each([
+    ["used up", session({ used_percent: 100 })],
+    ["already reset", session({ resets_at: NOW })],
+    ["without a reset", session({ resets_at: null })],
+  ])("does not count a session window that is %s as running", (_, window) => {
+    expect(pick([
+      reading("w", [windowOf({ resets_at: NOW + 24 * HOUR })]),
+      reading("soon", [windowOf({ resets_at: NOW + 25 * HOUR }), window]),
+    ])).toBe("w");
+  });
+});
+
+describe("settledInitialChoice when no account can be used", () => {
+  const owner = consoleOf("c-1", "Main", { default_agent: "claude", claude_account_id: "w" });
+  const stored = [account("w", "claude", "Work"), account("b", "claude", "B")];
+  const settleAuto = (quotas: AccountQuota[], accountList = stored) =>
+    settledInitialChoice(owner, undefined, accountList, availability({}), ["claude"], choiceGroups(accountList, availability({}), ["claude"], () => "Default", { quotas, now: NOW }), { now: NOW });
+  const used = (account: string | null, kind: QuotaWindow["kind"], resetsAt: number | null) =>
+    reading(account, [windowOf({ kind, used_percent: 100, resets_at: resetsAt, window_minutes: kind === "session" ? 300 : 7 * 24 * 60 })]);
+
+  it("opens on the account whose blocking window resets soonest", () => {
+    const quotas = [used(null, "weekly", NOW + 6 * DAY), used("w", "weekly", NOW + 5 * DAY), reading("b", [windowOf({ resets_at: NOW + 6 * DAY }), windowOf({ kind: "session", used_percent: 100, resets_at: NOW + 30 * 60_000, window_minutes: 300 })])];
+    expect(settleAuto(quotas).choice).toEqual({ agent: "claude", account: "b" });
+  });
+
+  it("goes by the window that resets last when an account has several used up, and counts one without a reset as never", () => {
+    const both = reading("w", [windowOf({ used_percent: 100, resets_at: NOW + 4 * DAY }), windowOf({ kind: "session", used_percent: 100, resets_at: NOW + HOUR, window_minutes: 300 })]);
+    expect(settleAuto([used(null, "weekly", null), both, used("b", "weekly", NOW + 5 * DAY)]).choice.account).toBe("w");
+    expect(settleAuto([used(null, "weekly", null), used("w", "weekly", null), used("b", "weekly", NOW + 5 * DAY)]).choice.account).toBe("b");
+  });
+
+  it("keeps the candidate order on equal times, the default account first", () => {
+    expect(settleAuto([used(null, "weekly", NOW + DAY), used("w", "weekly", NOW + DAY), used("b", "weekly", NOW + DAY)]).choice.account).toBeNull();
+  });
+
+  it("passes over an account that is not logged in, even when it would be usable sooner", () => {
+    const quotas = [signedOut("claude", null), used("w", "weekly", NOW + 5 * DAY), used("b", "weekly", NOW + 6 * DAY)];
+    expect(settleAuto(quotas).choice.account).toBe("w");
+  });
+
+  it("keeps the inherited account when automatic selection is off", () => {
+    const quotas = [used(null, "weekly", NOW + 6 * DAY), used("w", "weekly", NOW + 5 * DAY), used("b", "weekly", NOW + DAY)];
+    const groups = choiceGroups(stored, availability({}), ["claude"], () => "Default", { quotas, now: NOW });
+    expect(settledInitialChoice(owner, undefined, stored, availability({}), ["claude"], groups).choice.account).toBe("w");
+  });
+
+  it("prefers a usable account of another agent over the account that becomes usable soonest", () => {
+    const quotas = [used(null, "weekly", NOW + 6 * DAY), used("w", "weekly", NOW + 5 * DAY), used("b", "weekly", NOW + DAY)];
+    const both = [...stored, account("c", "codex", "Codex work")];
+    const groups = choiceGroups(both, availability({}), null, () => "Default", { quotas, now: NOW });
+    expect(settledInitialChoice(owner, undefined, both, availability({}), null, groups, { now: NOW }).choice.agent).toBe("codex");
+  });
+
+  it("opens a re-picked agent on the account that becomes usable soonest, as the dialog's first choice does", () => {
+    const quotas = [used(null, "weekly", NOW + 6 * DAY), used("w", "weekly", NOW + 5 * DAY), used("b", "weekly", NOW + DAY)];
+    const groups = choiceGroups(stored, availability({}), ["claude"], () => "Default", { quotas, now: NOW });
+    expect(agentOpeningChoice(owner, undefined, "claude", stored, groups, { now: NOW })).toEqual({ agent: "claude", account: "b" });
+    expect(agentOpeningChoice(owner, undefined, "claude", stored, groups)).toEqual({ agent: "claude", account: "w" });
+  });
+
+  it("keeps the inherited account when none is kept off by a used-up quota alone", () => {
+    expect(settleAuto([signedOut("claude", null), signedOut("claude", "w"), signedOut("claude", "b")]).choice.account).toBe("w");
   });
 });
 

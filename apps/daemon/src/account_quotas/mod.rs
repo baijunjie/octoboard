@@ -800,7 +800,7 @@ impl ExpiringWeekly {
 /// not strictly after `now` does not rank. Among the windows of one account,
 /// the soonest reset wins, so quota about to reset is spent first, then the
 /// larger remaining (`(100 - used_percent).max(0)`).
-pub fn expiring_weekly(windows: &[QuotaWindow], now: i64) -> Option<ExpiringWeekly> {
+fn expiring_weekly(windows: &[QuotaWindow], now: i64) -> Option<ExpiringWeekly> {
     let mut best: Option<ExpiringWeekly> = None;
     for window in windows {
         let weekly = match window.kind {
@@ -828,6 +828,74 @@ pub fn expiring_weekly(windows: &[QuotaWindow], now: i64) -> Option<ExpiringWeek
             .is_none_or(|current| candidate.ranks_ahead_of(*current))
         {
             best = Some(candidate);
+        }
+    }
+    best
+}
+
+/// How the quota of one candidate account ranks for automatic selection: its soonest rankable
+/// weekly window and, when its 5-hour session window is already running, when that resets.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AccountSignal {
+    pub weekly: ExpiringWeekly,
+    pub session_resets_at: Option<i64>,
+}
+
+impl AccountSignal {
+    /// The signal of an account's `windows`; `None` when no weekly window ranks.
+    pub fn of(windows: &[QuotaWindow], now: i64) -> Option<Self> {
+        Some(Self {
+            weekly: expiring_weekly(windows, now)?,
+            session_resets_at: running_session_reset(windows, now),
+        })
+    }
+
+    /// How this account ranks among accounts tied on the weekly reset: a running session window
+    /// before none, the sooner session reset first, then the sooner weekly reset, then the larger
+    /// remainder. `Less` ranks ahead, and `Equal` leaves the earlier candidate in front.
+    fn rank_among_tied(&self, other: &Self) -> std::cmp::Ordering {
+        let session = |signal: &Self| signal.session_resets_at.unwrap_or(i64::MAX);
+        session(self)
+            .cmp(&session(other))
+            .then(self.weekly.resets_at.cmp(&other.weekly.resets_at))
+            .then(other.weekly.remaining.total_cmp(&self.weekly.remaining))
+    }
+}
+
+/// How close two weekly resets must be, in milliseconds, to count as the same deadline: one
+/// session window. Quota of a session window that is already running is lost at its reset, so
+/// among accounts whose weekly quota expires within this of the soonest one, the running session
+/// window is spent first and the weekly reset decides only between equals.
+const SESSION_WINDOW_TOLERANCE_MS: i64 = 5 * 60 * 60 * 1000;
+
+/// When the session window of `windows` that is running resets: one with quota left and a reset
+/// still ahead. The agents report a reset only once the window has started, so a window with
+/// none has not. With several, the soonest reset.
+fn running_session_reset(windows: &[QuotaWindow], now: i64) -> Option<i64> {
+    windows
+        .iter()
+        .filter(|window| {
+            window.kind == QuotaWindowKind::Session
+                && window.used_percent.is_finite()
+                && window.used_percent < 100.0
+        })
+        .filter_map(|window| window.resets_at)
+        .filter(|resets_at| *resets_at > now)
+        .min()
+}
+
+/// The index in `signals` of the account to use first: of those whose weekly reset is less than
+/// [`SESSION_WINDOW_TOLERANCE_MS`] after the soonest one, the one that ranks first by
+/// [`AccountSignal::rank_among_tied`]; an earlier one wins an exact tie. `None` when empty.
+pub fn preferred_signal(signals: &[AccountSignal]) -> Option<usize> {
+    let soonest = signals.iter().map(|signal| signal.weekly.resets_at).min()?;
+    let mut best: Option<usize> = None;
+    for (index, signal) in signals.iter().enumerate() {
+        if signal.weekly.resets_at - soonest >= SESSION_WINDOW_TOLERANCE_MS {
+            continue;
+        }
+        if best.is_none_or(|current| signal.rank_among_tied(&signals[current]).is_lt()) {
+            best = Some(index);
         }
     }
     best
@@ -2673,6 +2741,106 @@ esac; done"#,
                 remaining: 90.0
             })
         );
+    }
+
+    const HOUR: i64 = 60 * 60 * 1000;
+
+    fn signal(weekly_in: i64, session_in: Option<i64>) -> AccountSignal {
+        let mut windows = vec![window(QuotaWindowKind::Weekly, 50.0, Some(NOW + weekly_in))];
+        windows.extend(session_in.map(|at| window(QuotaWindowKind::Session, 10.0, Some(NOW + at))));
+        AccountSignal::of(&windows, NOW).unwrap()
+    }
+
+    /// Weekly resets less than a session window apart are tied, and a running session window then
+    /// goes first; a weekly reset a session window or more later is not in the tie.
+    #[test]
+    fn a_running_session_window_decides_between_weekly_resets_within_five_hours() {
+        // A later weekly reset with a session window running beats a sooner one without.
+        assert_eq!(
+            preferred_signal(&[signal(24 * HOUR, None), signal(26 * HOUR, Some(3 * HOUR))]),
+            Some(1)
+        );
+        // Far apart weekly resets are not tied: the sooner one wins whatever the session says.
+        assert_eq!(
+            preferred_signal(&[
+                signal(4 * HOUR, None),
+                signal(6 * 24 * HOUR, Some(3 * HOUR))
+            ]),
+            Some(0)
+        );
+        // Exactly one session window after the soonest is outside the tie; a minute less is in.
+        assert_eq!(
+            preferred_signal(&[signal(24 * HOUR, None), signal(29 * HOUR, Some(HOUR))]),
+            Some(0)
+        );
+        assert_eq!(
+            preferred_signal(&[
+                signal(24 * HOUR, None),
+                signal(29 * HOUR - 60_000, Some(HOUR))
+            ]),
+            Some(1)
+        );
+        // The tie is measured against the soonest, not chained: the third is 7 hours out.
+        assert_eq!(
+            preferred_signal(&[
+                signal(24 * HOUR, None),
+                signal(27 * HOUR, None),
+                signal(31 * HOUR, Some(HOUR))
+            ]),
+            Some(0)
+        );
+    }
+
+    /// Among the tied, the sooner session reset, then the sooner weekly reset, then the larger
+    /// remainder decide, and an exact tie keeps the earlier candidate.
+    #[test]
+    fn tied_accounts_are_ranked_by_session_then_weekly_reset_then_remainder() {
+        assert_eq!(
+            preferred_signal(&[
+                signal(24 * HOUR, Some(3 * HOUR)),
+                signal(25 * HOUR, Some(2 * HOUR))
+            ]),
+            Some(1)
+        );
+        assert_eq!(
+            preferred_signal(&[signal(25 * HOUR, None), signal(24 * HOUR, None)]),
+            Some(1)
+        );
+        assert_eq!(
+            preferred_signal(&[signal(24 * HOUR, None), signal(24 * HOUR, None)]),
+            Some(0)
+        );
+        let fuller = AccountSignal {
+            weekly: ExpiringWeekly {
+                remaining: 90.0,
+                ..signal(24 * HOUR, None).weekly
+            },
+            ..signal(24 * HOUR, None)
+        };
+        assert_eq!(
+            preferred_signal(&[signal(24 * HOUR, None), fuller]),
+            Some(1)
+        );
+        assert_eq!(preferred_signal(&[]), None);
+    }
+
+    /// A session window counts as running only with quota left and a reset still ahead.
+    #[test]
+    fn a_session_window_that_is_used_up_stale_or_without_a_reset_is_not_running() {
+        for session in [
+            window(QuotaWindowKind::Session, 100.0, Some(NOW + HOUR)),
+            window(QuotaWindowKind::Session, 10.0, Some(NOW - 1)),
+            window(QuotaWindowKind::Session, 10.0, None),
+        ] {
+            let windows = [
+                window(QuotaWindowKind::Weekly, 50.0, Some(NOW + HOUR)),
+                session,
+            ];
+            assert_eq!(
+                AccountSignal::of(&windows, NOW).unwrap().session_resets_at,
+                None
+            );
+        }
     }
 
     /// A model window, a session window and a monthly credit pool are not the account's weekly

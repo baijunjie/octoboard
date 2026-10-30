@@ -62,7 +62,8 @@ const NO_OWNER = "none";
  * together. They open on the agent per the "Which agent a session uses" section of docs/product/opening-sessions.md
  * (for a project session: the project's default, then the console's project session default, then its `default_agent`;
  * a console session uses only `default_agent`). When automatic account selection is on, the account is the one whose
- * weekly quota resets soonest. With no usable account of that agent, the initial choice tries other added agents.
+ * quota is to be spent first (mostly the soonest weekly reset). With no usable account of that agent, the initial
+ * choice tries other added agents, and with none anywhere, opens on the account that becomes usable soonest.
  * A resumed record keeps its agent and account; without automatic selection the account is the one that
  * agent resolves to when none is chosen (the project's reference, else the console's). The user can pick another agent
  * or one of its accounts for this session; the choice goes out as `open_session`'s `agent` and `account` fields.

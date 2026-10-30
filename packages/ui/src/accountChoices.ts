@@ -207,11 +207,14 @@ function isWeeklyQuota(window: QuotaWindow): boolean {
     && window.window_minutes <= WEEKLY_CREDIT_MAX_MINUTES;
 }
 
+/** The weekly window an account is ranked by: when it resets and how much of it is left. */
+type WeeklySignal = { resetsAt: number; remaining: number };
+
 /** The weekly window of `quota` that resets soonest and still has quota left. Of several, the soonest
  * reset wins, then the larger remainder. Nothing rankable returns undefined. */
-export function expiringWeekly(quota: AccountQuota | undefined, now: number): { resetsAt: number; remaining: number } | undefined {
+export function expiringWeekly(quota: AccountQuota | undefined, now: number): WeeklySignal | undefined {
   if (!quota) return undefined;
-  let best: { resetsAt: number; remaining: number } | undefined;
+  let best: WeeklySignal | undefined;
   for (const window of quota.windows) {
     if (!isWeeklyQuota(window) || !Number.isFinite(window.used_percent) || window.used_percent >= 100) continue;
     if (typeof window.resets_at !== "number" || !(window.resets_at > now)) continue;
@@ -223,27 +226,93 @@ export function expiringWeekly(quota: AccountQuota | undefined, now: number): { 
   return best;
 }
 
-/** The entry whose weekly quota resets soonest, among entries that are not used up.
- * Soonest reset wins over a larger remainder. Equal reset and remainder keep `entries` order
- * supplied by the caller. No rankable window returns undefined. */
+/** Weekly resets less than this far apart count as the same deadline: one session window. The quota of a
+ * session window that is already running is lost at its reset, so among the accounts whose weekly quota
+ * expires within this of the soonest one, the running session window is spent first and the weekly reset
+ * decides only between equals. */
+const SESSION_WINDOW_TOLERANCE_MS = 5 * 60 * 60 * 1000;
+
+/** When the session window of `quota` that is running resets: one with quota left and a reset still ahead.
+ * The agents report a reset only once the window has started, so a window with none has not. Of several,
+ * the soonest. */
+function runningSessionReset(quota: AccountQuota | undefined, now: number): number | undefined {
+  let soonest: number | undefined;
+  for (const window of quota?.windows ?? []) {
+    if (window.kind !== "session" || !Number.isFinite(window.used_percent) || window.used_percent >= 100) continue;
+    if (typeof window.resets_at !== "number" || !(window.resets_at > now)) continue;
+    if (soonest === undefined || window.resets_at < soonest) soonest = window.resets_at;
+  }
+  return soonest;
+}
+
+/** What ranks an account for automatic selection: its weekly window and when its running session window resets. */
+interface AccountSignal {
+  weekly: WeeklySignal;
+  sessionResetsAt: number | undefined;
+}
+
+/** Whether the tied signal `a` ranks ahead of `b`: a running session window before none, the sooner session
+ * reset first, then the sooner weekly reset, then the larger remainder. An equal pair does not. */
+function ranksAheadWithinTie(a: AccountSignal, b: AccountSignal): boolean {
+  const session = (signal: AccountSignal) => signal.sessionResetsAt ?? Infinity;
+  if (session(a) !== session(b)) return session(a) < session(b);
+  if (a.weekly.resetsAt !== b.weekly.resetsAt) return a.weekly.resetsAt < b.weekly.resetsAt;
+  return a.weekly.remaining > b.weekly.remaining;
+}
+
+/** The entry to use first among entries that are not used up. Those whose weekly reset is less than a session
+ * window after the soonest one are tied: of them a running session window wins, the sooner session reset
+ * first, then the sooner weekly reset, then the larger remainder. A weekly reset a session window or more
+ * after the soonest does not take part. Equal signals keep `entries` order supplied by the caller. No
+ * rankable window returns undefined. */
 export function preferExpiringWeekly(entries: ChoiceEntry[], now: number): ChoiceEntry | undefined {
-  let best: ChoiceEntry | undefined;
-  let bestSignal: { resetsAt: number; remaining: number } | undefined;
+  const ranked: (AccountSignal & { entry: ChoiceEntry })[] = [];
   for (const entry of entries) {
     if (entry.exhaustedBy || entry.changingSharing || entry.signedOut || entry.disabled) continue;
-    const signal = expiringWeekly(entry.quota, now);
-    if (!signal) continue;
-    if (!bestSignal || signal.resetsAt < bestSignal.resetsAt || (signal.resetsAt === bestSignal.resetsAt && signal.remaining > bestSignal.remaining)) {
+    const weekly = expiringWeekly(entry.quota, now);
+    if (weekly) ranked.push({ entry, weekly, sessionResetsAt: runningSessionReset(entry.quota, now) });
+  }
+  const soonest = Math.min(...ranked.map((signal) => signal.weekly.resetsAt));
+  let best: (typeof ranked)[number] | undefined;
+  for (const signal of ranked) {
+    if (signal.weekly.resetsAt - soonest >= SESSION_WINDOW_TOLERANCE_MS) continue;
+    if (!best || ranksAheadWithinTie(signal, best)) best = signal;
+  }
+  return best?.entry;
+}
+
+/** The entries of `agent` in the order automatic selection takes them: the default account, then the stored
+ * accounts as they are kept, which the daemon uses to break a tie. */
+function selectionEntries(groups: ChoiceGroup[], accounts: Account[], agent: Agent): ChoiceEntry[] {
+  const entries = groups.find((candidate) => candidate.agent === agent)?.entries ?? [];
+  const byAccount = new Map(entries.map((entry) => [entry.account, entry]));
+  return orderedAccounts(agent, accounts, undefined).flatMap((account) => {
+    const entry = byAccount.get(account?.id ?? null);
+    return entry ? [entry] : [];
+  });
+}
+
+/** The entry that becomes usable soonest, among those kept off only by a used-up quota (not turned off, not
+ * logged out, no sharing change running): it is usable when the window that blocks it (`exhaustedBy`, the one
+ * that resets last) resets, and a blocking window with no reset time counts as never. Equal times keep `entries`
+ * order. No such entry returns undefined. */
+export function soonestAvailable(entries: ChoiceEntry[]): ChoiceEntry | undefined {
+  let best: ChoiceEntry | undefined;
+  let bestAt = Infinity;
+  for (const entry of entries) {
+    if (!entry.exhaustedBy || entry.changingSharing || entry.signedOut || entry.disabled) continue;
+    const at = entry.exhaustedBy.resets_at ?? Infinity;
+    if (!best || at < bestAt) {
       best = entry;
-      bestSignal = signal;
+      bestAt = at;
     }
   }
   return best;
 }
 
-/** The account a new session of `agent` opens on. With `autoSelect`, the one whose weekly quota resets
- * soonest when one ranks; otherwise the account the project or console resolves to. Equal weekly readings keep
- * the daemon's selection order: default account first, then named accounts in stored order. */
+/** The account a new session of `agent` opens on. With `autoSelect`, the one whose quota is to be spent first
+ * (`preferExpiringWeekly`) when one ranks; otherwise the account the project or console resolves to. Equal
+ * readings keep the daemon's selection order: default account first, then named accounts in stored order. */
 export function accountOpenedOn(
   owner: Console,
   project: Project | undefined,
@@ -253,13 +322,7 @@ export function accountOpenedOn(
   autoSelect?: { now: number },
 ): string | null {
   if (autoSelect) {
-    const entries = groups.find((candidate) => candidate.agent === agent)?.entries ?? [];
-    const byAccount = new Map(entries.map((entry) => [entry.account, entry]));
-    const selectionEntries = orderedAccounts(agent, accounts, undefined).flatMap((account) => {
-      const entry = byAccount.get(account?.id ?? null);
-      return entry ? [entry] : [];
-    });
-    const preferred = preferExpiringWeekly(selectionEntries, autoSelect.now);
+    const preferred = preferExpiringWeekly(selectionEntries(groups, accounts, agent), autoSelect.now);
     if (preferred) return preferred.account;
   }
   return inheritedAccount(owner, project, agent, accounts);
@@ -275,8 +338,29 @@ export function avoidUnavailableAccount(choice: AccountChoice, groups: ChoiceGro
   return usable ? { agent: choice.agent, account: usable.account } : choice;
 }
 
+/** The account of `agent` a new session opens on (`accountOpenedOn`), moved to another account of the agent
+ * when that one cannot be used (`avoidUnavailableAccount`). With `autoSelect` and no usable account of the
+ * agent, the one that becomes usable soonest (`soonestAvailable`); otherwise, or when none is kept off by a
+ * used-up quota alone, the inherited one stays. */
+export function agentOpeningChoice(
+  owner: Console,
+  project: Project | undefined,
+  agent: Agent,
+  accounts: Account[],
+  groups: ChoiceGroup[],
+  autoSelect?: { now: number },
+): AccountChoice {
+  const choice = avoidUnavailableAccount({ agent, account: accountOpenedOn(owner, project, agent, accounts, groups, autoSelect) }, groups);
+  const entry = findEntry(groups, choiceKey(choice));
+  if (!autoSelect || !entry?.selectable || !(entry.exhaustedBy || entry.changingSharing || entry.signedOut || entry.disabled)) return choice;
+  const soonest = soonestAvailable(selectionEntries(groups, accounts, agent));
+  return soonest ? { agent, account: soonest.account } : choice;
+}
+
 /** The initial choice of a new session. Automatic selection tries other added agents in listing order only
- * when the preferred agent has no usable account. Explicit picks do not pass through this fallback. */
+ * when the preferred agent has no usable account; when no agent has one, it is the preferred agent's
+ * `agentOpeningChoice`, which falls back to the account that becomes usable soonest. Explicit picks do not
+ * pass through the agent fallback. */
 export function openingChoice(
   owner: Console,
   project: Project | undefined,
@@ -286,11 +370,10 @@ export function openingChoice(
   added: Agent[] | null,
   autoSelect?: { now: number },
 ): AccountChoice {
-  const forAgent = (candidate: Agent) => avoidUnavailableAccount({ agent: candidate, account: accountOpenedOn(owner, project, candidate, accounts, groups, autoSelect) }, groups);
-  const initial = forAgent(agent);
+  const initial = agentOpeningChoice(owner, project, agent, accounts, groups, autoSelect);
   if (!autoSelect) return initial;
   for (const candidate of [agent, ...agentsInListingOrder(added).filter((other) => other !== agent)]) {
-    const choice = candidate === agent ? initial : forAgent(candidate);
+    const choice = candidate === agent ? initial : avoidUnavailableAccount({ agent: candidate, account: accountOpenedOn(owner, project, candidate, accounts, groups, autoSelect) }, groups);
     const entry = findEntry(groups, choiceKey(choice));
     if (entry?.selectable && !entry.exhaustedBy && !entry.changingSharing && !entry.signedOut && !entry.disabled) return choice;
   }
@@ -302,9 +385,10 @@ export function openingChoice(
  * session's: the console's default — moved to one that may be picked when that one is known
  * to be missing or is not added, with the account that agent resolves to when none is chosen: the project's
  * setting for it, else the console `owner`'s, moved to another account of the agent when that one's quota is
- * used up, its sharing change runs, it is not logged in or it is turned off (`avoidUnavailableAccount`). With `autoSelect`, an account of that agent whose weekly quota resets
- * soonest (`preferExpiringWeekly`) replaces the inherited one before that move, when the group has one;
- * when none of its accounts can be used, another selectable agent is tried in added order. With it
+ * used up, its sharing change runs, it is not logged in or it is turned off (`avoidUnavailableAccount`). With `autoSelect`, the account of that agent whose quota is to be spent first
+ * (`preferExpiringWeekly`) replaces the inherited one before that move, when the group has one;
+ * when none of its accounts can be used, another selectable agent is tried in added order, and when no agent has a usable account
+ * the preferred agent's account that becomes usable soonest is chosen (`soonestAvailable`). With it
  * omitted, the inherited account is used as before. The choice made in the dialog sits above this, as the
  * daemon's own chain puts a session's choice above both. `groups` are the agents' entries with their quotas
  * judged (`choiceGroups`). `exhaustedBy` is the window that still keeps the account from running a session
