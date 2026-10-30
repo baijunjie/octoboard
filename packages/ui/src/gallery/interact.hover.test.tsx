@@ -4,7 +4,6 @@ import React, { act } from "react";
 import { useHover } from "react-aria";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
-import type { LaunchPair } from "../agents";
 import { Button } from "../components/Button";
 import { change, changeViewFixture, mountRows } from "../browser/browserTestSupport";
 import { ChangeList } from "../browser/ChangeList";
@@ -22,22 +21,22 @@ import { leave, mountForTooltip, openPopover, openTooltip } from "../components/
 import { gitBadgeAriaLabel } from "../gitStatusLabel";
 import { isolate } from "../i18n/isolate";
 import { LanguageProvider } from "../i18n/react";
-import type { Account, ChangeEntry } from "../protocol";
+import type { Account, ChangeEntry, Launch } from "../protocol";
 import { GitBadge } from "../sidebar/GitBadge";
 import { ProjectFilterSummary } from "../sidebar/ProjectFilter";
 import { RailQuotaEntry } from "../quota/RailQuotaEntry";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
-import { gitStatusOf, sessionOf } from "./fixtures/builders";
+import { accountOf, gitStatusOf, sessionOf } from "./fixtures/builders";
 import { createUi } from "./interact";
 
 /** The tooltip of a Claude Code session's agent mark, drawn by the app's own `SessionAgentTooltip`: the
  * agent's name, then the account the session runs under as a badge or, given `launch`, a list of the
  * account, model and effort (as a sidebar row's and a focus card's are). */
-function agentTooltip(account: string, launch?: LaunchPair): React.ReactElement {
-  const stored: Account = { id: "account", agent: "claude", name: account, config_dir: "/Users/dev/.claude-work" };
+function agentTooltip(account: string, launch?: Launch): React.ReactElement {
+  const stored: Account = accountOf("account", "claude", account, "/Users/dev/.claude-work");
   return (
     <LanguageProvider>
-      <SessionAgentTooltip session={sessionOf("s-tooltip", "c", "p", "Tooltip", "idle", { account_id: stored.id })} accounts={[stored]} defaultNames={undefined} launch={launch} />
+      <SessionAgentTooltip session={sessionOf("s-tooltip", "c", "p", "Tooltip", "idle", { account_id: stored.id })} accounts={[stored]} defaultNames={{}} launch={launch} />
     </LanguageProvider>
   );
 }
@@ -366,7 +365,7 @@ function mountQuotaEntry(): void {
   // jsdom has no Web Animations, which the popover's exit waits for.
   HTMLElement.prototype.animate = vi.fn(() => ({ cancel: vi.fn(), finished: Promise.resolve(), onfinish: null })) as unknown as typeof HTMLElement.prototype.animate;
   onTestFinished(() => void delete (HTMLElement.prototype as Partial<HTMLElement>).animate);
-  const store = createStateStore({ agentAvailability: new Map([["claude", { agent: "claude", availability: "available" }]]) });
+  const store = createStateStore({ agentAvailability: new Map([["claude", { agent: "claude", availability: "available", default_account_dir: null }]]) });
   const daemon = { store, request: () => Promise.resolve({}) } as unknown as Daemon;
   mountForTooltip(
     <DaemonProvider value={daemon}>

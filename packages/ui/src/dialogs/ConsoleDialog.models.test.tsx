@@ -21,7 +21,7 @@ it("asks for the models only once Advanced is opened, and offers what comes back
 });
 
 it("keeps a stored model the list lacks, last and marked", async () => {
-  render(consoleOf("c-1", "Main", { claude_console_session_model: "retired" }));
+  render(consoleOf("c-1", "Main", { launch: { claude: { model: "retired" } } }));
   await openAdvanced();
   expect(pickerNamed("Model").textContent).toContain("retired, Not in the list");
   await click(pickerNamed("Model"));
@@ -29,7 +29,7 @@ it("keeps a stored model the list lacks, last and marked", async () => {
 });
 
 it("asks under the account that is settled, and again when the account or the agent changes", async () => {
-  const request = render(consoleOf("c-1", "Main", { claude_account_id: "a-work" }), [work, personal]);
+  const request = render(consoleOf("c-1", "Main", { accounts: { claude: "a-work" } }), [work, personal]);
   await openAdvanced();
   await clickButton("Work");
   await choose("Personal");
@@ -126,7 +126,7 @@ it.each([
   await click(clearButton("Reasoning effort"));
   await clickButton("Save");
   expect(sent(request)).toEqual([
-    { type: "update_console", console: "c-1", name: "Main", default_agent: "claude", claude_console_session_effort: null },
+    { type: "update_console", console: "c-1", name: "Main", default_agent: "claude", launch: { claude: { effort: null } } },
   ]);
 });
 
@@ -173,7 +173,7 @@ it("keeps a stored effort clearable once a model that takes none is chosen", asy
   await click(clearButton("Reasoning effort"));
   await clickButton("Save");
   expect(sent(request)).toEqual([
-    { type: "update_console", console: "c-1", name: "Main", default_agent: "claude", claude_console_session_model: "plain", claude_console_session_effort: null },
+    { type: "update_console", console: "c-1", name: "Main", default_agent: "claude", launch: { claude: { model: "plain", effort: null } } },
   ]);
 });
 
@@ -185,7 +185,7 @@ it("names the daemon's own alias for the best model from the catalogue and every
 });
 
 it("says so when the daemon answers the question with something else", async () => {
-  render(undefined, [], async () => ({ type: "ack" }) as Event);
+  render(undefined, [], async () => ({ type: "ack", id: null }) as Event);
   await openAdvanced();
   expect((await exposedStatusesAfterFirstWrite()).map((node) => node.textContent)).toEqual(["The daemon answered with something unexpected."]);
   press(document.body.querySelector("button[data-status-mark][aria-label='Could not load the models']")!);

@@ -34,7 +34,7 @@ const quota = (patch: Partial<AccountQuota> = {}): AccountQuota => ({
   plan: "max",
   windows,
   unavailable: null,
-  ...patch,
+  email: null, ...patch,
 });
 
 function mount(element: React.ReactNode): HTMLElement {

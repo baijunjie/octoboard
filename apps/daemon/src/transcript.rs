@@ -404,7 +404,7 @@ pub(crate) const TEST_TIMEOUT: Duration =
 mod tests {
 
     use super::*;
-    use crate::protocol::{Agent, Console, Origin, Role, Session};
+    use crate::protocol::{Agent, Console, OrchestrationRole, Origin, Role, Session};
     use crate::test_support::{
         captured_interrupt, fresh_interrupt, idle_stand_in, within, ScratchDir, ScratchFile,
         StandIn,
@@ -565,21 +565,9 @@ mod tests {
                 workdir: dir.to_string_lossy().into_owned(),
                 default_agent: Agent::Claude,
                 project_session_agent: None,
-                claude_project_session_model: None,
-                claude_project_session_effort: None,
-                codex_project_session_model: None,
-                codex_project_session_effort: None,
-                grok_project_session_model: None,
-                grok_project_session_effort: None,
-                claude_account_id: None,
-                codex_account_id: None,
-                grok_account_id: None,
-                claude_console_session_model: None,
-                claude_console_session_effort: None,
-                codex_console_session_model: None,
-                codex_console_session_effort: None,
-                grok_console_session_model: None,
-                grok_console_session_effort: None,
+                accounts: Default::default(),
+                launch: Default::default(),
+                project_session_launch: Default::default(),
                 icon: None,
                 console_session_prompt: None,
                 created_at: 0,
@@ -605,7 +593,7 @@ mod tests {
             background_tasks: Vec::new(),
             switching_account: false,
             default_effort: None,
-            orchestration_role: None,
+            orchestration_role: OrchestrationRole::Coordinator,
             context: None,
             observed_model: None,
             observed_effort: None,
@@ -613,7 +601,6 @@ mod tests {
             effort: None,
             has_conversation: true,
             bound_to: None,
-            lead: false,
             colour: None,
             ordinal: None,
             account_id: None,

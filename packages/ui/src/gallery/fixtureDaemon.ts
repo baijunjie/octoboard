@@ -5,7 +5,7 @@ import { daemonMessage } from "../daemonMessage";
 import { noticeErrorPresentation, noticeKind } from "../errorPresentation";
 import { FOLLOWING_GIT_WORKFLOW } from "../gitWorkflow";
 import { currentLanguage, t } from "../i18n/language";
-import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, scopeCause, type Account, type AccountLogin, type AccountSharing, type Agent, type ConsoleSessionColour, type BrowseEntry, type Console, type DirEntry, type Event, type PathLinkKind, type PathLinkView, type ProcessTree, type Project, type QuotaWindow, type RequestBody, type Session, type SharingCause, type SessionRecordsPresence, type ShellTerminal, type GitWorkflowOverride, type GitWorkflowOverrideChanges, type SourceUnavailableCause } from "../protocol";
+import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, scopeCause, type Account, type AccountLogin, type AccountSharing, type Agent, type ConsoleSessionColour, type Launch, type LaunchChange, type PerAgent, type ProjectAccount, type BrowseEntry, type Console, type DirEntry, type Event, type PathLinkKind, type PathLinkView, type ProcessTree, type Project, type QuotaWindow, type RequestBody, type Session, type SharingCause, type SessionRecordsPresence, type ShellTerminal, type GitWorkflowOverride, type GitWorkflowOverrideChanges, type SourceUnavailableCause } from "../protocol";
 import { hasClaudeCompatibility } from "../settings/claudeCompatibility";
 import { accountQuotaOf } from "../quota/accountQuotaOf";
 import { exhaustedQuotaWindow, isNotLoggedIn } from "../quota/quotaFormat";
@@ -16,7 +16,7 @@ import { createConfigurationReplies } from "./fixtureConfiguration";
 import { createGitReplies } from "./fixtureGit";
 import { refuseUnfillable } from "./banner";
 import { SAMPLE_MODELS } from "./fixtures/agentModels";
-import { ALL_AGENTS, effectiveClaudeCompatibility } from "./fixtures/builders";
+import { ALL_AGENTS, consoleOf, effectiveClaudeCompatibility, projectOf } from "./fixtures/builders";
 import { SAMPLE_FILES, permissionDenied, sourceUnavailable, type FixtureError, type FixtureFile, type FixtureFiles } from "./fixtures/projectFiles";
 import { SAMPLE_GIT } from "./fixtures/projectGit";
 
@@ -79,7 +79,7 @@ const LEFT_OUT_NAMES = new Set([
 function failedSharing(error: FixtureError, share: boolean): NonNullable<AccountSharing["failure"]> {
   return {
     share,
-    ...(error.params?.cause && { cause: error.params.cause as SharingCause }),
+    cause: (error.params?.cause as SharingCause | undefined) ?? "other",
     items: JSON.parse(error.params?.items ?? "[]") as NonNullable<AccountSharing["failure"]>["items"],
     detail: error.params?.detail ?? error.message,
   };
@@ -120,45 +120,54 @@ const agentNotAdded = (agent: Agent) => ({
  * (`trimmed_or_none` of `launch_settings.rs`). */
 const trimmedOrNull = (text: string | null | undefined): string | null => text?.trim() || null;
 
+/** One per-agent group with `map` applied to each agent's value. */
+function mappedPerAgent<T>(group: PerAgent<T>, map: (value: T) => T): PerAgent<T> {
+  return Object.fromEntries(ALL_AGENTS.map((agent) => [agent, map(group[agent])])) as PerAgent<T>;
+}
+
+/** One per-agent group after a request's `Partial<PerAgent<…>>`: an agent the request leaves out keeps its value, and
+ * `change` says what the request's value for one agent makes of the current one. */
+function changedPerAgent<T, C>(current: PerAgent<T>, changes: Partial<PerAgent<C>> | undefined, change: (value: T, change: C) => T): PerAgent<T> {
+  return Object.fromEntries(ALL_AGENTS.map((agent) => {
+    const requested = changes?.[agent];
+    return [agent, requested === undefined ? current[agent] : change(current[agent], requested)];
+  })) as PerAgent<T>;
+}
+
+/** One agent's launch settings after a request's change: a field the request leaves out keeps its value, and one it names
+ * is trimmed, `null` or blank clearing it. */
+function changedLaunch(current: Launch, change: LaunchChange): Launch {
+  return {
+    model: change.model === undefined ? current.model : trimmedOrNull(change.model),
+    effort: change.effort === undefined ? current.effort : trimmedOrNull(change.effort),
+  };
+}
+
 /** What a `create_console` or `update_console` request sets of the console, each field only where
- * the request names it; an `update_console` that leaves a field out leaves it alone, and one that
- * names it as `null` clears it, as `update_console` of `coordinator.rs` does. Account and model
- * references are taken as given, not checked against the settings or an agent's list. */
-function consoleFields(body: Extract<RequestBody, { type: "create_console" | "update_console" }>): Partial<Console> {
+ * the request names it, on top of the console it changes (a blank one for a new console); an
+ * `update_console` that leaves a field out leaves it alone, and one that names it as `null`
+ * clears it, as `update_console` of `coordinator.rs` does. Account and model references are
+ * taken as given, not checked against the settings or an agent's list. */
+function consoleFields(current: Console, body: Extract<RequestBody, { type: "create_console" | "update_console" }>): Partial<Console> {
   const fields: Partial<Console> = {};
   if (body.name !== undefined) fields.name = body.name.trim();
   if (body.default_agent !== undefined) fields.default_agent = body.default_agent;
   if (body.project_session_agent !== undefined) fields.project_session_agent = body.project_session_agent;
-  for (const agent of ["claude", "codex", "grok"] as const) {
-    const account = body[`${agent}_account_id`];
-    if (account !== undefined) fields[`${agent}_account_id`] = account;
-    const model = body[`${agent}_console_session_model`];
-    if (model !== undefined) fields[`${agent}_console_session_model`] = trimmedOrNull(model);
-    const effort = body[`${agent}_console_session_effort`];
-    if (effort !== undefined) fields[`${agent}_console_session_effort`] = trimmedOrNull(effort);
-    const projectModel = body[`${agent}_project_session_model`];
-    if (projectModel !== undefined) fields[`${agent}_project_session_model`] = trimmedOrNull(projectModel);
-    const projectEffort = body[`${agent}_project_session_effort`];
-    if (projectEffort !== undefined) fields[`${agent}_project_session_effort`] = trimmedOrNull(projectEffort);
-  }
+  fields.accounts = changedPerAgent(current.accounts, body.accounts, (_, account) => account);
+  fields.launch = changedPerAgent(current.launch, body.launch, changedLaunch);
+  fields.project_session_launch = changedPerAgent(current.project_session_launch, body.project_session_launch, changedLaunch);
   if (body.icon !== undefined) fields.icon = body.icon;
   if (body.console_session_prompt !== undefined) fields.console_session_prompt = trimmedOrNull(body.console_session_prompt);
   return fields;
 }
 
-/** Mutable project account and launch settings, retaining absent-versus-cleared values. */
-function projectFields(body: Extract<RequestBody, { type: "add_project" | "update_project" }>): Partial<Project> {
-  const fields: Partial<Project> = {};
-  if (body.default_agent !== undefined) fields.default_agent = body.default_agent;
-  for (const agent of ["claude", "codex", "grok"] as const) {
-    const account = body[`${agent}_account_id`];
-    if (account !== undefined) fields[`${agent}_account_id`] = account ?? { kind: "inherit" };
-    const model = body[`${agent}_session_model`];
-    if (model !== undefined) fields[`${agent}_session_model`] = trimmedOrNull(model);
-    const effort = body[`${agent}_session_effort`];
-    if (effort !== undefined) fields[`${agent}_session_effort`] = trimmedOrNull(effort);
-  }
-  return fields;
+/** Mutable project account and launch settings on top of the project they change, retaining absent-versus-cleared values. */
+function projectFields(current: Pick<Project, "accounts" | "launch">, body: Extract<RequestBody, { type: "add_project" | "update_project" }>): Partial<Project> & Pick<Project, "accounts" | "launch"> {
+  return {
+    ...(body.default_agent !== undefined && { default_agent: body.default_agent }),
+    accounts: changedPerAgent(current.accounts, body.accounts, (_, account): ProjectAccount => account ?? { kind: "inherit" }),
+    launch: changedPerAgent(current.launch, body.launch, changedLaunch),
+  };
 }
 
 /** A project's own git workflow settings after a request's: per item, absent keeps it, `null` goes back to following the
@@ -435,7 +444,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
   const projectAction = (project: string, error: FixtureError | undefined): Event => {
     refuseUnknownProject(project);
     if (error) return fail(error);
-    return { type: "ack" };
+    return { type: "ack", id: null };
   };
   const gitReply = createGitReplies(git, fail);
   const configurationReply = createConfigurationReplies(scenario.configuration, store.getState, fail, () => claudeCompatibilityChoices);
@@ -496,7 +505,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           // The processes of the sessions archived end with them.
           const ended = new Set([...descendants, session].map((record) => record.id));
           followed = followed.filter((tree) => !ended.has(tree.session_id));
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "resume_session": {
           if (scenario.sessionResumes?.[body.session] === "pending") return new Promise<Event>(() => {});
@@ -507,7 +516,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           refuseIfSharingChanges(session.account_id);
           // Reopening a child brings back archived owners, while siblings stay archived.
           const sessions = new Map(current.sessions);
-          const reopen = (record: Session) => sessions.set(record.id, { ...record, status: "idle", ended_at: undefined });
+          const reopen = (record: Session) => sessions.set(record.id, { ...record, status: "idle", ended_at: null });
           reopen(session);
           let owner = session.bound_to;
           while (owner) {
@@ -517,7 +526,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
             owner = record.bound_to;
           }
           store.setState({ sessions });
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "switch_project_branch": {
           refuseUnknownProject(body.project);
@@ -527,7 +536,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           restoredFiles.set(body.project, result.files);
           restoredGit.set(body.project, createGitReplies(result.git, fail));
           store.setState((state) => ({ gitStatuses: new Map(state.gitStatuses).set(body.project, result.status) }));
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "restore_project_changes": {
           refuseUnknownProject(body.project);
@@ -536,7 +545,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           if ("code" in result) return fail(result);
           restoredFiles.set(body.project, result.files);
           restoredGit.set(body.project, createGitReplies(result.git, fail));
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "switch_session_account": {
           const current = store.getState();
@@ -564,8 +573,8 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
             applyDaemonEvent(store, { type: "session_upserted", session: interrupted ? { ...resting, status: "interrupted" } : resting });
             return fail(reply);
           }
-          applyDaemonEvent(store, { type: "session_upserted", session: { ...resting, account_id: account?.id, config_dir: account?.config_dir } });
-          return { type: "ack" };
+          applyDaemonEvent(store, { type: "session_upserted", session: { ...resting, account_id: account?.id ?? null, config_dir: account?.config_dir ?? null } });
+          return { type: "ack", id: null };
         }
         case "set_session_model": {
           const current = store.getState();
@@ -578,10 +587,10 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           // A value left out keeps what the session has; a blank one leaves the choice to the agent.
           const chosen = (value: string | null | undefined, kept: string | null | undefined) => (value === undefined ? kept : value?.trim() || null);
           const [model, effort] = [chosen(body.model, session.model), chosen(body.effort, session.effort)];
-          if (model === session.model && effort === session.effort) return { type: "session_model_set", session: session.id, outcome: "unchanged" };
+          if (model === session.model && effort === session.effort) return { type: "session_model_set", id: null, session: session.id, outcome: "unchanged" };
           if (session.status === "interrupted") {
             applyDaemonEvent(store, { type: "session_upserted", session: { ...session, model, effort } });
-            return { type: "session_model_set", session: session.id, outcome: "recorded" };
+            return { type: "session_model_set", id: null, session: session.id, outcome: "recorded" };
           }
           // The daemon shows the session starting from the moment the restart is decided; once the process is down the
           // model and effort its records showed are forgotten.
@@ -598,7 +607,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
             return fail(reply);
           }
           applyDaemonEvent(store, { type: "session_upserted", session: { ...forgotten, status: "idle", model, effort } });
-          return { type: "session_model_set", session: session.id, outcome: "restarted", continued: true };
+          return { type: "session_model_set", id: null, session: session.id, outcome: "restarted", continued: true };
         }
         case "hand_off_session": {
           const current = store.getState();
@@ -638,11 +647,17 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
             title: session.title,
             status: "working",
             has_conversation: false,
+            orchestration_role: session.orchestration_role,
             pinned: session.pinned,
             locked: false,
             started_at: Date.now(),
-            ...(project ? { bound_to: session.bound_to } : { ordinal, colour: freshColour(owner.id) }),
-            ...(account && { account_id: account.id, config_dir: account.config_dir }),
+            agent_session_id: null,
+            bound_to: project ? session.bound_to : null,
+            ordinal: project ? null : ordinal,
+            colour: project ? null : freshColour(owner.id),
+            account_id: account?.id ?? null,
+            config_dir: account?.config_dir ?? null,
+            ended_at: null,
             ...(body.model !== undefined && { model: body.model }),
             ...(body.effort !== undefined && { effort: body.effort }),
           };
@@ -651,22 +666,26 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           sessions.set(session.id, { ...session, status: "archived", ended_at: Date.now() });
           sessions.set(received.id, received);
           store.setState({ sessions });
-          return { type: "session_opened", session: received };
+          return { type: "session_opened", id: null, session: received };
         }
         case "release_session": {
           const session = store.getState().sessions.get(body.session);
           if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
           if (scenario.sessionReleaseError) {
             const movedTo = scenario.sessionReleaseMovedTo;
-            if (movedTo) store.setState((state) => ({ sessions: new Map(state.sessions).set(session.id, { ...session, bound_to: movedTo }) }));
+            if (movedTo) {
+              // As the daemon's transfer: a coordinator stays one under a console session, and is a worker under any other owner.
+              const stays = session.orchestration_role === "coordinator" && store.getState().sessions.get(movedTo)?.role === "console";
+              store.setState((state) => ({ sessions: new Map(state.sessions).set(session.id, { ...session, bound_to: movedTo, orchestration_role: stays ? "coordinator" : "worker" }) }));
+            }
             return fail(scenario.sessionReleaseError);
           }
           // Refused with the daemon's codes and English messages.
           if (session.role === "console") return fail({ code: "console_session_never_bound", params: { session: session.id }, message: `\`${session.id}\` is a console session, which is never bound, so it has no owner to be released from` });
           if (!session.bound_to) return fail({ code: "session_not_bound", params: { session: session.id }, message: `\`${session.id}\` is not bound to any owner, so there is nothing to release` });
           // Whatever the session owns stays bound to it, and so do its branches; only its own binding goes.
-          store.setState((state) => ({ sessions: new Map(state.sessions).set(session.id, { ...session, bound_to: undefined }) }));
-          return { type: "ack" };
+          store.setState((state) => ({ sessions: new Map(state.sessions).set(session.id, { ...session, bound_to: null, orchestration_role: "coordinator" }) }));
+          return { type: "ack", id: null };
         }
         // Native path operations are acknowledged without launching anything on the host.
         case "open_project_path":
@@ -695,7 +714,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
               message: `${body.path} is not opened from a link: ${found.refused}`,
             });
           }
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "open_project_directory": {
           return projectAction(body.project, scenario.projectDirectoryOpenError);
@@ -710,34 +729,34 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           refuseUnknownProject(body.project);
           refuseLocked([...store.getState().sessions.values()].filter((session) => session.project_id === body.project));
           if (body.trash_directory && scenario.projectDeleteError) return fail(scenario.projectDeleteError);
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "set_session_pinned": {
           const session = store.getState().sessions.get(body.session);
           if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
           const updated = { ...session, pinned: body.pinned };
           store.setState((state) => ({ sessions: new Map(state.sessions).set(body.session, updated) }));
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "set_session_locked": {
           const session = store.getState().sessions.get(body.session);
           if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
           if (body.locked && session.status === "archived") return fail({ code: "session_archived", params: { session: body.session }, message: "An archived session cannot be locked" });
           store.setState((state) => ({ sessions: new Map(state.sessions).set(body.session, { ...session, locked: body.locked }) }));
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "set_session_colour": {
           const session = store.getState().sessions.get(body.session);
           if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
           const updated = { ...session, colour: body.colour };
           store.setState((state) => ({ sessions: new Map(state.sessions).set(body.session, updated) }));
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "locate_conversation_to_resume": {
           const located = scenario.conversationLocation ?? { kind: "not_found" as const };
           if (located === "pending") return new Promise<Event>(() => {});
           if ("code" in located) return fail(located);
-          return { type: "conversation_located", location: located };
+          return { type: "conversation_located", id: null, location: located };
         }
         case "open_session": {
           if (scenario.sessionOpenError) return fail(scenario.sessionOpenError);
@@ -759,9 +778,10 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
             id: `s-gallery-opened-${++openedSessionCount}`,
             agent,
             console_id: owner.id,
-            project_id: project?.id,
+            project_id: project?.id ?? null,
             host_id: project?.host_id ?? "local",
             role: project ? "project" : "console",
+            orchestration_role: project && body.bound_to ? "worker" : "coordinator",
             origin: "user",
             title: (body.title?.trim() || undefined) ?? project?.name ?? owner.name,
             status: body.task == null ? "idle" : "working",
@@ -769,13 +789,18 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
             pinned: false,
             locked: false,
             started_at: Date.now(),
-            ...(project ? { bound_to: body.bound_to } : { ordinal, colour: freshColour(owner.id) }),
-            ...(account && { account_id: account.id, config_dir: account.config_dir }),
+            agent_session_id: null,
+            bound_to: project ? body.bound_to ?? null : null,
+            ordinal: project ? null : ordinal,
+            colour: project ? null : freshColour(owner.id),
+            account_id: account?.id ?? null,
+            config_dir: account?.config_dir ?? null,
+            ended_at: null,
             ...(body.model !== undefined && { model: body.model }),
             ...(body.effort !== undefined && { effort: body.effort }),
           };
           store.setState({ sessions: new Map(current.sessions).set(session.id, session) });
-          return { type: "session_opened", session };
+          return { type: "session_opened", id: null, session };
         }
         case "update_settings": {
           // The daemon refuses a name that has no such setting (Claude Code, which the others are made compatible with) before
@@ -798,17 +823,17 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           }
           if (body.claude_compatibility !== undefined) claudeCompatibilityChoices = { ...claudeCompatibilityChoices, ...body.claude_compatibility };
           store.setState({ settings: { ...current.settings, auto_pull_repositories: body.auto_pull_repositories ?? current.settings.auto_pull_repositories, auto_delete_unresumable_archives: body.auto_delete_unresumable_archives ?? current.settings.auto_delete_unresumable_archives, ...(body.auto_approve_session_requests !== undefined && { auto_approve_session_requests: body.auto_approve_session_requests }), ...(body.auto_approve_resume_requests !== undefined && { auto_approve_resume_requests: body.auto_approve_resume_requests }), ...(body.auto_approve_account_switches !== undefined && { auto_approve_account_switches: body.auto_approve_account_switches }), ...(body.auto_approve_handoffs !== undefined && { auto_approve_handoffs: body.auto_approve_handoffs }), ...(body.ask_questions_as_choices !== undefined && { ask_questions_as_choices: body.ask_questions_as_choices }), ...(body.interface_language !== undefined && { interface_language: body.interface_language }), ...(body.auto_select_account !== undefined && { auto_select_account: body.auto_select_account }), ...(body.auto_switch_on_usage_limit !== undefined && { auto_switch_on_usage_limit: body.auto_switch_on_usage_limit }), ...(body.sidebar_order_by_status !== undefined && { sidebar_order_by_status: body.sidebar_order_by_status }), ...(body.auto_start_quota_windows !== undefined && { auto_start_quota_windows: body.auto_start_quota_windows }), ...(body.git_workflow !== undefined && { git_workflow: { ...current.settings.git_workflow, ...body.git_workflow } }), default_clone_dir: cloneDir } });
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "set_codex_approval_reviewer": {
           if (scenario.accountApprovalError) return fail(scenario.accountApprovalError);
           store.setState({ settings: { ...store.getState().settings, codex_approval_reviewer: body.reviewer } });
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "set_claude_approval_mode": {
           if (scenario.accountApprovalError) return fail(scenario.accountApprovalError);
           store.setState({ settings: { ...store.getState().settings, claude_approval_mode: body.mode } });
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "set_account_disabled": {
           // `null` is the agent's default account, kept by agent in `disabled_default_accounts`; an owned account carries
@@ -816,16 +841,16 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           const current = store.getState();
           if (body.account === null) {
             const held = current.settings.disabled_default_accounts ?? [];
-            if (held.includes(body.agent) === body.disabled) return { type: "ack" };
+            if (held.includes(body.agent) === body.disabled) return { type: "ack", id: null };
             const disabled_default_accounts = body.disabled ? [...held, body.agent] : held.filter((agent) => agent !== body.agent);
             store.setState({ settings: { ...current.settings, disabled_default_accounts } });
-            return { type: "ack" };
+            return { type: "ack", id: null };
           }
           const account = current.settings.accounts.find((item) => item.id === body.account && item.agent === body.agent);
           if (!account) return fail({ code: "unknown_account", params: { account: body.account }, message: `unknown account ${body.account}` });
-          if ((account.disabled === true) === body.disabled) return { type: "ack" };
+          if ((account.disabled === true) === body.disabled) return { type: "ack", id: null };
           store.setState({ settings: { ...current.settings, accounts: current.settings.accounts.map((item) => item.id === account.id ? { ...item, disabled: body.disabled } : item) } });
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "set_account_sharing": {
           // The default account is the directory the others share, so it has no choice. Turning
@@ -852,7 +877,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
             return fail({ code: "account_in_use", params: { account: account.id, name: account.name, sessions: String(sessions), signing_in: String(signing_in) }, message: `account \`${account.name}\` is in use` });
           }
           // Asking again for the recorded value does nothing, unless the last change did not finish: then it retries.
-          if (shares === body.share && account.share_default_config_incomplete !== true) return { type: "ack" };
+          if (shares === body.share && account.share_default_config_incomplete !== true) return { type: "ack", id: null };
           // A refusal other than a failed change leaves nothing recorded.
           const error = scenario.accountSharingError;
           if (error && error.code !== "account_sharing_failed") return fail(error);
@@ -871,7 +896,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
             };
           });
           if (error) return fail(error);
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "set_default_account_name": {
           const current = store.getState();
@@ -882,7 +907,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           // A blank name, or the reserved word in any letter case, clears the custom name.
           const clears = !name || name.toLowerCase() === DEFAULT_ACCOUNT_NAME.toLowerCase();
           store.setState({ settings: { ...current.settings, default_account_names: clears ? others : { ...others, [body.agent]: name } } });
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "start_account_login": {
           const current = store.getState();
@@ -912,14 +937,14 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
                 : { status: outcome });
             }, 300);
           }, 50);
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "cancel_account_login": {
           const account = body.account ?? null;
           const running = store.getState().accountLogins.find((login) => login.agent === body.agent && login.account === account && (login.status === "starting" || login.status === "waiting"));
           if (!running) return fail({ code: "login_not_running", params: { agent: AGENT_LABEL[body.agent] }, message: `${AGENT_LABEL[body.agent]} is not being signed in for this account` });
           store.setState((state) => ({ accountLogins: state.accountLogins.map((login) => login === running ? { ...login, status: "cancelled", authorization_url: null, device_code: null } : login) }));
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "create_account":
         case "update_account": {
@@ -941,7 +966,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
                 ?? (defaultDir != null && normalizedPath(defaultDir) === dir ? DEFAULT_ACCOUNT_NAME : undefined);
             if (owner !== undefined) return fail({ code: "config_dir_taken", params: { agent: AGENT_LABEL[agent], name: owner }, message: `${AGENT_LABEL[agent]} account ${owner} already uses this config directory` });
           }
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "inspect_account_trash": {
           if (!store.getState().settings.accounts.some((account) => account.id === body.account)) return fail({ code: "unknown_account", params: { account: body.account }, message: `unknown account ${body.account}` });
@@ -950,23 +975,14 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           trashInspections += 1;
           if (inspection === "pending") return new Promise<Event>(() => {});
           if ("code" in inspection) return fail(inspection);
-          return { type: "account_trash_inspected", outcome: inspection };
+          return { type: "account_trash_inspected", id: null, outcome: inspection };
         }
         case "delete_account": {
           const current = store.getState();
           if (!current.settings.accounts.some((account) => account.id === body.account)) return fail({ code: "unknown_account", params: { account: body.account }, message: `unknown account ${body.account}` });
           if (body.trash_directory && scenario.accountDeleteError) return fail(scenario.accountDeleteError);
-          const fields = ["claude_account_id", "codex_account_id", "grok_account_id"] as const;
-          const consoles = new Map([...current.consoles].map(([id, console]) => {
-            const updated = { ...console };
-            for (const field of fields) if (updated[field] === body.account) updated[field] = null;
-            return [id, updated];
-          }));
-          const projects = new Map([...current.projects].map(([id, project]) => {
-            const updated = { ...project };
-            for (const field of fields) if (updated[field].kind === "account" && updated[field].id === body.account) updated[field] = { kind: "inherit" };
-            return [id, updated];
-          }));
+          const consoles = new Map([...current.consoles].map(([id, console]) => [id, { ...console, accounts: mappedPerAgent(console.accounts, (account) => account === body.account ? null : account) }]));
+          const projects = new Map([...current.projects].map(([id, project]) => [id, { ...project, accounts: mappedPerAgent(project.accounts, (account): ProjectAccount => account.kind === "account" && account.id === body.account ? { kind: "inherit" } : account) }]));
           // An account that shares has its sharing turned off first, at once; when that does not finish, the account stays,
           // incomplete, with the failure kept, as `set_account_sharing` leaves it.
           const target = current.settings.accounts.find((account) => account.id === body.account)!;
@@ -979,7 +995,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
             return fail(error);
           }
           store.setState({ consoles, projects, settings: { ...current.settings, accounts: current.settings.accounts.filter((account) => account.id !== body.account) } });
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "reorder_accounts": {
           const current = store.getState();
@@ -991,7 +1007,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           if (!held || held.length !== body.accounts.length || held.some((id, index) => body.accounts[index] !== id)) {
             applyDaemonEvent(store, { type: "settings_updated", settings: { ...current.settings, account_order: { ...current.settings.account_order, [body.agent]: body.accounts } } });
           }
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "add_agent": {
           if (scenario.agentListError) return fail(scenario.agentListError);
@@ -1002,7 +1018,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           if (state !== "available") return fail({ code: "agent_availability_pending", params: { agent: AGENT_LABEL[body.agent] }, message: `${AGENT_LABEL[body.agent]} cannot be added until it is known which agents are installed` });
           if (added?.includes(body.agent)) return fail({ code: "agent_already_added", params: { agent: AGENT_LABEL[body.agent] }, message: `${AGENT_LABEL[body.agent]} is already added` });
           store.setState({ settings: { ...current.settings, added_agents: [...(added ?? []), body.agent] } });
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "remove_agent":
         case "reorder_agents": {
@@ -1018,12 +1034,12 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
             }
             store.setState({ settings: { ...current.settings, added_agents: body.agents } });
           }
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "remove_trusted_directory": {
           const path = normalizedPath(body.path);
           store.setState((current) => ({ trustedDirectories: current.trustedDirectories.filter((given) => given !== path) }));
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "probe_path_links": {
           const links = body.paths.map((path): { path: string; kind: PathLinkKind; view?: PathLinkView; viewer_only?: boolean } => {
@@ -1036,13 +1052,13 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
             if ("kind" in found) return { path, kind: found.kind, view: found.view };
             return { path, kind: "file", view: found.view, ...(found.viewerOnly && { viewer_only: true }) };
           });
-          return { type: "path_links", links };
+          return { type: "path_links", id: null, links };
         }
         case "list_project_dir": {
           const files = projectFiles(body.project);
           const dir = browsed(files, body.path);
           const complete = "dir" in dir ? dir.complete !== false : true;
-          return { type: "project_dir", project: body.project, worktree: null, path: body.path, root_id: "fixture", entries: entriesUnder(files, body.path), complete };
+          return { type: "project_dir", id: null, project: body.project, worktree: null, path: body.path, root_id: "fixture", entries: entriesUnder(files, body.path), complete };
         }
         case "search_project_files": {
           const query = body.query.trim().toLowerCase();
@@ -1055,7 +1071,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           const ignored = body.include_ignored === true ? paths.filter((path) => isIgnored(files, path)) : [];
           // A search that stopped at its limits or met a folder it could not read is not whole, as a listing cut short or failed is not.
           const complete = !Object.values(files).some((file) => "dir" in file && (file.complete === false || file.error !== undefined));
-          return { type: "project_file_matches", project: body.project, query: body.query, paths, ...(ignored.length > 0 && { ignored }), complete };
+          return { type: "project_file_matches", id: null, project: body.project, query: body.query, paths, ...(ignored.length > 0 && { ignored }), complete };
         }
         case "read_project_file": {
           const files = body.worktree === undefined ? projectFiles(body.project) : scenario.worktreeFiles?.[body.worktree] ?? {};
@@ -1067,7 +1083,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
               : "image" in file
                 ? { size: Math.floor((file.image.data.length * 3) / 4), kind: "binary" as const, media_type: file.image.mediaType, text: null, data: file.image.data }
                 : { size: "binary" in file ? file.binary.size : 0, kind: "binary" as const, media_type: null, text: null, data: "" };
-          return { type: "project_file", project: body.project, worktree: body.worktree ?? null, path: body.path, source, file: content };
+          return { type: "project_file", id: null, project: body.project, worktree: body.worktree ?? null, path: body.path, source, file: content };
         }
         case "list_dir": {
           // `~` is answered with the home directory it resolves to, as the real daemon does, so a
@@ -1075,49 +1091,48 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           const path = body.path === "~" ? HOME : body.path;
           const listed = scenario.directories?.[path];
           if (listed && !Array.isArray(listed)) return fail(listed);
-          return { type: "dir_listing", ...(listed ? { path, entries: listed } : genericListing(path)) };
+          return { type: "dir_listing", id: null, ...(listed ? { path, entries: listed } : genericListing(path)) };
         }
         case "detect_directory_agent":
         case "probe_git_remote": {
           const detected = scenario.detections?.[body.type === "probe_git_remote" ? body.remote_url : body.path];
           if (detected === "pending") return new Promise<Event>(() => {});
           if (detected && "code" in detected) return fail(detected);
-          return { type: "agent_detected", agent: detected?.agent ?? null };
+          return { type: "agent_detected", id: null, agent: detected?.agent ?? null };
         }
         case "list_agent_models": {
           const listed = scenario.agentModels?.[body.agent];
           if (listed === "pending") return new Promise<Event>(() => {});
           const { models, unavailable = null } = listed ?? { models: SAMPLE_MODELS[body.agent] };
-          return { type: "agent_models", agent: body.agent, account: body.account ?? null, models, unavailable };
+          return { type: "agent_models", id: null, agent: body.agent, account: body.account ?? null, models, unavailable };
         }
         case "list_pages": {
-          const refused = scenario.pageListErrors?.[body.console_session];
+          const refused = scenario.pageListErrors?.[body.session];
           if (refused) return fail(refused);
           // As the real client's reply reaches the reducer, so a console session with no fixture
           // pages ends up listed as empty rather than not listed yet.
-          const pages = store.getState().pages.get(body.console_session) ?? [];
+          const pages = store.getState().pages.get(body.session) ?? [];
           store.setState((state) =>
-            state.pages.has(body.console_session)
+            state.pages.has(body.session)
               ? state
-              : { pages: new Map(state.pages).set(body.console_session, pages) },
+              : { pages: new Map(state.pages).set(body.session, pages) },
           );
-          return { type: "page_list", console_session_id: body.console_session, pages };
+          return { type: "page_list", id: null, session_id: body.session, pages };
         }
         case "create_console": {
           // As the daemon does, the new console reaches the store before the request is answered
           // (`coordinator.rs` broadcasts first), so a scenario can reach the first console's arrival.
           const id = `console-${Date.now()}`;
+          const blank = consoleOf(id, body.name.trim(), { workdir: `${HOME}/.octoboard/consoles/${id}`, created_at: Date.now() });
           store.setState((state) => ({
             consoles: new Map(state.consoles).set(id, {
-              id,
-              workdir: `${HOME}/.octoboard/consoles/${id}`,
-              created_at: Date.now(),
-              ...consoleFields(body),
+              ...blank,
+              ...consoleFields(blank, body),
               name: body.name.trim(),
               default_agent: body.default_agent,
             }),
           }));
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "delete_console": {
           const current = store.getState();
@@ -1132,7 +1147,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           const gitStatuses = new Map([...current.gitStatuses].filter(([id]) => projects.has(id)));
           const shellTerminals = new Map([...current.shellTerminals].filter(([, terminal]) => projects.has(terminal.project_id)));
           store.setState({ consoles, projects, sessions, pages, gitStatuses, shellTerminals });
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "add_project": {
           const current = store.getState();
@@ -1150,6 +1165,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
             : [body.source === "git" ? normalizedPath(`${parent}/${repository}`) : parent];
           if (!directories.length) return fail({ code: "no_repositories_found", params: { path: parent }, message: `no repositories found in ${parent}` });
           const projects = new Map(current.projects);
+          const blank = projectOf("", body.console_id, "");
           let added = 0;
           for (const path of directories) {
             if ([...projects.values()].some((project) => project.console_id === body.console_id && project.path === path)) continue;
@@ -1162,36 +1178,33 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
               path,
               name: directories.length === 1 && body.name?.trim() || path.split("/").at(-1) || path,
               default_agent: body.default_agent ?? (body.detect_default_agent !== false && detection && typeof detection === "object" && "agent" in detection ? detection.agent : null),
-              remote_url: body.source === "git" ? body.remote_url : null,
+              remote_url: body.source === "git" ? body.remote_url ?? null : null,
               trust_consent: false,
               pinned: false,
               tags: normalizeTags(body.tags ?? []),
               description: directories.length === 1 ? trimmedOrNull(body.description) : null,
-              claude_account_id: { kind: "inherit" },
-              codex_account_id: { kind: "inherit" },
-              grok_account_id: { kind: "inherit" },
+              ...projectFields(blank, body),
               git_workflow: projectGitWorkflow(FOLLOWING_GIT_WORKFLOW, body.git_workflow),
-              ...projectFields(body),
             };
             projects.set(project.id, project);
             added++;
           }
           if (!added) return fail({ code: "all_projects_already_added", params: {}, message: "every directory found is already associated with this console" });
           store.setState({ projects });
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "update_project": {
           const current = store.getState().projects.get(body.project);
           if (!current) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
           if (body.name !== undefined && !body.name.trim()) return fail({ code: "field_required", params: { field: "name" }, message: "name is required" });
-          const project = { ...current, ...projectFields(body), git_workflow: projectGitWorkflow(current.git_workflow, body.git_workflow),
+          const project = { ...current, ...projectFields(current, body), git_workflow: projectGitWorkflow(current.git_workflow, body.git_workflow),
             ...(body.name !== undefined && body.name.trim() !== current.name.trim() && { name: body.name.trim() }),
             ...(body.description !== undefined && trimmedOrNull(body.description) !== trimmedOrNull(current.description) && { description: trimmedOrNull(body.description) }),
             ...(body.tags !== undefined && { tags: normalizeTags(body.tags) }),
             ...(body.pinned !== undefined && { pinned: body.pinned }),
           };
           store.setState((state) => ({ projects: new Map(state.projects).set(project.id, project) }));
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "rename_session": {
           const current = store.getState().sessions.get(body.session);
@@ -1199,35 +1212,35 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           const title = body.title.trim();
           if (!title) return fail({ code: "field_required", params: { field: "title" }, message: "title is required" });
           store.setState((state) => ({ sessions: new Map(state.sessions).set(current.id, { ...current, title }) }));
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "update_console": {
           // Broadcast before the answer, as the daemon does, so a dialog reopened on the console
           // reads what was saved.
           const current = store.getState().consoles.get(body.console);
-          if (current) store.setState((state) => ({ consoles: new Map(state.consoles).set(current.id, { ...current, ...consoleFields(body) }) }));
-          return { type: "ack" };
+          if (current) store.setState((state) => ({ consoles: new Map(state.consoles).set(current.id, { ...current, ...consoleFields(current, body) }) }));
+          return { type: "ack", id: null };
         }
         case "read_session_history": {
           if (!store.getState().sessions.has(body.session)) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
           const history = scenario.sessionHistory?.[body.session] ?? [];
           if (history === "pending") return new Promise<Event>(() => {});
-          if (history === "unavailable") return { type: "session_history", session: body.session, messages: [], unavailable: true };
+          if (history === "unavailable") return { type: "session_history", id: null, session: body.session, messages: [], unavailable: true };
           if (!Array.isArray(history)) return fail(history);
-          return { type: "session_history", session: body.session, messages: history };
+          return { type: "session_history", id: null, session: body.session, messages: history };
         }
         case "inspect_session_records":
-          return { type: "session_records_inspected", presence: recordsPresence(body.sessions) };
+          return { type: "session_records_inspected", id: null, presence: recordsPresence(body.sessions) };
         case "inspect_session_branches": {
           if (scenario.sessionBranches === "pending") return new Promise<Event>(() => {});
           if (scenario.sessionBranches && !Array.isArray(scenario.sessionBranches)) return fail(scenario.sessionBranches);
           const sessions = store.getState().sessions;
           const asked = new Set(body.sessions.filter((id) => sessions.has(id)));
           const items = (scenario.sessionBranches ?? []).filter((item) => item.session !== null && asked.has(item.session));
-          if (!body.processes) return { type: "session_branches_inspected", items };
+          if (!body.processes) return { type: "session_branches_inspected", id: null, items };
           const oldest = Date.now() - PROCESS_ASK_AFTER_MS;
           const processes = oldestFirst([...asked].flatMap(treesOfSession)).filter((tree) => tree.started_at <= oldest);
-          return { type: "session_branches_inspected", items, ...(processes.length > 0 ? { processes } : {}) };
+          return { type: "session_branches_inspected", id: null, items, ...(processes.length > 0 ? { processes } : {}) };
         }
         case "list_processes": {
           if (scenario.processes?.list === "pending") return new Promise<Event>(() => {});
@@ -1237,23 +1250,23 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           if ("session_id" in body) {
             if (!store.getState().sessions.has(body.session_id)) return fail({ code: "unknown_session", params: { session: body.session_id }, message: `unknown session ${body.session_id}` });
             if (!hasProcess(body.session_id)) return fail({ code: "session_not_running", params: { session: body.session_id }, message: `session ${body.session_id} has no running process` });
-            return { type: "processes_listed", trees: treesOfSession(body.session_id) };
+            return { type: "processes_listed", id: null, trees: treesOfSession(body.session_id) };
           }
           refuseUnknownProject(body.project_id);
           const refused = scenario.processes?.projectList?.[body.project_id];
           if (refused) return fail(refused);
           const running = [...store.getState().sessions.values()].filter((session) => session.project_id === body.project_id && hasProcess(session.id));
-          return { type: "processes_listed", trees: [...running.flatMap((session) => treesOfSession(session.id)), ...oldestFirst(projectProcesses.get(body.project_id) ?? [])] };
+          return { type: "processes_listed", id: null, trees: [...running.flatMap((session) => treesOfSession(session.id)), ...oldestFirst(projectProcesses.get(body.project_id) ?? [])] };
         }
         case "stop_processes": {
           if (scenario.processes?.stop === "pending") return new Promise<Event>(() => {});
           if (scenario.processes?.stop) return fail(scenario.processes.stop);
-          return { type: "processes_stopped", ids: stopTrees(body.ids) };
+          return { type: "processes_stopped", id: null, ids: stopTrees(body.ids) };
         }
         case "keep_processes": {
           if (scenario.processes?.keep === "pending") return new Promise<Event>(() => {});
           if (scenario.processes?.keep) return fail(scenario.processes.keep);
-          return { type: "processes_kept", ids: keepTrees(body.ids) };
+          return { type: "processes_kept", id: null, ids: keepTrees(body.ids) };
         }
         case "inspect_project_removal": {
           refuseUnknownProject(body.project);
@@ -1261,7 +1274,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           if ("code" in found) return fail(found);
           // The project's processes its removal stops, whatever it was asked to remove with them.
           const processes = oldestFirst(projectProcesses.get(body.project) ?? []);
-          return Array.isArray(found) ? { type: "project_removal_inspected", items: found, processes } : { type: "project_removal_inspected", ...found, processes };
+          return Array.isArray(found) ? { type: "project_removal_inspected", id: null, items: found, processes } : { type: "project_removal_inspected", id: null, ...found, processes };
         }
         case "delete_session": {
           const all = [...store.getState().sessions.values()];
@@ -1292,7 +1305,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
             sessions: new Map([...state.sessions].filter(([id]) => !doomed.has(id))),
             pages: new Map([...state.pages].filter(([id]) => !doomed.has(id))),
           }));
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "delete_archived_sessions": {
           // What the sessions' deletion comes to, written to the store directly (the reducer that
@@ -1329,7 +1342,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
             sessions: new Map(Array.from(state.sessions).filter(([id]) => !doomed.has(id))),
             pages: new Map(Array.from(state.pages).filter(([id]) => !doomed.has(id))),
           }));
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "create_shell_terminal": {
           const project = store.getState().projects.get(body.project);
@@ -1362,7 +1375,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           };
           startedShellTerminals.add(shellTerminal.id);
           store.setState((state) => ({ shellTerminals: new Map(state.shellTerminals).set(shellTerminal.id, shellTerminal) }));
-          return { type: "shell_terminal_created", shell_terminal: shellTerminal };
+          return { type: "shell_terminal_created", id: null, shell_terminal: shellTerminal };
         }
         case "rename_shell_terminal": {
           const terminal = store.getState().shellTerminals.get(body.shell_terminal);
@@ -1370,18 +1383,18 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           const title = body.title.trim();
           if (!title) return fail({ code: "field_required", params: { field: "title" }, message: "title is required" });
           store.setState((state) => ({ shellTerminals: new Map(state.shellTerminals).set(terminal.id, { ...terminal, title, renamed: true }) }));
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "close_shell_terminal": {
           if (!store.getState().shellTerminals.has(body.shell_terminal)) return fail({ code: "unknown_shell_terminal", params: { shell_terminal: body.shell_terminal }, message: `unknown shell terminal ${body.shell_terminal}` });
           store.setState((state) => ({ shellTerminals: new Map([...state.shellTerminals].filter(([id]) => id !== body.shell_terminal)) }));
-          return { type: "ack" };
+          return { type: "ack", id: null };
         }
         case "confirm_trust":
           if (body.trust_parent_dir === true && scenario.trustParentDirError) return fail(scenario.trustParentDirError);
-          return { type: "ack" };
+          return { type: "ack", id: null };
         default:
-          return { type: "ack" };
+          return { type: "ack", id: null };
       }
     },
     // The request the real daemon raises, so the title and the raw text an action gives it reach the alert as they do there.

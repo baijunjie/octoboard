@@ -474,7 +474,7 @@ export const en = {
   "daemon.icon_too_large.import": "The avatar of the console {console_name} is larger than {limit_kib} KiB.",
   "daemon.configuration_not_recognised": "This is not an {appName} configuration file.",
   "daemon.configuration_version_unsupported":
-    "This file's format version ({version}) is not one this version of {appName} can read. It reads up to version {supported}.",
+    "This file's format version ({version}) is not one this version of {appName} can read. It reads only version {supported}.",
   "daemon.configuration_unreadable": "This configuration file could not be read: {detail}",
   "daemon.configuration_unreadable.summary": "This configuration file could not be read.",
   // `{console}`, `{project}`, `{agent}` and `{account}` of this code are positions in the imported document, not

@@ -1,7 +1,7 @@
+import { DEFAULT_SETTINGS } from "../../defaultSettings";
 import type { Agent, AgentAvailability } from "../../protocol";
 import type { Scenario } from "../scenario";
 import { consoleOf, projectOf, sessionOf, snapshotState } from "./builders";
-import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
 
 const GROUP = "Welcome";
 
@@ -30,7 +30,7 @@ export const noneAddedState = {
     consoles: [consoleOf("c-1", "Main")],
     projects: [projectOf("p-1", "c-1", "Landing page")],
     sessions: [sessionOf("s-hub", "c-1", undefined, "Hub", "interrupted")],
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [] },
+    settings: { ...DEFAULT_SETTINGS, added_agents: [], default_clone_dir: "/Users/dev/Projects", accounts: [] },
   }),
   agentAvailability: ALL_INSTALLED,
 } satisfies Scenario["state"];

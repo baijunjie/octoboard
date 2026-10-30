@@ -7,10 +7,12 @@ import { DaemonRequestError } from "../daemon-client";
 import { errorAlerts } from "../errorAlerts";
 import { isolate } from "../i18n/isolate";
 import type { Session } from "../protocol";
-import { projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { accountOf, type ProjectExtra, projectOf, sessionOf } from "../gallery/fixtures/builders";
 import type { Daemon, State } from "../store";
 import { parentConsole, project, renderDialog, hub1, buttons, optionElements, choose } from "./sessionDialogTestSupport";
 import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
+import { DEFAULT_SETTINGS } from "../defaultSettings";
+
 
 vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
 
@@ -50,8 +52,8 @@ function typeResumeId(value: string): void {
   });
 }
 
-const record = (agent: string, account: string | null) => ({ type: "conversation_located", location: { kind: "record", agent, account } });
-const heldBy = (kind: string, session?: string) => ({ type: "conversation_located", location: { kind, ...(session && { session }) } });
+const record = (agent: string, account: string | null) => ({ type: "conversation_located", id: null, location: { kind: "record", agent, account } });
+const heldBy = (kind: string, session?: string) => ({ type: "conversation_located", id: null, location: { kind, ...(session && { session }) } });
 
 type Locate = object | ((id: string) => Promise<unknown>);
 
@@ -59,7 +61,7 @@ type Locate = object | ((id: string) => Promise<unknown>);
  * gives one) and every other request with `other`, or an ack. */
 function answerRequests(daemon: Daemon, locate: Locate, other?: (body: { type: string }) => Promise<unknown>): void {
   vi.mocked(daemon.request).mockImplementation((async (body: { type: string; agent_session_id?: string }) => {
-    if (body.type !== "locate_conversation_to_resume") return other ? other(body) : { type: "ack" };
+    if (body.type !== "locate_conversation_to_resume") return other ? other(body) : { type: "ack", id: null };
     return typeof locate === "function" ? locate(body.agent_session_id!) : locate;
   }) as never);
 }
@@ -70,15 +72,15 @@ const requestsOf = (daemon: Daemon, type: string) => vi.mocked(daemon.request).m
 const openButton = () => buttons().find((button) => button.textContent === "Open")!;
 const openDisabled = () => openButton().hasAttribute("disabled") || openButton().getAttribute("aria-disabled") === "true";
 const claudeAccounts: Partial<State> = {
-  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [
-    { id: "a-work", agent: "claude", name: "Work", config_dir: "/accounts/work" },
+  settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [
+    accountOf("a-work", "claude", "Work", "/accounts/work"),
   ] },
 };
 
 /** Renders the dialog for a project (or, with `null`, for the console) over one console session,
  * with the lookup of the conversation answered by `locate` (an Agent record in Claude Code's default
  * account unless given). Timers are faked, as the lookup waits for the typing to rest. */
-function renderForResume(projectOverride: Partial<typeof project> | null = {}, locate: Locate = record("claude", null), initial: Partial<State> = {}, sessions: Session[] = [hub1]) {
+function renderForResume(projectOverride: ProjectExtra | null = {}, locate: Locate = record("claude", null), initial: Partial<State> = {}, sessions: Session[] = [hub1]) {
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   const rendered = renderDialog(sessions, initial, {}, { kind: "choose" }, projectOverride);
@@ -240,12 +242,12 @@ it("keeps a resumed record's account when automatic selection would pick another
       auto_select_account: true,
       accounts: [
         ...claudeAccounts.settings!.accounts,
-        { id: "a-soon", agent: "claude", name: "Soon", config_dir: "/accounts/soon" },
+        accountOf("a-soon", "claude", "Soon", "/accounts/soon"),
       ],
     },
     accountQuotas: [
-      { agent: "claude", account: "a-work", fetched_at: now, plan: null, unavailable: null, windows: [weekly(10, now + 7 * 24 * 60 * 60 * 1000)] },
-      { agent: "claude", account: "a-soon", fetched_at: now, plan: null, unavailable: null, windows: [weekly(1, now + 3_600_000)] },
+      { agent: "claude", account: "a-work", fetched_at: now, plan: null, unavailable: null, windows: [weekly(10, now + 7 * 24 * 60 * 60 * 1000)], email: null },
+      { agent: "claude", account: "a-soon", fetched_at: now, plan: null, unavailable: null, windows: [weekly(1, now + 3_600_000)], email: null },
     ],
   });
   await chooseResume();
@@ -261,7 +263,7 @@ const interrupted = sessionOf("s-int", parentConsole.id, project.id, "Paused", "
 
 it("announces exhausted quota only when the selected conversation requires a new launch", async () => {
   const { daemon, onResume, onOpened } = renderForResume(
-    { claude_account_id: { kind: "account", id: "a-work" } },
+    { accounts: { claude: { kind: "account", id: "a-work" } } },
     heldBy("live_session", interrupted.id),
     { ...claudeAccounts, sessions: new Map([[interrupted.id, interrupted]]) },
   );
@@ -271,7 +273,7 @@ it("announces exhausted quota only when the selected conversation requires a new
   // The quota arrives after the form opened, so it is announced as the account field's error.
   act(() => daemon.store.setState({ accountQuotas: [null, "a-work"].map((account) => ({
     agent: "claude" as const, account, fetched_at: Date.now(), plan: null, unavailable: null,
-    windows: [{ kind: "session" as const, label: null, used_percent: 100, resets_at: Date.now() + 3_600_000, window_minutes: 300 }],
+    windows: [{ kind: "session" as const, label: null, used_percent: 100, resets_at: Date.now() + 3_600_000, window_minutes: 300 }], email: null,
   })) }));
   const assertQuotaAlert = () => {
     const alert = quotaAlert();
@@ -310,11 +312,11 @@ it("announces exhausted quota only when the selected conversation requires a new
 });
 
 it("holds Open back, with why, when the only account left is changing its sharing", () => {
-  const { daemon } = renderForResume({ claude_account_id: { kind: "account", id: "a-work" } }, record("claude", null), {
+  const { daemon } = renderForResume({ accounts: { claude: { kind: "account", id: "a-work" } } }, record("claude", null), {
     ...claudeAccounts,
     accountQuotas: [{
       agent: "claude", account: null, fetched_at: Date.now(), plan: null, unavailable: null,
-      windows: [{ kind: "session", label: null, used_percent: 100, resets_at: Date.now() + 3_600_000, window_minutes: 300 }],
+      windows: [{ kind: "session", label: null, used_percent: 100, resets_at: Date.now() + 3_600_000, window_minutes: 300 }], email: null,
     }],
     accountSharing: new Map([["a-work", { account: "a-work", progress: { share: true, phase: "changing" as const, done: 0, total: 2 } }]]),
   });
@@ -368,7 +370,7 @@ it.each(["conversation_in_session", "conversation_outside_project"])("asks the l
   let asked = 0;
   const { daemon } = renderForResume({}, record("claude", null), { sessions: new Map([[archived.id, archived]]) });
   answerRequests(daemon, async () => (asked++ === 0 ? record("claude", null) : heldBy("archived_session", archived.id)), (body) =>
-    body.type === "open_session" ? Promise.reject(new DaemonRequestError("plain", code, {})) : Promise.resolve({ type: "ack" }));
+    body.type === "open_session" ? Promise.reject(new DaemonRequestError("plain", code, {})) : Promise.resolve({ type: "ack", id: null }));
   await chooseResume();
   typeResumeId(UUID);
   await settle();
@@ -490,7 +492,7 @@ it("does not rename the reopened session to an empty name", async () => {
 it("toasts a rename that fails after the reopen, and still selects the session and closes", async () => {
   const { daemon, onOpened, onClose, onResume } = renderForResume({}, heldBy("archived_session", archived.id), { sessions: new Map([[archived.id, archived]]) });
   answerRequests(daemon, heldBy("archived_session", archived.id), (body) =>
-    body.type === "rename_session" ? Promise.reject(new DaemonRequestError("plain", "unknown_session", { session: "s-old" })) : Promise.resolve({ type: "ack" }));
+    body.type === "rename_session" ? Promise.reject(new DaemonRequestError("plain", "unknown_session", { session: "s-old" })) : Promise.resolve({ type: "ack", id: null }));
   await chooseResume();
   typeResumeId(UUID);
   await settle();
@@ -641,7 +643,7 @@ it.each([
 it("reports the open-time refusal of a conversation held elsewhere in the error alert dialog", async () => {
   const { daemon } = renderForResume({}, record("claude", null), { sessions: new Map([[elsewhere.id, elsewhere]]), projects: new Map([[otherProject.id, otherProject]]) });
   answerRequests(daemon, record("claude", null), (body) =>
-    body.type === "open_session" ? Promise.reject(new DaemonRequestError("plain", "conversation_outside_project", { id: UUID, session: elsewhere.id })) : Promise.resolve({ type: "ack" }));
+    body.type === "open_session" ? Promise.reject(new DaemonRequestError("plain", "conversation_outside_project", { id: UUID, session: elsewhere.id })) : Promise.resolve({ type: "ack", id: null }));
   await chooseResume();
   typeResumeId(UUID);
   await settle();

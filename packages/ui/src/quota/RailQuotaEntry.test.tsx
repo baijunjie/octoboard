@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
+import { accountOf } from "../gallery/fixtures/builders";
 import { presence, stubListMotion } from "../components/listMotionTestSupport";
 import { enter, leave, mountForTooltip, openTooltip, pointer, press as pressWith, withFakeTimers } from "../components/tooltipTestSupport";
 import { currentLanguage, setLanguage } from "../i18n/language";
@@ -11,6 +12,7 @@ import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { MODAL_OPEN } from "../layout/useRegionCycle";
 import { RailQuotaEntry } from "./RailQuotaEntry";
 import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
+import { DEFAULT_SETTINGS } from "../defaultSettings";
 
 // jsdom has no layout, so a scroller never reports overflow. This one reports the way the library's
 // does, once when it mounts: overflowing when its list holds the marked account. Each scroller's report
@@ -82,12 +84,12 @@ const quota = (agent: Agent, account: string | null, plan: string): AccountQuota
   fetched_at: NOW - MINUTE,
   plan,
   windows: [{ kind: "session", label: null, used_percent: 18, resets_at: NOW + 117 * MINUTE, window_minutes: 300 }],
-  unavailable: null,
+  unavailable: null, email: null,
 });
 
 const accounts: Account[] = [
-  { id: "claude-work", agent: "claude", name: "Work", config_dir: "/home/dev/.claude-work" },
-  { id: "codex-work", agent: "codex", name: "Codex Work", config_dir: "/home/dev/.codex-work" },
+  accountOf("claude-work", "claude", "Work", "/home/dev/.claude-work"),
+  accountOf("codex-work", "codex", "Codex Work", "/home/dev/.codex-work"),
 ];
 
 /** Mounts the entry with Claude Code and Codex available (Grok Build missing) and added (`added`, in
@@ -100,8 +102,8 @@ function mount(
 ) {
   vi.setSystemTime(NOW);
   const store = createStateStore({
-    agentAvailability: new Map((["claude", "codex", "grok"] as Agent[]).map((agent) => [agent, { agent, availability: availability[agent] ?? "not_determined" }])),
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
+    agentAvailability: new Map((["claude", "codex", "grok"] as Agent[]).map((agent) => [agent, { agent, availability: availability[agent] ?? "not_determined", default_account_dir: null }])),
+    settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
     accountQuotas: [quota("claude", null, "max"), quota("claude", "claude-work", "pro"), quota("codex", null, "plus")],
   });
   const daemon = { store, request } as unknown as Daemon;
@@ -694,8 +696,8 @@ it("follows the selected session's actual agent and account, account switches an
   onTestFinished(() => act(() => root.unmount()));
   const session: Session = {
     id: "selected", agent: "claude", account_id: "claude-work", config_dir: accounts[0]!.config_dir, console_id: "console", host_id: "local",
-    role: "console", origin: "console", title: "Selected", status: "idle", has_conversation: true,
-    pinned: false, locked: false, started_at: NOW,
+    role: "console", orchestration_role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, ended_at: null,
   };
   act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
   const select = (id?: string) => act(() => root.render(
@@ -740,8 +742,8 @@ it("opens on the tab of the agent whose quota the button shows, each time, and o
   onTestFinished(() => act(() => root.unmount()));
   const session: Session = {
     id: "selected", agent: "codex", account_id: null, config_dir: null, console_id: "console", host_id: "local",
-    role: "console", origin: "console", title: "Selected", status: "idle", has_conversation: true,
-    pinned: false, locked: false, started_at: NOW,
+    role: "console", orchestration_role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, ended_at: null,
   };
   act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
   const select = (id?: string) => act(() => root.render(
@@ -790,8 +792,8 @@ it("opens the shown agent's list scrolled to the selected session's account, wit
   onTestFinished(() => act(() => root.unmount()));
   const session: Session = {
     id: "selected", agent: "claude", account_id: "claude-work", config_dir: accounts[0]!.config_dir, console_id: "console", host_id: "local",
-    role: "console", origin: "console", title: "Selected", status: "idle", has_conversation: true,
-    pinned: false, locked: false, started_at: NOW,
+    role: "console", orchestration_role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, ended_at: null,
   };
   act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
   const select = (id?: string) => act(() => root.render(
@@ -825,8 +827,8 @@ it("draws the button's window full, and says so, once its reset time passes whil
   onTestFinished(() => act(() => root.unmount()));
   const session: Session = {
     id: "selected", agent: "codex", account_id: null, config_dir: null, console_id: "console", host_id: "local",
-    role: "console", origin: "console", title: "Selected", status: "idle", has_conversation: true,
-    pinned: false, locked: false, started_at: NOW,
+    role: "console", orchestration_role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, ended_at: null,
   };
   const used = quota("codex", null, "plus");
   used.windows = [{ ...used.windows[0]!, used_percent: 100, resets_at: NOW + 10 * MINUTE }];
@@ -852,8 +854,8 @@ it("hides the mini bar for unread, failed, stale or unavailable quota instead of
   onTestFinished(() => act(() => root.unmount()));
   const session: Session = {
     id: "selected", agent: "claude", account_id: "claude-work", console_id: "console", host_id: "local",
-    role: "console", origin: "console", title: "Selected", status: "idle", has_conversation: true,
-    pinned: false, locked: false, started_at: NOW,
+    role: "console", orchestration_role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, config_dir: null, ended_at: null,
   };
   act(() => store.setState({ sessions: new Map([[session.id, session]]), accountQuotas: [] }));
   act(() => root.render(<DaemonProvider value={{ store, request } as unknown as Daemon}>
@@ -880,8 +882,8 @@ it("keeps the mini bar of a session whose agent was removed", () => {
   onTestFinished(() => act(() => root.unmount()));
   const session: Session = {
     id: "selected", agent: "claude", account_id: "claude-work", console_id: "console", host_id: "local",
-    role: "console", origin: "console", title: "Selected", status: "idle", has_conversation: true,
-    pinned: false, locked: false, started_at: NOW,
+    role: "console", orchestration_role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, config_dir: null, ended_at: null,
   };
   act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
   act(() => root.render(<DaemonProvider value={{ store, request } as unknown as Daemon}>
@@ -900,7 +902,7 @@ it("moves the accounts and agent tabs that come and go while the panel is open, 
   openPanel(button);
   expect(motion.played()).toEqual([]);
   const setAccounts = (next: Account[]) => act(() => store.setState((state) => ({ settings: { ...state.settings, accounts: next } })));
-  const withSide = [...accounts, { id: "claude-side", agent: "claude" as const, name: "Side", config_dir: "/home/dev/.claude-side" }];
+  const withSide = [...accounts, accountOf("claude-side", "claude", "Side", "/home/dev/.claude-side")];
   setAccounts(withSide);
   const row = (id: string) => document.querySelector(`[data-list-motion="${id}"]`);
   expect(motion.played().map(({ element, frames }) => [element, presence(frames)])).toEqual([[row("claude-side"), "enter"]]);
@@ -913,7 +915,7 @@ it("moves the accounts and agent tabs that come and go while the panel is open, 
   expect(row("claude-work")).toBeNull();
   motion.clear();
   // Codex stops being installed: its tab leaves the strip.
-  act(() => store.setState((state) => ({ agentAvailability: new Map(state.agentAvailability).set("codex", { agent: "codex", availability: "unavailable" }) })));
+  act(() => store.setState((state) => ({ agentAvailability: new Map(state.agentAvailability).set("codex", { agent: "codex", availability: "unavailable", default_account_dir: null }) })));
   // The tabs are rendered from the collection in a commit of their own, which the motion observes.
   await act(async () => {});
   expect(motion.played().map(({ frames }) => presence(frames))).toEqual(["exit"]);
@@ -939,8 +941,8 @@ function mountWithSession(accountId: string | null = "claude-work") {
   onTestFinished(() => act(() => root.unmount()));
   const session: Session = {
     id: "selected", agent: "claude", account_id: accountId, config_dir: null, console_id: "console", host_id: "local",
-    role: "console", origin: "console", title: "Selected", status: "idle", has_conversation: true,
-    pinned: false, locked: false, started_at: NOW,
+    role: "console", orchestration_role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, ended_at: null,
   };
   act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
   act(() => root.render(
@@ -1025,8 +1027,8 @@ it("lists a turned-off account only for the selected session that is still runni
   act(() => store.setState({ settings: { ...store.getState().settings, accounts: accounts.map((account) => ({ ...account, disabled: true })), disabled_default_accounts: ["claude"] } }));
   const session: Session = {
     id: "selected", agent: "claude", account_id: "claude-work", config_dir: accounts[0]!.config_dir, console_id: "console", host_id: "local",
-    role: "console", origin: "console", title: "Selected", status: "idle", has_conversation: true,
-    pinned: false, locked: false, started_at: NOW,
+    role: "console", orchestration_role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, ended_at: null,
   };
   act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
   const select = (id?: string) => act(() => root.render(
@@ -1071,8 +1073,8 @@ it("drops the tab of an agent whose accounts are all turned off, bar the one the
   act(() => store.setState({ settings: { ...store.getState().settings, accounts: [{ ...accounts[0]!, disabled: true }, accounts[1]!], disabled_default_accounts: ["claude"] } }));
   const session: Session = {
     id: "selected", agent: "claude", account_id: "claude-work", config_dir: accounts[0]!.config_dir, console_id: "console", host_id: "local",
-    role: "console", origin: "console", title: "Selected", status: "idle", has_conversation: true,
-    pinned: false, locked: false, started_at: NOW,
+    role: "console", orchestration_role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, ended_at: null,
   };
   act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
   const select = (id?: string) => act(() => root.render(
@@ -1122,8 +1124,8 @@ function mountOnTurnedOff(status: Session["status"] = "idle") {
   act(() => store.setState({ settings: { ...store.getState().settings, accounts: [{ ...accounts[0]!, disabled: true }, accounts[1]!], disabled_default_accounts: ["claude"] } }));
   const session: Session = {
     id: "selected", agent: "claude", account_id: "claude-work", config_dir: accounts[0]!.config_dir, console_id: "console", host_id: "local",
-    role: "console", origin: "console", title: "Selected", status, has_conversation: true,
-    pinned: false, locked: false, started_at: NOW,
+    role: "console", orchestration_role: "coordinator", origin: "console", title: "Selected", status, has_conversation: true,
+    pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, ended_at: null,
   };
   const setStatus = (next: Session["status"]) => act(() => store.setState({ sessions: new Map([[session.id, { ...session, status: next }]]) }));
   setStatus(status);

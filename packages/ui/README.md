@@ -88,9 +88,12 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   is `"normal"` (expected UI, including empty, loading and platform-limited views) or `"exceptional"` (deliberate
   failures, validation errors, refusals, conflicts), chosen by the view being confirmed rather than the component or
   file name. Keep failed subjects out of normal navigation.
-- `state` is built with `snapshotState` from `builders.ts`, so a protocol change breaks it at typecheck. State that
-  lives in a component rather than the store (a dialog, the archive view, the selected session) is reached with the
-  shortest `steps`, which press controls by name as a user would (`ui.press(ui.t("rail.settings"))`; `ui.pressTab`
+- `state` is built with `snapshotState` from `builders.ts`. Build consoles and projects with `consoleWith` and
+  `projectWith` from the same file, or give the `Map` its type (`new Map<string, Console>(...)`): an object built by
+  spreading into an un-annotated `new Map([...])`, `.map(([id, x]) => [id, { ...x, … }])` included, is not checked for
+  leftover keys, so a renamed or removed protocol field survives in the fixture and the scenario silently shows the
+  wrong state. State that lives in a component rather than the store (a dialog, the archive view, the selected
+  session) is reached with the shortest `steps`, which press controls by name as a user would (`ui.press(ui.t("rail.settings"))`; `ui.pressTab`
   presses a tab where a checkbox or button before it carries the same name, as the import review's "What to import"
   checkboxes and its tabs do; `ui.confirm()` presses a dialog's confirming button, `ui.contextMenu` opens a row's
   right-click menu, `ui.touchPress` and `ui.tapTopBarStatus` press with a finger, for the popover a touch opens in place
@@ -302,12 +305,12 @@ Imports run one way between the feature directories: `src/panels/` imports `src/
 | `src/main.tsx`, `src/App.tsx` | Startup (platform, daemon location, connection, theme, native window reveal, global error handlers) and the screen: window chrome, the content panel, session selection and resume, toasts, connection banner and the dialog layer |
 | `src/StartupScreen.tsx`, `src/ErrorBoundary.tsx`, `src/WelcomeScreen.tsx` | The screens for no daemon connection, a UI crash, and a daemon with no console |
 | `src/platform/` | `PlatformAdapter`, the interface to everything native, made of optional capabilities; implemented by `tauri.ts` (the only importer of `@tauri-apps/*`) and `browser.ts`, exposed by `react.tsx` |
-| `src/daemon.ts`, `src/daemon-client.ts`, `src/protocol.ts` | Locating the daemon (`resolveDaemonAddress`: its origin and the key it requires, from the page's address; `resolveRecovered`: whether the shell restarted it), its WebSocket client for `GET /ws/control` (request correlation, reconnect, event dispatch), and the hand-written TypeScript mirror of the wire protocol |
+| `src/daemon.ts`, `src/daemon-client.ts`, `src/protocol.ts` | Locating the daemon (`resolveDaemonAddress`: its origin and the key it requires, from the page's address; `resolveRecovered`: whether the shell restarted it), its WebSocket client for `GET /ws/control` (request correlation, reconnect, event dispatch), and the hand-written TypeScript mirror of the wire protocol, checked against the daemon's types by `src/protocol.contract.ts` (`tsc` fails on a difference) over `src/protocol.generated.ts`, the file the daemon's `protocol/bindings.rs` test writes and `src/protocol.contract.test.ts` requires an assertion for every generated type |
 | `src/store.ts` | The Zustand store of the connection and the state derived from daemon events: `createDaemon`, `useDaemon`, `useDaemonStore`, `useDaemonStoreEqual`, `useErrorRecords` and the `onToast` stream |
 | `src/sessions/`, `src/sameValue.ts`, `src/waiting.ts` | `indexSessions` and the hooks reading session groups, deep equality, and the sessions waiting for the user in sidebar order |
 | `src/accountSwitchBatch.tsx`, `src/accountSwitchFailureAlert.tsx` | `runAccountSwitchBatch`, the app-level runner of a batch of session account switches that outlives the dialog starting it, and the error alert for its failures |
 | `src/preferenceKeys.ts`, `src/persistedPreference.ts` | The `localStorage` key of every persisted preference and `createPersistedPreference`, the guarded store behind them |
-| `src/gitWorkflow.ts` | The git workflow settings' defaults, choices and change detection |
+| `src/gitWorkflow.ts`, `src/defaultSettings.ts` | The git workflow settings' defaults, choices and change detection, and `DEFAULT_SETTINGS`, the settings a store starts from before the first snapshot |
 | `src/appConfig.ts` | The app-level facts from the repo-root `config/app.json`; `src/appConfig.test.ts` checks the copies that must live elsewhere against it |
 
 ### Failures, language and theme
@@ -348,7 +351,7 @@ Imports run one way between the feature directories: `src/panels/` imports `src/
 
 | Path | Role |
 |---|---|
-| `src/agents.ts`, `src/agentLaunchSettings.ts`, `src/agentFields.ts`, `src/accountChoices.ts` | The agents' names, listed agents and install pages, model and effort picker rules, per-agent dialog fields and the pure account-picker rules |
+| `src/agents.ts`, `src/agentLaunchSettings.ts`, `src/agentFields.ts`, `src/accountChoices.ts` | The agents' names, listed agents and install pages, model and effort picker rules, the per-agent settings of a console or project as a dialog holds and diffs them (`PerAgent` values) and the pure account-picker rules |
 | `src/accountOrder.ts` | `orderedAccounts`: the shared saved display order of an agent's accounts for settings, pickers and quota surfaces |
 | `src/processes.ts`, `src/processFacts.ts`, `src/components/ProcessTreeDetails.tsx` | `listProcesses`, `stopProcesses` and `keepProcesses`, the client-side process requests; `processFacts`, `ProcessCommand`, `ProcessTreeDetails` and the `StopGlyph` icon, the process wording shared by the Processes panel and the archive and removal choices |
 | `src/sessionLabel.ts`, `src/sessionColours.ts`, `src/gitStatusLabel.ts`, `src/projectFiltering.ts`, `src/sessionCopy.tsx`, `src/gitStatusCopy.tsx`, `src/sessionModel.ts`, `src/repositoryLink.ts` | Plain and rich session and git-badge wording, session colours, the sidebar filter's rules, a session's model and effort for display, and the repository host link |

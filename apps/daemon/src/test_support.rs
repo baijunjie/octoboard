@@ -17,8 +17,8 @@ use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 use crate::protocol::{
-    Account, Agent, Console, Origin, Page, Project, ProjectAccount, ProjectSource, Role, Session,
-    SessionStatus,
+    Account, Agent, Console, OrchestrationRole, Origin, Page, Project, ProjectSource, Role,
+    Session, SessionStatus,
 };
 use crate::session::{LiveSession, NewSession};
 use crate::state::AppState;
@@ -192,21 +192,9 @@ pub(crate) fn console(dir: &Path) -> crate::protocol::Console {
         workdir: dir.join("workdir").to_string_lossy().into_owned(),
         default_agent: Agent::Claude,
         project_session_agent: None,
-        claude_project_session_model: None,
-        claude_project_session_effort: None,
-        codex_project_session_model: None,
-        codex_project_session_effort: None,
-        grok_project_session_model: None,
-        grok_project_session_effort: None,
-        claude_account_id: None,
-        codex_account_id: None,
-        grok_account_id: None,
-        claude_console_session_model: None,
-        claude_console_session_effort: None,
-        codex_console_session_model: None,
-        codex_console_session_effort: None,
-        grok_console_session_model: None,
-        grok_console_session_effort: None,
+        accounts: Default::default(),
+        launch: Default::default(),
+        project_session_launch: Default::default(),
         icon: None,
         console_session_prompt: None,
         created_at: 0,
@@ -1026,15 +1014,8 @@ pub(crate) fn console_with_project_and_accounts(prefix: &str) -> (Arc<AppState>,
             default_agent: None,
             source: ProjectSource::Local,
             remote_url: None,
-            claude_account_id: ProjectAccount::Inherit,
-            codex_account_id: ProjectAccount::Inherit,
-            grok_account_id: ProjectAccount::Inherit,
-            claude_session_model: None,
-            claude_session_effort: None,
-            codex_session_model: None,
-            codex_session_effort: None,
-            grok_session_model: None,
-            grok_session_effort: None,
+            accounts: Default::default(),
+            launch: Default::default(),
             trust_consent: false,
             pinned: false,
             tags: Vec::new(),
@@ -1090,7 +1071,7 @@ pub(crate) fn bare_session(id: &str, role: Role) -> Session {
         background_tasks: Vec::new(),
         switching_account: false,
         default_effort: None,
-        orchestration_role: None,
+        orchestration_role: OrchestrationRole::Coordinator,
         context: None,
         observed_model: None,
         observed_effort: None,
@@ -1098,7 +1079,6 @@ pub(crate) fn bare_session(id: &str, role: Role) -> Session {
         effort: None,
         has_conversation: false,
         bound_to: None,
-        lead: false,
         colour: None,
         ordinal: None,
         account_id: None,
@@ -1232,11 +1212,11 @@ pub(crate) fn codex_chain(home: &Path, thread: &str, compressed: bool) -> CodexC
     chain
 }
 
-/// A page of the report panel pushed by `console_session_id` at `created_at`.
-pub(crate) fn test_page(id: &str, console_session_id: &str, created_at: i64) -> Page {
+/// A page of the report panel pushed by `session_id` at `created_at`.
+pub(crate) fn test_page(id: &str, session_id: &str, created_at: i64) -> Page {
     Page {
         id: id.to_string(),
-        console_session_id: console_session_id.to_string(),
+        session_id: session_id.to_string(),
         html: "<p>page</p>".to_string(),
         anchor_message_id: None,
         created_at,

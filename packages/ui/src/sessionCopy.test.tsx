@@ -5,7 +5,7 @@ import { expect, it, onTestFinished } from "vitest";
 
 import { AGENT_OPTIONS } from "./agents";
 import { SessionAgentTooltip } from "./components/SessionAgentIcon";
-import { consoleOf, gitStatusOf, projectOf, sessionOf } from "./gallery/fixtures/builders";
+import { accountOf, consoleOf, gitStatusOf, projectOf, sessionOf } from "./gallery/fixtures/builders";
 import { gitBadgeContent } from "./gitStatusCopy";
 import { gitBadgeAriaLabel } from "./gitStatusLabel";
 import { currentLanguage, setLanguage, t } from "./i18n/language";
@@ -49,9 +49,9 @@ it.each(["en", "zh-Hans", "ar"] as const)("keeps rich location wording equal to 
 });
 
 it.each(AGENT_OPTIONS)("retains account qualifiers and removed-account paths for $label", ({ value: agent, label }) => {
-  for (const account of [undefined, { id: "stored", name: "العمل Work 中文", config_dir: "/home/stored" }]) {
+  for (const account of [undefined, accountOf("stored", "claude", "العمل Work 中文", "/home/stored")]) {
     const session = sessionOf("s", "c", "p", "Task", "idle", { agent, account_id: account?.id ?? "gone", config_dir: "/Users/中文/old account" });
-    const container = mount(<SessionAgentTooltip session={session} accounts={account ? [{ ...account, agent }] : []} defaultNames={undefined} />);
+    const container = mount(<SessionAgentTooltip session={session} accounts={account ? [{ ...account, agent }] : []} defaultNames={{}} />);
     expect(container.querySelector("[data-inline-reference]")).toBeNull();
     expect(container.firstElementChild!.firstElementChild!.textContent).toBe(label);
     expect(container.textContent).toContain(account?.name ?? session.config_dir);

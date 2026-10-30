@@ -1,8 +1,8 @@
+import { DEFAULT_SETTINGS } from "../../defaultSettings";
 import type { Agent, AgentAvailability } from "../../protocol";
 import type { Ui } from "../interact";
 import type { Scenario } from "../scenario";
-import { ALL_AGENTS, SAMPLE, branchItemOf, minutesAgo, sessionOf, snapshotState, worktreeItemOf } from "./builders";
-import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
+import { accountOf, ALL_AGENTS, SAMPLE, branchItemOf, minutesAgo, sessionOf, snapshotState, worktreeItemOf } from "./builders";
 
 const { console: console_, web, api, consoleSession: hub } = SAMPLE;
 
@@ -29,12 +29,12 @@ const hubOwned = [
 
 // Codex has two named accounts beside its default one, which the dialog's joined picker offers.
 const settings = {
-  auto_pull_repositories: false,
-  auto_delete_unresumable_archives: true,
-  added_agents: ALL_AGENTS, default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW,
+  ...DEFAULT_SETTINGS,
+  added_agents: ALL_AGENTS,
+  default_clone_dir: "/Users/dev/Projects",
   accounts: [
-    { id: "a-codex-work", agent: "codex" as const, name: "Work account", config_dir: "/Users/dev/.codex-work" },
-    { id: "a-codex-personal", agent: "codex" as const, name: "Personal account", config_dir: "/Users/dev/.codex-personal" },
+    accountOf("a-codex-work", "codex", "Work account", "/Users/dev/.codex-work"),
+    accountOf("a-codex-personal", "codex", "Personal account", "/Users/dev/.codex-personal"),
   ],
 };
 

@@ -1,14 +1,10 @@
 import { describe, expect, it } from "vitest";
 
+import { accountOf } from "../gallery/fixtures/builders";
 import type { Account } from "../protocol";
 import { isAbsoluteConfigDir, nameCollision } from "./agentAccounts";
 
-const account = (id: string, agent: Account["agent"], name: string): Account => ({
-  id,
-  agent,
-  name,
-  config_dir: `/home/${id}`,
-});
+const account = (id: string, agent: Account["agent"], name: string): Account => accountOf(id, agent, name, `/home/${id}`);
 
 describe("isAbsoluteConfigDir", () => {
   it.each([

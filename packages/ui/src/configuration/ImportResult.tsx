@@ -175,9 +175,9 @@ export function ImportResult({
           <ul className="flex flex-col px-4 py-1 [&>li]:groove-b [&>li:last-child]:border-b-0">
             {BOOLEAN_SETTINGS.map(({ label, field }) => {
               const on = applied[field];
-              return typeof on === "boolean" && <SettingLine key={field} label={t(label)} badge={t(on ? "configuration.import.result.badge.on" : "configuration.import.result.badge.off")} />;
+              return <SettingLine key={field} label={t(label)} badge={t(on ? "configuration.import.result.badge.on" : "configuration.import.result.badge.off")} />;
             })}
-            {applied.git_workflow && <SettingLine label={t("configuration.import.gitWorkflow")} badge={t("configuration.import.result.badge.matches")} />}
+            <SettingLine label={t("configuration.import.gitWorkflow")} badge={t("configuration.import.result.badge.matches")} />
             {hasClaudeCompatibilityChoices(applied.claude_compatibility) && <SettingLine label={t("configuration.import.claudeCompatibility")} badge={t("configuration.import.result.badge.matches")} />}
             {shortcuts && (
               <SettingLine

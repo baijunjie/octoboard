@@ -77,6 +77,7 @@ const sent = (daemon: Daemon, type: string) => vi.mocked(daemon.request).mock.ca
 it("lists a session's trees with their command, working directory, ports, memory, age and process count", async () => {
   await mount({ session: running }, async () => ({
     type: "processes_listed",
+    id: null,
     trees: [tree("1:1", { ports: [3000, 5173], process_count: 3 }), tree("2:2", { command: "tail -f log", memory_bytes: 2_500_000 })],
   }));
   expect(rows()).toHaveLength(2);
@@ -92,6 +93,7 @@ it("lists a session's trees with their command, working directory, ports, memory
 it("words a command and a working directory that could not be read, and marks a deleted one", async () => {
   await mount({ session: running }, async () => ({
     type: "processes_listed",
+    id: null,
     trees: [tree("1:1", { command: "", cwd: null }), tree("2:2", { cwd_missing: true })],
   }));
   expect(rows()[0].textContent).toContain("Unknown command");
@@ -100,7 +102,7 @@ it("words a command and a working directory that could not be read, and marks a 
 });
 
 it("says there is nothing, not that it is loading, once the list comes back empty", async () => {
-  await mount({ session: running }, async () => ({ type: "processes_listed", trees: [] }));
+  await mount({ session: running }, async () => ({ type: "processes_listed", id: null, trees: [] }));
   expect(panel().textContent).toContain("No processes");
   expect(panel().textContent).toContain("Nothing the session started is still running.");
   expect(panel().textContent).not.toContain("Loading processes");
@@ -115,6 +117,7 @@ it("reads a session whose process has ended as having none, raising nothing", as
 it("filters a project's trees by a session picked in a selector that starts empty, with no visible label, and goes back to all of them when cleared", async () => {
   await mount({ project }, async () => ({
     type: "processes_listed",
+    id: null,
     trees: [tree("1:1"), tree("2:2", { session_id: second.id, command: "vite" }), tree("3:3", { session_id: undefined, command: "node kept.js" })],
   }));
   const trigger = panel().querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!;
@@ -141,7 +144,7 @@ it("filters a project's trees by a session picked in a selector that starts empt
 });
 
 it("sets the panel's explanation and the Project processes note in one style", async () => {
-  await mount({ project }, async () => ({ type: "processes_listed", trees: [tree("1:1"), tree("3:3", { session_id: undefined })] }));
+  await mount({ project }, async () => ({ type: "processes_listed", id: null, trees: [tree("1:1"), tree("3:3", { session_id: undefined })] }));
   const notes = [...panel().querySelectorAll("p")].filter((p) => p.textContent === "Processes started by a session stop automatically when the session ends." || p.textContent?.startsWith("These processes belong to no session"));
   expect(notes).toHaveLength(2);
   expect(new Set(notes.map((note) => note.className)).size).toBe(1);
@@ -150,6 +153,7 @@ it("sets the panel's explanation and the Project processes note in one style", a
 it("groups a project's trees under the sessions' titles and puts those no session owns under Project processes, kept or left behind", async () => {
   const { daemon } = await mount({ project }, async () => ({
     type: "processes_listed",
+    id: null,
     trees: [
       tree("1:1"),
       tree("2:2", { session_id: second.id, command: "vite" }),
@@ -171,9 +175,9 @@ it("stops a tree on request, drops it from the list and says so", async () => {
   const { daemon } = await mount({ session: running }, async (body) => {
     if (body.type === "stop_processes") {
       body.ids.forEach((id) => stopped.add(id));
-      return { type: "processes_stopped", ids: body.ids };
+      return { type: "processes_stopped", id: null, ids: body.ids };
     }
-    return { type: "processes_listed", trees: [tree("1:1"), tree("2:2", { command: "tail -f log" })].filter((candidate) => !stopped.has(candidate.id)) };
+    return { type: "processes_listed", id: null, trees: [tree("1:1"), tree("2:2", { command: "tail -f log" })].filter((candidate) => !stopped.has(candidate.id)) };
   });
   await act(async () => button("Stop").click());
   expect(sent(daemon, "stop_processes")).toEqual([]);
@@ -186,6 +190,7 @@ it("stops a tree on request, drops it from the list and says so", async () => {
 it("offers Stop and Keep on a session's tree, each named by the command, and only Stop on one no session owns", async () => {
   await mount({ project }, async () => ({
     type: "processes_listed",
+    id: null,
     trees: [tree("1:1"), tree("2:2", { session_id: undefined, command: "node old.js" }), tree("3:3", { command: "" })],
   }));
   expect([...rows()[0].querySelectorAll("button")].map((candidate) => candidate.textContent)).toEqual(["Keep", "Stop"]);
@@ -197,7 +202,7 @@ it("offers Stop and Keep on a session's tree, each named by the command, and onl
 });
 
 it("puts actions beside single-line facts while the command and directory keep the card's whole width", async () => {
-  await mount({ project }, async () => ({ type: "processes_listed", trees: [tree("1:1")] }));
+  await mount({ project }, async () => ({ type: "processes_listed", id: null, trees: [tree("1:1")] }));
   const line = button("Stop").parentElement!.parentElement!;
   expect(line.textContent).toContain("120 MB");
   expect(line.textContent).not.toContain("npm run dev");
@@ -209,7 +214,7 @@ it("puts actions beside single-line facts while the command and directory keep t
 
 it("offers a console session's trees only Stop", async () => {
   const consoleSession = sessionOf("s-console", console_.id, undefined, "Main", "idle");
-  await mount({ console: consoleSession }, async () => ({ type: "processes_listed", trees: [tree("1:1", { session_id: consoleSession.id })] }), [consoleSession]);
+  await mount({ console: consoleSession }, async () => ({ type: "processes_listed", id: null, trees: [tree("1:1", { session_id: consoleSession.id })] }), [consoleSession]);
   expect(rows()).toHaveLength(1);
   expect([...rows()[0].querySelectorAll("button")].map((candidate) => candidate.textContent)).toEqual(["Stop"]);
 });
@@ -219,9 +224,9 @@ it("keeps a tree on request after a confirmation, drops it from the list and say
   const { daemon } = await mount({ session: running }, async (body) => {
     if (body.type === "keep_processes") {
       body.ids.forEach((id) => kept.add(id));
-      return { type: "processes_kept", ids: body.ids };
+      return { type: "processes_kept", id: null, ids: body.ids };
     }
-    return { type: "processes_listed", trees: [tree("1:1"), tree("2:2", { command: "tail -f log" })].filter((candidate) => !kept.has(candidate.id)) };
+    return { type: "processes_listed", id: null, trees: [tree("1:1"), tree("2:2", { command: "tail -f log" })].filter((candidate) => !kept.has(candidate.id)) };
   });
   await act(async () => button("Keep").click());
   expect(sent(daemon, "keep_processes")).toEqual([]);
@@ -234,7 +239,7 @@ it("keeps a tree on request after a confirmation, drops it from the list and say
 });
 
 it("cancels a keep confirmation without sending a request", async () => {
-  const { daemon } = await mount({ session: running }, async () => ({ type: "processes_listed", trees: [tree("1:1")] }));
+  const { daemon } = await mount({ session: running }, async () => ({ type: "processes_listed", id: null, trees: [tree("1:1")] }));
   await act(async () => button("Keep").click());
   await act(async () => [...confirmation().querySelectorAll("button")].find((element) => element.textContent === "Cancel")!.click());
   expect(sent(daemon, "keep_processes")).toEqual([]);
@@ -244,7 +249,7 @@ it("cancels a keep confirmation without sending a request", async () => {
 it("raises a refused keep as an error alert and keeps the tree listed", async () => {
   await mount({ session: running }, async (body) => {
     if (body.type === "keep_processes") throw new DaemonRequestError("no", "internal_error", {});
-    return { type: "processes_listed", trees: [tree("1:1")] };
+    return { type: "processes_listed", id: null, trees: [tree("1:1")] };
   });
   await act(async () => button("Keep").click());
   await confirmStop();
@@ -254,14 +259,14 @@ it("raises a refused keep as an error alert and keeps the tree listed", async ()
 
 it("shows the whole command in a confirmation, wrapped rather than cut", async () => {
   const command = "node ".concat("--flag=value ".repeat(30));
-  await mount({ session: running }, async () => ({ type: "processes_listed", trees: [tree("1:1", { command })] }));
+  await mount({ session: running }, async () => ({ type: "processes_listed", id: null, trees: [tree("1:1", { command })] }));
   await act(async () => button("Stop").click());
   expect(confirmation().textContent).toContain(command.trim());
   expect(confirmation().querySelector(".line-clamp-2")).toBeNull();
 });
 
 it("cancels a stop confirmation without sending a request", async () => {
-  const { daemon } = await mount({ session: running }, async () => ({ type: "processes_listed", trees: [tree("1:1", { process_count: 4 })] }));
+  const { daemon } = await mount({ session: running }, async () => ({ type: "processes_listed", id: null, trees: [tree("1:1", { process_count: 4 })] }));
   await act(async () => button("Stop").click());
   expect(sent(daemon, "stop_processes")).toEqual([]);
   expect(confirmation().textContent).toContain("This process and its child processes will be stopped.");
@@ -277,9 +282,9 @@ it("raises a refused stop as an error alert and keeps the tree listed", async ()
   const { daemon } = await mount({ session: running }, async (body) => {
     if (body.type === "stop_processes") {
       if (failing) throw new DaemonRequestError("no", "internal_error", {});
-      return { type: "processes_stopped", ids: body.ids };
+      return { type: "processes_stopped", id: null, ids: body.ids };
     }
-    return { type: "processes_listed", trees: [tree("1:1")] };
+    return { type: "processes_listed", id: null, trees: [tree("1:1")] };
   });
   await act(async () => button("Stop").click());
   await confirmStop();
@@ -296,7 +301,7 @@ it("asks again every few seconds while open, and shows a failed refresh as an Al
   let failing = false;
   const { daemon } = await mount({ session: running }, async () => {
     if (failing) throw new DaemonRequestError("down", "internal_error", {});
-    return { type: "processes_listed", trees: [tree("1:1", { ports: [3000] })] };
+    return { type: "processes_listed", id: null, trees: [tree("1:1", { ports: [3000] })] };
   });
   expect(sent(daemon, "list_processes")).toHaveLength(1);
   expect(panel().textContent).not.toContain("Could not refresh the list");
@@ -318,9 +323,9 @@ it("asks again every few seconds while open, and shows a failed refresh as an Al
 it("keeps showing the refresh failure after a stop, which asks again at once", async () => {
   let failing = false;
   await mount({ session: running }, async (body) => {
-    if (body.type === "stop_processes") return { type: "processes_stopped", ids: body.ids };
+    if (body.type === "stop_processes") return { type: "processes_stopped", id: null, ids: body.ids };
     if (failing) throw new DaemonRequestError("down", "internal_error", {});
-    return { type: "processes_listed", trees: [tree("1:1"), tree("2:2")] };
+    return { type: "processes_listed", id: null, trees: [tree("1:1"), tree("2:2")] };
   });
   failing = true;
   await act(async () => void vi.advanceTimersByTime(3000));
@@ -334,7 +339,7 @@ it("shows a first-list failure in the panel and waits for explicit retry", async
   let failing = true;
   const { daemon } = await mount({ session: running }, async () => {
     if (failing) throw new Error("socket closed");
-    return { type: "processes_listed", trees: [tree("1:1")] };
+    return { type: "processes_listed", id: null, trees: [tree("1:1")] };
   });
   expect(panel().textContent).toContain("Could not list the processes");
   expect(panel().querySelector("h2")?.textContent).toBe("Processes");
@@ -351,7 +356,7 @@ it("shows a first-list failure in the panel and waits for explicit retry", async
 it("makes row controls and Cancel unavailable while the confirmed stop is pending", async () => {
   await mount({ session: running }, async (body) => body.type === "stop_processes"
     ? new Promise<never>(() => {})
-    : { type: "processes_listed", trees: [tree("1:1"), tree("2:2", { command: "tail -f log" })] });
+    : { type: "processes_listed", id: null, trees: [tree("1:1"), tree("2:2", { command: "tail -f log" })] });
   await act(async () => button("Stop").click());
   await confirmStop();
   expect([...confirmation().querySelectorAll("button")].find((element) => element.textContent === "Stop")!.hasAttribute("data-pending")).toBe(true);
@@ -365,7 +370,7 @@ it("ignores a late action failure after the panel passes to another owner", asyn
   let refuse!: (error: Error) => void;
   const { switchScope } = await mount({ session: running }, async (body) => {
     if (body.type === "stop_processes") return new Promise<Event>((_resolve, reject) => { refuse = reject; });
-    return { type: "processes_listed", trees: [tree("1:1")] };
+    return { type: "processes_listed", id: null, trees: [tree("1:1")] };
   });
   await act(async () => button("Stop").click());
   await confirmStop();
@@ -378,7 +383,7 @@ it("ignores a late action failure after the panel passes to another owner", asyn
 
 it("hands focus back into the panel when a focused process row disappears during refresh", async () => {
   let gone = false;
-  await mount({ session: running }, async () => ({ type: "processes_listed", trees: gone ? [] : [tree("1:1")] }));
+  await mount({ session: running }, async () => ({ type: "processes_listed", id: null, trees: gone ? [] : [tree("1:1")] }));
   await act(async () => button("Stop").focus());
   gone = true;
   await act(async () => void vi.advanceTimersByTime(3000));
@@ -388,7 +393,7 @@ it("hands focus back into the panel when a focused process row disappears during
 
 it("dismisses the confirmation if its process disappears before confirmation", async () => {
   let gone = false;
-  const { daemon } = await mount({ session: running }, async () => ({ type: "processes_listed", trees: gone ? [] : [tree("1:1")] }));
+  const { daemon } = await mount({ session: running }, async () => ({ type: "processes_listed", id: null, trees: gone ? [] : [tree("1:1")] }));
   await act(async () => button("Stop").click());
   gone = true;
   await act(async () => void vi.advanceTimersByTime(3000));
@@ -397,7 +402,7 @@ it("dismisses the confirmation if its process disappears before confirmation", a
 });
 
 it("dismisses an unconfirmed stop when the owner changes without sending it", async () => {
-  const { daemon, switchScope } = await mount({ session: running }, async () => ({ type: "processes_listed", trees: [tree("1:1")] }));
+  const { daemon, switchScope } = await mount({ session: running }, async () => ({ type: "processes_listed", id: null, trees: [tree("1:1")] }));
   await act(async () => button("Stop").click());
   await act(async () => switchScope({ project: { ...project, id: "other" } }));
   expect(confirmation()).toBeNull();
@@ -411,9 +416,9 @@ it("hands focus to the next row's first action after a confirmed stop, with the 
   await mount({ session: running }, async (body) => {
     if (body.type === "stop_processes") {
       body.ids.forEach((id) => stopped.add(id));
-      return { type: "processes_stopped", ids: body.ids };
+      return { type: "processes_stopped", id: null, ids: body.ids };
     }
-    return { type: "processes_listed", trees: [tree("1:1"), tree("2:2", { command: "tail -f log" })].filter((candidate) => !stopped.has(candidate.id)) };
+    return { type: "processes_listed", id: null, trees: [tree("1:1"), tree("2:2", { command: "tail -f log" })].filter((candidate) => !stopped.has(candidate.id)) };
   });
   await act(async () => button("Stop").focus());
   await act(async () => button("Stop").click());
@@ -429,9 +434,9 @@ it("hands focus on after a stop opened from the keyboard but confirmed with the 
   await mount({ session: running }, async (body) => {
     if (body.type === "stop_processes") {
       body.ids.forEach((id) => stopped.add(id));
-      return { type: "processes_stopped", ids: body.ids };
+      return { type: "processes_stopped", id: null, ids: body.ids };
     }
-    return { type: "processes_listed", trees: [tree("1:1"), tree("2:2", { command: "tail -f log" })].filter((candidate) => !stopped.has(candidate.id)) };
+    return { type: "processes_listed", id: null, trees: [tree("1:1"), tree("2:2", { command: "tail -f log" })].filter((candidate) => !stopped.has(candidate.id)) };
   });
   await act(async () => button("Stop").focus());
   await act(async () => button("Stop").click());
@@ -447,9 +452,9 @@ it("leaves focus alone after a stop opened and confirmed with the pointer, with 
   await mount({ session: running }, async (body) => {
     if (body.type === "stop_processes") {
       body.ids.forEach((id) => stopped.add(id));
-      return { type: "processes_stopped", ids: body.ids };
+      return { type: "processes_stopped", id: null, ids: body.ids };
     }
-    return { type: "processes_listed", trees: [tree("1:1"), tree("2:2", { command: "tail -f log" })].filter((candidate) => !stopped.has(candidate.id)) };
+    return { type: "processes_listed", id: null, trees: [tree("1:1"), tree("2:2", { command: "tail -f log" })].filter((candidate) => !stopped.has(candidate.id)) };
   });
   await act(async () => button("Stop").click());
   await confirmWithPointer();
@@ -464,9 +469,9 @@ it("hands focus to the panel's landing, the session filter of a project, after t
   await mount({ project }, async (body) => {
     if (body.type === "keep_processes") {
       body.ids.forEach((id) => kept.add(id));
-      return { type: "processes_kept", ids: body.ids };
+      return { type: "processes_kept", id: null, ids: body.ids };
     }
-    return { type: "processes_listed", trees: [tree("1:1")].filter((candidate) => !kept.has(candidate.id)) };
+    return { type: "processes_listed", id: null, trees: [tree("1:1")].filter((candidate) => !kept.has(candidate.id)) };
   });
   await act(async () => button("Keep").focus());
   await act(async () => button("Keep").click());
@@ -481,7 +486,7 @@ it("keeps the confirmation, the toast and the focus hand-over when a refresh tak
   let answer!: (event: Event) => void;
   const { daemon } = await mount({ project }, async (body) => {
     if (body.type === "stop_processes") return new Promise<Event>((resolve) => { answer = resolve; });
-    return { type: "processes_listed", trees: gone ? [] : [tree("1:1")] };
+    return { type: "processes_listed", id: null, trees: gone ? [] : [tree("1:1")] };
   });
   await act(async () => button("Stop").focus());
   await act(async () => button("Stop").click());
@@ -489,7 +494,7 @@ it("keeps the confirmation, the toast and the focus hand-over when a refresh tak
   gone = true;
   await act(async () => void vi.advanceTimersByTime(3000));
   expect(confirmation()).not.toBeNull();
-  await act(async () => answer({ type: "processes_stopped", ids: ["1:1"] }));
+  await act(async () => answer({ type: "processes_stopped", id: null, ids: ["1:1"] }));
   await settleFocus();
   expect(daemon.toastNotice).toHaveBeenCalledWith("Stopped the process.");
   expect(confirmation()).toBeNull();
@@ -511,7 +516,7 @@ it("gives the failed first list's place to the loading line when Try again start
   expect(panel().textContent).toContain("Loading processes");
   expect(panel().textContent).not.toContain("Could not list the processes");
   expect(document.activeElement).toBe(panel().querySelector('button[aria-haspopup="listbox"]'));
-  await act(async () => answer({ type: "processes_listed", trees: [tree("1:1")] }));
+  await act(async () => answer({ type: "processes_listed", id: null, trees: [tree("1:1")] }));
   await settleFocus();
   expect(rows()).toHaveLength(1);
   expect(document.activeElement).toBe(panel().querySelector('button[aria-haspopup="listbox"]'));
@@ -537,7 +542,7 @@ it("hands focus to the card that followed the tree when a refresh took it out wh
   let answer!: (event: Event) => void;
   await mount({ session: running }, async (body) => {
     if (body.type === "stop_processes") return new Promise<Event>((resolve) => { answer = resolve; });
-    return { type: "processes_listed", trees: threeTrees(gone ? "2:2" : undefined) };
+    return { type: "processes_listed", id: null, trees: threeTrees(gone ? "2:2" : undefined) };
   });
   await act(async () => button("Stop", rows()[1]).focus());
   await act(async () => button("Stop", rows()[1]).click());
@@ -545,7 +550,7 @@ it("hands focus to the card that followed the tree when a refresh took it out wh
   gone = true;
   await act(async () => void vi.advanceTimersByTime(3000));
   expect(rows()).toHaveLength(2);
-  await act(async () => answer({ type: "processes_stopped", ids: ["2:2"] }));
+  await act(async () => answer({ type: "processes_stopped", id: null, ids: ["2:2"] }));
   await settleFocus();
   expect(confirmation()).toBeNull();
   expect(document.activeElement).toBe(button("Keep", rows()[1]));
@@ -554,7 +559,7 @@ it("hands focus to the card that followed the tree when a refresh took it out wh
 
 it("hands focus to the next row's first action when a refresh takes the tree out from under its open confirmation", async () => {
   let gone = false;
-  await mount({ session: running }, async () => ({ type: "processes_listed", trees: threeTrees(gone ? "2:2" : undefined) }));
+  await mount({ session: running }, async () => ({ type: "processes_listed", id: null, trees: threeTrees(gone ? "2:2" : undefined) }));
   await act(async () => button("Stop", rows()[1]).focus());
   await act(async () => button("Stop", rows()[1]).click());
   gone = true;

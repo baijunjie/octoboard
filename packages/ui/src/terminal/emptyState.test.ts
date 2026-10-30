@@ -12,7 +12,7 @@ const archive = sessionOf("old", console.id, project.id, "Old work", "archived")
 const live = sessionOf("live", console.id, project.id, "Work", "interrupted");
 const owner = sessionOf("owner", console.id, undefined, "Owner", "idle");
 const pending = new Map<Agent, AgentAvailability>();
-const unavailable = new Map(AGENT_OPTIONS.map(({ value }) => [value, { agent: value, availability: "unavailable" as const }]));
+const unavailable = new Map(AGENT_OPTIONS.map(({ value }) => [value, { agent: value, availability: "unavailable" as const, default_account_dir: null }]));
 
 it("does not treat pre-snapshot empty collections as a bare console", () => {
   expect(terminalEmptyState(false, console, undefined, [], [], pending, null)).toBeUndefined();
@@ -51,7 +51,7 @@ it("known missing agents explain recovery while undetermined availability still 
 });
 
 it("counts only added agents and asks to add one when installed agents are waiting to be added", () => {
-  const installed = new Map(AGENT_OPTIONS.map(({ value }) => [value, { agent: value, availability: "available" as const }]));
+  const installed = new Map(AGENT_OPTIONS.map(({ value }) => [value, { agent: value, availability: "available" as const, default_account_dir: null }]));
   expect(terminalEmptyState(true, console, { project }, [project], [], installed, [])).toEqual({ kind: "no-agents", reason: "add" });
   expect(terminalEmptyState(true, console, { project }, [project], [], installed, ["codex"])).toMatchObject({ kind: "new-session" });
   expect(terminalEmptyState(true, console, { project }, [project], [], unavailable, ["codex"])).toEqual({ kind: "no-agents", reason: "install" });

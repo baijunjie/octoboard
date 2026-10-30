@@ -17,6 +17,7 @@ import type {
   DocumentProjectAccount,
   DocumentSettings,
   Event,
+  PerAgent,
   Project,
   ProjectAccount,
   RequestBody,
@@ -86,12 +87,17 @@ function exportedAccounts(state: State): DocumentAccounts {
       default_account: { name: name ?? null, position: display.indexOf(null) },
       accounts: display.flatMap((account) =>
         account
-          ? [{ name: account.name, directory: documentDirectory(account.config_dir, state.homeDir), share_default_config: account.share_default_config ?? false, disabled: account.disabled ?? false }]
+          ? [{ name: account.name, directory: documentDirectory(account.config_dir, state.homeDir), share_default_config: account.share_default_config, disabled: account.disabled }]
           : [],
       ),
     });
   }
   return { ...(settings.added_agents !== null && { added_agents: settings.added_agents }), agents };
+}
+
+/** One per-agent group with `map` applied to each agent's value. */
+function mappedAgents<T, U>(group: PerAgent<T>, map: (value: T, agent: Agent) => U): PerAgent<U> {
+  return Object.fromEntries((["claude", "codex", "grok"] as const).map((agent) => [agent, map(group[agent], agent)])) as PerAgent<U>;
 }
 
 /** The document `export_configuration` answers: the regions the request chooses (see `exportedRegions`): the console named
@@ -125,15 +131,8 @@ export function exportedDocument(
     pinned: project.pinned,
     tags: project.tags,
     description: project.description,
-    claude_account: projectAccount("claude", project.claude_account_id),
-    codex_account: projectAccount("codex", project.codex_account_id),
-    grok_account: projectAccount("grok", project.grok_account_id),
-    claude_session_model: project.claude_session_model,
-    claude_session_effort: project.claude_session_effort,
-    codex_session_model: project.codex_session_model,
-    codex_session_effort: project.codex_session_effort,
-    grok_session_model: project.grok_session_model,
-    grok_session_effort: project.grok_session_effort,
+    accounts: mappedAgents(project.accounts, (account, agent) => projectAccount(agent, account)),
+    launch: project.launch,
     git_workflow: project.git_workflow,
   });
   const consoles = Array.from(state.consoles.values())
@@ -145,21 +144,9 @@ export function exportedDocument(
         icon: console.icon,
         default_agent: console.default_agent,
         project_session_agent: console.project_session_agent ?? null,
-        claude_account: accountName("claude", console.claude_account_id),
-        codex_account: accountName("codex", console.codex_account_id),
-        grok_account: accountName("grok", console.grok_account_id),
-        claude_console_session_model: console.claude_console_session_model,
-        claude_console_session_effort: console.claude_console_session_effort,
-        codex_console_session_model: console.codex_console_session_model,
-        codex_console_session_effort: console.codex_console_session_effort,
-        grok_console_session_model: console.grok_console_session_model,
-        grok_console_session_effort: console.grok_console_session_effort,
-        claude_project_session_model: console.claude_project_session_model,
-        claude_project_session_effort: console.claude_project_session_effort,
-        codex_project_session_model: console.codex_project_session_model,
-        codex_project_session_effort: console.codex_project_session_effort,
-        grok_project_session_model: console.grok_project_session_model,
-        grok_project_session_effort: console.grok_project_session_effort,
+        accounts: mappedAgents(console.accounts, (id, agent) => accountName(agent, id)),
+        launch: console.launch,
+        project_session_launch: console.project_session_launch,
         console_session_prompt: console.console_session_prompt,
         projects: Array.from(state.projects.values())
           .filter((project) => project.console_id === console.id)
@@ -169,24 +156,25 @@ export function exportedDocument(
     );
   return {
     format: "octoboard-configuration",
-    version: 2,
-    ...(regions.settings && {
-      settings: {
+    version: 1,
+    exported_by: null,
+    settings: regions.settings
+      ? {
         auto_pull_repositories: state.settings.auto_pull_repositories,
         auto_delete_unresumable_archives: state.settings.auto_delete_unresumable_archives,
-        ...(typeof state.settings.auto_select_account === "boolean" && { auto_select_account: state.settings.auto_select_account }),
-        ...(typeof state.settings.auto_switch_on_usage_limit === "boolean" && { auto_switch_on_usage_limit: state.settings.auto_switch_on_usage_limit }),
-        ...(typeof state.settings.sidebar_order_by_status === "boolean" && { sidebar_order_by_status: state.settings.sidebar_order_by_status }),
-        ...(typeof state.settings.auto_start_quota_windows === "boolean" && { auto_start_quota_windows: state.settings.auto_start_quota_windows }),
-        ...(typeof state.settings.auto_approve_session_requests === "boolean" && { auto_approve_session_requests: state.settings.auto_approve_session_requests }),
-        ...(typeof state.settings.auto_approve_resume_requests === "boolean" && { auto_approve_resume_requests: state.settings.auto_approve_resume_requests }),
-        ...(typeof state.settings.auto_approve_account_switches === "boolean" && { auto_approve_account_switches: state.settings.auto_approve_account_switches }),
-        ...(typeof state.settings.auto_approve_handoffs === "boolean" && { auto_approve_handoffs: state.settings.auto_approve_handoffs }),
-        ...(typeof state.settings.ask_questions_as_choices === "boolean" && { ask_questions_as_choices: state.settings.ask_questions_as_choices }),
+        auto_select_account: state.settings.auto_select_account,
+        auto_switch_on_usage_limit: state.settings.auto_switch_on_usage_limit,
+        sidebar_order_by_status: state.settings.sidebar_order_by_status,
+        auto_start_quota_windows: state.settings.auto_start_quota_windows,
+        auto_approve_session_requests: state.settings.auto_approve_session_requests,
+        auto_approve_resume_requests: state.settings.auto_approve_resume_requests,
+        auto_approve_account_switches: state.settings.auto_approve_account_switches,
+        auto_approve_handoffs: state.settings.auto_approve_handoffs,
+        ask_questions_as_choices: state.settings.ask_questions_as_choices,
         git_workflow: state.settings.git_workflow,
         claude_compatibility: { ...choices },
-      },
-    }),
+      }
+      : null,
     ...(regions.accounts && { accounts: exportedAccounts(state) }),
     consoles,
   };
@@ -268,7 +256,7 @@ export function createConfigurationReplies(
       case "export_configuration": {
         const refusal = exportRefusal(getState(), body);
         if (refusal) return fail(refusal);
-        return { type: "configuration_exported", document: exportedDocument(getState(), body, claudeCompatibilityChoices()) };
+        return { type: "configuration_exported", id: null, document: exportedDocument(getState(), body, claudeCompatibilityChoices()) };
       }
       case "inspect_configuration": {
         const inspection = fixture?.inspection;

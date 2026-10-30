@@ -59,3 +59,7 @@ tokio-tungstenite = { version = "=0.24.0", default-features = false, features = 
 [dev-dependencies]
 # Paused time for tests that would otherwise wait out a real timeout.
 tokio = { version = "1", features = ["full", "test-util"] }
+
+# Renders the wire types as TypeScript for the contract test (`protocol::bindings`); test builds
+# only, so the release binary carries nothing of it.
+ts-rs = { version = "12.0.1", default-features = false, features = ["serde-compat", "serde-json-impl", "no-serde-warnings"] }

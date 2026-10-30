@@ -50,13 +50,13 @@ export function AccountSharingSwitch({ account, opensFocused }: { account: Accou
   const [busy, setBusy] = useState(false);
   const id = useId();
   const label = t("settings.accounts.sharing.switchLabel", { name: isolate(account.name) });
-  const shared = account.share_default_config === true;
+  const shared = account.share_default_config;
   const progress = sharing?.progress;
   const idle = sharing?.idle_sessions ?? 0;
   const inUse = sharing?.in_use && (sharing.in_use.sessions > 0 || sharing.in_use.signing_in) ? sharing.in_use : undefined;
   // A change that did not finish: the daemon says so with the flag, and may hold why (`failure`, until the next change
   // starts); after a restart there is the flag alone.
-  const unfinished = !progress && account.share_default_config_incomplete === true;
+  const unfinished = !progress && account.share_default_config_incomplete;
   const failure = unfinished ? sharing?.failure : undefined;
   const moved = failure?.cause === "default_moved";
   const locked = busy || progress !== undefined || inUse !== undefined;

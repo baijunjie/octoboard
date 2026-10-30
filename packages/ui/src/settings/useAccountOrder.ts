@@ -12,7 +12,7 @@ import { useDaemon, useDaemonStore } from "../store";
 export function useAccountOrder(agent: Agent, accounts: Account[]) {
   const t = useT();
   const { request, toastError } = useDaemon();
-  const saved = useDaemonStore((s) => s.settings.account_order?.[agent]);
+  const saved = useDaemonStore((s) => s.settings.account_order[agent]);
   const base = JSON.stringify([saved, accounts.map((account) => account.id)]);
   const [pending, setPending] = useState<{ base: string; order: (string | null)[] }>();
   const [busy, setBusy] = useState(false);

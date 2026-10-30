@@ -12,7 +12,7 @@ import { setLanguage } from "../i18n/language";
 import type { Event, ImportedProject } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { ImportResult } from "./ImportResult";
-import { openTab, settingLinesOf } from "./testSupport";
+import { documentSettings, openTab, settingLinesOf } from "./testSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -40,7 +40,7 @@ it("groups a count by the language of the application, not the browser's", () =>
   const consoles = [
     { name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: Array.from({ length: 1200 }, (_, i) => project(i)) },
   ];
-  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles }} /></DaemonProvider>));
+  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", id: null, consoles, settings_applied: null, settings_error: null, accounts: null }} /></DaemonProvider>));
   expect(container.textContent).toContain("1.200 projects created");
 });
 
@@ -63,7 +63,8 @@ it("says nothing failed once rather than listing zeros, and lists a failure when
           <ImportResult
             result={{
               type: "configuration_imported",
-              consoles: [{ name: "C", status, console: "c-1", error: null, account_fallbacks: [], projects: [{ ...project(1), status: status === "failed" ? "not_attempted" : "created" }] }],
+              id: null,
+              consoles: [{ name: "C", status, console: "c-1", error: null, account_fallbacks: [], projects: [{ ...project(1), status: status === "failed" ? "not_attempted" : "created" }] }], settings_applied: null, settings_error: null, accounts: null,
             }}
           />
         </DaemonProvider>,
@@ -90,7 +91,7 @@ it("gives each console a card named by its heading with its own outcome, and a r
     { name: "Broken", status: "failed" as const, console: null, error: { code: "path_not_found", message: "no", params: { path: "/missing" } }, account_fallbacks: [], projects: [{ ...project(3), status: "not_attempted" as const, via: null }] },
     { name: "Empty", status: "created" as const, console: "c-3", error: null, account_fallbacks: [], projects: [] },
   ];
-  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles }} /></DaemonProvider>));
+  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", id: null, consoles, settings_applied: null, settings_error: null, accounts: null }} /></DaemonProvider>));
   expect(container.querySelector("table")).toBeNull();
   const cards = [...container.querySelectorAll("section")];
   expect(cards.map((card) => card.querySelector("h3")!.textContent)).toEqual(["Fine", "Broken", "Empty"]);
@@ -128,7 +129,7 @@ it("colours a row's Details by its line: the warning's beside a reached outcome,
       ],
     }],
   };
-  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles: [], accounts }} /></DaemonProvider>));
+  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", id: null, consoles: [], accounts, settings_applied: null, settings_error: null }} /></DaemonProvider>));
   const details = (name: string) => detailsButton([...container.querySelectorAll("li")].find((li) => li.textContent?.startsWith(name))!)!;
   expect(details("Work").className).toContain("alert-button--warning-soft");
   expect(details("Sandbox").className).toContain("button--danger-soft");
@@ -145,7 +146,7 @@ it("says nothing failed for the consoles and the accounts beside a failure to ap
   const consoles = [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [project(1)] }];
   const settings_error = { code: "path_not_found", params: { path: "/Users/dev/missing" }, message: "no" };
   const accounts = { agents_added: [], agents: [{ agent: "claude" as const, default_name_applied: false, accounts: [{ name: "Work", status: "created" as const, account: "a1", error: null, sharing_warning: null }] }] };
-  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles, accounts, settings_error }} /></DaemonProvider>));
+  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", id: null, consoles, accounts, settings_error, settings_applied: null }} /></DaemonProvider>));
   // The settings failure brings its tab forward; each other region's totals depend on its own failures alone.
   expect(container.textContent).toContain("The application settings could not be applied");
   expect(container.querySelector("[role=tab][aria-selected=true]")!.textContent).toBe("Application settings");
@@ -168,7 +169,7 @@ it("lists the totals as items of their own in every language, with the dot betwe
     container.remove();
   });
   const consoles = [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [project(1)] }];
-  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles }} /></DaemonProvider>));
+  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", id: null, consoles, settings_applied: null, settings_error: null, accounts: null }} /></DaemonProvider>));
   expect(totals(container, "控制台和项目汇总")).toEqual(["已创建 1 个控制台", "已创建 1 个项目", "没有失败项"]);
   expect(container.querySelectorAll("ul[aria-label=控制台和项目汇总] [aria-hidden=true]")).toHaveLength(2);
 });
@@ -187,7 +188,7 @@ it("announces a failure to apply the settings once focus has settled, with its t
   });
   const consoles = [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [project(1)] }];
   const settings_error = { code: "path_not_found", params: { path: "/Users/dev/missing" }, message: "no" };
-  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles, settings_error }} /></DaemonProvider>));
+  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", id: null, consoles, settings_error, settings_applied: null, accounts: null }} /></DaemonProvider>));
   expect(container.querySelectorAll('[role="alert"]')).toHaveLength(0);
   act(() => vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS - 1));
   expect(container.querySelectorAll('[role="alert"]')).toHaveLength(0);
@@ -204,6 +205,9 @@ it("opens no error alert for partial import failures: the result screen already 
   const root = createRoot(container);
   const result = {
     type: "configuration_imported" as const,
+    id: null,
+    settings_applied: null,
+    accounts: null,
     consoles: [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [{ ...project(1), status: "failed" as const, error: { code: "path_not_found", message: "Directory unavailable", params: { path: "/missing" } } }] }],
     settings_error: { code: "internal_error", message: "Settings unavailable", params: { detail: "Settings unavailable" } },
   };
@@ -230,7 +234,7 @@ function settingLines(container: Element): ReturnType<typeof settingLinesOf> {
   return settingLinesOf(container.querySelector("section[aria-labelledby] > ul")!);
 }
 
-it("tells of each application setting that was applied, and of none the file did not carry", () => {
+it("tells of each application setting that was applied, and of the git workflow", () => {
   const daemon = { store: createStateStore({}) } as Daemon;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -238,45 +242,24 @@ it("tells of each application setting that was applied, and of none the file did
     act(() => root.unmount());
     container.remove();
   });
-  const render = (settings_applied: { auto_pull_repositories: boolean; auto_delete_unresumable_archives?: boolean; auto_select_account?: boolean; auto_approve_session_requests?: boolean; auto_approve_resume_requests?: boolean; auto_approve_account_switches?: boolean; auto_approve_handoffs?: boolean; ask_questions_as_choices?: boolean }) =>
-    act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles: [], settings_applied }} /></DaemonProvider>));
-  render({ auto_pull_repositories: true, auto_delete_unresumable_archives: false, auto_select_account: false });
+  const render = (carried: Partial<ImportedSettings>) =>
+    act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", id: null, consoles: [], settings_applied: documentSettings(carried), settings_error: null, accounts: null }} /></DaemonProvider>));
+  render({ auto_pull_repositories: true, auto_approve_session_requests: true, auto_approve_handoffs: true, ask_questions_as_choices: false });
   expect(container.querySelector("section > h3")?.textContent).toBe("Application settings applied");
   expect(settingLines(container)).toEqual({
     "Automatically pull repositories": { badge: "On" },
     "Automatically delete archived sessions whose conversation is gone": { badge: "Off" },
     "Automatically select an account": { badge: "Off" },
-  });
-  render({ auto_pull_repositories: true, auto_approve_session_requests: true, auto_approve_resume_requests: false });
-  expect(settingLines(container)).toMatchObject({
+    "Automatically switch accounts at the usage limit": { badge: "Off" },
+    "Order the sidebar by status": { badge: "Off" },
+    "Start usage windows automatically": { badge: "Off" },
     "Automatically approve session requests": { badge: "On" },
     "Automatically approve resume requests": { badge: "Off" },
+    "Automatically approve account switches": { badge: "Off" },
+    "Automatically approve handoffs": { badge: "On" },
+    "Ask questions as choices": { badge: "Off" },
+    "Git workflow": { badge: "Matches the file" },
   });
-  render({ auto_pull_repositories: true, auto_approve_account_switches: true, auto_approve_handoffs: false });
-  expect(settingLines(container)).toMatchObject({
-    "Automatically approve account switches": { badge: "On" },
-    "Automatically approve handoffs": { badge: "Off" },
-  });
-  render({ auto_pull_repositories: true, ask_questions_as_choices: false });
-  expect(settingLines(container)).toMatchObject({ "Ask questions as choices": { badge: "Off" } });
-  render({ auto_pull_repositories: true });
-  expect(settingLines(container)).toEqual({ "Automatically pull repositories": { badge: "On" } });
-});
-
-it("tells of the git workflow settings when they were applied, and not otherwise", () => {
-  const daemon = { store: createStateStore({}) } as Daemon;
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
-  const render = (settings_applied: ImportedSettings) =>
-    act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles: [], settings_applied }} /></DaemonProvider>));
-  render({ auto_pull_repositories: true, git_workflow: { development: "worktree", squash_before_delivery: false, rebase_before_merge: true, delivery: "ask", revert_gate: true } });
-  expect(settingLines(container)["Git workflow"]).toEqual({ badge: "Matches the file" });
-  render({ auto_pull_repositories: true });
-  expect(container.textContent).not.toContain("Git workflow");
 });
 
 it("tells what came of the keyboard shortcuts in the settings card, and the ones left out under them", () => {
@@ -288,7 +271,7 @@ it("tells what came of the keyboard shortcuts in the settings card, and the ones
     container.remove();
   });
   const render = (shortcuts: { applied: number; skipped: number }) =>
-    act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles: [], settings_applied: { auto_pull_repositories: true } }} shortcuts={shortcuts} /></DaemonProvider>));
+    act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", id: null, consoles: [], settings_applied: documentSettings({ auto_pull_repositories: true }), settings_error: null, accounts: null }} shortcuts={shortcuts} /></DaemonProvider>));
   render({ applied: 2, skipped: 0 });
   expect(settingLines(container)["Keyboard shortcuts"]).toEqual({ badge: "2 changes from the defaults" });
   render({ applied: 1, skipped: 2 });
@@ -309,7 +292,7 @@ it("marks a console and a project whose account fell back with a warning mark af
     { name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [{ agent: "claude" as const, name: "Work" }], projects: [{ ...project(1), account_fallbacks: [{ agent: "codex" as const, name: "Personal" }] }, { ...project(2), status: "left_out" as const, via: null, account_fallbacks: [{ agent: "codex" as const, name: "Other" }] }] },
     { name: "Broken", status: "failed" as const, console: null, error: null, account_fallbacks: [{ agent: "claude" as const, name: "Gone" }], projects: [] },
   ];
-  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles, settings_applied: { auto_pull_repositories: true } }} /></DaemonProvider>));
+  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", id: null, consoles, settings_applied: documentSettings({ auto_pull_repositories: true }), settings_error: null, accounts: null }} /></DaemonProvider>));
   expect([...container.querySelectorAll("h3")].map((h) => h.textContent)).toEqual(["C", "Broken"]);
   const marks = [...container.querySelectorAll("section button[data-status-mark]")].filter((button) => button.getAttribute("aria-label")!.startsWith("Accounts not set up for"));
   expect(marks.map((mark) => mark.getAttribute("aria-label"))).toEqual(["C", "P1", "P2", "Broken"].map((name) => `Accounts not set up for ${isolate(name)}`));
@@ -333,6 +316,10 @@ it("writes a failed line's reason under its row, with the raw text behind Detail
   });
   const result = {
     type: "configuration_imported" as const,
+    id: null,
+    settings_applied: null,
+    settings_error: null,
+    accounts: null,
     consoles: [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [{ ...project(1), status: "failed" as const, error: { code: "internal_error", message: "boom", params: { detail: "raw diagnostic text" } } }] }],
   };
   act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={result} /></DaemonProvider>));
@@ -357,10 +344,10 @@ it("shows tabs only for the regions that were imported", () => {
   const tabs = () => Array.from(container.querySelectorAll("[role=tab]")).map((tab) => tab.textContent);
   const accounts = { agents_added: [], agents: [] };
   const consoles = [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [project(1)] }];
-  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles, accounts }} /></DaemonProvider>));
+  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", id: null, consoles, accounts, settings_applied: null, settings_error: null }} /></DaemonProvider>));
   expect(tabs()).toEqual(["Consoles and projects", "Accounts"]);
   // Imported without the consoles, only the accounts are left: one panel, no tab bar.
-  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles: [], accounts }} /></DaemonProvider>));
+  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", id: null, consoles: [], accounts, settings_applied: null, settings_error: null }} /></DaemonProvider>));
   expect(tabs()).toEqual([]);
   expect(container.querySelector("section")).toBeNull();
 });

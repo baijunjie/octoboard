@@ -62,12 +62,12 @@ it.each<[Session["status"], boolean, string | undefined]>([
 });
 
 it("offers a bound unused session the user opened the Delete shortcut", () => {
-  const { container } = mount({ ...unused, status: "idle", bound_to: "owner", origin: "user" }, async () => ({ type: "ack" }));
+  const { container } = mount({ ...unused, status: "idle", bound_to: "owner", origin: "user" }, async () => ({ type: "ack", id: null }));
   expect(shortcut(container, "Delete")).not.toBeNull();
 });
 
 it("removes the delete shortcut as soon as the first conversation is reported", () => {
-  const { container, daemon, render } = mount({ ...unused, status: "idle" }, async () => ({ type: "ack" }));
+  const { container, daemon, render } = mount({ ...unused, status: "idle" }, async () => ({ type: "ack", id: null }));
   expect(shortcut(container, "Delete")).not.toBeNull();
   render({ ...unused, status: "working", has_conversation: true });
   expect(shortcut(container, "Delete")).toBeNull();
@@ -75,7 +75,7 @@ it("removes the delete shortcut as soon as the first conversation is reported", 
 });
 
 it.each([false, true])("hides removal shortcuts on a locked session, conversation=%s", (has_conversation) => {
-  const { container } = mount({ ...unused, status: "idle", has_conversation, locked: true }, async () => ({ type: "ack" }));
+  const { container } = mount({ ...unused, status: "idle", has_conversation, locked: true }, async () => ({ type: "ack", id: null }));
   expect(shortcut(container, "Delete")).toBeNull();
   expect(shortcut(container, "Archive")).toBeNull();
 });
@@ -89,7 +89,7 @@ it.each([true, false])("gives the Copy session ID row's ID its full text as a to
     onTestFinished(() => void Object.defineProperty(Element.prototype, name, own));
   }
   const session = { ...unused, id: "3f2c9a1e-7b4d-4e8a-9c61-0d5b2f8e4a17", status: "idle" as const, has_conversation: true };
-  const { container, handlers } = mount(session, async () => ({ type: "ack" }));
+  const { container, handlers } = mount(session, async () => ({ type: "ack", id: null }));
   press(container.querySelector<HTMLElement>('button[aria-label^="Actions for session"]')!, "mouse");
   await act(async () => {});
   const item = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((el) => el.getAttribute("aria-label") === "Copy session ID")!;

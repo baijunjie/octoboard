@@ -56,12 +56,12 @@ beforeEach(() => {
   settings.accounts = [account("claude-work", "claude"), account("codex-work", "codex"), account("grok-work", "grok")];
   settings.codex_approval_reviewer = null;
   settings.claude_approval_mode = null;
-  settings.claude_compatibility = undefined;
+  settings.claude_compatibility = {};
   accountQuotas.length = 0;
   accountLogins.length = 0;
   accountSharing.clear();
-  settings.default_account_names = undefined;
-  settings.disabled_default_accounts = undefined;
+  settings.default_account_names = {};
+  settings.disabled_default_accounts = [];
   availability.clear();
 });
 afterEach(() => {

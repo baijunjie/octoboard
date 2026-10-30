@@ -215,7 +215,7 @@ fn render_info_copy(sender: &Session, receiver: &Session, text: &str) -> String 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::{Agent, Origin, Role, SessionStatus};
+    use crate::protocol::{Agent, OrchestrationRole, Origin, Role, SessionStatus};
 
     fn session(id: &str, title: &str) -> Session {
         Session {
@@ -234,7 +234,7 @@ mod tests {
             background_tasks: Vec::new(),
             switching_account: false,
             default_effort: None,
-            orchestration_role: None,
+            orchestration_role: OrchestrationRole::Coordinator,
             context: None,
             observed_model: None,
             observed_effort: None,
@@ -242,7 +242,6 @@ mod tests {
             effort: None,
             has_conversation: false,
             bound_to: None,
-            lead: false,
             colour: None,
             ordinal: None,
             account_id: None,

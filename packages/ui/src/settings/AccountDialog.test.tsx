@@ -3,12 +3,14 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { accountOf } from "../gallery/fixtures/builders";
 import { DaemonRequestError } from "../daemon-client";
 import { errorAlerts } from "../errorAlerts";
 import type { Account, Agent, AgentAvailability, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { AccountDialog } from "./AccountDialog";
 import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
+import { DEFAULT_SETTINGS } from "../defaultSettings";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -19,7 +21,7 @@ vi.mock("../dialogs/DirectoryPicker", () => ({
   ),
 }));
 
-const work: Account = { id: "a-work", agent: "claude", name: "Work", config_dir: "/home/dev/.claude-work" };
+const work: Account = accountOf("a-work", "claude", "Work", "/home/dev/.claude-work");
 
 function render(
   editing: Account | undefined,
@@ -29,7 +31,7 @@ function render(
   renameDefault = false,
 ) {
   const daemon: Daemon = {
-    store: createStateStore({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: addedAgents, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [work] }, agentAvailability }),
+    store: createStateStore({ settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: addedAgents, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [work] }, agentAvailability }),
     request: vi.fn(request) as Daemon["request"],
     toastError: vi.fn(),
     toastNotice: vi.fn(),
@@ -68,7 +70,7 @@ const submit = () =>
   act(async () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Save")!.click());
 
 const availabilityOf = (unavailable: Agent) => new Map(
-  (["claude", "codex", "grok"] as Agent[]).map((agent): [Agent, AgentAvailability] => [agent, { agent, availability: agent === unavailable ? "unavailable" : "available" }]),
+  (["claude", "codex", "grok"] as Agent[]).map((agent): [Agent, AgentAvailability] => [agent, { agent, availability: agent === unavailable ? "unavailable" : "available", default_account_dir: null }]),
 );
 
 it("lists every added agent as selectable when adding, naming the ones known to be missing", async () => {

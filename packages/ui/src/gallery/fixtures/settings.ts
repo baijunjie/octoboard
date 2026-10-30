@@ -1,13 +1,13 @@
+import { DEFAULT_SETTINGS } from "../../defaultSettings";
 import { AGENT_LABEL } from "../../agents";
 import { describing, type Ui } from "../interact";
 import type { AccountLogin, AccountSharing, AccountTrashOutcome, Agent, AgentAvailability } from "../../protocol";
 import type { AccountTrashAnswer, Scenario, Step } from "../scenario";
-import { ALL_AGENTS, SAMPLE, accountSharingOf, minutesAgo, sessionOf, snapshotState } from "./builders";
+import { accountOf, ALL_AGENTS, SAMPLE, accountSharingOf, minutesAgo, sessionOf, snapshotState } from "./builders";
 import { noneAddedState } from "./empty";
 import { agentAvailability } from "./liveChanges";
 import type { FixtureError } from "./projectFiles";
 import { USED_UP_MIX, manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow } from "./quotas";
-import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
 
 const GROUP = "Settings";
 
@@ -28,28 +28,21 @@ const state = snapshotState({
 const browserState: Scenario["state"] = {
   ...state,
   settings: {
-    auto_pull_repositories: false,
-    auto_delete_unresumable_archives: true,
+    ...DEFAULT_SETTINGS,
     sidebar_order_by_status: true,
     ask_questions_as_choices: true,
     added_agents: ["claude", "codex"],
     default_clone_dir: "/Users/dev/Projects",
-    git_workflow: DEFAULT_GIT_WORKFLOW,
     accounts: [
-      { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" },
-      {
-        id: "a-long",
-        agent: "claude",
-        name: "Client",
-        config_dir: "/Users/dev/work/clients/acme-corporation/internal-platform/.claude-config",
-      },
-      { id: "a-codex", agent: "codex", name: "Personal", config_dir: "/Users/dev/.codex-personal" },
+      accountOf("a-work", "claude", "Work", "/Users/dev/.claude-work"),
+      accountOf("a-long", "claude", "Client", "/Users/dev/work/clients/acme-corporation/internal-platform/.claude-config"),
+      accountOf("a-codex", "codex", "Personal", "/Users/dev/.codex-personal"),
     ],
   },
   agentAvailability: new Map<Agent, AgentAvailability>([
     ["claude", { agent: "claude", availability: "available", default_account_dir: "/Users/dev/.claude" }],
     ["codex", { agent: "codex", availability: "unavailable", default_account_dir: "/Users/dev/.codex" }],
-    ["grok", { agent: "grok", availability: "not_determined" }],
+    ["grok", { agent: "grok", availability: "not_determined", default_account_dir: null }],
   ]),
 };
 
@@ -73,8 +66,8 @@ const approvalState: Scenario["state"] = {
     ...browserState.settings!,
     accounts: [
       ...browserState.settings!.accounts,
-      { id: "a-codex-auto", agent: "codex", name: "Automation", config_dir: "/Users/dev/.codex-automation" },
-      { id: "a-codex-user", agent: "codex", name: "Production", config_dir: "/Users/dev/.codex-production" },
+      accountOf("a-codex-auto", "codex", "Automation", "/Users/dev/.codex-automation"),
+      accountOf("a-codex-user", "codex", "Production", "/Users/dev/.codex-production"),
     ],
   },
   agentAvailability: new Map(browserState.agentAvailability).set("codex", { agent: "codex", availability: "available", default_account_dir: "/Users/dev/.codex" }),
@@ -170,7 +163,7 @@ const disabledState: Scenario["state"] = {
     disabled_default_accounts: ["claude"],
     accounts: [
       ...quotaState.settings!.accounts.map((account) => account.id === "a-work" ? { ...account, disabled: true } : account),
-      { id: "a-trial", agent: "claude", name: "Trial", config_dir: "/Users/dev/.claude-trial", disabled: true },
+      accountOf("a-trial", "claude", "Trial", "/Users/dev/.claude-trial", { disabled: true }),
     ],
   },
   accountQuotas: [
@@ -238,7 +231,7 @@ const emailsState: Scenario["state"] = {
   ...quotaState,
   settings: {
     ...quotaState.settings!,
-    accounts: [...quotaState.settings!.accounts, { id: "a-trial", agent: "claude", name: "Trial", config_dir: "/Users/dev/.claude-trial" }],
+    accounts: [...quotaState.settings!.accounts, accountOf("a-trial", "claude", "Trial", "/Users/dev/.claude-trial")],
   },
   accountQuotas: [
     ...defaultEmailState.accountQuotas!.filter((quota) => quota.agent !== "claude" || quota.account === null),
@@ -376,8 +369,8 @@ function sharingAccounts(work: { share: boolean; incomplete?: boolean }, client:
       ...base.settings!,
       added_agents: ["claude"],
       accounts: [
-        { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work", share_default_config: work.share, share_default_config_incomplete: work.incomplete ?? false },
-        { id: "a-client", agent: "claude", name: "Client", config_dir: "/Users/dev/.claude-client", share_default_config: client.share, share_default_config_incomplete: client.incomplete ?? false },
+        accountOf("a-work", "claude", "Work", "/Users/dev/.claude-work", { share_default_config: work.share, share_default_config_incomplete: work.incomplete ?? false }),
+        accountOf("a-client", "claude", "Client", "/Users/dev/.claude-client", { share_default_config: client.share, share_default_config_incomplete: client.incomplete ?? false }),
       ],
     },
   };
@@ -425,7 +418,7 @@ function sharingHelpState(agent: Agent): Scenario["state"] {
     settings: {
       ...base.settings!,
       added_agents: [agent],
-      accounts: [{ id: `a-${agent}-share`, agent, name: agent === "codex" ? "Personal" : "Work", config_dir: `/Users/dev/.${agent}-work`, share_default_config: false }],
+      accounts: [accountOf(`a-${agent}-share`, agent, agent === "codex" ? "Personal" : "Work", `/Users/dev/.${agent}-work`)],
     },
     agentAvailability: new Map(base.agentAvailability).set(agent, { agent, availability: "available", default_account_dir: `/Users/dev/.${agent}` }),
     // Claude Code's account has 2 idle sessions, which a change would end first and resume after: the last line of its explanation.
@@ -452,10 +445,10 @@ const sharingFailedState: Scenario["state"] = {
     ...browserState.settings!,
     added_agents: ["claude"],
     accounts: [
-      { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work", share_default_config: false, share_default_config_incomplete: true },
+      accountOf("a-work", "claude", "Work", "/Users/dev/.claude-work", { share_default_config_incomplete: true }),
     ],
   },
-  accountSharing: accountSharingOf([{ account: "a-work", idle_sessions: 2, failure: { share: false, items: SHARING_FAILURE_ITEMS, detail: SHARING_FAILURE_DETAIL } }]),
+  accountSharing: accountSharingOf([{ account: "a-work", idle_sessions: 2, failure: { share: false, cause: "other", items: SHARING_FAILURE_ITEMS, detail: SHARING_FAILURE_DETAIL } }]),
 };
 
 /** Turning sharing on for Work failed because the default account's directory has moved since sharing was

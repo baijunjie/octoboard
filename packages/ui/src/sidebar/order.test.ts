@@ -1,17 +1,19 @@
 import { describe, expect, it } from "vitest";
 
+import { DEFAULT_SETTINGS } from "../defaultSettings";
 import { consoleOf } from "../gallery/fixtures/builders";
 import type { Project, Session, SessionStatus } from "../protocol";
 import { archiveNeedsConfirmation, countsAsWorking, isUnusedSession, consoleActivity, consoleStatus, INACTIVE_PROJECT_RANK, archivePreviewSessions, projectRank, liveConsoleSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, ordersByStatus, sessionsInTreeOrder, sortProjects, switchStrip } from "./order";
 import { FOLLOWING_GIT_WORKFLOW } from "../gitWorkflow";
 
-const session = (id: string, status: SessionStatus, started_at: number, pinned = false, bound_to?: string): Session => ({
+const session = (id: string, status: SessionStatus, started_at: number, pinned = false, bound_to: string | null = null): Session => ({
   id,
   agent: "claude",
   console_id: "c",
   project_id: "p",
   host_id: "h",
   role: "project",
+  orchestration_role: bound_to ? "worker" : "coordinator",
   origin: "user",
   title: id,
   status,
@@ -19,7 +21,7 @@ const session = (id: string, status: SessionStatus, started_at: number, pinned =
   bound_to,
   started_at,
   pinned,
-  locked: false,
+  locked: false, agent_session_id: null, colour: null, ordinal: null, account_id: null, config_dir: null, ended_at: null,
 });
 
 const project = (id: string, name: string, pinned = false): Project => ({
@@ -28,21 +30,21 @@ const project = (id: string, name: string, pinned = false): Project => ({
   host_id: "h",
   name,
   path: `/${name}`,
+  default_agent: null,
   source: "local",
+  remote_url: null,
   trust_consent: false,
   pinned,
   tags: [],
-  claude_account_id: { kind: "inherit" },
-  codex_account_id: { kind: "inherit" },
-  grok_account_id: { kind: "inherit" },
+  description: null,
+  accounts: { claude: { kind: "inherit" }, codex: { kind: "inherit" }, grok: { kind: "inherit" } },
+  launch: { claude: { model: null, effort: null }, codex: { model: null, effort: null }, grok: { model: null, effort: null } },
   git_workflow: FOLLOWING_GIT_WORKFLOW,
 });
 
 describe("ordersByStatus", () => {
-  it("orders by status unless the settings turn it off, a daemon that does not say counting as on", () => {
-    expect(ordersByStatus({})).toBe(true);
-    expect(ordersByStatus({ sidebar_order_by_status: true })).toBe(true);
-    expect(ordersByStatus({ sidebar_order_by_status: false })).toBe(false);
+  it.each([true, false])("follows the setting (%s)", (value) => {
+    expect(ordersByStatus({ ...DEFAULT_SETTINGS, sidebar_order_by_status: value })).toBe(value);
   });
 });
 
@@ -390,7 +392,7 @@ describe("archivedSessionRows", () => {
 });
 
 describe("boundElsewhere", () => {
-  const owner = (id: string, started_at: number): Session => ({ ...session(id, "idle", started_at), role: "console", project_id: undefined });
+  const owner = (id: string, started_at: number): Session => ({ ...session(id, "idle", started_at), role: "console", project_id: null });
   const owners = new Map([owner("hub-1", 1), owner("hub-2", 2), { ...owner("hub-old", 3), status: "archived" as const }].map((o) => [o.id, o]));
 
   it.each([
@@ -443,7 +445,7 @@ describe("focusGroups", () => {
 describe("switchStrip", () => {
   const hub = (id: string, status: SessionStatus, started_at: number, extra: Partial<Session> = {}): Session => ({
     ...session(id, status, started_at),
-    project_id: undefined,
+    project_id: null,
     role: "console",
     origin: "console",
     ...extra,

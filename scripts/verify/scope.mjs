@@ -39,7 +39,9 @@ export const MENU_KEYS_FILE = "packages/ui/src/i18n/messages/en.ts";
 // machine-wide heavy-step lock.
 export const SWEEP_SHARED = ["scripts/verify/lock.mjs"];
 
-export const WIRE_PROTOCOL = ["apps/daemon/PROTOCOL.md", "apps/daemon/src/protocol.rs", "packages/ui/src/protocol.ts"];
+// `protocol.generated.ts` is written by a daemon test from the Rust types (`protocol/bindings.rs`) and checked
+// against `protocol.ts` by the UI's type check (`protocol.contract.ts`).
+export const WIRE_PROTOCOL = ["apps/daemon/PROTOCOL.md", "apps/daemon/src/protocol.rs", "packages/ui/src/protocol.ts", "packages/ui/src/protocol.generated.ts"];
 
 // Files a test of another package reads from disk. Found by searching for `include_str!`,
 // `readFileSync(new URL(...))` and relative paths that leave a package root; `scope.test.mjs` fails
@@ -85,7 +87,7 @@ export const RULES = [
 
   // Cross-package reads. Each also selects `verify`, whose tests check that the paths named here exist.
   { match: [...WEB_IMPORTS_FROM_UI, ...WEB_PREVIEW_INPUTS], consumers: ["verify", "ui", "web"], why: "the website imports these modules, or builds its preview from them" },
-  { match: WIRE_PROTOCOL, consumers: ["verify", "ui", "daemon", "native"], why: "the wire protocol is kept in step by hand across the daemon, the UI and the desktop shell, and a UI test (`daemonCodes.test.ts`) reads the daemon's code registry from `protocol.rs`" },
+  { match: WIRE_PROTOCOL, consumers: ["verify", "ui", "daemon", "native"], why: "the wire protocol is kept in step across the daemon, the UI and the desktop shell: the UI's types are checked against the generated ones, the daemon writes those from its own, and a UI test (`daemonCodes.test.ts`) reads the daemon's code registry from `protocol.rs`" },
   { match: DESKTOP_CONTRACT, consumers: ["verify", "ui", "native"], why: "the UI side of the contract with the desktop shell" },
   { match: SWEEP_SHARED, consumers: ["verify", "ui"], why: "the UI's gallery sweep, which its tests run, imports it" },
   { match: DAEMON_READS_UI, consumers: ["verify", "ui", "daemon"], why: "a daemon test parses it" },

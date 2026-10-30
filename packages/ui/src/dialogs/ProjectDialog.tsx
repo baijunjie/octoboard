@@ -3,13 +3,9 @@ import React, { useId, useMemo, useState } from "react";
 import { orderedAccounts } from "../accountOrder";
 import { Button } from "../components/Button";
 import { accountDisabled, consoleAccount, resolveProjectAccount, settledProjectAccount } from "../accountChoices";
-import { changedAgentFields, changedProjectAccounts, readAgentFields, readProjectAccounts } from "../agentFields";
+import { changedLaunch, changedProjectAccounts, readLaunch, readProjectAccounts } from "../agentFields";
 import {
-  AGENT_ACCOUNT_FIELD,
   AGENT_LABEL,
-  AGENT_OPTIONS,
-  AGENT_PROJECT_EFFORT_FIELD,
-  AGENT_PROJECT_MODEL_FIELD,
   consoleProjectLaunch,
   defaultAccountName,
   projectSessionAgent,
@@ -45,13 +41,6 @@ const SOURCE_OPTIONS: { value: ProjectSource; label: PlainMessageKey }[] = [
   { value: "parent", label: "dialog.project.source.parent" },
   { value: "git", label: "dialog.project.source.git" },
 ];
-
-/** Every per-agent text field of a project: each agent's model and effort. The account is not one,
- * as it has three states (`ProjectAccount`) and is held apart. */
-const FIELDS = AGENT_OPTIONS.flatMap(({ value: agent }) => [
-  AGENT_PROJECT_MODEL_FIELD[agent],
-  AGENT_PROJECT_EFFORT_FIELD[agent],
-]);
 
 /** The account picker's option values: `""` inherits the console's, which the picker opens on;
  * `"default"` and `"account:<id>"` cannot be taken for one another or for an id. */
@@ -113,11 +102,11 @@ export function ProjectDialog({
   };
   // What the project holds for each agent when the dialog opens, and the edits since: the model and
   // effort, `null` being unset (the agent's own), and the account, which may be inheriting the
-  // console's. Kept per agent as the names are the agent's own, so a value set for one says nothing
+  // console's. Kept per agent as the values are the agent's own, so a value set for one says nothing
   // about another.
-  const [initial] = useState(() => readAgentFields(FIELDS, editing ?? {}));
-  const [fields, setFields] = useState(initial);
-  const [initialAccounts] = useState(() => readProjectAccounts(editing ?? {}));
+  const [initialLaunch] = useState(() => readLaunch(editing?.launch));
+  const [launch, setLaunch] = useState(initialLaunch);
+  const [initialAccounts] = useState(() => readProjectAccounts(editing?.accounts));
   const [accountFields, setAccountFields] = useState(initialAccounts);
   // The project's own git workflow settings when the dialog opens, and the edits since; `null` follows the application-wide value.
   const [initialGitWorkflow] = useState(() => editing?.git_workflow ?? FOLLOWING_GIT_WORKFLOW);
@@ -185,15 +174,12 @@ export function ProjectDialog({
   // project session agent for "Same as console", and none for "Detect from files", which
   // stands for a different agent per repository.
   const agent = defaultAgent === "detect" ? undefined : defaultAgent === "" ? consoleAgent : defaultAgent;
-  const accountField = agent && AGENT_ACCOUNT_FIELD[agent];
-  const modelField = agent && AGENT_PROJECT_MODEL_FIELD[agent];
-  const effortField = agent && AGENT_PROJECT_EFFORT_FIELD[agent];
   // Offered only where there is something to choose between: an agent with no account of its own
   // has the console's reference to inherit and nothing else.
   const ownAccounts = agent ? accounts.filter((account) => account.agent === agent) : [];
   const consoleAccountId = owner && agent ? consoleAccount(owner, agent, accounts) : null;
-  const picked = accountField && agent ? settledProjectAccount(accountFields[accountField], agent, accounts) : INHERIT;
-  const saved = accountField && agent ? settledProjectAccount(initialAccounts[accountField], agent, accounts) : INHERIT;
+  const picked = agent ? settledProjectAccount(accountFields[agent], agent, accounts) : INHERIT;
+  const saved = agent ? settledProjectAccount(initialAccounts[agent], agent, accounts) : INHERIT;
   // The account the project's sessions of `agent` run under, whose models the launch settings offer.
   const launchAccount = resolveProjectAccount(picked, consoleAccountId);
 
@@ -201,7 +187,7 @@ export function ProjectDialog({
     if (locked || !attempt(pathError, nameError, descriptionError)) return;
     void run(async () => {
       // Under "Detect from files" the controls are out of sight, so what was set in them is not sent.
-      const sent = defaultAgent === "detect" ? initial : fields;
+      const sent = defaultAgent === "detect" ? initialLaunch : launch;
       const sentAccounts = defaultAgent === "detect" ? initialAccounts : accountFields;
       const trimmedDescription = addsParent ? "" : description.trim();
       // On add every item starts out following, so what changed is what the project holds a value of its own for.
@@ -216,8 +202,8 @@ export function ProjectDialog({
           // is an explicit `null` (clear), never an omitted field — omitting it means "leave
           // whatever was there alone" instead.
           default_agent: defaultAgent === "" || defaultAgent === "detect" ? null : defaultAgent,
-          ...changedAgentFields("update", sent, initial),
-          ...changedProjectAccounts("update", sentAccounts, initialAccounts),
+          launch: changedLaunch("update", sent, initialLaunch),
+          accounts: changedProjectAccounts("update", sentAccounts, initialAccounts),
           // Always sent, the whole list: a present array replaces the tags, and the field shows them all.
           tags,
           // Cleared with an explicit `null`, and sent only when it changed.
@@ -237,8 +223,8 @@ export function ProjectDialog({
           // What the form shows is what is stored: "Same as console" is not detected again,
           // whether it was preselected after a pre-read or chosen; only "Detect from files" is.
           detect_default_agent: defaultAgent === "detect" ? undefined : false,
-          ...changedAgentFields("create", sent, initial),
-          ...changedProjectAccounts("create", sentAccounts, initialAccounts),
+          launch: changedLaunch("create", sent, initialLaunch),
+          accounts: changedProjectAccounts("create", sentAccounts, initialAccounts),
           tags,
           ...(trimmedDescription && { description: trimmedDescription }),
           // Only the items set to a value of their own; the rest follow the application-wide value.
@@ -376,7 +362,7 @@ export function ProjectDialog({
           description={addsParent ? t("dialog.project.agentDetectHint") : undefined}
           isDisabled={locked}
           account={
-            agent && accountField && ownAccounts.length > 0
+            agent && ownAccounts.length > 0
               ? {
                 label: t("dialog.agentSettings.account", { agent: AGENT_LABEL[agent] }),
                 options: [
@@ -397,19 +383,19 @@ export function ProjectDialog({
                     .map(({ choice, label, off }) => markDisabledPickable(t, { value: accountValue(choice), label }, off)),
                 ],
                 value: accountValue(picked),
-                onChange: (value) => setAccountFields({ ...accountFields, [accountField]: accountOfValue(value) }),
+                onChange: (value) => setAccountFields({ ...accountFields, [agent]: accountOfValue(value) }),
               }
               : undefined
           }
         />
-        {agent && modelField && effortField ? (
+        {agent ? (
           <LaunchSettingsFields
             agent={agent}
             account={launchAccount}
-            model={fields[modelField]}
-            effort={fields[effortField]}
-            onModelChange={(value) => setFields({ ...fields, [modelField]: value })}
-            onEffortChange={(value) => setFields({ ...fields, [effortField]: value })}
+            model={launch[agent].model}
+            effort={launch[agent].effort}
+            onModelChange={(model) => setLaunch({ ...launch, [agent]: { ...launch[agent], model } })}
+            onEffortChange={(effort) => setLaunch({ ...launch, [agent]: { ...launch[agent], effort } })}
             inherit={owner ? consoleProjectLaunch(owner, agent) : undefined}
             isDisabled={locked}
             expanded={advancedExpanded}

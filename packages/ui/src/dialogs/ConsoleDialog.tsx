@@ -2,15 +2,9 @@ import { ActionableError } from "../actionableError";
 import { reportError } from "../reportError";
 import React, { useEffect, useRef, useState } from "react";
 
-import { changedAgentFields, readAgentFields } from "../agentFields";
+import { changedAccounts, changedLaunch, readAccounts, readLaunch } from "../agentFields";
 import {
-  AGENT_ACCOUNT_FIELD,
-  AGENT_CONSOLE_EFFORT_FIELD,
-  AGENT_CONSOLE_MODEL_FIELD,
-  AGENT_CONSOLE_PROJECT_EFFORT_FIELD,
-  AGENT_CONSOLE_PROJECT_MODEL_FIELD,
   AGENT_LABEL,
-  AGENT_OPTIONS,
   selectableAgent,
 } from "../agents";
 import { imageToAvatar } from "../avatarImage";
@@ -22,23 +16,13 @@ import { SettingsDialog } from "../settings/SettingsDialog";
 import { useDaemon, useDaemonStore } from "../store";
 import { AvatarField } from "./AvatarField";
 import { ConsoleAccountsField } from "./ConsoleAccountsField";
-import { ConsoleLaunchFields } from "./ConsoleLaunchFields";
+import { type ConsoleAgentSettings, ConsoleLaunchFields } from "./ConsoleLaunchFields";
 import { Dialog, useDialogAction, useSubmitValidation } from "./Dialog";
 import { GroupRow, GroupRows } from "./GroupRows";
 import { LabelledGroup } from "./LabelledGroup";
 import { OptionSelect } from "./OptionSelect";
 import { TextAreaInput } from "./TextAreaInput";
 import { TextInput } from "./TextInput";
-
-/** Every per-agent field of a console: each agent's account, and the model and effort of its console
- * sessions and of its project sessions. */
-const FIELDS = AGENT_OPTIONS.flatMap(({ value: agent }) => [
-  AGENT_ACCOUNT_FIELD[agent],
-  AGENT_CONSOLE_MODEL_FIELD[agent],
-  AGENT_CONSOLE_EFFORT_FIELD[agent],
-  AGENT_CONSOLE_PROJECT_MODEL_FIELD[agent],
-  AGENT_CONSOLE_PROJECT_EFFORT_FIELD[agent],
-]);
 
 export function ConsoleDialog({
   console: editing,
@@ -63,10 +47,14 @@ export function ConsoleDialog({
   const [projectAgent, setProjectAgent] = useState<Agent | "">(editing?.project_session_agent ?? "");
   // What the console holds for each agent when the dialog opens, and the edits since: the account
   // (`null` is that agent's default account) and what its console session is launched with (`null`
-  // being the agent's own default), kept per agent as the names are the agent's own, so a value set
+  // being the agent's own default), kept per agent as the values are the agent's own, so a value set
   // for one says nothing about another.
-  const [initial] = useState(() => readAgentFields(FIELDS, editing ?? {}));
-  const [fields, setFields] = useState(initial);
+  const [initial] = useState<ConsoleAgentSettings>(() => ({
+    accounts: readAccounts(editing?.accounts),
+    launch: readLaunch(editing?.launch),
+    project_session_launch: readLaunch(editing?.project_session_launch),
+  }));
+  const [settings, setSettings] = useState(initial);
   const [icon, setIcon] = useState<string | null>(editing?.icon ?? null);
   const [sessionPrompt, setSessionPrompt] = useState(editing?.console_session_prompt ?? "");
   const { busy, run } = useDialogAction(undefined, t(editing ? "dialog.console.saveFailedTitle" : "dialog.console.createFailedTitle"));
@@ -118,9 +106,11 @@ export function ConsoleDialog({
           default_agent: defaultAgent,
           // Back to Same as console sessions is an explicit `null`.
           ...(projectAgent !== (editing.project_session_agent ?? "") && { project_session_agent: projectAgent || null }),
-          ...changedAgentFields("update", fields, initial),
+          accounts: changedAccounts("update", settings.accounts, initial.accounts),
+          launch: changedLaunch("update", settings.launch, initial.launch),
+          project_session_launch: changedLaunch("update", settings.project_session_launch, initial.project_session_launch),
           // The avatar is cleared the same way, with an explicit `null`.
-          ...(icon !== (editing.icon ?? null) && { icon }),
+          ...(icon !== editing.icon && { icon }),
           // Cleared the same way, with an explicit `null`.
           ...(prompt !== (editing.console_session_prompt ?? "") && {
             console_session_prompt: prompt || null,
@@ -134,7 +124,9 @@ export function ConsoleDialog({
           ...(projectAgent && { project_session_agent: projectAgent }),
           ...(icon && { icon }),
           ...(prompt && { console_session_prompt: prompt }),
-          ...changedAgentFields("create", fields, initial),
+          accounts: changedAccounts("create", settings.accounts, initial.accounts),
+          launch: changedLaunch("create", settings.launch, initial.launch),
+          project_session_launch: changedLaunch("create", settings.project_session_launch, initial.project_session_launch),
         });
       }
       onClose();
@@ -208,8 +200,8 @@ export function ConsoleDialog({
         <ConsoleAccountsField
           label={t("dialog.console.accounts")}
           description={t("dialog.console.accountsNote")}
-          values={fields}
-          onChange={(field, value) => setFields({ ...fields, [field]: value })}
+          values={settings.accounts}
+          onChange={(agent, account) => setSettings({ ...settings, accounts: { ...settings.accounts, [agent]: account } })}
           onManageAccounts={(opener) => {
             accountsOpener.current = opener;
             setManagingAccounts(true);
@@ -218,8 +210,9 @@ export function ConsoleDialog({
         {/* What is inside is the console's own: its sessions' launch settings and its instructions. */}
         <ConsoleLaunchFields
           defaultAgent={defaultAgent}
-          values={fields}
-          onChange={(field, value) => setFields({ ...fields, [field]: value })}
+          values={settings}
+          onChange={(kind, agent, key, value) =>
+            setSettings({ ...settings, [kind]: { ...settings[kind], [agent]: { ...settings[kind][agent], [key]: value } } })}
         >
           <TextAreaInput
             label={t("dialog.console.sessionInstructions")}

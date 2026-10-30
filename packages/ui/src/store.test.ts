@@ -108,7 +108,7 @@ it("remembers the logins this window started until they end, and forgets those a
 it("replaces the account quotas with each update and keeps the entry of an account whose reading did not change", () => {
   const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   const window = { kind: "session" as const, label: null, used_percent: 10, resets_at: null, window_minutes: 300 };
-  const first = { agent: "claude" as const, account: null, fetched_at: 1, plan: "max", windows: [window], unavailable: null };
+  const first = { agent: "claude" as const, account: null, fetched_at: 1, plan: "max", windows: [window], unavailable: null, email: null };
   const second = { ...first, agent: "codex" as const, plan: "plus" };
   client.onEvents!([{ type: "account_quotas_updated", account_quotas: [first, second] }]);
   const held = daemon.store.getState().accountQuotas;
@@ -138,7 +138,7 @@ it("keeps each account's sharing state from the snapshot and the account_sharing
   expect(daemon.store.getState().accountSharing.get("a")).toEqual({ account: "a", progress: { share: true, phase: "changing" as const, done: 2, total: 4, item: "plugins" } });
   client.onEvents!([{ type: "account_sharing", account: "b", in_use: { sessions: 2, signing_in: false } }]);
   expect(daemon.store.getState().accountSharing.get("b")).toEqual({ account: "b", in_use: { sessions: 2, signing_in: false } });
-  const failure = { share: true, items: [{ item: "skills", left: "backed_up" as const, detail: "denied" }], detail: "summary" };
+  const failure = { share: true, cause: "other" as const, items: [{ item: "skills", left: "backed_up" as const, cause: "other" as const, detail: "denied" }], detail: "summary" };
   client.onEvents!([{ type: "account_sharing", account: "a", failure }]);
   expect(daemon.store.getState().accountSharing.get("a")).toEqual({ account: "a", failure });
   client.onEvents!([{ type: "account_sharing", account: "a" }]);
@@ -274,30 +274,30 @@ it("drops the pages a pages_deleted event names from that session's list only, k
   ]);
   const ids = (session: string) => daemon.store.getState().pages.get(session)?.map((page) => page.id);
 
-  client.onEvents!([{ type: "pages_deleted", console_session_id: "session-a", pages: ["a-1", "b-1"] }]);
+  client.onEvents!([{ type: "pages_deleted", session_id: "session-a", pages: ["a-1", "b-1"] }]);
   expect(ids("session-a")).toEqual(["a-2"]);
   expect(ids("session-b")).toEqual(["b-1"]);
 
-  client.onEvents!([{ type: "pages_deleted", console_session_id: "session-a", pages: ["a-2"] }]);
+  client.onEvents!([{ type: "pages_deleted", session_id: "session-a", pages: ["a-2"] }]);
   expect(ids("session-a")).toEqual([]);
 
   // A session whose pages were never listed has nothing to drop, and no list is made for it.
-  client.onEvents!([{ type: "pages_deleted", console_session_id: "session-c", pages: ["c-1"] }]);
+  client.onEvents!([{ type: "pages_deleted", session_id: "session-c", pages: ["c-1"] }]);
   expect(daemon.store.getState().pages.has("session-c")).toBe(false);
 });
 
 it("does not bring back a deleted page when a list computed before the deletion is applied after it", () => {
   const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   const stale: Event = {
-    type: "page_list", id: "r", console_session_id: "session-a",
+    type: "page_list", id: "r", session_id: "session-a",
     pages: [pageOf("a-1", "session-a", "<p>1</p>", 2), pageOf("a-2", "session-a", "<p>2</p>", 1)],
   };
   const ids = () => daemon.store.getState().pages.get("session-a")?.map((page) => page.id);
 
   // Twice: first with no list held yet, then with one held.
-  client.onEvents!([{ type: "pages_deleted", console_session_id: "session-a", pages: ["a-1"] }, stale]);
+  client.onEvents!([{ type: "pages_deleted", session_id: "session-a", pages: ["a-1"] }, stale]);
   expect(ids()).toEqual(["a-2"]);
-  client.onEvents!([{ type: "pages_deleted", console_session_id: "session-a", pages: ["a-2"] }, stale]);
+  client.onEvents!([{ type: "pages_deleted", session_id: "session-a", pages: ["a-2"] }, stale]);
   expect(ids()).toEqual([]);
 
   // A snapshot forgets the deletions along with the pages.
@@ -319,7 +319,7 @@ it.each([
     { type: "session_upserted", session: sessionOf(id, id === "a" ? "c" : "d", id === "a" ? "p" : "q", id, "waiting_user", { switching_account: true }) },
     { type: "page_created", page: pageOf(`${id}-1`, id, "<p>1</p>", 2) },
     { type: "page_created", page: pageOf(`${id}-2`, id, "<p>2</p>", 1) },
-    { type: "pages_deleted", console_session_id: id, pages: [`${id}-2`] },
+    { type: "pages_deleted", session_id: id, pages: [`${id}-2`] },
     { type: "trust_prompt", session: id, agent: "claude", project: "p", path: "/work/app", trust_dir: null },
     { ...request, session: id, request_id: `r-${id}` },
   ]));

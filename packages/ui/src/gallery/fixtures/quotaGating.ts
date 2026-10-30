@@ -1,9 +1,9 @@
+import { DEFAULT_SETTINGS } from "../../defaultSettings";
 import type { Account, AccountQuota, Agent, AgentAvailability, Console, Project, Settings } from "../../protocol";
 import type { Scenario } from "../scenario";
 import type { Ui } from "../interact";
-import { ALL_AGENTS, SAMPLE, accountSharingOf, minutesAgo, minutesFromNow, projectOf, sessionOf, snapshotState, switchingAccount } from "./builders";
+import { accountOf, ALL_AGENTS, SAMPLE, accountSharingOf, minutesAgo, minutesFromNow, projectOf, projectWith, sessionOf, snapshotState, switchingAccount } from "./builders";
 import { quotaFailure, quotaOf, quotaWindow } from "./quotas";
-import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
 
 const GROUP = "Sidebar sessions";
 const FOCUS_GROUP = "Focus mode";
@@ -13,17 +13,16 @@ const { console: console_, web, consoleSession: hub } = SAMPLE;
 /** Claude Code's accounts: Work (spent), Personal (nearly), Client (no reading) beside the default account, which has
  * plenty left. Codex has a second account, Team; Grok Build only its default one. */
 const accounts: Account[] = [
-  { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" },
-  { id: "a-personal", agent: "claude", name: "Personal", config_dir: "/Users/dev/.claude-personal" },
-  { id: "a-client", agent: "claude", name: "Client", config_dir: "/Users/dev/.claude-client" },
-  { id: "a-team", agent: "codex", name: "Team", config_dir: "/Users/dev/.codex-team" },
+  accountOf("a-work", "claude", "Work", "/Users/dev/.claude-work"),
+  accountOf("a-personal", "claude", "Personal", "/Users/dev/.claude-personal"),
+  accountOf("a-client", "claude", "Client", "/Users/dev/.claude-client"),
+  accountOf("a-team", "codex", "Team", "/Users/dev/.codex-team"),
 ];
 
 const settings: Settings = {
-  auto_pull_repositories: false,
-  auto_delete_unresumable_archives: true,
+  ...DEFAULT_SETTINGS,
   added_agents: ALL_AGENTS,
-  default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW,
+  default_clone_dir: "/Users/dev/Projects",
   accounts,
 };
 
@@ -78,17 +77,17 @@ const handoffWeeklyQuotas: AccountQuota[] = [
   quotaOf("codex", "a-sprint", "pro", [quotaWindow("weekly", 81, 2 * 24 * 60)]),
 ];
 
-const sprintAccount: Account = { id: "a-sprint", agent: "codex", name: "Sprint", config_dir: "/Users/dev/.codex-sprint" };
+const sprintAccount: Account = accountOf("a-sprint", "codex", "Sprint", "/Users/dev/.codex-sprint");
 
-const soonAccount: Account = { id: "a-soon", agent: "claude", name: "Soon", config_dir: "/Users/dev/.claude-soon" };
+const soonAccount: Account = accountOf("a-soon", "claude", "Soon", "/Users/dev/.claude-soon");
 
 const website = { ...web, default_agent: "claude" as const };
 const searchApi = projectOf("p-api", console_.id, "Search API", { default_agent: "codex" });
 const chat = projectOf("p-chat", console_.id, "Chat Bot", { default_agent: "grok" });
 /** A project whose Claude Code sessions name Work, the spent account, to run under. */
 /** A project whose Claude Code sessions name Client to run under. */
-const onClient = { ...website, claude_account_id: { kind: "account" as const, id: "a-client" } };
-const onWork = { ...website, claude_account_id: { kind: "account" as const, id: "a-work" } };
+const onClient = projectWith(website, { accounts: { claude: { kind: "account", id: "a-client" } } });
+const onWork = projectWith(website, { accounts: { claude: { kind: "account", id: "a-work" } } });
 
 /** The console whose sessions run on Codex, for the buttons that create one. */
 const codexConsole: Console = { ...console_, default_agent: "codex" };
@@ -177,7 +176,7 @@ const teamIncomplete: Settings = {
   ...settings,
   accounts: accounts.map((account) => (account.id === "a-team" ? { ...account, share_default_config_incomplete: true } : account)),
 };
-const onTeam = { ...searchApi, codex_account_id: { kind: "account" as const, id: "a-team" } };
+const onTeam = projectWith(searchApi, { accounts: { codex: { kind: "account", id: "a-team" } } });
 
 /** When the daemon, which holds a newer reading than the window, refuses: the session window resets in 95 minutes.
  * Its wire name stays "5-hour", with its kind and its five-hour length beside it; the app words it "session" for

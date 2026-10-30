@@ -426,7 +426,7 @@ export const zhHans: Translation<"other"> = {
   "daemon.icon_not_an_image.import": "控制台 {console_name} 的头像不是图片。",
   "daemon.icon_too_large.import": "控制台 {console_name} 的头像大于 {limit_kib} KiB。",
   "daemon.configuration_not_recognised": "这不是 {appName} 的配置文件。",
-  "daemon.configuration_version_unsupported": "此文件的格式版本（{version}）无法由当前版本的 {appName} 读取。它最高可读取版本 {supported}。",
+  "daemon.configuration_version_unsupported": "此文件的格式版本（{version}）无法由当前版本的 {appName} 读取。它只能读取版本 {supported}。",
   "daemon.configuration_unreadable": "无法读取此配置文件：{detail}",
   "daemon.configuration_unreadable.summary": "无法读取此配置文件。",
   "daemon.import_resolution_invalid": "为项目或账户所做的其中一项选择无法使用。",

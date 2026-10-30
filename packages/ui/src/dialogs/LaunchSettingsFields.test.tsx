@@ -19,10 +19,10 @@ function mount(unavailable?: import("../protocol").ModelsUnavailable | Error) {
   const request = vi.fn(async (body: { type: string }) => {
     if (body.type === "list_agent_models") {
       if (unavailable instanceof Error) throw unavailable;
-      if (unavailable) return { type: "agent_models", models: [], unavailable };
+      if (unavailable) return { type: "agent_models", id: null, models: [], unavailable };
       throw new Error("Fixture has no models");
     }
-    return { type: "ack" };
+    return { type: "ack", id: null };
   });
   const daemon = { store: createStateStore({}), request, toastError: vi.fn(), toastNotice: vi.fn() } as unknown as Daemon;
   const container = document.body.appendChild(document.createElement("div"));
@@ -195,9 +195,9 @@ it.each([
 ] as const)("hands focus on to %s when the mark that holds it goes in the render that locks the Model trigger", async (_, withTabs) => {
   let reload = false;
   const request = vi.fn(async (body: { type: string }) => {
-    if (body.type !== "list_agent_models") return { type: "ack" };
+    if (body.type !== "list_agent_models") return { type: "ack", id: null };
     if (reload) return new Promise<never>(() => {});
-    return { type: "agent_models", models: [], unavailable: { code: "agent-not-found", message: "Gone", params: {} } };
+    return { type: "agent_models", id: null, models: [], unavailable: { code: "agent-not-found", message: "Gone", params: {} } };
   });
   const daemon = { store: createStateStore({}), request, toastError: vi.fn(), toastNotice: vi.fn() } as unknown as Daemon;
   const container = document.body.appendChild(document.createElement("div"));

@@ -3,7 +3,7 @@
 //!
 //! The calling session is resolved from the token the call arrived with, never from an argument,
 //! so a child that rewrote its own arguments still cannot act on another session. Which tools it
-//! may call follows from that session's role and whether it has the role of a bound session,
+//! may call follows from that session's role and whether it has the role of a worker,
 //! checked here as well as in the child: the child is a separate process and its announcement is
 //! not something the daemon can rely on.
 //!
@@ -229,12 +229,12 @@ async fn add_project(
         ..Default::default()
     };
     for (agent, account) in project_accounts_argument(state, arguments)? {
-        *settings.account_mut(agent) = account;
+        *settings.accounts.get_mut(agent) = account;
     }
     for (agent, change) in launch_argument(arguments, "launch")? {
-        let (model, effort) = settings.launch_mut(agent);
-        *model = change.model.flatten();
-        *effort = change.effort.flatten();
+        let launch = settings.launch.get_mut(agent);
+        launch.model = change.model.flatten();
+        launch.effort = change.effort.flatten();
     }
     let added = coordinator::add_project(
         state,
@@ -678,8 +678,8 @@ fn keep_note(
     let mut note = String::from(
         "Archived. Its git branches and worktrees were left as they are, as asked. They stay \
          bound to the sessions that are responsible for them (`get_session_branches` lists \
-         them) and come back with those sessions when they are reopened; a session under a lead \
-         session is reopened by its lead.",
+         them) and come back with those sessions when they are reopened; a session under a \
+         project coordinator is reopened by that coordinator.",
     );
     let holders = |under: bool| {
         archived
@@ -821,8 +821,8 @@ fn unarchived_refusal(caller_id: &str, unarchived: &[Session]) -> Option<String>
                 .filter(|session| session.bound_to.as_deref() == Some(lead)),
         );
         advice.push(format!(
-            "{} under the lead session `{lead}`: not yours to archive; wait for the lead session \
-             to finish them (its `done` report archives it), or archive `{lead}` with \
+            "{} under the project coordinator `{lead}`: not yours to archive; wait for the \
+             coordinator to finish them (its `done` report archives it), or archive `{lead}` with \
              `archive_session`, which takes along its sessions that have no process running and \
              is refused while any has one",
             named
@@ -1288,7 +1288,7 @@ pub(crate) fn describe_session(
         // The names only: the worktree each stands in is `get_session_branches`'.
         "branches": branches.get(&session.id).cloned().unwrap_or_default(),
         "role": session.role,
-        "orchestration_role": session.orchestration_role(),
+        "orchestration_role": session.orchestration_role,
         "console": session.console_id,
         "project": session.project_id,
         // The session this one reports to. Null for a project session means unbound: the user
@@ -1298,8 +1298,6 @@ pub(crate) fn describe_session(
         "owner": session.bound_to,
         // Whether that owner is a console session or a project session; null with no owner.
         "owner_kind": owner_kind,
-        // A lead session: bound to a console session while keeping sessions of its own.
-        "lead": session.lead,
         // The sessions bound to this one in any status, archived ones included, as the rules on
         // who can own a session and on transferring one count them.
         "owned_sessions": owned.get(&session.id).copied().unwrap_or(0),
@@ -1390,7 +1388,7 @@ pub(super) mod tests {
     use super::*;
     use crate::protocol::{
         now_millis, Account, AccountQuota, Agent, AgentAvailability, Availability, Console, Event,
-        Project, ProjectAccount, ProjectSource, QuotaWindow, QuotaWindowKind,
+        OrchestrationRole, Project, ProjectAccount, ProjectSource, QuotaWindow, QuotaWindowKind,
     };
     use crate::store::LOCAL_HOST_ID;
     use crate::test_support::{output_containing, running, ScratchDir};
@@ -1403,21 +1401,9 @@ pub(super) mod tests {
             workdir: "/tmp/console-1".to_string(),
             default_agent: Agent::Claude,
             project_session_agent: None,
-            claude_project_session_model: None,
-            claude_project_session_effort: None,
-            codex_project_session_model: None,
-            codex_project_session_effort: None,
-            grok_project_session_model: None,
-            grok_project_session_effort: None,
-            claude_account_id: None,
-            codex_account_id: None,
-            grok_account_id: None,
-            claude_console_session_model: None,
-            claude_console_session_effort: None,
-            codex_console_session_model: None,
-            codex_console_session_effort: None,
-            grok_console_session_model: None,
-            grok_console_session_effort: None,
+            accounts: Default::default(),
+            launch: Default::default(),
+            project_session_launch: Default::default(),
             icon: None,
             console_session_prompt: None,
             created_at: 0,
@@ -1441,7 +1427,7 @@ pub(super) mod tests {
             background_tasks: Vec::new(),
             switching_account: false,
             default_effort: None,
-            orchestration_role: None,
+            orchestration_role: OrchestrationRole::Coordinator,
             context: None,
             observed_model: None,
             observed_effort: None,
@@ -1449,7 +1435,6 @@ pub(super) mod tests {
             effort: None,
             has_conversation: false,
             bound_to: None,
-            lead: false,
             colour: None,
             ordinal: None,
             account_id: None,
@@ -1481,15 +1466,8 @@ pub(super) mod tests {
                 default_agent: None,
                 source: ProjectSource::Local,
                 remote_url: None,
-                claude_account_id: ProjectAccount::Inherit,
-                codex_account_id: ProjectAccount::Inherit,
-                grok_account_id: ProjectAccount::Inherit,
-                claude_session_model: None,
-                claude_session_effort: None,
-                codex_session_model: None,
-                codex_session_effort: None,
-                grok_session_model: None,
-                grok_session_effort: None,
+                accounts: Default::default(),
+                launch: Default::default(),
                 trust_consent: false,
                 pinned: false,
                 tags: Vec::new(),
@@ -2069,6 +2047,11 @@ pub(super) mod tests {
             project_id: Some("project-1".to_string()),
             title: format!("Work {id}"),
             bound_to: bound_to.map(str::to_string),
+            orchestration_role: if bound_to.is_some() {
+                OrchestrationRole::Worker
+            } else {
+                OrchestrationRole::Coordinator
+            },
             ..console_session(id)
         }
     }
@@ -2097,15 +2080,8 @@ pub(super) mod tests {
                     default_agent: None,
                     source: ProjectSource::Local,
                     remote_url: None,
-                    claude_account_id: ProjectAccount::Inherit,
-                    codex_account_id: ProjectAccount::Inherit,
-                    grok_account_id: ProjectAccount::Inherit,
-                    claude_session_model: None,
-                    claude_session_effort: None,
-                    codex_session_model: None,
-                    codex_session_effort: None,
-                    grok_session_model: None,
-                    grok_session_effort: None,
+                    accounts: Default::default(),
+                    launch: Default::default(),
                     trust_consent: false,
                     pinned: false,
                     tags: Vec::new(),
@@ -2603,6 +2579,7 @@ pub(super) mod tests {
         let mut console_archived = console_session("archived-console");
         console_archived.status = SessionStatus::Archived;
         console_archived.bound_to = Some("a".to_string());
+        console_archived.orchestration_role = OrchestrationRole::Worker;
         let mut elsewhere = project_session("archived-elsewhere", "console-2", None);
         elsewhere.project_id = Some("project-2".to_string());
         elsewhere.status = SessionStatus::Archived;
@@ -3624,15 +3601,8 @@ pub(super) mod tests {
                 default_agent: None,
                 source: ProjectSource::Local,
                 remote_url: None,
-                claude_account_id: ProjectAccount::Inherit,
-                codex_account_id: ProjectAccount::Inherit,
-                grok_account_id: ProjectAccount::Inherit,
-                claude_session_model: None,
-                claude_session_effort: None,
-                codex_session_model: None,
-                codex_session_effort: None,
-                grok_session_model: None,
-                grok_session_effort: None,
+                accounts: Default::default(),
+                launch: Default::default(),
                 trust_consent: false,
                 pinned: false,
                 tags: Vec::new(),
@@ -3697,7 +3667,14 @@ pub(super) mod tests {
         let (state, dir) = peer_state(name);
         state
             .store
-            .set_binding("starter", None, "a", true, false, false)
+            .set_binding(
+                "starter",
+                None,
+                "a",
+                OrchestrationRole::Coordinator,
+                false,
+                false,
+            )
             .unwrap()
             .unwrap();
         (state, dir)
@@ -3812,7 +3789,7 @@ pub(super) mod tests {
                 assert!(!message.contains("`of-a`"), "{message}");
                 if caller == "a" {
                     assert!(
-                        message.contains("under the lead session `starter`"),
+                        message.contains("under the project coordinator `starter`"),
                         "{message}"
                     );
                 } else {
@@ -4411,7 +4388,7 @@ pub(super) mod tests {
         }
         let stored = state.store.get_project("project-1").unwrap().unwrap();
         assert_eq!(stored.tags, ["api", "docs"]);
-        assert_eq!(stored.claude_session_model.as_deref(), Some("opus"));
+        assert_eq!(stored.launch.claude.model.as_deref(), Some("opus"));
 
         let message = refused(
             &state,
@@ -4600,12 +4577,12 @@ pub(super) mod tests {
         let (state, _dir) = shared_console_state("get-project-effective");
         let mut console = state.store.get_console("console-1").unwrap().unwrap();
         console.project_session_agent = Some(Agent::Codex);
-        console.claude_project_session_model = Some("console-model".to_string());
-        console.claude_project_session_effort = Some("console-effort".to_string());
+        console.project_session_launch.claude.model = Some("console-model".to_string());
+        console.project_session_launch.claude.effort = Some("console-effort".to_string());
         state.store.update_console(&console).unwrap();
         let mut project = state.store.get_project("project-1").unwrap().unwrap();
         project.default_agent = None;
-        *project.launch_mut(Agent::Claude).0 = Some("project-model".to_string());
+        project.launch.get_mut(Agent::Claude).model = Some("project-model".to_string());
         state.store.update_project(&project).unwrap();
 
         let own = call(&state, "of-a", "get_project", &Map::new())
@@ -4738,7 +4715,7 @@ pub(super) mod tests {
         assert_eq!(pair["launch"]["claude"]["model"], "sonnet");
         let stored = state.store.get_console("console-1").unwrap().unwrap();
         assert_eq!(
-            stored.claude_project_session_model.as_deref(),
+            stored.project_session_launch.claude.model.as_deref(),
             Some("sonnet")
         );
         let cleared_pair = call(
@@ -5560,7 +5537,7 @@ pub(super) mod tests {
         let (state, _dir, caller) = codex_caller_state("auto-select-sharing-caller-project-pin");
         insert_codex(&state, "project-pin", "/tmp/codex-project-pin");
         let mut project = state.store.get_project("project-1").unwrap().unwrap();
-        project.codex_account_id = ProjectAccount::Account {
+        project.accounts.codex = ProjectAccount::Account {
             id: "project-pin".to_string(),
         };
         state.store.update_project(&project).unwrap();
@@ -6031,13 +6008,15 @@ pub(super) mod tests {
         assert_eq!(record["session"], "kid");
     }
 
+    /// The role a session is stored with is the one its record and the wire carry, whatever its
+    /// parent and however many children it has.
     #[test]
-    fn session_roles_are_derived_independently_of_parent_and_child_count() {
+    fn the_stored_role_is_what_the_record_and_the_wire_carry() {
         use crate::protocol::OrchestrationRole::{Coordinator, Worker};
 
-        let (state, _dir) = peer_state("derived-session-role");
+        let (state, _dir) = peer_state("stored-session-role");
         let caller = state.session_record("a").unwrap();
-        for (mut session, expected, name) in [
+        for (session, expected, name) in [
             (console_session("a"), Coordinator, "console"),
             (
                 project_session("loose", "console-1", None),
@@ -6051,23 +6030,17 @@ pub(super) mod tests {
             ),
             (
                 Session {
-                    lead: true,
+                    orchestration_role: Coordinator,
                     ..project_session("empty-coordinator", "console-1", Some("a"))
                 },
                 Coordinator,
                 "reporting coordinator without children",
             ),
         ] {
-            // A wire value must never become authoritative for a later derivation.
-            session.orchestration_role = Some(if expected == Worker {
-                Coordinator
-            } else {
-                Worker
-            });
-            assert_eq!(session.orchestration_role(), expected, "{name}");
+            assert_eq!(session.orchestration_role, expected, "{name}");
             assert_eq!(session.is_worker(), expected == Worker, "{name}");
             let wire = state.wire_session(session.clone());
-            assert_eq!(wire.orchestration_role, Some(expected), "{name}");
+            assert_eq!(wire.orchestration_role, expected, "{name}");
             let record =
                 describe_session(&state, &session, &caller, &HashMap::new(), &HashMap::new())
                     .unwrap();
@@ -6090,7 +6063,7 @@ pub(super) mod tests {
                 has_conversation: true,
                 model: Some(Some("opus".to_string())),
                 effort: Some(None),
-                lead: true,
+                orchestration_role: OrchestrationRole::Coordinator,
                 ..project_session("lead-two", "console-1", Some("a"))
             })
             .unwrap();
@@ -6121,7 +6094,8 @@ pub(super) mod tests {
         assert_eq!(record["model"], "opus");
         // An explicit choice of the agent's own default is a `null`, not an absent key.
         assert!(record.get("effort").is_some_and(Value::is_null));
-        assert_eq!(record["lead"], true);
+        assert_eq!(record["orchestration_role"], "coordinator");
+        assert!(record.get("lead").is_none());
 
         // A session that inherits its launch settings has neither key, and owns nothing.
         let plain = call(
@@ -6134,7 +6108,7 @@ pub(super) mod tests {
         .unwrap();
         assert!(plain.get("model").is_none() && plain.get("effort").is_none());
         assert_eq!(plain["owned_sessions"], 0);
-        assert_eq!(plain["lead"], false);
+        assert_eq!(plain["orchestration_role"], "worker");
         assert_eq!(plain["agent_session_id"], Value::Null);
         assert_eq!(plain["display_title"], plain["title"]);
     }
@@ -6451,8 +6425,8 @@ pub(super) mod tests {
             .unwrap();
         state.store.set_auto_select_account(true).unwrap();
         let mut project = state.store.get_project("project-1").unwrap().unwrap();
-        project.claude_session_model = Some("sonnet".to_string());
-        project.claude_session_effort = Some("high".to_string());
+        project.launch.claude.model = Some("sonnet".to_string());
+        project.launch.claude.effort = Some("high".to_string());
         state.store.update_project(&project).unwrap();
         let hold = |account: Option<&str>, used_percent: f64| {
             let quota = AccountQuota {
@@ -6580,9 +6554,9 @@ pub(super) mod tests {
             .unwrap();
         crate::test_support::offer_models(&state, Agent::Codex, &[("fallback-model", &["high"])]);
         let mut project = state.store.get_project("project-1").unwrap().unwrap();
-        project.claude_session_model = Some("sonnet".to_string());
-        project.codex_session_model = Some("fallback-model".to_string());
-        project.codex_session_effort = Some("high".to_string());
+        project.launch.claude.model = Some("sonnet".to_string());
+        project.launch.codex.model = Some("fallback-model".to_string());
+        project.launch.codex.effort = Some("high".to_string());
         state.store.update_project(&project).unwrap();
         let caller = state.session_record("a").unwrap();
         let launches = Arc::new(Mutex::new(Vec::<Launched>::new()));
@@ -6659,7 +6633,11 @@ pub(super) mod tests {
                 .store
                 .insert_session(&Session {
                     project_id: Some("repo".to_string()),
-                    lead: id == "mid",
+                    orchestration_role: if id == "mid" {
+                        OrchestrationRole::Coordinator
+                    } else {
+                        OrchestrationRole::Worker
+                    },
                     ..project_session(id, "console-1", Some(owner))
                 })
                 .unwrap();

@@ -10,19 +10,20 @@ import type { Agent, AgentAvailability, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { AddAgentDialog } from "./AddAgentDialog";
 import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
+import { DEFAULT_SETTINGS } from "../defaultSettings";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 function render(
   availability: Partial<Record<Agent, AgentAvailability["availability"]>>,
   added: Agent[] | null,
-  request: (body: RequestBody) => Promise<unknown> = () => Promise.resolve({ type: "ack" }),
+  request: (body: RequestBody) => Promise<unknown> = () => Promise.resolve({ type: "ack", id: null }),
   onClose = () => {},
 ) {
   const daemon: Daemon = {
     store: createStateStore({
-      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [] },
-      agentAvailability: new Map(Object.entries(availability).map(([agent, state]) => [agent as Agent, { agent: agent as Agent, availability: state }])),
+      settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [] },
+      agentAvailability: new Map(Object.entries(availability).map(([agent, state]) => [agent as Agent, { agent: agent as Agent, availability: state, default_account_dir: null }])),
     }),
     request: vi.fn(request) as Daemon["request"],
     toastError: vi.fn(),

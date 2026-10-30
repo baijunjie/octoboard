@@ -38,7 +38,7 @@ function geometry(container: HTMLElement) {
 describe("account order in Settings", () => {
   it("follows the saved order including the default account", () => {
     settings.account_order = { claude: ["claude-work", null] };
-    onTestFinished(() => { settings.account_order = undefined; });
+    onTestFinished(() => { settings.account_order = {}; });
     const { container } = mount();
     expect(rows(container)).toEqual(["claude-work", "default:claude"]);
   });
@@ -71,10 +71,10 @@ describe("account order in Settings", () => {
     expect(rows(container)).toEqual(["claude-work", "default:claude"]);
     expect(request).toHaveBeenCalledExactlyOnceWith({ type: "reorder_accounts", agent: "claude", accounts: ["claude-work", null] });
     settings.account_order = { claude: ["claude-work", null] };
-    onTestFinished(() => { settings.account_order = undefined; });
+    onTestFinished(() => { settings.account_order = {}; });
     render();
     expect(rows(container)).toEqual(["claude-work", "default:claude"]);
-    settings.account_order = undefined;
+    settings.account_order = {};
     render();
     expect(rows(container)).toEqual(["default:claude", "claude-work"]);
   });

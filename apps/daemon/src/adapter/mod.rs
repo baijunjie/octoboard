@@ -195,7 +195,7 @@ pub fn mcp_server_command(spec: &LaunchSpec<'_>) -> (String, Vec<String>) {
         spec.mcp_token.to_string(),
     ];
     if spec.owner.is_some() {
-        args.push("--bound".to_string());
+        args.push("--worker".to_string());
     }
     (spec.self_exe.to_string(), args)
 }
@@ -700,18 +700,18 @@ pub mod tests {
         assert_eq!(mode & 0o777, 0o700);
     }
 
-    /// The child starts its catalogue from its own arguments, so a bound session has to say so
-    /// there and an unbound one must not; after launch it follows the daemon's answers.
+    /// The child starts its catalogue from its own arguments, so a session with an owner has to
+    /// say so there and one without must not; after launch it follows the daemon's answers.
     #[test]
-    fn the_mcp_child_is_told_whether_the_session_is_bound() {
+    fn the_mcp_child_is_told_whether_the_session_is_a_worker() {
         let mut fixture = spec_fixture();
-        let (_, bound) = super::mcp_server_command(&fixture.spec());
-        assert!(bound.contains(&"--bound".to_string()));
+        let (_, owned) = super::mcp_server_command(&fixture.spec());
+        assert!(owned.contains(&"--worker".to_string()));
         // The child authenticates to the daemon with the key.
-        let key = bound.iter().position(|arg| arg == "--key").expect("--key");
-        assert_eq!(bound[key + 1], "feedface");
+        let key = owned.iter().position(|arg| arg == "--key").expect("--key");
+        assert_eq!(owned[key + 1], "feedface");
         fixture.owner = None;
-        let (_, unbound) = super::mcp_server_command(&fixture.spec());
-        assert!(!unbound.contains(&"--bound".to_string()));
+        let (_, independent) = super::mcp_server_command(&fixture.spec());
+        assert!(!independent.contains(&"--worker".to_string()));
     }
 }

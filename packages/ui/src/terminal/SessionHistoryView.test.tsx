@@ -26,7 +26,7 @@ vi.mock("../viewer/MarkdownDocument", () => ({
   MarkdownDocument: ({ text }: { text: string }) => <div data-testid="markdown">{text}</div>,
 }));
 
-const session = { id: "s-1", started_at: 1700000000000, ended_at: 1700000600000 };
+const session = { id: "s-1", started_at: 1700000000000, ended_at: 1700000600000, bound_to: null };
 const roots: Root[] = [];
 beforeEach(() => {
   daemon.request.mockReset();
@@ -64,7 +64,7 @@ const articles = (container: HTMLElement) =>
   [...container.querySelectorAll("article")].map((node) => document.getElementById(node.getAttribute("aria-labelledby")!)?.textContent);
 
 it("shows the context size beside the heading, before the dates", async () => {
-  const container = await mount({ type: "session_history", session: "s-1", messages: history }, { tokens: 130000, window: 200000, used_percent: 65 });
+  const container = await mount({ type: "session_history", id: null, session: "s-1", messages: history }, { tokens: 130000, window: 200000, used_percent: 65 });
   const header = container.querySelector("header")!;
   const badge = header.querySelector<HTMLElement>('[role="img"]')!;
   expect(header.querySelector("h2")!.compareDocumentPosition(badge) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -75,12 +75,12 @@ it("shows the context size beside the heading, before the dates", async () => {
 });
 
 it("shows no context badge in the header for a session whose size is unknown", async () => {
-  const container = await mount({ type: "session_history", session: "s-1", messages: history });
+  const container = await mount({ type: "session_history", id: null, session: "s-1", messages: history });
   expect(container.querySelector('header [role="img"]')).toBeNull();
 });
 
 it("shows the session's archive and creation times even when its history is unavailable", async () => {
-  const container = await mount({ type: "session_history", session: "s-1", messages: [], unavailable: true });
+  const container = await mount({ type: "session_history", id: null, session: "s-1", messages: [], unavailable: true });
   const times = [...container.querySelectorAll<HTMLTimeElement>("header time")];
   expect(times.map((time) => time.dateTime)).toEqual(["2023-11-14T22:23:20.000Z", "2023-11-14T22:13:20.000Z"]);
   expect(times[0].textContent).toContain("Archived");
@@ -88,7 +88,7 @@ it("shows the session's archive and creation times even when its history is unav
 });
 
 it("shows user messages and agent replies while omitting Octoboard messages", async () => {
-  const container = await mount({ type: "session_history", session: "s-1", messages: history });
+  const container = await mount({ type: "session_history", id: null, session: "s-1", messages: history });
   expect(daemon.request).toHaveBeenCalledWith({ type: "read_session_history", session: "s-1" });
   expect(articles(container)).toEqual(["Agent", "You", "Agent"]);
   expect(container.textContent).toContain("Why is it slow?");
@@ -100,7 +100,7 @@ it("shows user messages and agent replies while omitting Octoboard messages", as
 });
 
 it("renders agent replies as Markdown without a toggle", async () => {
-  const container = await mount({ type: "session_history", session: "s-1", messages: history });
+  const container = await mount({ type: "session_history", id: null, session: "s-1", messages: history });
   expect([...container.querySelectorAll("[data-testid=markdown]")].map((node) => node.textContent)).toEqual([
     "**Planned**",
     "The query scans the table.",
@@ -108,13 +108,13 @@ it("renders agent replies as Markdown without a toggle", async () => {
 });
 
 it("says nothing was said in a session with no messages", async () => {
-  const container = await mount({ type: "session_history", session: "s-1", messages: [] });
+  const container = await mount({ type: "session_history", id: null, session: "s-1", messages: [] });
   expect(container.textContent).toContain("No messages in this session");
   expect(container.querySelector("article")).toBeNull();
 });
 
 it("points at reopening when the record is unavailable", async () => {
-  const container = await mount({ type: "session_history", session: "s-1", messages: [], unavailable: true });
+  const container = await mount({ type: "session_history", id: null, session: "s-1", messages: [], unavailable: true });
   expect(container.textContent).toContain("History unavailable");
   // The record's state, not a failed load, so it is a neutral empty panel rather than a failure or an
   // Alert: the heading says what is missing, the line why, and the remedy under it, with no Try again
@@ -144,7 +144,7 @@ it("shows a failed request as an error with Try again, and reads again when it i
   expect([...panel.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Try again"]);
   expect(errorAlerts.report).not.toHaveBeenCalled();
   expect(container.textContent).not.toContain("History unavailable");
-  daemon.request.mockResolvedValue({ type: "session_history", session: "s-1", messages: history });
+  daemon.request.mockResolvedValue({ type: "session_history", id: null, session: "s-1", messages: history });
   const retry = [...container.querySelectorAll("button")].find((button) => button.textContent === "Try again")!;
   await act(async () => retry.click());
   await act(async () => {});
@@ -155,7 +155,7 @@ it("shows a failed request as an error with Try again, and reads again when it i
 
 it("reads a failed request again when a fresh snapshot arrives, but a loaded one is left alone", async () => {
   const container = await mount(new Error("gone"));
-  daemon.request.mockResolvedValue({ type: "session_history", session: "s-1", messages: history });
+  daemon.request.mockResolvedValue({ type: "session_history", id: null, session: "s-1", messages: history });
   store.snapshotEpoch = 1;
   const root = roots[0]!;
   await act(async () => root.render(<SessionHistoryView session={session} />));
@@ -168,7 +168,7 @@ it("reads a failed request again when a fresh snapshot arrives, but a loaded one
 });
 
 it("treats a history containing only Octoboard messages as empty", async () => {
-  const container = await mount({ type: "session_history", session: "s-1", messages: history.filter((message) => message.speaker === "octoboard") });
+  const container = await mount({ type: "session_history", id: null, session: "s-1", messages: history.filter((message) => message.speaker === "octoboard") });
   expect(container.textContent).toContain("No messages in this session");
   expect(container.querySelector("article")).toBeNull();
 });
@@ -176,10 +176,10 @@ it("treats a history containing only Octoboard messages as empty", async () => {
 it("speaks an unavailable and an empty history through a status", async () => {
   vi.useFakeTimers();
   try {
-    const unavailable = await mount({ type: "session_history", session: "s-1", messages: [], unavailable: true });
+    const unavailable = await mount({ type: "session_history", id: null, session: "s-1", messages: [], unavailable: true });
     await act(async () => void vi.advanceTimersByTime(200));
     expect(unavailable.querySelector("[role=status]")?.textContent).toContain("Reopen the session to see its terminal.");
-    const empty = await mount({ type: "session_history", session: "s-1", messages: [] });
+    const empty = await mount({ type: "session_history", id: null, session: "s-1", messages: [] });
     await act(async () => void vi.advanceTimersByTime(200));
     expect(empty.querySelector("[role=status]")?.textContent).toContain("No messages in this session");
   } finally {
@@ -206,7 +206,7 @@ it("keeps focus in the view when Try again goes away under it, on the view while
   retry.focus();
   await act(async () => retry.click());
   expect(document.activeElement).toBe(container.querySelector("section"));
-  await act(async () => answer({ type: "session_history", session: "s-1", messages: history }));
+  await act(async () => answer({ type: "session_history", id: null, session: "s-1", messages: history }));
   expect(container.querySelector("[role=region][tabindex]")).not.toBeNull();
   expect(document.activeElement).toBe(container.querySelector("section"));
 });
@@ -226,8 +226,8 @@ it("retains the daemon reason for rich rendering inside the Alert, which announc
 
 const owner = { id: "owner-1", title: "Release captain", role: "console" } as Session;
 
-async function mountChild(boundTo: string | undefined, onSelectSession: ((session: Session) => void) | null = vi.fn()): Promise<HTMLElement> {
-  daemon.request.mockResolvedValue({ type: "session_history", session: "s-1", messages: history });
+async function mountChild(boundTo: string | null, onSelectSession: ((session: Session) => void) | null = vi.fn()): Promise<HTMLElement> {
+  daemon.request.mockResolvedValue({ type: "session_history", id: null, session: "s-1", messages: history });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -261,7 +261,7 @@ it("rings the owner link only when it has keyboard focus itself, not when the hi
 
 it("shows no owner line for an unbound session or an owner the client does not know", async () => {
   store.sessions = new Map([[owner.id, owner]]);
-  expect((await mountChild(undefined)).querySelector("header p")).toBeNull();
+  expect((await mountChild(null)).querySelector("header p")).toBeNull();
   expect((await mountChild("deleted-owner")).querySelector("header p")).toBeNull();
 });
 

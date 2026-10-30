@@ -36,8 +36,7 @@ use crate::git_workflow::{
 };
 use crate::hostfs;
 use crate::launch_settings::{
-    self, normalize_launch_setting, normalize_session_launch_setting, trimmed_or_none,
-    LaunchChange, LaunchCheck,
+    self, normalize_session_launch_setting, normalized_launches, trimmed_or_none, LaunchCheck,
 };
 use crate::mcp;
 use crate::open_directory;
@@ -47,9 +46,10 @@ use crate::project_trash;
 use crate::protocol::{
     error_code, error_parts, notice_code, now_millis, Account, Agent, ApprovalReviewer,
     Availability, ClaudeApprovalMode, CodedError, Console, ConsoleSessionColour,
-    ConversationLocation, Event, ModelChangeOutcome, Notice, Origin, Present, Project,
-    ProjectAccount, ProjectSource, RequestBody, Role, Session, SessionBranchItem,
-    SessionBranchTarget, SessionStatus, TerminalAppearance,
+    ConversationLocation, Event, Launch, LaunchChange, ModelChangeOutcome, Notice,
+    OrchestrationRole, Origin, PerAgent, Present, Project, ProjectAccount, ProjectSource,
+    RequestBody, Role, Session, SessionBranchItem, SessionBranchTarget, SessionStatus,
+    TerminalAppearance,
 };
 use crate::relocate;
 use crate::reporting;
@@ -100,21 +100,9 @@ async fn handle_inner(
             name,
             default_agent,
             project_session_agent,
-            claude_account_id,
-            codex_account_id,
-            grok_account_id,
-            claude_console_session_model,
-            claude_console_session_effort,
-            codex_console_session_model,
-            codex_console_session_effort,
-            grok_console_session_model,
-            grok_console_session_effort,
-            claude_project_session_model,
-            claude_project_session_effort,
-            codex_project_session_model,
-            codex_project_session_effort,
-            grok_project_session_model,
-            grok_project_session_effort,
+            accounts,
+            launch,
+            project_session_launch,
             icon,
             console_session_prompt,
         } => {
@@ -122,21 +110,9 @@ async fn handle_inner(
                 name,
                 default_agent,
                 project_session_agent,
-                claude_account_id,
-                codex_account_id,
-                grok_account_id,
-                claude_console_session_model,
-                claude_console_session_effort,
-                codex_console_session_model,
-                codex_console_session_effort,
-                grok_console_session_model,
-                grok_console_session_effort,
-                claude_project_session_model,
-                claude_project_session_effort,
-                codex_project_session_model,
-                codex_project_session_effort,
-                grok_project_session_model,
-                grok_project_session_effort,
+                accounts,
+                launch,
+                project_session_launch,
                 icon,
                 console_session_prompt,
             };
@@ -153,58 +129,12 @@ async fn handle_inner(
             name,
             default_agent,
             project_session_agent,
-            claude_account_id,
-            codex_account_id,
-            grok_account_id,
-            claude_console_session_model,
-            claude_console_session_effort,
-            codex_console_session_model,
-            codex_console_session_effort,
-            grok_console_session_model,
-            grok_console_session_effort,
-            claude_project_session_model,
-            claude_project_session_effort,
-            codex_project_session_model,
-            codex_project_session_effort,
-            grok_project_session_model,
-            grok_project_session_effort,
+            accounts,
+            launch,
+            project_session_launch,
             icon,
             console_session_prompt,
         } => {
-            let project_launch = launch_settings::changes_of([
-                (
-                    Agent::Claude,
-                    claude_project_session_model,
-                    claude_project_session_effort,
-                ),
-                (
-                    Agent::Codex,
-                    codex_project_session_model,
-                    codex_project_session_effort,
-                ),
-                (
-                    Agent::Grok,
-                    grok_project_session_model,
-                    grok_project_session_effort,
-                ),
-            ]);
-            let launch = launch_settings::changes_of([
-                (
-                    Agent::Claude,
-                    claude_console_session_model,
-                    claude_console_session_effort,
-                ),
-                (
-                    Agent::Codex,
-                    codex_console_session_model,
-                    codex_console_session_effort,
-                ),
-                (
-                    Agent::Grok,
-                    grok_console_session_model,
-                    grok_console_session_effort,
-                ),
-            ]);
             update_console(
                 state,
                 &id,
@@ -212,16 +142,12 @@ async fn handle_inner(
                     name,
                     default_agent,
                     project_session_agent,
-                    accounts: [
-                        (Agent::Claude, claude_account_id),
-                        (Agent::Codex, codex_account_id),
-                        (Agent::Grok, grok_account_id),
-                    ]
-                    .into_iter()
-                    .filter_map(|(agent, account)| Some((agent, account?)))
-                    .collect(),
-                    launch,
-                    project_launch,
+                    accounts: accounts
+                        .into_iter()
+                        .filter_map(|(agent, account)| Some((agent, account.into_present()?)))
+                        .collect(),
+                    launch: launch.into(),
+                    project_launch: project_session_launch.into(),
                     icon,
                     console_session_prompt,
                 },
@@ -292,15 +218,8 @@ async fn handle_inner(
             remote_url,
             name,
             default_agent,
-            claude_account_id,
-            codex_account_id,
-            grok_account_id,
-            claude_session_model,
-            claude_session_effort,
-            codex_session_model,
-            codex_session_effort,
-            grok_session_model,
-            grok_session_effort,
+            accounts,
+            launch,
             detect_default_agent,
             tags,
             description,
@@ -317,15 +236,8 @@ async fn handle_inner(
                     default_agent,
                     settings: NewProjectSettings {
                         pinned: false,
-                        claude_account_id: claude_account_id.unwrap_or_default(),
-                        codex_account_id: codex_account_id.unwrap_or_default(),
-                        grok_account_id: grok_account_id.unwrap_or_default(),
-                        claude_session_model,
-                        claude_session_effort,
-                        codex_session_model,
-                        codex_session_effort,
-                        grok_session_model,
-                        grok_session_effort,
+                        accounts: accounts.map(|_, account| account.unwrap_or_default()),
+                        launch,
                         git_workflow: git_workflow.unwrap_or_default(),
                     },
                     detect_default_agent,
@@ -343,40 +255,26 @@ async fn handle_inner(
             project: id,
             name,
             default_agent,
-            claude_account_id,
-            codex_account_id,
-            grok_account_id,
-            claude_session_model,
-            claude_session_effort,
-            codex_session_model,
-            codex_session_effort,
-            grok_session_model,
-            grok_session_effort,
+            accounts,
+            launch,
             pinned,
             tags,
             description,
             git_workflow,
         } => {
-            let launch = launch_settings::changes_of([
-                (Agent::Claude, claude_session_model, claude_session_effort),
-                (Agent::Codex, codex_session_model, codex_session_effort),
-                (Agent::Grok, grok_session_model, grok_session_effort),
-            ]);
             update_project(
                 state,
                 &id,
                 ProjectChanges {
                     name,
                     default_agent,
-                    accounts: [
-                        (Agent::Claude, claude_account_id),
-                        (Agent::Codex, codex_account_id),
-                        (Agent::Grok, grok_account_id),
-                    ]
-                    .into_iter()
-                    .filter_map(|(agent, account)| Some((agent, account?.unwrap_or_default())))
-                    .collect(),
-                    launch,
+                    accounts: accounts
+                        .into_iter()
+                        .filter_map(|(agent, account)| {
+                            Some((agent, account.into_present()?.unwrap_or_default()))
+                        })
+                        .collect(),
+                    launch: launch.into(),
                     pinned,
                     tags,
                     description,
@@ -1086,13 +984,13 @@ async fn handle_inner(
             Ok(None)
         }
 
-        RequestBody::ListPages { console_session } => {
+        RequestBody::ListPages { session } => {
             // A project session can have pages too; only a session that does not exist is unknown.
-            state.session_record(&console_session)?;
-            let pages = state.store.list_pages(&console_session)?;
+            state.session_record(&session)?;
+            let pages = state.store.list_pages(&session)?;
             Ok(Some(Event::PageList {
                 id: request_id,
-                console_session_id: console_session,
+                session_id: session,
                 pages,
             }))
         }
@@ -1466,21 +1364,9 @@ pub struct NewConsole {
     pub name: String,
     pub default_agent: Agent,
     pub project_session_agent: Option<Agent>,
-    pub claude_account_id: Option<String>,
-    pub codex_account_id: Option<String>,
-    pub grok_account_id: Option<String>,
-    pub claude_console_session_model: Option<String>,
-    pub claude_console_session_effort: Option<String>,
-    pub codex_console_session_model: Option<String>,
-    pub codex_console_session_effort: Option<String>,
-    pub grok_console_session_model: Option<String>,
-    pub grok_console_session_effort: Option<String>,
-    pub claude_project_session_model: Option<String>,
-    pub claude_project_session_effort: Option<String>,
-    pub codex_project_session_model: Option<String>,
-    pub codex_project_session_effort: Option<String>,
-    pub grok_project_session_model: Option<String>,
-    pub grok_project_session_effort: Option<String>,
+    pub accounts: PerAgent<Option<String>>,
+    pub launch: PerAgent<Launch>,
+    pub project_session_launch: PerAgent<Launch>,
     pub icon: Option<String>,
     pub console_session_prompt: Option<String>,
 }
@@ -1491,9 +1377,9 @@ pub struct NewConsole {
 pub fn check_new_console(state: &Arc<AppState>, new: &NewConsole) -> Result<Option<String>> {
     required_text("name", &new.name)?;
     let icon = normalize_icon(new.icon.as_deref())?;
-    checked_account_reference(state, Agent::Claude, new.claude_account_id.clone())?;
-    checked_account_reference(state, Agent::Codex, new.codex_account_id.clone())?;
-    checked_account_reference(state, Agent::Grok, new.grok_account_id.clone())?;
+    for (agent, account) in new.accounts.iter() {
+        checked_account_reference(state, agent, account.clone())?;
+    }
     Ok(icon)
 }
 
@@ -1501,47 +1387,17 @@ pub fn check_new_console(state: &Arc<AppState>, new: &NewConsole) -> Result<Opti
 /// `launch_settings`). Separate from [`check_new_console`], which has no wait in it, and left out
 /// for a console a configuration document creates, whose values were chosen on another machine.
 pub async fn check_new_console_launch(state: &Arc<AppState>, new: &NewConsole) -> Result<()> {
-    let accounts = [
-        &new.claude_account_id,
-        &new.codex_account_id,
-        &new.grok_account_id,
-    ];
-    let pairs = [
-        // Console session pairs, then project session pairs, each by agent.
-        [
-            (
-                &new.claude_console_session_model,
-                &new.claude_console_session_effort,
-            ),
-            (
-                &new.codex_console_session_model,
-                &new.codex_console_session_effort,
-            ),
-            (
-                &new.grok_console_session_model,
-                &new.grok_console_session_effort,
-            ),
-        ],
-        [
-            (
-                &new.claude_project_session_model,
-                &new.claude_project_session_effort,
-            ),
-            (
-                &new.codex_project_session_model,
-                &new.codex_project_session_effort,
-            ),
-            (
-                &new.grok_project_session_model,
-                &new.grok_project_session_effort,
-            ),
-        ],
-    ];
-    for set in pairs {
-        for ((agent, account), (model, effort)) in Agent::ALL.into_iter().zip(accounts).zip(set) {
-            LaunchCheck::given(agent, account.clone(), model.as_deref(), effort.as_deref())
-                .run(state)
-                .await?;
+    for set in [&new.launch, &new.project_session_launch] {
+        for (agent, launch) in set.iter() {
+            let account = new.accounts.get(agent).clone();
+            LaunchCheck::given(
+                agent,
+                account,
+                launch.model.as_deref(),
+                launch.effort.as_deref(),
+            )
+            .run(state)
+            .await?;
         }
     }
     Ok(())
@@ -1570,45 +1426,9 @@ fn store_new_console(
         workdir: workdir.to_string_lossy().into_owned(),
         default_agent: new.default_agent,
         project_session_agent: new.project_session_agent,
-        claude_account_id: new.claude_account_id,
-        codex_account_id: new.codex_account_id,
-        grok_account_id: new.grok_account_id,
-        claude_console_session_model: normalize_launch_setting(
-            new.claude_console_session_model.as_deref(),
-        ),
-        claude_console_session_effort: normalize_launch_setting(
-            new.claude_console_session_effort.as_deref(),
-        ),
-        codex_console_session_model: normalize_launch_setting(
-            new.codex_console_session_model.as_deref(),
-        ),
-        codex_console_session_effort: normalize_launch_setting(
-            new.codex_console_session_effort.as_deref(),
-        ),
-        grok_console_session_model: normalize_launch_setting(
-            new.grok_console_session_model.as_deref(),
-        ),
-        grok_console_session_effort: normalize_launch_setting(
-            new.grok_console_session_effort.as_deref(),
-        ),
-        claude_project_session_model: normalize_launch_setting(
-            new.claude_project_session_model.as_deref(),
-        ),
-        claude_project_session_effort: normalize_launch_setting(
-            new.claude_project_session_effort.as_deref(),
-        ),
-        codex_project_session_model: normalize_launch_setting(
-            new.codex_project_session_model.as_deref(),
-        ),
-        codex_project_session_effort: normalize_launch_setting(
-            new.codex_project_session_effort.as_deref(),
-        ),
-        grok_project_session_model: normalize_launch_setting(
-            new.grok_project_session_model.as_deref(),
-        ),
-        grok_project_session_effort: normalize_launch_setting(
-            new.grok_project_session_effort.as_deref(),
-        ),
+        accounts: new.accounts,
+        launch: normalized_launches(new.launch),
+        project_session_launch: normalized_launches(new.project_session_launch),
         icon,
         console_session_prompt: trimmed_or_none(new.console_session_prompt.as_deref()),
         created_at: now_millis(),
@@ -1696,23 +1516,23 @@ pub async fn update_console(
         // Only sessions opened afterwards take a new reference; each existing one keeps the
         // account and the directory it was started with (see `Session::account_id`).
         for (agent, reference) in &accounts {
-            *console.account_mut(*agent) = reference.clone();
+            *console.accounts.get_mut(*agent) = reference.clone();
         }
         // Read when a console session is opened or resumed; one already running keeps the
         // values it was started with.
         let mut pending = Vec::new();
         for (agent, change) in &changes.launch {
-            let account_id = console.account(*agent).clone();
-            let (model, effort) = console.launch_mut(*agent);
-            let check = launch_settings::apply_change(*agent, account_id, model, effort, change);
+            let account_id = console.accounts.get(*agent).clone();
+            let launch = console.launch.get_mut(*agent);
+            let check = launch_settings::apply_change(*agent, account_id, launch, change);
             if !check.is_empty() && !verified.contains(&check) {
                 pending.push(check);
             }
         }
         for (agent, change) in &changes.project_launch {
-            let account_id = console.account(*agent).clone();
-            let (model, effort) = console.project_launch_mut(*agent);
-            let check = launch_settings::apply_change(*agent, account_id, model, effort, change);
+            let account_id = console.accounts.get(*agent).clone();
+            let launch = console.project_session_launch.get_mut(*agent);
+            let check = launch_settings::apply_change(*agent, account_id, launch, change);
             if !check.is_empty() && !verified.contains(&check) {
                 pending.push(check);
             }
@@ -1841,50 +1661,9 @@ pub struct AddProjectRequest {
 #[derive(Default)]
 pub struct NewProjectSettings {
     pub pinned: bool,
-    pub claude_account_id: ProjectAccount,
-    pub codex_account_id: ProjectAccount,
-    pub grok_account_id: ProjectAccount,
-    pub claude_session_model: Option<String>,
-    pub claude_session_effort: Option<String>,
-    pub codex_session_model: Option<String>,
-    pub codex_session_effort: Option<String>,
-    pub grok_session_model: Option<String>,
-    pub grok_session_effort: Option<String>,
+    pub accounts: PerAgent<ProjectAccount>,
+    pub launch: PerAgent<Launch>,
     pub git_workflow: GitWorkflowOverride,
-}
-
-impl NewProjectSettings {
-    /// The account setting for `agent`, for a caller that fills them in agent by agent.
-    pub fn account_mut(&mut self, agent: Agent) -> &mut ProjectAccount {
-        match agent {
-            Agent::Claude => &mut self.claude_account_id,
-            Agent::Codex => &mut self.codex_account_id,
-            Agent::Grok => &mut self.grok_account_id,
-        }
-    }
-
-    /// The model and effort for `agent`.
-    pub fn launch(&self, agent: Agent) -> (&Option<String>, &Option<String>) {
-        match agent {
-            Agent::Claude => (&self.claude_session_model, &self.claude_session_effort),
-            Agent::Codex => (&self.codex_session_model, &self.codex_session_effort),
-            Agent::Grok => (&self.grok_session_model, &self.grok_session_effort),
-        }
-    }
-
-    pub fn launch_mut(&mut self, agent: Agent) -> (&mut Option<String>, &mut Option<String>) {
-        match agent {
-            Agent::Claude => (
-                &mut self.claude_session_model,
-                &mut self.claude_session_effort,
-            ),
-            Agent::Codex => (
-                &mut self.codex_session_model,
-                &mut self.codex_session_effort,
-            ),
-            Agent::Grok => (&mut self.grok_session_model, &mut self.grok_session_effort),
-        }
-    }
 }
 
 /// Checks the models and efforts a new project is given against what each agent offers, unless
@@ -1895,21 +1674,21 @@ async fn check_new_project_launch(
     state: &Arc<AppState>,
     console: &Console,
     settings: &NewProjectSettings,
-    accounts: [&ProjectAccount; 3],
+    accounts: &PerAgent<ProjectAccount>,
     check: bool,
 ) -> Result<()> {
     if !check {
         return Ok(());
     }
-    for (agent, account) in Agent::ALL.into_iter().zip(accounts) {
-        let (model, effort) = settings.launch(agent);
+    for (agent, account) in accounts.iter() {
+        let launch = settings.launch.get(agent);
         LaunchCheck::given(
             agent,
             console.resolve_project_account(agent, account),
-            model.as_deref(),
-            effort.as_deref(),
+            launch.model.as_deref(),
+            launch.effort.as_deref(),
         )
-        .behind(console.project_launch(agent).0)
+        .behind(&console.project_session_launch.get(agent).model)
         .run(state)
         .await?;
     }
@@ -1961,19 +1740,15 @@ pub async fn add_project(
         check_text()?;
     }
     // Checked before anything is cloned or stored, so a refusal leaves nothing behind.
-    let claude_account_id =
-        checked_project_account(state, Agent::Claude, settings.claude_account_id.clone())?;
-    let codex_account_id =
-        checked_project_account(state, Agent::Codex, settings.codex_account_id.clone())?;
-    let grok_account_id =
-        checked_project_account(state, Agent::Grok, settings.grok_account_id.clone())?;
-    let accounts = [&claude_account_id, &codex_account_id, &grok_account_id];
+    let accounts = PerAgent::try_from_fn(|agent| {
+        checked_project_account(state, agent, settings.accounts.get(agent).clone())
+    })?;
 
     let directories: Vec<PathBuf> = match source {
         ProjectSource::Local => {
             let path = absolute_path(&path.ok_or_else(|| field_required("path"))?)?;
             hostfs::require_directory(&path)?;
-            check_new_project_launch(state, &console, &settings, accounts, check_launch).await?;
+            check_new_project_launch(state, &console, &settings, &accounts, check_launch).await?;
             vec![path]
         }
         ProjectSource::Parent => {
@@ -1992,7 +1767,7 @@ pub async fn add_project(
             if repos.len() == 1 {
                 check_text()?;
             }
-            check_new_project_launch(state, &console, &settings, accounts, check_launch).await?;
+            check_new_project_launch(state, &console, &settings, &accounts, check_launch).await?;
             repos
         }
         ProjectSource::Git => {
@@ -2003,7 +1778,7 @@ pub async fn add_project(
                 Some(path) => absolute_path(&path)?,
                 None => PathBuf::from(state.store.default_clone_dir()?),
             };
-            check_new_project_launch(state, &console, &settings, accounts, check_launch).await?;
+            check_new_project_launch(state, &console, &settings, &accounts, check_launch).await?;
             let cloned =
                 tokio::task::spawn_blocking(move || hostfs::clone_repo(&url, &parent)).await??;
             vec![cloned]
@@ -2060,21 +1835,8 @@ pub async fn add_project(
             }),
             source,
             remote_url: project_remote_url,
-            claude_account_id: claude_account_id.clone(),
-            codex_account_id: codex_account_id.clone(),
-            grok_account_id: grok_account_id.clone(),
-            claude_session_model: normalize_launch_setting(
-                settings.claude_session_model.as_deref(),
-            ),
-            claude_session_effort: normalize_launch_setting(
-                settings.claude_session_effort.as_deref(),
-            ),
-            codex_session_model: normalize_launch_setting(settings.codex_session_model.as_deref()),
-            codex_session_effort: normalize_launch_setting(
-                settings.codex_session_effort.as_deref(),
-            ),
-            grok_session_model: normalize_launch_setting(settings.grok_session_model.as_deref()),
-            grok_session_effort: normalize_launch_setting(settings.grok_session_effort.as_deref()),
+            accounts: accounts.clone(),
+            launch: normalized_launches(settings.launch.clone()),
             trust_consent: false,
             pinned: settings.pinned,
             tags: tags.clone(),
@@ -2192,14 +1954,14 @@ pub async fn update_project(
         // one keeps the account and directory it was started with (see `Session::account_id`)
         // and the process it is running.
         for (agent, reference) in &accounts {
-            *project.account_mut(*agent) = reference.clone();
+            *project.accounts.get_mut(*agent) = reference.clone();
         }
         let mut pending = Vec::new();
         for (agent, change) in &changes.launch {
-            let account_id = console.resolve_project_account(*agent, project.account(*agent));
-            let (model, effort) = project.launch_mut(*agent);
-            let check = launch_settings::apply_change(*agent, account_id, model, effort, change)
-                .behind(console.project_launch(*agent).0);
+            let account_id = console.resolve_project_account(*agent, project.accounts.get(*agent));
+            let launch = project.launch.get_mut(*agent);
+            let check = launch_settings::apply_change(*agent, account_id, launch, change)
+                .behind(&console.project_session_launch.get(*agent).model);
             if !check.is_empty() && !verified.contains(&check) {
                 pending.push(check);
             }
@@ -2358,7 +2120,7 @@ fn agent_is_available(state: &Arc<AppState>, agent: Agent) -> bool {
 /// session, or the request is refused with `unknown_session` — a binding changes afterwards only
 /// at the session's or its owner's own request, so naming one that does not exist, or belongs to
 /// another console, must not be let through to be discovered later. A project session with the
-/// role of a bound one is refused as an owner for the same reason, and this is where the depth
+/// role of a worker is refused as an owner for the same reason, and this is where the depth
 /// limit is enforced, not only by which tools are offered: a session bound to a lead session would
 /// otherwise make a third level. A session still starting is refused too: its launch may fail, and
 /// a failed launch deletes the session whatever is bound to it.
@@ -3025,7 +2787,6 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         background_tasks: Vec::new(),
         switching_account: false,
         default_effort: None,
-        orchestration_role: None,
         context: None,
         observed_model: None,
         observed_effort: None,
@@ -3036,9 +2797,14 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         config_dir,
         model,
         effort,
+        // A session is opened bound or unbound; only binding it afterwards makes a coordinator
+        // of one under a console session.
+        orchestration_role: if bound_to.is_some() {
+            OrchestrationRole::Worker
+        } else {
+            OrchestrationRole::Coordinator
+        },
         bound_to,
-        // A session is opened bound or unbound; only binding it afterwards makes it a lead session.
-        lead: false,
         // Assigned by `insert_console_session` below for a console session; a project session
         // carries no colour or ordinal of its own.
         colour: None,
@@ -3233,8 +2999,8 @@ async fn check_launch_settings(
     let effective_model = match &model {
         Some(model) => model.clone(),
         None => match project {
-            Some(project) => project_launch_settings(project, console, agent).0,
-            None => console.launch(agent).0.clone(),
+            Some(project) => project_launch_settings(project, console, agent).model,
+            None => console.launch.get(agent).model.clone(),
         },
     };
     let given = |value: &Option<Option<String>>, had: Option<&Option<Option<String>>>| {
@@ -3432,10 +3198,10 @@ pub(crate) fn owner_refusal(
 /// Takes the exclusive claim on `session_id` (see [`AppState::begin_switch`]) for as long as a
 /// change of the owner it is bound to takes. What a handoff or an account switch holds goes stale
 /// if it changes meanwhile: the owner read at the start (`bound_to` in the `OpenRequest` for a
-/// bound role, `lead_of` for a lead session, [`owner_of`] for the switch's relaunch). Taken before
-/// the session is read, so what is checked after it holds until the write; refused
-/// ([`error_code::SESSION_CHANGING`]) when a launch, a resume, a handoff, a handover of branches, a
-/// switch or another binding change of it is under way.
+/// worker, the owner a coordinator reports to for a coordinator, [`owner_of`] for the switch's
+/// relaunch). Taken before the session is read, so what is checked after it holds until the
+/// write; refused ([`error_code::SESSION_CHANGING`]) when a launch, a resume, a handoff, a handover
+/// of branches, a switch or another binding change of it is under way.
 fn claim_for_binding(state: &Arc<AppState>, session_id: &str) -> Result<crate::state::LaunchClaim> {
     state.begin_switch(session_id).map_err(|_| {
         CodedError::raised(
@@ -3473,9 +3239,9 @@ fn refuse_if_owner_claimed(state: &Arc<AppState>, session_id: &str, owner_id: &s
 }
 
 /// Binds the unbound project session `session_id` to `owner_id`, at its own request, and tells
-/// every client. Bound to a console session it becomes a lead session, keeping the sessions it
-/// started and the tools it drives them with; bound to a project session it becomes an ordinary
-/// bound session, which only one with no sessions of its own may (see [`owner_refusal`]).
+/// every client. Bound to a console session it stays a coordinator, keeping the sessions it
+/// started and the tools it drives them with; bound to a project session it becomes a worker,
+/// which only one with no sessions of its own may (see [`owner_refusal`]).
 ///
 /// Refused, with nothing changed, for a session or an owner under a claim (see
 /// [`claim_for_binding`], [`refuse_if_owner_claimed`]), a console session, a session that is
@@ -3502,10 +3268,24 @@ pub fn bind_session(
     if let Some(reason) = owner_refusal(state, &session, &owner)? {
         anyhow::bail!(reason);
     }
-    let lead = owner.role == Role::Console;
+    // Under a console session it stays the coordinator it is; under a project session it becomes
+    // a worker, which may then have no sessions of its own.
+    let to_console = owner.role == Role::Console;
+    let orchestration_role = if to_console {
+        OrchestrationRole::Coordinator
+    } else {
+        OrchestrationRole::Worker
+    };
     let bound = state
         .store
-        .set_binding(session_id, None, owner_id, lead, !lead, false)?
+        .set_binding(
+            session_id,
+            None,
+            owner_id,
+            orchestration_role,
+            !to_console,
+            false,
+        )?
         .ok_or_else(|| {
             anyhow::anyhow!(
                 "the binding changed while it was being made — this session was bound, it gained \
@@ -3514,19 +3294,19 @@ pub fn bind_session(
             )
         })?;
     state.publish_session(&bound);
-    withdraw_pages_if_bound(state, &session, &bound);
+    withdraw_pages_if_now_worker(state, &session, &bound);
     Ok((bound, owner))
 }
 
 /// Withdraws the report-panel pages of a session that a binding change has just given the role of
-/// a bound one: it has no tool left to list or delete them, and the panel would go on offering
+/// a worker: it has no tool left to list or delete them, and the panel would go on offering
 /// their form. The binding is written by now, so a failure is logged and leaves the pages for
 /// [`submit_page`] to refuse.
-fn withdraw_pages_if_bound(state: &Arc<AppState>, before: &Session, after: &Session) {
+fn withdraw_pages_if_now_worker(state: &Arc<AppState>, before: &Session, after: &Session) {
     if !before.is_worker() && after.is_worker() {
         if let Err(err) = mcp::withdraw_pages(state, &after.id) {
             tracing::warn!(
-                session = %after.id, %err, "withdrawing the pages of a bound session failed"
+                session = %after.id, %err, "withdrawing the pages of a worker session failed"
             );
         }
     }
@@ -3534,7 +3314,7 @@ fn withdraw_pages_if_bound(state: &Arc<AppState>, before: &Session, after: &Sess
 
 /// Hands `session_id`, bound to `from_id`, to the owner `to_id`, at `from_id`'s request, and tells
 /// every client. What the session is bound to changes and nothing else: the sessions bound to it
-/// stay bound to it. A lead session handed to another console session stays one; handed to a
+/// stay bound to it. A coordinator handed to another console session stays one; handed to a
 /// project session it no longer can own sessions, which only one with none of its own may be (see
 /// [`owner_refusal`]).
 ///
@@ -3564,14 +3344,27 @@ pub fn transfer_session(
     if let Some(reason) = owner_refusal(state, &session, &owner)? {
         anyhow::bail!(reason);
     }
-    let lead = owner.role == Role::Console && session.lead;
     let to_project = owner.role == Role::Project;
+    let orchestration_role = if owner.role == Role::Console
+        && session.orchestration_role == OrchestrationRole::Coordinator
+    {
+        OrchestrationRole::Coordinator
+    } else {
+        OrchestrationRole::Worker
+    };
     // Decided here, under the claim, and recorded by the binding write itself when there is no
     // process to tell.
     let running = mcp::is_running(state, &session);
     let bound = state
         .store
-        .set_binding(session_id, Some(from_id), to_id, lead, to_project, !running)?
+        .set_binding(
+            session_id,
+            Some(from_id),
+            to_id,
+            orchestration_role,
+            to_project,
+            !running,
+        )?
         .ok_or_else(|| {
             anyhow::anyhow!(
                 "the binding changed while it was being handed over — `{session_id}` was bound \
@@ -3580,7 +3373,7 @@ pub fn transfer_session(
             )
         })?;
     state.publish_session(&bound);
-    withdraw_pages_if_bound(state, &session, &bound);
+    withdraw_pages_if_now_worker(state, &session, &bound);
     Ok((bound, owner, running))
 }
 
@@ -3597,8 +3390,9 @@ pub struct Released {
 
 /// Unbinds `session_id` from its owner, at the owner's request (`owner_id` names it) or the
 /// user's (`None`), and tells every client. The session becomes an ordinary unbound project
-/// session: `bound_to` and `lead` are cleared, and what it owns stays bound to it, so a lead
-/// session keeps its sessions. Its branches stay with it. Any running or dormant state will do.
+/// session: `bound_to` is cleared and it is a coordinator, and what it owns stays bound to it,
+/// so a coordinator that reported to a console session keeps its sessions. Its branches stay with
+/// it. Any running or dormant state will do.
 ///
 /// Refused, with nothing changed, for the session or its owner under a claim (see
 /// [`claim_for_binding`], [`refuse_if_owner_claimed`]), a console session
@@ -4208,28 +4002,6 @@ pub(crate) async fn relaunch_session_with(
     }
 }
 
-/// The model and reasoning effort `console` launches a console session of `agent`
-/// with: that agent's own pair, since each has its own model names.
-fn console_session_launch_settings(
-    console: &Console,
-    agent: Agent,
-) -> (Option<String>, Option<String>) {
-    match agent {
-        Agent::Claude => (
-            console.claude_console_session_model.clone(),
-            console.claude_console_session_effort.clone(),
-        ),
-        Agent::Codex => (
-            console.codex_console_session_model.clone(),
-            console.codex_console_session_effort.clone(),
-        ),
-        Agent::Grok => (
-            console.grok_console_session_model.clone(),
-            console.grok_console_session_effort.clone(),
-        ),
-    }
-}
-
 /// The model and reasoning effort a session of `project` launches `agent` with when it chose
 /// neither: for each value independently, the project's own, else its console's project session
 /// value, else `None`, the agent's own default. Each agent has its own pair, since each has its own
@@ -4238,13 +4010,13 @@ pub(crate) fn project_launch_settings(
     project: &Project,
     console: &Console,
     agent: Agent,
-) -> (Option<String>, Option<String>) {
-    let (model, effort) = project.launch(agent);
-    let (console_model, console_effort) = console.project_launch(agent);
-    (
-        model.clone().or_else(|| console_model.clone()),
-        effort.clone().or_else(|| console_effort.clone()),
-    )
+) -> Launch {
+    let own = project.launch.get(agent);
+    let console_launch = console.project_session_launch.get(agent);
+    Launch {
+        model: own.model.clone().or_else(|| console_launch.model.clone()),
+        effort: own.effort.clone().or_else(|| console_launch.effort.clone()),
+    }
 }
 
 /// The model and reasoning effort `session` is launched with, for its own agent: a console session
@@ -4273,12 +4045,13 @@ pub(crate) fn launch_settings(
                 .store
                 .get_console(&session.console_id)?
                 .ok_or_else(|| CodedError::unknown_console(&session.console_id))?;
-            console_session_launch_settings(&console, session.agent)
+            // A console session's own pair: each agent has its own model names.
+            console.launch.get(session.agent).clone()
         }
     };
     Ok((
-        session.model.clone().unwrap_or(inherited.0),
-        session.effort.clone().unwrap_or(inherited.1),
+        session.model.clone().unwrap_or(inherited.model),
+        session.effort.clone().unwrap_or(inherited.effort),
     ))
 }
 
@@ -4413,7 +4186,7 @@ async fn start_process(
 /// archive. The order is deliberate: the deepest level first and the owner last, so a failure part
 /// way leaves only a state the user could have produced by hand, never an archived owner with a
 /// session bound to it still outside the archive. A session with nothing bound to it — one with
-/// the role of a bound session, or an owner that started none — never reaches another session: the
+/// the role of a worker, or an owner that started none — never reaches another session: the
 /// owner's tool, a `done` report with no open items, a `delete_project` that stops sessions.
 /// The user's control-socket request instead explicitly ends running descendants too.
 ///
@@ -4571,7 +4344,7 @@ pub(crate) fn group_in<'a>(sessions: &'a [Session], root: &'a Session) -> Vec<&'
 }
 
 /// How many sessions are bound to each owner of `sessions`, in any status, by the owner's id,
-/// counted as [`bound_in`] does: a session with the role of a bound one owns none, whatever rows
+/// counted as [`bound_in`] does: a session with the role of a worker owns none, whatever rows
 /// say they are bound to it.
 pub(crate) fn owned_counts(sessions: &[Session]) -> HashMap<String, usize> {
     let owns_none: HashSet<&str> = sessions
@@ -4593,7 +4366,7 @@ pub(crate) fn owned_counts(sessions: &[Session]) -> HashMap<String, usize> {
 
 /// [`owned_counts`] for the one session `owner`, without reading the table of sessions: its
 /// entry, or none when it owns none. Counted as [`bound_in`] does, so a session with the role of a
-/// bound one owns none.
+/// worker owns none.
 pub(crate) fn owned_count_of(
     state: &Arc<AppState>,
     owner: &Session,
@@ -6099,7 +5872,7 @@ async fn send_message(state: &Arc<AppState>, id: &str, text: String) -> Result<(
 /// A report panel form submission. Refused unless `page_id` names its console session's newest page —
 /// history pages are read-only, and this is where that is actually enforced; a panel that disables
 /// its own submit button on a history page is only reflecting the rule, not the source of it.
-/// Refused too when the session that pushed it has the role of a bound session and so has no tool
+/// Refused too when the session that pushed it has the role of a worker and so has no tool
 /// to read the submission through; a lead session, though it reports to an owner too, keeps its
 /// pages.
 async fn submit_page(state: &Arc<AppState>, page_id: &str, data: serde_json::Value) -> Result<()> {
@@ -6110,7 +5883,7 @@ async fn submit_page(state: &Arc<AppState>, page_id: &str, data: serde_json::Val
             &[("page", page_id)],
         )
     })?;
-    let newest = state.store.newest_page_id(&page.console_session_id)?;
+    let newest = state.store.newest_page_id(&page.session_id)?;
     if newest.as_deref() != Some(page.id.as_str()) {
         return Err(CodedError::raised(
             error_code::PAGE_NOT_CURRENT,
@@ -6118,21 +5891,21 @@ async fn submit_page(state: &Arc<AppState>, page_id: &str, data: serde_json::Val
             &[],
         ));
     }
-    // A bound session has no tool to read what the page sent; its pages are withdrawn when it
+    // A worker has no tool to read what the page sent; its pages are withdrawn when it
     // becomes one, so this holds for one left behind by a failed withdrawal, until the daemon's
     // next start sweeps it.
-    let pusher = state.store.get_session(&page.console_session_id)?;
+    let pusher = state.store.get_session(&page.session_id)?;
     if pusher.is_some_and(|pusher| pusher.is_worker()) {
         return Err(CodedError::raised(
             error_code::UNKNOWN_PAGE,
             format!(
-                "unknown page {page_id}: its session has the role of a bound session, which \
+                "unknown page {page_id}: its session has the role of a worker, which \
                  pushes no pages"
             ),
             &[("page", page_id)],
         ));
     }
-    let console_session_id = page.console_session_id;
+    let session_id = page.session_id;
 
     let message = reporting::render_page_submission(&page.id, &data);
     let owned_state = state.clone();
@@ -6141,7 +5914,7 @@ async fn submit_page(state: &Arc<AppState>, page_id: &str, data: serde_json::Val
     tokio::task::spawn_blocking(move || {
         reporting::write_message(
             &owned_state,
-            &console_session_id,
+            &session_id,
             &message,
             reporting::WhenBlocked::Queue,
         )
@@ -6593,8 +6366,8 @@ fn session_account(
     let account_id = match chosen {
         Some(choice) => checked_account_reference(state, agent, choice)?,
         None => match project {
-            Some(project) => console.resolve_project_account(agent, project.account(agent)),
-            None => console.account(agent).clone(),
+            Some(project) => console.resolve_project_account(agent, project.accounts.get(agent)),
+            None => console.accounts.get(agent).clone(),
         },
     };
     let config_dir = state.store.account_dir(&account_id)?;
@@ -7155,23 +6928,17 @@ fn added_agents_undecided(what: &str) -> anyhow::Error {
 }
 
 fn console_references_account(console: &Console, account_id: &str) -> bool {
-    [
-        &console.claude_account_id,
-        &console.codex_account_id,
-        &console.grok_account_id,
-    ]
-    .iter()
-    .any(|referenced| referenced.as_deref() == Some(account_id))
+    console
+        .accounts
+        .iter()
+        .any(|(_, referenced)| referenced.as_deref() == Some(account_id))
 }
 
 fn project_references_account(project: &Project, account_id: &str) -> bool {
-    [
-        &project.claude_account_id,
-        &project.codex_account_id,
-        &project.grok_account_id,
-    ]
-    .iter()
-    .any(|referenced| referenced.account_id() == Some(account_id))
+    project
+        .accounts
+        .iter()
+        .any(|(_, referenced)| referenced.account_id() == Some(account_id))
 }
 
 /// The longest avatar `data:` URL a console may carry. The UI sends a 128x128 image, which is
@@ -7418,19 +7185,23 @@ fn session_cwd(state: &Arc<AppState>, session: &Session) -> Result<PathBuf> {
 mod tests {
     use super::*;
     use crate::paths;
-    use crate::protocol::Console;
+    use crate::protocol::{Change, Console};
     use crate::test_support::{
         bare_session, console_session, console_with_project_and_accounts, fake_live_session,
         idle_stand_in, project_session, session_ids, ScratchDir,
     };
 
     /// Owned sessions are counted as the walks of a team count them: in any status, and none for a
-    /// session with the role of a bound one, whatever a row says is bound to it.
+    /// session with the role of a worker, whatever a row says is bound to it.
     #[test]
     fn owned_counts_leave_out_owners_with_the_bound_role() {
         let owned = |id: &str, owner: Option<&str>, lead: bool, status: SessionStatus| Session {
             bound_to: owner.map(str::to_string),
-            lead,
+            orchestration_role: if owner.is_none() || lead {
+                OrchestrationRole::Coordinator
+            } else {
+                OrchestrationRole::Worker
+            },
             ..project_session(id, Agent::Claude, status)
         };
         let sessions = [
@@ -7456,14 +7227,18 @@ mod tests {
 
     /// The count of a single session is the one the count of every session gives, without
     /// listing them: the same owners, the same numbers, and none for an owner with the role of a
-    /// bound one.
+    /// worker.
     #[test]
     fn the_count_of_one_session_agrees_with_the_count_of_all() {
         let (state, dir) = crate::test_support::app_state("coordinator-owned-count-of");
         let owned = |id: &str, owner: Option<&str>, lead: bool, status: SessionStatus| Session {
             project_id: Some("p1".to_string()),
             bound_to: owner.map(str::to_string),
-            lead,
+            orchestration_role: if owner.is_none() || lead {
+                OrchestrationRole::Coordinator
+            } else {
+                OrchestrationRole::Worker
+            },
             ..project_session(id, Agent::Claude, status)
         };
         state
@@ -7672,21 +7447,9 @@ mod tests {
             workdir: workdir.to_string_lossy().into_owned(),
             default_agent,
             project_session_agent: None,
-            claude_project_session_model: None,
-            claude_project_session_effort: None,
-            codex_project_session_model: None,
-            codex_project_session_effort: None,
-            grok_project_session_model: None,
-            grok_project_session_effort: None,
-            claude_account_id: None,
-            codex_account_id: None,
-            grok_account_id: None,
-            claude_console_session_model: None,
-            claude_console_session_effort: None,
-            codex_console_session_model: None,
-            codex_console_session_effort: None,
-            grok_console_session_model: None,
-            grok_console_session_effort: None,
+            accounts: Default::default(),
+            launch: Default::default(),
+            project_session_launch: Default::default(),
             icon: None,
             console_session_prompt: None,
             created_at: 0,
@@ -7760,15 +7523,8 @@ mod tests {
                 default_agent: None,
                 source: ProjectSource::Local,
                 remote_url: None,
-                claude_account_id: ProjectAccount::Inherit,
-                codex_account_id: ProjectAccount::Inherit,
-                grok_account_id: ProjectAccount::Inherit,
-                claude_session_model: None,
-                claude_session_effort: None,
-                codex_session_model: None,
-                codex_session_effort: None,
-                grok_session_model: None,
-                grok_session_effort: None,
+                accounts: Default::default(),
+                launch: Default::default(),
                 trust_consent: false,
                 pinned: false,
                 tags: Vec::new(),
@@ -7795,7 +7551,7 @@ mod tests {
                     background_tasks: Vec::new(),
                     switching_account: false,
                     default_effort: None,
-                    orchestration_role: None,
+                    orchestration_role: OrchestrationRole::Coordinator,
                     context: None,
                     observed_model: None,
                     observed_effort: None,
@@ -7803,7 +7559,6 @@ mod tests {
                     effort: None,
                     has_conversation: false,
                     bound_to: None,
-                    lead: false,
                     colour: None,
                     ordinal: None,
                     account_id: None,
@@ -7892,15 +7647,8 @@ mod tests {
                 default_agent: None,
                 source: ProjectSource::Local,
                 remote_url: None,
-                claude_account_id: ProjectAccount::Inherit,
-                codex_account_id: ProjectAccount::Inherit,
-                grok_account_id: ProjectAccount::Inherit,
-                claude_session_model: None,
-                claude_session_effort: None,
-                codex_session_model: None,
-                codex_session_effort: None,
-                grok_session_model: None,
-                grok_session_effort: None,
+                accounts: Default::default(),
+                launch: Default::default(),
                 trust_consent: false,
                 pinned: false,
                 tags: Vec::new(),
@@ -7926,7 +7674,7 @@ mod tests {
                 background_tasks: Vec::new(),
                 switching_account: false,
                 default_effort: None,
-                orchestration_role: None,
+                orchestration_role: OrchestrationRole::Coordinator,
                 context: None,
                 observed_model: None,
                 observed_effort: None,
@@ -7934,7 +7682,6 @@ mod tests {
                 effort: None,
                 has_conversation: false,
                 bound_to: None,
-                lead: false,
                 colour: None,
                 ordinal: None,
                 account_id: None,
@@ -8007,15 +7754,8 @@ mod tests {
                     default_agent: None,
                     source: ProjectSource::Local,
                     remote_url: None,
-                    claude_account_id: ProjectAccount::Inherit,
-                    codex_account_id: ProjectAccount::Inherit,
-                    grok_account_id: ProjectAccount::Inherit,
-                    claude_session_model: None,
-                    claude_session_effort: None,
-                    codex_session_model: None,
-                    codex_session_effort: None,
-                    grok_session_model: None,
-                    grok_session_effort: None,
+                    accounts: Default::default(),
+                    launch: Default::default(),
                     trust_consent: false,
                     pinned: false,
                     tags: Vec::new(),
@@ -9544,8 +9284,8 @@ mod tests {
                 .unwrap();
         }
         let mut console = console(Agent::Claude, Path::new("/tmp/unused"));
-        console.claude_account_id = Some("claude-acct".to_string());
-        console.codex_account_id = Some("codex-acct".to_string());
+        console.accounts.claude = Some("claude-acct".to_string());
+        console.accounts.codex = Some("codex-acct".to_string());
 
         let resolved = |agent: Agent, project: Option<&Project>, chosen: Option<Option<&str>>| {
             session_account(
@@ -9560,8 +9300,8 @@ mod tests {
         let account = |id: &str, dir: &str| (Some(id.to_string()), Some(dir.to_string()));
         let project = |claude: ProjectAccount, grok: ProjectAccount| {
             let mut project = project_of("console-1", "project-1");
-            project.claude_account_id = claude;
-            project.grok_account_id = grok;
+            project.accounts.claude = claude;
+            project.accounts.grok = grok;
             Some(project)
         };
         let claude_acct = || account("claude-acct", "/home/u/.claude-alt");
@@ -9684,15 +9424,8 @@ mod tests {
             default_agent: None,
             source: ProjectSource::Local,
             remote_url: None,
-            claude_account_id: ProjectAccount::Inherit,
-            codex_account_id: ProjectAccount::Inherit,
-            grok_account_id: ProjectAccount::Inherit,
-            claude_session_model: None,
-            claude_session_effort: None,
-            codex_session_model: None,
-            codex_session_effort: None,
-            grok_session_model: None,
-            grok_session_effort: None,
+            accounts: Default::default(),
+            launch: Default::default(),
             trust_consent: false,
             pinned: false,
             tags: Vec::new(),
@@ -9823,7 +9556,7 @@ mod tests {
     }
 
     /// An unbound project session or a lead session of the new session's own project may own it.
-    /// One of another project, or one with the role of a bound session, may not — among them a
+    /// One of another project, or one with the role of a worker, may not — among them a
     /// session bound to a lead session, which would make a third level.
     #[test]
     fn a_project_session_binds_only_to_an_unbound_or_lead_session_of_its_own_project() {
@@ -9848,15 +9581,8 @@ mod tests {
                     default_agent: None,
                     source: ProjectSource::Local,
                     remote_url: None,
-                    claude_account_id: ProjectAccount::Inherit,
-                    codex_account_id: ProjectAccount::Inherit,
-                    grok_account_id: ProjectAccount::Inherit,
-                    claude_session_model: None,
-                    claude_session_effort: None,
-                    codex_session_model: None,
-                    codex_session_effort: None,
-                    grok_session_model: None,
-                    grok_session_effort: None,
+                    accounts: Default::default(),
+                    launch: Default::default(),
                     trust_consent: false,
                     pinned: false,
                     tags: Vec::new(),
@@ -9880,7 +9606,9 @@ mod tests {
             let mut session = bare_session(id, Role::Project);
             session.project_id = Some(project.to_string());
             session.bound_to = owner.map(str::to_string);
-            session.lead = lead;
+            if owner.is_some() && !lead {
+                session.orchestration_role = OrchestrationRole::Worker;
+            }
             state.store.insert_session(&session).unwrap();
         }
         let resolve = |target: &str| {
@@ -11081,21 +10809,9 @@ mod tests {
             name: None,
             default_agent: None,
             project_session_agent: None,
-            claude_project_session_model: None,
-            claude_project_session_effort: None,
-            codex_project_session_model: None,
-            codex_project_session_effort: None,
-            grok_project_session_model: None,
-            grok_project_session_effort: None,
-            claude_account_id: None,
-            codex_account_id: None,
-            grok_account_id: None,
-            claude_console_session_model: None,
-            claude_console_session_effort: None,
-            codex_console_session_model: None,
-            codex_console_session_effort: None,
-            grok_console_session_model: None,
-            grok_console_session_effort: None,
+            accounts: Default::default(),
+            launch: Default::default(),
+            project_session_launch: Default::default(),
             icon: None,
             console_session_prompt: None,
         };
@@ -11116,21 +10832,26 @@ mod tests {
                 name: "Console".to_string(),
                 default_agent: Agent::Codex,
                 project_session_agent: None,
-                claude_project_session_model: None,
-                claude_project_session_effort: None,
-                codex_project_session_model: None,
-                codex_project_session_effort: None,
-                grok_project_session_model: None,
-                grok_project_session_effort: None,
-                claude_account_id: None,
-                codex_account_id: None,
-                grok_account_id: None,
-                claude_console_session_model: Some("  ".to_string()),
-                claude_console_session_effort: None,
-                codex_console_session_model: Some(" gpt-5 ".to_string()),
-                codex_console_session_effort: Some("high".to_string()),
-                grok_console_session_model: None,
-                grok_console_session_effort: None,
+                accounts: PerAgent {
+                    claude: None,
+                    codex: None,
+                    grok: None,
+                },
+                launch: PerAgent {
+                    claude: Launch {
+                        model: Some("  ".to_string()),
+                        effort: None,
+                    },
+                    codex: Launch {
+                        model: Some(" gpt-5 ".to_string()),
+                        effort: Some("high".to_string()),
+                    },
+                    grok: Launch {
+                        model: None,
+                        effort: None,
+                    },
+                },
+                project_session_launch: Default::default(),
                 icon: None,
                 console_session_prompt: None,
             },
@@ -11140,15 +10861,9 @@ mod tests {
         let created = state.store.list_consoles().unwrap().remove(0);
         assert!(Path::new(&created.workdir).starts_with(&*dir));
         assert_eq!(created.default_agent, Agent::Codex);
-        assert_eq!(created.claude_console_session_model, None);
-        assert_eq!(
-            created.codex_console_session_model.as_deref(),
-            Some("gpt-5")
-        );
-        assert_eq!(
-            created.codex_console_session_effort.as_deref(),
-            Some("high")
-        );
+        assert_eq!(created.launch.claude.model, None);
+        assert_eq!(created.launch.codex.model.as_deref(), Some("gpt-5"));
+        assert_eq!(created.launch.codex.effort.as_deref(), Some("high"));
 
         // A model the agent does not offer is refused, and no second console is created.
         let err = handle(
@@ -11158,21 +10873,26 @@ mod tests {
                 name: "Other".to_string(),
                 default_agent: Agent::Codex,
                 project_session_agent: None,
-                claude_project_session_model: None,
-                claude_project_session_effort: None,
-                codex_project_session_model: None,
-                codex_project_session_effort: None,
-                grok_project_session_model: None,
-                grok_project_session_effort: None,
-                claude_account_id: None,
-                codex_account_id: None,
-                grok_account_id: None,
-                claude_console_session_model: None,
-                claude_console_session_effort: None,
-                codex_console_session_model: Some("gpt-9".to_string()),
-                codex_console_session_effort: None,
-                grok_console_session_model: None,
-                grok_console_session_effort: None,
+                accounts: PerAgent {
+                    claude: None,
+                    codex: None,
+                    grok: None,
+                },
+                launch: PerAgent {
+                    claude: Launch {
+                        model: None,
+                        effort: None,
+                    },
+                    codex: Launch {
+                        model: Some("gpt-9".to_string()),
+                        effort: None,
+                    },
+                    grok: Launch {
+                        model: None,
+                        effort: None,
+                    },
+                },
+                project_session_launch: Default::default(),
                 icon: None,
                 console_session_prompt: None,
             },
@@ -11246,21 +10966,9 @@ mod tests {
                 name: "Other".to_string(),
                 default_agent: Agent::Claude,
                 project_session_agent: Some(Agent::Grok),
-                claude_project_session_model: None,
-                claude_project_session_effort: None,
-                codex_project_session_model: None,
-                codex_project_session_effort: None,
-                grok_project_session_model: None,
-                grok_project_session_effort: None,
-                claude_account_id: None,
-                codex_account_id: None,
-                grok_account_id: None,
-                claude_console_session_model: None,
-                claude_console_session_effort: None,
-                codex_console_session_model: None,
-                codex_console_session_effort: None,
-                grok_console_session_model: None,
-                grok_console_session_effort: None,
+                accounts: Default::default(),
+                launch: Default::default(),
+                project_session_launch: Default::default(),
                 icon: None,
                 console_session_prompt: None,
             },
@@ -11284,60 +10992,45 @@ mod tests {
         let (state, dir) = crate::test_support::app_state("coordinator-update-console-launch");
         let workdir = console_workdir(&dir);
         let mut seeded = console(Agent::Claude, &workdir);
-        seeded.claude_console_session_model = Some("opus".to_string());
-        seeded.grok_console_session_model = Some("grok-4".to_string());
+        seeded.launch.claude.model = Some("opus".to_string());
+        seeded.launch.grok.model = Some("grok-4".to_string());
         state.store.insert_console(&seeded).unwrap();
         let stored = || state.store.get_console("console-1").unwrap().unwrap();
 
         handle(&state, None, update_console_request("console-1", |_| {}))
             .await
             .unwrap();
-        assert_eq!(
-            stored().claude_console_session_model.as_deref(),
-            Some("opus")
-        );
+        assert_eq!(stored().launch.claude.model.as_deref(), Some("opus"));
 
         handle(
             &state,
             None,
             update_console_request("console-1", |request| {
-                let RequestBody::UpdateConsole {
-                    claude_console_session_model,
-                    grok_console_session_model,
-                    ..
-                } = request
-                else {
+                let RequestBody::UpdateConsole { launch, .. } = request else {
                     unreachable!()
                 };
-                *claude_console_session_model = Some(Some(" sonnet ".to_string()));
-                *grok_console_session_model = Some(None);
+                launch.claude.model = Some(Some(" sonnet ".to_string()));
+                launch.grok.model = Some(None);
             }),
         )
         .await
         .unwrap();
-        assert_eq!(
-            stored().claude_console_session_model.as_deref(),
-            Some("sonnet")
-        );
-        assert_eq!(stored().grok_console_session_model, None);
+        assert_eq!(stored().launch.claude.model.as_deref(), Some("sonnet"));
+        assert_eq!(stored().launch.grok.model, None);
 
         handle(
             &state,
             None,
             update_console_request("console-1", |request| {
-                let RequestBody::UpdateConsole {
-                    claude_console_session_model,
-                    ..
-                } = request
-                else {
+                let RequestBody::UpdateConsole { launch, .. } = request else {
                     unreachable!()
                 };
-                *claude_console_session_model = Some(Some("  ".to_string()));
+                launch.claude.model = Some(Some("  ".to_string()));
             }),
         )
         .await
         .unwrap();
-        assert_eq!(stored().claude_console_session_model, None);
+        assert_eq!(stored().launch.claude.model, None);
     }
 
     /// The user's addition to the console session's instructions is left alone when absent, set
@@ -11474,15 +11167,25 @@ mod tests {
             default_agent: None,
             source: ProjectSource::Local,
             remote_url: None,
-            claude_account_id: ProjectAccount::Inherit,
-            codex_account_id: ProjectAccount::Inherit,
-            grok_account_id: ProjectAccount::Inherit,
-            claude_session_model: Some("retired".to_string()),
-            claude_session_effort: None,
-            codex_session_model: None,
-            codex_session_effort: None,
-            grok_session_model: None,
-            grok_session_effort: None,
+            accounts: PerAgent {
+                claude: ProjectAccount::Inherit,
+                codex: ProjectAccount::Inherit,
+                grok: ProjectAccount::Inherit,
+            },
+            launch: PerAgent {
+                claude: Launch {
+                    model: Some("retired".to_string()),
+                    effort: None,
+                },
+                codex: Launch {
+                    model: None,
+                    effort: None,
+                },
+                grok: Launch {
+                    model: None,
+                    effort: None,
+                },
+            },
             trust_consent: false,
             pinned: false,
             tags: Vec::new(),
@@ -11531,7 +11234,7 @@ mod tests {
         assert_eq!(refused(err), error_code::INVALID_LAUNCH_SETTING);
         project = state.store.get_project("project-1").unwrap().unwrap();
         assert_eq!(project.name, "Project");
-        assert_eq!(project.claude_session_model.as_deref(), Some("retired"));
+        assert_eq!(project.launch.claude.model.as_deref(), Some("retired"));
 
         // The stored model is not on the list, and sending it again is not a change.
         let mut changes = ProjectChanges::default();
@@ -11551,7 +11254,7 @@ mod tests {
         .await
         .expect("renamed");
         assert_eq!(renamed.name, "Renamed");
-        assert_eq!(renamed.claude_session_model.as_deref(), Some("retired"));
+        assert_eq!(renamed.launch.claude.model.as_deref(), Some("retired"));
 
         // Nothing to check Codex's model against, so it is taken as given.
         crate::test_support::offer_models(&state, Agent::Codex, &[]);
@@ -11562,7 +11265,7 @@ mod tests {
         let updated = update_project(&state, "project-1", changes)
             .await
             .expect("accepted");
-        assert_eq!(updated.codex_session_model.as_deref(), Some("anything"));
+        assert_eq!(updated.launch.codex.model.as_deref(), Some("anything"));
 
         let err = update_console(
             &state,
@@ -11584,15 +11287,15 @@ mod tests {
     fn a_session_launches_with_the_pair_of_the_record_that_owns_it() {
         let (state, _dir) = crate::test_support::app_state("coordinator-launch-settings");
         let mut owner = console(Agent::Claude, Path::new("/tmp/unused"));
-        owner.claude_console_session_model = Some("console-opus".to_string());
-        owner.codex_console_session_effort = Some("console-high".to_string());
-        owner.grok_console_session_model = Some("console-grok".to_string());
-        owner.grok_console_session_effort = Some("console-low".to_string());
+        owner.launch.claude.model = Some("console-opus".to_string());
+        owner.launch.codex.effort = Some("console-high".to_string());
+        owner.launch.grok.model = Some("console-grok".to_string());
+        owner.launch.grok.effort = Some("console-low".to_string());
         state.store.insert_console(&owner).unwrap();
         let mut configured = project_of("console-1", "configured");
-        configured.claude_session_model = Some("project-sonnet".to_string());
-        configured.claude_session_effort = Some("project-low".to_string());
-        configured.codex_session_model = Some("project-gpt".to_string());
+        configured.launch.claude.model = Some("project-sonnet".to_string());
+        configured.launch.claude.effort = Some("project-low".to_string());
+        configured.launch.codex.model = Some("project-gpt".to_string());
         state.store.insert_project(&configured).unwrap();
         state
             .store
@@ -11649,25 +11352,25 @@ mod tests {
     fn session_launch_overrides_take_precedence_over_live_defaults() {
         let (state, _dir) = crate::test_support::app_state("coordinator-session-overrides");
         let mut owner = console(Agent::Claude, Path::new("/tmp/unused"));
-        owner.claude_console_session_model = Some("console-model".to_string());
-        owner.claude_console_session_effort = Some("console-effort".to_string());
+        owner.launch.claude.model = Some("console-model".to_string());
+        owner.launch.claude.effort = Some("console-effort".to_string());
         state.store.insert_console(&owner).unwrap();
         let mut project = project_of("console-1", "project-1");
-        project.claude_session_model = Some("project-model".to_string());
-        project.claude_session_effort = Some("project-effort".to_string());
+        project.launch.claude.model = Some("project-model".to_string());
+        project.launch.claude.effort = Some("project-effort".to_string());
         state.store.insert_project(&project).unwrap();
         for (role, project_id) in [(Role::Console, None), (Role::Project, Some("project-1"))] {
             let mut session = bare_session("s", role);
             session.project_id = project_id.map(str::to_string);
             let defaults = if role == Role::Console {
                 (
-                    owner.claude_console_session_model.clone(),
-                    owner.claude_console_session_effort.clone(),
+                    owner.launch.claude.model.clone(),
+                    owner.launch.claude.effort.clone(),
                 )
             } else {
                 (
-                    project.claude_session_model.clone(),
-                    project.claude_session_effort.clone(),
+                    project.launch.claude.model.clone(),
+                    project.launch.claude.effort.clone(),
                 )
             };
             assert_eq!(launch_settings(&state, &session).unwrap(), defaults);
@@ -11692,7 +11395,7 @@ mod tests {
         let mut inherited = bare_session("legacy", Role::Project);
         inherited.project_id = Some("project-1".to_string());
         state.store.insert_session(&inherited).unwrap();
-        project.claude_session_model = Some("changed-model".to_string());
+        project.launch.claude.model = Some("changed-model".to_string());
         state.store.update_project(&project).unwrap();
         let reread = state.session_record("legacy").unwrap();
         assert_eq!(
@@ -11752,7 +11455,7 @@ mod tests {
     fn a_project_session_falls_back_to_the_consoles_project_session_pair_per_value() {
         let (state, _dir) = crate::test_support::app_state("coordinator-project-session-pair");
         let mut owner = console(Agent::Claude, Path::new("/tmp/unused"));
-        owner.claude_console_session_model = Some("console-session-model".to_string());
+        owner.launch.claude.model = Some("console-session-model".to_string());
         state.store.insert_console(&owner).unwrap();
         let mut project = project_of("console-1", "project-1");
         state.store.insert_project(&project).unwrap();
@@ -11762,9 +11465,9 @@ mod tests {
         // A console that names no pair: nothing to fall back to.
         assert_eq!(launch_settings(&state, &session).unwrap(), (None, None));
 
-        owner.claude_project_session_model = Some("fallback-model".to_string());
-        owner.claude_project_session_effort = Some("fallback-effort".to_string());
-        owner.codex_project_session_model = Some("codex-fallback".to_string());
+        owner.project_session_launch.claude.model = Some("fallback-model".to_string());
+        owner.project_session_launch.claude.effort = Some("fallback-effort".to_string());
+        owner.project_session_launch.codex.model = Some("codex-fallback".to_string());
         state.store.update_console(&owner).unwrap();
         assert_eq!(
             launch_settings(&state, &session).unwrap(),
@@ -11775,7 +11478,7 @@ mod tests {
         );
 
         // The project's own value wins for that value alone.
-        project.claude_session_model = Some("project-model".to_string());
+        project.launch.claude.model = Some("project-model".to_string());
         state.store.update_project(&project).unwrap();
         assert_eq!(
             launch_settings(&state, &session).unwrap(),
@@ -11818,8 +11521,8 @@ mod tests {
         crate::test_support::offer_models(&state, Agent::Claude, &[("opus", &["medium"])]);
         let workdir = console_workdir(&dir);
         let mut seeded = console(Agent::Claude, &workdir);
-        seeded.claude_project_session_model = Some("opus".to_string());
-        seeded.grok_project_session_effort = Some("low".to_string());
+        seeded.project_session_launch.claude.model = Some("opus".to_string());
+        seeded.project_session_launch.grok.effort = Some("low".to_string());
         state.store.insert_console(&seeded).unwrap();
         let stored = || state.store.get_console("console-1").unwrap().unwrap();
 
@@ -11827,7 +11530,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(
-            stored().claude_project_session_model.as_deref(),
+            stored().project_session_launch.claude.model.as_deref(),
             Some("opus")
         );
 
@@ -11836,34 +11539,35 @@ mod tests {
             None,
             update_console_request("console-1", |request| {
                 let RequestBody::UpdateConsole {
-                    claude_project_session_model,
-                    claude_project_session_effort,
-                    codex_project_session_model,
+                    project_session_launch,
                     ..
                 } = request
                 else {
                     unreachable!()
                 };
-                *claude_project_session_model = Some(None);
-                *claude_project_session_effort = Some(Some("  medium ".to_string()));
-                *codex_project_session_model = Some(Some("gpt-5".to_string()));
+                project_session_launch.claude.model = Some(None);
+                project_session_launch.claude.effort = Some(Some("  medium ".to_string()));
+                project_session_launch.codex.model = Some(Some("gpt-5".to_string()));
             }),
         )
         .await
         .unwrap();
         let updated = stored();
-        assert_eq!(updated.claude_project_session_model, None);
+        assert_eq!(updated.project_session_launch.claude.model, None);
         assert_eq!(
-            updated.claude_project_session_effort.as_deref(),
+            updated.project_session_launch.claude.effort.as_deref(),
             Some("medium")
         );
         assert_eq!(
-            updated.codex_project_session_model.as_deref(),
+            updated.project_session_launch.codex.model.as_deref(),
             Some("gpt-5")
         );
         // The console session pair is a separate setting, and the other agents' values stay.
-        assert_eq!(updated.claude_console_session_model, None);
-        assert_eq!(updated.grok_project_session_effort.as_deref(), Some("low"));
+        assert_eq!(updated.launch.claude.model, None);
+        assert_eq!(
+            updated.project_session_launch.grok.effort.as_deref(),
+            Some("low")
+        );
     }
 
     /// A project session that sets no model takes the console's project session one, so an effort
@@ -11879,7 +11583,7 @@ mod tests {
         );
         let workdir = console_workdir(&dir);
         let mut owner = console(Agent::Claude, &workdir);
-        owner.claude_project_session_model = Some("fallback".to_string());
+        owner.project_session_launch.claude.model = Some("fallback".to_string());
         state.store.insert_console(&owner).unwrap();
         state
             .store
@@ -11918,7 +11622,13 @@ mod tests {
                     name: None,
                     default_agent: None,
                     settings: NewProjectSettings {
-                        claude_session_effort: Some(effort.to_string()),
+                        launch: PerAgent {
+                            claude: Launch {
+                                model: None,
+                                effort: Some(effort.to_string()),
+                            },
+                            ..Default::default()
+                        },
                         ..NewProjectSettings::default()
                     },
                     detect_default_agent: false,
@@ -12216,15 +11926,8 @@ mod tests {
             project: project.to_string(),
             name: None,
             default_agent: None,
-            claude_account_id: None,
-            codex_account_id: None,
-            grok_account_id: None,
-            claude_session_model: None,
-            claude_session_effort: None,
-            codex_session_model: None,
-            codex_session_effort: None,
-            grok_session_model: None,
-            grok_session_effort: None,
+            accounts: Default::default(),
+            launch: Default::default(),
             pinned: None,
             tags: None,
             description: None,
@@ -12245,44 +11948,37 @@ mod tests {
             .insert_console(&console(Agent::Claude, &workdir))
             .unwrap();
         let mut seeded = project_of("console-1", "project-1");
-        seeded.claude_session_model = Some("opus".to_string());
-        seeded.grok_session_effort = Some("high".to_string());
-        seeded.codex_session_model = Some("gpt-5".to_string());
+        seeded.launch.claude.model = Some("opus".to_string());
+        seeded.launch.grok.effort = Some("high".to_string());
+        seeded.launch.codex.model = Some("gpt-5".to_string());
         state.store.insert_project(&seeded).unwrap();
         let stored = || state.store.get_project("project-1").unwrap().unwrap();
 
         handle(&state, None, update_project_request("project-1", |_| {}))
             .await
             .unwrap();
-        assert_eq!(stored().claude_session_model.as_deref(), Some("opus"));
+        assert_eq!(stored().launch.claude.model.as_deref(), Some("opus"));
 
         handle(
             &state,
             None,
             update_project_request("project-1", |request| {
-                let RequestBody::UpdateProject {
-                    claude_session_model,
-                    claude_session_effort,
-                    grok_session_effort,
-                    codex_session_model,
-                    ..
-                } = request
-                else {
+                let RequestBody::UpdateProject { launch, .. } = request else {
                     unreachable!()
                 };
-                *claude_session_model = Some(Some(" sonnet ".to_string()));
-                *claude_session_effort = Some(Some("low".to_string()));
-                *grok_session_effort = Some(None);
-                *codex_session_model = Some(Some("  ".to_string()));
+                launch.claude.model = Some(Some(" sonnet ".to_string()));
+                launch.claude.effort = Some(Some("low".to_string()));
+                launch.grok.effort = Some(None);
+                launch.codex.model = Some(Some("  ".to_string()));
             }),
         )
         .await
         .unwrap();
         let updated = stored();
-        assert_eq!(updated.claude_session_model.as_deref(), Some("sonnet"));
-        assert_eq!(updated.claude_session_effort.as_deref(), Some("low"));
-        assert_eq!(updated.grok_session_effort, None);
-        assert_eq!(updated.codex_session_model, None);
+        assert_eq!(updated.launch.claude.model.as_deref(), Some("sonnet"));
+        assert_eq!(updated.launch.claude.effort.as_deref(), Some("low"));
+        assert_eq!(updated.launch.grok.effort, None);
+        assert_eq!(updated.launch.codex.model, None);
     }
 
     /// A project's account reference is checked against the agent it is set for, set or cleared by
@@ -12319,34 +12015,26 @@ mod tests {
             &state,
             None,
             update_project_request("project-1", |request| {
-                let RequestBody::UpdateProject {
-                    claude_account_id, ..
-                } = request
-                else {
+                let RequestBody::UpdateProject { accounts, .. } = request else {
                     unreachable!()
                 };
-                *claude_account_id = Some(Some(pins("claude-acct")));
+                accounts.claude = Change::Set(pins("claude-acct"));
             }),
         )
         .await
         .unwrap();
-        assert_eq!(stored().claude_account_id, pins("claude-acct"));
+        assert_eq!(stored().accounts.claude, pins("claude-acct"));
 
         // An account of another agent is refused, and the rest of the same request with it.
         let err = handle(
             &state,
             None,
             update_project_request("project-1", |request| {
-                let RequestBody::UpdateProject {
-                    name,
-                    grok_account_id,
-                    ..
-                } = request
-                else {
+                let RequestBody::UpdateProject { name, accounts, .. } = request else {
                     unreachable!()
                 };
                 *name = Some("Renamed".to_string());
-                *grok_account_id = Some(Some(pins("codex-acct")));
+                accounts.grok = Change::Set(pins("codex-acct"));
             }),
         )
         .await
@@ -12354,90 +12042,78 @@ mod tests {
         let coded = err.downcast_ref::<CodedError>().expect("a coded error");
         assert_eq!(coded.code, error_code::UNKNOWN_ACCOUNT);
         assert_eq!(stored().name, "project-1");
-        assert_eq!(stored().grok_account_id, ProjectAccount::Inherit);
+        assert_eq!(stored().accounts.grok, ProjectAccount::Inherit);
 
         handle(&state, None, update_project_request("project-1", |_| {}))
             .await
             .unwrap();
-        assert_eq!(stored().claude_account_id, pins("claude-acct"));
+        assert_eq!(stored().accounts.claude, pins("claude-acct"));
 
         // The agent's default account is stored as such, and needs no account to exist.
         handle(
             &state,
             None,
             update_project_request("project-1", |request| {
-                let RequestBody::UpdateProject {
-                    claude_account_id, ..
-                } = request
-                else {
+                let RequestBody::UpdateProject { accounts, .. } = request else {
                     unreachable!()
                 };
-                *claude_account_id = Some(Some(ProjectAccount::Default));
+                accounts.claude = Change::Set(ProjectAccount::Default);
             }),
         )
         .await
         .unwrap();
-        assert_eq!(stored().claude_account_id, ProjectAccount::Default);
+        assert_eq!(stored().accounts.claude, ProjectAccount::Default);
         // Left alone by a request that does not mention it, then named again from the default.
         handle(&state, None, update_project_request("project-1", |_| {}))
             .await
             .unwrap();
-        assert_eq!(stored().claude_account_id, ProjectAccount::Default);
+        assert_eq!(stored().accounts.claude, ProjectAccount::Default);
         handle(
             &state,
             None,
             update_project_request("project-1", |request| {
-                let RequestBody::UpdateProject {
-                    claude_account_id, ..
-                } = request
-                else {
+                let RequestBody::UpdateProject { accounts, .. } = request else {
                     unreachable!()
                 };
-                *claude_account_id = Some(Some(pins("claude-acct")));
+                accounts.claude = Change::Set(pins("claude-acct"));
             }),
         )
         .await
         .unwrap();
-        assert_eq!(stored().claude_account_id, pins("claude-acct"));
+        assert_eq!(stored().accounts.claude, pins("claude-acct"));
 
         handle(
             &state,
             None,
             update_project_request("project-1", |request| {
-                let RequestBody::UpdateProject {
-                    claude_account_id, ..
-                } = request
-                else {
+                let RequestBody::UpdateProject { accounts, .. } = request else {
                     unreachable!()
                 };
-                *claude_account_id = Some(None);
+                accounts.claude = Change::Clear;
             }),
         )
         .await
         .unwrap();
-        assert_eq!(stored().claude_account_id, ProjectAccount::Inherit);
+        assert_eq!(stored().accounts.claude, ProjectAccount::Inherit);
 
         // An explicit inherit is the same as null, from the default as from an account.
         for before in [ProjectAccount::Default, pins("claude-acct")] {
             let mut project = stored();
-            project.claude_account_id = before;
+            project.accounts.claude = before;
             state.store.update_project(&project).unwrap();
             handle(
                 &state,
                 None,
                 update_project_request("project-1", |request| {
-                    let RequestBody::UpdateProject {
-                        claude_account_id, ..
-                    } = request
-                    else {
+                    let RequestBody::UpdateProject { accounts, .. } = request else {
                         unreachable!()
                     };
-                    *claude_account_id = Some(Some(ProjectAccount::Inherit));
+                    accounts.claude = Change::Set(ProjectAccount::Inherit);
                 }),
             )
             .await
             .unwrap();
-            assert_eq!(stored().claude_account_id, ProjectAccount::Inherit);
+            assert_eq!(stored().accounts.claude, ProjectAccount::Inherit);
         }
     }
 
@@ -12486,7 +12162,10 @@ mod tests {
         let err = add_project(
             &state,
             request(NewProjectSettings {
-                claude_account_id: pins("codex-acct"),
+                accounts: PerAgent {
+                    claude: pins("codex-acct"),
+                    ..Default::default()
+                },
                 ..NewProjectSettings::default()
             }),
         )
@@ -12499,11 +12178,22 @@ mod tests {
         let added = add_project(
             &state,
             request(NewProjectSettings {
-                codex_account_id: pins("codex-acct"),
-                grok_account_id: ProjectAccount::Default,
-                claude_session_model: Some(" opus ".to_string()),
-                claude_session_effort: Some("  ".to_string()),
-                grok_session_effort: Some("high".to_string()),
+                accounts: PerAgent {
+                    codex: pins("codex-acct"),
+                    grok: ProjectAccount::Default,
+                    ..Default::default()
+                },
+                launch: PerAgent {
+                    claude: Launch {
+                        model: Some(" opus ".to_string()),
+                        effort: Some("  ".to_string()),
+                    },
+                    grok: Launch {
+                        model: None,
+                        effort: Some("high".to_string()),
+                    },
+                    ..Default::default()
+                },
                 ..NewProjectSettings::default()
             }),
         )
@@ -12511,12 +12201,12 @@ mod tests {
         .expect("added")
         .remove(0);
         let stored = state.store.get_project(&added.id).unwrap().unwrap();
-        assert_eq!(stored.codex_account_id, pins("codex-acct"));
-        assert_eq!(stored.grok_account_id, ProjectAccount::Default);
-        assert_eq!(stored.claude_account_id, ProjectAccount::Inherit);
-        assert_eq!(stored.claude_session_model.as_deref(), Some("opus"));
-        assert_eq!(stored.claude_session_effort, None);
-        assert_eq!(stored.grok_session_effort.as_deref(), Some("high"));
+        assert_eq!(stored.accounts.codex, pins("codex-acct"));
+        assert_eq!(stored.accounts.grok, ProjectAccount::Default);
+        assert_eq!(stored.accounts.claude, ProjectAccount::Inherit);
+        assert_eq!(stored.launch.claude.model.as_deref(), Some("opus"));
+        assert_eq!(stored.launch.claude.effort, None);
+        assert_eq!(stored.launch.grok.effort.as_deref(), Some("high"));
     }
 
     /// Removing an account publishes the projects whose reference it cleared, and only those.
@@ -12537,10 +12227,10 @@ mod tests {
         referring.id = "console-referring".to_string();
         state.store.insert_console(&referring).unwrap();
         let mut referring_project = project_of("console-referring", "project-referring");
-        referring_project.claude_account_id = pins(&account_id);
+        referring_project.accounts.claude = pins(&account_id);
         state.store.insert_project(&referring_project).unwrap();
         let mut defaulting_project = project_of("console-referring", "project-defaulting");
-        defaulting_project.claude_account_id = ProjectAccount::Default;
+        defaulting_project.accounts.claude = ProjectAccount::Default;
         state.store.insert_project(&defaulting_project).unwrap();
         let inheriting_project = project_of("console-referring", "project-inheriting");
         state.store.insert_project(&inheriting_project).unwrap();
@@ -12560,7 +12250,7 @@ mod tests {
         let mut broadcast_projects = Vec::new();
         while let Ok(event) = events.try_recv() {
             if let Event::ProjectUpserted { project } = event {
-                broadcast_projects.push((project.id, project.claude_account_id));
+                broadcast_projects.push((project.id, project.accounts.claude));
             }
         }
         assert_eq!(
@@ -13117,6 +12807,7 @@ mod tests {
         state.store.insert_session(&hub).unwrap();
         let mut bound = project_session("bound", Agent::Claude, SessionStatus::Interrupted);
         bound.bound_to = Some("hub".to_string());
+        bound.orchestration_role = OrchestrationRole::Worker;
         state.store.insert_session(&bound).unwrap();
         let live = idle_stand_in("hub");
         state.register_live(live.clone());
@@ -14020,6 +13711,7 @@ mod tests {
         state.store.insert_session(&owner).unwrap();
         let mut held = archived_with_conversation("s", Agent::Claude, &account);
         held.bound_to = Some("owner".to_string());
+        held.orchestration_role = OrchestrationRole::Worker;
         state.store.insert_session(&held).unwrap();
 
         let err = check_can_resume_with(&state, "s", stub_shell(&dir))
@@ -14068,6 +13760,7 @@ mod tests {
             },
             Session {
                 bound_to: Some("hub".to_string()),
+                orchestration_role: OrchestrationRole::Worker,
                 ..archived_with_conversation("worker", Agent::Claude, worker_account)
             },
         ] {
@@ -14169,6 +13862,7 @@ mod tests {
             .store
             .insert_session(&Session {
                 bound_to: Some("hub".to_string()),
+                orchestration_role: OrchestrationRole::Worker,
                 ..archived_with_conversation("worker", Agent::Codex, &account)
             })
             .unwrap();
@@ -14303,6 +13997,7 @@ mod tests {
         Session {
             title: id.to_string(),
             bound_to: Some(owner.to_string()),
+            orchestration_role: OrchestrationRole::Worker,
             ..project_session(id, Agent::Claude, status)
         }
     }
@@ -14561,10 +14256,11 @@ mod tests {
         assert_eq!(status_of(&state, "hub"), Some(SessionStatus::Idle));
     }
 
-    /// A lead session in `status`: bound to the console session `owner` after it was opened.
+    /// A coordinator in `status` under the console session `owner`: bound to it after it was
+    /// opened.
     fn lead_session(id: &str, status: SessionStatus, owner: &str) -> Session {
         Session {
-            lead: true,
+            orchestration_role: OrchestrationRole::Coordinator,
             ..bound_session(id, status, owner)
         }
     }
@@ -15347,18 +15043,24 @@ mod tests {
             assert!(err.to_string().contains(reason), "{session} {owner}: {err}");
         }
         let loner = state.store.get_session("loner").unwrap().unwrap();
-        assert_eq!((loner.bound_to, loner.lead), (None, false));
+        assert_eq!(
+            (loner.bound_to, loner.orchestration_role),
+            (None, OrchestrationRole::Coordinator)
+        );
 
         let (lead, _) = bind_session(&state, "starter", "hub").unwrap();
-        assert_eq!((lead.bound_to.as_deref(), lead.lead), (Some("hub"), true));
+        assert_eq!(
+            (lead.bound_to.as_deref(), lead.orchestration_role),
+            (Some("hub"), OrchestrationRole::Coordinator)
+        );
         assert!(!lead.is_worker());
         let mine = state.store.get_session("mine").unwrap().unwrap();
         assert_eq!(mine.bound_to.as_deref(), Some("starter"));
 
         let (joined, _) = bind_session(&state, "loner", "other-starter").unwrap();
         assert_eq!(
-            (joined.bound_to.as_deref(), joined.lead),
-            (Some("other-starter"), false)
+            (joined.bound_to.as_deref(), joined.orchestration_role),
+            (Some("other-starter"), OrchestrationRole::Worker)
         );
         assert!(joined.is_worker());
         let again = bind_session(&state, "loner", "hub").expect_err("bound already");
@@ -15420,7 +15122,10 @@ mod tests {
             let err = transfer_session(&state, session, from, to).expect_err(reason);
             assert!(err.to_string().contains(reason), "{session} to {to}: {err}");
             let after = state.store.get_session(session).unwrap().unwrap();
-            assert_eq!((before.bound_to, before.lead), (after.bound_to, after.lead));
+            assert_eq!(
+                (before.bound_to, before.orchestration_role),
+                (after.bound_to, after.orchestration_role)
+            );
         }
 
         // A session that becomes a bound one loses the report panel's tools, so its pages are
@@ -15432,20 +15137,23 @@ mod tests {
                 .unwrap();
         }
         let (lead, ..) = transfer_session(&state, "lead", "hub", "hub-2").unwrap();
-        assert_eq!((lead.bound_to.as_deref(), lead.lead), (Some("hub-2"), true));
+        assert_eq!(
+            (lead.bound_to.as_deref(), lead.orchestration_role),
+            (Some("hub-2"), OrchestrationRole::Coordinator)
+        );
         assert_eq!(state.store.list_pages("lead").unwrap().len(), 1);
         let child = state.store.get_session("child").unwrap().unwrap();
         assert_eq!(child.bound_to.as_deref(), Some("lead"));
 
         let (plain, ..) = transfer_session(&state, "plain", "hub", "peer").unwrap();
         assert_eq!(
-            (plain.bound_to.as_deref(), plain.lead),
-            (Some("peer"), false)
+            (plain.bound_to.as_deref(), plain.orchestration_role),
+            (Some("peer"), OrchestrationRole::Worker)
         );
         let (spare, owner, _) = transfer_session(&state, "spare-lead", "hub", "peer").unwrap();
         assert_eq!(
-            (spare.bound_to.as_deref(), spare.lead),
-            (Some("peer"), false)
+            (spare.bound_to.as_deref(), spare.orchestration_role),
+            (Some("peer"), OrchestrationRole::Worker)
         );
         assert!(spare.is_worker());
         assert_eq!(owner.id, "peer");
@@ -15571,21 +15279,30 @@ mod tests {
             let err = release_session(&state, session, owner, None).expect_err(code.as_str());
             assert_eq!(code_of(&err), code, "{session}: {err}");
             let after = state.store.get_session(session).unwrap().unwrap();
-            assert_eq!((before.bound_to, before.lead), (after.bound_to, after.lead));
+            assert_eq!(
+                (before.bound_to, before.orchestration_role),
+                (after.bound_to, after.orchestration_role)
+            );
         }
 
         let lead = release_session(&state, "lead", Some("hub"), None)
             .unwrap()
             .session;
         assert!(!lead.is_worker());
-        assert_eq!((lead.bound_to, lead.lead), (None, false));
+        assert_eq!(
+            (lead.bound_to, lead.orchestration_role),
+            (None, OrchestrationRole::Coordinator)
+        );
         let child = state.store.get_session("child").unwrap().unwrap();
         assert_eq!(child.bound_to.as_deref(), Some("lead"));
 
         let plain = release_session(&state, "plain", Some("hub"), None)
             .unwrap()
             .session;
-        assert_eq!((plain.bound_to, plain.lead), (None, false));
+        assert_eq!(
+            (plain.bound_to, plain.orchestration_role),
+            (None, OrchestrationRole::Coordinator)
+        );
         let dormant = release_session(&state, "dormant", Some("hub"), None)
             .unwrap()
             .session;
@@ -15695,7 +15412,14 @@ mod tests {
         release_session(&state, "replaced", Some("hub"), None).unwrap();
         state
             .store
-            .set_binding("replaced", None, "hub-2", true, false, false)
+            .set_binding(
+                "replaced",
+                None,
+                "hub-2",
+                OrchestrationRole::Coordinator,
+                false,
+                false,
+            )
             .unwrap()
             .unwrap();
         mcp::running_or_leave(&state, &state.session_record("replaced").unwrap()).unwrap();
@@ -16140,7 +15864,14 @@ mod tests {
         release_session(&state, "rebound", Some("hub"), Some("Pick up at step 3.")).unwrap();
         state
             .store
-            .set_binding("rebound", None, "hub-2", true, false, true)
+            .set_binding(
+                "rebound",
+                None,
+                "hub-2",
+                OrchestrationRole::Coordinator,
+                false,
+                true,
+            )
             .unwrap()
             .unwrap();
         assert_eq!(state.store.owner_notice_note("rebound").unwrap(), None);
@@ -16441,7 +16172,7 @@ mod tests {
                 &state,
                 None,
                 RequestBody::ListPages {
-                    console_session: session.to_string(),
+                    session: session.to_string(),
                 },
             )
         };
@@ -16465,6 +16196,7 @@ mod tests {
         // all.
         let mut bound = bare_session("bound-worker", Role::Project);
         bound.bound_to = Some("owner-a".to_string());
+        bound.orchestration_role = OrchestrationRole::Worker;
         state.store.insert_session(&bound).unwrap();
         state
             .store
@@ -16833,19 +16565,21 @@ mod tests {
         let sessions = [
             Session {
                 bound_to: Some("hub".to_string()),
+                orchestration_role: OrchestrationRole::Worker,
                 ..bare_session("member", Role::Project)
             },
             Session {
                 bound_to: Some("member".to_string()),
+                orchestration_role: OrchestrationRole::Worker,
                 ..bare_session("stray", Role::Project)
             },
             Session {
                 bound_to: Some("hub".to_string()),
-                lead: true,
                 ..bare_session("lead", Role::Project)
             },
             Session {
                 bound_to: Some("lead".to_string()),
+                orchestration_role: OrchestrationRole::Worker,
                 ..bare_session("led", Role::Project)
             },
             bare_session("hub", Role::Console),

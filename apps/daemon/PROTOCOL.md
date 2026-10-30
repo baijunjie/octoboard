@@ -82,11 +82,11 @@ the request id as if it were a record id.
 
 | `type` | Fields | Meaning |
 |---|---|---|
-| `create_console` | `name`, `default_agent`, `project_session_agent?`, `claude_account_id?`, `codex_account_id?`, `grok_account_id?`, `claude_console_session_model?`, `claude_console_session_effort?`, `codex_console_session_model?`, `codex_console_session_effort?`, `grok_console_session_model?`, `grok_console_session_effort?`, `claude_project_session_model?`, `claude_project_session_effort?`, `codex_project_session_model?`, `codex_project_session_effort?`, `grok_project_session_model?`, `grok_project_session_effort?`, `icon?`, `console_session_prompt?` | The daemon creates the console's working directory under `~/.octoboard/consoles/<id>/`. `icon` is validated first, as in the "Records" notes below: a failure is answered with `icon_not_an_image` or `icon_too_large`, and a blank value means unset. `console_session_prompt` is the user's own text added at the end of the console session's instruction file (see `docs/product/launching-agents.md`, "The console session's instruction file"): it is trimmed, and absent or blank means none. Each account field names the account this console should reference for that agent, by id; absent means the agent's default account. An id that names no account, or an account of another agent, is answered with `unknown_account`, and nothing is created. Console sessions inherit the console's `default_agent` unless an explicit agent is chosen when opening one. `project_session_agent` is the agent a project session falls back to when its project has no default agent; absent or `null` follows `default_agent`. The model and effort fields are the model and reasoning effort a console session is launched with, one pair per agent in that agent's own spelling; they are trimmed, and absent or blank means the agent's own default. `name` is trimmed and cannot be blank (`field_required`), and a model or effort is checked as in `update_project` (`invalid_launch_setting`); nothing is created when any is refused. The six `*_project_session_model` / `*_project_session_effort` fields are the model and effort a project session falls back to when its project sets none, trimmed, absent or blank meaning the agent's own default; they are checked like the console session ones. |
-| `update_console` | `console`, `name?`, `default_agent?`, `project_session_agent?`, `claude_account_id?`, `codex_account_id?`, `grok_account_id?`, `claude_console_session_model?`, `claude_console_session_effort?`, `codex_console_session_model?`, `codex_console_session_effort?`, `grok_console_session_model?`, `grok_console_session_effort?`, `claude_project_session_model?`, `claude_project_session_effort?`, `codex_project_session_model?`, `codex_project_session_effort?`, `grok_project_session_model?`, `grok_project_session_effort?`, `icon?`, `console_session_prompt?` | `project_session_agent`: absent leaves it alone; an explicit `null` clears it, so project sessions follow `default_agent` again; an agent replaces it. For each account field independently: absent leaves the console's reference alone; an explicit `null` clears it, back to the agent's default account; an id is validated as in `create_console` and replaces the reference. A reference left alone is not checked again. `icon` follows the same absent / `null` / blank rule, clearing back to the default glyph. `console_session_prompt` follows the same absent / `null` / blank rule, clearing back to none; the console's instruction file is rewritten at once. A console session begun afterwards reads it on every agent; a resumed Claude Code or Codex session reads it too, while a Grok session never does within its life (`docs/agent-cli-reference.md`, "Injecting Octoboard into each agent"). Only sessions opened afterwards take a changed reference (see `Session.account_id`). Each model and effort field follows the same absent / `null` / blank rule, clearing back to the agent's own default; a console session that is opened or resumed afterwards inherits the console's current values unless it has its own override, and one already running keeps what it started with. Project sessions never read them (they read the `*_project_session_*` pair). Existing sessions keep their recorded agent. A model or effort that is being set, and is not blank, must be one the agent offers under the account its sessions would run with, by the list `list_agent_models` answers with, or the request is refused with `invalid_launch_setting`; a value left as it is is not checked again, and an agent whose list could not be read (`unavailable`, or no model in it) takes any value. `name` is trimmed and cannot be blank (`field_required`). The `*_project_session_model` / `*_project_session_effort` fields follow the same absent / `null` / blank rule and the same check, and are read at every launch by the project sessions whose project and override leave the value unset. |
+| `create_console` | `name`, `default_agent`, `project_session_agent?`, `accounts?`, `launch?`, `project_session_launch?`, `icon?`, `console_session_prompt?` | The daemon creates the console's working directory under `~/.octoboard/consoles/<id>/`. `icon` is validated first, as in the "Records" notes below: a failure is answered with `icon_not_an_image` or `icon_too_large`, and a blank value means unset. `console_session_prompt` is the user's own text added at the end of the console session's instruction file (see `docs/product/launching-agents.md`, "The console session's instruction file"): it is trimmed, and absent or blank means none. `accounts` is an object keyed by agent (`claude`, `codex`, `grok`) naming the account this console should reference for that agent, by id; an agent left out, or `null`, means the agent's default account. An id that names no account, or an account of another agent, is answered with `unknown_account`, and nothing is created. Console sessions inherit the console's `default_agent` unless an explicit agent is chosen when opening one. `project_session_agent` is the agent a project session falls back to when its project has no default agent; absent or `null` follows `default_agent`. `launch` is an object keyed by agent whose values are `{model?, effort?}`, the model and reasoning effort a console session is launched with, one pair per agent in that agent's own spelling; they are trimmed, and an agent or a field left out, or blank, means the agent's own default. `name` is trimmed and cannot be blank (`field_required`), and a model or effort is checked as in `update_project` (`invalid_launch_setting`); nothing is created when any is refused. `project_session_launch` has the same shape as `launch` and holds the model and effort a project session falls back to when its project sets none, trimmed, absent or blank meaning the agent's own default; they are checked like the console session ones. |
+| `update_console` | `console`, `name?`, `default_agent?`, `project_session_agent?`, `accounts?`, `launch?`, `project_session_launch?`, `icon?`, `console_session_prompt?` | `project_session_agent`: absent leaves it alone; an explicit `null` clears it, so project sessions follow `default_agent` again; an agent replaces it. `accounts` is an object keyed by agent, and for each agent independently: a key left out leaves the console's reference alone; an explicit `null` clears it, back to the agent's default account; an id is validated as in `create_console` and replaces the reference. A reference left alone is not checked again. `icon` follows the same absent / `null` / blank rule, clearing back to the default glyph. `console_session_prompt` follows the same absent / `null` / blank rule, clearing back to none; the console's instruction file is rewritten at once. A console session begun afterwards reads it on every agent; a resumed Claude Code or Codex session reads it too, while a Grok session never does within its life (`docs/agent-cli-reference.md`, "Injecting Octoboard into each agent"). Only sessions opened afterwards take a changed reference (see `Session.account_id`). In `launch`, `{model?, effort?}` for each agent left out leaves that agent alone, and within one a field left out is left alone, an explicit `null` or a blank string clearing it back to the agent's own default; a console session that is opened or resumed afterwards inherits the console's current values unless it has its own override, and one already running keeps what it started with. Project sessions never read them (they read `project_session_launch`). Existing sessions keep their recorded agent. A model or effort that is being set, and is not blank, must be one the agent offers under the account its sessions would run with, by the list `list_agent_models` answers with, or the request is refused with `invalid_launch_setting`; a value left as it is is not checked again, and an agent whose list could not be read (`unavailable`, or no model in it) takes any value. `name` is trimmed and cannot be blank (`field_required`). `project_session_launch` follows the same rule and the same check, and is read at every launch by the project sessions whose project and override leave the value unset. |
 | `delete_console` | `console` | Takes its projects and all their session records with it, and stops each project's processes (see "Process trees"). Refused while any of them is still running |
-| `add_project` | `console_id`, `source` (`local`\|`parent`\|`git`), `path?`, `remote_url?`, `name?`, `default_agent?`, `claude_account_id?`, `codex_account_id?`, `grok_account_id?`, `claude_session_model?`, `claude_session_effort?`, `codex_session_model?`, `codex_session_effort?`, `grok_session_model?`, `grok_session_effort?`, `detect_default_agent?`, `tags?`, `description?`, `git_workflow?` | `local` associates one directory; `parent` associates every git repository directly beneath `path`; `git` clones `remote_url`, any git remote, into `path` (used as the parent directory) and associates the clone; every added project records its repository's remote URL (`remote_url`, see the "Records" notes below): a clone keeps the URL it was given, and a `local` or `parent` project takes the one read from its directory, or none when the directory is not a repository or has no remote, which is not an error; `path` is required for `local` and `parent` only, and a `git` request without one clones into `default_clone_dir` of the settings. A `path` must be absolute or start with `~/`, and is stored lexically normalised (`.` and `..` folded, no trailing slash); a relative one is refused, because the trusted directories compare project paths and a relative path means nothing to them. A directory the console already has a project at is not associated again, whichever way it is written: a path through a symbolic link, or in another case on a case-insensitive file system, names the same directory (compared by device and inode, the stored path staying as it was given), except while the console's existing projects cannot be looked at within the deadline, when only the normalised text is compared; a path that is the same text once normalised is the same directory even where nothing can be read at it. An absent or blank `description` means none; it is stored trimmed, and ignored for a `parent` directory that adds more than one project, as `name` is. Absent `default_agent` lets the daemon store one detected from each directory's marker files, or none (rules in `docs/product/projects.md`, "The project's default agent"); an absent `detect_default_agent` is true, and false stores none, for a client that has already shown the user the detection (`detect_directory_agent`, `probe_git_remote`) and sends what it showed. Absent `tags` means none, and each added project takes the same list, normalised as in the "Records" notes below. Each account field is a `ProjectAccount` (see the "Records" notes below) saying which account the project's sessions of that agent should read; absent or `null` means inheriting the console's reference for that agent, and `{"kind":"default"}` the agent's default account. An `account` kind that names no account, or an account of another agent, is answered with `unknown_account`, and nothing is cloned or stored. The model and effort fields are the model and reasoning effort the project's sessions are launched with, one pair per agent in that agent's own spelling; they are trimmed, and absent or blank means the console's project session value for that agent, else the agent's own default. Each added project takes the same values. A given model or effort is checked as in `update_project`, except for a project of `import_configuration`, whose document's values are stored as they are. `git_workflow` is an object of the project's own git workflow settings (`development`: `in_place`, `branch` or `worktree`; `squash_before_delivery`, `rebase_before_merge`, `delivery`, `revert_gate`); the object, or any item in it, absent or `null` follows the application-wide value, and a `development` that is none of the three or a `delivery` that is none of `ask`, `merge` or `pull_request` is refused as a malformed request, before anything is cloned or stored. `squash_before_delivery`, `rebase_before_merge` and `delivery` apply only while the project's resolved `development` is not `in_place`, and their values are kept while it is; `revert_gate` applies whatever `development` is. Each added project takes the same values. A blank `name` is read as absent: a single project takes its directory's name, and so does each of several found under a parent directory; an explicit `name` applies when a parent directory finds exactly one repository. An explicit name is limited to 100 Unicode scalar values, and a description to 2,000, counted after trimming; an overlong field is refused with `field_too_long` before anything is cloned or stored. Ignored text for several parent-directory projects is not checked, and directory-derived names and imported configuration values retain their full text. |
-| `update_project` | `project`, `name?`, `default_agent?`, `claude_account_id?`, `codex_account_id?`, `grok_account_id?`, `claude_session_model?`, `claude_session_effort?`, `codex_session_model?`, `codex_session_effort?`, `grok_session_model?`, `grok_session_effort?`, `pinned?`, `tags?`, `description?`, `git_workflow?` | An absent `default_agent` leaves it alone; an explicit `null` clears it, so the project follows the console's project session agent again. For each account field independently: absent leaves the project's reference alone; an explicit `null` (or `{"kind":"inherit"}`) puts it back to inheriting the console's reference for that agent; `{"kind":"default"}` makes it the agent's default account; an `account` kind is validated as in `add_project` and replaces the reference, and a reference left alone is not checked again. Each model and effort field follows the absent / `null` / blank rule, clearing back to the console's project session value for that agent, else the agent's own default. Only sessions opened afterwards take a changed reference (see `Session.account_id`); a session that is opened or resumed afterwards inherits the project's current model and effort unless it has its own override, and one already running keeps what it started with. An absent `pinned` leaves the pin alone. An absent `tags` leaves the tags alone; a present array, even an empty one, replaces them wholesale; an explicit `null` is the same as absent. An absent `description` leaves it alone; an explicit `null` or a blank string clears it, and any other text is stored trimmed. A model or effort that is being set, and is not blank, must be one the agent offers under the account its sessions would run with, by the list `list_agent_models` answers with, or the request is refused with `invalid_launch_setting`; a value left as it is is not checked again, and an agent whose list could not be read (`unavailable`, or no model in it) takes any value. `name` is trimmed and cannot be blank (`field_required`). A changed name is limited to 100 Unicode scalar values, and a changed description to 2,000, after trimming (`field_too_long`); no text is truncated. A legacy overlong value left alone or resubmitted unchanged is accepted, so unrelated settings remain editable. `git_workflow` is an object of the project's own git workflow choices (`development`, `squash_before_delivery`, `rebase_before_merge`, `delivery`, `revert_gate`), and per item: absent leaves it alone, an explicit `null` goes back to following the application-wide value in `Settings.git_workflow`, and a value sets the project's own; an unknown `development` or `delivery` is refused when the request is parsed. `squash_before_delivery`, `rebase_before_merge` and `delivery` apply only while the project's resolved `development` is not `in_place`, and their values are kept while it is; `revert_gate` applies whatever `development` is. |
+| `add_project` | `console_id`, `source` (`local`\|`parent`\|`git`), `path?`, `remote_url?`, `name?`, `default_agent?`, `accounts?`, `launch?`, `detect_default_agent?`, `tags?`, `description?`, `git_workflow?` | `local` associates one directory; `parent` associates every git repository directly beneath `path`; `git` clones `remote_url`, any git remote, into `path` (used as the parent directory) and associates the clone; every added project records its repository's remote URL (`remote_url`, see the "Records" notes below): a clone keeps the URL it was given, and a `local` or `parent` project takes the one read from its directory, or none when the directory is not a repository or has no remote, which is not an error; `path` is required for `local` and `parent` only, and a `git` request without one clones into `default_clone_dir` of the settings. A `path` must be absolute or start with `~/`, and is stored lexically normalised (`.` and `..` folded, no trailing slash); a relative one is refused, because the trusted directories compare project paths and a relative path means nothing to them. A directory the console already has a project at is not associated again, whichever way it is written: a path through a symbolic link, or in another case on a case-insensitive file system, names the same directory (compared by device and inode, the stored path staying as it was given), except while the console's existing projects cannot be looked at within the deadline, when only the normalised text is compared; a path that is the same text once normalised is the same directory even where nothing can be read at it. An absent or blank `description` means none; it is stored trimmed, and ignored for a `parent` directory that adds more than one project, as `name` is. Absent `default_agent` lets the daemon store one detected from each directory's marker files, or none (rules in `docs/product/projects.md`, "The project's default agent"); an absent `detect_default_agent` is true, and false stores none, for a client that has already shown the user the detection (`detect_directory_agent`, `probe_git_remote`) and sends what it showed. Absent `tags` means none, and each added project takes the same list, normalised as in the "Records" notes below. `accounts` is an object keyed by agent whose values are a `ProjectAccount` (see the "Records" notes below) saying which account the project's sessions of that agent should read; an agent left out, or `null`, means inheriting the console's reference for that agent, and `{"kind":"default"}` the agent's default account. An `account` kind that names no account, or an account of another agent, is answered with `unknown_account`, and nothing is cloned or stored. `launch` is an object keyed by agent whose values are `{model?, effort?}`, the model and reasoning effort the project's sessions are launched with, one pair per agent in that agent's own spelling; they are trimmed, and an agent or a field left out, or blank, means the console's project session value for that agent, else the agent's own default. Each added project takes the same values. A given model or effort is checked as in `update_project`, except for a project of `import_configuration`, whose document's values are stored as they are. `git_workflow` is an object of the project's own git workflow settings (`development`: `in_place`, `branch` or `worktree`; `squash_before_delivery`, `rebase_before_merge`, `delivery`, `revert_gate`); the object, or any item in it, absent or `null` follows the application-wide value, and a `development` that is none of the three or a `delivery` that is none of `ask`, `merge` or `pull_request` is refused as a malformed request, before anything is cloned or stored. `squash_before_delivery`, `rebase_before_merge` and `delivery` apply only while the project's resolved `development` is not `in_place`, and their values are kept while it is; `revert_gate` applies whatever `development` is. Each added project takes the same values. A blank `name` is read as absent: a single project takes its directory's name, and so does each of several found under a parent directory; an explicit `name` applies when a parent directory finds exactly one repository. An explicit name is limited to 100 Unicode scalar values, and a description to 2,000, counted after trimming; an overlong field is refused with `field_too_long` before anything is cloned or stored. Ignored text for several parent-directory projects is not checked, and directory-derived names and imported configuration values retain their full text. |
+| `update_project` | `project`, `name?`, `default_agent?`, `accounts?`, `launch?`, `pinned?`, `tags?`, `description?`, `git_workflow?` | An absent `default_agent` leaves it alone; an explicit `null` clears it, so the project follows the console's project session agent again. `accounts` is an object keyed by agent, and for each agent independently: a key left out leaves the project's reference alone; an explicit `null` (or `{"kind":"inherit"}`) puts it back to inheriting the console's reference for that agent; `{"kind":"default"}` makes it the agent's default account; an `account` kind is validated as in `add_project` and replaces the reference, and a reference left alone is not checked again. In `launch`, an agent left out is left alone, and within one agent's `{model?, effort?}` a field left out is left alone while an explicit `null` or a blank string clears it back to the console's project session value for that agent, else the agent's own default. Only sessions opened afterwards take a changed reference (see `Session.account_id`); a session that is opened or resumed afterwards inherits the project's current model and effort unless it has its own override, and one already running keeps what it started with. An absent `pinned` leaves the pin alone. An absent `tags` leaves the tags alone; a present array, even an empty one, replaces them wholesale; an explicit `null` is the same as absent. An absent `description` leaves it alone; an explicit `null` or a blank string clears it, and any other text is stored trimmed. A model or effort that is being set, and is not blank, must be one the agent offers under the account its sessions would run with, by the list `list_agent_models` answers with, or the request is refused with `invalid_launch_setting`; a value left as it is is not checked again, and an agent whose list could not be read (`unavailable`, or no model in it) takes any value. `name` is trimmed and cannot be blank (`field_required`). A changed name is limited to 100 Unicode scalar values, and a changed description to 2,000, after trimming (`field_too_long`); no text is truncated. A legacy overlong value left alone or resubmitted unchanged is accepted, so unrelated settings remain editable. `git_workflow` is an object of the project's own git workflow choices (`development`, `squash_before_delivery`, `rebase_before_merge`, `delivery`, `revert_gate`), and per item: absent leaves it alone, an explicit `null` goes back to following the application-wide value in `Settings.git_workflow`, and a value sets the project's own; an unknown `development` or `delivery` is refused when the request is parsed. `squash_before_delivery`, `rebase_before_merge` and `delivery` apply only while the project's resolved `development` is not `in_place`, and their values are kept while it is; `revert_gate` applies whatever `development` is. |
 | `delete_project` | `project`, `stop_sessions?`, `trash_directory?`, `force_remove?`, `inspection?` | Removes the association and the project's session records, archived ones included; touches the directory only when `trash_directory` (absent means false) is true: the directory is then moved to the system Trash (recoverable, never deleted outright) after any running sessions are stopped and before the project is removed, so when the move fails the request fails with `project_directory_trash_failed` and the project is kept for a retry. A session started in the project while the directory moves is archived before the project is removed, even when `stop_sessions` is false. A directory that no longer exists is skipped and the project is removed as usual. The move uses `NSFileManager` on macOS (no Finder permission needed), so Finder's "Put Back" may be unavailable; the folder is recoverable from the Trash. Refused before anything is stopped, with the project kept, with `project_directory_protected` for the home directory, the root of a disk (`/` or a mount point), or a directory holding Octoboard's own data, and with `project_directory_shared` while another project's directory is the same as, inside, or holds this one, or another project's Git repository (a linked worktree's, say) lies inside it. Directories are told apart by device and inode, never by their paths' text, so a symbolic link, a case-only respelling, a bind mount or a macOS firmlink naming one directory makes no difference. Another project's path, the home directory's or Octoboard's data directory's, with nothing at it or that cannot be read for want of permission, is compared by its text instead, as written and, where it resolves, as resolved. Any other path that cannot be resolved — this project's own folder when it cannot be read, an I/O error, a file system that reports no inode, a look that gives no answer within a few seconds — counts as overlapping: another project's refuses with `project_directory_shared` naming that project, and the project's own, the home directory's or Octoboard's data directory's with `project_directory_trash_failed`; the root of a disk is refused with `project_directory_protected` before either. With `trash_directory` and `inspection`, the token an `inspect_project_removal` refusal carried, the request is refused with that inspection's error, even once the path that decided it resolves, so a removal confirmed after an inspection that listed nothing takes nothing along; the token is then used up. With the token a `project_removal_inspected` carried, the worktrees that inspection held back are left even once whether they are or hold another project's folder can be told, and reported as left; that token is kept until the project is removed, so a request that fails before the removal stands, and is sent again with it, holds them back too. A request without `inspection`, or with a token no longer kept (used, its project removed, pushed out by newer ones, the daemon restarted), looks for itself. Another project at something other than a directory (a file, or a link to one) is in the way only when the directory holding its path, or the directory holding what a link there resolves to, is or lies in this one; a project whose own path is a file or a link that leads nowhere is moved as itself and refused, with `project_directory_shared`, only when another project's directory holds it, another project is at that same entry or at a link to it, or another project's path could not be looked at. Refused with `project_has_running_sessions` while the project has live sessions, unless `stop_sessions` (absent means false) is true: the running ones are then ended first, exactly as `archive_session` ends one (the deepest level of binding first — the sessions bound to a project coordinator, then that project coordinator, then the independent ones — so a parent is never refused over them; a console session belongs to no project and is left running, and a project coordinator's binding to one goes with the project coordinator's record), and the project goes with them. A session being launched or resumed at that moment is not stoppable, so it refuses either way. The project's processes (the trees no session owns: kept under it, and left behind in its folder; see "Process trees") are stopped once its sessions are, before the folder moves, whether or not `trash_directory` is set. Without `trash_directory` no branch or worktree is touched. With it, what `inspect_project_removal` describes goes too, after the project is removed and once its sessions' processes have ended: the outside worktrees are moved to the Trash whatever they hold, except one that is or holds another project's folder, or of which that cannot be told (reported as left, `failed`), each looked at again just before they are moved, so one that has come to be so since the request stays too; a `locked` one only when `force_remove` (absent means none) names it as `locked` and without uncommitted changes it did not show, and unlocked once it is in the Trash where the repository outlives the folder — and where the repository outlives the folder its worktree records are pruned and the branches no worktree still has checked out are deleted with `git branch -D`; one still checked out in a worktree that was to go and did not, other than a locked one that was kept, is reported. The request itself reads no worktree's status and makes no merge check. A failure there never fails the request; it is reported as `session_branches_not_removed`, or as `project_branches_not_determined` when what goes along could not be found out at all |
 | `inspect_project_removal` | `project` | Replies with `project_removal_inspected`: in `processes`, the project's processes, which `delete_project` stops with or without `trash_directory` (`ProcessTree`s with no `session_id`, see "Process trees"; `list_processes` with the `project_id` lists the same trees, which a client can ask for when the inspection is refused); and what `delete_project` with `trash_directory` would also remove now, as `SessionBranchItem`s (see "Branches and worktrees bound to a session"). When the folder holds the repository (it is the main worktree), that is every linked worktree of the repository outside the folder, bound to a session or not (`session` null, and `branch` null for one with a detached `HEAD`), since none works once the repository is gone. When the repository outlives the folder (the folder is part of a bigger repository, or a linked worktree), it is the linked worktrees bound to the project's sessions outside the folder and the bound branches, but not a branch checked out in a worktree that stays. A worktree that is or holds another project's folder never counts, nor one that is the home directory, the root of a disk or a directory holding Octoboard's data, nor does the main worktree, and one of which that cannot be told (as in "Branches and worktrees bound to a session") is held back: listed among the items as `failed` with `cause` `project_folder_unknown`, as one that stays. The answer then carries `inspection`, a token the worktrees it held back are kept under, for the `delete_project` confirmed after it to send back, so that it leaves them even once they can be told; an answer that held none back carries none. `state` says whether a worktree has uncommitted changes and whether a branch is merged, both of which go either way; a `locked` worktree, whose `uncommitted` says whether it has changes, goes only when `delete_project`'s `force_remove` names it, and a branch it has checked out only with it. Refused as `delete_project` with `trash_directory` would be (`project_directory_protected`, `project_directory_shared`, or `project_directory_trash_failed` when a path it depends on cannot be resolved), each of which a client takes as nothing to list rather than as a failure, and `unknown_project` for an unknown project. A refusal because a path could not be resolved (`project_directory_trash_failed`, or `project_directory_shared` naming a project whose path could not be) is kept under a token of its own, which the error carries as its `inspection` param, for the `delete_project` confirmed after it to send back (see there); any other refusal carries none. The daemon keeps the four newest tokens of either kind per project at most, drops them with the project or its console, and keeps none for an inspection that ends after its project is gone |
 | `list_dir` | `path` | Answered with `dir_listing` on the asking socket |
@@ -135,7 +135,7 @@ the request id as if it were a record id.
 | `interrupt_session` | `session` | Stops the turn the session's agent is running, as the user pressing its interrupt key in the terminal would, and replies with `session_interrupted`; no ownership is checked. The process and its conversation stay, and the session goes back to `idle`. The key is the agent's own, written on its own and never joined to a message: one Esc for Claude Code and Codex, Ctrl-U then Ctrl-C for Grok Build (which ignores Esc, and whose Ctrl-C clears text in its composer instead of cancelling the turn). A draft in Grok's composer is cleared first with Ctrl-U, one press at a time until the screen shows the composer empty, and the note says so (Grok may let the user undo it with ctrl+z); a draft that does not clear gets no Ctrl-C. The input box is read off the screen with faint text left out, such as Claude Code's placeholder in a fresh session's empty box. It is written only while the session reads `working` by its hooks and its terminal title shows the turn running, checked right before each key, so a turn that ends meanwhile gets no key. When Claude Code or Grok Build puts the interrupted prompt back in its input box (a key before the model has shown anything), the daemon clears it with Ctrl-U, one press at a time while the screen shows text there, as long as the box was empty before the interrupt key and nothing else has been written meanwhile; text left there is reported in the note. Messages Octoboard has for the session are held from the first key until the reply, so none joins the restored text, and are written afterwards. A cancel the user makes in the terminal is left as the agent leaves it. The reply waits up to five seconds for the turn to end, which counts even when a message the agent had queued starts the next turn at once. A session not in a turn (at its prompt, with or without background work) is answered with `interrupted: false` and nothing is written; so is a session another `interrupt_session` is already interrupting. Refused, with nothing written: `session_not_running` for a session that is archived or interrupted, has no process, or is still being launched or not yet past its startup screens; `session_trust_pending` while its agent shows its folder-trust confirmation; `session_waiting_for_user` while its agent waits on the user (a permission prompt or question, a screen of its own recognised on the terminal, Codex's `Action Required` title) or a `request_session` call of its own holds its hand up; `session_busy` while it is being switched to another account, handed off, having its branches handed over, given another parent or restarted for a change of its account's sharing. An id that names no session is `unknown_session` |
 | `rename_session` | `session`, `title` | The title is stored trimmed and cannot be blank (`field_required`) |
 | `release_session` | `session` | Makes a project session independent from its parent, whoever it is, and broadcasts `session_upserted`: `bound_to` is cleared and the session is an ordinary independent project coordinator, the user's own. A project coordinator keeps the sessions bound to it, and branches stay with their session. Allowed whether the session is running or not, and refused for a console session, an independent session, and a session, or the parent it is bound to, that is being started, resumed, handed off, switched to another account or having its parent changed. The refusals are `console_session_never_bound`, `session_not_bound`, `session_binding_changed` (the binding moved between the check and the write), `session_changing` and `session_owner_changing`; an id that names no session is `unknown_session`. A running session is told in a message, queued while it cannot take one, that it has no parent and which tools it has; one with no process is told when it next starts, ahead of any instruction of that launch, as the notice every change of parent leaves for a session that was not running (see `release_session` under the MCP tools). The former parent is told in a message, queued while it cannot take one, that the user released the session, so it can no longer instruct, drive or archive it (it can still tell it something with the MCP tool `send_message`) and should treat any work it handed the session as left with the user; a parent with no process is not told, and a later attempt by it to drive the session is refused as not its own |
-| `list_pages` | `console_session` | A session's report panel pages, oldest first. Answered with `page_list` on the asking socket. `console_session` is the session that pushed the pages, a console session or a project session; one that names no session is refused with `unknown_session` |
+| `list_pages` | `session` | A session's report panel pages, oldest first. Answered with `page_list` on the asking socket. `session` is the session that pushed the pages, a console session or a project session; one that names no session is refused with `unknown_session` |
 | `submit_page` | `page`, `data` | A report panel form submission; `data` is the submitted form's fields as an object of strings, field name to value (a repeated name's values joined by `, `), in document order, including the pressed submit button's `name`/`value`. Written into the session that pushed the page, found from the page itself, as a user message naming the page; held rather than refused while that session is `waiting_user`, since the session is not the one who has to answer that prompt. Refused when `page` is not its session's newest page — history pages are read-only — and, as an unknown page, when its session has the worker role and so no tool to read the submission (its pages are withdrawn when it becomes one, below) |
 | `confirm_trust` | `session`, `remember`, `trust_parent_dir?` | The user's go-ahead to a `trust_prompt`, whichever agent is asking: Octoboard may press that session's own folder-trust confirmation, which it does by typing at the session's terminal after checking that the confirmation is still up — for Claude Code a Down and an Enter, once the cursor is seen to move to "Yes, I trust this folder"; for Codex an Enter, with the cursor seen on "1. Trust and continue" and nothing written into the session since the confirmation was sighted; for Grok Build a `y`, while no hook has run, the process is still there and nothing has been written into the session since the confirmation was sighted. Pressing it is what makes the agent record the trust in its own configuration, so its later launches do not ask; for Grok Build the entry Grok wrote into the session's own copy of its trust store is then carried over, unchanged, into the user's own store, and the press counts only once that is done, or, when no hook comes to carry it (a Grok policy that runs none), once the confirmation is seen to have gone from the screen; a hook that comes later still carries the entry. `remember` also records the project's permission (`Project.trust_consent`) once the confirmation has been pressed, so a later confirmation of any agent in that project is pressed without a prompt, and broadcasts the updated `project_upserted`. `trust_parent_dir` (absent means false) records the project's parent directory as trusted instead, once the confirmation has been pressed, and then `remember` adds nothing. Every project whose directory really lies under that directory (see the `trusted_directories` notes under "Records") is covered by it, for every agent — those already there, those added later by any means, repositories the console session clones or adds into it included — and each agent then applies that project's own configuration once it has recorded its trust. The confirmations already waiting under it are pressed at once. The daemon derives the directory from the session's project (it is the prompt's `trust_dir`); a client never names one. A parent that is the filesystem root, the user's home directory (however it is spelled or linked) or a directory containing it is refused, before anything is pressed, with `error` code `trust_directory_too_broad`; so is a project whose path is not absolute (`trust_path_not_absolute`), so is any case where the home directory cannot be determined to check against (`trust_home_unknown`), and so is a project whose parent cannot be checked within a few seconds, as on a mount that does not answer (`trust_directory_unreachable`); a client keeps its dialog open for each of these four. Refused, with nothing recorded and nothing sent, unless `session` is a running project session that is still waiting at its own agent's confirmation and has not been answered (one that is no longer waiting is answered with `error` code `trust_not_waiting`, which a client shows nothing for); a failure to press once it was accepted (the confirmation is not as expected, or something else typed into the session meanwhile) is an `error` with code `trust_answer_failed`, and a Grok Build press whose entry could not be carried over is one with code `trust_not_carried_over`; either records no permission and is also broadcast as a `session_notice` so that it is seen even if the requesting dialog has closed. Octoboard never writes a trust decision into an agent's configuration itself; the one file it writes is the user's Grok Build trust store, with the entry Grok wrote |
 | `remove_trusted_directory` | `path` | Stops trusting a directory (compared after lexical normalisation, so a trailing slash does not matter) and broadcasts `trusted_directories_updated`. Projects' own permissions, sessions already running and the trust each agent has already recorded are untouched. Removing one that is not trusted does nothing. Directories are added only by `confirm_trust` |
@@ -223,10 +223,10 @@ the request id as if it were a record id.
 | `configuration_exported` | `id`, `document` — the reply to `export_configuration`; `document` is a configuration document (see "Configuration export") |
 | `configuration_inspected` | `id`, `settings?`, `accounts?`, `consoles` — the reply to `inspect_configuration`; `settings` is what the document's application settings are and what they are on this machine now; `accounts` is what importing the document's accounts would do (present when the document carries them); one `InspectedConsole` per console of the document, in its order (see "Configuration import") |
 | `configuration_imported` | `id`, `settings_applied?`, `settings_error?`, `accounts?`, `consoles` — the reply to `import_configuration`; `settings_applied` holds the settings that were applied, and is absent when they were not asked for or could not be applied, in which case `settings_error` says why; `accounts` is what came of the accounts and is present only when `apply_accounts` was sent; one `ImportedConsole` per console of the document, in its order (see "Configuration import") |
-| `page_list` | `id`, `console_session_id`, `pages` — oldest first. Pages are not in `snapshot`: one carries a whole HTML document, and only the session on screen needs its pages, so the panel asks (and so does the window for a project session it has selected, to know whether the Report panel has anything to show). Asking again after every `snapshot` is what keeps it correct across a `page_created` a lagging client never received: such a client is sent a fresh snapshot in place of the events it missed, on the socket it already has |
+| `page_list` | `id`, `session_id`, `pages` — oldest first. Pages are not in `snapshot`: one carries a whole HTML document, and only the session on screen needs its pages, so the panel asks (and so does the window for a project session it has selected, to know whether the Report panel has anything to show). Asking again after every `snapshot` is what keeps it correct across a `page_created` a lagging client never received: such a client is sent a fresh snapshot in place of the events it missed, on the socket it already has |
 | `path_links` | `id`, `links` — one `{path, kind, view?, viewer_only?}` per asked path, in order, `path` as asked, `kind` `file`, `directory` or `none`, `view` (`{worktree?, path}`) and `viewer_only` (present only when true) as `probe_path_links` describes |
 | `page_created` | `page` — the whole record. A session pushed a page with `show_page` |
-| `pages_deleted` | `console_session_id` (the session that pushed them), `pages` — the ids withdrawn with `delete_pages`, or by the daemon when the session took the worker role (see "MCP tools"), never empty. A client drops them from its list for that session, and applies it idempotently: it may name an id the client does not hold, one it already dropped or one whose `page_created` has not arrived yet (a later `pages_deleted` then drops that one) |
+| `pages_deleted` | `session_id` (the session that pushed them), `pages` — the ids withdrawn with `delete_pages`, or by the daemon when the session took the worker role (see "MCP tools"), never empty. A client drops them from its list for that session, and applies it idempotently: it may name an id the client does not hold, one it already dropped or one whose `page_created` has not arrived yet (a later `pages_deleted` then drops that one) |
 | `ack` | `id` |
 | `error` | `code`, `params`, `message`, `id?` — a failure of a request (carrying its `id`) or, with no `id`, one that belongs to no request. See "Coded messages" |
 
@@ -309,7 +309,7 @@ A client also branches on some codes, instead of only showing them:
 | `agent_order_invalid` | — | `reorder_agents` named agents that are not exactly the added ones, each once |
 | `added_agents_undecided` | — | `reorder_agents` or `remove_agent` was asked while the list is undecided (availability not determined); no longer refused for this reason once it is, and a run whose snapshot failed refuses until the next start |
 | `configuration_not_recognised` | — | The `format` of a configuration document is absent or is not `octoboard-configuration` |
-| `configuration_version_unsupported` | `version`, `supported` | A configuration document's `version` is newer than the newest this daemon reads, `supported`, or is 0 |
+| `configuration_version_unsupported` | `version`, `supported` | A configuration document's `version` is not the one this daemon reads, `supported` |
 | `configuration_unreadable` | `detail` | A configuration document is not a JSON object, has a `version` that is not a whole number, or cannot be read as a document of its version |
 | `import_resolution_invalid` | `console`, `project` or `agent`, `account` | A resolution of `import_configuration` names a project the document does not have, resolves one twice, or chooses a `directory` that is neither an absolute path nor starts with `~/`; `console` and `project` are the indexes it gave. An account resolution (`account_resolutions`) that names an account the document lacks, resolves one twice, gives both or neither of `directory` and `leave_out`, or gives a `directory` that is neither an absolute path nor starts with `~/` is refused the same way, with `agent` (its display name, such as `Claude Code`) and `account` (the index it gave) in place of the two |
 | `import_settings_missing` | — | `import_configuration` asked for the document's application settings and it carries none |
@@ -464,36 +464,28 @@ one it does not know:
 ```
 Host    { id, name, kind: "local"|"ssh", ssh_config? }
 Console { id, name, workdir, default_agent, project_session_agent?,   // null: project sessions follow default_agent
-          claude_account_id?, codex_account_id?, grok_account_id?,
-          claude_console_session_model?, claude_console_session_effort?,
-          codex_console_session_model?, codex_console_session_effort?,
-          grok_console_session_model?, grok_console_session_effort?,
-          claude_project_session_model?, claude_project_session_effort?,      // the fallback of a project's own
-          codex_project_session_model?, codex_project_session_effort?,        // unset values
-          grok_project_session_model?, grok_project_session_effort?, icon?, console_session_prompt?, created_at }
+          accounts: { claude, codex, grok },        // each an account id, null: the agent's default account
+          launch: { claude, codex, grok },          // each { model, effort }, null for an unset value: what a
+                                                    // console session of that agent is launched with
+          project_session_launch: { claude, codex, grok },   // the same shape: the fallback of a project's own
+                                                             // unset values
+          icon?, console_session_prompt?, created_at }
 Account { id, agent, name, config_dir,
           share_default_config?, share_default_config_incomplete?, disabled? }
 Project { id, console_id, host_id, name, path, default_agent?, source, remote_url?,
-          claude_account_id, codex_account_id, grok_account_id,   // each a ProjectAccount
-          claude_session_model?, claude_session_effort?,
-          codex_session_model?, codex_session_effort?,
-          grok_session_model?, grok_session_effort?,
+          accounts: { claude, codex, grok },       // each a ProjectAccount
+          launch: { claude, codex, grok },         // each { model, effort }, null for an unset value
           trust_consent, pinned, tags: string[], description?,
-          git_workflow: GitWorkflowOverride }   // absent in an older record: every item follows the application-wide value
+          git_workflow: GitWorkflowOverride }
 GitWorkflowSettings { development: "in_place"|"branch"|"worktree", squash_before_delivery: bool, rebase_before_merge: bool,
                       delivery: "ask"|"merge"|"pull_request", revert_gate: bool }
+                      // rebase_before_merge retains its wire name; both preparation flags apply
+                      // before delivering finished work by merge, push or pull request,
+                      // with squashing before rebasing, and never rewrite a pushed shared branch.
 GitWorkflowOverride { development: "in_place"|"branch"|"worktree"|null, squash_before_delivery: bool|null, rebase_before_merge: bool|null, delivery: "ask"|"merge"|"pull_request"|null,
                       revert_gate: bool|null }  // each item null: follows the application-wide value
-DocumentGitWorkflowSettings { development: "in_place"|"branch"|"worktree", squash_before_delivery?: bool|null,
-                              rebase_before_merge: bool, delivery: "ask"|"merge"|"pull_request", revert_gate: bool }
-                                // a missing/null squash_before_delivery leaves the current value unchanged on import
-                                // squash_before_delivery defaults to false in older runtime records; in a configuration
-                                // document it is optional/null and import then keeps the current value.
-                                // rebase_before_merge retains its wire name; both preparation flags apply
-                                // before delivering finished work by merge, push or pull request,
-                                // with squashing before rebasing, and never rewrite a pushed shared branch.
 Session { id, agent, agent_session_id?, console_id, project_id?, host_id,
-          role: "console"|"project", orchestration_role?: "coordinator"|"worker", origin: "console"|"user", title, terminal_title?, context?: SessionContext,
+          role: "console"|"project", orchestration_role: "coordinator"|"worker", origin: "console"|"user", title, terminal_title?, context?: SessionContext,
           observed_model?: string, observed_effort?: string, default_effort?: string,
           status: "starting"|"working"|"waiting_user"|"idle"|"interrupted"|"archived",
           background_tasks?: BackgroundTask[],   // only with status "idle"; absent when none
@@ -502,7 +494,7 @@ Session { id, agent, agent_session_id?, console_id, project_id?, host_id,
           account_id?, config_dir?, model?: string|null, effort?: string|null, pinned, locked, started_at, ended_at? }
 BackgroundTask { id, type?, description? }
 SessionContext { tokens, window?, used_percent? }
-Page    { id, console_session_id, html, anchor_message_id?, created_at }  // console_session_id: the session that pushed it, a console session or a project session
+Page    { id, session_id, html, anchor_message_id?, created_at }  // session_id: the session that pushed it, a console session or a project session
 Settings  { auto_pull_repositories, auto_delete_unresumable_archives, auto_approve_session_requests, auto_approve_resume_requests,
             auto_approve_account_switches, auto_approve_handoffs, ask_questions_as_choices,
             interface_language: string|null, auto_select_account, auto_switch_on_usage_limit, sidebar_order_by_status, auto_start_quota_windows, default_clone_dir, accounts: Account[],
@@ -531,13 +523,13 @@ start, and kept current by the git status check (step 3 of "Daemon behaviour, pe
 clients as `project_upserted`.
 
 `Session.orchestration_role` describes capability independently of the reporting relationship in `bound_to`:
-`coordinator` can manage child sessions, and `worker` cannot. The daemon supplies it on every session record sent to a
-client; it is optional for compatibility with older records. Console sessions are coordinators. A project session
-without a parent is a coordinator; a project session with a parent is a worker unless its stored `lead` flag preserves
-coordinator capability. A coordinator remains one even when it has no child sessions. The field is derived, never
-stored, and is not an authorization input. MCP session records carry the same `orchestration_role`; their existing
-`owner` and `owner_kind` fields describe the parent, independently of the role. Existing `bound_to`, `lead`, `role`,
-and tool names retain their meanings.
+`coordinator` can manage child sessions, and `worker` cannot. It is stored with the session and present on every session
+record. Console sessions are coordinators. A project session without a parent is a coordinator; a project session with a
+parent is a worker unless it is a coordinator that was bound to a console session, which keeps coordinator capability. A
+coordinator remains one even when it has no child sessions. Whatever clears a session's parent also makes it a
+coordinator. The daemon's capability checks (the MCP tool catalogue, who may own a session) read this field. MCP
+session records carry the same `orchestration_role`; their `owner` and `owner_kind` fields describe the parent,
+independently of the role. Existing `bound_to`, `role`, and tool names retain their meanings.
 
 `Session.terminal_title` as a client receives it is the session's resolved title, not the terminal's own: the title the
 agent's own records name the conversation with, else the task in the last terminal title with the agent's decorations
@@ -824,17 +816,17 @@ first), survive a daemon restart and stay local like the overrides above.
   written into the account's settings.
 
 **Every agent also has a *default* account, which is not a row in `Settings.accounts` at all**: it is the state of
-pinning nothing, named by `Console.*_account_id` and `Session.account_id` being unset. It cannot be created or removed.
+pinning nothing, named by `Console.accounts.<agent>` and `Session.account_id` being unset. It cannot be created or removed.
 The user may name it (`set_default_account_name`, kept in `Settings.default_account_names` by agent); without a name a
 client shows its own word for it, and the daemon compares account names against `Default`.
 
-`Console.*_account_id` is the account each agent's sessions opened in this console read, by id; unset means that agent's
-default account. `Project.*_account_id` is the same setting for the sessions opened in one project, and has one state
+`Console.accounts` holds the account each agent's sessions opened in this console read, by id, one entry per agent; unset
+means that agent's default account. `Project.accounts` is the same setting for the sessions opened in one project, and has one state
 more than a console's: a `ProjectAccount`, an object tagged by `kind`, which is always present on a `Project` record.
 `{"kind":"inherit"}` takes the console's reference for that agent (the state of a project that never set one, and the
 one a deleted account leaves behind); `{"kind":"default"}` is the agent's default account even where the console
-references a named account; `{"kind":"account","id":…}` is that account. A request may send `null`, or leave the field
-out where absent is meaningful, for inherit; a bare string is not accepted. A session reads only its own agent's. The
+references a named account; `{"kind":"account","id":…}` is that account. A request may send `null`, or leave the agent's
+key out where absent is meaningful, for inherit; a bare string is not accepted. A session reads only its own agent's. The
 account a session opens under is resolved, in descending priority, from the one chosen for that session
 (`open_session`'s `account`), else the project's reference for the session's agent, else the console's, else the agent's
 default account; a console session has no project, so its chain skips that step. A project whose reference is `default`
@@ -845,12 +837,12 @@ any value in the user's shell environment; unset leaves that environment as it i
 whenever the variable is set and from `~/.claude.json` otherwise — which is why the default account is never offered as
 a second, pinned account of its own. For Grok it replaces `~/.grok` (or the shell's `GROK_HOME`) as the *source*
 directory the session's private home is built from, so the user's config, login, trust store and session records come
-from it; Grok itself still runs against that private home. `Console.*_console_session_model` and
-`Console.*_console_session_effort` are the model and reasoning effort a console session of the console is launched with,
+from it; Grok itself still runs against that private home. `Console.launch.<agent>.model` and
+`Console.launch.<agent>.effort` are the model and reasoning effort a console session of the console is launched with,
 one pair per agent in that agent's own spelling, read from the console when the session is opened or resumed; unset
-means the agent's own default. Only a console session reads them. `Project.*_session_model` and
-`Project.*_session_effort` are the same for a session of one project, and are read by that project's sessions alone.
-`Console.*_project_session_model` and `Console.*_project_session_effort` are the pair a project session of the console
+means the agent's own default. Only a console session reads them. `Project.launch.<agent>.model` and
+`Project.launch.<agent>.effort` are the same for a session of one project, and are read by that project's sessions alone.
+`Console.project_session_launch.<agent>.model` and `.effort` are the pair a project session of the console
 falls back to for each value its project leaves unset; unset means the agent's own default. A project session therefore
 resolves each value as: the session's override, else its project's, else its console's project session value, else the
 agent's own default; a console session never reads the project session pair. `Session.model` and `Session.effort` are
@@ -873,8 +865,8 @@ console parent preserves coordinator capability, as does taking that coordinator
 transferring it to another console parent. A transfer to a project parent, allowed only without any child sessions,
 changes it to a worker. Release restores independent coordinator status and keeps its children. A project worker stays a
 worker when transferred to either kind of parent. Creating a project session with a parent creates a worker. The
-wire-only `orchestration_role` distinguishes coordinator from worker independently of `bound_to`; the persisted `lead`
-flag preserves coordinator capability under a console parent. `report` and the synthesised report deliver to the parent;
+stored `orchestration_role` distinguishes coordinator from worker independently of `bound_to`, so a coordinator keeps
+its capability under a console parent. `report` and the synthesised report deliver to the parent;
 see `docs/product/reporting-to-owners.md`, "Coordinators with a parent session" in `docs/product/hub-orchestration.md`,
 and `docs/product/changing-session-owners.md`.
 
@@ -977,8 +969,7 @@ The inherited account is resolved as follows: in the caller's own console, the c
 account when it is the same agent and that account can open the session, otherwise the project's for the agent, else the
 console's; in another console, the project's, else the console's, with no fall-back to the caller; a handoff's session
 is always in the caller's own console. Agents may read and
-change the setting. A full configuration export carries it; a
-document exported before it existed omits it, and importing that document leaves the stored value unchanged.
+change the setting. A full configuration export carries it.
 
 For a new `open_session`, `new_session`, `request_session` or `handoff_session` with automatic selection on and no
 explicit account, the preferred agent is tried first: its weekly pick, then the inherited account above, then its first
@@ -1013,17 +1004,15 @@ session is launched like the settings above, so a change of the language reaches
 `title` argument (`new_session`, `handoff_session`, `rename_session`, `request_session` and `request_resume_session`)
 keeps the same static description: the language of a name is the one the section names where the session has one, else
 the one the user writes in. The field is not visible to agents (`get_settings` omits it, `update_settings` ignores it)
-and a configuration export does not carry it: a client reports it. A document exported by a build that carried a
-`reply_in_interface_language` switch still imports: the field is ignored.
+and a configuration export does not carry it: a client reports it. A settings key the daemon does not know is
+ignored on import.
 `sidebar_order_by_status` (default `true`) is whether the client's sidebar
 orders sessions and projects by status. The daemon only stores and serves it; the ordering is the client's. Off, the
 sidebar ranks no session or project by status: sessions go pinned first, then most recently started, and projects keep
-active first, then pinned, then name. Agents may read and change the setting. A full configuration export carries it; a
-document exported before it existed omits it, and importing that document leaves the stored value unchanged.
+active first, then pinned, then name. Agents may read and change the setting. A full configuration export carries it.
 `auto_start_quota_windows` (default `false`) is whether the daemon starts a
 usage window that has reset but not begun counting; see "Account quotas" below. Agents cannot read or change it, as it
-spends the user's quota. A full configuration export carries it; a document exported before it existed omits it, and
-importing that document leaves the stored value unchanged.
+spends the user's quota. A full configuration export carries it.
 `GitStatus` is one project's live git state, derived from its working directory on request and never stored; see
 "Daemon behaviour, per project" below for how it is built. `repository` is `false` when the project's directory is
 not a git repository, and every other field is then at its empty value. `branch` is the branch name, the short
@@ -1045,8 +1034,7 @@ usage limit, with the switch `switch_session_account` makes (the conversation co
 stopped is continued). It is off by default because it ends the session's process and spends another account's quota
 without asking. It governs only this: `auto_select_account` decides how a new session picks its account, and
 `auto_approve_account_switches` whether an agent's request for a switch asks the user. An agent cannot read or change
-it, as it cannot the approvals; a full configuration export carries it, and a document exported before it existed
-omits it, which leaves the stored value unchanged.
+it, as it cannot the approvals; a full configuration export carries it.
 
 - **Trigger.** The end of a turn that failed (Claude Code's and Grok Build's `StopFailure`, a Codex turn found failed in
   its rollout), and only when the session's conversation record then says the turn stopped on the usage limit; a quota
@@ -1134,7 +1122,7 @@ or reopening a session is not refused for this.
 
 `list_agent_models` is how a dialog learns which models to offer, so that no model name is written into a client.
 Each `models` entry is `{id, name, efforts}`: `id` is what Octoboard passes to the agent as its model (the value of a
-setting such as `claude_session_model`), `name` is what to show, and `efforts` is the reasoning-effort levels to offer
+setting such as `launch.claude.model`), `name` is what to show, and `efforts` is the reasoning-effort levels to offer
 for it, in the agent's own spelling. It is never unknown: it is the model's own levels, in the catalogue's order, where
 its catalogue entry gives them, else the agent's whole measured level set (Claude Code `low`, `medium`, `high`, `xhigh`,
 `max`; Codex those and `ultra`; Grok Build `low`, `medium`, `high`, `xhigh`), which is safe because levels, unlike model
@@ -1292,48 +1280,44 @@ holds it under `document`; a client saves it as a file and does not build or alt
 input of the import as much as a file the user keeps, so its shape is part of this contract.
 
 ```
-Document { format: "octoboard-configuration", version: 2,
-           exported_by?,                                  // the Octoboard version that exported it; informational
+Document { format: "octoboard-configuration", version: 1,
+           exported_by,              // the Octoboard version that exported it, or null; informational
            settings?: { auto_pull_repositories,       // present exactly when the application settings were
-                                                      // exported, whichever consoles; an older document
-                                                      // may carry it as `auto_sync_repositories`, read alike
-                        auto_delete_unresumable_archives?,   // absent or null in an older document: left as it is
-                        auto_select_account?,                // absent or null in an older document: left as it is
-                        auto_switch_on_usage_limit?,         // absent or null in an older document: left as it is
-                        sidebar_order_by_status?,            // absent or null in an older document: left as it is
-                        auto_start_quota_windows?,           // absent or null in an older document: left as it is
-                        auto_approve_session_requests?,      // absent or null in an older document: left as it is
-                        auto_approve_resume_requests?,       // absent or null in an older document: left as it is
-                        auto_approve_account_switches?,      // absent or null in an older document: left as it is
-                        auto_approve_handoffs?,              // absent or null in an older document: left as it is
-                        ask_questions_as_choices?,           // absent or null in an older document: left as it is
-                        git_workflow?: GitWorkflowSettings,  // absent or null in an older document: left as they are
-                        claude_compatibility?: { "<agent>": boolean },  // absent or null in an older document: left as it is
+                                                      // exported, whichever consoles
+                        auto_delete_unresumable_archives,
+                        auto_select_account,
+                        auto_switch_on_usage_limit,
+                        sidebar_order_by_status,
+                        auto_start_quota_windows,
+                        auto_approve_session_requests,
+                        auto_approve_resume_requests,
+                        auto_approve_account_switches,
+                        auto_approve_handoffs,
+                        ask_questions_as_choices,
+                        git_workflow: GitWorkflowSettings,
+                        claude_compatibility: { "<agent>": boolean },  // an agent the user never chose for is left out
                         keyboard_shortcuts? },               // the exporting client's changed shortcuts by command id
                                                              // (`{}`: all at their defaults), added by the client, never
                                                              // the daemon (see below)
            accounts?: DocumentAccounts,                      // present exactly when the accounts were exported
            consoles: DocumentConsole[] }                     // empty when no console was exported
 DocumentConsole { name, icon?, default_agent,
-                  project_session_agent?,                           // absent in an older document: follows default_agent
-                  claude_account?, codex_account?, grok_account?,   // each an AccountName
-                  claude_console_session_model?, claude_console_session_effort?,
-                  codex_console_session_model?, codex_console_session_effort?,
-                  grok_console_session_model?, grok_console_session_effort?,
-                  claude_project_session_model?, claude_project_session_effort?,   // absent in an older
-                  codex_project_session_model?, codex_project_session_effort?,     // document: unset
-                  grok_project_session_model?, grok_project_session_effort?,
-                  console_session_prompt?,                          // absent in an older document: none
+                  project_session_agent?,                           // absent or null: follows default_agent
+                  accounts: { claude?, codex?, grok? },             // each an AccountName or null
+                  launch: { claude?, codex?, grok? },               // each { model, effort }, which are each null when
+                                                                    // unset; an agent's entry may be left out
+                  project_session_launch: { claude?, codex?, grok? },    // the same shape
+                  console_session_prompt?,                          // absent or null: none
                   projects: DocumentProject[] }
 DocumentProject { name, path,                                       // absolute; only the last segment without paths
                   source: "local"|"parent"|"git", remote_url?, default_agent?, pinned, tags: string[],
-                  description?,                                     // absent in an older document: none
-                  claude_account, codex_account, grok_account,       // each a ProjectAccountRef
-                  claude_session_model?, claude_session_effort?,
-                  codex_session_model?, codex_session_effort?,
-                  grok_session_model?, grok_session_effort?,
-                  git_workflow?: GitWorkflowOverride }               // both export scopes; absent in an older document:
-                                                                    // every item follows the application-wide value
+                  description?,                                     // absent or null: none
+                  accounts: { claude?, codex?, grok? },              // each a ProjectAccountRef; an agent left out
+                                                                    // inherits
+                  launch: { claude?, codex?, grok? },                // each { model, effort }, which are each null when
+                                                                    // unset; an agent's entry may be left out
+                  git_workflow: GitWorkflowOverride }                // both export scopes; an item that is null follows
+                                                                    // the application-wide value
 AccountName       { name }
 ProjectAccountRef { kind: "inherit" } | { kind: "default" } | { kind: "account", name }
 DocumentAccounts  { added_agents?: Agent[],                 // the added agents in their order; absent when the exporting
@@ -1341,7 +1325,7 @@ DocumentAccounts  { added_agents?: Agent[],                 // the added agents 
                     agents: DocumentAgentAccounts[] }       // an entry for each agent with an account or a named default
                                                             // account, in the order claude, codex, grok
 DocumentAgentAccounts { agent,                               // "claude" | "codex" | "grok"
-                        default_account: { name?, position },   // name: what the user called it (absent or null when
+                        default_account: { name, position },    // name: what the user called it (null when
                                                             // unnamed); position: how many accounts come before it in
                                                             // the display order
                         accounts: DocumentAccount[] }        // the accounts the user owns, in the display order
@@ -1351,8 +1335,7 @@ DocumentAccount   { name, directory, share_default_config: bool, disabled: bool 
 - **Scope.** The regions are chosen one by one (see the `export_configuration` request): the consoles and projects
   (`consoles`: one, all or none; `consoles` is empty for none), the application settings (`settings`) and the accounts
   (`accounts`). `settings` is present exactly when the settings were exported and `accounts` exactly when the accounts
-  were: nothing may be inferred from the presence of one about the others (earlier daemons exported `settings` with
-  every console and with no other, and a reader must not rely on that). `settings` holds the portable application
+  were: nothing may be inferred from the presence of one about the others. `settings` holds the portable application
   settings (`auto_pull_repositories`, `auto_delete_unresumable_archives`, `auto_select_account`,
   `auto_switch_on_usage_limit`, `sidebar_order_by_status`, `auto_start_quota_windows`, `auto_approve_session_requests`,
   `auto_approve_resume_requests`, `auto_approve_account_switches`, `auto_approve_handoffs`, `ask_questions_as_choices`,
@@ -1364,11 +1347,11 @@ DocumentAccount   { name, directory, share_default_config: bool, disabled: bool 
   repository.
 - **Nothing is an id.** No console, project or account carries an `id`. A console's `workdir` is not in the document
   either: the daemon derives it from the console's id when it creates the console, so it would carry that id and the
-  daemon's own layout, and an import creates its console, and so its directory, itself. A console's `*_account` is
+  daemon's own layout, and an import creates its console, and so its directory, itself. A console's `accounts.<agent>` is
   an `AccountName`, or `null` for the agent's default account. A project's is a `ProjectAccountRef`, which keeps the
-  three states of `Project.*_account_id`: `inherit` the console's reference, `default` to pin the agent's default
+  three states of `Project.accounts.<agent>`: `inherit` the console's reference, `default` to pin the agent's default
   account even where the console names another, or the named account. A reference holds the account's name alone:
-  its agent is the one whose field it sits in (`claude_account` is a Claude Code account), so the document has no
+  its agent is the one whose entry it sits in (`accounts.claude` is a Claude Code account), so the document has no
   second statement of it to contradict. An import matches the name without regard to case, since account names are
   unique within an agent only compared that way (`Work` and `work` are one name); matching exactly would send a
   reference to the default account for no better reason than how the name was typed.
@@ -1404,18 +1387,15 @@ DocumentAccount   { name, directory, share_default_config: bool, disabled: bool 
   `file:` URL is dropped, as it would point into the exporting machine.
 - **Models and efforts** are exported as stored. They are free text read only when a session is launched, so a value
   the importing machine's agent does not offer is not an error here.
-- **Version.** `format` tells a configuration document from any other JSON; `version` is an integer, 2 today. It is
+- **Version.** `format` tells a configuration document from any other JSON; `version` is an integer, 1 today. It is
   raised when a change would make a reader written for the older version misread a document: a field removed, or given
-  another meaning. A field added is not such a change, and a reader ignores one it does not know. An import refuses a
-  `format` it does not know, or a `version` newer than it supports, before creating anything. An older `version` is
-  upgraded one version at a time to the current one before the document is read, so an export kept from before a change
-  stays importable. `exported_by` records the Octoboard version that produced the document, for diagnosing one that
-  misbehaves; an import never reads it, it is absent in a document exported before it existed, and it takes no part in
-  `version`. Version 2 renamed the worktree settings to the git workflow settings: `settings.worktrees` and each
-  project's `worktrees` became `git_workflow`, and their boolean `use_worktrees` became `development`, where `true` is
-  `worktree`, `false` is `in_place` and a project's `null` stays `null`. A version 1 document is upgraded to that shape
-  before it is read. The `accounts` region was added without raising `version`: a reader that does not know it ignores
-  it.
+  another meaning. A field added is not such a change, and a reader ignores one it does not know. An import reads only
+  the current `version`: it refuses a `format` it does not know, or any other `version`, older or newer, before
+  creating anything. No build has been released, so there are no upgrade steps; once a version is released, raising
+  `version` adds a step that upgrades the previous one. `exported_by` records the Octoboard version that produced
+  the document, for diagnosing one that misbehaves; an import never reads it and it takes no part in `version`. Each
+  agent's settings are nested: a console's `accounts`, `launch` and `project_session_launch` and a project's
+  `accounts` and `launch` are objects keyed by agent, and an agent's entry that is left out is unset.
 
 ### Configuration import
 
@@ -1426,28 +1406,28 @@ untrusted input: its paths and URLs are data this machine checks, and nothing in
 
 ```
 configuration_inspected { settings?: { auto_pull_repositories, current_auto_pull_repositories,
-                                      auto_delete_unresumable_archives?,   // absent or null: the document predates it
+                                      auto_delete_unresumable_archives,
                                       current_auto_delete_unresumable_archives,
-                                      auto_select_account?,                // absent or null: the document predates it
+                                      auto_select_account,
                                       current_auto_select_account,
-                                      auto_switch_on_usage_limit?,         // absent or null: the document predates it
+                                      auto_switch_on_usage_limit,
                                       current_auto_switch_on_usage_limit,
-                                      sidebar_order_by_status?,            // absent or null: the document predates it
+                                      sidebar_order_by_status,
                                       current_sidebar_order_by_status,
-                                      auto_start_quota_windows?,           // absent or null: the document predates it
+                                      auto_start_quota_windows,
                                       current_auto_start_quota_windows,
-                                      auto_approve_session_requests?,      // absent or null: the document predates it
+                                      auto_approve_session_requests,
                                       current_auto_approve_session_requests,
-                                      auto_approve_resume_requests?,       // absent or null: the document predates it
+                                      auto_approve_resume_requests,
                                       current_auto_approve_resume_requests,
-                                      auto_approve_account_switches?,      // absent or null: the document predates it
+                                      auto_approve_account_switches,
                                       current_auto_approve_account_switches,
-                                      auto_approve_handoffs?,              // absent or null: the document predates it
+                                      auto_approve_handoffs,
                                       current_auto_approve_handoffs,
-                                      ask_questions_as_choices?,           // absent or null: the document predates it
+                                      ask_questions_as_choices,
                                       current_ask_questions_as_choices,
-                                      git_workflow?: DocumentGitWorkflowSettings,  // absent or null: the document predates it
-                                      claude_compatibility?: { "<agent>": boolean },  // absent or null: the document predates it
+                                      git_workflow: GitWorkflowSettings,
+                                      claude_compatibility: { "<agent>": boolean },
                                       current_claude_compatibility: { "<agent>": boolean },
                                       current_git_workflow: GitWorkflowSettings },
                           accounts?: InspectedAccounts,       // present when the document carries accounts
@@ -1515,8 +1495,8 @@ Failure           { code, params, message }             // as an `error` reply c
 ```
 
 - **Refused before anything is created.** The document is refused when it is not a configuration document
-  (`configuration_not_recognised`), when its `version` is 0 or newer than this daemon reads
-  (`configuration_version_unsupported`; checked before the rest of the body is read, since a newer version may be shaped
+  (`configuration_not_recognised`), when its `version` is not the one this daemon reads
+  (`configuration_version_unsupported`; checked before the rest of the body is read, since another version may be shaped
   in ways this one cannot read), or when it cannot be read (`configuration_unreadable`). Applying also refuses an
   impossible resolution, of a project or of an account (`import_resolution_invalid`), a request for settings or accounts
   the document does not carry (`import_settings_missing`, `import_accounts_missing`), and whatever `create_console`
@@ -1597,10 +1577,8 @@ Failure           { code, params, message }             // as an `error` reply c
   show what applying would change. They are applied only when `import_configuration` is sent `apply_settings: true`,
   because `auto_pull_repositories` makes the daemon fast-forward the user's repositories on its own and
   `auto_delete_unresumable_archives` makes it delete archived sessions on its own, which changes how this machine
-  behaves. A document without `auto_delete_unresumable_archives` leaves that setting as it is. `auto_select_account` is
-  carried and applied the same way; a document that omits it, as one exported before the setting existed does, leaves
-  the stored value unchanged. `auto_switch_on_usage_limit`, `sidebar_order_by_status`, `auto_start_quota_windows`,
-  `auto_approve_session_requests`, `auto_approve_resume_requests`, `auto_approve_account_switches`,
+  behaves. `auto_select_account` is carried and applied the same way. `auto_switch_on_usage_limit`,
+  `sidebar_order_by_status`, `auto_start_quota_windows`, `auto_approve_session_requests`, `auto_approve_resume_requests`, `auto_approve_account_switches`,
   `auto_approve_handoffs` and `ask_questions_as_choices` are carried and applied the same way; the four approvals make
   the daemon approve agents' session and resume requests, account switches and handoffs without asking the user, which
   is why the review states it when the document turns one on. `ask_questions_as_choices` is on by default, so a document
@@ -1608,9 +1586,9 @@ Failure           { code, params, message }             // as an `error` reply c
   carried and applied the same way, agent by agent, as the user's explicit choices only (an agent never chosen for is
   not exported, so the importing machine keeps following its own default for it; an agent the document lists that has no
   such setting is skipped, in the review as in the apply); `git_workflow` is carried and applied the same way, item by
-  item; a document without it leaves the git workflow settings as they are. A project's own `git_workflow` override is
-  not a setting of this kind: it travels with the project in both export scopes and a created project takes it, every
-  item following the application-wide value when the document omits it. They are applied last, through the same path as
+  item. A project's own `git_workflow` override is not a setting of this kind: it travels with the project in both
+  export scopes and a created project takes it, an item that is `null` following the application-wide value. They are
+  applied last, through the same path as
   `update_settings` (so they are normalised and `settings_updated` is broadcast when the value changes), and
   `settings_applied` in the result reports what was applied. Asking for them of a document that has none is refused
   (`import_settings_missing`) rather than ignored, so a request never silently does less than it was told to. Settings
@@ -2674,9 +2652,9 @@ Request body is `{"tool": "<name>", "arguments": {…}}`. The answer is always `
 `{"ok": false, "error": "<prose>"}`: a refused call is an outcome the model is meant to read and act on, not a transport
 failure. Which tools a session may call follows from its kind, coordinator or worker capability, and current parent
 relationship, and is checked here as well as in the child. A coordinator with a console parent keeps the coordinator
-tool catalogue. Capability can change while a session runs, so every answer also carries `bound`, the legacy flag
-meaning that the session is a worker after the call, not merely that it has a parent. The `octoboardd mcp` child,
-started with `--bound` for a worker, switches the catalogue it announces to match and sends
+tool catalogue. Capability can change while a session runs, so every answer also carries `worker`, whether
+the session is a worker after the call, not merely whether it has a parent. The `octoboardd mcp` child,
+started with `--worker` for a worker, switches the catalogue it announces to match and sends
 `notifications/tools/list_changed` when it changes. A call to a tool in the other capability catalogue, but not in the
 one the child last announced, is forwarded rather than refused in the child, so that the daemon decides and its answer
 brings the child's catalogue up to date; a name in neither catalogue is a protocol error in the child. An agent that
@@ -3098,7 +3076,7 @@ directory.
   turn was taken; whether the agent still holds the record is not read, `reopen_session` refusing as
   `conversation_unresumable` when it does not), `model` and `effort` (the session's own launch choices as
   `Session.model` and `Session.effort` carry them: a key absent when it follows its project's or console's setting,
-  `null` for the agent's own default), `orchestration_role` (`coordinator` or `worker`), the compatibility flag `lead`,
+  `null` for the agent's own default), `orchestration_role` (`coordinator` or `worker`),
   and `owned_sessions` (its child sessions in any status, archived ones included, as the rules of `transfer_session`
   count them). Reading them runs no process: `branches` comes from the store and the reflog files, once per repository
   for a listing.

@@ -338,10 +338,9 @@ that parent is the caller). `orchestration_role` is `coordinator` or `worker`: i
 manage child sessions, separately from the parent relationship. Console sessions read `coordinator`; project sessions
 use the roles described in `docs/product/hub-orchestration.md`. A coordinator can have a parent and no children.
 
-Session records sent to windows also expose `orchestration_role`; their parent field remains `bound_to`. Tool names,
-arguments such as `owner`, the `owner_kind` field and the compatibility flag `lead` keep their existing names.
-Clients reading an older record without `orchestration_role` cannot infer a project session's role from a non-null
-parent alone: a coordinator can also have a parent.
+Session records sent to windows carry `orchestration_role` too, always, and name the parent `bound_to`. A project
+session's role cannot be inferred from a non-null parent alone, since a coordinator can also have a parent: it is read
+from `orchestration_role`.
 
 Each record also carries `background_tasks`: for a Claude Code session working in background, the work it left running,
 each entry with `id` and, where Claude Code gives them, `type` and `description`; an empty list for every other session.
@@ -420,7 +419,7 @@ And each record carries what tells sessions apart and what an owner decides on:
   absent when the session follows its project's, else its console's, setting, and `null` when the session leaves the
   value to the agent's own default. They differ from `observed_model` and `observed_effort`, which say what the agent's
   records show.
-- `lead`, a compatibility flag that is true for a project coordinator with a console parent (see "Coordinators with a
-  parent session" in `docs/product/hub-orchestration.md`), and `owned_sessions`, how many sessions are bound to it in
-  any status, archived ones included — the count that decides whom it can be bound to (see "Who can own a session" in
-  `docs/product/changing-session-owners.md`).
+- `owned_sessions`, how many sessions are bound to it in any status, archived ones included — the count that decides
+  whom it can be bound to (see "Who can own a session" in `docs/product/changing-session-owners.md`). A project
+  coordinator with a console parent reads `coordinator` in `orchestration_role` with `owner_kind` `console` (see
+  "Coordinators with a parent session" in `docs/product/hub-orchestration.md`).

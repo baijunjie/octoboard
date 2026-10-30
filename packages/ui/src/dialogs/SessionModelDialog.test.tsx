@@ -14,7 +14,7 @@ vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }))
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const parentConsole = consoleOf("c-1", "Main");
-const project = { ...projectOf("p-1", parentConsole.id, "Search API"), claude_session_model: "opus", claude_session_effort: "high" };
+const project = projectOf("p-1", parentConsole.id, "Search API", { launch: { claude: { model: "opus", effort: "high" } } });
 
 async function mount(session: Session, models: "pending" | "unavailable" | "empty" | "listed" = "listed") {
   const store = createStateStore({
@@ -23,7 +23,7 @@ async function mount(session: Session, models: "pending" | "unavailable" | "empt
     sessions: new Map([[session.id, session]]),
   });
   const request = vi.fn(async (body: { type: string; agent?: string; account?: string | null }) => {
-    if (body.type !== "list_agent_models") return { type: "ack" };
+    if (body.type !== "list_agent_models") return { type: "ack", id: null };
     if (models === "pending") return new Promise<never>(() => {});
     return { type: "agent_models", agent: body.agent, account: body.account ?? null, ...(models === "unavailable"
       ? { models: [], unavailable: { code: "models_binary_not_found", params: { binary: "claude" }, message: "claude was not found" } }

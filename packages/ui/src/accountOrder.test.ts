@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 
+import { accountOf } from "./gallery/fixtures/builders";
 import { orderedAccounts } from "./accountOrder";
 import type { Account } from "./protocol";
 
-const work: Account = { id: "work", agent: "claude", name: "Work", config_dir: "/work" };
-const home: Account = { id: "home", agent: "claude", name: "Home", config_dir: "/home" };
-const other: Account = { id: "other", agent: "codex", name: "Other", config_dir: "/other" };
+const work: Account = accountOf("work", "claude", "Work", "/work");
+const home: Account = accountOf("home", "claude", "Home", "/home");
+const other: Account = accountOf("other", "codex", "Other", "/other");
 const accounts = [work, other, home];
 
 describe("orderedAccounts", () => {

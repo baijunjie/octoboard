@@ -25,11 +25,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::account_dirs::account_dir_key;
 use crate::git_remote;
-use crate::git_workflow::{
-    Delivery, Development, GitWorkflowOverride, GitWorkflowSettings, GitWorkflowSettingsChanges,
-};
+use crate::git_workflow::{GitWorkflowOverride, GitWorkflowSettings};
 use crate::protocol::{
-    error_code, Account, Agent, CodedError, Console, Project, ProjectAccount, ProjectSource,
+    error_code, Account, Agent, CodedError, Console, Launch, PerAgent, Project, ProjectAccount,
+    ProjectSource,
 };
 use crate::store::Store;
 
@@ -40,16 +39,19 @@ pub const FORMAT: &str = "octoboard-configuration";
 /// Raised when a change makes an older reader misread a document: a field removed or given another
 /// meaning. A field added, which a reader that does not know it ignores, does not raise it.
 ///
-/// Raising it needs a step in `config_upgrade` that upgrades a document of the previous version,
-/// so an export made before stays importable.
-pub const VERSION: u32 = 2;
+/// An import reads only this version and refuses any other. No build has been released yet, so
+/// there are no upgrade steps; once a version is released, raising it adds a step that upgrades a
+/// document of the previous version, so an export made before stays importable.
+pub const VERSION: u32 = 1;
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ConfigurationDocument {
+    #[cfg_attr(test, ts(type = "\"octoboard-configuration\""))]
     pub format: String,
     pub version: u32,
     /// The Octoboard version that produced the document, for diagnosing one that misbehaves. An
-    /// import never reads it, and it is absent in a document exported before it existed.
+    /// import never reads it; `null` when the producer did not record one.
     pub exported_by: Option<String>,
     /// The application settings that are not console-scoped. Present exactly when the export
     /// included them, whichever consoles it holds.
@@ -64,6 +66,7 @@ pub struct ConfigurationDocument {
 
 /// The account structure of this machine, never a credential: which agents the user has added and
 /// each agent's accounts.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DocumentAccounts {
     /// The agents the user has added, in their order. Absent when the exporting machine had not
@@ -76,30 +79,29 @@ pub struct DocumentAccounts {
     pub agents: Vec<DocumentAgentAccounts>,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DocumentAgentAccounts {
     pub agent: Agent,
-    #[serde(default)]
     pub default_account: DocumentDefaultAccount,
     /// The accounts the user owns, in the agent's display order.
-    #[serde(default)]
     pub accounts: Vec<DocumentAccount>,
 }
 
 /// What the document says of an agent's default account. Its directory is whatever the agent
 /// resolves on the machine, so it is not carried, and neither is its disabled flag.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DocumentDefaultAccount {
     /// The name the user gave it; `null` when it is unnamed.
-    #[serde(default)]
     pub name: Option<String>,
     /// Its place in the display order: how many of the agent's accounts come before it.
-    #[serde(default)]
     pub position: usize,
 }
 
 /// An account the user owns. Its id, its login and everything the agent keeps in its directory
 /// stay behind.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DocumentAccount {
     pub name: String,
@@ -108,120 +110,48 @@ pub struct DocumentAccount {
     /// choice: an account cannot exist without its directory.
     pub directory: String,
     /// Whether the account shares the agent's default configuration.
-    #[serde(default)]
     pub share_default_config: bool,
-    #[serde(default)]
     pub disabled: bool,
 }
 
-/// The workflow carried by a configuration document. A setting added after the original
-/// workflow shape is optional, so importing an older document leaves its current value alone.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DocumentGitWorkflowSettings {
-    pub development: Development,
-    #[serde(default)]
-    pub squash_before_delivery: Option<bool>,
-    pub rebase_before_merge: bool,
-    pub delivery: Delivery,
-    pub revert_gate: bool,
-}
-
-impl From<GitWorkflowSettings> for DocumentGitWorkflowSettings {
-    fn from(settings: GitWorkflowSettings) -> Self {
-        Self {
-            development: settings.development,
-            squash_before_delivery: Some(settings.squash_before_delivery),
-            rebase_before_merge: settings.rebase_before_merge,
-            delivery: settings.delivery,
-            revert_gate: settings.revert_gate,
-        }
-    }
-}
-
-impl From<DocumentGitWorkflowSettings> for GitWorkflowSettingsChanges {
-    fn from(settings: DocumentGitWorkflowSettings) -> Self {
-        Self {
-            development: Some(settings.development),
-            squash_before_delivery: settings.squash_before_delivery,
-            rebase_before_merge: Some(settings.rebase_before_merge),
-            delivery: Some(settings.delivery),
-            revert_gate: Some(settings.revert_gate),
-        }
-    }
-}
-
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DocumentSettings {
-    /// Documents exported before the setting was renamed carry it as `auto_sync_repositories`.
-    #[serde(alias = "auto_sync_repositories")]
     pub auto_pull_repositories: bool,
-    /// Absent in a document exported before the setting existed: importing it leaves the setting
-    /// as it is.
-    #[serde(default)]
-    pub auto_delete_unresumable_archives: Option<bool>,
-    /// Absent in a document exported before the setting existed: importing it leaves the setting
-    /// as it is.
-    #[serde(default)]
-    pub auto_select_account: Option<bool>,
-    /// Absent in a document exported before the setting existed: importing it leaves the setting
-    /// as it is.
-    #[serde(default)]
-    pub auto_switch_on_usage_limit: Option<bool>,
-    /// Absent in a document exported before the setting existed: importing it leaves the setting
-    /// as it is.
-    #[serde(default)]
-    pub sidebar_order_by_status: Option<bool>,
-    /// Absent in a document exported before the setting existed: importing it leaves the setting
-    /// as it is.
-    #[serde(default)]
-    pub auto_start_quota_windows: Option<bool>,
-    /// Absent in a document exported before the setting was carried: importing it leaves the
-    /// setting as it is.
-    #[serde(default)]
-    pub auto_approve_session_requests: Option<bool>,
-    /// Absent in a document exported before the setting was carried: importing it leaves the
-    /// setting as it is.
-    #[serde(default)]
-    pub auto_approve_resume_requests: Option<bool>,
-    /// Absent in a document exported before the setting was carried: importing it leaves the
-    /// setting as it is.
-    #[serde(default)]
-    pub auto_approve_account_switches: Option<bool>,
-    /// Absent in a document exported before the setting was carried: importing it leaves the
-    /// setting as it is.
-    #[serde(default)]
-    pub auto_approve_handoffs: Option<bool>,
-    /// Absent in a document exported before the setting was carried: importing it leaves the
-    /// setting as it is.
-    #[serde(default)]
-    pub ask_questions_as_choices: Option<bool>,
-    /// The application-wide git workflow settings. Absent in a document exported before they
-    /// existed: importing it leaves them as they are. A version 1 document carries them as
-    /// `worktrees`, which `config_upgrade` converts.
-    #[serde(default)]
-    pub git_workflow: Option<DocumentGitWorkflowSettings>,
+    pub auto_delete_unresumable_archives: bool,
+    pub auto_select_account: bool,
+    pub auto_switch_on_usage_limit: bool,
+    pub sidebar_order_by_status: bool,
+    pub auto_start_quota_windows: bool,
+    pub auto_approve_session_requests: bool,
+    pub auto_approve_resume_requests: bool,
+    pub auto_approve_account_switches: bool,
+    pub auto_approve_handoffs: bool,
+    pub ask_questions_as_choices: bool,
+    /// The application-wide git workflow settings.
+    pub git_workflow: GitWorkflowSettings,
     /// The choices the user made on whether an agent other than Claude Code (by wire name) loads
     /// Claude Code's instructions and skills. An agent they never chose for is not listed, so the
-    /// importing machine keeps following its own default for it. Absent in a document exported
-    /// before the setting was carried: importing it leaves the setting as it is. An agent the
-    /// document does not list is left as it is.
-    #[serde(default)]
-    pub claude_compatibility: Option<std::collections::BTreeMap<String, bool>>,
+    /// importing machine keeps following its own default for it; an agent the document does not
+    /// list is left as it is.
+    #[cfg_attr(test, ts(type = "Partial<Record<Agent, boolean>>"))]
+    pub claude_compatibility: std::collections::BTreeMap<String, bool>,
     /// The keyboard shortcuts the exporting client has changed, by command id, which only the client
     /// reads and writes: the client adds them to a full export it saves (an empty object when it has
     /// none changed, which on import means every shortcut at its default) and applies them from an
     /// import. The daemon builds none, stores them nowhere and does not read them, so they pass
-    /// through an import's reply as they came. Absent in a document exported before they were
-    /// carried, or one a client saved without them: importing it leaves the client's shortcuts as
-    /// they are.
+    /// through an import's reply as they came. Absent in a document a client saved without them:
+    /// importing it leaves the client's shortcuts as they are.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(type = "unknown"))]
     pub keyboard_shortcuts: Option<serde_json::Value>,
 }
 
 /// A reference to an account: its name, which is unique within its agent. The agent is the one
-/// whose field holds the reference (`claude_account` is a Claude Code account), so it is not
+/// whose entry holds the reference (`accounts.claude` is a Claude Code account), so it is not
 /// repeated here, where a hand-edited document could contradict it. The importing machine rebinds
 /// the reference to the account of that agent and name.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AccountName {
     pub name: String,
@@ -229,10 +159,12 @@ pub struct AccountName {
 
 /// A project's choice of account for one agent; [`ProjectAccount`] with the account named rather
 /// than numbered.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ProjectAccountRef {
     /// Take the console's reference for the agent.
+    #[default]
     Inherit,
     /// The agent's default account, even where the console references a named one.
     Default,
@@ -242,31 +174,20 @@ pub enum ProjectAccountRef {
 }
 
 /// A console's own settings and the projects associated with it.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DocumentConsole {
     pub name: String,
     pub icon: Option<String>,
     pub default_agent: Agent,
-    /// The agent a project session falls back to; absent or `null` follows `default_agent`, as
-    /// every document written before it was carried does.
+    /// The agent a project session falls back to; absent or `null` follows `default_agent`.
     pub project_session_agent: Option<Agent>,
     /// Each agent's account, by name; `null` is that agent's default account.
-    pub claude_account: Option<AccountName>,
-    pub codex_account: Option<AccountName>,
-    pub grok_account: Option<AccountName>,
-    pub claude_console_session_model: Option<String>,
-    pub claude_console_session_effort: Option<String>,
-    pub codex_console_session_model: Option<String>,
-    pub codex_console_session_effort: Option<String>,
-    pub grok_console_session_model: Option<String>,
-    pub grok_console_session_effort: Option<String>,
-    /// The model and effort a project session falls back to; absent in an older document is none.
-    pub claude_project_session_model: Option<String>,
-    pub claude_project_session_effort: Option<String>,
-    pub codex_project_session_model: Option<String>,
-    pub codex_project_session_effort: Option<String>,
-    pub grok_project_session_model: Option<String>,
-    pub grok_project_session_effort: Option<String>,
+    pub accounts: PerAgent<Option<AccountName>>,
+    /// Each agent's model and effort for a console session.
+    pub launch: PerAgent<Launch>,
+    /// The model and effort a project session falls back to.
+    pub project_session_launch: PerAgent<Launch>,
     /// The user's own addition to the console session's instructions; absent is none.
     pub console_session_prompt: Option<String>,
     pub projects: Vec<DocumentProject>,
@@ -277,6 +198,7 @@ pub struct DocumentConsole {
 /// project, absent for a directory that is not a repository or a repository with no remote, and
 /// also when the export left paths out and the remote is not one that can be cloned from (a local
 /// path would reveal one).
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DocumentProject {
     pub name: String,
@@ -286,24 +208,19 @@ pub struct DocumentProject {
     pub default_agent: Option<Agent>,
     pub pinned: bool,
     pub tags: Vec<String>,
-    /// The user's own summary of the project; absent in an older document is none.
+    /// The user's own summary of the project; absent is none.
     pub description: Option<String>,
-    pub claude_account: ProjectAccountRef,
-    pub codex_account: ProjectAccountRef,
-    pub grok_account: ProjectAccountRef,
-    pub claude_session_model: Option<String>,
-    pub claude_session_effort: Option<String>,
-    pub codex_session_model: Option<String>,
-    pub codex_session_effort: Option<String>,
-    pub grok_session_model: Option<String>,
-    pub grok_session_effort: Option<String>,
+    /// Each agent's account choice.
+    pub accounts: PerAgent<ProjectAccountRef>,
+    /// Each agent's model and effort for the project's sessions.
+    pub launch: PerAgent<Launch>,
     /// The project's own git workflow settings, each item `null` when it follows the
-    /// application-wide value. Absent in an older document: every item follows.
-    #[serde(default)]
+    /// application-wide value.
     pub git_workflow: GitWorkflowOverride,
 }
 
 /// Which consoles an export holds. On the wire it is the request's `consoles` field.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExportedConsoles {
@@ -423,18 +340,18 @@ pub fn build(store: &Store, selection: &Selection) -> Result<ConfigurationDocume
     let settings = if selection.settings {
         Some(DocumentSettings {
             auto_pull_repositories: store.auto_pull_repositories()?,
-            auto_delete_unresumable_archives: Some(store.auto_delete_unresumable_archives()?),
-            auto_select_account: Some(store.auto_select_account()?),
-            auto_switch_on_usage_limit: Some(store.auto_switch_on_usage_limit()?),
-            sidebar_order_by_status: Some(store.sidebar_order_by_status()?),
-            auto_start_quota_windows: Some(store.auto_start_quota_windows()?),
-            auto_approve_session_requests: Some(store.auto_approve_session_requests()?),
-            auto_approve_resume_requests: Some(store.auto_approve_resume_requests()?),
-            auto_approve_account_switches: Some(store.auto_approve_account_switches()?),
-            auto_approve_handoffs: Some(store.auto_approve_handoffs()?),
-            ask_questions_as_choices: Some(store.ask_questions_as_choices()?),
-            git_workflow: Some(store.git_workflow_settings()?.into()),
-            claude_compatibility: Some(store.claude_compatibility_choices()?),
+            auto_delete_unresumable_archives: store.auto_delete_unresumable_archives()?,
+            auto_select_account: store.auto_select_account()?,
+            auto_switch_on_usage_limit: store.auto_switch_on_usage_limit()?,
+            sidebar_order_by_status: store.sidebar_order_by_status()?,
+            auto_start_quota_windows: store.auto_start_quota_windows()?,
+            auto_approve_session_requests: store.auto_approve_session_requests()?,
+            auto_approve_resume_requests: store.auto_approve_resume_requests()?,
+            auto_approve_account_switches: store.auto_approve_account_switches()?,
+            auto_approve_handoffs: store.auto_approve_handoffs()?,
+            ask_questions_as_choices: store.ask_questions_as_choices()?,
+            git_workflow: store.git_workflow_settings()?,
+            claude_compatibility: store.claude_compatibility_choices()?,
             keyboard_shortcuts: None,
         })
     } else {
@@ -558,27 +475,16 @@ fn document_console(
     accounts: &HashMap<String, Account>,
     include_paths: bool,
 ) -> DocumentConsole {
-    let reference = |agent: Agent, id: &Option<String>| account_ref(accounts, agent, id.as_deref());
     DocumentConsole {
         name: console.name.clone(),
         icon: console.icon.clone(),
         default_agent: console.default_agent,
         project_session_agent: console.project_session_agent,
-        claude_account: reference(Agent::Claude, &console.claude_account_id),
-        codex_account: reference(Agent::Codex, &console.codex_account_id),
-        grok_account: reference(Agent::Grok, &console.grok_account_id),
-        claude_console_session_model: console.claude_console_session_model.clone(),
-        claude_console_session_effort: console.claude_console_session_effort.clone(),
-        codex_console_session_model: console.codex_console_session_model.clone(),
-        codex_console_session_effort: console.codex_console_session_effort.clone(),
-        grok_console_session_model: console.grok_console_session_model.clone(),
-        grok_console_session_effort: console.grok_console_session_effort.clone(),
-        claude_project_session_model: console.claude_project_session_model.clone(),
-        claude_project_session_effort: console.claude_project_session_effort.clone(),
-        codex_project_session_model: console.codex_project_session_model.clone(),
-        codex_project_session_effort: console.codex_project_session_effort.clone(),
-        grok_project_session_model: console.grok_project_session_model.clone(),
-        grok_project_session_effort: console.grok_project_session_effort.clone(),
+        accounts: PerAgent::from_fn(|agent| {
+            account_ref(accounts, agent, console.accounts.get(agent).as_deref())
+        }),
+        launch: console.launch.clone(),
+        project_session_launch: console.project_session_launch.clone(),
         console_session_prompt: console.console_session_prompt.clone(),
         projects: projects
             .into_iter()
@@ -601,9 +507,9 @@ fn document_project(
             .unwrap_or(ProjectAccountRef::Inherit),
     };
     DocumentProject {
-        claude_account: reference(Agent::Claude, &project.claude_account_id),
-        codex_account: reference(Agent::Codex, &project.codex_account_id),
-        grok_account: reference(Agent::Grok, &project.grok_account_id),
+        accounts: project
+            .accounts
+            .map(|agent, account| reference(agent, &account)),
         name: project.name,
         path: if include_paths {
             project.path
@@ -618,12 +524,7 @@ fn document_project(
         pinned: project.pinned,
         tags: project.tags,
         description: project.description,
-        claude_session_model: project.claude_session_model,
-        claude_session_effort: project.claude_session_effort,
-        codex_session_model: project.codex_session_model,
-        codex_session_effort: project.codex_session_effort,
-        grok_session_model: project.grok_session_model,
-        grok_session_effort: project.grok_session_effort,
+        launch: project.launch,
         git_workflow: project.git_workflow,
     }
 }
@@ -653,7 +554,9 @@ fn account_ref(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::{error_code, Origin, Page, RequestBody, Role, Session, SessionStatus};
+    use crate::protocol::{
+        error_code, OrchestrationRole, Origin, Page, RequestBody, Role, Session, SessionStatus,
+    };
     use crate::store::LOCAL_HOST_ID;
 
     fn console(id: &str, name: &str) -> Console {
@@ -663,21 +566,9 @@ mod tests {
             workdir: format!("/consoles/{id}"),
             default_agent: Agent::Codex,
             project_session_agent: None,
-            claude_project_session_model: None,
-            claude_project_session_effort: None,
-            codex_project_session_model: None,
-            codex_project_session_effort: None,
-            grok_project_session_model: None,
-            grok_project_session_effort: None,
-            claude_account_id: None,
-            codex_account_id: None,
-            grok_account_id: None,
-            claude_console_session_model: None,
-            claude_console_session_effort: None,
-            codex_console_session_model: None,
-            codex_console_session_effort: None,
-            grok_console_session_model: None,
-            grok_console_session_effort: None,
+            accounts: Default::default(),
+            launch: Default::default(),
+            project_session_launch: Default::default(),
             icon: None,
             console_session_prompt: None,
             created_at: 0,
@@ -694,15 +585,8 @@ mod tests {
             default_agent: None,
             source: ProjectSource::Local,
             remote_url: None,
-            claude_account_id: ProjectAccount::Inherit,
-            codex_account_id: ProjectAccount::Inherit,
-            grok_account_id: ProjectAccount::Inherit,
-            claude_session_model: None,
-            claude_session_effort: None,
-            codex_session_model: None,
-            codex_session_effort: None,
-            grok_session_model: None,
-            grok_session_effort: None,
+            accounts: Default::default(),
+            launch: Default::default(),
             trust_consent: false,
             pinned: false,
             tags: Vec::new(),
@@ -747,12 +631,12 @@ mod tests {
         let mut hub = console("console-1", "Hub");
         hub.created_at = 2000;
         hub.icon = Some("data:image/png;base64,AAAA".to_string());
-        hub.claude_account_id = Some("acct-1".to_string());
+        hub.accounts.claude = Some("acct-1".to_string());
         // Names an account that no longer exists, and one of another agent.
-        hub.codex_account_id = Some("acct-gone".to_string());
-        hub.grok_account_id = Some("acct-1".to_string());
-        hub.claude_console_session_model = Some("opus".to_string());
-        hub.claude_console_session_effort = Some("some-future-level".to_string());
+        hub.accounts.codex = Some("acct-gone".to_string());
+        hub.accounts.grok = Some("acct-1".to_string());
+        hub.launch.claude.model = Some("opus".to_string());
+        hub.launch.claude.effort = Some("some-future-level".to_string());
         hub.console_session_prompt = Some("Be brief.".to_string());
         store.insert_console(&hub).unwrap();
         // Created at the same instant as each other and before `hub`; the id breaks the tie.
@@ -771,15 +655,15 @@ mod tests {
         cloned.pinned = true;
         cloned.tags = vec!["backend".to_string(), "Rust".to_string()];
         cloned.description = Some("Mirrors the team's service.".to_string());
-        cloned.claude_account_id = ProjectAccount::Account {
+        cloned.accounts.claude = ProjectAccount::Account {
             id: "acct-1".to_string(),
         };
-        cloned.codex_account_id = ProjectAccount::Default;
-        cloned.grok_account_id = ProjectAccount::Account {
+        cloned.accounts.codex = ProjectAccount::Default;
+        cloned.accounts.grok = ProjectAccount::Account {
             id: "acct-gone".to_string(),
         };
-        cloned.codex_session_model = Some("gpt-x".to_string());
-        cloned.codex_session_effort = Some("high".to_string());
+        cloned.launch.codex.model = Some("gpt-x".to_string());
+        cloned.launch.codex.effort = Some("high".to_string());
         // Not a git repository: exported like any other.
         store
             .insert_project(&project("project-0", "console-1", "plain"))
@@ -851,18 +735,18 @@ mod tests {
             document.settings,
             Some(DocumentSettings {
                 auto_pull_repositories: true,
-                auto_delete_unresumable_archives: Some(false),
-                auto_select_account: Some(false),
-                auto_switch_on_usage_limit: Some(false),
-                sidebar_order_by_status: Some(true),
-                auto_start_quota_windows: Some(false),
-                auto_approve_session_requests: Some(false),
-                auto_approve_resume_requests: Some(false),
-                auto_approve_account_switches: Some(false),
-                auto_approve_handoffs: Some(false),
-                ask_questions_as_choices: Some(true),
-                git_workflow: Some(GitWorkflowSettings::default().into()),
-                claude_compatibility: Some(std::collections::BTreeMap::new()),
+                auto_delete_unresumable_archives: false,
+                auto_select_account: false,
+                auto_switch_on_usage_limit: false,
+                sidebar_order_by_status: true,
+                auto_start_quota_windows: false,
+                auto_approve_session_requests: false,
+                auto_approve_resume_requests: false,
+                auto_approve_account_switches: false,
+                auto_approve_handoffs: false,
+                ask_questions_as_choices: true,
+                git_workflow: GitWorkflowSettings::default(),
+                claude_compatibility: std::collections::BTreeMap::new(),
                 keyboard_shortcuts: None,
             })
         );
@@ -897,10 +781,10 @@ mod tests {
 
         let hub = &document.consoles[2];
         assert_eq!(hub.icon.as_deref(), Some("data:image/png;base64,AAAA"));
-        assert_eq!(hub.claude_console_session_model.as_deref(), Some("opus"));
+        assert_eq!(hub.launch.claude.model.as_deref(), Some("opus"));
         assert_eq!(hub.console_session_prompt.as_deref(), Some("Be brief."));
         assert_eq!(
-            hub.claude_console_session_effort.as_deref(),
+            hub.launch.claude.effort.as_deref(),
             Some("some-future-level"),
             "a value is exported as it is stored"
         );
@@ -918,8 +802,8 @@ mod tests {
             cloned.description.as_deref(),
             Some("Mirrors the team's service.")
         );
-        assert_eq!(cloned.codex_session_model.as_deref(), Some("gpt-x"));
-        assert_eq!(cloned.codex_session_effort.as_deref(), Some("high"));
+        assert_eq!(cloned.launch.codex.model.as_deref(), Some("gpt-x"));
+        assert_eq!(cloned.launch.codex.effort.as_deref(), Some("high"));
         let plain = &hub.projects[1];
         assert_eq!(
             (plain.source, plain.remote_url.as_deref()),
@@ -1005,26 +889,26 @@ mod tests {
 
         let hub = &document.consoles[0];
         assert_eq!(
-            hub.claude_account,
+            hub.accounts.claude,
             Some(AccountName {
                 name: "Work".to_string()
             })
         );
-        assert_eq!(hub.codex_account, None, "the account is gone");
+        assert_eq!(hub.accounts.codex, None, "the account is gone");
         assert_eq!(
-            hub.grok_account, None,
+            hub.accounts.grok, None,
             "the account belongs to another agent"
         );
         let cloned = &hub.projects[0];
         assert_eq!(
-            cloned.claude_account,
+            cloned.accounts.claude,
             ProjectAccountRef::Account {
                 name: "Work".to_string()
             }
         );
-        assert_eq!(cloned.codex_account, ProjectAccountRef::Default);
-        assert_eq!(cloned.grok_account, ProjectAccountRef::Inherit);
-        assert_eq!(hub.projects[1].claude_account, ProjectAccountRef::Inherit);
+        assert_eq!(cloned.accounts.codex, ProjectAccountRef::Default);
+        assert_eq!(cloned.accounts.grok, ProjectAccountRef::Inherit);
+        assert_eq!(hub.projects[1].accounts.claude, ProjectAccountRef::Inherit);
 
         for leaked in [
             "acct-1",
@@ -1072,7 +956,7 @@ mod tests {
             background_tasks: Vec::new(),
             switching_account: false,
             default_effort: None,
-            orchestration_role: None,
+            orchestration_role: OrchestrationRole::Coordinator,
             context: None,
             observed_model: None,
             observed_effort: None,
@@ -1080,7 +964,6 @@ mod tests {
             effort: None,
             has_conversation: true,
             bound_to: None,
-            lead: false,
             colour: None,
             ordinal: None,
             account_id: Some("acct-1".to_string()),
@@ -1105,7 +988,7 @@ mod tests {
             .store
             .insert_page(&Page {
                 id: "page-1".to_string(),
-                console_session_id: "session-2".to_string(),
+                session_id: "session-2".to_string(),
                 html: "<p>Distinctive page body</p>".to_string(),
                 anchor_message_id: None,
                 created_at: 0,
@@ -1261,9 +1144,10 @@ mod tests {
         let all = built(ConsoleScope::All, false, false);
         assert_eq!(all.consoles.len(), 3);
         assert!(all.settings.is_none());
-        assert!(!serde_json::to_string(&all)
+        assert!(serde_json::to_value(&all)
             .unwrap()
-            .contains(r#""accounts""#));
+            .get("accounts")
+            .is_none());
         let read: ConfigurationDocument =
             serde_json::from_str(&serde_json::to_string(&accounts_alone).unwrap()).unwrap();
         assert_eq!(read, accounts_alone);
@@ -1348,7 +1232,13 @@ mod tests {
         assert!(claude.accounts[0].disabled && !claude.accounts[0].share_default_config);
         assert!(!claude.accounts[1].disabled && claude.accounts[1].share_default_config);
         let codex = &accounts.agents[1];
-        assert_eq!(codex.default_account, DocumentDefaultAccount::default());
+        assert_eq!(
+            codex.default_account,
+            DocumentDefaultAccount {
+                name: None,
+                position: 0
+            }
+        );
 
         let text = serde_json::to_string(&accounts).unwrap();
         for leaked in ["acct-", "incomplete", "token", "credential", "quota"] {

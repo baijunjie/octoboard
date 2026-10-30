@@ -33,8 +33,7 @@ it("creates with the model and effort that were set", async () => {
       type: "create_console",
       name: "Main",
       default_agent: "claude",
-      claude_console_session_model: "alpha",
-      claude_console_session_effort: "high",
+      launch: { claude: { model: "alpha", effort: "high" } },
     },
   ]);
 });
@@ -55,7 +54,7 @@ it("sends only what changed when editing", async () => {
   await choose("low");
   await clickButton("Save");
   expect(sent(request)).toEqual([
-    { type: "update_console", console: "c-1", name: "Main", default_agent: "claude", claude_console_session_effort: "low" },
+    { type: "update_console", console: "c-1", name: "Main", default_agent: "claude", launch: { claude: { effort: "low" } } },
   ]);
 });
 
@@ -66,7 +65,7 @@ it("sends an explicit null when a picker is returned to unset", async () => {
   expect(pickerNamed("Model").textContent).toContain(PLACEHOLDER);
   await clickButton("Save");
   expect(sent(request)).toEqual([
-    { type: "update_console", console: "c-1", name: "Main", default_agent: "claude", claude_console_session_model: null },
+    { type: "update_console", console: "c-1", name: "Main", default_agent: "claude", launch: { claude: { model: null } } },
   ]);
 });
 
@@ -86,12 +85,12 @@ it("keeps an edit to an agent that is no longer the selected one", async () => {
   await choose("Codex");
   await clickButton("Save");
   expect(sent(request)).toEqual([
-    { type: "update_console", console: "c-1", name: "Main", default_agent: "codex", claude_account_id: "a-personal" },
+    { type: "update_console", console: "c-1", name: "Main", default_agent: "codex", accounts: { claude: "a-personal" } },
   ]);
 });
 
 it("leaves an account reference that was since removed alone unless its picker is used", async () => {
-  const request = render(consoleOf("c-1", "Main", { codex_account_id: "a-gone" }), [work, personal]);
+  const request = render(consoleOf("c-1", "Main", { accounts: { codex: "a-gone" } }), [work, personal]);
   type("Name", "Renamed");
   await clickButton("Save");
   expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", name: "Renamed", default_agent: "claude" }]);

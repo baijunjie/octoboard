@@ -597,7 +597,7 @@ it("follows a project's sessions while a console session's focus mode replaces t
 
 it("says no agent is installed in the console's sessions with a neutral glyph, not a warning one", () => {
   const { container, daemon } = mountSidebar({});
-  const none = new Map<Agent, AgentAvailability>(["claude", "codex", "grok"].map((agent) => [agent as Agent, { agent, availability: "unavailable" } as AgentAvailability]));
+  const none = new Map<Agent, AgentAvailability>(["claude", "codex", "grok"].map((agent) => [agent as Agent, { agent, availability: "unavailable", default_account_dir: null } as AgentAvailability]));
   act(() => daemon.store.setState({ agentAvailability: none }));
   const row = [...container.querySelectorAll('[data-slot="empty-state"]')].find((node) => node.textContent?.includes("No agent found on"))!;
   expect(row).toBeDefined();

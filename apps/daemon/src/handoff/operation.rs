@@ -29,7 +29,8 @@ use uuid::Uuid;
 use crate::coordinator::{self, OpenRequest};
 use crate::mcp::qualified_tool_name;
 use crate::protocol::{
-    error_code, notice_code, Agent, CodedError, Notice, Session, SessionStatus, TerminalAppearance,
+    error_code, notice_code, Agent, CodedError, Notice, OrchestrationRole, Session, SessionStatus,
+    TerminalAppearance,
 };
 use crate::reporting::{self, WhenBlocked, NOTICE_PREFIX};
 use crate::sharing::{named_session, one_line, place_of, quote};
@@ -164,8 +165,9 @@ pub(crate) fn receiving_request(
                 .unwrap_or_else(|| state.display_title(original)),
         ),
         origin: original.origin,
-        // A bound session's owner is reported to from the first launch. A lead session is bound
-        // after the launch instead, for it launches as an unbound one does, with the tools of one.
+        // A worker's owner is reported to from the first launch. A coordinator under a console
+        // session is bound after the launch instead, for it launches as an unbound one does, with
+        // the tools of one.
         bound_to: original
             .is_worker()
             .then(|| original.bound_to.clone())
@@ -292,13 +294,15 @@ async fn move_place_inner(
     receiving: &Session,
     hold: &OutboxHold,
 ) -> Result<Moved> {
-    let lead_of = original.lead.then(|| original.bound_to.clone()).flatten();
+    let coordinator_of = (original.orchestration_role == OrchestrationRole::Coordinator)
+        .then(|| original.bound_to.clone())
+        .flatten();
     let ids = state
         .store
-        .hand_over_binding(&original.id, &receiving.id, lead_of.as_deref())?
+        .hand_over_binding(&original.id, &receiving.id, coordinator_of.as_deref())?
         .ok_or_else(|| {
             anyhow!(
-                "`{}` could not take the original's place as a lead session: it was bound meanwhile",
+                "`{}` could not take the original's place as a coordinator: it was bound meanwhile",
                 receiving.id
             )
         })?;
@@ -416,7 +420,7 @@ pub(super) async fn tell(
 
     let mut held = String::new();
     match &owner {
-        Some(owner) if receiving.lead => held.push_str(&format!(
+        Some(owner) if receiving.orchestration_role == OrchestrationRole::Coordinator => held.push_str(&format!(
             "\n- Your role is coordinator and your parent session is {owner}: take work only from \
              it, or from the user typing in this terminal, and report to it with `{report}` once \
              per round of work. This replaces anything your role description says about being \

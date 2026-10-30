@@ -1,18 +1,18 @@
 import { expect, it } from "vitest";
 
-import { sessionOf } from "../gallery/fixtures/builders";
+import { accountOf, sessionOf } from "../gallery/fixtures/builders";
 import type { Account, AccountQuota, Agent, AgentAvailability, QuotaWindow } from "../protocol";
 import { sessionQuotaBarOf, type SessionQuotaSource } from "./sessionQuota";
 
 const session = (extra = {}) => sessionOf("s-1", "c-1", undefined, "Fix", "idle", extra);
 const window: QuotaWindow = { kind: "session", label: null, used_percent: 30, resets_at: null, window_minutes: 300 };
 const reading = (account: string | null, patch: Partial<AccountQuota> = {}): AccountQuota => ({
-  agent: "claude", account, fetched_at: 0, plan: null, unavailable: null, windows: [window], ...patch,
+  agent: "claude", account, fetched_at: 0, plan: null, unavailable: null, windows: [window], email: null, ...patch,
 });
-const work: Account = { id: "a-work", agent: "claude", name: "Work", config_dir: "/accounts/work" };
+const work: Account = accountOf("a-work", "claude", "Work", "/accounts/work");
 const source = (patch: Partial<SessionQuotaSource> = {}): SessionQuotaSource => ({
   accounts: [work],
-  agentAvailability: new Map<Agent, AgentAvailability>([["claude", { agent: "claude", availability: "available" }]]),
+  agentAvailability: new Map<Agent, AgentAvailability>([["claude", { agent: "claude", availability: "available", default_account_dir: null }]]),
   accountQuotas: [reading(null), reading("a-work")],
   ...patch,
 });

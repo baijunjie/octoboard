@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { consoleOf, sessionOf } from "../gallery/fixtures/builders";
+import { accountOf, consoleOf, sessionOf } from "../gallery/fixtures/builders";
 import type { AccountQuota } from "../protocol";
 import type { PlatformAdapter, StatusItemCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";
@@ -11,6 +11,7 @@ import { createStateStore, DaemonProvider, type Daemon, type State } from "../st
 import type { StatusItemMenuDraft } from "./statusItemMenu";
 import { useStatusItemMenu } from "./useStatusItemMenu";
 import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
+import { DEFAULT_SETTINGS } from "../defaultSettings";
 
 const withIcons = vi.hoisted(() => vi.fn(async (draft: StatusItemMenuDraft, _appearance: "light" | "dark") => ({ ...draft, icons: {} })));
 vi.mock("./statusItemIcons", () => ({ withIcons }));
@@ -69,12 +70,12 @@ it("updates the native icon on session selection, quota changes and cleared sele
   const claude = sessionOf("claude", "console", undefined, "Claude", "idle", { account_id: "work", config_dir: "/work" });
   const reading = (agent: "claude" | "codex", account: string | null, used: number): AccountQuota => ({
     agent, account, fetched_at: 1, plan: null, unavailable: null,
-    windows: [{ kind: agent === "codex" ? "session" : "weekly", label: null, used_percent: used, resets_at: null, window_minutes: null }],
+    windows: [{ kind: agent === "codex" ? "session" : "weekly", label: null, used_percent: used, resets_at: null, window_minutes: null }], email: null,
   });
   const { store, select } = mount(statusItem, vi.fn(), {
     sessions: new Map([[codex.id, codex], [claude.id, claude]]),
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex"], default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [{ id: "work", agent: "claude", name: "Work", config_dir: "/work" }] },
-    agentAvailability: new Map([["codex", { agent: "codex", availability: "available" }], ["claude", { agent: "claude", availability: "available" }]]),
+    settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex"], default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [accountOf("work", "claude", "Work", "/work")] },
+    agentAvailability: new Map([["codex", { agent: "codex", availability: "available", default_account_dir: null }], ["claude", { agent: "claude", availability: "available", default_account_dir: null }]]),
     accountQuotas: [reading("codex", null, 100), reading("claude", "work", 35)],
   });
   const settle = () => act(async () => {});
@@ -122,19 +123,19 @@ it("updates the native icon on session selection, quota changes and cleared sele
 it("shows each submenu's current-console default account and follows console switches and edits", async () => {
   const setMenu = vi.fn<StatusItemCapability["setMenu"]>(() => Promise.resolve());
   const statusItem: StatusItemCapability = { setMenu, onSessionChosen: () => () => {}, onOpened: () => () => {} };
-  const work = consoleOf("work", "Work", { claude_account_id: "work-account" });
+  const work = consoleOf("work", "Work", { accounts: { claude: "work-account" } });
   const personal = consoleOf("personal", "Personal");
   const reading = (agent: "claude" | "codex", account: string | null, used: number): AccountQuota => ({
     agent, account, fetched_at: 1, plan: null, unavailable: null,
-    windows: [{ kind: "session", label: null, used_percent: used, resets_at: null, window_minutes: 300 }],
+    windows: [{ kind: "session", label: null, used_percent: used, resets_at: null, window_minutes: 300 }], email: null,
   });
   const quotas = [reading("claude", "work-account", 35), reading("claude", null, 0), reading("codex", null, 100)];
   quotas[0]!.windows.push({ kind: "weekly", label: null, used_percent: 70, resets_at: null, window_minutes: 10080 });
   quotas[2]!.windows.push({ kind: "weekly", label: null, used_percent: 100, resets_at: null, window_minutes: 10080 });
   const { store, select } = mount(statusItem, vi.fn(), {
     consoles: new Map([[work.id, work], [personal.id, personal]]),
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex"], default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [{ id: "work-account", agent: "claude", name: "Team", config_dir: "/team" }] },
-    agentAvailability: new Map([["codex", { agent: "codex", availability: "available" }], ["claude", { agent: "claude", availability: "available" }]]),
+    settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex"], default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [accountOf("work-account", "claude", "Team", "/team")] },
+    agentAvailability: new Map([["codex", { agent: "codex", availability: "available", default_account_dir: null }], ["claude", { agent: "claude", availability: "available", default_account_dir: null }]]),
     accountQuotas: quotas,
   });
   const settle = () => act(async () => {});
@@ -153,7 +154,7 @@ it("shows each submenu's current-console default account and follows console swi
   expect(rows().map((row) => row.quota_remaining)).toEqual([100, 0]);
   expect(rows().map((row) => row.quota_weekly_remaining)).toEqual([undefined, 0]);
   expect(rows()[0]!.quota_label).toContain("Default");
-  act(() => store.setState({ consoles: new Map([[work.id, work], [personal.id, { ...personal, claude_account_id: "work-account" }]]) }));
+  act(() => store.setState({ consoles: new Map([[work.id, work], [personal.id, { ...personal, accounts: { ...personal.accounts, claude: "work-account" } }]]) }));
   await settle();
   expect(rows()[0]!.quota_remaining).toBe(65);
   act(() => store.setState({ accountQuotas: [{ ...quotas[0]!, unavailable: { code: "quota_timed_out", params: {}, message: "timeout" } }, ...quotas.slice(1)] }));
@@ -177,11 +178,11 @@ it("pushes the menu again when a held window's reset time passes, drawing it ful
   const session = sessionOf("s", "console", undefined, "S", "idle", { agent: "codex" });
   const reading: AccountQuota = {
     agent: "codex", account: null, fetched_at: start - 30_000, plan: null, unavailable: null,
-    windows: [{ kind: "session", label: null, used_percent: 100, resets_at: start + 10_000, window_minutes: 300 }],
+    windows: [{ kind: "session", label: null, used_percent: 100, resets_at: start + 10_000, window_minutes: 300 }], email: null,
   };
   mount(statusItem, vi.fn(), {
     sessions: new Map([[session.id, session]]),
-    agentAvailability: new Map([["codex", { agent: "codex", availability: "available" }]]),
+    agentAvailability: new Map([["codex", { agent: "codex", availability: "available", default_account_dir: null }]]),
     accountQuotas: [reading],
   });
   await act(async () => {});
@@ -202,10 +203,10 @@ it("pushes the menu again at each whole minute of a reading's age, so the age in
   const statusItem: StatusItemCapability = { setMenu, onSessionChosen: () => () => {}, onOpened: () => () => {} };
   const reading: AccountQuota = {
     agent: "codex", account: null, fetched_at: start - 30_000, plan: null, unavailable: null,
-    windows: [{ kind: "session", label: null, used_percent: 10, resets_at: null, window_minutes: 300 }],
+    windows: [{ kind: "session", label: null, used_percent: 10, resets_at: null, window_minutes: 300 }], email: null,
   };
   mount(statusItem, vi.fn(), {
-    agentAvailability: new Map([["codex", { agent: "codex", availability: "available" }]]),
+    agentAvailability: new Map([["codex", { agent: "codex", availability: "available", default_account_dir: null }]]),
     accountQuotas: [reading],
   });
   await act(async () => {});

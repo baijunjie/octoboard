@@ -11,7 +11,7 @@ import { SwitchSettingRow } from "./SettingRow";
 export function AutoApproveResumeRequestsSetting(): React.ReactElement {
   const t = useT();
   const { request, toastError } = useDaemon();
-  const enabled = useDaemonStore((s) => s.settings.auto_approve_resume_requests ?? false);
+  const enabled = useDaemonStore((s) => s.settings.auto_approve_resume_requests);
   const description = t(enabled ? "settings.autoApproveResume.description.on" : "settings.autoApproveResume.description.off");
 
   const setEnabled = (value: boolean) =>

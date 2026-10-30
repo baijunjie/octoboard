@@ -46,7 +46,7 @@ export function accountQuotaLabel(
   agent: Agent,
   accountName: string | undefined,
   bar: QuotaBar,
-  defaultNames: Settings["default_account_names"],
+  defaultNames: Settings["default_account_names"] | undefined,
   now: number,
 ): string {
   return t("rail.quota.selected", {

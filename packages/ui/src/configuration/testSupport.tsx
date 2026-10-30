@@ -8,10 +8,31 @@ import { onTestFinished, vi } from "vitest";
 import { ErrorAlerts } from "../dialogs/ErrorAlerts";
 import { errorAlerts } from "../errorAlerts";
 import { trackMountRefocus } from "../dialogs/dialogTestSupport";
+import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
 import type { ConfigurationFileCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";
-import type { Event, RequestBody } from "../protocol";
+import type { DocumentSettings, Event, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
+
+/** A document's settings with each switch off and no Claude compatibility choice, except what `carried` sets. */
+export function documentSettings(carried: Partial<DocumentSettings> = {}): DocumentSettings {
+  return {
+    auto_pull_repositories: false,
+    auto_delete_unresumable_archives: false,
+    auto_select_account: false,
+    auto_switch_on_usage_limit: false,
+    sidebar_order_by_status: false,
+    auto_start_quota_windows: false,
+    auto_approve_session_requests: false,
+    auto_approve_resume_requests: false,
+    auto_approve_account_switches: false,
+    auto_approve_handoffs: false,
+    ask_questions_as_choices: false,
+    git_workflow: DEFAULT_GIT_WORKFLOW,
+    claude_compatibility: {},
+    ...carried,
+  };
+}
 
 export interface Mounted {
   /** The bodies of the requests sent to the daemon, in order. */

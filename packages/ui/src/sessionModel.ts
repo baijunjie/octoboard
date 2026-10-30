@@ -1,7 +1,7 @@
-import { consoleProjectLaunch, inheritedSessionLaunch, type LaunchPair, launchWithOverrides } from "./agents";
+import { consoleProjectLaunch, inheritedSessionLaunch, launchWithOverrides } from "./agents";
 import type { Translate } from "./i18n/catalog";
 import { isolate } from "./i18n/isolate";
-import type { Agent, Console, Project, Session } from "./protocol";
+import type { Agent, Console, Launch, Project, Session } from "./protocol";
 
 const CLAUDE_ALIASES = new Set(["opus", "sonnet", "haiku"]);
 /** A Claude model id: the family, then the version parts, then optionally a release date. */
@@ -24,7 +24,7 @@ export function modelDisplayName(t: Translate, agent: Agent, model: string): str
 
 /** What the session takes when its launch override is absent. A project session whose project is
  * not in the store yet still takes its console's project session pair. */
-export function inheritedLaunch(session: Session, consoles: Map<string, Console>, projects: Map<string, Project>): LaunchPair {
+export function inheritedLaunch(session: Session, consoles: Map<string, Console>, projects: Map<string, Project>): Launch {
   const owner = consoles.get(session.console_id);
   if (!owner) return { model: null, effort: null };
   const project = session.project_id ? projects.get(session.project_id) : undefined;
@@ -37,7 +37,7 @@ export function inheritedLaunch(session: Session, consoles: Map<string, Console>
  * leave unset is, before those two, the level the daemon found the agent runs the observed model at
  * by itself, since the records show the session running without one. `null` is the agent's own
  * default where nothing says which it is. */
-export function sessionModelEffort(session: Session, inherited: LaunchPair): LaunchPair {
+export function sessionModelEffort(session: Session, inherited: Launch): Launch {
   const launched = launchWithOverrides(inherited, session);
   return {
     model: session.observed_model ?? launched.model,
@@ -47,7 +47,7 @@ export function sessionModelEffort(session: Session, inherited: LaunchPair): Lau
 
 /** The model's short name and the effort as separate values, for the labelled list of a session's
  * agent tooltip. A value not known reads as the default. */
-export function sessionModelValues(t: Translate, agent: Agent, launch: LaunchPair): { model: string; effort: string } {
+export function sessionModelValues(t: Translate, agent: Agent, launch: Launch): { model: string; effort: string } {
   return {
     model: launch.model === null ? t("session.modelEffort.unknownItem") : modelDisplayName(t, agent, launch.model),
     effort: launch.effort ?? t("session.modelEffort.unknownItem"),
@@ -56,7 +56,7 @@ export function sessionModelValues(t: Translate, agent: Agent, launch: LaunchPai
 
 /** "Opus 5.5 · high" for the line beside a session's agent mark. An item not known reads as the
  * default, and a session with neither known says so once. */
-export function sessionModelLabel(t: Translate, agent: Agent, launch: LaunchPair): string {
+export function sessionModelLabel(t: Translate, agent: Agent, launch: Launch): string {
   if (launch.model === null && launch.effort === null) return t("session.modelEffort.default");
   return t("session.modelEffort", {
     model: launch.model === null ? t("session.modelEffort.unknownItem") : isolate(modelDisplayName(t, agent, launch.model)),

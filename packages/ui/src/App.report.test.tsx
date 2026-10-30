@@ -79,7 +79,7 @@ function mountApp(narrow = false) {
     sessionOf("s-two", console_.id, project.id, "Second work", "idle"),
     sessionOf("s-none", console_.id, project.id, "No pages", "idle"),
   ];
-  const request = vi.fn(async (_message: unknown) => ({ type: "ack" })) as Daemon["request"] & ReturnType<typeof vi.fn>;
+  const request = vi.fn(async (_message: unknown) => ({ type: "ack", id: null })) as Daemon["request"] & ReturnType<typeof vi.fn>;
   const daemon: Daemon = {
     store: createStateStore(snapshotState({ consoles: [console_], projects: [project], sessions })),
     request,
@@ -122,7 +122,7 @@ const filesCard = () => document.getElementById("panel-files");
 it("offers a project session's Report panel only while that session has pages, listing them when it is selected", async () => {
   const { request, push } = mountApp();
   await pressElement(row("First work"));
-  expect(request).toHaveBeenCalledWith({ type: "list_pages", console_session: "s-one" });
+  expect(request).toHaveBeenCalledWith({ type: "list_pages", session: "s-one" });
   expect(toggle("Hide report panel")).toBeNull();
   expect(toggle("Show report panel")).toBeNull();
   expect(reportCard()).toBeNull();
@@ -185,11 +185,11 @@ it("follows a deletion live: the pager's pages go, and the panel and its toggle 
   await pressElement(row("First work"));
   expect(reportSession()).toBe("s-one");
 
-  await receive({ type: "pages_deleted", console_session_id: "s-one", pages: ["page-1"] });
+  await receive({ type: "pages_deleted", session_id: "s-one", pages: ["page-1"] });
   expect(reportSession()).toBe("s-one");
   expect(toggle("Hide report panel")).not.toBeNull();
 
-  await receive({ type: "pages_deleted", console_session_id: "s-one", pages: ["page-2"] });
+  await receive({ type: "pages_deleted", session_id: "s-one", pages: ["page-2"] });
   expect(reportCard()).toBeNull();
   expect(toggle("Hide report panel")).toBeNull();
   expect(toggle("Show report panel")).toBeNull();
@@ -230,7 +230,7 @@ it("offers the Report panel when listing a project session's pages fails, so its
   const { request } = mountApp();
   request.mockImplementation(async (message: unknown) => {
     if ((message as { type: string }).type === "list_pages") throw new Error("offline");
-    return { type: "ack" };
+    return { type: "ack", id: null };
   });
   await pressElement(row("First work"));
   expect(toggle("Hide report panel")).not.toBeNull();
@@ -241,15 +241,15 @@ it("clears a failed listing once the store holds a list, so a later snapshot doe
   const { request, receive, resnapshot } = mountApp();
   request.mockImplementation(async (message: unknown) => {
     if ((message as { type: string }).type === "list_pages") throw new Error("offline");
-    return { type: "ack" };
+    return { type: "ack", id: null };
   });
   await pressElement(row("First work"));
   expect(toggle("Hide report panel")).not.toBeNull();
 
   // Try again answers, and then every page is deleted; the daemon answers listings from here on.
-  request.mockImplementation(async () => ({ type: "ack" }));
-  await receive({ type: "page_list", console_session_id: "s-one", pages: [pageOf("page-1", "s-one", "<p>1</p>", 0)] });
-  await receive({ type: "pages_deleted", console_session_id: "s-one", pages: ["page-1"] });
+  request.mockImplementation(async () => ({ type: "ack", id: null }));
+  await receive({ type: "page_list", id: null, session_id: "s-one", pages: [pageOf("page-1", "s-one", "<p>1</p>", 0)] });
+  await receive({ type: "pages_deleted", session_id: "s-one", pages: ["page-1"] });
   expect(reportCard()).toBeNull();
 
   await resnapshot();
@@ -283,7 +283,7 @@ it("takes back the card a hovered Report toggle floated in when the last page is
   act(() => reportCard()!.querySelector<HTMLElement>("[data-in-report]")!.focus());
   act(() => setInteractionModality("pointer"));
 
-  await receive({ type: "pages_deleted", console_session_id: "s-one", pages: ["page-1"] });
+  await receive({ type: "pages_deleted", session_id: "s-one", pages: ["page-1"] });
   await act(async () => void (await vi.advanceTimersByTimeAsync(500)));
   expect(reportCard()).toBeNull();
   // The card's focus was handed on, with the ring (the mocked terminal cannot take it itself).
@@ -299,7 +299,7 @@ it("takes back a floating Report panel at once when its last page is deleted, ha
   act(() => reportCard()!.querySelector<HTMLElement>("[data-in-report]")!.focus());
   act(() => setInteractionModality("pointer"));
 
-  await receive({ type: "pages_deleted", console_session_id: "s-one", pages: ["page-1"] });
+  await receive({ type: "pages_deleted", session_id: "s-one", pages: ["page-1"] });
   // Not left fading away as a blank card.
   expect(reportCard()).toBeNull();
   expect(getInteractionModality()).toBe("keyboard");

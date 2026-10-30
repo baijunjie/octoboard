@@ -14,7 +14,7 @@ use super::git::GitEnv;
 use super::*;
 use crate::protocol::{
     Agent, BrowseEntry, BrowseRequest, Console, ContentKind, EntryKind, LinkTarget, Project,
-    ProjectAccount, ProjectSource,
+    ProjectSource,
 };
 use crate::state::AppState;
 use crate::test_support::{app_state, git, git_bytes, repo_with, ScratchDir, TEST_KEY};
@@ -81,21 +81,9 @@ impl Fixture {
                 workdir: workdir.to_string_lossy().into_owned(),
                 default_agent: Agent::Claude,
                 project_session_agent: None,
-                claude_project_session_model: None,
-                claude_project_session_effort: None,
-                codex_project_session_model: None,
-                codex_project_session_effort: None,
-                grok_project_session_model: None,
-                grok_project_session_effort: None,
-                claude_account_id: None,
-                codex_account_id: None,
-                grok_account_id: None,
-                claude_console_session_model: None,
-                claude_console_session_effort: None,
-                codex_console_session_model: None,
-                codex_console_session_effort: None,
-                grok_console_session_model: None,
-                grok_console_session_effort: None,
+                accounts: Default::default(),
+                launch: Default::default(),
+                project_session_launch: Default::default(),
                 icon: None,
                 console_session_prompt: None,
                 created_at: 0,
@@ -117,15 +105,8 @@ impl Fixture {
                 default_agent: None,
                 source: ProjectSource::Local,
                 remote_url: None,
-                claude_account_id: ProjectAccount::Inherit,
-                codex_account_id: ProjectAccount::Inherit,
-                grok_account_id: ProjectAccount::Inherit,
-                claude_session_model: None,
-                claude_session_effort: None,
-                codex_session_model: None,
-                codex_session_effort: None,
-                grok_session_model: None,
-                grok_session_effort: None,
+                accounts: Default::default(),
+                launch: Default::default(),
                 trust_consent: false,
                 pinned: false,
                 tags: Vec::new(),
@@ -1026,8 +1007,7 @@ async fn a_burst_of_reads_neither_starves_the_control_socket_nor_outgrows_its_bo
         });
         sink.send(Message::Text(request.to_string())).await.unwrap();
     }
-    let ordinary =
-        serde_json::json!({"type": "list_pages", "id": "ordinary", "console_session": "none"});
+    let ordinary = serde_json::json!({"type": "list_pages", "id": "ordinary", "session": "none"});
     sink.send(Message::Text(ordinary.to_string()))
         .await
         .unwrap();

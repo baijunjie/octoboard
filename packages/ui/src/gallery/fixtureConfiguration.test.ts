@@ -1,6 +1,8 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 
-import type { ImportedAccount, ImportedProject } from "../protocol";
+import { documentSettings } from "../configuration/testSupport";
+import type { DocumentSettings, ImportedAccount, ImportedProject } from "../protocol";
 import { importDisagreement, withShortcutsEcho } from "./fixtureConfiguration";
 
 const project = (name: string, status: ImportedProject["status"], via: ImportedProject["via"] = null): ImportedProject => ({
@@ -13,10 +15,13 @@ const project = (name: string, status: ImportedProject["status"], via: ImportedP
 });
 const result = (
   projects: ImportedProject[],
-  settings?: { settings_applied?: { auto_pull_repositories: boolean } },
+  settings?: { settings_applied?: Partial<DocumentSettings> },
   status: "created" | "failed" = "created",
 ) => ({
-  ...settings,
+  id: null,
+  settings_applied: settings?.settings_applied ? documentSettings(settings.settings_applied) : null,
+  settings_error: null,
+  accounts: null,
   consoles: [{ name: "Work", status, console: status === "created" ? "c-1" : null, error: null, account_fallbacks: [], projects }],
 });
 const request = (resolutions: { project: number; kind: "exported_path" | "clone" }[], apply_settings?: boolean) => ({
@@ -67,8 +72,8 @@ describe("importDisagreement over the consoles", () => {
   });
 
   it("finds none where the request asked for no consoles and the result has none, or left the choice out", () => {
-    expect(importDisagreement({ type: "import_configuration" as const, document: {}, apply_consoles: false, resolutions: [{ console: 0, project: 0, choice: { kind: "clone" } }] }, { consoles: [] })).toBeUndefined();
-    expect(importDisagreement({ type: "import_configuration" as const, document: {} }, { consoles: [] })).toBeUndefined();
+    expect(importDisagreement({ type: "import_configuration" as const, document: {}, apply_consoles: false, resolutions: [{ console: 0, project: 0, choice: { kind: "clone" } }] }, { ...result([]), consoles: [] })).toBeUndefined();
+    expect(importDisagreement({ type: "import_configuration" as const, document: {} }, { ...result([]), consoles: [] })).toBeUndefined();
   });
 });
 
@@ -104,7 +109,7 @@ describe("withShortcutsEcho", () => {
   const applied = result([], { settings_applied: { auto_pull_repositories: true } });
 
   it("hands back the document's shortcuts in what was applied, an empty object included", () => {
-    expect(withShortcutsEcho(asked({ keyboard_shortcuts: { lock } }), applied).settings_applied).toEqual({ auto_pull_repositories: true, keyboard_shortcuts: { lock } });
+    expect(withShortcutsEcho(asked({ keyboard_shortcuts: { lock } }), applied).settings_applied).toEqual({ ...documentSettings({ auto_pull_repositories: true }), keyboard_shortcuts: { lock } });
     expect(withShortcutsEcho(asked({ keyboard_shortcuts: {} }), applied).settings_applied?.keyboard_shortcuts).toEqual({});
   });
 

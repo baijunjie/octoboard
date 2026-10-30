@@ -4,21 +4,24 @@
 // here by hand, and the test beside this file holds those answers to the rules the daemon follows.
 import type { Imported } from "../../configuration/ImportResult";
 import type { Inspection } from "../../configuration/importPlan";
+import { DEFAULT_SETTINGS } from "../../defaultSettings";
 import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
 import {
   DEFAULT_ACCOUNT_NAME,
   type AccountFallback,
   type Agent,
+  type DocumentSettings,
   type GitWorkflowSettings,
   type ImportedAccount,
   type ImportedAccounts,
   type InspectedAccount,
   type InspectedAccounts,
   type InspectedProject,
+  type InspectedSettings,
 } from "../../protocol";
 import type { Ui } from "../interact";
 import type { ConfigurationFixture, Scenario, Step } from "../scenario";
-import { ALL_AGENTS, SAMPLE, consoleOf, effectiveClaudeCompatibility, projectOf, snapshotState } from "./builders";
+import { accountOf, ALL_AGENTS, SAMPLE, consoleOf, effectiveClaudeCompatibility, projectOf, snapshotState } from "./builders";
 import type { FixtureError } from "./projectFiles";
 
 const GROUP = "Configuration";
@@ -32,41 +35,39 @@ export const DEFAULT_CLONE_DIR = "/Users/dev/Projects";
 /** The accounts the machine has. A document's account that is one of these is rebound to it, so
  * none of what a document names as falling back to the default account is among them. */
 const accounts = [
-  { id: "a-studio", agent: "claude" as const, name: "Studio", config_dir: "/Users/dev/.claude-studio" },
-  { id: "a-home", agent: "codex" as const, name: "Home", config_dir: "/Users/dev/.codex-home" },
+  accountOf("a-studio", "claude", "Studio", "/Users/dev/.claude-studio"),
+  accountOf("a-home", "codex", "Home", "/Users/dev/.codex-home"),
 ];
 
 // Two consoles, so the export has something to choose between, one of them naming an account. The
 // inspections below say the application setting is off now; `autoPulling` is the machine where it is
 // on.
-const second = consoleOf("c-docs", "Documentation", { claude_account_id: "a-studio", created_at: console_.created_at + 1 });
+const second = consoleOf("c-docs", "Documentation", { accounts: { claude: "a-studio" }, created_at: console_.created_at + 1 });
 const layout = {
   consoles: [console_, second],
   projects: [
     { ...web, remote_url: "git@github.com:acme/website.git", tags: ["frontend"] },
     api,
-    projectOf("p-guide", second.id, "Style Guide", { claude_account_id: { kind: "account" as const, id: "a-studio" } }),
+    projectOf("p-guide", second.id, "Style Guide", { accounts: { claude: { kind: "account" as const, id: "a-studio" } } }),
   ],
   sessions,
 };
 const state = snapshotState({
   ...layout,
-  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ALL_AGENTS, default_clone_dir: DEFAULT_CLONE_DIR, git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
+  settings: { ...DEFAULT_SETTINGS, added_agents: ALL_AGENTS, default_clone_dir: DEFAULT_CLONE_DIR, accounts },
 });
 const autoPulling = snapshotState({
   ...layout,
-  settings: { auto_pull_repositories: true, auto_delete_unresumable_archives: true, added_agents: ALL_AGENTS, default_clone_dir: DEFAULT_CLONE_DIR, git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
+  settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: true, added_agents: ALL_AGENTS, default_clone_dir: DEFAULT_CLONE_DIR, accounts },
 });
 // The machine the accounts of a document are imported on: Grok is not among its added agents, and its default account
 // already has a name of its own.
 const accountsMachine = snapshotState({
   ...layout,
   settings: {
-    auto_pull_repositories: false,
-    auto_delete_unresumable_archives: true,
+    ...DEFAULT_SETTINGS,
     added_agents: ["claude", "codex"],
     default_clone_dir: DEFAULT_CLONE_DIR,
-    git_workflow: DEFAULT_GIT_WORKFLOW,
     accounts,
     default_account_names: { grok: "Main" },
   },
@@ -75,7 +76,7 @@ const noConsoleState = snapshotState({
   consoles: [],
   projects: [],
   sessions: [],
-  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ALL_AGENTS, default_clone_dir: DEFAULT_CLONE_DIR, git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
+  settings: { ...DEFAULT_SETTINGS, added_agents: ALL_AGENTS, default_clone_dir: DEFAULT_CLONE_DIR, accounts },
 });
 
 const openSettings = (ui: Ui) => ui.press(ui.t("rail.settings"));
@@ -148,11 +149,78 @@ const FILE_CLAUDE_COMPATIBILITY = { codex: false };
  * machines the document is set up on have every agent added and no explicit choice, so both are on. */
 const THIS_CLAUDE_COMPATIBILITY = effectiveClaudeCompatibility({}, ALL_AGENTS);
 
+/** An inspection of a document that carries no settings and no accounts unless `parts` gives them: the regions a document
+ * does not carry are `null`, as the daemon sends them. */
+function inspected(parts: Pick<Inspection, "consoles"> & Partial<Omit<Inspection, "type" | "consoles">>): Omit<Inspection, "type"> {
+  return { id: null, settings: null, accounts: null, ...parts };
+}
+
+/** An import's result that applied no settings and no accounts unless `parts` says it did, likewise. */
+function imported(parts: Pick<Imported, "consoles"> & Partial<Omit<Imported, "type" | "consoles">>): Omit<Imported, "type"> {
+  return { id: null, settings_applied: null, settings_error: null, accounts: null, ...parts };
+}
+
+/** The settings of a document, which always carries every one: each switch off, the default git workflow and no Claude
+ * compatibility choice, except what `carried` sets. */
+function documentSettings(carried: Partial<DocumentSettings> = {}): DocumentSettings {
+  return {
+    auto_pull_repositories: false,
+    auto_delete_unresumable_archives: false,
+    auto_select_account: false,
+    auto_switch_on_usage_limit: false,
+    sidebar_order_by_status: false,
+    auto_start_quota_windows: false,
+    auto_approve_session_requests: false,
+    auto_approve_resume_requests: false,
+    auto_approve_account_switches: false,
+    auto_approve_handoffs: false,
+    ask_questions_as_choices: false,
+    git_workflow: DEFAULT_GIT_WORKFLOW,
+    claude_compatibility: {},
+    ...carried,
+  };
+}
+
+/** The settings an inspection says its document carries, without this machine's values beside them. */
+export function carriedSettings(settings: InspectedSettings): DocumentSettings {
+  return documentSettings(Object.fromEntries(Object.entries(settings).filter(([key]) => !key.startsWith("current_"))));
+}
+
+/** The settings that have a value of the document and one of this machine's in an inspection. */
+const SETTING_KEYS = [
+  "auto_pull_repositories",
+  "auto_delete_unresumable_archives",
+  "auto_select_account",
+  "auto_switch_on_usage_limit",
+  "sidebar_order_by_status",
+  "auto_start_quota_windows",
+  "auto_approve_session_requests",
+  "auto_approve_resume_requests",
+  "auto_approve_account_switches",
+  "auto_approve_handoffs",
+  "ask_questions_as_choices",
+  "git_workflow",
+] as const;
+type SettingKey = (typeof SETTING_KEYS)[number];
+
+/** An inspection's settings of a document whose every setting is the one this machine already has (the settings a fresh
+ * installation starts with, and this machine's Claude compatibility) except what `carried` sets; the document carries no
+ * Claude compatibility choice, so that line is not shown. */
+function inspectedSettings(carried: Partial<InspectedSettings> = {}): InspectedSettings {
+  const entries = (name: (key: SettingKey) => string) => SETTING_KEYS.map((key) => [name(key), DEFAULT_SETTINGS[key]]);
+  return {
+    ...documentSettings(Object.fromEntries(entries((key) => key))),
+    ...(Object.fromEntries(entries((key) => `current_${key}`)) as { [K in SettingKey as `current_${K}`]: DocumentSettings[K] }),
+    current_claude_compatibility: THIS_CLAUDE_COMPATIBILITY,
+    ...carried,
+  };
+}
+
 /** A document of a laptop's layout set up on a machine where it sits elsewhere: one project at its
  * recorded path, one found under the default clone directory, one to be cloned and one that nothing
  * places (whose recorded path is long enough to break over lines, and whose account falls back too),
  * a second console whose only project can be cloned, and one with no project. */
-export const REVIEW: Omit<Inspection, "type"> = {
+export const REVIEW = inspected({
   settings: {
     auto_pull_repositories: true,
     current_auto_pull_repositories: false,
@@ -229,11 +297,11 @@ export const REVIEW: Omit<Inspection, "type"> = {
     },
     { name: "Scratch", account_fallbacks: [], projects: [] },
   ],
-};
+});
 
 /** One console's document: no application settings; a project at its recorded path, one that can
  * only be cloned, and one nothing places. */
-const SINGLE: Omit<Inspection, "type"> = {
+const SINGLE = inspected({
   consoles: [
     {
       name: "Documentation",
@@ -256,11 +324,11 @@ const SINGLE: Omit<Inspection, "type"> = {
       ],
     },
   ],
-};
+});
 
 /** A console and projects whose names are long enough to wrap in the dialog, each with a mark after the name: the
  * console's own account falls back, one project is found and its account falls back, the other is not found. */
-const LONG_NAMES: Omit<Inspection, "type"> = {
+const LONG_NAMES = inspected({
   consoles: [
     {
       name: "Northwest regional distribution centres, quarterly planning and reporting workspace for the whole logistics group",
@@ -280,11 +348,11 @@ const LONG_NAMES: Omit<Inspection, "type"> = {
       ],
     },
   ],
-};
+});
 
 /** A document exported without full project paths, which records only each directory's name: one
  * project found under the default clone directory, one to be cloned, and one nothing places. */
-const NO_PATHS: Omit<Inspection, "type"> = {
+const NO_PATHS = inspected({
   consoles: [
     {
       name: "Work laptop",
@@ -308,14 +376,13 @@ const NO_PATHS: Omit<Inspection, "type"> = {
       ],
     },
   ],
-};
+});
 
-/** The same document of a full export made before archive cleanup, automatic account selection, the
- * sidebar's status ordering, starting usage windows, the automatic approval of agents' requests and asking
- * questions as choices were carried, so it holds only the automatic pull, which is off where this machine has it on. */
+/** The same document with every setting the one this machine has, except the automatic pull, which is off where this
+ * machine has it on. */
 const WITH_SETTING_OFF: Omit<Inspection, "type"> = {
   ...SINGLE,
-  settings: { auto_pull_repositories: false, current_auto_pull_repositories: true, current_auto_delete_unresumable_archives: true },
+  settings: inspectedSettings({ auto_pull_repositories: false, current_auto_pull_repositories: true }),
 };
 
 const failure = (code: string, params: Record<string, string>, message: string) => ({ code, params, message });
@@ -330,7 +397,7 @@ const LONG_CLONE_DETAIL = [
 /** What importing `REVIEW` with its defaults came to: a project whose directory was gone by the time
  * it was imported, a clone that failed with a long reason, a project nothing placed, a console that
  * could not be created with its project not tried, and the account references that fell back. */
-export const MIXED_RESULT: Omit<Imported, "type"> = {
+export const MIXED_RESULT = imported({
   settings_applied: { auto_pull_repositories: true, auto_delete_unresumable_archives: false, auto_select_account: true, auto_switch_on_usage_limit: true, sidebar_order_by_status: false, auto_start_quota_windows: true, auto_approve_session_requests: true, auto_approve_resume_requests: true, auto_approve_account_switches: true, auto_approve_handoffs: true, ask_questions_as_choices: false, git_workflow: FILE_GIT_WORKFLOW, claude_compatibility: FILE_CLAUDE_COMPATIBILITY },
   consoles: [
     {
@@ -385,7 +452,7 @@ export const MIXED_RESULT: Omit<Imported, "type"> = {
     },
     { name: "Scratch", status: "created", console: "c-new-3", error: null, account_fallbacks: [], projects: [] },
   ],
-};
+});
 
 const LONG_CONSOLE = LONG_NAMES.consoles[0].name;
 const LONG_FOUND = LONG_NAMES.consoles[0].projects[0].name;
@@ -398,7 +465,7 @@ const LONG_PLACED_DIRECTORY = "/Volumes/Archive/Logistics/Northwest/Carrier-Cont
 /** `LONG_NAMES` with a project that can only be cloned and a second console, where each name is too long for one line: the
  * result of importing it has a failure whose reason carries a long path, one whose raw text is long, and a console that
  * could not be created. */
-const LONG_RESULT_REVIEW: Omit<Inspection, "type"> = {
+const LONG_RESULT_REVIEW = inspected({
   consoles: [
     {
       ...LONG_NAMES.consoles[0],
@@ -426,7 +493,7 @@ const LONG_RESULT_REVIEW: Omit<Inspection, "type"> = {
       ],
     },
   ],
-};
+});
 
 const LONG_CLONE_FAILURE = [
   "Cloning into '/Users/dev/Projects/customs-pipeline'...",
@@ -436,7 +503,7 @@ const LONG_CLONE_FAILURE = [
 /** What importing `LONG_RESULT_REVIEW` came to with the second project placed in a directory of the user's own: the first
  * project created with the console's accounts falling back, the second failing on a long path, the third on a long git
  * message, and the second console not created with its project not tried, each by a reason in the application's words. */
-const LONG_RESULT: Omit<Imported, "type"> = {
+const LONG_RESULT = imported({
   consoles: [
     {
       name: LONG_CONSOLE,
@@ -473,11 +540,11 @@ const LONG_RESULT: Omit<Imported, "type"> = {
       projects: [{ name: LONG_ORPHAN, status: "not_attempted", via: null, project: null, error: null, account_fallbacks: [] }],
     },
   ],
-};
+});
 
 /** Everything created, nothing to report: `SINGLE` with the user's own directory given to the
  * project nothing placed. */
-const CLEAN_RESULT: Omit<Imported, "type"> = {
+const CLEAN_RESULT = imported({
   consoles: [
     {
       name: "Documentation",
@@ -492,11 +559,11 @@ const CLEAN_RESULT: Omit<Imported, "type"> = {
       ],
     },
   ],
-};
+});
 
 /** A console and its one project, both naming accounts this machine does not have, and where the project is
  * found at its recorded path: so the only thing the import has to report is the fallbacks. */
-const FALLBACKS_ONLY: Omit<Inspection, "type"> = {
+const FALLBACKS_ONLY = inspected({
   consoles: [
     {
       name: "Documentation",
@@ -512,10 +579,10 @@ const FALLBACKS_ONLY: Omit<Inspection, "type"> = {
       ],
     },
   ],
-};
+});
 
 /** `FALLBACKS_ONLY` imported with its defaults. */
-const FALLBACKS_ONLY_RESULT: Omit<Imported, "type"> = {
+const FALLBACKS_ONLY_RESULT = imported({
   consoles: [
     {
       name: "Documentation",
@@ -526,11 +593,11 @@ const FALLBACKS_ONLY_RESULT: Omit<Imported, "type"> = {
       projects: [{ name: "Style Guide", status: "created", via: "exported_path", project: "p-new-1", error: null, account_fallbacks: [fallback("codex", "Personal")] }],
     },
   ],
-};
+});
 
 /** `WITH_SETTING_OFF` imported with its defaults and the settings asked for: the project nothing
  * placed is left out, and the settings could not be written. */
-const SETTINGS_FAILED_CONSOLES_RESULT: Omit<Imported, "type"> = {
+const SETTINGS_FAILED_CONSOLES_RESULT = imported({
   settings_error: failure("internal_error", { detail: "the settings could not be written" }, "the settings could not be written"),
   consoles: [
     {
@@ -542,21 +609,22 @@ const SETTINGS_FAILED_CONSOLES_RESULT: Omit<Imported, "type"> = {
       ],
     },
   ],
-};
+});
 
-const FILE = { name: "octoboard-configuration.json", text: JSON.stringify({ format: "octoboard-configuration", version: 2, consoles: [] }, null, 2) };
+const FILE = { name: "octoboard-configuration.json", text: JSON.stringify({ format: "octoboard-configuration", version: 1, consoles: [] }, null, 2) };
 
 const refusal = (name: string, text: string, inspection: FixtureError): ConfigurationFixture => ({ file: { name, text }, inspection });
 
 const DIRECTORY_PROJECT = "Notes for production release coordination مرحبا 发布";
 const DIRECTORY_REVIEW = { ...REVIEW, consoles: REVIEW.consoles.map((console) => ({ ...console, projects: console.projects.map((project) => project.name === "Notes" ? { ...project, name: DIRECTORY_PROJECT } : project) })) };
 
-/** A full export's document, with `keyboard_shortcuts` as the client that saved it wrote them. The fixture daemon
- * echoes them in the result's `settings_applied`, as the real one does, so a result scenario needs none of its own. */
+/** A full export's document, with `keyboard_shortcuts` as the client that saved it wrote them beside the settings
+ * `WITH_SETTING_OFF` reports for it. The fixture daemon echoes them in the result's `settings_applied`, as the real one
+ * does, so a result scenario needs none of its own. */
 const documentWith = (shortcuts: Record<string, unknown>) => ({
   name: FILE.name,
   text: JSON.stringify(
-    { format: "octoboard-configuration", version: 2, settings: { auto_pull_repositories: true, keyboard_shortcuts: shortcuts }, consoles: [] },
+    { format: "octoboard-configuration", version: 1, settings: { ...carriedSettings(WITH_SETTING_OFF.settings!), keyboard_shortcuts: shortcuts }, consoles: [] },
     null,
     2,
   ),
@@ -583,18 +651,16 @@ const SHORTCUTS_HERE = {
 } as const;
 
 /** `SETTINGS_FAILED_CONSOLES_RESULT`'s consoles with the settings applied this time. */
-const SETTINGS_APPLIED_RESULT: Omit<Imported, "type"> = {
-  settings_applied: { auto_pull_repositories: false },
+const SETTINGS_APPLIED_RESULT = imported({
+  settings_applied: carriedSettings(WITH_SETTING_OFF.settings!),
   consoles: SETTINGS_FAILED_CONSOLES_RESULT.consoles,
-};
+});
 
-/** `WITH_SETTING_OFF`, its document carrying the git workflow and Claude compatibility settings this machine already has. */
+/** `WITH_SETTING_OFF`, its document also carrying a Claude compatibility choice this machine already has. */
 const WITH_SETTINGS_HERE: Omit<Inspection, "type"> = {
   ...WITH_SETTING_OFF,
   settings: {
     ...WITH_SETTING_OFF.settings!,
-    git_workflow: DEFAULT_GIT_WORKFLOW,
-    current_git_workflow: DEFAULT_GIT_WORKFLOW,
     claude_compatibility: { grok: true },
     current_claude_compatibility: THIS_CLAUDE_COMPATIBILITY,
   },
@@ -686,7 +752,7 @@ export const ACCOUNTS_REVIEW: Omit<Inspection, "type"> = {
 
 /** A document of accounts alone, imported on a machine with no console: an existing and a new account for Claude Code
  * and for Codex, the new ones sharing the default configuration or disabled, and nothing that needs attention. */
-const ACCOUNTS_ONLY: Omit<Inspection, "type"> = {
+const ACCOUNTS_ONLY = inspected({
   consoles: [],
   accounts: {
     agents_to_add: [],
@@ -711,15 +777,15 @@ const ACCOUNTS_ONLY: Omit<Inspection, "type"> = {
       },
     ],
   },
-};
+});
 
 /** The accounts of `ACCOUNTS` that cannot be created as the file has them, alone: a directory another account uses, one the
  * default account uses, and a name Claude Code already has. A document of these alone, so that all three rows stand in
  * view and their marks can be read. */
-const ACCOUNTS_UNUSABLE: Omit<Inspection, "type"> = {
+const ACCOUNTS_UNUSABLE = inspected({
   consoles: [],
   accounts: { agents_to_add: [], agents: [{ ...ACCOUNTS.agents[0], default_name: null, default_name_applies: false, accounts: ACCOUNTS.agents[0].accounts.slice(3) }] },
-};
+});
 
 const importedAccount = (name: string, status: ImportedAccount["status"], extra: Partial<ImportedAccount> = {}): ImportedAccount => ({
   name,
@@ -770,16 +836,16 @@ const ACCOUNTS_RESULT_ACCOUNTS: ImportedAccounts = {
 };
 
 /** `MIXED_RESULT`'s consoles and projects, and the accounts above, the application settings not asked for. */
-const ACCOUNTS_RESULT: Omit<Imported, "type"> = {
+const ACCOUNTS_RESULT = imported({
   accounts: ACCOUNTS_RESULT_ACCOUNTS,
   consoles: MIXED_RESULT.consoles.map((console) => (console.name === "Work laptop" ? { ...console, account_fallbacks: [] } : console)),
-};
+});
 
 /** `ACCOUNTS_REVIEW` imported with the consoles and projects unchecked and the application settings checked, where nothing
  * went wrong: every account the review would create was created (Sandbox's directory was not taken after all, and sharing
  * the default configuration for Work went through), the settings were applied, and no console exists, as the daemon answers
  * `apply_consoles` false. */
-const ACCOUNTS_SETTINGS_RESULT: Omit<Imported, "type"> = {
+const ACCOUNTS_SETTINGS_RESULT = imported({
   settings_applied: MIXED_RESULT.settings_applied,
   accounts: {
     ...ACCOUNTS_RESULT_ACCOUNTS,
@@ -791,10 +857,10 @@ const ACCOUNTS_SETTINGS_RESULT: Omit<Imported, "type"> = {
     })),
   },
   consoles: [],
-};
+});
 
 /** `ACCOUNTS_ONLY` imported with its defaults: the two new accounts created, the two existing ones used as they are. */
-const ACCOUNTS_ONLY_RESULT: Omit<Imported, "type"> = {
+const ACCOUNTS_ONLY_RESULT = imported({
   consoles: [],
   accounts: {
     agents_added: [],
@@ -803,7 +869,7 @@ const ACCOUNTS_ONLY_RESULT: Omit<Imported, "type"> = {
       { agent: "codex", default_name_applied: false, accounts: [importedAccount("Home", "existing", { account: "a-home" }), importedAccount("Personal", "created")] },
     ],
   },
-};
+});
 
 /** `WITH_SETTING_OFF` with the accounts of `ACCOUNTS_ONLY` as well, imported with its defaults and the settings asked for:
  * the consoles and the accounts all went through, and only the settings could not be written. */
@@ -1023,8 +1089,8 @@ export const configurationScenarios: Scenario[] = [
     state,
     configuration: refusal(
       "octoboard-configuration.json",
-      JSON.stringify({ format: "octoboard-configuration", version: 3, consoles: [] }),
-      failure("configuration_version_unsupported", { version: "3", supported: "2" }, "version 3 is not supported"),
+      JSON.stringify({ format: "octoboard-configuration", version: 2, consoles: [] }),
+      failure("configuration_version_unsupported", { version: "2", supported: "1" }, "version 2 is not supported"),
     ),
     steps: [
       ...importFromSettings,
@@ -1040,7 +1106,7 @@ export const configurationScenarios: Scenario[] = [
     state,
     configuration: refusal(
       "octoboard-configuration.json",
-      JSON.stringify({ format: "octoboard-configuration", version: 2, consoles: "none" }),
+      JSON.stringify({ format: "octoboard-configuration", version: 1, consoles: "none" }),
       failure("configuration_unreadable", { detail: "invalid type: string \"none\", expected a sequence" }, "unreadable"),
     ),
     steps: [
@@ -1261,7 +1327,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, keyboard shortcuts, git workflow and Claude compatibility the device already has",
-    description: "With Application settings ticked in the What to import group, its tab holds Git workflow, Claude compatibility and keyboard shortcuts, all reading \"No change\" because the file's are the ones this device already has, below automatic pull, which turns off.",
+    description: "With Application settings ticked in the What to import group, its tab holds Git workflow, Claude compatibility and keyboard shortcuts, all reading \"No change\" because the file's are the ones this device already has, below the switches, which all read \"No change\" too except automatic pull, which turns off.",
     state: autoPulling,
     preferences: { keyboardShortcuts: SHORTCUTS_HERE },
     configuration: { file: SHORTCUTS_FILE, inspection: WITH_SETTINGS_HERE },
@@ -1276,8 +1342,8 @@ export const configurationScenarios: Scenario[] = [
     id: "configuration-import-review-shortcuts-reset",
     group: GROUP,
     category: "normal",
-    title: "Import, an older file whose keyboard shortcuts are all defaults",
-    description: "With Application settings ticked, its tab is open. The older file carries only automatic pull, which turns off, so there is no Git workflow or Claude compatibility line, and its keyboard shortcuts are all defaults, so that line reads \"Back to defaults\" with the note that it applies to this device or browser only.",
+    title: "Import, a file whose keyboard shortcuts are all defaults",
+    description: "With Application settings ticked, its tab is open. The file's settings are this device's except automatic pull, which turns off, so Git workflow reads \"No change\" and there is no Claude compatibility line (the file makes no choice), and its keyboard shortcuts are all defaults, so that line reads \"Back to defaults\" with the note that it applies to this device or browser only.",
     state: autoPulling,
     preferences: { keyboardShortcuts: SHORTCUTS_HERE },
     configuration: { file: SHORTCUTS_DEFAULT_FILE, inspection: WITH_SETTING_OFF },
@@ -1505,7 +1571,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import result, keyboard shortcuts back to their defaults",
-    description: "On the Application settings tab the card shows automatic pull as Off and keyboard shortcuts as \"Defaults\", with no muted line under it.",
+    description: "On the Application settings tab the card lists all eleven switches with the values applied, automatic pull as Off, Git workflow as \"Matches the file\" and no Claude compatibility line, and keyboard shortcuts as \"Defaults\", with no muted line under it.",
     state: autoPulling,
     preferences: { keyboardShortcuts: SHORTCUTS_HERE },
     configuration: { file: SHORTCUTS_DEFAULT_FILE, inspection: WITH_SETTING_OFF, imported: SETTINGS_APPLIED_RESULT },

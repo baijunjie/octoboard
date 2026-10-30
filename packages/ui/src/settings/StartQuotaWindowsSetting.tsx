@@ -12,7 +12,7 @@ import { SwitchSettingRow } from "./SettingRow";
 export function StartQuotaWindowsSetting(): React.ReactElement {
   const t = useT();
   const { request, toastError } = useDaemon();
-  const enabled = useDaemonStore((s) => s.settings.auto_start_quota_windows ?? false);
+  const enabled = useDaemonStore((s) => s.settings.auto_start_quota_windows);
   const description = t(enabled ? "settings.startQuotaWindows.description.on" : "settings.startQuotaWindows.description.off");
 
   const setEnabled = (value: boolean) =>

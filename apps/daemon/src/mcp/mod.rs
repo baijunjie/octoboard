@@ -107,20 +107,21 @@ pub struct ToolDef {
 /// The tools a session may call, by session kind and orchestration capability. Nothing else is
 /// announced to it: workers cannot manage child sessions, and console sessions cannot report.
 ///
-/// `bound` is the legacy transport flag for worker capability (`Session::is_worker`), not
-/// the presence of a parent. A project coordinator reporting to a console still has the
-/// coordinator set. The daemon checks the current capability on every call (`exec::call`) and
-/// tells the MCP child when its catalogue changes (`stdio`).
-pub fn tools_for(role: Role, bound: bool) -> &'static [ToolDef] {
-    match (role, bound) {
+/// `worker` is `Session::is_worker`, not the presence of a parent: a project coordinator
+/// reporting to a console still has the coordinator set. The daemon checks the current capability
+/// on every call (`exec::call`) and tells the MCP child when its catalogue changes (`stdio`).
+pub fn tools_for(role: Role, worker: bool) -> &'static [ToolDef] {
+    match (role, worker) {
         (Role::Console, _) => CONSOLE_SESSION_TOOLS,
         (Role::Project, true) => WORKER_PROJECT_SESSION_TOOLS,
         (Role::Project, false) => COORDINATOR_PROJECT_SESSION_TOOLS,
     }
 }
 
-pub fn tool_by_name(role: Role, bound: bool, name: &str) -> Option<&'static ToolDef> {
-    tools_for(role, bound).iter().find(|tool| tool.name == name)
+pub fn tool_by_name(role: Role, worker: bool, name: &str) -> Option<&'static ToolDef> {
+    tools_for(role, worker)
+        .iter()
+        .find(|tool| tool.name == name)
 }
 
 /// How the agent presents one of these tools to its model. Only the prefix differs between the
@@ -218,9 +219,8 @@ macro_rules! session_record_fields {
          `set_session_model` changes them for a session of yours. `orchestration_role` is \
          `coordinator` (can manage child sessions) or `worker` (cannot); `owner` is the parent \
          session, null when independent, and `owner_kind` its kind. A coordinator may have a \
-         parent and no child sessions. `lead` is the compatibility flag for a project \
-         coordinator with a console parent; `owned_sessions` counts child sessions in any \
-         status, archived ones included, which is what decides whom it can be transferred to."
+         parent and no child sessions. `owned_sessions` counts child sessions in any status, \
+         archived ones included, which is what decides whom it can be transferred to."
     };
 }
 
@@ -2635,8 +2635,8 @@ mod tests {
     /// owner, and every read-only tool but `get_project` is offered to all three alike.
     #[test]
     fn the_tools_offered_follow_from_role_and_binding() {
-        let names = |role, bound| -> Vec<&'static str> {
-            tools_for(role, bound)
+        let names = |role, worker| -> Vec<&'static str> {
+            tools_for(role, worker)
                 .iter()
                 .map(|tool| tool.name)
                 .collect()
@@ -2764,8 +2764,8 @@ mod tests {
             "list_archived",
             "get_account_quotas",
         ] {
-            let described = |role, bound| {
-                let tool = tool_by_name(role, bound, read).unwrap_or_else(|| panic!("{read}"));
+            let described = |role, worker| {
+                let tool = tool_by_name(role, worker, read).unwrap_or_else(|| panic!("{read}"));
                 (tool.description.to_string(), (tool.schema)())
             };
             let console = described(Role::Console, false);
@@ -2967,7 +2967,6 @@ mod tests {
         }
         assert!(tool("reopen_session").description.contains("`effort`"));
         for field in [
-            "`lead`",
             "`owned_sessions`",
             "`agent_session_id`",
             "`display_title`",

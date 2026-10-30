@@ -17,7 +17,7 @@ const stale: AccountQuota = {
     { kind: "session", label: null, used_percent: 40, resets_at: NOW + HOUR, window_minutes: 300 },
     { kind: "weekly", label: null, used_percent: 10, resets_at: NOW + 72 * HOUR, window_minutes: 10_080 },
   ],
-  unavailable: { code: "quota_timed_out", params: {}, message: "x" },
+  unavailable: { code: "quota_timed_out", params: {}, message: "x" }, email: null,
 };
 
 function fills(element: React.ReactElement): number {

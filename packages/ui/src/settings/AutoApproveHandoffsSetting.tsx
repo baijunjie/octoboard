@@ -11,7 +11,7 @@ import { SwitchSettingRow } from "./SettingRow";
 export function AutoApproveHandoffsSetting(): React.ReactElement {
   const t = useT();
   const { request, toastError } = useDaemon();
-  const enabled = useDaemonStore((s) => s.settings.auto_approve_handoffs ?? false);
+  const enabled = useDaemonStore((s) => s.settings.auto_approve_handoffs);
   const description = t(enabled ? "settings.autoApproveHandoffs.description.on" : "settings.autoApproveHandoffs.description.off");
 
   const setEnabled = (value: boolean) =>

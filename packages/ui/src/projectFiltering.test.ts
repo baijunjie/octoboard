@@ -14,10 +14,9 @@ const project = (name: string, tags: string[]): Project => ({
   trust_consent: false,
   pinned: false,
   tags,
-  claude_account_id: { kind: "inherit" },
-  codex_account_id: { kind: "inherit" },
-  grok_account_id: { kind: "inherit" },
-  git_workflow: FOLLOWING_GIT_WORKFLOW,
+  accounts: { claude: { kind: "inherit" }, codex: { kind: "inherit" }, grok: { kind: "inherit" } },
+  launch: { claude: { model: null, effort: null }, codex: { model: null, effort: null }, grok: { model: null, effort: null } },
+  git_workflow: FOLLOWING_GIT_WORKFLOW, default_agent: null, remote_url: null, description: null,
 });
 
 describe("tagVocabulary", () => {

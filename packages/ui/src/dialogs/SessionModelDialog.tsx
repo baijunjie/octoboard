@@ -2,7 +2,7 @@ import { Description } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
 import { ActionableError } from "../actionableError";
-import { inheritedSessionLaunch, launchWithOverrides, type LaunchPair } from "../agents";
+import { inheritedSessionLaunch, launchWithOverrides } from "../agents";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { InlineReference } from "../components/InlineReference";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/StatusAnnouncer";
@@ -10,7 +10,7 @@ import { useHasPainted } from "../components/useHasPainted";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
-import type { Session } from "../protocol";
+import type { Launch, Session } from "../protocol";
 import type { AcknowledgementView } from "../errorAlerts";
 import { sessionDisplayTitle } from "../sessionLabel";
 import { useDaemonStore } from "../store";
@@ -25,7 +25,7 @@ export type ModelEdits = { model?: string | null; effort?: string | null };
 
 /** The edits that differ from what the pickers started on, so a value that now equals the session's own
  * (another window made the same change) is not sent, and a session is never restarted for nothing. */
-function changedFrom(start: LaunchPair, picked: ModelEdits): ModelEdits {
+function changedFrom(start: Launch, picked: ModelEdits): ModelEdits {
   return {
     ...(picked.model !== undefined && picked.model !== start.model ? { model: picked.model } : {}),
     ...(picked.effort !== undefined && picked.effort !== start.effort ? { effort: picked.effort } : {}),
@@ -87,7 +87,7 @@ function SessionModelForm({
   onChangeModel,
 }: {
   session: Session;
-  start: LaunchPair;
+  start: Launch;
   failure: AcknowledgementView | undefined;
   onClose: () => void;
   onChangeModel: (sessionId: string, edits: ModelEdits) => void;

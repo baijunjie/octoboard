@@ -1,9 +1,9 @@
+import { DEFAULT_SETTINGS } from "../../defaultSettings";
 import { AGENT_LABEL } from "../../agents";
 import type { Session, SessionContext } from "../../protocol";
 import type { Ui } from "../interact";
 import type { Scenario } from "../scenario";
-import { ALL_AGENTS, consoleOf, contextOf, gitStatusOf, minutesAgo, projectOf, sessionOf, snapshotState, switchingAccount } from "./builders";
-import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
+import { accountOf, ALL_AGENTS, consoleOf, contextOf, gitStatusOf, minutesAgo, projectOf, projectWith, sessionOf, snapshotState, switchingAccount } from "./builders";
 
 const GROUP = "Focus mode";
 
@@ -21,10 +21,10 @@ const hub4 = sessionOf("s-console-4", console_.id, undefined, "Release notes", "
 
 // A named account exposed through agent icon tooltips and accessible session labels.
 const settings = {
-  auto_pull_repositories: false,
-  auto_delete_unresumable_archives: true,
-  added_agents: ALL_AGENTS, default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW,
-  accounts: [{ id: "a-work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" }],
+  ...DEFAULT_SETTINGS,
+  added_agents: ALL_AGENTS,
+  default_clone_dir: "/Users/dev/Projects",
+  accounts: [accountOf("a-work", "claude", "Work", "/Users/dev/.claude-work")],
 };
 
 // The sessions of `project` are bound to one of three console sessions or to none, so the project's
@@ -207,11 +207,11 @@ const REMOVED_ACCOUNT_DIR = "/Users/dev/.claude-accounts/production-release-coor
 const combinedState = {
   ...scrollingFocusState,
   settings: { ...settings, accounts: [...settings.accounts,
-    { id: "a-long", agent: "claude" as const, name: "Release coordination مرحبا 東京 UnbrokenAccountNameForProductionCompatibilityReview", config_dir: "/Users/dev/.claude-release" },
-    { id: "a-release", agent: "claude" as const, name: "Production release coordination and regression review account", config_dir: "/Users/dev/.claude-regression" },
+    accountOf("a-long", "claude", "Release coordination مرحبا 東京 UnbrokenAccountNameForProductionCompatibilityReview", "/Users/dev/.claude-release"),
+    accountOf("a-release", "claude", "Production release coordination and regression review account", "/Users/dev/.claude-regression"),
   ] },
   // The project's own setting is what a card with nothing observed or overridden follows.
-  projects: new Map([...scrollingFocusState.projects!].map(([id, item]) => [id, id === project.id ? { ...item, claude_session_model: "sonnet", claude_session_effort: "medium" } : item])),
+  projects: new Map([...scrollingFocusState.projects!].map(([id, item]) => [id, id === project.id ? projectWith(item, { launch: { claude: { model: "sonnet", effort: "medium" } } }) : item])),
   sessions: new Map([...scrollingFocusState.sessions].map(([id, session]) => [id, {
     ...session,
     ...observedLaunches[id],

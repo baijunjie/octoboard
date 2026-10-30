@@ -38,14 +38,12 @@ export function ImportSettings({
         {BOOLEAN_SETTINGS.map(({ label, field, consequence }) => {
           const wanted = settings[field];
           const now = settings[`current_${field}` as const];
-          return typeof wanted === "boolean" && typeof now === "boolean" && <BooleanSettingLine key={field} label={t(label)} wanted={wanted} current={now} consequence={consequence} />;
+          return <BooleanSettingLine key={field} label={t(label)} wanted={wanted} current={now} consequence={consequence} />;
         })}
-        {settings.git_workflow && settings.current_git_workflow && (
-          sameValue({ ...settings.git_workflow, squash_before_delivery: settings.git_workflow.squash_before_delivery ?? settings.current_git_workflow.squash_before_delivery }, settings.current_git_workflow)
-            ? <SettingLine label={t("configuration.import.gitWorkflow")} badge={t("configuration.import.settings.badge.same")} />
-            : <SettingLine label={t("configuration.import.gitWorkflow")} badge={t("configuration.import.settings.badge.changes")} tone="accent" />
-        )}
-        {hasClaudeCompatibilityChoices(settings.claude_compatibility) && settings.current_claude_compatibility && (
+        {sameValue(settings.git_workflow, settings.current_git_workflow)
+          ? <SettingLine label={t("configuration.import.gitWorkflow")} badge={t("configuration.import.settings.badge.same")} />
+          : <SettingLine label={t("configuration.import.gitWorkflow")} badge={t("configuration.import.settings.badge.changes")} tone="accent" />}
+        {hasClaudeCompatibilityChoices(settings.claude_compatibility) && (
           claudeCompatibilityChanges(settings.claude_compatibility, settings.current_claude_compatibility)
             ? <SettingLine label={t("configuration.import.claudeCompatibility")} badge={t("configuration.import.settings.badge.changes")} tone="accent" />
             : <SettingLine label={t("configuration.import.claudeCompatibility")} badge={t("configuration.import.settings.badge.same")} />

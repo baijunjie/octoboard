@@ -104,6 +104,7 @@ test("a rule overrides the Markdown fallback, and a Markdown file no rule names 
   assert.equal(mode(["docs/plans/x/README.md", "CLAUDE.md", ".claude/skills/a/SKILL.md", "packages/ui/README.md"]), "unread");
   assert.equal(mode([]), "unread");
   assert.deepEqual(planScope(["apps/daemon/PROTOCOL.md"]).packages, ["verify", "ui", "daemon", "native"]);
+  assert.deepEqual(planScope(["packages/ui/src/protocol.generated.ts"]).packages, ["verify", "ui", "daemon", "native"]);
 });
 
 test("several changed packages select a union, in package order, without unrelated consumers", () => {

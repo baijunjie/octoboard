@@ -1107,7 +1107,9 @@ fn tell(state: &Arc<AppState>, id: &str, text: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::{now_millis, Account, AccountQuota, Event, QuotaWindow, QuotaWindowKind};
+    use crate::protocol::{
+        now_millis, Account, AccountQuota, Event, OrchestrationRole, QuotaWindow, QuotaWindowKind,
+    };
     use crate::test_support::{
         app_state, console, insert_project, output_containing, running, stand_in_launch, Launched,
         ScratchDir, StandIn,
@@ -1160,6 +1162,7 @@ mod tests {
                 .insert_session(&Session {
                     project_id: Some("p1".to_string()),
                     bound_to: Some("owner".to_string()),
+                    orchestration_role: OrchestrationRole::Worker,
                     has_conversation: true,
                     agent_session_id: Some("agent-1".to_string()),
                     ..crate::test_support::project_session("w", Agent::Claude, status)
@@ -3555,6 +3558,7 @@ mod tests {
             .insert_session(&Session {
                 project_id: Some("p1".to_string()),
                 bound_to: Some("owner".to_string()),
+                orchestration_role: OrchestrationRole::Worker,
                 ..crate::test_support::project_session("g", Agent::Grok, SessionStatus::Idle)
             })
             .unwrap();

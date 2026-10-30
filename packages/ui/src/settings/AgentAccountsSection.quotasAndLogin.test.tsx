@@ -25,7 +25,7 @@ const quotaOf = (agent: Account["agent"], account: string | null, patch: Partial
   plan: "plus",
   windows: [{ kind: "session", label: null, used_percent: 18, resets_at: null, window_minutes: 300 }],
   unavailable: null,
-  ...patch,
+  email: null, ...patch,
 });
 
 it("asks the daemon to refresh the quotas when the section opens", () => {
@@ -354,13 +354,13 @@ it("reports a login failure by its code, parameter names and the daemon's own te
 });
 
 it("waits for the first reading of an account of an available agent that has no entry yet", () => {
-  availability.set("codex", { agent: "codex", availability: "available" });
+  availability.set("codex", { agent: "codex", availability: "available", default_account_dir: null });
   const { container } = mount("Codex");
   expect(container.textContent?.match(/Reading usage/g)).toHaveLength(2);
 });
 
 it("leaves an account whose agent is not available without a quota block", () => {
-  availability.set("codex", { agent: "codex", availability: "unavailable" });
+  availability.set("codex", { agent: "codex", availability: "unavailable", default_account_dir: null });
   const { container } = mount("Codex");
   expect(container.querySelector('[data-slot="meter"]')).toBeNull();
   expect(container.textContent).not.toContain("Reading usage");

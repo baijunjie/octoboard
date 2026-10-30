@@ -3,15 +3,9 @@ import React, { useId, useRef, useState } from "react";
 
 import { storedAccount } from "../accountChoices";
 import {
-  AGENT_ACCOUNT_FIELD,
-  AGENT_CONSOLE_EFFORT_FIELD,
-  AGENT_CONSOLE_MODEL_FIELD,
-  AGENT_CONSOLE_PROJECT_EFFORT_FIELD,
-  AGENT_CONSOLE_PROJECT_MODEL_FIELD,
   AGENT_LABEL,
   agentChoiceBadge,
   listedPickerAgents,
-  type LaunchPair,
 } from "../agents";
 import { AgentIcon } from "../components/AgentIcon";
 import { HandOffOnUnmount } from "../components/HandOffOnUnmount";
@@ -20,16 +14,18 @@ import { useTabScrollLabels } from "../components/tabScrollLabels";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useListMotion } from "../components/useListMotion";
 import { useT } from "../i18n/react";
-import type { Agent } from "../protocol";
+import type { Agent, Launch, PerAgent } from "../protocol";
 import { useDaemonStore } from "../store";
 import { AdvancedSection } from "./AdvancedSection";
 import { EffortPicker, type LaunchModels, ModelPicker, ModelsFailureMark, useLaunchModels } from "./LaunchSettingsFields";
 
-type LaunchField =
-  | (typeof AGENT_CONSOLE_MODEL_FIELD)[Agent]
-  | (typeof AGENT_CONSOLE_EFFORT_FIELD)[Agent]
-  | (typeof AGENT_CONSOLE_PROJECT_MODEL_FIELD)[Agent]
-  | (typeof AGENT_CONSOLE_PROJECT_EFFORT_FIELD)[Agent];
+/** What the section holds for each agent, the way the console dialog does: its account, and what its console
+ * sessions and its project sessions are launched with. */
+export interface ConsoleAgentSettings {
+  accounts: PerAgent<string | null>;
+  launch: PerAgent<Launch>;
+  project_session_launch: PerAgent<Launch>;
+}
 
 /**
  * The console dialog's Advanced section: the model and reasoning effort of the console's console
@@ -54,8 +50,8 @@ export function ConsoleLaunchFields({
   children,
 }: {
   defaultAgent: Agent;
-  values: Record<LaunchField | (typeof AGENT_ACCOUNT_FIELD)[Agent], string | null>;
-  onChange: (field: LaunchField, value: string | null) => void;
+  values: ConsoleAgentSettings;
+  onChange: (kind: "launch" | "project_session_launch", agent: Agent, key: keyof Launch, value: string | null) => void;
   children?: React.ReactNode;
 }): React.ReactElement {
   const t = useT();
@@ -67,10 +63,10 @@ export function ConsoleLaunchFields({
   const [picked, setPicked] = useState<Agent>();
   const stores = (agent: Agent) =>
     !!(
-      values[AGENT_CONSOLE_MODEL_FIELD[agent]] ||
-      values[AGENT_CONSOLE_EFFORT_FIELD[agent]] ||
-      values[AGENT_CONSOLE_PROJECT_MODEL_FIELD[agent]] ||
-      values[AGENT_CONSOLE_PROJECT_EFFORT_FIELD[agent]]
+      values.launch[agent].model ||
+      values.launch[agent].effort ||
+      values.project_session_launch[agent].model ||
+      values.project_session_launch[agent].effort
     );
   const listed = listedPickerAgents(agentAvailability, addedAgents, stores);
   // The agent picked, else the console session agent, else the first listed: a tab can go away
@@ -82,7 +78,7 @@ export function ConsoleLaunchFields({
   // Tabs come and go while the section is open, as values for a missing agent are cleared or availability changes.
   const tabsRef = useListMotion<HTMLDivElement>({ contentWidth: true });
   const focusHandoff = useFocusHandoff(() => rootRef.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus());
-  const launch = useLaunchModels(agent, storedAccount(values[AGENT_ACCOUNT_FIELD[agent]], agent, accounts), expanded);
+  const launch = useLaunchModels(agent, storedAccount(values.accounts[agent], agent, accounts), expanded);
 
   return (
     <AdvancedSection expanded={expanded} onExpandedChange={setExpanded} status={launch.modelText}>
@@ -108,10 +104,10 @@ export function ConsoleLaunchFields({
             <Tabs.Panel key={option} id={option} className="mt-0 p-0">
               <LaunchMatrix
                 launch={launch}
-                consoleSessions={{ model: values[AGENT_CONSOLE_MODEL_FIELD[agent]], effort: values[AGENT_CONSOLE_EFFORT_FIELD[agent]] }}
-                projectSessions={{ model: values[AGENT_CONSOLE_PROJECT_MODEL_FIELD[agent]], effort: values[AGENT_CONSOLE_PROJECT_EFFORT_FIELD[agent]] }}
-                onConsoleChange={(key, value) => onChange(key === "model" ? AGENT_CONSOLE_MODEL_FIELD[agent] : AGENT_CONSOLE_EFFORT_FIELD[agent], value)}
-                onProjectChange={(key, value) => onChange(key === "model" ? AGENT_CONSOLE_PROJECT_MODEL_FIELD[agent] : AGENT_CONSOLE_PROJECT_EFFORT_FIELD[agent], value)}
+                consoleSessions={values.launch[agent]}
+                projectSessions={values.project_session_launch[agent]}
+                onConsoleChange={(key, value) => onChange("launch", agent, key, value)}
+                onProjectChange={(key, value) => onChange("project_session_launch", agent, key, value)}
               />
             </Tabs.Panel>
           ))}
@@ -140,10 +136,10 @@ export function LaunchMatrix({
   onProjectChange,
 }: {
   launch: LaunchModels;
-  consoleSessions: LaunchPair;
-  projectSessions: LaunchPair;
-  onConsoleChange: (key: keyof LaunchPair, value: string | null) => void;
-  onProjectChange: (key: keyof LaunchPair, value: string | null) => void;
+  consoleSessions: Launch;
+  projectSessions: Launch;
+  onConsoleChange: (key: keyof Launch, value: string | null) => void;
+  onProjectChange: (key: keyof Launch, value: string | null) => void;
 }): React.ReactElement {
   const t = useT();
   const id = useId();

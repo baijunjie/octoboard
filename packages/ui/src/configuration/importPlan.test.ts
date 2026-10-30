@@ -172,10 +172,8 @@ describe("the keyboard shortcuts of a document", () => {
 });
 
 describe("Claude compatibility in a document", () => {
-  it("says nothing when no agent was chosen for or the document predates it", () => {
+  it("says nothing when no agent was chosen for", () => {
     expect(hasClaudeCompatibilityChoices({})).toBe(false);
-    expect(hasClaudeCompatibilityChoices(undefined)).toBe(false);
-    expect(hasClaudeCompatibilityChoices(null)).toBe(false);
     expect(hasClaudeCompatibilityChoices({ codex: false })).toBe(true);
   });
 

@@ -177,7 +177,7 @@ function switchAccountSubmenu(
   readings: QuotaReadings | undefined,
   sharing: Map<string, AccountSharing> | undefined,
   disabledDefaults: Agent[] | undefined,
-  accountOrder: Settings["account_order"],
+  accountOrder: Settings["account_order"] | undefined,
 ): ActionMenuSubmenu | undefined {
   const entries = switchEntries(session, accounts, t, defaultNames, readings, sharing, disabledDefaults, accountOrder)
     .filter((entry) => entry.current || !entry.disabled);

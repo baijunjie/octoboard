@@ -7,7 +7,7 @@ import { daemonMessage } from "./daemonMessage";
 import { errorPresentation, noticeErrorPresentation, noticeKind } from "./errorPresentation";
 import type { ErrorRecovery } from "./errorRecovery";
 import { errorText } from "./errorText";
-import { DEFAULT_GIT_WORKFLOW } from "./gitWorkflow";
+import { DEFAULT_SETTINGS } from "./defaultSettings";
 import { currentLanguage } from "./i18n/language";
 import { daemonWsUrl, type DaemonAddress } from "./daemon";
 import { accountQuotaOf } from "./quota/accountQuotaOf";
@@ -265,6 +265,7 @@ export interface State {
 const INITIAL_AGENT_AVAILABILITY: AgentAvailability[] = (["claude", "codex", "grok"] as Agent[]).map((agent) => ({
   agent,
   availability: "not_determined",
+  default_account_dir: null,
 }));
 
 type Action =
@@ -287,7 +288,7 @@ const initialState: State = {
   trustedDirectories: [],
   sessionRequests: [],
   gitStatuses: new Map(),
-  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [] },
+  settings: DEFAULT_SETTINGS,
   agentAvailability: new Map(INITIAL_AGENT_AVAILABILITY.map((a) => [a.agent, a])),
   accountQuotas: [],
   accountLogins: [],
@@ -611,12 +612,12 @@ function reducer(state: State, action: Action): State {
           // A `page_created` is always the newest page, so appending after keeps the merged order
           // correct. Pages can also be deleted, and a reply computed before a deletion can be
           // applied after its `pages_deleted`: the deleted ids are remembered and filtered out.
-          const existing = state.pages.get(event.console_session_id) ?? [];
-          const deleted = state.deletedPages.get(event.console_session_id);
+          const existing = state.pages.get(event.session_id) ?? [];
+          const deleted = state.deletedPages.get(event.session_id);
           const listed = deleted ? event.pages.filter((p) => !deleted.has(p.id)) : event.pages;
           const seen = new Set(listed.map((p) => p.id));
           const pages = new Map(state.pages);
-          pages.set(event.console_session_id, [...listed, ...existing.filter((p) => !seen.has(p.id))]);
+          pages.set(event.session_id, [...listed, ...existing.filter((p) => !seen.has(p.id))]);
           return { ...state, pages };
         }
         case "page_created": {
@@ -624,22 +625,22 @@ function reducer(state: State, action: Action): State {
           // being in flight, and dropping the event here would mean waiting for a second push to
           // ever see it. The transient "1 / 1" this produces is corrected once that reply's merge
           // (above) lands.
-          const existing = state.pages.get(event.page.console_session_id) ?? [];
+          const existing = state.pages.get(event.page.session_id) ?? [];
           const pages = new Map(state.pages);
-          pages.set(event.page.console_session_id, [...existing, event.page]);
+          pages.set(event.page.session_id, [...existing, event.page]);
           return { ...state, pages };
         }
         case "pages_deleted": {
           // Kept as an empty list rather than dropped when none is left: the session's pages are
           // still known, and there are none.
           // The ids are remembered even with no list yet, as the reply in flight may hold them.
-          const gone = new Set([...(state.deletedPages.get(event.console_session_id) ?? []), ...event.pages]);
+          const gone = new Set([...(state.deletedPages.get(event.session_id) ?? []), ...event.pages]);
           const deletedPages = new Map(state.deletedPages);
-          deletedPages.set(event.console_session_id, gone);
-          const existing = state.pages.get(event.console_session_id);
+          deletedPages.set(event.session_id, gone);
+          const existing = state.pages.get(event.session_id);
           if (!existing) return { ...state, deletedPages };
           const pages = new Map(state.pages);
-          pages.set(event.console_session_id, existing.filter((page) => !gone.has(page.id)));
+          pages.set(event.session_id, existing.filter((page) => !gone.has(page.id)));
           return { ...state, pages, deletedPages };
         }
         case "project_git_status": {

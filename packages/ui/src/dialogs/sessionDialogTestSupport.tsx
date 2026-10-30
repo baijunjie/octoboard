@@ -5,7 +5,7 @@ import { vi } from "vitest";
 
 import type { Session } from "../protocol";
 import type { NewSessionBinding } from "./dialogRequest";
-import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { type ConsoleExtra, consoleOf, type ProjectExtra, projectOf, sessionOf } from "../gallery/fixtures/builders";
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
 import { trackMountRefocus } from "./dialogTestSupport";
 import { SessionDialog } from "./SessionDialog";
@@ -18,7 +18,7 @@ export const project = projectOf("p-1", parentConsole.id, "Search API");
 function fakeDaemon(initial: Partial<State> = {}): Daemon {
   return {
     store: createStateStore(initial),
-    request: vi.fn(async () => ({ type: "ack" })) as Daemon["request"],
+    request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
     toastError: vi.fn(),
     toastNotice: vi.fn(),
     onToast: () => () => {},
@@ -34,9 +34,9 @@ function fakeDaemon(initial: Partial<State> = {}): Daemon {
 export function renderDialog(
   sessions: Session[],
   initial: Partial<State> = {},
-  consoleOverride: Partial<typeof parentConsole> = {},
+  consoleOverride: ConsoleExtra = {},
   binding: NewSessionBinding = { kind: "choose" },
-  projectOverride: Partial<typeof project> | null = {},
+  projectOverride: ProjectExtra | null = {},
 ): { container: HTMLElement; root: ReturnType<typeof createRoot>; daemon: Daemon; onClose: () => void; onOpened: (sessionId: string) => void; onResume: ReturnType<typeof vi.fn<(sessionId: string) => Promise<void>>>; pastMountRefocus: () => Promise<void> } {
   const daemon = fakeDaemon(initial);
   const onClose = vi.fn();
@@ -48,8 +48,8 @@ export function renderDialog(
     root.render(
       <DaemonProvider value={daemon}>
         <SessionDialog
-          console={{ ...parentConsole, ...consoleOverride }}
-          project={projectOverride === null ? undefined : { ...project, ...projectOverride }}
+          console={consoleOf(parentConsole.id, parentConsole.name, consoleOverride)}
+          project={projectOverride === null ? undefined : projectOf(project.id, parentConsole.id, project.name, projectOverride)}
           binding={binding}
           sessions={sessions}
           onClose={onClose}

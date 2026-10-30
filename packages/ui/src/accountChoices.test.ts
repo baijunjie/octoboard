@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { agentOpeningChoice, avoidUnavailableAccount, choiceSignedOut, choiceChangingSharing, switchEntryBlock, choiceDisabled, choiceExhaustion, choiceGroups, choiceKey, consoleAccount, currentChoice, expiringWeekly, handoffBlock, incompleteAccount, inheritedAccount, preferExpiringWeekly, projectAccount, settledInitialChoice, switchEntries, type QuotaReadings } from "./accountChoices";
-import { consoleOf, projectOf, sessionOf } from "./gallery/fixtures/builders";
+import { accountOf, consoleOf, projectOf, sessionOf } from "./gallery/fixtures/builders";
 import { format } from "./i18n/catalog";
 import type { Translate } from "./i18n/catalog";
 import type { Account, AccountQuota, AccountSharing, Agent, AgentAvailability, Console, Project, QuotaWindow } from "./protocol";
@@ -10,11 +10,11 @@ const availability = (entries: Partial<Record<Agent, AgentAvailability["availabi
   new Map(
     (["claude", "codex", "grok"] as Agent[]).map((agent) => [
       agent,
-      { agent, availability: entries[agent] ?? "not_determined" },
+      { agent, availability: entries[agent] ?? "not_determined", default_account_dir: null },
     ]),
   );
 
-const account = (id: string, agent: Agent, name: string): Account => ({ id, agent, name, config_dir: `/home/${id}` });
+const account = (id: string, agent: Agent, name: string): Account => accountOf(id, agent, name, `/home/${id}`);
 const accounts = [account("w", "claude", "Work"), account("c", "codex", "Codex work")];
 
 describe("choiceGroups", () => {
@@ -23,7 +23,7 @@ describe("choiceGroups", () => {
     const groups = choiceGroups(accounts, availability({}), null, () => "Default", undefined, undefined, undefined, order);
     expect(groups.find((group) => group.agent === "claude")!.entries.map((entry) => entry.account)).toEqual(["w", null]);
     const session = sessionOf("s", "console", "project", "Session", "idle", { agent: "claude" });
-    expect(switchEntries(session, accounts, ((key: string) => key) as Translate, undefined, undefined, undefined, undefined, order).map((entry) => entry.account)).toEqual(["w", null]);
+    expect(switchEntries(session, accounts, ((key: string) => key) as Translate, {}, undefined, undefined, undefined, order).map((entry) => entry.account)).toEqual(["w", null]);
     expect(avoidUnavailableAccount({ agent: "claude", account: null }, groups)).toEqual({ agent: "claude", account: null });
   });
 
@@ -72,7 +72,7 @@ describe("choiceGroups and a running sharing change", () => {
 describe("an account whose sharing change runs", () => {
   const sharing = new Map<string, AccountSharing>([["w", { account: "w", progress: { share: true, phase: "changing" as const, done: 0, total: 2 } }]]);
   const groups = choiceGroups(accounts, availability({}), null, () => "Default", undefined, sharing);
-  const owner = consoleOf("c-1", "Main", { claude_account_id: "w" });
+  const owner = consoleOf("c-1", "Main", { accounts: { claude: "w" } });
 
   it("is avoided like a used-up one: the choice moves to the first other account of the agent", () => {
     expect(avoidUnavailableAccount({ agent: "claude", account: "w" }, groups)).toEqual({ agent: "claude", account: null });
@@ -97,7 +97,7 @@ describe("an account whose sharing change runs", () => {
 describe("a disabled account", () => {
   const stored = [{ ...account("w", "claude", "Work"), disabled: true }, account("v", "claude", "Other")];
   const groups = choiceGroups(stored, availability({}), null, () => "Default", undefined, undefined, ["codex"]);
-  const owner = consoleOf("c-1", "Main", { claude_account_id: "w" });
+  const owner = consoleOf("c-1", "Main", { accounts: { claude: "w" } });
 
   it("is marked on its entry, the default account of an agent by that agent", () => {
     expect(groups.map((group) => [group.agent, group.entries.map((entry) => entry.disabled)])).toEqual([
@@ -111,7 +111,7 @@ describe("a disabled account", () => {
   });
 
   it("marks nothing without the disabled state", () => {
-    expect(choiceGroups(stored.map((item) => ({ ...item, disabled: undefined })), availability({}), null, () => "Default")[0]!.entries.every((entry) => !entry.disabled)).toBe(true);
+    expect(choiceGroups(stored.map((item) => ({ ...item, disabled: false })), availability({}), null, () => "Default")[0]!.entries.every((entry) => !entry.disabled)).toBe(true);
   });
 
   it("is avoided like a used-up one: the choice moves to the first other account of the agent", () => {
@@ -132,7 +132,7 @@ describe("a disabled account", () => {
 
   it("is flagged on the Switch account entries, a disabled default account too, each other account still counted", () => {
     const on = sessionOf("s", "c-1", "p-1", "Title", "idle", { agent: "claude", account_id: "v", config_dir: "/home/v" });
-    expect(switchEntries(on, stored, t, undefined, undefined, undefined, ["claude"]).map((entry) => [entry.account, entry.disabled])).toEqual([[null, true], ["w", true], ["v", false]]);
+    expect(switchEntries(on, stored, t, {}, undefined, undefined, ["claude"]).map((entry) => [entry.account, entry.disabled])).toEqual([[null, true], ["w", true], ["v", false]]);
   });
 });
 
@@ -151,7 +151,7 @@ const settle = (owner: Console, project: Project | undefined, accounts: Account[
 const initialChoice = (...args: Parameters<typeof settle>) => settle(...args).choice;
 
 describe("settledInitialChoice", () => {
-  const owner = consoleOf("c-1", "Main", { codex_account_id: "c" });
+  const owner = consoleOf("c-1", "Main", { accounts: { codex: "c" } });
   const project = (agent?: Agent) => projectOf("p-1", "c-1", "App", { default_agent: agent });
 
   it.each([
@@ -169,7 +169,7 @@ describe("settledInitialChoice", () => {
   });
 
   it("opens a project session on the console's project session agent when the project names none", () => {
-    const split = consoleOf("c-1", "Main", { project_session_agent: "codex", codex_account_id: "c" });
+    const split = consoleOf("c-1", "Main", { project_session_agent: "codex", accounts: { codex: "c" } });
     expect(initialChoice(split, project(), accounts, availability({}), null)).toEqual({ agent: "codex", account: "c" });
     expect(initialChoice(split, project("grok"), accounts, availability({}), null)).toEqual({ agent: "grok", account: null });
   });
@@ -185,7 +185,7 @@ describe("settledInitialChoice", () => {
   });
 
   it("opens on the project's account for the agent it moved to when the first is missing", () => {
-    const moved = projectOf("p-1", "c-1", "App", { codex_account_id: { kind: "account", id: "c2" } });
+    const moved = projectOf("p-1", "c-1", "App", { accounts: { codex: { kind: "account", id: "c2" } } });
     const stored = [...accounts, account("c2", "codex", "Codex 2")];
     expect(initialChoice(owner, moved, stored, availability({ claude: "unavailable" }), null)).toEqual({ agent: "codex", account: "c2" });
   });
@@ -194,15 +194,15 @@ describe("settledInitialChoice", () => {
 const NOW = 1_000_000;
 const usedUp = (agent: Agent, account: string | null): AccountQuota => ({
   agent, account, fetched_at: NOW, plan: null, unavailable: null,
-  windows: [{ kind: "session", label: null, used_percent: 100, resets_at: NOW + 60_000, window_minutes: 300 }],
+  windows: [{ kind: "session", label: null, used_percent: 100, resets_at: NOW + 60_000, window_minutes: 300 }], email: null,
 });
 
 const signedOut = (agent: Agent, account: string | null, code = "quota_not_signed_in"): AccountQuota => ({
-  agent, account, fetched_at: NOW, plan: null, windows: [], unavailable: { code, params: { agent }, message: "x" },
+  agent, account, fetched_at: NOW, plan: null, windows: [], unavailable: { code, params: { agent }, message: "x" }, email: null,
 });
 
 describe("an account whose last reading found it not logged in", () => {
-  const owner = consoleOf("c-1", "Main", { claude_account_id: "w" });
+  const owner = consoleOf("c-1", "Main", { accounts: { claude: "w" } });
   const stored = [...accounts, account("w2", "claude", "Work 2")];
   const readings = (quotas: AccountQuota[]) => ({ quotas, now: NOW });
 
@@ -233,21 +233,21 @@ describe("an account whose last reading found it not logged in", () => {
   });
 
   it("is listed in the Switch account menu with why, and not offered", () => {
-    const entries = switchEntries(sessionOf("s", "c-1", "p-1", "Title", "idle"), stored, t, undefined, readings([signedOut("claude", "w")]));
+    const entries = switchEntries(sessionOf("s", "c-1", "p-1", "Title", "idle"), stored, t, {}, readings([signedOut("claude", "w")]));
     expect(entries.map((entry) => [entry.current, entry.signedOut])).toEqual([[true, false], [false, true], [false, false]]);
     expect(switchEntryBlock(t, entries[1], { switching: false, ownChanging: false })?.reason).toEqual({ state: "Not logged in" });
     expect(switchEntryBlock(t, entries[2], { switching: false, ownChanging: false })).toBeUndefined();
   });
 
   it("says why over a switch holding the session, which ends on its own and says nothing", () => {
-    const entries = switchEntries(sessionOf("s", "c-1", "p-1", "Title", "idle"), stored, t, undefined, readings([signedOut("claude", "w")]));
+    const entries = switchEntries(sessionOf("s", "c-1", "p-1", "Title", "idle"), stored, t, {}, readings([signedOut("claude", "w")]));
     expect(switchEntryBlock(t, entries[1], { switching: true, ownChanging: false })?.reason).toEqual({ state: "Not logged in" });
     expect(switchEntryBlock(t, entries[2], { switching: true, ownChanging: false })).toEqual({ detail: "Unavailable while this session is switching its account" });
   });
 });
 
 describe("an account whose quota is used up", () => {
-  const owner = consoleOf("c-1", "Main", { claude_account_id: "w" });
+  const owner = consoleOf("c-1", "Main", { accounts: { claude: "w" } });
   const stored = [...accounts, account("w2", "claude", "Work 2")];
   const open = (quotas: AccountQuota[]) => settle(owner, undefined, stored, availability({}), null, { quotas, now: NOW });
 
@@ -291,7 +291,7 @@ const windowOf = (patch: Partial<QuotaWindow> = {}): QuotaWindow => ({
   kind: "weekly", label: null, used_percent: 0, resets_at: NOW + DAY, window_minutes: 7 * 24 * 60, ...patch,
 });
 const reading = (accountId: string | null, windows: QuotaWindow[], agent: Agent = "claude"): AccountQuota => ({
-  agent, account: accountId, fetched_at: NOW, plan: null, unavailable: null, windows,
+  agent, account: accountId, fetched_at: NOW, plan: null, unavailable: null, windows, email: null,
 });
 
 describe("preferExpiringWeekly", () => {
@@ -436,7 +436,7 @@ describe("preferExpiringWeekly and the session window", () => {
 });
 
 describe("settledInitialChoice when no account can be used", () => {
-  const owner = consoleOf("c-1", "Main", { default_agent: "claude", claude_account_id: "w" });
+  const owner = consoleOf("c-1", "Main", { default_agent: "claude", accounts: { claude: "w" } });
   const stored = [account("w", "claude", "Work"), account("b", "claude", "B")];
   const settleAuto = (quotas: AccountQuota[], accountList = stored) =>
     settledInitialChoice(owner, undefined, accountList, availability({}), ["claude"], choiceGroups(accountList, availability({}), ["claude"], () => "Default", { quotas, now: NOW }), { now: NOW });
@@ -489,7 +489,7 @@ describe("settledInitialChoice when no account can be used", () => {
 });
 
 describe("settledInitialChoice with automatic account selection", () => {
-  const owner = consoleOf("c-1", "Main", { default_agent: "claude", claude_account_id: "w" });
+  const owner = consoleOf("c-1", "Main", { default_agent: "claude", accounts: { claude: "w" } });
   const stored = [account("w", "claude", "Work"), account("soon", "claude", "Soon")];
   const quotas = [
     reading("w", [windowOf({ used_percent: 10, resets_at: NOW + 3 * DAY })]),
@@ -520,7 +520,7 @@ describe("settledInitialChoice with automatic account selection", () => {
 });
 
 describe("inheritedAccount", () => {
-  const owner = consoleOf("c-1", "Main", { claude_account_id: "w" });
+  const owner = consoleOf("c-1", "Main", { accounts: { claude: "w" } });
   const stored = [...accounts, account("w2", "claude", "Work 2")];
 
   it("is the default account when neither the project nor the console pins one", () => {
@@ -528,19 +528,19 @@ describe("inheritedAccount", () => {
   });
 
   it("is the project's account over the console's", () => {
-    const project = projectOf("p-1", "c-1", "App", { claude_account_id: { kind: "account", id: "w2" } });
+    const project = projectOf("p-1", "c-1", "App", { accounts: { claude: { kind: "account", id: "w2" } } });
     expect(inheritedAccount(owner, project, "claude", stored)).toBe("w2");
   });
 
   it("is the console's account when the project's reference is no longer stored", () => {
-    const project = projectOf("p-1", "c-1", "App", { claude_account_id: { kind: "account", id: "gone" } });
+    const project = projectOf("p-1", "c-1", "App", { accounts: { claude: { kind: "account", id: "gone" } } });
     expect(inheritedAccount(owner, project, "claude", stored)).toBe("w");
   });
 });
 
 describe("a project on the agent's default account", () => {
-  const owner = consoleOf("c-1", "Main", { claude_account_id: "w", codex_account_id: "c" });
-  const onDefault = projectOf("p-1", "c-1", "App", { claude_account_id: { kind: "default" } });
+  const owner = consoleOf("c-1", "Main", { accounts: { claude: "w", codex: "c" } });
+  const onDefault = projectOf("p-1", "c-1", "App", { accounts: { claude: { kind: "default" } } });
 
   it("resolves to the default account without falling through to the console's", () => {
     expect(inheritedAccount(owner, onDefault, "claude", accounts)).toBeNull();
@@ -551,24 +551,24 @@ describe("a project on the agent's default account", () => {
   });
 
   it("opens the session dialog on the default account while the console pins one", () => {
-    const project = projectOf("p-1", "c-1", "App", { default_agent: "claude", claude_account_id: { kind: "default" } });
+    const project = projectOf("p-1", "c-1", "App", { default_agent: "claude", accounts: { claude: { kind: "default" } } });
     expect(initialChoice(owner, project, accounts, availability({}), null)).toEqual({ agent: "claude", account: null });
   });
 
   it("is told from inheriting by projectAccount", () => {
     expect(projectAccount(onDefault, "claude", accounts)).toEqual({ kind: "default" });
-    expect(projectAccount(projectOf("p-1", "c-1", "App", { claude_account_id: { kind: "inherit" } }), "claude", accounts)).toEqual({ kind: "inherit" });
+    expect(projectAccount(projectOf("p-1", "c-1", "App", { accounts: { claude: { kind: "inherit" } } }), "claude", accounts)).toEqual({ kind: "inherit" });
   });
 
   it("reads a pinned account that is not stored as inheriting", () => {
-    const gone = projectOf("p-1", "c-1", "App", { claude_account_id: { kind: "account", id: "gone" } });
+    const gone = projectOf("p-1", "c-1", "App", { accounts: { claude: { kind: "account", id: "gone" } } });
     expect(projectAccount(gone, "claude", accounts)).toEqual({ kind: "inherit" });
   });
 });
 
 describe("consoleAccount", () => {
   it("reads a reference to an account that is not stored, or is another agent's, as the default account", () => {
-    const owner = consoleOf("c-1", "Main", { claude_account_id: "w", codex_account_id: "w", grok_account_id: "gone" });
+    const owner = consoleOf("c-1", "Main", { accounts: { claude: "w", codex: "w", grok: "gone" } });
     expect(consoleAccount(owner, "claude", accounts)).toBe("w");
     expect(consoleAccount(owner, "codex", accounts)).toBeNull();
     expect(consoleAccount(owner, "grok", accounts)).toBeNull();
@@ -602,7 +602,7 @@ const t: Translate = ((key: string, ...args: unknown[]) => format("en", key as n
 describe("switchEntries and a running sharing change", () => {
   it("marks the account whose change runs, and no other, a removed account's directory never", () => {
     const sharing = new Map<string, AccountSharing>([["w", { account: "w", progress: { share: false, phase: "changing" as const, done: 0, total: 2 } }], ["gone", { account: "gone", progress: { share: false, phase: "changing" as const, done: 0, total: 2 } }]]);
-    const entries = switchEntries(sessionOf("s", "c-1", "p-1", "Title", "idle", { account_id: "gone", config_dir: "/home/old" }), accounts, t, undefined, undefined, sharing);
+    const entries = switchEntries(sessionOf("s", "c-1", "p-1", "Title", "idle", { account_id: "gone", config_dir: "/home/old" }), accounts, t, {}, undefined, sharing);
     expect(entries.map((entry) => [entry.name, entry.changingSharing])).toEqual([["Default", false], ["Work", true], ["/home/old", false]]);
   });
 });
@@ -619,11 +619,11 @@ describe("switchEntries", () => {
     ["a removed account that recorded no directory as nothing to name", { account_id: "gone" }, ["Default", "Work"]],
     ["only the session's own agent's accounts", { agent: "grok" }, ["Default (current)"]],
   ] as const)("lists %s", (_, extra, expected) => {
-    expect(summary(switchEntries(session(extra), accounts, t, undefined))).toEqual(expected);
+    expect(summary(switchEntries(session(extra), accounts, t, {}))).toEqual(expected);
   });
 
   it("marks an account whose quota is used up at the time given, and not once it has reset", () => {
-    const exhausted = (now: number) => switchEntries(session(), accounts, t, undefined, { quotas: [usedUp("claude", "w")], now }).map((entry) => entry.exhaustedBy?.kind);
+    const exhausted = (now: number) => switchEntries(session(), accounts, t, {}, { quotas: [usedUp("claude", "w")], now }).map((entry) => entry.exhaustedBy?.kind);
     expect(exhausted(NOW)).toEqual([undefined, "session"]);
     expect(exhausted(NOW + 120_000)).toEqual([undefined, undefined]);
   });

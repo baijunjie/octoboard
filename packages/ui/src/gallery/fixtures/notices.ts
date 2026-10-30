@@ -1,10 +1,10 @@
+import { DEFAULT_SETTINGS } from "../../defaultSettings";
 import { DEFAULT_ACCOUNT_NAME, type Account, type AccountQuota, type AccountSharing, type Settings } from "../../protocol";
 import type { SessionRequest } from "../../store";
 import type { Scenario } from "../scenario";
-import { ALL_AGENTS, SAMPLE, consoleOf, failureTitle, projectOf, sessionOf, snapshotState } from "./builders";
+import { accountOf, ALL_AGENTS, SAMPLE, consoleOf, failureTitle, projectOf, sessionOf, snapshotState } from "./builders";
 import { quotaFailure, quotaOf, quotaWindow } from "./quotas";
 import { SHELL_TIMEOUT } from "./shellTimeout";
-import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
 
 const TRUST = "Trust prompts and toasts";
 
@@ -60,14 +60,13 @@ const requestOf = (fields: RequestFields<SessionRequest>): SessionRequest => ({
 
 // The accounts the requests that resume a conversation name: Work, and Client, whose last sharing change did not finish.
 const accounts: Account[] = [
-  { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" },
-  { id: "a-client", agent: "claude", name: "Client", config_dir: "/Users/dev/.claude-client", share_default_config_incomplete: true },
+  accountOf("a-work", "claude", "Work", "/Users/dev/.claude-work"),
+  accountOf("a-client", "claude", "Client", "/Users/dev/.claude-client", { share_default_config_incomplete: true }),
 ];
 const resumeSettings: Settings = {
-  auto_pull_repositories: false,
-  auto_delete_unresumable_archives: true,
+  ...DEFAULT_SETTINGS,
   added_agents: ALL_AGENTS,
-  default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW,
+  default_clone_dir: "/Users/dev/Projects",
   accounts,
 };
 const onAccount = (account: Account) => ({ account_id: account.id, config_dir: account.config_dir });
@@ -103,10 +102,10 @@ const idleOwnedSession = { ...ownedSession, status: "idle" as const };
 const startingOwnedSession = { ...ownedSession, status: "starting" as const };
 const archivedOwnedSession = { ...ownedSession, status: "archived" as const };
 const moveAccounts: Account[] = [
-  { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" },
-  { id: "a-personal", agent: "claude", name: "Personal", config_dir: "/Users/dev/.claude-personal" },
-  { id: "a-client", agent: "claude", name: "Client", config_dir: "/Users/dev/.claude-client" },
-  { id: "a-team", agent: "codex", name: "Team", config_dir: "/Users/dev/.codex-team" },
+  accountOf("a-work", "claude", "Work", "/Users/dev/.claude-work"),
+  accountOf("a-personal", "claude", "Personal", "/Users/dev/.claude-personal"),
+  accountOf("a-client", "claude", "Client", "/Users/dev/.claude-client"),
+  accountOf("a-team", "codex", "Team", "/Users/dev/.codex-team"),
 ];
 const moveQuotas: AccountQuota[] = [
   quotaOf("claude", null, "max", [quotaWindow("session", 22, 190), quotaWindow("weekly", 41, 3 * 24 * 60 + 4 * 60)]),

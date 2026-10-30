@@ -23,7 +23,7 @@ const hub = sessionOf("s-hub", parent.id, undefined, "Hub", "idle");
 function mount(initial: Partial<State> = {}) {
   const daemon: Daemon = {
     store: createStateStore(initial),
-    request: vi.fn(async () => ({ type: "session_opened", session: sessionOf("s-new", parent.id, project.id, "", "idle") })) as Daemon["request"],
+    request: vi.fn(async () => ({ type: "session_opened", id: null, session: sessionOf("s-new", parent.id, project.id, "", "idle") })) as Daemon["request"],
     toastError: vi.fn(),
     toastNotice: vi.fn(),
     onToast: () => () => {},
@@ -92,7 +92,7 @@ it("reports a refusal as a toast and selects nothing", async () => {
 it("explains that no account is available without adding recovery instructions", async () => {
   const spent = {
     agent: "claude" as const, account: null, fetched_at: 0, plan: null, unavailable: null,
-    windows: [{ kind: "session" as const, label: null, used_percent: 100, resets_at: Date.now() + 3_600_000, window_minutes: 300 }],
+    windows: [{ kind: "session" as const, label: null, used_percent: 100, resets_at: Date.now() + 3_600_000, window_minutes: 300 }], email: null,
   };
   const { daemon, run } = mount({ accountQuotas: [spent] });
   await run({ kind: "new-console-session", console: parent });
@@ -113,7 +113,7 @@ it("refuses a disabled account with the short unavailable message", async () => 
 });
 
 it("refuses a signed-out account with the short unavailable message", async () => {
-  const signedOut = { agent: parent.default_agent, account: null, fetched_at: 0, plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } };
+  const signedOut = { agent: parent.default_agent, account: null, fetched_at: 0, plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" }, email: null };
   const { daemon, run } = mount({ accountQuotas: [signedOut] });
   await run({ kind: "new-console-session", console: parent });
   expect(daemon.request).not.toHaveBeenCalled();
@@ -131,7 +131,7 @@ it("refuses an owner that is no longer live, as the dialog does, and sends nothi
 });
 
 it("sends nothing with no agent available", async () => {
-  const none = new Map(AGENT_OPTIONS.map(({ value }) => [value, { agent: value, availability: "unavailable" as const }]));
+  const none = new Map(AGENT_OPTIONS.map(({ value }) => [value, { agent: value, availability: "unavailable" as const, default_account_dir: null }]));
   const { daemon, run } = mount({ agentAvailability: none });
   await run({ kind: "new-console-session", console: parent });
   expect(daemon.request).not.toHaveBeenCalled();
@@ -143,20 +143,20 @@ it("does not select the session when the window moved to another console while i
   vi.mocked(daemon.request).mockReturnValue(new Promise((resolve) => (reply = resolve)) as never);
   await run({ kind: "new-console-session", console: parent });
   showConsole("c-2");
-  await act(async () => reply({ type: "session_opened", session: sessionOf("s-new", parent.id, undefined, "", "idle") }));
+  await act(async () => reply({ type: "session_opened", id: null, session: sessionOf("s-new", parent.id, undefined, "", "idle") }));
   expect(onOpened).not.toHaveBeenCalled();
 });
 
 const ASKING = '[role="alertdialog"]';
-const half: Account = { id: "a-half", agent: "claude", name: "Half", config_dir: "/a/half", share_default_config: true, share_default_config_incomplete: true };
-const target = (): NewSessionRequest => ({ kind: "new-console-session", console: consoleOf(parent.id, "Main", { claude_account_id: half.id }) });
+const half: Account = { id: "a-half", agent: "claude", name: "Half", config_dir: "/a/half", share_default_config: true, share_default_config_incomplete: true, disabled: false };
+const target = (): NewSessionRequest => ({ kind: "new-console-session", console: consoleOf(parent.id, "Main", { accounts: { claude: half.id } }) });
 const close = () => act(async () => (document.body.querySelector(`${ASKING} button[aria-label="Close"]`) as HTMLElement).click());
 
 it("sends nothing when the question about an incomplete account is cancelled, and takes a new press afterwards", async () => {
   const base = mount();
   const state = base.daemon.store.getState();
   base.daemon.store.setState({
-    consoles: new Map([[parent.id, consoleOf(parent.id, "Main", { claude_account_id: half.id })]]),
+    consoles: new Map([[parent.id, consoleOf(parent.id, "Main", { accounts: { claude: half.id } })]]),
     settings: { ...state.settings, accounts: [half] },
   });
   await base.run(target());

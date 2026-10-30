@@ -230,7 +230,7 @@ describe("the announcement of the phases", () => {
 
   it("shows the progress and not the warning when an old failure is still held during the wait", async () => {
     settings.accounts[1]!.share_default_config_incomplete = true;
-    accountSharing.set("codex-work", { account: "codex-work", failure: { share: true, items: [], detail: "x" }, progress: { share: true, phase: "waiting", done: 0, total: 3 } });
+    accountSharing.set("codex-work", { account: "codex-work", failure: { share: true, cause: "other", items: [], detail: "x" }, progress: { share: true, phase: "waiting", done: 0, total: 3 } });
     const { container } = await mountSettings("Codex");
     expect(mark(container)).toBeNull();
     expect(container.querySelector('[role="progressbar"]')).not.toBeNull();
@@ -403,7 +403,7 @@ describe("a change that did not finish", () => {
       { item: "plugins/", left: "unchanged", detail: "b", cause: "permission_denied" },
       { item: "agents/", left: "unchanged", detail: "c", cause: "permission_denied" },
       { item: "settings.json", left: "linked", detail: "d", cause: "busy" },
-      { item: "hooks/", left: "unchanged", detail: "e" },
+      { item: "hooks/", left: "unchanged", detail: "e", cause: "other" },
     ] }) });
     const { container } = await mountSettings("Codex");
     const popover = openMark(container);

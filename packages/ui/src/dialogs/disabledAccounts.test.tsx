@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "../errorAlerts";
-import { sessionOf } from "../gallery/fixtures/builders";
+import { accountOf, sessionOf } from "../gallery/fixtures/builders";
 import type { Account, AccountQuota, Settings } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { ConsoleAccountsField } from "./ConsoleAccountsField";
@@ -14,9 +14,9 @@ vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }))
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const work: Account = { id: "claude-work", agent: "claude", name: "Work", config_dir: "/a/work" };
+const work: Account = accountOf("claude-work", "claude", "Work", "/a/work");
 
-const notLoggedIn: AccountQuota = { agent: "claude", account: "claude-work", fetched_at: 0, plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } };
+const notLoggedIn: AccountQuota = { agent: "claude", account: "claude-work", fetched_at: 0, plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" }, email: null };
 
 function render(settings: Partial<Settings>, ui: React.ReactElement, accountQuotas: AccountQuota[] = []) {
   const store = createStateStore({ accountQuotas });
@@ -88,7 +88,7 @@ it("refuses a switch to a default account that is turned off in the error alert 
 function openConsoleOptions(settings: Partial<Settings>, pinned: string | null) {
   const { container } = render(
     { added_agents: ["claude"], ...settings },
-    <ConsoleAccountsField label="Accounts" description="d" values={{ claude_account_id: pinned, codex_account_id: null, grok_account_id: null }} onChange={() => {}} onManageAccounts={() => {}} />,
+    <ConsoleAccountsField label="Accounts" description="d" values={{ claude: pinned, codex: null, grok: null }} onChange={() => {}} onManageAccounts={() => {}} />,
   );
   const trigger = container.querySelector<HTMLElement>('[data-slot="select-trigger"]')!;
   act(() => {
@@ -106,7 +106,7 @@ it("hides a turned-off account from the console's account picker", () => {
 });
 
 it("keeps the turned-off account a console still pins as its marked current value", () => {
-  const options = openConsoleOptions({ accounts: [{ ...work, disabled: true }, { id: "claude-spare", agent: "claude", name: "Spare", config_dir: "/a/spare", disabled: true }] }, "claude-work");
+  const options = openConsoleOptions({ accounts: [{ ...work, disabled: true }, accountOf("claude-spare", "claude", "Spare", "/a/spare", { disabled: true })] }, "claude-work");
   const kept = options.find((option) => option.textContent?.includes("Work"))!;
   expect(kept.textContent).toContain("Disabled");
   expect(options.some((option) => option.textContent?.includes("Spare"))).toBe(false);

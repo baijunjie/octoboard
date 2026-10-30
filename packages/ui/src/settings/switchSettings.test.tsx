@@ -98,13 +98,3 @@ describe.each(switches)("$Setting.name", ({ Setting, key, onText }) => {
     expect(toastError).toHaveBeenCalledOnce();
   });
 });
-
-it("reads a daemon that sends no value for asking questions as choices as on", () => {
-  settings = { ask_questions_as_choices: undefined };
-  expect(mount(AskQuestionsAsChoicesSetting).checked).toBe(true);
-});
-
-it("reads a daemon that sends no value for the sidebar order as on", () => {
-  settings = { sidebar_order_by_status: undefined };
-  expect(mount(SidebarOrderSetting).checked).toBe(true);
-});

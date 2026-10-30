@@ -3,14 +3,14 @@ import React, { useId, useRef, useState } from "react";
 
 import { Button } from "../components/Button";
 import { choiceGroups, choiceKey, findEntry, storedAccount } from "../accountChoices";
-import { AGENT_ACCOUNT_FIELD, AGENT_LABEL, agentChoiceBadge, defaultAccountName, isAgentPickable, isDefaultAccountRenamed, listedPickerAgents } from "../agents";
+import { AGENT_LABEL, agentChoiceBadge, defaultAccountName, isAgentPickable, isDefaultAccountRenamed, listedPickerAgents } from "../agents";
 import { AgentIcon } from "../components/AgentIcon";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { StatusBadge } from "../components/StatusBadge";
 import { TitledControl } from "../components/TitledControl";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useT } from "../i18n/react";
-import type { AccountField, Agent } from "../protocol";
+import type { Agent, PerAgent } from "../protocol";
 import { useDaemonStore } from "../store";
 import { markDisabledPickable } from "./accountOptions";
 import { LabelledGroup } from "./LabelledGroup";
@@ -38,8 +38,8 @@ export function ConsoleAccountsField({
 }: {
   label: string;
   description: string;
-  values: Record<AccountField, string | null>;
-  onChange: (field: AccountField, value: string | null) => void;
+  values: PerAgent<string | null>;
+  onChange: (agent: Agent, account: string | null) => void;
   onManageAccounts: (opener: HTMLButtonElement) => void;
 }): React.ReactElement | null {
   const t = useT();
@@ -53,7 +53,7 @@ export function ConsoleAccountsField({
   // pick it back after choosing another.
   const [saved] = useState(values);
   const groups = choiceGroups(accounts, agentAvailability, addedAgents, (agent) => defaultAccountName(t, defaultNames, agent), undefined, undefined, disabledDefaults, accountOrder);
-  const pinned = (agent: Agent) => storedAccount(values[AGENT_ACCOUNT_FIELD[agent]], agent, accounts);
+  const pinned = (agent: Agent) => storedAccount(values[agent], agent, accounts);
   const rows = listedPickerAgents(agentAvailability, addedAgents, (agent) => pinned(agent) !== null).map((agent) => ({
     agent,
     entries: groups.find((group) => group.agent === agent)?.entries ?? [],
@@ -92,7 +92,7 @@ export function ConsoleAccountsField({
       <div ref={rowsRef} {...focusHandoff} className="flex flex-col gap-3">
         {rows.map(({ agent, entries, picked }) => {
           const marked = !isAgentPickable(agentAvailability, addedAgents, agent);
-          const kept = storedAccount(saved[AGENT_ACCOUNT_FIELD[agent]], agent, accounts);
+          const kept = storedAccount(saved[agent], agent, accounts);
           const offered = entries.filter((entry) => !entry.disabled || entry.account === picked || entry.account === kept);
           const nameId = `${idPrefix}-${agent}`;
           return (
@@ -120,7 +120,7 @@ export function ConsoleAccountsField({
                   value={choiceKey({ agent, account: picked })}
                   onChange={(key) => {
                     const entry = findEntry(groups, key);
-                    if (entry) onChange(AGENT_ACCOUNT_FIELD[agent], entry.account);
+                    if (entry) onChange(agent, entry.account);
                   }}
                 />
               </div>

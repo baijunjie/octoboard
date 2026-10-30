@@ -57,7 +57,7 @@ it("is a named region of the window", () => {
 
 it("always lists supported tools and keeps the action enabled when none is detected", () => {
   const unavailable = new Map<Agent, AgentAvailability>(
-    (["claude", "codex", "grok"] as const).map((agent) => [agent, { agent, availability: "unavailable" }]),
+    (["claude", "codex", "grok"] as const).map((agent) => [agent, { agent, availability: "unavailable", default_account_dir: null }]),
   );
   const pending = mount();
   expect(pending.querySelectorAll("li")).toHaveLength(3);
@@ -72,9 +72,9 @@ it("always lists supported tools and keeps the action enabled when none is detec
 
 it("shows each tool's own detection status when an installed tool is available", () => {
   const agentAvailability = new Map<Agent, AgentAvailability>([
-    ["claude", { agent: "claude", availability: "available" }],
-    ["codex", { agent: "codex", availability: "unavailable" }],
-    ["grok", { agent: "grok", availability: "available" }],
+    ["claude", { agent: "claude", availability: "available", default_account_dir: null }],
+    ["codex", { agent: "codex", availability: "unavailable", default_account_dir: null }],
+    ["grok", { agent: "grok", availability: "available", default_account_dir: null }],
   ]);
   const rows = Array.from(mount(vi.fn(), { agentAvailability }).querySelectorAll("li"));
   expect(rows.map((row) => row.textContent)).toEqual([

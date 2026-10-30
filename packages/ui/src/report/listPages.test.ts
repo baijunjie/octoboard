@@ -3,7 +3,7 @@ import { expect, it, vi } from "vitest";
 import type { Daemon } from "../store";
 import { listPages } from "./listPages";
 
-const requester = (reply: () => Promise<unknown> = async () => ({ type: "ack" })) => vi.fn(reply) as unknown as Daemon["request"] & ReturnType<typeof vi.fn>;
+const requester = (reply: () => Promise<unknown> = async () => ({ type: "ack", id: null })) => vi.fn(reply) as unknown as Daemon["request"] & ReturnType<typeof vi.fn>;
 
 it("shares one listing per session and snapshot epoch, in flight or answered", async () => {
   const request = requester();

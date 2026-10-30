@@ -212,11 +212,11 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
     const sides = { old: readWhole(found.entry.old, wholeBody("old")), new: readWhole(found.entry.new, wholeBody("new")) };
     switch (body.type) {
       case "read_project_change_bodies":
-        return { type: "project_change_bodies", project: body.project, worktree: body.worktree ?? null, group: body.change.group, ...sides };
+        return { type: "project_change_bodies", id: null, project: body.project, worktree: body.worktree ?? null, group: body.change.group, ...sides };
       case "read_project_comparison_change_bodies":
-        return { type: "project_comparison_change_bodies", project: body.project, left: body.left, right: body.right, base: body.base, ...sides };
+        return { type: "project_comparison_change_bodies", id: null, project: body.project, left: body.left, right: body.right, base: body.base, ...sides };
       case "read_project_commit_change_bodies":
-        return { type: "project_commit_change_bodies", project: body.project, commit: body.commit, parent: body.parent, ...sides };
+        return { type: "project_commit_change_bodies", id: null, project: body.project, commit: body.commit, parent: body.parent ?? null, ...sides };
     }
   };
 
@@ -232,6 +232,7 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
         const main = git?.worktrees.find((worktree) => worktree.main) ?? own;
         return {
           type: "project_source",
+          id: null,
           source: {
             project: body.project,
             root,
@@ -252,6 +253,7 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
         if (!Array.isArray(changes)) return fail(changes);
         return {
           type: "project_changes",
+          id: null,
           project: body.project,
           worktree: body.worktree ?? null,
           head: git?.worktrees.find((w) => w.id === worktree)?.head ?? null,
@@ -263,9 +265,9 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
         const listed = (git?.branches ?? []).filter((branch) => !isGone(branch.name));
         // A lookup past its budgets leaves the main branch without an upstream and the list without a default branch, and the list says so.
         if (git?.upstreamsCut) {
-          return { type: "project_branches", project: body.project, branches: listed.map(({ upstream: _upstream, ...branch }) => branch), complete: true, upstreams_complete: false };
+          return { type: "project_branches", id: null, project: body.project, branches: listed.map(({ upstream: _upstream, ...branch }) => branch), complete: true, upstreams_complete: false };
         }
-        return { type: "project_branches", project: body.project, branches: listed, complete: !git?.branchesCut, ...(git?.defaultBranch ? { default_branch: git.defaultBranch } : {}) };
+        return { type: "project_branches", id: null, project: body.project, branches: listed, complete: !git?.branchesCut, ...(git?.defaultBranch ? { default_branch: git.defaultBranch } : {}) };
       }
       case "compare_project_branches": {
         const resolve = (name: string, remote: boolean) => {
@@ -294,7 +296,7 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
         }
         // A right branch that is an ancestor of the left one forks at its own tip, which is no change.
         const changes = fork === right.commit ? [] : (git?.comparisons?.[key] ?? []);
-        return { type: "project_comparison", project: body.project, left, right, base: fork, changes: changes.map((change) => change.entry), complete: !git?.cutShort };
+        return { type: "project_comparison", id: null, project: body.project, left, right, base: fork, changes: changes.map((change) => change.entry), complete: !git?.cutShort };
       }
       case "read_project_comparison_change": {
         // Only the left side can be a remote-tracking branch or the empty tree.
@@ -307,6 +309,7 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
         const at = `${body.left.branch}..${body.right.branch}`;
         return {
           type: "project_comparison_change",
+          id: null,
           project: body.project,
           left: body.left,
           right: body.right,
@@ -333,6 +336,7 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
         const at = `${worktree} ${found.entry.group}`;
         return {
           type: "project_change",
+          id: null,
           project: body.project,
           worktree: body.worktree ?? null,
           group: found.entry.group,
@@ -351,11 +355,12 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
           if (pair !== undefined && (git?.comparisons?.[pair]?.length ?? 0) > 0) {
             refuseUnfillable(`${pair} commits: the comparison lists changes, and the fixture carries no commits to make them of`);
           }
-          return { type: "project_commits", project: body.project, base: body.base, tip: body.tip, commits: [], complete: true, commits_complete: true };
+          return { type: "project_commits", id: null, project: body.project, base: body.base, tip: body.tip, commits: [], complete: true, commits_complete: true };
         }
         if ("error" in listed) return fail(listed.error);
         return {
           type: "project_commits",
+          id: null,
           project: body.project,
           base: body.base,
           tip: body.tip,
@@ -374,9 +379,10 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
         const at = `commit ${shortId(body.commit)}`;
         return {
           type: "project_commit_change",
+          id: null,
           project: body.project,
           commit: body.commit,
-          parent: body.parent,
+          parent: body.parent ?? null,
           old: readSide(at, found.entry.old, found.bodies?.old, whole.old, hasHunk(found)),
           new: readSide(at, found.entry.new, found.bodies?.new, whole.new, hasHunk(found)),
           patch: found.patch === undefined ? null : { size: found.patch.length, kind: "text", media_type: null, text: found.patch, data: null },

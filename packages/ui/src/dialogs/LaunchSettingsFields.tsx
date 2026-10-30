@@ -1,7 +1,6 @@
 import { Description } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
-import type { LaunchPair } from "../agents";
 import { effortLevels, launchSettingOptions } from "../agentLaunchSettings";
 import { FailureBody } from "../components/errorParts";
 import { StatusMark } from "../components/StatusMark";
@@ -11,7 +10,7 @@ import { DaemonRequestError } from "../daemon-client";
 import { failureSummaryText } from "../errorText";
 import type { Translate } from "../i18n/catalog";
 import { useCurrentLanguage, useT } from "../i18n/react";
-import type { Agent, AgentModel } from "../protocol";
+import type { Agent, AgentModel, Launch } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { AdvancedSection, type AdvancedTab, AdvancedTabs } from "./AdvancedSection";
 import { OptionSelect } from "./OptionSelect";
@@ -85,7 +84,7 @@ type PickerProps = {
   launch: LaunchModels;
   /** The values an unset picker resolves to (the console's, for a project): an unset picker names
    * them instead of standing for the agent's own setting. */
-  inherit?: LaunchPair;
+  inherit?: Launch;
   isDisabled?: boolean;
   /** The id of an element elsewhere on the page that also describes the picker. */
   describedBy?: string;
@@ -188,7 +187,7 @@ export function LaunchPickers({
   effort: string | null;
   onModelChange: (value: string | null) => void;
   onEffortChange: (value: string | null) => void;
-  inherit?: LaunchPair;
+  inherit?: Launch;
   isDisabled?: boolean;
 }): React.ReactElement {
   return (
@@ -231,7 +230,7 @@ export function LaunchSettingsFields({
   onModelChange: (value: string | null) => void;
   onEffortChange: (value: string | null) => void;
   note?: string;
-  inherit?: LaunchPair;
+  inherit?: Launch;
   isDisabled?: boolean;
   /** Whether the section is open, for a dialog that keeps it open across a swap of this component for another
    * `AdvancedSection`; without it the section keeps its own state. */

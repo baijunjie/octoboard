@@ -24,9 +24,12 @@ no reason to leave it out of the export: the settings hidden from agents because
 spend quota (approving requests automatically, starting usage windows automatically) travel all the same. So a new
 application setting that is not machine-local is added, in the same change, to:
 
-- `DocumentSettings` in `apps/daemon/src/config_export.rs`, as an `Option` with `#[serde(default)]`, so a document
-  exported before the setting existed still imports and applying it leaves the setting as it is; filled in `build`
-  beside the others, which are written only when `Selection.settings` asks for the settings region;
+- `DocumentSettings` in `apps/daemon/src/config_export.rs`, filled in `build` beside the others, which are written only
+  when `Selection.settings` asks for the settings region. Until the first release it is a required field (no `Option`,
+  no `#[serde(default)]`), since every export writes it and there is no older document to read. From the first release
+  on, a setting added without raising `VERSION` is an `Option` with `#[serde(default)]`, applied by an import only when
+  present, because an export from a released build lacks it and a required field would make that export unreadable;
+  otherwise raise `VERSION` and add the step that upgrades the previous version (its doc comment there);
 - the import inspection in `apps/daemon/src/config_import/mod.rs` (`InspectedSettings`), with the document's value and
   the current one, and the `coordinator::update_settings` call that applies the document's settings;
 - the window: for a setting that is a switch, one entry in `BOOLEAN_SETTINGS` in
@@ -36,4 +39,5 @@ application setting that is not machine-local is added, in the same change, to:
   and its `current_` counterpart must exist in `DocumentSettings` and `InspectedSettings` in
   `packages/ui/src/protocol.ts`. A setting that is not a switch (like the git workflow settings or keyboard
   shortcuts) instead gets its own line in both `packages/ui/src/configuration/ImportSettings.tsx` (the review's
-  Application settings tab) and `ImportResult.tsx`, shown only when the document carries the setting.
+  Application settings tab) and `ImportResult.tsx`: always shown for a required field (like the git workflow line),
+  shown only when the document carries the setting for an optional one.

@@ -50,7 +50,7 @@ async function mountApp(phone: boolean) {
   let trees: ProcessTree[] = [{ id: "1:1", session_id: session.id, command: "npm run dev", cwd: "/work/site", cwd_missing: false, kept: false, started_at: Date.now(), process_count: 1, memory_bytes: 120_000_000, ports: [3000] }];
   const daemon: Daemon = {
     store: createStateStore(snapshotState({ consoles: [console_], projects: [project], sessions: [session] })),
-    request: vi.fn(async (body) => body.type === "list_processes" ? { type: "processes_listed", trees: structuredClone(trees) } : { type: "ack" }) as Daemon["request"],
+    request: vi.fn(async (body) => body.type === "list_processes" ? { type: "processes_listed", id: null, trees: structuredClone(trees) } : { type: "ack", id: null }) as Daemon["request"],
     toastError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
   };
   let stacks!: ReturnType<typeof usePanelStacks>;

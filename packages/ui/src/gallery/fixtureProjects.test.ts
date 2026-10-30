@@ -15,7 +15,7 @@ describe("fixture project writes", () => {
     ["/../../", "/", "/"],
   ])("derives a blank name independently from the daemon path %s", async (path, expectedPath, name) => {
     const daemon = make();
-    await expect(daemon.request({ type: "add_project", console_id: "c", source: "local", path, name: " " })).resolves.toEqual({ type: "ack" });
+    await expect(daemon.request({ type: "add_project", console_id: "c", source: "local", path, name: " " })).resolves.toEqual({ type: "ack", id: null });
     expect([...daemon.store.getState().projects.values()]).toMatchObject([{ path: expectedPath, name, trust_consent: false, source: "local" }]);
   });
 
@@ -38,6 +38,22 @@ describe("fixture project writes", () => {
     await expect(daemon.request({ ...request, path: "relative" })).rejects.toMatchObject({ code: "path_not_absolute" });
   });
 
+  it("adds a project with every agent's account and launch filled, naming only what the request names", async () => {
+    const daemon = make();
+    await daemon.request({ type: "add_project", console_id: "c", source: "local", path: "/code/review", accounts: { codex: { kind: "default" } }, launch: { claude: { model: " opus " } } });
+    expect([...daemon.store.getState().projects.values()]).toMatchObject([{
+      accounts: { claude: { kind: "inherit" }, codex: { kind: "default" }, grok: { kind: "inherit" } },
+      launch: { claude: { model: "opus", effort: null }, codex: { model: null, effort: null }, grok: { model: null, effort: null } },
+    }]);
+  });
+
+  it("puts an account back to inheriting with null and leaves the agents an update does not name alone", async () => {
+    const project = projectOf("p", "c", "Site", { accounts: { claude: { kind: "account", id: "a" }, codex: { kind: "default" } } });
+    const daemon = make({ state: snapshotState({ consoles: [consoleOf("c", "Main")], projects: [project] }) });
+    await daemon.request({ type: "update_project", project: "p", accounts: { claude: null } });
+    expect(daemon.store.getState().projects.get("p")?.accounts).toEqual({ claude: { kind: "inherit" }, codex: { kind: "default" }, grok: { kind: "inherit" } });
+  });
+
   it("associates only listed repositories of a parent and ignores shared single-project text for several", async () => {
     const daemon = make({ directories: { "/code": [{ name: "one", path: "/code/one", is_git_repo: true }, { name: "two", path: "/code/two", is_git_repo: true }, { name: "notes", path: "/code/notes", is_git_repo: false }] } });
     await daemon.request({ type: "add_project", console_id: "c", source: "parent", path: "/code", name: "Ignored", description: "Ignored" });
@@ -45,12 +61,12 @@ describe("fixture project writes", () => {
   });
 
   it("updates only mutable supplied settings and keeps stored legacy whitespace unchanged", async () => {
-    const project = projectOf("p", "c", " Existing ", { remote_url: "git@example.com:o/original.git", trust_consent: true, claude_session_model: "old", description: " Before " });
+    const project = projectOf("p", "c", " Existing ", { remote_url: "git@example.com:o/original.git", trust_consent: true, launch: { claude: { model: "old", effort: "high" } }, description: " Before " });
     const daemon = make({ state: snapshotState({ consoles: [consoleOf("c", "Main")], projects: [project] }) });
     await daemon.request({ type: "update_project", project: "p", description: "Before" });
     expect(daemon.store.getState().projects.get("p")?.description).toBe(" Before ");
-    await daemon.request({ type: "update_project", project: "p", name: "Existing", description: "", claude_session_model: null, default_agent: null, tags: [" One ", "one"] });
-    expect(daemon.store.getState().projects.get("p")).toMatchObject({ name: " Existing ", description: null, claude_session_model: null, default_agent: null, tags: ["One"], remote_url: project.remote_url, path: project.path, trust_consent: true });
+    await daemon.request({ type: "update_project", project: "p", name: "Existing", description: "", launch: { claude: { model: null } }, default_agent: null, tags: [" One ", "one"] });
+    expect(daemon.store.getState().projects.get("p")).toMatchObject({ name: " Existing ", description: null, launch: { claude: { model: null, effort: "high" }, codex: { model: null, effort: null } }, default_agent: null, tags: ["One"], remote_url: project.remote_url, path: project.path, trust_consent: true });
     await daemon.request({ type: "update_project", project: "p", name: "  Changed مرحبا  " });
     expect(daemon.store.getState().projects.get("p")?.name).toBe("Changed مرحبا");
     await expect(daemon.request({ type: "update_project", project: "p", name: " " })).rejects.toMatchObject({ code: "field_required" });

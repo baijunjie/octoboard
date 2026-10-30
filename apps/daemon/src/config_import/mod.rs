@@ -22,19 +22,18 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::config_export::{
-    self, AccountName, ConfigurationDocument, DocumentConsole, DocumentGitWorkflowSettings,
-    DocumentProject, DocumentSettings, ProjectAccountRef,
+    self, AccountName, ConfigurationDocument, DocumentConsole, DocumentProject, DocumentSettings,
+    ProjectAccountRef,
 };
-use crate::config_upgrade;
 use crate::coordinator::{
     self, AddProjectRequest, NewConsole, NewProjectSettings, SettingsChanges,
 };
 use crate::git_remote;
 use crate::git_remote::read_bounded;
-use crate::git_workflow::{GitWorkflowSettings, GitWorkflowSettingsChanges};
+use crate::git_workflow::GitWorkflowSettings;
 use crate::hostfs;
 use crate::protocol::{
-    error_code, Account, Agent, CodedError, Params, ProjectAccount, ProjectSource,
+    error_code, Account, Agent, CodedError, Params, PerAgent, ProjectAccount, ProjectSource,
 };
 use crate::state::AppState;
 
@@ -43,6 +42,7 @@ pub use accounts::{AccountResolution, ImportedAccounts, InspectedAccounts};
 
 /// Which directory a project is placed in. [`DirectoryChoice`] is the caller's pick of one, and
 /// this is the bare name that results report.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ChoiceKind {
@@ -67,6 +67,7 @@ impl ChoiceKind {
 }
 
 /// The choice made for one project when applying.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum DirectoryChoice {
@@ -89,6 +90,7 @@ impl DirectoryChoice {
 
 /// The choice for the project at `project` of the document's console at `console`, both indexes
 /// into the document as it was sent.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Deserialize)]
 pub struct ProjectResolution {
     pub console: usize,
@@ -98,6 +100,7 @@ pub struct ProjectResolution {
 
 /// An account reference of the document that names no account of its agent on this machine, and
 /// so is bound to that agent's default account.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct AccountFallback {
     pub agent: Agent,
@@ -106,6 +109,7 @@ pub struct AccountFallback {
 
 /// The directory each choice would use for a project, present only for the choices its state
 /// allows.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct Offers {
     pub exported_path: Option<String>,
@@ -129,6 +133,7 @@ impl Offers {
     }
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct InspectedProject {
     pub name: String,
@@ -136,54 +141,50 @@ pub struct InspectedProject {
     pub path: String,
     pub remote_url: Option<String>,
     pub offers: Offers,
+    #[cfg_attr(
+        test,
+        ts(type = "\"exported_path\" | \"default_clone_dir\" | \"clone\" | null")
+    )]
     pub default: Option<ChoiceKind>,
     pub account_fallbacks: Vec<AccountFallback>,
 }
 
 /// The application settings a document carries, beside the value this machine has now, so a client
 /// can show what applying them would change.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct InspectedSettings {
     pub auto_pull_repositories: bool,
     pub current_auto_pull_repositories: bool,
-    /// Absent when the document predates the setting, which applying it then leaves as it is.
-    pub auto_delete_unresumable_archives: Option<bool>,
+    pub auto_delete_unresumable_archives: bool,
     pub current_auto_delete_unresumable_archives: bool,
-    /// Absent when the document predates the setting, which applying it then leaves as it is.
-    pub auto_select_account: Option<bool>,
+    pub auto_select_account: bool,
     pub current_auto_select_account: bool,
-    /// Absent when the document predates the setting, which applying it then leaves as it is.
-    pub auto_switch_on_usage_limit: Option<bool>,
+    pub auto_switch_on_usage_limit: bool,
     pub current_auto_switch_on_usage_limit: bool,
-    /// Absent when the document predates the setting, which applying it then leaves as it is.
-    pub sidebar_order_by_status: Option<bool>,
+    pub sidebar_order_by_status: bool,
     pub current_sidebar_order_by_status: bool,
-    /// Absent when the document predates the setting, which applying it then leaves as it is.
-    pub auto_start_quota_windows: Option<bool>,
+    pub auto_start_quota_windows: bool,
     pub current_auto_start_quota_windows: bool,
-    /// Absent when the document predates the setting, which applying it then leaves as it is.
-    pub auto_approve_session_requests: Option<bool>,
+    pub auto_approve_session_requests: bool,
     pub current_auto_approve_session_requests: bool,
-    /// Absent when the document predates the setting, which applying it then leaves as it is.
-    pub auto_approve_resume_requests: Option<bool>,
+    pub auto_approve_resume_requests: bool,
     pub current_auto_approve_resume_requests: bool,
-    /// Absent when the document predates the setting, which applying it then leaves as it is.
-    pub auto_approve_account_switches: Option<bool>,
+    pub auto_approve_account_switches: bool,
     pub current_auto_approve_account_switches: bool,
-    /// Absent when the document predates the setting, which applying it then leaves as it is.
-    pub auto_approve_handoffs: Option<bool>,
+    pub auto_approve_handoffs: bool,
     pub current_auto_approve_handoffs: bool,
-    /// Absent when the document predates the setting, which applying it then leaves as it is.
-    pub ask_questions_as_choices: Option<bool>,
+    pub ask_questions_as_choices: bool,
     pub current_ask_questions_as_choices: bool,
-    /// Absent when the document predates the settings, which applying it then leaves as they are.
-    pub git_workflow: Option<DocumentGitWorkflowSettings>,
+    pub git_workflow: GitWorkflowSettings,
     pub current_git_workflow: GitWorkflowSettings,
-    /// Absent when the document predates the setting, which applying it then leaves as it is.
-    pub claude_compatibility: Option<BTreeMap<String, bool>>,
+    #[cfg_attr(test, ts(type = "Partial<Record<Agent, boolean>>"))]
+    pub claude_compatibility: BTreeMap<String, bool>,
+    #[cfg_attr(test, ts(type = "Partial<Record<Agent, boolean>>"))]
     pub current_claude_compatibility: BTreeMap<String, bool>,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct Inspection {
     /// Absent when the document carries no settings.
@@ -193,6 +194,7 @@ pub struct Inspection {
     pub consoles: Vec<InspectedConsole>,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct Imported {
     /// The settings applied to this machine; absent unless the caller asked for them and they
@@ -205,6 +207,7 @@ pub struct Imported {
     pub consoles: Vec<ImportedConsole>,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct InspectedConsole {
     pub name: String,
@@ -212,6 +215,7 @@ pub struct InspectedConsole {
     pub projects: Vec<InspectedProject>,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ImportStatus {
@@ -226,6 +230,7 @@ pub enum ImportStatus {
 }
 
 /// Why something was not created or applied: an `error` reply's `code`, `params` and `message`.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct ImportFailure {
     pub code: crate::protocol::Code,
@@ -233,6 +238,7 @@ pub struct ImportFailure {
     pub message: String,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct ImportedProject {
     pub name: String,
@@ -246,12 +252,14 @@ pub struct ImportedProject {
     pub account_fallbacks: Vec<AccountFallback>,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct ImportedConsole {
     /// The id of the console created; absent when it could not be created.
     pub console: Option<String>,
     pub name: String,
     /// `created` or `failed`.
+    #[cfg_attr(test, ts(type = "\"created\" | \"failed\""))]
     pub status: ImportStatus,
     pub error: Option<ImportFailure>,
     /// Empty unless the console was created.
@@ -262,8 +270,8 @@ pub struct ImportedConsole {
 
 /// The document `value` holds, or the refusal that applies: it is not one at all, it is of a
 /// version this daemon does not read, or it cannot be read. `format` and `version` are looked at
-/// before the rest, since a newer version may well have a shape this one cannot read, and the
-/// useful answer to that is that it is newer.
+/// before the rest, since a document of another version may well have a shape this one cannot
+/// read, and the useful answer to that is its version.
 fn parse(value: &serde_json::Value) -> Result<ConfigurationDocument> {
     let unreadable = |detail: &str| {
         CodedError::raised(
@@ -286,11 +294,11 @@ fn parse(value: &serde_json::Value) -> Result<ConfigurationDocument> {
         .get("version")
         .and_then(|version| version.as_u64())
         .ok_or_else(|| unreadable("`version` is not a whole number"))?;
-    if version == 0 || version > u64::from(config_export::VERSION) {
+    if version != u64::from(config_export::VERSION) {
         return Err(CodedError::raised(
             error_code::CONFIGURATION_VERSION_UNSUPPORTED,
             format!(
-                "the configuration is of version {version}; this Octoboard reads up to {}",
+                "the configuration is of version {version}; this Octoboard reads only version {}",
                 config_export::VERSION
             ),
             &[
@@ -299,10 +307,7 @@ fn parse(value: &serde_json::Value) -> Result<ConfigurationDocument> {
             ],
         ));
     }
-    let mut upgraded = object.clone();
-    config_upgrade::upgrade(&mut upgraded, version as u32);
-    serde_json::from_value(serde_json::Value::Object(upgraded))
-        .map_err(|err| unreadable(&err.to_string()))
+    serde_json::from_value(value.clone()).map_err(|err| unreadable(&err.to_string()))
 }
 
 /// The document's account references bound to this machine's accounts.
@@ -312,16 +317,12 @@ struct Rebinder {
 }
 
 struct ConsoleAccounts {
-    claude: Option<String>,
-    codex: Option<String>,
-    grok: Option<String>,
+    accounts: PerAgent<Option<String>>,
     fallbacks: Vec<AccountFallback>,
 }
 
 struct ProjectAccounts {
-    claude: ProjectAccount,
-    codex: ProjectAccount,
-    grok: ProjectAccount,
+    accounts: PerAgent<ProjectAccount>,
     fallbacks: Vec<AccountFallback>,
 }
 
@@ -384,9 +385,9 @@ impl Rebinder {
     fn console(&self, console: &DocumentConsole) -> ConsoleAccounts {
         let mut fallbacks = Vec::new();
         ConsoleAccounts {
-            claude: self.console_reference(Agent::Claude, &console.claude_account, &mut fallbacks),
-            codex: self.console_reference(Agent::Codex, &console.codex_account, &mut fallbacks),
-            grok: self.console_reference(Agent::Grok, &console.grok_account, &mut fallbacks),
+            accounts: PerAgent::from_fn(|agent| {
+                self.console_reference(agent, console.accounts.get(agent), &mut fallbacks)
+            }),
             fallbacks,
         }
     }
@@ -394,9 +395,9 @@ impl Rebinder {
     fn project(&self, project: &DocumentProject) -> ProjectAccounts {
         let mut fallbacks = Vec::new();
         ProjectAccounts {
-            claude: self.project_reference(Agent::Claude, &project.claude_account, &mut fallbacks),
-            codex: self.project_reference(Agent::Codex, &project.codex_account, &mut fallbacks),
-            grok: self.project_reference(Agent::Grok, &project.grok_account, &mut fallbacks),
+            accounts: PerAgent::from_fn(|agent| {
+                self.project_reference(agent, project.accounts.get(agent), &mut fallbacks)
+            }),
             fallbacks,
         }
     }
@@ -580,10 +581,8 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
             current_ask_questions_as_choices: state.store.ask_questions_as_choices()?,
             git_workflow: settings.git_workflow,
             current_git_workflow: state.store.git_workflow_settings()?,
-            claude_compatibility: settings
-                .claude_compatibility
-                .as_ref()
-                .map(|choices| known_claude_compatibility(choices).collect()),
+            claude_compatibility: known_claude_compatibility(&settings.claude_compatibility)
+                .collect(),
             current_claude_compatibility: state.store.claude_compatibility()?,
         }),
         None => None,
@@ -667,21 +666,9 @@ fn new_console(document_console: DocumentConsole, accounts: ConsoleAccounts) -> 
         name: document_console.name,
         default_agent: document_console.default_agent,
         project_session_agent: document_console.project_session_agent,
-        claude_account_id: accounts.claude,
-        codex_account_id: accounts.codex,
-        grok_account_id: accounts.grok,
-        claude_console_session_model: document_console.claude_console_session_model,
-        claude_console_session_effort: document_console.claude_console_session_effort,
-        codex_console_session_model: document_console.codex_console_session_model,
-        codex_console_session_effort: document_console.codex_console_session_effort,
-        grok_console_session_model: document_console.grok_console_session_model,
-        grok_console_session_effort: document_console.grok_console_session_effort,
-        claude_project_session_model: document_console.claude_project_session_model,
-        claude_project_session_effort: document_console.claude_project_session_effort,
-        codex_project_session_model: document_console.codex_project_session_model,
-        codex_project_session_effort: document_console.codex_project_session_effort,
-        grok_project_session_model: document_console.grok_project_session_model,
-        grok_project_session_effort: document_console.grok_project_session_effort,
+        accounts: accounts.accounts,
+        launch: document_console.launch,
+        project_session_launch: document_console.project_session_launch,
         icon: document_console.icon,
         console_session_prompt: document_console.console_session_prompt,
     }
@@ -838,29 +825,23 @@ pub async fn apply(
     if let Some(settings) = document.settings.filter(|_| apply_settings) {
         let changes = SettingsChanges {
             auto_pull_repositories: Some(settings.auto_pull_repositories),
-            auto_delete_unresumable_archives: settings.auto_delete_unresumable_archives,
-            auto_approve_session_requests: settings.auto_approve_session_requests,
-            auto_approve_resume_requests: settings.auto_approve_resume_requests,
-            auto_approve_account_switches: settings.auto_approve_account_switches,
-            auto_approve_handoffs: settings.auto_approve_handoffs,
-            ask_questions_as_choices: settings.ask_questions_as_choices,
+            auto_delete_unresumable_archives: Some(settings.auto_delete_unresumable_archives),
+            auto_approve_session_requests: Some(settings.auto_approve_session_requests),
+            auto_approve_resume_requests: Some(settings.auto_approve_resume_requests),
+            auto_approve_account_switches: Some(settings.auto_approve_account_switches),
+            auto_approve_handoffs: Some(settings.auto_approve_handoffs),
+            ask_questions_as_choices: Some(settings.ask_questions_as_choices),
             // Reported by a client, not carried by a document.
             interface_language: None,
-            auto_select_account: settings.auto_select_account,
-            auto_switch_on_usage_limit: settings.auto_switch_on_usage_limit,
-            sidebar_order_by_status: settings.sidebar_order_by_status,
-            auto_start_quota_windows: settings.auto_start_quota_windows,
+            auto_select_account: Some(settings.auto_select_account),
+            auto_switch_on_usage_limit: Some(settings.auto_switch_on_usage_limit),
+            sidebar_order_by_status: Some(settings.sidebar_order_by_status),
+            auto_start_quota_windows: Some(settings.auto_start_quota_windows),
             default_clone_dir: None,
-            git_workflow: settings
-                .git_workflow
-                .map(GitWorkflowSettingsChanges::from)
-                .unwrap_or_default(),
+            git_workflow: settings.git_workflow.into(),
             // An agent this build has no such setting for is skipped, so a document from a build
             // that knows more agents still applies the rest of its settings.
-            claude_compatibility: settings
-                .claude_compatibility
-                .iter()
-                .flat_map(known_claude_compatibility)
+            claude_compatibility: known_claude_compatibility(&settings.claude_compatibility)
                 .collect(),
         };
         match coordinator::update_settings(state, changes) {
@@ -952,15 +933,8 @@ async fn place_project(
                     default_agent: project.default_agent,
                     settings: NewProjectSettings {
                         pinned: project.pinned,
-                        claude_account_id: accounts.claude,
-                        codex_account_id: accounts.codex,
-                        grok_account_id: accounts.grok,
-                        claude_session_model: project.claude_session_model,
-                        claude_session_effort: project.claude_session_effort,
-                        codex_session_model: project.codex_session_model,
-                        codex_session_effort: project.codex_session_effort,
-                        grok_session_model: project.grok_session_model,
-                        grok_session_effort: project.grok_session_effort,
+                        accounts: accounts.accounts,
+                        launch: project.launch,
                         git_workflow: project.git_workflow,
                     },
                     // The document says what the project's default agent is, including none.
@@ -1004,7 +978,7 @@ fn failed(name: String, err: anyhow::Error) -> ImportedProject {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::Project;
+    use crate::protocol::{Launch, Project};
     use crate::test_support::{app_state, ScratchDir, PATIENCE};
     use serde_json::json;
 
@@ -1022,15 +996,8 @@ mod tests {
             pinned: false,
             tags: Vec::new(),
             description: None,
-            claude_account: ProjectAccountRef::Inherit,
-            codex_account: ProjectAccountRef::Inherit,
-            grok_account: ProjectAccountRef::Inherit,
-            claude_session_model: None,
-            claude_session_effort: None,
-            codex_session_model: None,
-            codex_session_effort: None,
-            grok_session_model: None,
-            grok_session_effort: None,
+            accounts: Default::default(),
+            launch: Default::default(),
             git_workflow: Default::default(),
         }
     }
@@ -1041,21 +1008,9 @@ mod tests {
             icon: None,
             default_agent: Agent::Codex,
             project_session_agent: None,
-            claude_project_session_model: None,
-            claude_project_session_effort: None,
-            codex_project_session_model: None,
-            codex_project_session_effort: None,
-            grok_project_session_model: None,
-            grok_project_session_effort: None,
-            claude_account: None,
-            codex_account: None,
-            grok_account: None,
-            claude_console_session_model: None,
-            claude_console_session_effort: None,
-            codex_console_session_model: None,
-            codex_console_session_effort: None,
-            grok_console_session_model: None,
-            grok_console_session_effort: None,
+            project_session_launch: Default::default(),
+            accounts: Default::default(),
+            launch: Default::default(),
             console_session_prompt: None,
             projects,
         }
@@ -1119,6 +1074,17 @@ mod tests {
         document["settings"] = json!({
             "auto_pull_repositories": auto_pull,
             "auto_delete_unresumable_archives": auto_delete,
+            "auto_select_account": false,
+            "auto_switch_on_usage_limit": false,
+            "sidebar_order_by_status": true,
+            "auto_start_quota_windows": false,
+            "auto_approve_session_requests": false,
+            "auto_approve_resume_requests": false,
+            "auto_approve_account_switches": false,
+            "auto_approve_handoffs": false,
+            "ask_questions_as_choices": true,
+            "git_workflow": GitWorkflowSettings::default(),
+            "claude_compatibility": {},
         });
         document
     }
@@ -1140,8 +1106,8 @@ mod tests {
                 json!({ "format": config_export::FORMAT }),
                 error_code::CONFIGURATION_UNREADABLE,
             ),
-            // A newer version may be shaped in ways this one cannot read; it is told apart from
-            // an unreadable body by being newer.
+            // Another version may be shaped in ways this one cannot read; it is told apart from
+            // an unreadable body by its version.
             (
                 json!({ "format": config_export::FORMAT, "version": config_export::VERSION + 1 }),
                 error_code::CONFIGURATION_VERSION_UNSUPPORTED,
@@ -1163,7 +1129,7 @@ mod tests {
     }
 
     #[test]
-    fn a_document_exported_before_exported_by_existed_is_still_read() {
+    fn a_document_without_exported_by_is_read_with_none() {
         let mut value = document(vec![console("Hub", Vec::new())]);
         value.as_object_mut().unwrap().remove("exported_by");
 
@@ -1171,6 +1137,71 @@ mod tests {
 
         assert_eq!(parsed.exported_by, None);
         assert_eq!(parsed.consoles.len(), 1);
+    }
+
+    /// Every export writes the whole settings region, so a document whose region lacks a part of
+    /// it is not one an export produced, and is refused rather than filled in.
+    #[test]
+    fn a_settings_region_missing_the_git_workflow_or_a_switch_is_refused() {
+        let complete = with_settings(document(vec![console("Hub", Vec::new())]), true, false);
+        parse(&complete).expect("a complete settings region is read");
+
+        for key in ["git_workflow", "ask_questions_as_choices"] {
+            let mut value = complete.clone();
+            value["settings"].as_object_mut().unwrap().remove(key);
+            let err = parse(&value).expect_err(key);
+            assert_eq!(code_of(&err), error_code::CONFIGURATION_UNREADABLE, "{key}");
+        }
+        let mut value = complete;
+        value["settings"]["git_workflow"]
+            .as_object_mut()
+            .unwrap()
+            .remove("squash_before_delivery");
+        let err = parse(&value).expect_err("squash_before_delivery");
+        assert_eq!(code_of(&err), error_code::CONFIGURATION_UNREADABLE);
+    }
+
+    /// A document may leave an agent's entry out of `accounts` and `launch`: it reads as that
+    /// agent being unset, which an agent added to Octoboard after the document was exported is.
+    #[test]
+    fn an_agent_left_out_of_a_per_agent_entry_reads_as_unset() {
+        let named = |name: &str| {
+            Some(AccountName {
+                name: name.to_string(),
+            })
+        };
+        let launch = Launch {
+            model: Some("grok-4".to_string()),
+            effort: None,
+        };
+        let mut hub = console("Hub", vec![project("repo", "/work/repo")]);
+        hub.accounts.codex = named("Work");
+        hub.launch.grok = launch.clone();
+        hub.projects[0].accounts.claude = ProjectAccountRef::Default;
+        let mut value = document(vec![hub]);
+        let parsed = parse(&value).expect("read");
+        assert_eq!(parsed.consoles[0].accounts.codex, named("Work"));
+        assert_eq!(parsed.consoles[0].launch.grok, launch);
+        assert_eq!(
+            parsed.consoles[0].projects[0].accounts.claude,
+            ProjectAccountRef::Default
+        );
+
+        let hub = &mut value["consoles"][0];
+        hub["accounts"].as_object_mut().unwrap().remove("codex");
+        hub["launch"].as_object_mut().unwrap().remove("grok");
+        hub["projects"][0]["accounts"]
+            .as_object_mut()
+            .unwrap()
+            .remove("claude");
+        let parsed = parse(&value).expect("read");
+
+        assert_eq!(parsed.consoles[0].accounts.codex, None);
+        assert_eq!(parsed.consoles[0].launch.grok, Launch::default());
+        assert_eq!(
+            parsed.consoles[0].projects[0].accounts.claude,
+            ProjectAccountRef::Inherit
+        );
     }
 
     #[test]
@@ -1189,13 +1220,13 @@ mod tests {
         let mut hub = console("Hub", Vec::new());
         // Matches by case-insensitive name in its own agent; the Grok one has no account at all;
         // the Codex one names an account that exists for Claude only.
-        hub.claude_account = named("WORK");
-        hub.codex_account = named("Work");
-        hub.grok_account = named("Work");
+        hub.accounts.claude = named("WORK");
+        hub.accounts.codex = named("Work");
+        hub.accounts.grok = named("Work");
         let bound = rebinder.console(&hub);
-        assert_eq!(bound.claude.as_deref(), Some("claude-work"));
-        assert_eq!(bound.codex.as_deref(), Some("codex-work"));
-        assert_eq!(bound.grok, None);
+        assert_eq!(bound.accounts.claude.as_deref(), Some("claude-work"));
+        assert_eq!(bound.accounts.codex.as_deref(), Some("codex-work"));
+        assert_eq!(bound.accounts.grok, None);
         assert_eq!(
             bound.fallbacks,
             vec![AccountFallback {
@@ -1205,24 +1236,24 @@ mod tests {
         );
 
         let mut unmatched = project("p", "/p");
-        unmatched.claude_account = ProjectAccountRef::Account {
+        unmatched.accounts.claude = ProjectAccountRef::Account {
             name: "missing".to_string(),
         };
-        unmatched.codex_account = ProjectAccountRef::Default;
-        unmatched.grok_account = ProjectAccountRef::Account {
+        unmatched.accounts.codex = ProjectAccountRef::Default;
+        unmatched.accounts.grok = ProjectAccountRef::Account {
             name: "work".to_string(),
         };
         let bound = rebinder.project(&unmatched);
         // The default account is pinned, not left to the console's reference.
-        assert_eq!(bound.claude, ProjectAccount::Default);
-        assert_eq!(bound.codex, ProjectAccount::Default);
-        assert_eq!(bound.grok, ProjectAccount::Default);
+        assert_eq!(bound.accounts.claude, ProjectAccount::Default);
+        assert_eq!(bound.accounts.codex, ProjectAccount::Default);
+        assert_eq!(bound.accounts.grok, ProjectAccount::Default);
         assert_eq!(
             bound.fallbacks.iter().map(|f| f.agent).collect::<Vec<_>>(),
             [Agent::Claude, Agent::Grok]
         );
         assert_eq!(
-            rebinder.project(&project("q", "/q")).claude,
+            rebinder.project(&project("q", "/q")).accounts.claude,
             ProjectAccount::Inherit
         );
     }
@@ -1396,10 +1427,10 @@ mod tests {
     async fn inspecting_reports_the_fallbacks_and_creates_nothing() {
         let (state, _dir) = app_state("import-inspect-readonly");
         let mut hub = console("Hub", vec![project("p", "/nowhere/p")]);
-        hub.claude_account = Some(AccountName {
+        hub.accounts.claude = Some(AccountName {
             name: "Missing".to_string(),
         });
-        hub.projects[0].codex_account = ProjectAccountRef::Account {
+        hub.projects[0].accounts.codex = ProjectAccountRef::Account {
             name: "Gone".to_string(),
         };
 
@@ -1428,9 +1459,9 @@ mod tests {
         let repo = directory(&area, "repo");
         let mut hub = console("Hub", vec![project("renamed", &repo.to_string_lossy())]);
         hub.icon = Some("data:image/png;base64,AAAA".to_string());
-        hub.codex_console_session_model = Some("gpt-x".to_string());
+        hub.launch.codex.model = Some("gpt-x".to_string());
         hub.console_session_prompt = Some("\n Be brief.\n".to_string());
-        hub.claude_account = Some(AccountName {
+        hub.accounts.claude = Some(AccountName {
             name: "WORK".to_string(),
         });
         let p = &mut hub.projects[0];
@@ -1438,12 +1469,12 @@ mod tests {
         p.tags = vec!["backend".to_string(), "Backend".to_string()];
         p.description = Some("\n A billing service.\n".to_string());
         p.default_agent = Some(Agent::Grok);
-        p.codex_session_model = Some("gpt-y".to_string());
-        p.grok_session_effort = Some("high".to_string());
-        p.claude_account = ProjectAccountRef::Account {
+        p.launch.codex.model = Some("gpt-y".to_string());
+        p.launch.grok.effort = Some("high".to_string());
+        p.accounts.claude = ProjectAccountRef::Account {
             name: "Work".to_string(),
         };
-        p.codex_account = ProjectAccountRef::Default;
+        p.accounts.codex = ProjectAccountRef::Default;
 
         let imported = import(
             &state,
@@ -1461,15 +1492,12 @@ mod tests {
             stored_console.icon.as_deref(),
             Some("data:image/png;base64,AAAA")
         );
-        assert_eq!(
-            stored_console.codex_console_session_model.as_deref(),
-            Some("gpt-x")
-        );
+        assert_eq!(stored_console.launch.codex.model.as_deref(), Some("gpt-x"));
         assert_eq!(
             stored_console.console_session_prompt.as_deref(),
             Some("Be brief.")
         );
-        assert_eq!(stored_console.claude_account_id.as_deref(), Some("acct-1"));
+        assert_eq!(stored_console.accounts.claude.as_deref(), Some("acct-1"));
         assert!(Path::new(&stored_console.workdir).is_dir());
 
         let created = stored_projects(&state).remove(0);
@@ -1486,16 +1514,16 @@ mod tests {
         assert_eq!(created.tags, ["backend"]);
         assert_eq!(created.description.as_deref(), Some("A billing service."));
         assert_eq!(created.default_agent, Some(Agent::Grok));
-        assert_eq!(created.codex_session_model.as_deref(), Some("gpt-y"));
-        assert_eq!(created.grok_session_effort.as_deref(), Some("high"));
+        assert_eq!(created.launch.codex.model.as_deref(), Some("gpt-y"));
+        assert_eq!(created.launch.grok.effort.as_deref(), Some("high"));
         assert_eq!(
-            created.claude_account_id,
+            created.accounts.claude,
             ProjectAccount::Account {
                 id: "acct-1".to_string()
             }
         );
-        assert_eq!(created.codex_account_id, ProjectAccount::Default);
-        assert_eq!(created.grok_account_id, ProjectAccount::Inherit);
+        assert_eq!(created.accounts.codex, ProjectAccount::Default);
+        assert_eq!(created.accounts.grok, ProjectAccount::Inherit);
         // Trust does not travel: an imported project asks like a hand-added one.
         assert!(!created.trust_consent);
     }
@@ -1506,10 +1534,10 @@ mod tests {
         let (state, _dir) = app_state("import-fallback");
         let repo = directory(&area, "repo");
         let mut hub = console("Hub", vec![project("p", &repo.to_string_lossy())]);
-        hub.grok_account = Some(AccountName {
+        hub.accounts.grok = Some(AccountName {
             name: "Team".to_string(),
         });
-        hub.projects[0].codex_account = ProjectAccountRef::Account {
+        hub.projects[0].accounts.codex = ProjectAccountRef::Account {
             name: "Solo".to_string(),
         };
 
@@ -1521,12 +1549,9 @@ mod tests {
         .await
         .unwrap();
 
+        assert_eq!(state.store.list_consoles().unwrap()[0].accounts.grok, None);
         assert_eq!(
-            state.store.list_consoles().unwrap()[0].grok_account_id,
-            None
-        );
-        assert_eq!(
-            stored_projects(&state)[0].codex_account_id,
+            stored_projects(&state)[0].accounts.codex,
             ProjectAccount::Default
         );
         let fallback = |agent, name: &str| AccountFallback {
@@ -1804,21 +1829,15 @@ mod tests {
             workdir: "/consoles/console-1".to_string(),
             default_agent: Agent::Claude,
             project_session_agent: Some(Agent::Grok),
-            claude_project_session_model: Some("opus".to_string()),
-            claude_project_session_effort: Some("high".to_string()),
-            codex_project_session_model: None,
-            codex_project_session_effort: None,
-            grok_project_session_model: None,
-            grok_project_session_effort: None,
-            claude_account_id: None,
-            codex_account_id: None,
-            grok_account_id: None,
-            claude_console_session_model: None,
-            claude_console_session_effort: None,
-            codex_console_session_model: None,
-            codex_console_session_effort: None,
-            grok_console_session_model: None,
-            grok_console_session_effort: None,
+            accounts: Default::default(),
+            launch: Default::default(),
+            project_session_launch: crate::protocol::PerAgent {
+                claude: crate::protocol::Launch {
+                    model: Some("opus".to_string()),
+                    effort: Some("high".to_string()),
+                },
+                ..Default::default()
+            },
             icon: None,
             console_session_prompt: None,
             created_at: 1,
@@ -1833,15 +1852,8 @@ mod tests {
             default_agent: None,
             source: ProjectSource::Local,
             remote_url: None,
-            claude_account_id: ProjectAccount::Inherit,
-            codex_account_id: ProjectAccount::Inherit,
-            grok_account_id: ProjectAccount::Inherit,
-            claude_session_model: None,
-            claude_session_effort: None,
-            codex_session_model: None,
-            codex_session_effort: None,
-            grok_session_model: None,
-            grok_session_effort: None,
+            accounts: Default::default(),
+            launch: Default::default(),
             trust_consent: true,
             pinned: false,
             tags: vec!["t".to_string()],
@@ -1880,45 +1892,32 @@ mod tests {
         let console = target.store.list_consoles().unwrap().remove(0);
         assert_eq!(console.project_session_agent, Some(Agent::Grok));
         assert_eq!(
-            console.claude_project_session_model.as_deref(),
+            console.project_session_launch.claude.model.as_deref(),
             Some("opus")
         );
         assert_eq!(
-            console.claude_project_session_effort.as_deref(),
+            console.project_session_launch.claude.effort.as_deref(),
             Some("high")
         );
 
-        // A document written before the setting was carried names none, so project sessions
-        // follow `default_agent`.
-        let mut legacy = exported.clone();
-        legacy["consoles"][0]
+        // A document that names no agent for project sessions follows `default_agent`.
+        let mut unnamed = exported.clone();
+        unnamed["consoles"][0]
             .as_object_mut()
             .unwrap()
             .remove("project_session_agent")
             .expect("the export carries the setting");
-        for key in [
-            "claude_project_session_model",
-            "claude_project_session_effort",
-        ] {
-            legacy["consoles"][0]
-                .as_object_mut()
-                .unwrap()
-                .remove(key)
-                .expect("the export carries the setting");
-        }
-        let (older, _older_dir) = app_state("import-roundtrip-legacy");
+        let (other, _other_dir) = app_state("import-roundtrip-unnamed");
         import(
-            &older,
-            &legacy,
+            &other,
+            &unnamed,
             vec![at(0, 0, DirectoryChoice::ExportedPath)],
         )
         .await
         .unwrap();
-        let console = older.store.list_consoles().unwrap().remove(0);
+        let console = other.store.list_consoles().unwrap().remove(0);
         assert_eq!(console.project_session_agent, None);
         assert_eq!(console.project_session_default(), Agent::Claude);
-        assert_eq!(console.claude_project_session_model, None);
-        assert_eq!(console.claude_project_session_effort, None);
     }
 
     #[tokio::test]
@@ -1932,7 +1931,7 @@ mod tests {
         let settings = inspection.settings.expect("the document carries settings");
         assert!(settings.auto_pull_repositories);
         assert!(!settings.current_auto_pull_repositories);
-        assert_eq!(settings.auto_delete_unresumable_archives, Some(false));
+        assert!(!settings.auto_delete_unresumable_archives);
         assert!(settings.current_auto_delete_unresumable_archives);
         assert!(!state.store.auto_pull_repositories().unwrap());
         assert!(state.store.auto_delete_unresumable_archives().unwrap());
@@ -1956,18 +1955,18 @@ mod tests {
             imported.settings_applied,
             Some(DocumentSettings {
                 auto_pull_repositories: true,
-                auto_delete_unresumable_archives: Some(false),
-                auto_select_account: None,
-                auto_switch_on_usage_limit: None,
-                sidebar_order_by_status: None,
-                auto_start_quota_windows: None,
-                auto_approve_session_requests: None,
-                auto_approve_resume_requests: None,
-                auto_approve_account_switches: None,
-                auto_approve_handoffs: None,
-                ask_questions_as_choices: None,
-                git_workflow: None,
-                claude_compatibility: None,
+                auto_delete_unresumable_archives: false,
+                auto_select_account: false,
+                auto_switch_on_usage_limit: false,
+                sidebar_order_by_status: true,
+                auto_start_quota_windows: false,
+                auto_approve_session_requests: false,
+                auto_approve_resume_requests: false,
+                auto_approve_account_switches: false,
+                auto_approve_handoffs: false,
+                ask_questions_as_choices: true,
+                git_workflow: GitWorkflowSettings::default(),
+                claude_compatibility: BTreeMap::new(),
                 keyboard_shortcuts: None,
             })
         );
@@ -2063,13 +2062,13 @@ mod tests {
         let (target, _target_dir) = app_state("import-auto-approve-target");
         let inspection = inspect(&target, &full).await.unwrap();
         let settings = inspection.settings.unwrap();
-        assert_eq!(settings.auto_approve_session_requests, Some(true));
+        assert!(settings.auto_approve_session_requests);
         assert!(!settings.current_auto_approve_session_requests);
-        assert_eq!(settings.auto_approve_resume_requests, Some(true));
+        assert!(settings.auto_approve_resume_requests);
         assert!(!settings.current_auto_approve_resume_requests);
-        assert_eq!(settings.auto_approve_account_switches, Some(true));
+        assert!(settings.auto_approve_account_switches);
         assert!(!settings.current_auto_approve_account_switches);
-        assert_eq!(settings.auto_approve_handoffs, Some(true));
+        assert!(settings.auto_approve_handoffs);
         assert!(!settings.current_auto_approve_handoffs);
 
         apply(&target, &full, Vec::new(), false, None, true)
@@ -2107,7 +2106,7 @@ mod tests {
 
         let (target, _target_dir) = app_state("import-ask-choices-target");
         let settings = inspect(&target, &full).await.unwrap().settings.unwrap();
-        assert_eq!(settings.ask_questions_as_choices, Some(false));
+        assert!(!settings.ask_questions_as_choices);
         assert!(settings.current_ask_questions_as_choices);
 
         apply(&target, &full, Vec::new(), false, None, true)
@@ -2154,7 +2153,7 @@ mod tests {
             .set_claude_compatibility(Agent::Codex, true)
             .unwrap();
         let settings = inspect(&target, &full).await.unwrap().settings.unwrap();
-        assert!(!settings.claude_compatibility.unwrap()["codex"]);
+        assert!(!settings.claude_compatibility["codex"]);
         assert!(!settings.current_claude_compatibility["grok"]);
 
         apply(&target, &full, Vec::new(), false, None, true)
@@ -2170,10 +2169,10 @@ mod tests {
     }
 
     /// The interface language is a client's report, not part of the document: an export does not
-    /// carry it and an import leaves it alone. A document exported while a switch for replying in
-    /// it existed still carries `reply_in_interface_language`, which is ignored rather than refused.
+    /// carry it and an import leaves it alone. A settings key this build does not know, such as
+    /// `reply_in_interface_language`, is ignored rather than refused.
     #[tokio::test]
-    async fn the_interface_language_is_not_carried_and_an_older_documents_switch_is_ignored() {
+    async fn the_interface_language_is_not_carried_and_an_unknown_setting_is_ignored() {
         let (source, source_dir) = app_state("import-reply-language-source");
         source.store.set_interface_language("ja").unwrap();
         source
@@ -2202,8 +2201,7 @@ mod tests {
     /// The git workflow settings travel in a full export beside each project's own override: the
     /// inspection shows the document's and the current ones, applying settings sets the global
     /// ones, and a created project gets its override from the document. A single console's export
-    /// carries the override of its projects but no global settings, and a document from before
-    /// them imports with the global settings and every item following.
+    /// carries the override of its projects but no global settings.
     #[tokio::test]
     async fn the_git_workflow_settings_and_a_projects_override_round_trip_in_an_export() {
         use crate::git_workflow::{
@@ -2268,7 +2266,7 @@ mod tests {
 
         let (target, _target_dir) = app_state("import-git-workflow-target");
         let settings = inspect(&target, &full).await.unwrap().settings.unwrap();
-        assert_eq!(settings.git_workflow, Some(global.into()));
+        assert_eq!(settings.git_workflow, global);
         assert_eq!(
             settings.current_git_workflow,
             GitWorkflowSettings::default()
@@ -2303,237 +2301,6 @@ mod tests {
             );
         }
         assert!(broadcast);
-
-        // A document from before the settings existed leaves the global ones alone and has every
-        // item of a project following them.
-        let mut older = full.clone();
-        older["settings"]
-            .as_object_mut()
-            .unwrap()
-            .remove("git_workflow");
-        older["consoles"][0]["projects"][0]
-            .as_object_mut()
-            .unwrap()
-            .remove("git_workflow");
-        let (state, _dir) = app_state("import-git-workflow-older");
-        state
-            .store
-            .change_git_workflow_settings(&crate::git_workflow::GitWorkflowSettingsChanges {
-                revert_gate: Some(true),
-                ..Default::default()
-            })
-            .unwrap();
-        let settings = inspect(&state, &older).await.unwrap().settings.unwrap();
-        assert_eq!(settings.git_workflow, None);
-        assert!(settings.current_git_workflow.revert_gate);
-        apply(
-            &state,
-            &older,
-            vec![at(0, 0, DirectoryChoice::ExportedPath)],
-            true,
-            None,
-            true,
-        )
-        .await
-        .unwrap();
-        assert!(state.store.git_workflow_settings().unwrap().revert_gate);
-        assert_eq!(
-            stored_projects(&state)[0].git_workflow,
-            GitWorkflowOverride::default()
-        );
-    }
-
-    #[tokio::test]
-    async fn a_workflow_document_without_squash_preserves_the_current_choice() {
-        let (state, _dir) = app_state("import-before-squash");
-        state
-            .store
-            .change_git_workflow_settings(&GitWorkflowSettingsChanges {
-                squash_before_delivery: Some(true),
-                ..Default::default()
-            })
-            .unwrap();
-        let mut document = serde_json::to_value(
-            config_export::build(&state.store, &config_export::Selection::full(true)).unwrap(),
-        )
-        .unwrap();
-        let workflow = document["settings"]["git_workflow"]
-            .as_object_mut()
-            .unwrap();
-        workflow.remove("squash_before_delivery");
-        workflow.insert("rebase_before_merge".into(), json!(false));
-        let inspected = inspect(&state, &document).await.unwrap().settings.unwrap();
-        assert_eq!(inspected.git_workflow.unwrap().squash_before_delivery, None);
-        assert!(inspected.current_git_workflow.squash_before_delivery);
-        apply(&state, &document, Vec::new(), true, None, true)
-            .await
-            .unwrap();
-        let stored = state.store.git_workflow_settings().unwrap();
-        assert!(stored.squash_before_delivery);
-        assert!(!stored.rebase_before_merge);
-    }
-
-    /// A document of version 1 carries the git workflow settings as `worktrees` with a boolean
-    /// `use_worktrees`; importing it reads them as the same settings, on being `worktree` and off
-    /// `in_place`, and a project that followed the application-wide value still does.
-    #[tokio::test]
-    async fn a_version_1_document_imports_its_worktree_settings_as_git_workflow_settings() {
-        use crate::git_workflow::{Delivery, Development, GitWorkflowOverride};
-        let area = ScratchDir::new("import-v1-worktrees-area");
-        let repo = directory(&area, "repo");
-        let (source, source_dir) = app_state("import-v1-worktrees-source");
-        let hub = crate::test_support::console(&source_dir);
-        source.store.insert_console(&hub).unwrap();
-        crate::test_support::insert_project(&source, &repo);
-        let mut document = serde_json::to_value(
-            crate::config_export::build(&source.store, &config_export::Selection::full(true))
-                .unwrap(),
-        )
-        .unwrap();
-        document["version"] = 1.into();
-        let settings = document["settings"].as_object_mut().unwrap();
-        settings.remove("git_workflow");
-        settings.insert(
-            "worktrees".to_string(),
-            serde_json::json!({
-                "use_worktrees": false,
-                "rebase_before_merge": false,
-                "delivery": "pull_request",
-                "revert_gate": true,
-            }),
-        );
-        let project = document["consoles"][0]["projects"][0]
-            .as_object_mut()
-            .unwrap();
-        project.remove("git_workflow");
-        project.insert(
-            "worktrees".to_string(),
-            serde_json::json!({ "use_worktrees": true, "delivery": "merge" }),
-        );
-
-        let (target, _target_dir) = app_state("import-v1-worktrees-target");
-        let inspected = inspect(&target, &document).await.unwrap().settings.unwrap();
-        assert_eq!(
-            inspected.git_workflow.map(|settings| settings.development),
-            Some(Development::InPlace)
-        );
-        apply(
-            &target,
-            &document,
-            vec![at(0, 0, DirectoryChoice::ExportedPath)],
-            true,
-            None,
-            true,
-        )
-        .await
-        .unwrap();
-        let global = target.store.git_workflow_settings().unwrap();
-        assert_eq!(global.development, Development::InPlace);
-        assert!(!global.rebase_before_merge);
-        assert_eq!(global.delivery, Delivery::PullRequest);
-        assert!(global.revert_gate);
-        assert_eq!(
-            stored_projects(&target)[0].git_workflow,
-            GitWorkflowOverride {
-                development: Some(Development::Worktree),
-                delivery: Some(Delivery::Merge),
-                ..GitWorkflowOverride::default()
-            }
-        );
-    }
-
-    /// A document from before the cleanup setting existed leaves it as the importing machine has
-    /// it.
-    #[tokio::test]
-    async fn a_document_without_the_cleanup_setting_leaves_it_as_it_is() {
-        let (state, _dir) = app_state("import-older-settings");
-        state
-            .store
-            .set_auto_delete_unresumable_archives(false)
-            .unwrap();
-        state.store.set_auto_select_account(true).unwrap();
-        state.store.set_sidebar_order_by_status(false).unwrap();
-        state.store.set_auto_start_quota_windows(true).unwrap();
-        state.store.set_auto_approve_session_requests(true).unwrap();
-        state.store.set_auto_approve_resume_requests(true).unwrap();
-        let mut older = document(vec![console("Hub", Vec::new())]);
-        older["settings"] = json!({ "auto_pull_repositories": true });
-
-        let inspection = inspect(&state, &older).await.unwrap();
-        let settings = inspection.settings.unwrap();
-        assert_eq!(settings.auto_delete_unresumable_archives, None);
-        assert!(!settings.current_auto_delete_unresumable_archives);
-        assert_eq!(settings.auto_select_account, None);
-        assert!(settings.current_auto_select_account);
-        assert_eq!(settings.sidebar_order_by_status, None);
-        assert!(!settings.current_sidebar_order_by_status);
-        assert_eq!(settings.auto_start_quota_windows, None);
-        assert!(settings.current_auto_start_quota_windows);
-        assert_eq!(settings.auto_approve_session_requests, None);
-        assert!(settings.current_auto_approve_session_requests);
-        assert_eq!(settings.auto_approve_resume_requests, None);
-        assert!(settings.current_auto_approve_resume_requests);
-
-        let imported = apply(&state, &older, Vec::new(), true, None, true)
-            .await
-            .unwrap();
-        assert_eq!(
-            imported.settings_applied,
-            Some(DocumentSettings {
-                auto_pull_repositories: true,
-                auto_delete_unresumable_archives: None,
-                auto_select_account: None,
-                auto_switch_on_usage_limit: None,
-                sidebar_order_by_status: None,
-                auto_start_quota_windows: None,
-                auto_approve_session_requests: None,
-                auto_approve_resume_requests: None,
-                auto_approve_account_switches: None,
-                auto_approve_handoffs: None,
-                ask_questions_as_choices: None,
-                git_workflow: None,
-                claude_compatibility: None,
-                keyboard_shortcuts: None,
-            })
-        );
-        assert!(state.store.auto_pull_repositories().unwrap());
-        assert!(!state.store.auto_delete_unresumable_archives().unwrap());
-        assert!(state.store.auto_select_account().unwrap());
-        assert!(!state.store.sidebar_order_by_status().unwrap());
-        assert!(state.store.auto_start_quota_windows().unwrap());
-        assert!(state.store.auto_approve_session_requests().unwrap());
-        assert!(state.store.auto_approve_resume_requests().unwrap());
-    }
-
-    #[tokio::test]
-    async fn a_document_exported_with_the_older_setting_name_still_applies_it() {
-        let (state, _dir) = app_state("import-legacy-setting");
-        let mut older = document(vec![console("Hub", Vec::new())]);
-        older["settings"] = json!({ "auto_sync_repositories": true });
-
-        let imported = apply(&state, &older, Vec::new(), true, None, true)
-            .await
-            .unwrap();
-        assert_eq!(
-            imported.settings_applied,
-            Some(DocumentSettings {
-                auto_pull_repositories: true,
-                auto_delete_unresumable_archives: None,
-                auto_select_account: None,
-                auto_switch_on_usage_limit: None,
-                sidebar_order_by_status: None,
-                auto_start_quota_windows: None,
-                auto_approve_session_requests: None,
-                auto_approve_resume_requests: None,
-                auto_approve_account_switches: None,
-                auto_approve_handoffs: None,
-                ask_questions_as_choices: None,
-                git_workflow: None,
-                claude_compatibility: None,
-                keyboard_shortcuts: None,
-            })
-        );
-        assert!(state.store.auto_pull_repositories().unwrap());
     }
 
     /// The keyboard shortcuts a client adds to a full export belong to the client: an import
@@ -2565,13 +2332,13 @@ mod tests {
     #[tokio::test]
     async fn a_document_without_a_console_session_prompt_imports_a_console_with_none() {
         let (state, _dir) = app_state("import-no-prompt");
-        let mut older = document(vec![console("Hub", Vec::new())]);
-        older["consoles"][0]
+        let mut without = document(vec![console("Hub", Vec::new())]);
+        without["consoles"][0]
             .as_object_mut()
             .unwrap()
             .remove("console_session_prompt");
 
-        apply(&state, &older, Vec::new(), false, None, true)
+        apply(&state, &without, Vec::new(), false, None, true)
             .await
             .unwrap();
         let stored = state.store.list_consoles().unwrap().remove(0);
@@ -2615,18 +2382,18 @@ mod tests {
         let area = ScratchDir::new("import-no-description-area");
         let (state, _dir) = app_state("import-no-description");
         let repo = directory(&area, "repo");
-        let mut older = document(vec![console(
+        let mut without = document(vec![console(
             "Hub",
             vec![project("repo", &repo.to_string_lossy())],
         )]);
-        older["consoles"][0]["projects"][0]
+        without["consoles"][0]["projects"][0]
             .as_object_mut()
             .unwrap()
             .remove("description");
 
         import(
             &state,
-            &older,
+            &without,
             vec![at(0, 0, DirectoryChoice::ExportedPath)],
         )
         .await

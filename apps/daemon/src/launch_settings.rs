@@ -18,7 +18,7 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use crate::agent_models::Listing;
-use crate::protocol::{error_code, Agent, CodedError, Present};
+use crate::protocol::{error_code, Agent, CodedError, Launch, LaunchChange, PerAgent};
 use crate::state::AppState;
 
 /// Free text as stored: trimmed, with blank read as unset.
@@ -33,6 +33,14 @@ pub(crate) fn normalize_launch_setting(text: Option<&str>) -> Option<String> {
     trimmed_or_none(text)
 }
 
+/// Each agent's launch pair as stored.
+pub(crate) fn normalized_launches(launches: PerAgent<Launch>) -> PerAgent<Launch> {
+    launches.map(|_, launch| Launch {
+        model: normalize_launch_setting(launch.model.as_deref()),
+        effort: normalize_launch_setting(launch.effort.as_deref()),
+    })
+}
+
 /// A session override keeps its presence even when blank means explicitly unset.
 pub(crate) fn normalize_session_launch_setting(
     value: Option<Option<String>>,
@@ -40,24 +48,14 @@ pub(crate) fn normalize_session_launch_setting(
     value.map(|text| normalize_launch_setting(text.as_deref()))
 }
 
-/// A change to one agent's model and effort: each absent for "leave it alone", `Some(None)` or a
-/// blank string for the agent's own default.
-#[derive(Default)]
-pub struct LaunchChange {
-    pub model: Present<String>,
-    pub effort: Present<String>,
-}
-
-/// The per-agent `(agent, model, effort)` triples of a request as the map the changes carry,
-/// leaving out an agent whose two are both absent.
-pub fn changes_of(
-    fields: [(Agent, Present<String>, Present<String>); 3],
-) -> HashMap<Agent, LaunchChange> {
-    fields
-        .into_iter()
-        .filter(|(_, model, effort)| model.is_some() || effort.is_some())
-        .map(|(agent, model, effort)| (agent, LaunchChange { model, effort }))
-        .collect()
+impl From<PerAgent<LaunchChange>> for HashMap<Agent, LaunchChange> {
+    /// The map the in-memory changes carry, leaving out an agent whose two fields are absent.
+    fn from(changes: PerAgent<LaunchChange>) -> Self {
+        changes
+            .into_iter()
+            .filter(|(_, change)| !change.is_keep())
+            .collect()
+    }
 }
 
 /// What a record was newly given for one agent's model and effort, and what to check it against.
@@ -157,13 +155,12 @@ impl LaunchCheck {
     }
 }
 
-/// Applies `change` to a record's pair of launch fields, blank read as unset, and returns what is
+/// Applies `change` to a record's launch pair, blank read as unset, and returns what is
 /// left to check: only a value that differs from the one stored.
 pub fn apply_change(
     agent: Agent,
     account_id: Option<String>,
-    model: &mut Option<String>,
-    effort: &mut Option<String>,
+    launch: &mut Launch,
     change: &LaunchChange,
 ) -> LaunchCheck {
     let mut check = LaunchCheck {
@@ -174,8 +171,8 @@ pub fn apply_change(
         effective_model: None,
     };
     for (field, change, set) in [
-        (&mut *model, &change.model, &mut check.model),
-        (&mut *effort, &change.effort, &mut check.effort),
+        (&mut launch.model, &change.model, &mut check.model),
+        (&mut launch.effort, &change.effort, &mut check.effort),
     ] {
         if let Some(value) = change {
             let value = normalize_launch_setting(value.as_deref());
@@ -185,7 +182,7 @@ pub fn apply_change(
             *field = value;
         }
     }
-    check.effective_model = model.clone();
+    check.effective_model = launch.model.clone();
     check
 }
 

@@ -29,8 +29,8 @@ use serde::Serialize;
 use crate::git_workflow::{GitWorkflowOverride, GitWorkflowSettings, GitWorkflowSettingsChanges};
 use crate::protocol::{
     error_code, now_millis, Account, Agent, ApprovalReviewer, ClaudeApprovalMode, CodedError,
-    Console, ConsoleSessionColour, Host, HostKind, Origin, Page, Project, ProjectAccount,
-    ProjectSource, Role, Session, SessionStatus, Settings,
+    Console, ConsoleSessionColour, Host, HostKind, Launch, OrchestrationRole, Origin, Page,
+    PerAgent, Project, ProjectAccount, ProjectSource, Role, Session, SessionStatus, Settings,
 };
 use crate::session_title::RecordTitles;
 
@@ -62,13 +62,13 @@ pub enum ReorderOutcome {
 /// The schema version a database is created at, recorded in SQLite's `user_version`. A database
 /// at any other version is not opened as it stands; see [`settle_existing_file`].
 ///
-/// Every change to [`SCHEMA`] raises this by one: `SCHEMA` only ever runs on an empty file, so
-/// an existing database at an unchanged version keeps its old shape and fails at query time —
-/// while every test, starting from a fresh file, still passes. Once a build at the old version
-/// has been released, the change also adds the step from that version to `settle_existing_file`,
-/// keyed on `user_version` rather than on probing for columns, with a test that opens a database
-/// at the old version; without the step, a released user's database is moved aside.
-const SCHEMA_VERSION: i64 = 4;
+/// `SCHEMA` only ever runs on an empty file, so an existing database at an unchanged version keeps
+/// its old shape and fails at query time — while every test, starting from a fresh file, still
+/// passes. No build has been released yet: the schema is edited in place and stays at version 1,
+/// with no upgrade steps, and a database an earlier development build created is moved aside by
+/// hand. From the first release on, every change to `SCHEMA` raises this by one and adds the step
+/// from the previous version, with a test that opens a database at it.
+const SCHEMA_VERSION: i64 = 1;
 
 /// Every table, index and trigger of the current schema.
 const SCHEMA: &str = r#"
@@ -219,9 +219,9 @@ CREATE TABLE sessions (
     -- would remove rows behind the daemon's back, so no `session_deleted` would be
     -- broadcast and every client would keep a ghost row.
     bound_to         TEXT,
-    -- 1 for a lead session: a project session bound to a console session that can
-    -- still own sessions of its own (see `Session::lead`).
-    lead             INTEGER NOT NULL DEFAULT 0,
+    -- `coordinator` or `worker` (see `Session::orchestration_role`). Written with
+    -- `bound_to`: a console session and a session with no parent are always coordinators.
+    orchestration_role TEXT NOT NULL,
     -- Above 0 while the session has a change of its owner it was not running to be
     -- told of (one count per change): its next launch tells it, from the binding as
     -- it then stands, and clears what it saw.
@@ -266,7 +266,7 @@ CREATE TABLE pages (
     -- The session that pushed the page, a console session or a project session that
     -- faces the user; deleting it takes its pages, and deleting a console or a project
     -- therefore takes all of theirs.
-    console_session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    session_id        TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
     html              TEXT NOT NULL,
     anchor_message_id TEXT,
     created_at        INTEGER NOT NULL
@@ -274,8 +274,7 @@ CREATE TABLE pages (
 -- Messages for a session that was interrupted (shared information, and the reports and
 -- notices for an owner), held to be written into it once it is resumed
 -- (`Store::add_kept_message`), oldest first by `id`. Deleting the session takes its rows.
--- The table keeps the name it was made with.
-CREATE TABLE pending_info (
+CREATE TABLE kept_messages (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
     text       TEXT NOT NULL
@@ -447,25 +446,25 @@ impl Store {
                 console.name,
                 console.workdir,
                 enum_to_text(&console.default_agent),
-                console.claude_account_id,
-                console.codex_account_id,
-                console.grok_account_id,
-                console.claude_console_session_model,
-                console.claude_console_session_effort,
-                console.codex_console_session_model,
-                console.codex_console_session_effort,
-                console.grok_console_session_model,
-                console.grok_console_session_effort,
+                console.accounts.claude,
+                console.accounts.codex,
+                console.accounts.grok,
+                console.launch.claude.model,
+                console.launch.claude.effort,
+                console.launch.codex.model,
+                console.launch.codex.effort,
+                console.launch.grok.model,
+                console.launch.grok.effort,
                 console.icon,
                 console.console_session_prompt,
                 console.created_at,
                 console.project_session_agent.as_ref().map(enum_to_text),
-                console.claude_project_session_model,
-                console.claude_project_session_effort,
-                console.codex_project_session_model,
-                console.codex_project_session_effort,
-                console.grok_project_session_model,
-                console.grok_project_session_effort,
+                console.project_session_launch.claude.model,
+                console.project_session_launch.claude.effort,
+                console.project_session_launch.codex.model,
+                console.project_session_launch.codex.effort,
+                console.project_session_launch.grok.model,
+                console.project_session_launch.grok.effort,
             ],
         )?;
         Ok(())
@@ -493,24 +492,24 @@ impl Store {
                 console.id,
                 console.name,
                 enum_to_text(&console.default_agent),
-                console.claude_account_id,
-                console.codex_account_id,
-                console.grok_account_id,
-                console.claude_console_session_model,
-                console.claude_console_session_effort,
-                console.codex_console_session_model,
-                console.codex_console_session_effort,
-                console.grok_console_session_model,
-                console.grok_console_session_effort,
+                console.accounts.claude,
+                console.accounts.codex,
+                console.accounts.grok,
+                console.launch.claude.model,
+                console.launch.claude.effort,
+                console.launch.codex.model,
+                console.launch.codex.effort,
+                console.launch.grok.model,
+                console.launch.grok.effort,
                 console.icon,
                 console.console_session_prompt,
                 console.project_session_agent.as_ref().map(enum_to_text),
-                console.claude_project_session_model,
-                console.claude_project_session_effort,
-                console.codex_project_session_model,
-                console.codex_project_session_effort,
-                console.grok_project_session_model,
-                console.grok_project_session_effort,
+                console.project_session_launch.claude.model,
+                console.project_session_launch.claude.effort,
+                console.project_session_launch.codex.model,
+                console.project_session_launch.codex.effort,
+                console.project_session_launch.grok.model,
+                console.project_session_launch.grok.effort,
             ],
         )?;
         Ok(())
@@ -764,18 +763,18 @@ impl Store {
                 project.default_agent.as_ref().map(enum_to_text),
                 enum_to_text(&project.source),
                 project.remote_url,
-                project.claude_account_id.account_id(),
-                project.codex_account_id.account_id(),
-                project.grok_account_id.account_id(),
-                project.claude_account_id == ProjectAccount::Default,
-                project.codex_account_id == ProjectAccount::Default,
-                project.grok_account_id == ProjectAccount::Default,
-                project.claude_session_model,
-                project.claude_session_effort,
-                project.codex_session_model,
-                project.codex_session_effort,
-                project.grok_session_model,
-                project.grok_session_effort,
+                project.accounts.claude.account_id(),
+                project.accounts.codex.account_id(),
+                project.accounts.grok.account_id(),
+                project.accounts.claude == ProjectAccount::Default,
+                project.accounts.codex == ProjectAccount::Default,
+                project.accounts.grok == ProjectAccount::Default,
+                project.launch.claude.model,
+                project.launch.claude.effort,
+                project.launch.codex.model,
+                project.launch.codex.effort,
+                project.launch.grok.model,
+                project.launch.grok.effort,
                 project.trust_consent,
                 project.pinned,
                 tags_to_text(&project.tags),
@@ -830,18 +829,18 @@ impl Store {
                 project.id,
                 project.name,
                 project.default_agent.as_ref().map(enum_to_text),
-                project.claude_account_id.account_id(),
-                project.codex_account_id.account_id(),
-                project.grok_account_id.account_id(),
-                project.claude_account_id == ProjectAccount::Default,
-                project.codex_account_id == ProjectAccount::Default,
-                project.grok_account_id == ProjectAccount::Default,
-                project.claude_session_model,
-                project.claude_session_effort,
-                project.codex_session_model,
-                project.codex_session_effort,
-                project.grok_session_model,
-                project.grok_session_effort,
+                project.accounts.claude.account_id(),
+                project.accounts.codex.account_id(),
+                project.accounts.grok.account_id(),
+                project.accounts.claude == ProjectAccount::Default,
+                project.accounts.codex == ProjectAccount::Default,
+                project.accounts.grok == ProjectAccount::Default,
+                project.launch.claude.model,
+                project.launch.claude.effort,
+                project.launch.codex.model,
+                project.launch.codex.effort,
+                project.launch.grok.model,
+                project.launch.grok.effort,
                 project.pinned,
                 tags_to_text(&project.tags),
                 project.description,
@@ -1547,7 +1546,7 @@ impl Store {
     pub fn add_kept_message(&self, session_id: &str, text: &str) -> Result<i64> {
         let conn = self.lock();
         conn.execute(
-            "INSERT INTO pending_info (session_id, text) VALUES (?1, ?2)",
+            "INSERT INTO kept_messages (session_id, text) VALUES (?1, ?2)",
             params![session_id, text],
         )?;
         Ok(conn.last_insert_rowid())
@@ -1557,7 +1556,7 @@ impl Store {
     pub fn kept_messages(&self, session_id: &str) -> Result<Vec<(i64, String)>> {
         let conn = self.lock();
         let mut stmt =
-            conn.prepare("SELECT id, text FROM pending_info WHERE session_id = ?1 ORDER BY id")?;
+            conn.prepare("SELECT id, text FROM kept_messages WHERE session_id = ?1 ORDER BY id")?;
         let rows = stmt
             .query_map(params![session_id], |row| Ok((row.get(0)?, row.get(1)?)))?
             .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -1570,7 +1569,7 @@ impl Store {
         let mut conn = self.lock();
         let tx = conn.transaction()?;
         for row in rows {
-            tx.execute("DELETE FROM pending_info WHERE id = ?1", params![row])?;
+            tx.execute("DELETE FROM kept_messages WHERE id = ?1", params![row])?;
         }
         tx.commit()?;
         Ok(())
@@ -1579,7 +1578,7 @@ impl Store {
     /// Drops everything held for the session, which will not take it.
     pub fn clear_kept_messages(&self, session_id: &str) -> Result<()> {
         self.lock().execute(
-            "DELETE FROM pending_info WHERE session_id = ?1",
+            "DELETE FROM kept_messages WHERE session_id = ?1",
             params![session_id],
         )?;
         Ok(())
@@ -1591,7 +1590,7 @@ impl Store {
         let conn = self.lock();
         let page = conn
             .query_row(
-                "SELECT id, console_session_id, html, anchor_message_id, created_at
+                "SELECT id, session_id, html, anchor_message_id, created_at
                  FROM pages WHERE id = ?1",
                 params![id],
                 read_page,
@@ -1600,21 +1599,22 @@ impl Store {
         Ok(page)
     }
 
-    /// Stores `page` unless its session has the role of a bound session by now (it is bound and
-    /// not a lead session, see [`Session::is_worker`]), checked in the same statement so that
-    /// a binding written meanwhile cannot leave a page behind it. Returns whether it was stored.
-    pub fn insert_page_unless_bound(&self, page: &Page) -> Result<bool> {
+    /// Stores `page` unless its session is a worker by now (see [`Session::is_worker`]), checked
+    /// in the same statement so that a binding written meanwhile cannot leave a page behind it.
+    /// Returns whether it was stored.
+    pub fn insert_page_unless_worker(&self, page: &Page) -> Result<bool> {
         let inserted = self.lock().execute(
-            "INSERT INTO pages (id, console_session_id, html, anchor_message_id, created_at)
+            "INSERT INTO pages (id, session_id, html, anchor_message_id, created_at)
              SELECT ?1, ?2, ?3, ?4, ?5
              WHERE NOT EXISTS (SELECT 1 FROM sessions
-                               WHERE id = ?2 AND bound_to IS NOT NULL AND lead = 0)",
+                               WHERE id = ?2 AND orchestration_role = ?6)",
             params![
                 page.id,
-                page.console_session_id,
+                page.session_id,
                 page.html,
                 page.anchor_message_id,
                 page.created_at,
+                enum_to_text(&OrchestrationRole::Worker),
             ],
         )?;
         Ok(inserted > 0)
@@ -1623,11 +1623,11 @@ impl Store {
     #[cfg(test)]
     pub fn insert_page(&self, page: &Page) -> Result<()> {
         self.lock().execute(
-            "INSERT INTO pages (id, console_session_id, html, anchor_message_id, created_at)
+            "INSERT INTO pages (id, session_id, html, anchor_message_id, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5)",
             params![
                 page.id,
-                page.console_session_id,
+                page.session_id,
                 page.html,
                 page.anchor_message_id,
                 page.created_at,
@@ -1641,8 +1641,8 @@ impl Store {
     pub fn list_pages(&self, session_id: &str) -> Result<Vec<Page>> {
         let conn = self.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, console_session_id, html, anchor_message_id, created_at
-             FROM pages WHERE console_session_id = ?1 ORDER BY created_at, id",
+            "SELECT id, session_id, html, anchor_message_id, created_at
+             FROM pages WHERE session_id = ?1 ORDER BY created_at, id",
         )?;
         let rows = stmt
             .query_map(params![session_id], read_page)?
@@ -1674,7 +1674,7 @@ impl Store {
             }
             None => {
                 let mut stmt = tx.prepare(
-                    "SELECT id FROM pages WHERE console_session_id = ?1 ORDER BY created_at, id",
+                    "SELECT id FROM pages WHERE session_id = ?1 ORDER BY created_at, id",
                 )?;
                 let ids = stmt
                     .query_map(params![session_id], |row| row.get(0))?
@@ -1686,7 +1686,7 @@ impl Store {
         for id in ids {
             let removed: Option<String> = tx
                 .query_row(
-                    "DELETE FROM pages WHERE id = ?1 AND console_session_id = ?2 RETURNING id",
+                    "DELETE FROM pages WHERE id = ?1 AND session_id = ?2 RETURNING id",
                     params![id, session_id],
                     |row| row.get(0),
                 )
@@ -1701,18 +1701,20 @@ impl Store {
         Ok(Ok(deleted))
     }
 
-    /// The ids of the sessions that have a page and the role of a bound session (bound and not a
-    /// lead session, see [`Session::is_worker`]), whose pages no tool of theirs can list.
-    pub fn session_ids_with_pages_and_bound_role(&self) -> Result<Vec<String>> {
+    /// The ids of the sessions that have a page and are workers (see [`Session::is_worker`]),
+    /// whose pages no tool of theirs can list.
+    pub fn session_ids_with_pages_and_worker_role(&self) -> Result<Vec<String>> {
         let conn = self.lock();
         let mut stmt = conn.prepare(
-            "SELECT DISTINCT p.console_session_id FROM pages p
-             JOIN sessions s ON s.id = p.console_session_id
-             WHERE s.bound_to IS NOT NULL AND s.lead = 0
-             ORDER BY p.console_session_id",
+            "SELECT DISTINCT p.session_id FROM pages p
+             JOIN sessions s ON s.id = p.session_id
+             WHERE s.orchestration_role = ?1
+             ORDER BY p.session_id",
         )?;
         let ids = stmt
-            .query_map([], |row| row.get(0))?
+            .query_map(params![enum_to_text(&OrchestrationRole::Worker)], |row| {
+                row.get(0)
+            })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(ids)
     }
@@ -1724,7 +1726,7 @@ impl Store {
         let id = self
             .lock()
             .query_row(
-                "SELECT id FROM pages WHERE console_session_id = ?1 ORDER BY created_at DESC, id DESC LIMIT 1",
+                "SELECT id FROM pages WHERE session_id = ?1 ORDER BY created_at DESC, id DESC LIMIT 1",
                 params![session_id],
                 |row| row.get(0),
             )
@@ -1741,19 +1743,18 @@ impl Store {
         insert_session_row(&self.lock(), session)
     }
 
-    /// Inserts a project session bound to `owner`, only while `owner` can still own sessions — a
-    /// console session, or a project session that is unbound or a lead session, the condition
-    /// [`Self::set_binding`] keeps — and says whether it did. The check and the insert run under
-    /// one lock, so a binding that lands between the caller's own check and this write either
-    /// came first, and is seen here, or comes after, and sees the new session as a child of
-    /// `owner` (`set_binding`'s `childless`): orchestration cannot reach a third level either way.
-    /// `false` also covers an `owner` that is gone.
+    /// Inserts a project session bound to `owner`, only while `owner` can still own sessions — it
+    /// is a coordinator, the condition [`Self::set_binding`] keeps — and says whether it did. The
+    /// check and the insert run under one lock, so a binding that lands between the caller's own
+    /// check and this write either came first, and is seen here, or comes after, and sees the new
+    /// session as a child of `owner` (`set_binding`'s `childless`): orchestration cannot reach a
+    /// third level either way. `false` also covers an `owner` that is gone.
     pub fn insert_session_under_owner(&self, session: &Session, owner: &str) -> Result<bool> {
         let conn = self.lock();
         let can_own: bool = conn.query_row(
             "SELECT EXISTS (SELECT 1 FROM sessions AS owner WHERE owner.id = ?1
-                              AND (owner.role = ?2 OR owner.bound_to IS NULL OR owner.lead = 1))",
-            params![owner, enum_to_text(&Role::Console)],
+                              AND owner.orchestration_role = ?2)",
+            params![owner, enum_to_text(&OrchestrationRole::Coordinator)],
             |row| row.get(0),
         )?;
         if !can_own {
@@ -2195,9 +2196,9 @@ impl Store {
     }
 
     /// Binds the project session `id`, currently bound to `from` (`None` for unbound), to `owner`,
-    /// with `lead` as its new lead flag, in one statement that matches only while that still holds,
-    /// so of two changes racing for it only one lands. It also matches only while `owner` can own
-    /// sessions — a console session, or a project session that is unbound or a lead session — and,
+    /// with `orchestration_role` as its new role, in one statement that matches only while that
+    /// still holds, so of two changes racing for it only one lands. It also matches only while
+    /// `owner` can own sessions — it is a coordinator — and,
     /// with `childless`, only while no session is bound to `id`: the two conditions that keep
     /// orchestration two levels deep cannot be undone by a binding that lands between the
     /// caller's check and this write. Returns the record as it now stands, or `None` when nothing
@@ -2210,27 +2211,27 @@ impl Store {
         id: &str,
         from: Option<&str>,
         owner: &str,
-        lead: bool,
+        orchestration_role: OrchestrationRole,
         childless: bool,
         owe_notice: bool,
     ) -> Result<Option<Session>> {
         let conn = self.lock();
         let changed = conn.execute(
-            "UPDATE sessions SET bound_to = ?3, lead = ?4,
+            "UPDATE sessions SET bound_to = ?3, orchestration_role = ?4,
                     owner_notice_pending = owner_notice_pending + ?8,
                     owner_notice_note = NULL
              WHERE id = ?1 AND role = ?5 AND bound_to IS ?2
                AND EXISTS (SELECT 1 FROM sessions AS owner WHERE owner.id = ?3
-                             AND (owner.role = ?6 OR owner.bound_to IS NULL OR owner.lead = 1))
+                             AND owner.orchestration_role = ?6)
                AND (?7 = 0
                     OR NOT EXISTS (SELECT 1 FROM sessions AS bound WHERE bound.bound_to = ?1))",
             params![
                 id,
                 from,
                 owner,
-                lead,
+                enum_to_text(&orchestration_role),
                 enum_to_text(&Role::Project),
-                enum_to_text(&Role::Console),
+                enum_to_text(&OrchestrationRole::Coordinator),
                 childless,
                 owe_notice
             ],
@@ -2256,13 +2257,13 @@ impl Store {
         )?)
     }
 
-    /// Unbinds the project session `id`, currently bound to `from`: `bound_to` cleared and `lead`
-    /// off, in one statement that matches only while `id` is still bound to `from`, so of two
-    /// changes racing for it only one lands. The sessions bound to `id` stay bound to it. Returns
-    /// the record as it now stands, or `None` when nothing changed. With `owe_notice` the session
-    /// is marked owed a notice ([`Self::mark_owner_notice`]) in the same statement, and `note`,
-    /// the releasing owner's parting words, is kept with it ([`Self::owner_notice_note`]);
-    /// without, there is nobody to keep it for and it is dropped.
+    /// Unbinds the project session `id`, currently bound to `from`: `bound_to` cleared and the
+    /// session made a coordinator, in one statement that matches only while `id` is still bound
+    /// to `from`, so of two changes racing for it only one lands. The sessions bound to `id` stay
+    /// bound to it. Returns the record as it now stands, or `None` when nothing changed. With
+    /// `owe_notice` the session is marked owed a notice ([`Self::mark_owner_notice`]) in the same
+    /// statement, and `note`, the releasing owner's parting words, is kept with it
+    /// ([`Self::owner_notice_note`]); without, there is nobody to keep it for and it is dropped.
     pub fn clear_binding(
         &self,
         id: &str,
@@ -2272,11 +2273,18 @@ impl Store {
     ) -> Result<Option<Session>> {
         let conn = self.lock();
         let changed = conn.execute(
-            "UPDATE sessions SET bound_to = NULL, lead = 0,
+            "UPDATE sessions SET bound_to = NULL, orchestration_role = ?6,
                     owner_notice_pending = owner_notice_pending + ?4,
                     owner_notice_note = CASE WHEN ?4 THEN ?5 END
              WHERE id = ?1 AND role = ?3 AND bound_to IS ?2",
-            params![id, from, enum_to_text(&Role::Project), owe_notice, note],
+            params![
+                id,
+                from,
+                enum_to_text(&Role::Project),
+                owe_notice,
+                note,
+                enum_to_text(&OrchestrationRole::Coordinator)
+            ],
         )?;
         if changed == 0 {
             return Ok(None);
@@ -2290,29 +2298,30 @@ impl Store {
             .optional()?)
     }
 
-    /// Moves the sessions bound to `from` to `to`, and, with `lead_of`, binds `to`, an unbound
-    /// project session, to that console session as a lead session, all in one transaction.
-    /// Returns the ids of the sessions moved, or `None` when the lead binding did not apply (`to`
-    /// was bound meanwhile, or `lead_of` is not a console session) and nothing changed. What may
+    /// Moves the sessions bound to `from` to `to`, and, with `coordinator_of`, binds `to`, an
+    /// unbound project session, to that console session as a coordinator, all in one transaction.
+    /// Returns the ids of the sessions moved, or `None` when that binding did not apply (`to` was
+    /// bound meanwhile, or `coordinator_of` is not a console session) and nothing changed. What may
     /// own what is the caller's to check.
     pub fn hand_over_binding(
         &self,
         from: &str,
         to: &str,
-        lead_of: Option<&str>,
+        coordinator_of: Option<&str>,
     ) -> Result<Option<Vec<String>>> {
         let mut conn = self.lock();
         let tx = conn.transaction()?;
-        if let Some(owner) = lead_of {
+        if let Some(owner) = coordinator_of {
             let bound = tx.execute(
-                "UPDATE sessions SET bound_to = ?2, lead = 1, owner_notice_note = NULL
+                "UPDATE sessions SET bound_to = ?2, orchestration_role = ?5, owner_notice_note = NULL
                  WHERE id = ?1 AND role = ?3 AND bound_to IS NULL
                    AND EXISTS (SELECT 1 FROM sessions AS owner WHERE owner.id = ?2 AND owner.role = ?4)",
                 params![
                     to,
                     owner,
                     enum_to_text(&Role::Project),
-                    enum_to_text(&Role::Console)
+                    enum_to_text(&Role::Console),
+                    enum_to_text(&OrchestrationRole::Coordinator)
                 ],
             )?;
             if bound == 0 {
@@ -2816,16 +2825,13 @@ fn user_version(conn: &Connection) -> Result<i64> {
 ///
 /// - at [`SCHEMA_VERSION`], or holding no tables at all (an empty file, which `open` initializes):
 ///   left as it is;
-/// - at versions 1 through 3: upgraded in place, adding the account display order (version 2),
-///   the collector's private observation boundary (version 3), and delivery squash settings
-///   (version 4) where needed;
-/// - at an older version without an upgrade step, which includes every database from before
-///   versions were recorded: moved aside, so `open` starts a fresh one. The old file is renamed
-///   rather than deleted, so a user who needs what was in it still has it on disk; see "Files
-///   Octoboard owns" in `docs/product/application-lifecycle.md`. A step from a recorded older
-///   version to the current one belongs here, ahead of this case;
-/// - at a newer version: refused. It was written by a newer build, whose data moving it aside
-///   would lose, and this build cannot read it.
+/// - at an older version, which today is only 0, a database from before versions were recorded:
+///   moved aside, so `open` starts a fresh one. The old file is renamed rather than deleted, so a
+///   user who needs what was in it still has it on disk; see "Files Octoboard owns" in
+///   `docs/product/application-lifecycle.md`;
+/// - at a newer version: refused and left in place. This build cannot read it, and the user may
+///   still have a build that does, so the file is not moved aside for them; the message says how
+///   to do that by hand.
 fn settle_existing_file(path: &Path) -> Result<()> {
     {
         let conn = Connection::open(path).with_context(|| format!("opening {}", path.display()))?;
@@ -2834,27 +2840,11 @@ fn settle_existing_file(path: &Path) -> Result<()> {
         if version == SCHEMA_VERSION {
             return Ok(());
         }
-        if (1..=3).contains(&version) {
-            let tx = conn.unchecked_transaction()?;
-            if version == 1 {
-                tx.execute_batch("ALTER TABLE settings ADD COLUMN account_order TEXT")?;
-            }
-            if version <= 2 {
-                tx.execute_batch("ALTER TABLE sessions ADD COLUMN observed_boundary TEXT")?;
-            }
-            tx.execute_batch(
-                "ALTER TABLE settings ADD COLUMN squash_before_delivery INTEGER NOT NULL DEFAULT 0;
-                 ALTER TABLE projects ADD COLUMN squash_before_delivery INTEGER",
-            )?;
-            tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
-            tx.commit()?;
-            return Ok(());
-        }
         if version > SCHEMA_VERSION {
             anyhow::bail!(
-                "the database at {} is at schema version {version}, newer than the {SCHEMA_VERSION} \
-                 this build reads; it was written by a newer build of Octoboard, so use that build \
-                 or move the file aside",
+                "the database at {} is at schema version {version}, which this build does not read \
+                 (it reads version {SCHEMA_VERSION}); rename that file to move it aside (nothing \
+                 is deleted) and this build starts a fresh database in its place",
                 path.display()
             );
         }
@@ -2890,8 +2880,8 @@ fn settle_existing_file(path: &Path) -> Result<()> {
     tracing::warn!(
         old = %moved_aside.display(),
         new = %path.display(),
-        "the database at this path is from before the current schema version and has no step to \
-         it; moved it aside and starting a fresh one in its place"
+        "the database at this path is from before the current schema version; moved it aside and \
+         starting a fresh one in its place"
     );
     Ok(())
 }
@@ -2925,8 +2915,9 @@ pub struct RecordUpdate {
 const SESSION_COLUMNS: &str = "id, agent, agent_session_id, console_id, project_id, host_id,
                                role, origin, title, status, has_conversation, bound_to, colour,
                                ordinal, account_id, config_dir, pinned, started_at, ended_at,
-                               lead, terminal_title, model, effort, model_override, effort_override, context,
-                               record_title, record_prompt, locked, observed_model, observed_effort";
+                               orchestration_role, terminal_title, model, effort, model_override,
+                               effort_override, context, record_title, record_prompt, locked,
+                               observed_model, observed_effort";
 
 const CONSOLE_COLUMNS: &str = "id, name, workdir, default_agent,
                                claude_account_id, codex_account_id, grok_account_id,
@@ -2963,8 +2954,8 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
         "INSERT INTO sessions
             (id, agent, agent_session_id, console_id, project_id, host_id, role, origin, title,
              status, has_conversation, bound_to, colour, ordinal, account_id, config_dir, pinned,
-             started_at, ended_at, lead, terminal_title, model, effort, model_override, effort_override, context,
-             record_title, record_prompt, locked, observed_model, observed_effort)
+             started_at, ended_at, orchestration_role, terminal_title, model, effort, model_override,
+             effort_override, context, record_title, record_prompt, locked, observed_model, observed_effort)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
                  ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31)",
         params![
@@ -2987,7 +2978,7 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
             session.pinned,
             session.started_at,
             session.ended_at,
-            session.lead,
+            enum_to_text(&session.orchestration_role),
             session.terminal_title,
             session.model.as_ref().and_then(|value| value.as_deref()),
             session.effort.as_ref().and_then(|value| value.as_deref()),
@@ -3004,31 +2995,39 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
     Ok(())
 }
 
+/// Which of the three consecutive per-agent columns (or pairs of columns) of a `consoles` or
+/// `projects` row an agent's are.
+fn column_slot(agent: Agent) -> usize {
+    match agent {
+        Agent::Claude => 0,
+        Agent::Codex => 1,
+        Agent::Grok => 2,
+    }
+}
+
+/// The model and effort in the two columns from `model_column` on.
+fn launch_from_row(row: &Row<'_>, model_column: usize) -> rusqlite::Result<Launch> {
+    Ok(Launch {
+        model: row.get(model_column)?,
+        effort: row.get(model_column + 1)?,
+    })
+}
+
 fn read_console(row: &Row<'_>) -> rusqlite::Result<Console> {
     Ok(Console {
         id: row.get(0)?,
         name: row.get(1)?,
         workdir: row.get(2)?,
         default_agent: enum_from_row(row, 3)?,
-        claude_account_id: row.get(4)?,
-        codex_account_id: row.get(5)?,
-        grok_account_id: row.get(6)?,
-        claude_console_session_model: row.get(7)?,
-        claude_console_session_effort: row.get(8)?,
-        codex_console_session_model: row.get(9)?,
-        codex_console_session_effort: row.get(10)?,
-        grok_console_session_model: row.get(11)?,
-        grok_console_session_effort: row.get(12)?,
+        accounts: PerAgent::try_from_fn(|agent| row.get(4 + column_slot(agent)))?,
+        launch: PerAgent::try_from_fn(|agent| launch_from_row(row, 7 + 2 * column_slot(agent)))?,
         icon: row.get(13)?,
         console_session_prompt: row.get(14)?,
         created_at: row.get(15)?,
         project_session_agent: enum_from_row_opt::<Agent>(row, 16)?,
-        claude_project_session_model: row.get(17)?,
-        claude_project_session_effort: row.get(18)?,
-        codex_project_session_model: row.get(19)?,
-        codex_project_session_effort: row.get(20)?,
-        grok_project_session_model: row.get(21)?,
-        grok_project_session_effort: row.get(22)?,
+        project_session_launch: PerAgent::try_from_fn(|agent| {
+            launch_from_row(row, 17 + 2 * column_slot(agent))
+        })?,
     })
 }
 
@@ -3109,15 +3108,11 @@ fn read_project(row: &Row<'_>) -> rusqlite::Result<Project> {
         default_agent: enum_from_row_opt::<Agent>(row, 5)?,
         source: enum_from_row::<ProjectSource>(row, 6)?,
         remote_url: row.get(7)?,
-        claude_account_id: project_account(row.get(8)?, row.get(11)?),
-        codex_account_id: project_account(row.get(9)?, row.get(12)?),
-        grok_account_id: project_account(row.get(10)?, row.get(13)?),
-        claude_session_model: row.get(14)?,
-        claude_session_effort: row.get(15)?,
-        codex_session_model: row.get(16)?,
-        codex_session_effort: row.get(17)?,
-        grok_session_model: row.get(18)?,
-        grok_session_effort: row.get(19)?,
+        accounts: PerAgent::try_from_fn(|agent| {
+            let slot = column_slot(agent);
+            Ok::<_, rusqlite::Error>(project_account(row.get(8 + slot)?, row.get(11 + slot)?))
+        })?,
+        launch: PerAgent::try_from_fn(|agent| launch_from_row(row, 14 + 2 * column_slot(agent)))?,
         trust_consent: row.get(20)?,
         pinned: row.get(21)?,
         tags,
@@ -3145,7 +3140,7 @@ fn project_account(id: Option<String>, pins_default: bool) -> ProjectAccount {
 fn read_page(row: &Row<'_>) -> rusqlite::Result<Page> {
     Ok(Page {
         id: row.get(0)?,
-        console_session_id: row.get(1)?,
+        session_id: row.get(1)?,
         html: row.get(2)?,
         anchor_message_id: row.get(3)?,
         created_at: row.get(4)?,
@@ -3167,7 +3162,7 @@ fn read_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         background_tasks: Vec::new(),
         switching_account: false,
         default_effort: None,
-        orchestration_role: None,
+        orchestration_role: enum_from_row::<OrchestrationRole>(row, 19)?,
         has_conversation: row.get(10)?,
         bound_to: row.get(11)?,
         colour: enum_from_row_opt::<ConsoleSessionColour>(row, 12)?,
@@ -3180,7 +3175,6 @@ fn read_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         observed_effort: row.get(30)?,
         started_at: row.get(17)?,
         ended_at: row.get(18)?,
-        lead: row.get(19)?,
         terminal_title: row.get(20)?,
         record_titles: RecordTitles {
             named: row.get(26)?,
@@ -3363,25 +3357,17 @@ mod tests {
             name: "Console".to_string(),
             workdir: "/tmp/console-1".to_string(),
             default_agent: Agent::Claude,
-            claude_account_id: claude.map(str::to_string),
-            codex_account_id: codex.map(str::to_string),
-            grok_account_id: grok.map(str::to_string),
-            claude_console_session_model: None,
-            claude_console_session_effort: None,
-            codex_console_session_model: None,
-            codex_console_session_effort: None,
-            grok_console_session_model: None,
-            grok_console_session_effort: None,
+            accounts: PerAgent {
+                claude: claude.map(str::to_string),
+                codex: codex.map(str::to_string),
+                grok: grok.map(str::to_string),
+            },
+            launch: Default::default(),
             icon: None,
             console_session_prompt: None,
             created_at: 0,
             project_session_agent: None,
-            claude_project_session_model: None,
-            claude_project_session_effort: None,
-            codex_project_session_model: None,
-            codex_project_session_effort: None,
-            grok_project_session_model: None,
-            grok_project_session_effort: None,
+            project_session_launch: Default::default(),
         }
     }
 
@@ -3414,7 +3400,7 @@ mod tests {
             background_tasks: Vec::new(),
             switching_account: false,
             default_effort: None,
-            orchestration_role: None,
+            orchestration_role: OrchestrationRole::Coordinator,
             context: None,
             observed_model: None,
             observed_effort: None,
@@ -3422,7 +3408,6 @@ mod tests {
             effort: None,
             has_conversation: false,
             bound_to: None,
-            lead: false,
             colour: None,
             ordinal: None,
             account_id: None,
@@ -3460,115 +3445,6 @@ mod tests {
         let store = Store::open(&path).expect("reopened");
         assert_eq!(user_version(&store.lock()).unwrap(), SCHEMA_VERSION);
         assert!(store.get_console("console-1").unwrap().is_some());
-        assert!(moved_aside(&path).is_empty());
-    }
-
-    #[test]
-    fn delivery_squash_upgrade_preserves_version_three_settings_and_projects() {
-        let path = temp_db("delivery-squash-upgrade");
-        {
-            let conn = Connection::open(&path).unwrap();
-            conn.execute_batch(
-                &SCHEMA
-                    .replace("    squash_before_delivery INTEGER,\n", "")
-                    .replace(
-                        "    squash_before_delivery INTEGER NOT NULL DEFAULT 0,\n",
-                        "",
-                    ),
-            )
-            .unwrap();
-            conn.pragma_update(None, "user_version", 3).unwrap();
-            conn.execute(
-                "INSERT INTO settings (id, rebase_before_merge, delivery) VALUES (?1, 0, 'merge')",
-                params![SETTINGS_ID],
-            )
-            .unwrap();
-            conn.execute_batch(
-                "INSERT INTO consoles (id, name, workdir, default_agent, created_at)
-                 VALUES ('kept-console', 'Kept', '/kept', 'claude', 1);
-                 INSERT INTO projects (id, console_id, host_id, name, path, source,
-                                       rebase_before_merge, delivery)
-                 VALUES ('kept-project', 'kept-console', 'local', 'Kept', '/kept', 'local',
-                         1, 'pull_request')",
-            )
-            .unwrap();
-        }
-        let store = Store::open(&path).unwrap();
-        let global = store.git_workflow_settings().unwrap();
-        assert!(!global.squash_before_delivery);
-        assert!(!global.rebase_before_merge);
-        assert_eq!(global.delivery, Delivery::Merge);
-        let project = store.get_project("kept-project").unwrap().unwrap();
-        assert_eq!(project.git_workflow.squash_before_delivery, None);
-        assert_eq!(project.git_workflow.rebase_before_merge, Some(true));
-        assert_eq!(project.git_workflow.delivery, Some(Delivery::PullRequest));
-        assert_eq!(user_version(&store.lock()).unwrap(), SCHEMA_VERSION);
-        assert!(moved_aside(&path).is_empty());
-    }
-
-    #[test]
-    fn observation_boundary_upgrade_preserves_version_two_sessions() {
-        let path = temp_db("model-boundary-upgrade");
-        {
-            let conn = Connection::open(&path).unwrap();
-            conn.execute_batch(
-                &SCHEMA
-                    .replace("    observed_boundary TEXT,\n", "")
-                    .replace("    squash_before_delivery INTEGER,\n", "")
-                    .replace(
-                        "    squash_before_delivery INTEGER NOT NULL DEFAULT 0,\n",
-                        "",
-                    ),
-            )
-            .unwrap();
-            conn.pragma_update(None, "user_version", 2).unwrap();
-            let store = Store {
-                conn: Mutex::new(conn),
-            };
-            store.insert_console(&console(None, None, None)).unwrap();
-            store.insert_session(&session(None)).unwrap();
-        }
-        let store = Store::open(&path).unwrap();
-        let source = session(None);
-        assert!(store.get_session(&source.id).unwrap().is_some());
-        assert!(store.observed_boundary(&source.id).unwrap().is_none());
-        assert_eq!(user_version(&store.lock()).unwrap(), SCHEMA_VERSION);
-        assert!(moved_aside(&path).is_empty());
-    }
-
-    #[test]
-    fn account_order_upgrade_keeps_existing_data() {
-        let path = temp_db("account-order-upgrade");
-        {
-            let conn = Connection::open(&path).unwrap();
-            conn.execute_batch(
-                &SCHEMA
-                    .replace("    account_order          TEXT,\n", "")
-                    .replace("    squash_before_delivery INTEGER,\n", "")
-                    .replace(
-                        "    squash_before_delivery INTEGER NOT NULL DEFAULT 0,\n",
-                        "",
-                    )
-                    .replace("    observed_boundary TEXT,\n", ""),
-            )
-            .unwrap();
-            conn.pragma_update(None, "user_version", 1).unwrap();
-            conn.execute(
-                "INSERT INTO settings (id, auto_select_account) VALUES (?1, 1)",
-                params![SETTINGS_ID],
-            )
-            .unwrap();
-            conn.execute_batch(
-                "INSERT INTO accounts (id, agent, name, config_dir, created_at)
-                 VALUES ('kept', 'claude', 'Work', '/accounts/work', 1)",
-            )
-            .unwrap();
-        }
-        let store = Store::open(&path).unwrap();
-        assert_eq!(store.list_accounts().unwrap()[0].id, "kept");
-        assert!(store.get_settings().unwrap().auto_select_account);
-        assert!(store.get_settings().unwrap().account_order.is_empty());
-        assert_eq!(user_version(&store.lock()).unwrap(), SCHEMA_VERSION);
         assert!(moved_aside(&path).is_empty());
     }
 
@@ -3752,8 +3628,8 @@ mod tests {
         assert!(moved_aside(&path).is_empty());
     }
 
-    /// A database from a newer build is refused and left where it is: moving it aside would lose
-    /// what that build wrote.
+    /// A database at a schema version this build does not read is refused and left where it is,
+    /// with the way to move it aside by hand.
     #[test]
     fn a_database_from_a_newer_build_is_refused_and_left_alone() {
         let path = temp_db("newer-version");
@@ -3766,7 +3642,10 @@ mod tests {
         }
 
         let error = Store::open(&path).err().expect("refused");
-        assert!(error.to_string().contains("newer"), "{error}");
+        let message = error.to_string();
+        assert!(message.contains(&path.display().to_string()), "{message}");
+        assert!(message.contains("rename that file"), "{message}");
+        assert!(message.contains("nothing is deleted"), "{message}");
         assert!(path.exists());
         assert!(moved_aside(&path).is_empty());
     }
@@ -3831,62 +3710,47 @@ mod tests {
 
         let store = Store::open(&path).expect("reopened");
         let mut kept = store.get_console("console-1").unwrap().expect("kept");
-        assert_eq!(kept.claude_console_session_model, None);
+        assert_eq!(kept.launch.claude.model, None);
         // Six distinct values, so a pair of columns swapped between the SELECT list and the
         // positional reads fails here.
-        kept.claude_console_session_model = Some("claude-model".to_string());
-        kept.claude_console_session_effort = Some("claude-effort".to_string());
-        kept.codex_console_session_model = Some("codex-model".to_string());
-        kept.codex_console_session_effort = Some("codex-effort".to_string());
-        kept.grok_console_session_model = Some("grok-model".to_string());
-        kept.grok_console_session_effort = Some("grok-effort".to_string());
+        kept.launch.claude.model = Some("claude-model".to_string());
+        kept.launch.claude.effort = Some("claude-effort".to_string());
+        kept.launch.codex.model = Some("codex-model".to_string());
+        kept.launch.codex.effort = Some("codex-effort".to_string());
+        kept.launch.grok.model = Some("grok-model".to_string());
+        kept.launch.grok.effort = Some("grok-effort".to_string());
         store.update_console(&kept).expect("writes the columns");
         let reread = store.get_console("console-1").unwrap().expect("kept");
+        assert_eq!(reread.launch.claude.model.as_deref(), Some("claude-model"));
         assert_eq!(
-            reread.claude_console_session_model.as_deref(),
-            Some("claude-model")
-        );
-        assert_eq!(
-            reread.claude_console_session_effort.as_deref(),
+            reread.launch.claude.effort.as_deref(),
             Some("claude-effort")
         );
-        assert_eq!(
-            reread.codex_console_session_model.as_deref(),
-            Some("codex-model")
-        );
-        assert_eq!(
-            reread.codex_console_session_effort.as_deref(),
-            Some("codex-effort")
-        );
-        assert_eq!(
-            reread.grok_console_session_model.as_deref(),
-            Some("grok-model")
-        );
-        assert_eq!(
-            reread.grok_console_session_effort.as_deref(),
-            Some("grok-effort")
-        );
+        assert_eq!(reread.launch.codex.model.as_deref(), Some("codex-model"));
+        assert_eq!(reread.launch.codex.effort.as_deref(), Some("codex-effort"));
+        assert_eq!(reread.launch.grok.model.as_deref(), Some("grok-model"));
+        assert_eq!(reread.launch.grok.effort.as_deref(), Some("grok-effort"));
 
         // A console inserted with all six set reads them back the same way.
         let mut inserted = console(None, None, None);
         inserted.id = "console-2".to_string();
         inserted.workdir = "/tmp/console-2".to_string();
-        inserted.claude_console_session_model = kept.claude_console_session_model.clone();
-        inserted.claude_console_session_effort = kept.claude_console_session_effort.clone();
-        inserted.codex_console_session_model = kept.codex_console_session_model.clone();
-        inserted.codex_console_session_effort = kept.codex_console_session_effort.clone();
-        inserted.grok_console_session_model = kept.grok_console_session_model.clone();
-        inserted.grok_console_session_effort = kept.grok_console_session_effort.clone();
+        inserted.launch.claude.model = kept.launch.claude.model.clone();
+        inserted.launch.claude.effort = kept.launch.claude.effort.clone();
+        inserted.launch.codex.model = kept.launch.codex.model.clone();
+        inserted.launch.codex.effort = kept.launch.codex.effort.clone();
+        inserted.launch.grok.model = kept.launch.grok.model.clone();
+        inserted.launch.grok.effort = kept.launch.grok.effort.clone();
         store.insert_console(&inserted).expect("insert");
         let listed = store.get_console("console-2").unwrap().expect("listed");
         assert_eq!(
             [
-                listed.claude_console_session_model,
-                listed.claude_console_session_effort,
-                listed.codex_console_session_model,
-                listed.codex_console_session_effort,
-                listed.grok_console_session_model,
-                listed.grok_console_session_effort,
+                listed.launch.claude.model,
+                listed.launch.claude.effort,
+                listed.launch.codex.model,
+                listed.launch.codex.effort,
+                listed.launch.grok.model,
+                listed.launch.grok.effort,
             ]
             .map(|field| field.expect("set")),
             [
@@ -3903,10 +3767,7 @@ mod tests {
         drop(store);
         let store = Store::open(&path).expect("reopened again");
         let again = store.get_console("console-1").unwrap().expect("kept");
-        assert_eq!(
-            again.codex_console_session_effort.as_deref(),
-            Some("codex-effort")
-        );
+        assert_eq!(again.launch.codex.effort.as_deref(), Some("codex-effort"));
     }
 
     /// A console follows `default_agent` until it names a project session agent, which then
@@ -3936,40 +3797,40 @@ mod tests {
             .insert_console(&console(None, None, None))
             .expect("console");
         let mut kept = store.get_console("console-1").unwrap().expect("kept");
-        assert_eq!(kept.claude_project_session_model, None);
-        assert_eq!(kept.grok_project_session_effort, None);
+        assert_eq!(kept.project_session_launch.claude.model, None);
+        assert_eq!(kept.project_session_launch.grok.effort, None);
         // Six distinct values, so a pair of columns swapped between the SELECT list and the
         // positional reads fails here.
-        kept.claude_project_session_model = Some("claude-model".to_string());
-        kept.claude_project_session_effort = Some("claude-effort".to_string());
-        kept.codex_project_session_model = Some("codex-model".to_string());
-        kept.codex_project_session_effort = Some("codex-effort".to_string());
-        kept.grok_project_session_model = Some("grok-model".to_string());
-        kept.grok_project_session_effort = Some("grok-effort".to_string());
+        kept.project_session_launch.claude.model = Some("claude-model".to_string());
+        kept.project_session_launch.claude.effort = Some("claude-effort".to_string());
+        kept.project_session_launch.codex.model = Some("codex-model".to_string());
+        kept.project_session_launch.codex.effort = Some("codex-effort".to_string());
+        kept.project_session_launch.grok.model = Some("grok-model".to_string());
+        kept.project_session_launch.grok.effort = Some("grok-effort".to_string());
         store.update_console(&kept).expect("writes the columns");
         let reread = store.get_console("console-1").unwrap().expect("kept");
         assert_eq!(
-            reread.claude_project_session_model.as_deref(),
+            reread.project_session_launch.claude.model.as_deref(),
             Some("claude-model")
         );
         assert_eq!(
-            reread.claude_project_session_effort.as_deref(),
+            reread.project_session_launch.claude.effort.as_deref(),
             Some("claude-effort")
         );
         assert_eq!(
-            reread.codex_project_session_model.as_deref(),
+            reread.project_session_launch.codex.model.as_deref(),
             Some("codex-model")
         );
         assert_eq!(
-            reread.codex_project_session_effort.as_deref(),
+            reread.project_session_launch.codex.effort.as_deref(),
             Some("codex-effort")
         );
         assert_eq!(
-            reread.grok_project_session_model.as_deref(),
+            reread.project_session_launch.grok.model.as_deref(),
             Some("grok-model")
         );
         assert_eq!(
-            reread.grok_project_session_effort.as_deref(),
+            reread.project_session_launch.grok.effort.as_deref(),
             Some("grok-effort")
         );
     }
@@ -4001,15 +3862,15 @@ mod tests {
             .insert_console(&console(None, None, None))
             .expect("console");
         let mut stored = project(false);
-        stored.claude_account_id = named("claude-acct");
-        stored.codex_account_id = ProjectAccount::Default;
+        stored.accounts.claude = named("claude-acct");
+        stored.accounts.codex = ProjectAccount::Default;
         store.insert_project(&stored).expect("insert");
         let read = || store.get_project("project-1").unwrap().unwrap();
         let states = |project: &Project| {
             [
-                project.claude_account_id.clone(),
-                project.codex_account_id.clone(),
-                project.grok_account_id.clone(),
+                project.accounts.claude.clone(),
+                project.accounts.codex.clone(),
+                project.accounts.grok.clone(),
             ]
         };
         assert_eq!(
@@ -4029,17 +3890,17 @@ mod tests {
         ];
         for from in &all {
             for to in &all {
-                stored.grok_account_id = from.clone();
+                stored.accounts.grok = from.clone();
                 store.update_project(&stored).expect("update");
-                assert_eq!(read().grok_account_id, *from);
-                stored.grok_account_id = to.clone();
+                assert_eq!(read().accounts.grok, *from);
+                stored.accounts.grok = to.clone();
                 store.update_project(&stored).expect("update");
-                assert_eq!(read().grok_account_id, *to);
+                assert_eq!(read().accounts.grok, *to);
             }
         }
 
         // The default state stores no id at all, only its flag.
-        stored.grok_account_id = ProjectAccount::Default;
+        stored.accounts.grok = ProjectAccount::Default;
         store.update_project(&stored).expect("update");
         let (id, flag): (Option<String>, bool) = store
             .lock()
@@ -4064,30 +3925,30 @@ mod tests {
         store.insert_project(&project(true)).expect("project");
         let mut kept = store.get_project("project-1").unwrap().expect("kept");
         assert!(kept.trust_consent);
-        assert_eq!(kept.claude_account_id, ProjectAccount::Inherit);
-        assert_eq!(kept.grok_session_effort, None);
-        kept.claude_account_id = named("claude-account");
-        kept.codex_account_id = named("codex-account");
-        kept.grok_account_id = named("grok-account");
-        kept.claude_session_model = Some("claude-model".to_string());
-        kept.claude_session_effort = Some("claude-effort".to_string());
-        kept.codex_session_model = Some("codex-model".to_string());
-        kept.codex_session_effort = Some("codex-effort".to_string());
-        kept.grok_session_model = Some("grok-model".to_string());
-        kept.grok_session_effort = Some("grok-effort".to_string());
+        assert_eq!(kept.accounts.claude, ProjectAccount::Inherit);
+        assert_eq!(kept.launch.grok.effort, None);
+        kept.accounts.claude = named("claude-account");
+        kept.accounts.codex = named("codex-account");
+        kept.accounts.grok = named("grok-account");
+        kept.launch.claude.model = Some("claude-model".to_string());
+        kept.launch.claude.effort = Some("claude-effort".to_string());
+        kept.launch.codex.model = Some("codex-model".to_string());
+        kept.launch.codex.effort = Some("codex-effort".to_string());
+        kept.launch.grok.model = Some("grok-model".to_string());
+        kept.launch.grok.effort = Some("grok-effort".to_string());
         store.update_project(&kept).expect("writes the columns");
 
         let fields = |project: &Project| {
             [
-                project.claude_account_id.account_id().map(str::to_string),
-                project.codex_account_id.account_id().map(str::to_string),
-                project.grok_account_id.account_id().map(str::to_string),
-                project.claude_session_model.clone(),
-                project.claude_session_effort.clone(),
-                project.codex_session_model.clone(),
-                project.codex_session_effort.clone(),
-                project.grok_session_model.clone(),
-                project.grok_session_effort.clone(),
+                project.accounts.claude.account_id().map(str::to_string),
+                project.accounts.codex.account_id().map(str::to_string),
+                project.accounts.grok.account_id().map(str::to_string),
+                project.launch.claude.model.clone(),
+                project.launch.claude.effort.clone(),
+                project.launch.codex.model.clone(),
+                project.launch.codex.effort.clone(),
+                project.launch.grok.model.clone(),
+                project.launch.grok.effort.clone(),
             ]
             .map(|field| field.expect("set"))
         };
@@ -4113,15 +3974,15 @@ mod tests {
         let mut inserted = project(false);
         inserted.id = "project-2".to_string();
         inserted.path = "/tmp/project-2".to_string();
-        inserted.claude_account_id = kept.claude_account_id.clone();
-        inserted.codex_account_id = kept.codex_account_id.clone();
-        inserted.grok_account_id = kept.grok_account_id.clone();
-        inserted.claude_session_model = kept.claude_session_model.clone();
-        inserted.claude_session_effort = kept.claude_session_effort.clone();
-        inserted.codex_session_model = kept.codex_session_model.clone();
-        inserted.codex_session_effort = kept.codex_session_effort.clone();
-        inserted.grok_session_model = kept.grok_session_model.clone();
-        inserted.grok_session_effort = kept.grok_session_effort.clone();
+        inserted.accounts.claude = kept.accounts.claude.clone();
+        inserted.accounts.codex = kept.accounts.codex.clone();
+        inserted.accounts.grok = kept.accounts.grok.clone();
+        inserted.launch.claude.model = kept.launch.claude.model.clone();
+        inserted.launch.claude.effort = kept.launch.claude.effort.clone();
+        inserted.launch.codex.model = kept.launch.codex.model.clone();
+        inserted.launch.codex.effort = kept.launch.codex.effort.clone();
+        inserted.launch.grok.model = kept.launch.grok.model.clone();
+        inserted.launch.grok.effort = kept.launch.grok.effort.clone();
         store.insert_project(&inserted).expect("insert");
         let listed = store
             .list_projects()
@@ -4196,15 +4057,8 @@ mod tests {
             default_agent: None,
             source: ProjectSource::Local,
             remote_url: None,
-            claude_account_id: ProjectAccount::Inherit,
-            codex_account_id: ProjectAccount::Inherit,
-            grok_account_id: ProjectAccount::Inherit,
-            claude_session_model: None,
-            claude_session_effort: None,
-            codex_session_model: None,
-            codex_session_effort: None,
-            grok_session_model: None,
-            grok_session_effort: None,
+            accounts: Default::default(),
+            launch: Default::default(),
             trust_consent: consent,
             pinned: false,
             tags: Vec::new(),
@@ -4605,9 +4459,9 @@ mod tests {
             ))
             .expect("insert");
         let stored = store.get_console("console-1").unwrap().unwrap();
-        assert_eq!(stored.claude_account_id.as_deref(), Some("claude-acct"));
-        assert_eq!(stored.codex_account_id.as_deref(), Some("codex-acct"));
-        assert_eq!(stored.grok_account_id.as_deref(), Some("grok-acct"));
+        assert_eq!(stored.accounts.claude.as_deref(), Some("claude-acct"));
+        assert_eq!(stored.accounts.codex.as_deref(), Some("codex-acct"));
+        assert_eq!(stored.accounts.grok.as_deref(), Some("grok-acct"));
 
         let mut opened = session(Some("/home/u/.claude-alt"));
         opened.account_id = Some("claude-acct".to_string());
@@ -4655,12 +4509,13 @@ mod tests {
                 .get_console("console-1")
                 .unwrap()
                 .unwrap()
-                .claude_account_id
+                .accounts
+                .claude
         };
         assert_eq!(read(&store), None);
 
         for account_id in [Some("alt"), Some("other"), None] {
-            stored.claude_account_id = account_id.map(str::to_string);
+            stored.accounts.claude = account_id.map(str::to_string);
             store.update_console(&stored).expect("update");
             assert_eq!(read(&store), account_id.map(str::to_string));
         }
@@ -4696,15 +4551,15 @@ mod tests {
         untouched.id = "console-3".to_string();
         store.insert_console(&untouched).expect("insert");
         let mut referring = project(false);
-        referring.claude_account_id = named("claude-acct");
+        referring.accounts.claude = named("claude-acct");
         // Another agent's setting of the same project is not touched by a Claude account going.
-        referring.codex_account_id = ProjectAccount::Default;
+        referring.accounts.codex = ProjectAccount::Default;
         store.insert_project(&referring).expect("insert");
         // A project that pins the default account refers to no id, so it keeps saying so.
         let mut defaulting = project(false);
         defaulting.id = "project-2".to_string();
         defaulting.path = "/tmp/project-2".to_string();
-        defaulting.claude_account_id = ProjectAccount::Default;
+        defaulting.accounts.claude = ProjectAccount::Default;
         store.insert_project(&defaulting).expect("insert");
         let mut inheriting = project(false);
         inheriting.id = "project-3".to_string();
@@ -4712,7 +4567,7 @@ mod tests {
         store.insert_project(&inheriting).expect("insert");
 
         store.delete_account("claude-acct").expect("deleted");
-        let claude_account = |id: &str| store.get_project(id).unwrap().unwrap().claude_account_id;
+        let claude_account = |id: &str| store.get_project(id).unwrap().unwrap().accounts.claude;
         assert_eq!(claude_account("project-1"), ProjectAccount::Inherit);
         assert_eq!(claude_account("project-2"), ProjectAccount::Default);
         assert_eq!(claude_account("project-3"), ProjectAccount::Inherit);
@@ -4721,16 +4576,17 @@ mod tests {
                 .get_project("project-1")
                 .unwrap()
                 .unwrap()
-                .codex_account_id,
+                .accounts
+                .codex,
             ProjectAccount::Default
         );
         assert!(store.get_account("claude-acct").unwrap().is_none());
         for id in ["console-1", "console-2"] {
             let console = store.get_console(id).unwrap().unwrap();
-            assert_eq!(console.claude_account_id, None);
+            assert_eq!(console.accounts.claude, None);
         }
         let untouched = store.get_console("console-3").unwrap().unwrap();
-        assert_eq!(untouched.claude_account_id.as_deref(), Some("claude-other"));
+        assert_eq!(untouched.accounts.claude.as_deref(), Some("claude-other"));
     }
 
     /// The added agents are undecided on a fresh database, survive a restart once decided, and a
@@ -5327,7 +5183,76 @@ mod tests {
         built.id = id.to_string();
         built.role = Role::Project;
         built.bound_to = bound_to.map(str::to_string);
+        if bound_to.is_some() {
+            built.orchestration_role = OrchestrationRole::Worker;
+        }
         built
+    }
+
+    /// A session with no parent is a coordinator after every binding operation: the owner checks
+    /// read the stored role alone, so a write that cleared `bound_to` and left a worker behind
+    /// would leave a session that owns nothing and is nobody's.
+    #[test]
+    fn every_session_without_a_parent_is_a_coordinator_after_each_binding_operation() {
+        let path = temp_db("unparented-coordinators");
+        let store = Store::open(&path).expect("store");
+        store.insert_console(&console(None, None, None)).unwrap();
+        store.insert_session(&session(None)).unwrap();
+        for id in ["a", "b"] {
+            store.insert_session(&project_session(id, None)).unwrap();
+        }
+        let check = |step: &str| {
+            for session in store.list_sessions().unwrap() {
+                if session.bound_to.is_none() {
+                    assert_eq!(
+                        session.orchestration_role,
+                        OrchestrationRole::Coordinator,
+                        "{} after {step}",
+                        session.id
+                    );
+                }
+            }
+        };
+        check("the inserts");
+        store
+            .set_binding(
+                "a",
+                None,
+                "session-1",
+                OrchestrationRole::Worker,
+                false,
+                false,
+            )
+            .unwrap()
+            .expect("bound as a worker");
+        check("binding a worker");
+        store
+            .clear_binding("a", "session-1", false, None)
+            .unwrap()
+            .expect("released");
+        check("releasing it");
+        store
+            .set_binding(
+                "a",
+                None,
+                "session-1",
+                OrchestrationRole::Coordinator,
+                false,
+                false,
+            )
+            .unwrap()
+            .expect("bound as a coordinator");
+        check("binding a coordinator");
+        store
+            .hand_over_binding("a", "b", Some("session-1"))
+            .unwrap()
+            .expect("handed over");
+        check("a handover");
+        store
+            .clear_binding("b", "session-1", false, None)
+            .unwrap()
+            .expect("released");
+        check("releasing the heir");
     }
 
     /// A session opened under an owner is inserted only while the owner can still own sessions.
@@ -5353,7 +5278,14 @@ mod tests {
 
         // The owner binds itself to a project session after the new session's owner was resolved.
         store
-            .set_binding("owner", None, "peer", false, true, false)
+            .set_binding(
+                "owner",
+                None,
+                "peer",
+                OrchestrationRole::Worker,
+                true,
+                false,
+            )
             .expect("binding")
             .expect("the owner had no sessions of its own");
         assert!(!store
@@ -5372,7 +5304,7 @@ mod tests {
         // The other order: with the child in place, the owner can no longer be bound to a project
         // session.
         assert!(store
-            .set_binding("free", None, "peer", false, true, false)
+            .set_binding("free", None, "peer", OrchestrationRole::Worker, true, false)
             .expect("binding")
             .is_none());
 
@@ -5485,7 +5417,14 @@ mod tests {
             .insert_session(&project_session("child", Some("lead")))
             .expect("child");
         store
-            .set_binding("lead", None, "session-1", true, false, false)
+            .set_binding(
+                "lead",
+                None,
+                "session-1",
+                OrchestrationRole::Coordinator,
+                false,
+                false,
+            )
             .expect("binding")
             .expect("lead bound");
 
@@ -5501,7 +5440,10 @@ mod tests {
             .clear_binding("lead", "session-1", true, Some("good luck"))
             .unwrap()
             .expect("cleared");
-        assert_eq!((cleared.bound_to, cleared.lead), (None, false));
+        assert_eq!(
+            (cleared.bound_to, cleared.orchestration_role),
+            (None, OrchestrationRole::Coordinator)
+        );
         // The mark lands with the change, and only with a change that landed.
         assert_eq!(store.owner_notice_pending("lead").unwrap(), 1);
         assert_eq!(store.owner_notice_pending("child").unwrap(), 0);
@@ -5511,7 +5453,14 @@ mod tests {
             Some("good luck")
         );
         store
-            .set_binding("lead", None, "session-1", false, false, true)
+            .set_binding(
+                "lead",
+                None,
+                "session-1",
+                OrchestrationRole::Worker,
+                false,
+                true,
+            )
             .unwrap()
             .expect("bound again");
         assert_eq!(store.owner_notice_pending("lead").unwrap(), 2);
@@ -5529,7 +5478,14 @@ mod tests {
         assert_eq!(store.owner_notice_pending("lead").unwrap(), 2);
         // The note goes with the count that delivered it, and stays with a newer mark.
         store
-            .set_binding("lead", None, "session-1", false, false, false)
+            .set_binding(
+                "lead",
+                None,
+                "session-1",
+                OrchestrationRole::Worker,
+                false,
+                false,
+            )
             .unwrap()
             .expect("bound once more");
         store
@@ -5548,7 +5504,14 @@ mod tests {
             Some("kept")
         );
         store
-            .set_binding("lead", None, "session-1", false, false, false)
+            .set_binding(
+                "lead",
+                None,
+                "session-1",
+                OrchestrationRole::Worker,
+                false,
+                false,
+            )
             .unwrap()
             .expect("bound again");
         store.mark_owner_notice_with_note("lead", "stale").unwrap();

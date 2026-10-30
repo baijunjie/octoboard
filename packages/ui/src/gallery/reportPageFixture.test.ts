@@ -4,15 +4,17 @@ import { createFixtureDaemon } from "./fixtureDaemon";
 import { reportScenarios } from "./fixtures/report";
 import { installReportPageFixture } from "./reportPageFixture";
 
+const scenario = reportScenarios.find(({ id }) => id === "report-two-console-sessions")!;
+
 it("appends a page through the daemon reducer only for known report fixtures, without changing another session", () => {
-  const daemon = createFixtureDaemon(reportScenarios[0]);
+  const daemon = createFixtureDaemon(scenario);
   const before = daemon.store.getState().pages;
-  const remove = installReportPageFixture(document, daemon, reportScenarios[0].id);
-  const page = { id: "probe", console_session_id: "s-hub-2", html: "<p>New</p>", created_at: 1 };
+  const remove = installReportPageFixture(document, daemon, scenario.id);
+  const page = { id: "probe", session_id: "s-hub-2", html: "<p>New</p>", created_at: 1 };
   const send = (detail: unknown) => document.dispatchEvent(new CustomEvent("gallery:report-page-created", { detail }));
   send(null);
   send({ ...page, created_at: NaN });
-  send({ ...page, console_session_id: "unknown" });
+  send({ ...page, session_id: "unknown" });
   expect(daemon.store.getState().pages).toBe(before);
   send(page);
   expect(daemon.store.getState().pages.get("s-hub-2")).toEqual([...before.get("s-hub-2")!, page]);

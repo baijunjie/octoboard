@@ -68,7 +68,7 @@ const { FakeController } = vi.hoisted(() => {
 });
 vi.mock("./TerminalController", () => ({ TerminalController: FakeController }));
 // One object for every render: the pane re-attaches when `terminalUrl` changes identity.
-const daemon = vi.hoisted(() => ({ terminalUrl: () => "", request: vi.fn(async (_body: unknown) => ({ type: "ack" })), toastError: vi.fn() }));
+const daemon = vi.hoisted(() => ({ terminalUrl: () => "", request: vi.fn(async (_body: unknown) => ({ type: "ack", id: null })), toastError: vi.fn() }));
 const store = vi.hoisted(() => ({ snapshotEpoch: 0, connectionState: "open", sessions: new Map<string, unknown>() }));
 vi.mock("../store", () => ({
   useDaemon: () => daemon,
@@ -423,7 +423,7 @@ it("hands a path with a view to the file viewer once it has read it, and opens a
   const onViewFile = vi.fn();
   const inProject = { ...session, project_id: "p-1" };
   daemon.request.mockClear();
-  daemon.request.mockResolvedValueOnce({ type: "project_file", project: "p-1", worktree: "w", path: "src/a.ts", source: { kind: "live", version: "1" }, file: { size: 1, kind: "text", media_type: null, text: "x", data: null } } as never);
+  daemon.request.mockResolvedValueOnce({ type: "project_file", id: null, project: "p-1", worktree: "w", path: "src/a.ts", source: { kind: "live", version: "1" }, file: { size: 1, kind: "text", media_type: null, text: "x", data: null } } as never);
   act(() => root.render(<TerminalPane session={inProject} onResume={async () => true} onAddAgent={() => {}} onViewFile={onViewFile} />));
   await act(async () => FakeController.last.openPath({ path: "/r/src/a.ts", line: 3, view: { worktree: "w", path: "src/a.ts" } }));
   expect(onViewFile).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ project: "p-1", worktree: "w", path: "src/a.ts", line: 3 }));
@@ -481,7 +481,7 @@ it("keeps an interrupted session's saved screen and shows no history for it", ()
 });
 
 it("puts focus asked for the terminal on the history's scrolling region when it is archived", async () => {
-  daemon.request.mockResolvedValueOnce({ type: "session_history", messages: [{ speaker: "user", text: "Hello", turn: 1 }] } as { type: string });
+  daemon.request.mockResolvedValueOnce({ type: "session_history", id: null, messages: [{ speaker: "user", text: "Hello", turn: 1 }] } as never);
   const { container, handle } = mountArchived();
   await act(async () => {});
   act(() => handle.current?.focus());
@@ -623,7 +623,7 @@ it("speaks a dormant bar's sentence once, from a region mounted empty, and leave
 });
 
 it("speaks an archived bar's sentence and leaves the history's own announcer to its own states", async () => {
-  daemon.request.mockResolvedValueOnce({ type: "session_history", messages: [{ speaker: "user", text: "Hello", turn: 1 }] } as { type: string });
+  daemon.request.mockResolvedValueOnce({ type: "session_history", id: null, messages: [{ speaker: "user", text: "Hello", turn: 1 }] } as never);
   const { container } = mountArchived();
   await act(async () => {});
   act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));

@@ -47,7 +47,7 @@ function mountUnder(modality: "virtual" | "pointer" | "keyboard", strict: boolea
   onTestFinished(() => { opener.remove(); });
   opener.focus();
   const { element, open } = openable(editProject, deferred);
-  const dialog = mountPendingQuestionDialog({ homeDir: "/Users/dev" }, () => Promise.resolve({ type: "ack" }), { under: element, strict });
+  const dialog = mountPendingQuestionDialog({ homeDir: "/Users/dev" }, () => Promise.resolve({ type: "ack", id: null }), { under: element, strict });
   return { ...dialog, open };
 }
 
@@ -113,7 +113,7 @@ describe.each([{ strict: false }, { strict: true }])("(StrictMode: $strict)", ({
     it("raised in the same task as an error alert waits under it, then takes focus once it is acknowledged", async () => {
       framesAsTimers();
       onTestFinished(setFocusAfterModalLoss(() => focusAfterLoss(() => {})));
-      const dialog = mountPendingQuestionDialog({ homeDir: "/Users/dev" }, () => Promise.resolve({ type: "ack" }), { after: <ErrorAlerts />, strict });
+      const dialog = mountPendingQuestionDialog({ homeDir: "/Users/dev" }, () => Promise.resolve({ type: "ack", id: null }), { after: <ErrorAlerts />, strict });
       act(() => {
         dialog.store.setState(state);
         errorAlerts.report({ message: "Refused" });
@@ -136,7 +136,7 @@ describe.each([{ strict: false }, { strict: true }])("(StrictMode: $strict)", ({
     it("raised in the same task as a press opening a dialog that opens another a commit later ends on itself", async () => {
       framesAsTimers();
       const { element, open } = openable(<OpensAnotherDialog />, true);
-      const dialog = mountPendingQuestionDialog({ homeDir: "/Users/dev" }, () => Promise.resolve({ type: "ack" }), { under: element, strict });
+      const dialog = mountPendingQuestionDialog({ homeDir: "/Users/dev" }, () => Promise.resolve({ type: "ack", id: null }), { under: element, strict });
       act(() => {
         open();
         dialog.store.setState(state);
@@ -152,7 +152,7 @@ describe.each([{ strict: false }, { strict: true }])("(StrictMode: $strict)", ({
     it("covered by a dialog opened after it, leaves focus there when what it asks about is replaced", async () => {
       framesAsTimers("pointer");
       const { element, open } = openable(<Dialog title="Later" onClose={() => {}} footer={null}><input aria-label="Field" autoFocus /></Dialog>, true);
-      const dialog = mountPendingQuestionDialog({ homeDir: "/Users/dev" }, () => Promise.resolve({ type: "ack" }), { after: element, strict });
+      const dialog = mountPendingQuestionDialog({ homeDir: "/Users/dev" }, () => Promise.resolve({ type: "ack", id: null }), { after: element, strict });
       act(() => dialog.store.setState(state));
       await settleFrames();
       questionHoldsFocus();
@@ -191,7 +191,7 @@ describe.each([{ strict: false }, { strict: true }])("closed over a dialog its p
       onTestFinished(setFocusAfterModalLoss(() => focusAfterLoss(() => {})));
       (document.activeElement as HTMLElement | null)?.blur();
       const { element, open } = openable(formDialog, true);
-      const dialog = mountPendingQuestionDialog({ homeDir: "/Users/dev" }, () => Promise.resolve({ type: "ack" }), { under: element, strict });
+      const dialog = mountPendingQuestionDialog({ homeDir: "/Users/dev" }, () => Promise.resolve({ type: "ack", id: null }), { under: element, strict });
       act(() => {
         open();
         dialog.store.setState(state);
@@ -206,7 +206,7 @@ describe.each([{ strict: false }, { strict: true }])("closed over a dialog its p
     it("gives focus back to the control that had it when the dialog had settled", async () => {
       framesAsTimers();
       onTestFinished(setFocusAfterModalLoss(() => focusAfterLoss(() => {})));
-      const dialog = mountPendingQuestionDialog({ homeDir: "/Users/dev" }, () => Promise.resolve({ type: "ack" }), { under: formDialog, strict });
+      const dialog = mountPendingQuestionDialog({ homeDir: "/Users/dev" }, () => Promise.resolve({ type: "ack", id: null }), { under: formDialog, strict });
       await settleFrames();
       const cancel = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((button) => button.textContent === "Cancel")!;
       act(() => cancel.focus());

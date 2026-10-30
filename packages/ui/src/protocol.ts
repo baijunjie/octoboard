@@ -10,7 +10,9 @@
  * it holds or overlaps another account's or a project's directory could not be checked), and `undecided` that a look did not answer in
  * time, so that nothing is said against the directory. */
 export type AccountTrashOutcome =
-  | { status: "ok" | "missing" | "protected" }
+  | { status: "ok" }
+  | { status: "missing" }
+  | { status: "protected" }
   | { status: "shared"; kind: "account" | "default_account" | "project"; name?: string; agent?: string }
   | { status: "unlookable"; cause?: "unreadable" | "other_unlooked" }
   | { status: "undecided" };
@@ -105,7 +107,14 @@ export interface ProcessTree {
 
 /** A bound item a request forces or keeps, named as its `SessionBranchItem` names it and in the
  * state the user was shown it in: a forced removal goes only while it still stands so. */
-export type SessionBranchTarget = Pick<SessionBranchItem, "kind" | "repository" | "branch" | "path" | "state" | "uncommitted">;
+export interface SessionBranchTarget {
+  kind: SessionBranchItem["kind"];
+  repository: string;
+  branch?: string | null;
+  path?: string | null;
+  state: SessionBranchState;
+  uncommitted?: boolean;
+}
 
 export type Agent = "claude" | "codex" | "grok";
 export type Role = "console" | "project";
@@ -162,7 +171,7 @@ export interface Host {
   id: string;
   name: string;
   kind: HostKind;
-  ssh_config?: string | null;
+  ssh_config: string | null;
 }
 
 export interface Console {
@@ -171,40 +180,28 @@ export interface Console {
   workdir: string;
   /** The agent a console session of this console is of. */
   default_agent: Agent;
-  /** The agent a project session falls back to when its project names none; absent or `null`
+  /** The agent a project session falls back to when its project names none; `null`
    * follows `default_agent`. */
-  project_session_agent?: Agent | null;
-  /** The account each agent's sessions opened in this console read, by id; absent means that
+  project_session_agent: Agent | null;
+  /** The account each agent's sessions opened in this console read, by id; `null` means that
    * agent's default account — the state of pinning nothing. A session resolves its own: the one
    * chosen for it, else this, else the default. */
-  claude_account_id?: string | null;
-  codex_account_id?: string | null;
-  grok_account_id?: string | null;
+  accounts: PerAgent<string | null>;
   /** The model and reasoning effort a console session of this console is launched with, in the
    * agent's own spelling; one pair per agent, and a session reads only its own agent's, unless the
-   * session overrides it. Absent means the agent's own default. Read when a console session is opened
-   * or resumed, so one already running keeps what it started with; project sessions never read
-   * them. */
-  claude_console_session_model?: string | null;
-  claude_console_session_effort?: string | null;
-  codex_console_session_model?: string | null;
-  codex_console_session_effort?: string | null;
-  grok_console_session_model?: string | null;
-  grok_console_session_effort?: string | null;
+   * session overrides it. `null` means the agent's own default. Read when a console session is
+   * opened or resumed, so one already running keeps what it started with; project sessions never
+   * read them. */
+  launch: PerAgent<Launch>;
   /** The model and reasoning effort a project session of this console is launched with when neither
-   * the session nor its project names one; one pair per agent. Absent means the agent's own
+   * the session nor its project names one; one pair per agent. `null` means the agent's own
    * default. Read at every launch. */
-  claude_project_session_model?: string | null;
-  claude_project_session_effort?: string | null;
-  codex_project_session_model?: string | null;
-  codex_project_session_effort?: string | null;
-  grok_project_session_model?: string | null;
-  grok_project_session_effort?: string | null;
+  project_session_launch: PerAgent<Launch>;
   /** A custom avatar as an `image/*` `data:` URL of at most 256 KiB; unset shows the default glyph. */
-  icon?: string | null;
+  icon: string | null;
   /** The user's own text added after the console session's built-in instructions; unset adds
    * nothing. */
-  console_session_prompt?: string | null;
+  console_session_prompt: string | null;
   created_at: number;
 }
 
@@ -220,31 +217,22 @@ export type ProjectAccount =
   /** The account with this id, which belongs to the agent the setting is for. */
   | { kind: "account"; id: string };
 
-/** The three per-agent account reference fields of a console, as named on the wire. */
-export type AccountField = "claude_account_id" | "codex_account_id" | "grok_account_id";
+/** One value for each agent. The daemon always sends every key of a record; a request may leave
+ * agents out (see `Partial<PerAgent<T>>` in the requests). */
+export type PerAgent<T> = Record<Agent, T>;
 
-/** The per-agent model and reasoning effort fields of a console (its console sessions' launch
- * settings), as named on the wire. */
-export type ConsoleModelField = "claude_console_session_model" | "codex_console_session_model" | "grok_console_session_model";
-export type ConsoleEffortField =
-  | "claude_console_session_effort"
-  | "codex_console_session_effort"
-  | "grok_console_session_effort";
+/** One agent's model and reasoning effort, each `null` while unset. */
+export interface Launch {
+  model: string | null;
+  effort: string | null;
+}
 
-/** The pair of fields a console holds for its project sessions, which a project's own unset values
- * fall back to. */
-export type ConsoleProjectModelField =
-  | "claude_project_session_model"
-  | "codex_project_session_model"
-  | "grok_project_session_model";
-export type ConsoleProjectEffortField =
-  | "claude_project_session_effort"
-  | "codex_project_session_effort"
-  | "grok_project_session_effort";
-
-/** The same pair of fields on a project (its sessions' launch settings). */
-export type ProjectModelField = "claude_session_model" | "codex_session_model" | "grok_session_model";
-export type ProjectEffortField = "claude_session_effort" | "codex_session_effort" | "grok_session_effort";
+/** A change to one agent's `Launch` in an update: a field left out is untouched, `null` or a
+ * blank string clears it back to the agent's own default. */
+export interface LaunchChange {
+  model?: string | null;
+  effort?: string | null;
+}
 
 /** How Codex reviews permission requests, for every Codex account, when the user overrides the accounts' own
  * configuration. */
@@ -266,21 +254,21 @@ export interface Account {
   /** Absolute, lexically normalised. Existence is not checked when this is set. */
   config_dir: string;
   /** Whether the account shares the agent's default configuration (`set_account_sharing`). */
-  share_default_config?: boolean;
+  share_default_config: boolean;
   /** The last change toward `share_default_config` did not finish (the daemon always sends it): the account's
    * directory may not match the recorded choice. Cleared only by asking again for the recorded value (a
    * retry) or for the opposite one. The `account_sharing` failure, when the daemon still holds one, says
    * what was left. */
-  share_default_config_incomplete?: boolean;
+  share_default_config_incomplete: boolean;
   /** The user turned the account off for new work (`set_account_disabled`): automatic selection skips it and no
-   * session can be opened on, handed off to or switched to it. Sessions already on it keep running. Absent is on. */
-  disabled?: boolean;
+   * session can be opened on, handed off to or switched to it. Sessions already on it keep running. */
+  disabled: boolean;
 }
 
 /** What a failed sharing change left one entry as. */
 export type SharingLeft = "unchanged" | "backed_up" | "partly_moved" | "linked" | "absent";
 
-/** Why an entry could not be brought in line, as the daemon names it; an absent or unknown one reads as `other`. */
+/** Why an entry could not be brought in line, as the daemon names it; an unknown one reads as `other`. */
 export type SharingEntryCause = "permission_denied" | "busy" | "not_found" | "no_space" | "conflict" | "other";
 
 /** Why a change failed as a whole: an entry cause, or `default_moved`, the agent's default directory having moved
@@ -309,8 +297,8 @@ export interface AccountSharing {
   failure?: {
     share: boolean;
     /** The cause shared by all entries, or why the change could not start when there are none. */
-    cause?: SharingCause;
-    items: { item: string; left: SharingLeft; detail: string; sessions?: string[]; cause?: SharingEntryCause }[];
+    cause: SharingCause;
+    items: { item: string; left: SharingLeft; cause: SharingCause; detail: string; sessions?: string[] }[];
     detail: string;
   };
 }
@@ -333,9 +321,6 @@ export interface GitWorkflowSettings {
   revert_gate: boolean;
 }
 
-/** A configuration document may predate the squash setting; omitting it leaves the current value as it is. */
-export type DocumentGitWorkflowSettings = Omit<GitWorkflowSettings, "squash_before_delivery"> & { squash_before_delivery?: boolean | null };
-
 /** A project's own git workflow settings: an item that is `null` follows the application-wide value. */
 export type GitWorkflowOverride = { [K in keyof GitWorkflowSettings]: GitWorkflowSettings[K] | null };
 
@@ -352,26 +337,18 @@ export interface Project {
   host_id: string;
   name: string;
   path: string;
-  default_agent?: Agent | null;
+  default_agent: Agent | null;
   source: ProjectSource;
-  remote_url?: string | null;
-  /** The account each agent's sessions opened in this project read; always present, with
-   * `{ kind: "inherit" }` taking the console's reference. A session resolves its own: the one
-   * chosen for it, else this (unless it inherits), else the console's, else the agent's default
-   * account. */
-  claude_account_id: ProjectAccount;
-  codex_account_id: ProjectAccount;
-  grok_account_id: ProjectAccount;
+  remote_url: string | null;
+  /** The account each agent's sessions opened in this project read, with `{ kind: "inherit" }`
+   * taking the console's reference. A session resolves its own: the one chosen for it, else this
+   * (unless it inherits), else the console's, else the agent's default account. */
+  accounts: PerAgent<ProjectAccount>;
   /** The model and reasoning effort a session of this project is launched with, in the agent's own
-   * spelling; one pair per agent, and a session reads only its own agent's unless it overrides it. Absent means the
-   * agent's own default: there is no console-level fallback. Read when a session is opened or
-   * resumed, so one already running keeps what it started with. */
-  claude_session_model?: string | null;
-  claude_session_effort?: string | null;
-  codex_session_model?: string | null;
-  codex_session_effort?: string | null;
-  grok_session_model?: string | null;
-  grok_session_effort?: string | null;
+   * spelling; one pair per agent, and a session reads only its own agent's unless it overrides it.
+   * `null` means the agent's own default: there is no console-level fallback. Read when a session
+   * is opened or resumed, so one already running keeps what it started with. */
+  launch: PerAgent<Launch>;
   /** The user has agreed that Octoboard may press any agent's own trust confirmation for this
    * project's directory without asking: the project form of the one permission every agent shares.
    * Only ever set by `confirm_trust` with `remember`, once a confirmation has been pressed. */
@@ -382,9 +359,9 @@ export interface Project {
    * registry: the tags in use are the distinct ones across projects. Stored trimmed, non-empty and
    * without case-insensitive duplicates, in the order the user gave them. */
   tags: string[];
-  /** The user's own summary of what the project is for, read by agent sessions; absent or null is
+  /** The user's own summary of what the project is for, read by agent sessions; `null` is
    * none. */
-  description?: string | null;
+  description: string | null;
   /** The project's own git workflow settings; an item that is `null` follows `Settings.git_workflow`. */
   git_workflow: GitWorkflowOverride;
 }
@@ -394,16 +371,16 @@ export interface Project {
  * formula) are present only once the agent has given its context-window limit. */
 export interface SessionContext {
   tokens: number;
-  window?: number;
-  used_percent?: number;
+  window?: number | null;
+  used_percent?: number | null;
 }
 
 /** One piece of work an agent left running in the background when its turn ended. */
 export interface BackgroundTask {
   id: string;
   /** The agent's name for the kind of task, such as a shell command or an MCP call. */
-  type?: string;
-  description?: string;
+  type?: string | null;
+  description?: string | null;
 }
 
 /** What a path in a session's terminal names on the daemon's host: a file, a folder, or nothing it
@@ -423,14 +400,14 @@ export type OrchestrationRole = "coordinator" | "worker";
 export interface Session {
   id: string;
   agent: Agent;
-  agent_session_id?: string | null;
+  agent_session_id: string | null;
   console_id: string;
-  project_id?: string | null;
+  project_id: string | null;
   host_id: string;
   role: Role;
-  /** Capability independent of the reporting relationship. Supplied by the daemon; optional for
-   * older records. Console sessions and independent project sessions are coordinators. */
-  orchestration_role?: OrchestrationRole;
+  /** Capability independent of the reporting relationship. Console sessions and independent project
+   * sessions are coordinators; a project coordinator keeps the role under a console parent. */
+  orchestration_role: OrchestrationRole;
   origin: Origin;
   title: string;
   terminal_title?: string | null;
@@ -443,21 +420,21 @@ export interface Session {
   switching_account?: boolean;
   has_conversation: boolean;
   /** The parent session this session reports to: a console session of the same console or a
-   * coordinator of the same project. Absent or null means independent. Binding, transfer and
+   * coordinator of the same project. `null` means independent. Binding, transfer and
    * release can change it; a console session has no parent. Role is given by orchestration_role. */
-  bound_to?: string | null;
+  bound_to: string | null;
   /** A console session's badge colour, assigned on creation and changed afterwards only by
-   * `set_session_colour`. Absent for a project session, which carries no colour of its own. */
-  colour?: ConsoleSessionColour | null;
+   * `set_session_colour`. `null` for a project session, which carries no colour of its own. */
+  colour: ConsoleSessionColour | null;
   /** A console session's place in its console's history, one past the highest ordinal ever used
-   * there. Never reused after archiving or deletion. Absent for a project session. */
-  ordinal?: number | null;
-  /** The account this session's own agent reads, by id; absent means the default account. Written
+   * there. Never reused after archiving or deletion. `null` for a project session. */
+  ordinal: number | null;
+  /** The account this session's own agent reads, by id; `null` means the default account. Written
    * when the session is opened and when its account is switched. */
-  account_id?: string | null;
+  account_id: string | null;
   /** The config directory of this session's own agent that it launches with, recorded with the
    * account so a resume finds its transcript even after the account's own directory changes. */
-  config_dir?: string | null;
+  config_dir: string | null;
   /** Absent follows the project's or console's current setting; null explicitly uses the
    * agent's own default. Overrides survive resuming and switching accounts. */
   model?: string | null;
@@ -466,26 +443,25 @@ export interface Session {
   pinned: boolean;
   locked: boolean;
   started_at: number;
-  ended_at?: number | null;
+  ended_at: number | null;
   context?: SessionContext | null;
   /** The model and reasoning effort the agent's records show the session running with, as the
    * agent spells them; unlike `model` and `effort`, which are the launch overrides. */
-  observed_model?: string;
-  observed_effort?: string;
+  observed_model?: string | null;
+  observed_effort?: string | null;
   /** The reasoning effort the agent runs `observed_model` at by itself, where the records name that
    * model but no effort and the agent's catalogue gives it a default. */
-  default_effort?: string;
+  default_effort?: string | null;
 }
 
 /** One page a session pushed to its report panel (a console session, or a project session that faces
- * the user); it belongs to that session, not to its console or project. `console_session_id` keeps the
- * name it had when only a console session could push pages. `anchor_message_id` is stored only — the
- * rewind linkage that would read it does not exist. */
+ * the user); it belongs to that session, not to its console or project. `anchor_message_id` is stored
+ * only — the rewind linkage that would read it does not exist. */
 export interface Page {
   id: string;
-  console_session_id: string;
+  session_id: string;
   html: string;
-  anchor_message_id?: string | null;
+  anchor_message_id: string | null;
   created_at: number;
 }
 
@@ -513,13 +489,13 @@ export type GitActivity = "idle" | "checking" | "pulling" | "pushing";
 export interface GitStatus {
   project: string;
   repository: boolean;
-  branch?: string | null;
+  branch: string | null;
   detached: boolean;
-  upstream?: string | null;
+  upstream: string | null;
   ahead: number;
   behind: number;
   activity: GitActivity;
-  error?: string | null;
+  error: string | null;
 }
 
 /** Whether a shell terminal's shell is still running. An `exited` terminal stays, its output still
@@ -570,8 +546,8 @@ export interface AgentAvailability {
   /** The directory this agent's default account currently resolves to: the directory its own
    * variable is exported to in the snapshot, else the agent's own usual default. For Grok Build
    * this is the *source* home a session's per-session home would be built from, never the
-   * per-session home itself. Absent exactly while `availability` is `not_determined`. */
-  default_account_dir?: string | null;
+   * per-session home itself. `null` exactly while `availability` is `not_determined`. */
+  default_account_dir: string | null;
 }
 
 /** Where a conversation is held, as `locate_conversation_to_resume` reports it: `archived_session`,
@@ -652,7 +628,7 @@ export interface AccountQuota {
   plan: string | null;
   /** The email the account is signed in with, if the agent's sign-in record gives one; read whether or not the quota
    * could be, and null for an account that is not signed in. */
-  email?: string | null;
+  email: string | null;
   /** Empty when the account has never been read. After a failed re-read the last good windows
    * stay (with their `fetched_at`) and `unavailable` says why the newer attempt failed, so they
    * can be shown as stale. */
@@ -700,48 +676,40 @@ export interface Settings {
    * cleanup deletes nothing. Reopening such a session is refused either way. */
   auto_delete_unresumable_archives: boolean;
   /** Off (the default): a session's `request_session` call waits for the user's answer in a
-   * dialog. On: a request that passes the daemon's checks is approved at once, without asking.
-   * Optional only so that a state built without it reads as off; the daemon always sends it. */
-  auto_approve_session_requests?: boolean;
+   * dialog. On: a request that passes the daemon's checks is approved at once, without asking. */
+  auto_approve_session_requests: boolean;
   /** `auto_approve_session_requests` for a session's `request_resume_session` call, independent of
-   * it. Optional only so that a state built without it reads as off; the daemon always sends it. */
-  auto_approve_resume_requests?: boolean;
+   * it. */
+  auto_approve_resume_requests: boolean;
   /** Off (the default): an owner's `switch_session_account` calls wait for the user's approval.
-   * On: they run without asking. Optional only so that a state built without it reads as off; the
-   * daemon always sends it. */
-  auto_approve_account_switches?: boolean;
-  /** `auto_approve_account_switches` for an owner's `handoff_session` calls, independent of it.
-   * Optional only so that a state built without it reads as off; the daemon always sends it. */
-  auto_approve_handoffs?: boolean;
+   * On: they run without asking. */
+  auto_approve_account_switches: boolean;
+  /** `auto_approve_account_switches` for an owner's `handoff_session` calls, independent of it. */
+  auto_approve_handoffs: boolean;
   /** On (the default): the instructions every session is launched with ask it to put each question
    * that needs the user's decision or answer as options to pick from. Off: they do not. Fixed when a
    * session is launched, so a change reaches only sessions begun afterwards (a console session's
-   * file is rewritten at each launch). Optional only so that a state built without it reads as on;
-   * the daemon always sends it. */
-  ask_questions_as_choices?: boolean;
+   * file is rewritten at each launch). */
+  ask_questions_as_choices: boolean;
   /** The tag of the language the user last picked for the interface (one of `LANGUAGES`), as a
    * client reported it; null until one has. The daemon holds the one most recently reported, for
-   * the instructions it gives sessions. Optional only so that a state built without it reads as none. */
-  interface_language?: string | null;
+   * the instructions it gives sessions. */
+  interface_language: string | null;
   /** Off (the default): a new session uses the account the console or project resolves to. On: it
    * uses the account of that agent whose weekly quota resets soonest, so quota that is about to
-   * reset is used before it is lost. Optional only so that a state built without it reads as off;
-   * the daemon always sends it. */
-  auto_select_account?: boolean;
+   * reset is used before it is lost. */
+  auto_select_account: boolean;
   /** Off (the default): a session whose turn stopped on its account's usage limit stays where it is. On:
-   * Octoboard switches it to another account of its agent by itself and carries on. Optional only so that a state
-   * built without it reads as off; the daemon always sends it. */
-  auto_switch_on_usage_limit?: boolean;
+   * Octoboard switches it to another account of its agent by itself and carries on. */
+  auto_switch_on_usage_limit: boolean;
   /** On (the default): the sidebar ranks sessions and projects by status, so a row moves when its
    * status changes. Off: neither is ranked by status; a project still drops to the inactive group at
-   * the end when its last unarchived session is archived, and leaves it when one is opened again.
-   * Optional only so that a state built without it reads as on; the daemon always sends it. */
-  sidebar_order_by_status?: boolean;
+   * the end when its last unarchived session is archived, and leaves it when one is opened again. */
+  sidebar_order_by_status: boolean;
   /** Off (the default): a usage window that has reset waits for the account's next request to begin
    * counting. On: the daemon starts such a window by sending one small request on that account with
-   * the agent's cheapest model at its lowest effort, then reads the account's quota again. Optional
-   * only so that a state built without it reads as off; the daemon always sends it. */
-  auto_start_quota_windows?: boolean;
+   * the agent's cheapest model at its lowest effort, then reads the account's quota again. */
+  auto_start_quota_windows: boolean;
   /** Where a `git` association clones into when no directory is named: the one the user set, or
    * `~/Projects` expanded while none is. Always an absolute path. */
   default_clone_dir: string;
@@ -752,27 +720,25 @@ export interface Settings {
   accounts: Account[];
   /** The user's order of each agent's accounts, including null for its default account, which clients
    * list them in and automatic account selection takes them in. Missing IDs are appended and stale IDs
-   * ignored. Optional for clients with settings from an older daemon. */
-  account_order?: Partial<Record<Agent, (string | null)[]>>;
+   * ignored. */
+  account_order: Partial<Record<Agent, (string | null)[]>>;
   /** The agents the user has added, in the order the user set; a newly added agent goes last. `null` while the daemon has not
    * yet decided the list (it waits for the agents' availability, and a failed shell snapshot
    * leaves it so for the run); an empty array is a user who removed them all. */
   added_agents: Agent[] | null;
-  /** Every Codex account's approval reviewer; absent or null follows each account's own configuration. */
-  codex_approval_reviewer?: ApprovalReviewer | null;
-  /** Every Claude Code account's approval mode; absent or null follows each account's own configuration. */
-  claude_approval_mode?: ClaudeApprovalMode | null;
+  /** Every Codex account's approval reviewer; `null` follows each account's own configuration. */
+  codex_approval_reviewer: ApprovalReviewer | null;
+  /** Every Claude Code account's approval mode; `null` follows each account's own configuration. */
+  claude_approval_mode: ClaudeApprovalMode | null;
   /** Whether each agent other than Claude Code loads Claude Code's instructions and skills in its sessions, one value for
    * every account of the agent. It carries the value the daemon has in effect (the user's choice, else a default that
-   * follows the agent and the added agents); an agent without an entry, or the field absent from a daemon that predates
-   * it, is read as on, only as a fallback. */
-  claude_compatibility?: Partial<Record<Agent, boolean>>;
+   * follows the agent and the added agents); an agent without an entry is read as on, only as a fallback. */
+  claude_compatibility: Partial<Record<Agent, boolean>>;
   /** The name the user gave an agent's default account, by agent; an agent without an entry shows the client's own
-   * word for it. Absent from a daemon that predates it. */
-  default_account_names?: Partial<Record<Agent, string>>;
-  /** The agents whose default account is turned off for new work, as `Account.disabled` does for an account row.
-   * Absent from a daemon that predates it. */
-  disabled_default_accounts?: Agent[];
+   * word for it. */
+  default_account_names: Partial<Record<Agent, string>>;
+  /** The agents whose default account is turned off for new work, as `Account.disabled` does for an account row. */
+  disabled_default_accounts: Agent[];
 }
 
 /** An account reference of a configuration document: the account's name alone, since the agent is
@@ -791,85 +757,54 @@ export interface DocumentProject {
    * paths out. */
   path: string;
   source: ProjectSource;
-  remote_url?: string | null;
-  default_agent?: Agent | null;
+  remote_url: string | null;
+  default_agent: Agent | null;
   pinned: boolean;
   tags: string[];
-  /** Absent in an older document: none. */
-  description?: string | null;
-  claude_account: DocumentProjectAccount;
-  codex_account: DocumentProjectAccount;
-  grok_account: DocumentProjectAccount;
-  claude_session_model?: string | null;
-  claude_session_effort?: string | null;
-  codex_session_model?: string | null;
-  codex_session_effort?: string | null;
-  grok_session_model?: string | null;
-  grok_session_effort?: string | null;
-  /** Absent in a file exported before the settings existed: every item follows the application-wide value. */
-  git_workflow?: GitWorkflowOverride | null;
+  /** `null` is none. */
+  description: string | null;
+  accounts: PerAgent<DocumentProjectAccount>;
+  launch: PerAgent<Launch>;
+  /** Each item is `null` to follow the application-wide value. */
+  git_workflow: GitWorkflowOverride;
 }
 
 export interface DocumentConsole {
   name: string;
-  icon?: string | null;
+  icon: string | null;
   default_agent: Agent;
-  /** The agent project sessions fall back to; `null` or absent follows `default_agent`. */
-  project_session_agent?: Agent | null;
-  /** Each agent's account by name; `null` or absent is that agent's default account. */
-  claude_account?: AccountName | null;
-  codex_account?: AccountName | null;
-  grok_account?: AccountName | null;
-  claude_console_session_model?: string | null;
-  claude_console_session_effort?: string | null;
-  codex_console_session_model?: string | null;
-  codex_console_session_effort?: string | null;
-  grok_console_session_model?: string | null;
-  grok_console_session_effort?: string | null;
-  /** The console's project session model and effort; absent is none. */
-  claude_project_session_model?: string | null;
-  claude_project_session_effort?: string | null;
-  codex_project_session_model?: string | null;
-  codex_project_session_effort?: string | null;
-  grok_project_session_model?: string | null;
-  grok_project_session_effort?: string | null;
-  /** The console's own addition to its console session's instructions; absent is none. */
-  console_session_prompt?: string | null;
+  /** The agent project sessions fall back to; `null` follows `default_agent`. */
+  project_session_agent: Agent | null;
+  /** Each agent's account by name; `null` is that agent's default account. */
+  accounts: PerAgent<AccountName | null>;
+  launch: PerAgent<Launch>;
+  /** The console's project session model and effort. */
+  project_session_launch: PerAgent<Launch>;
+  /** The console's own addition to its console session's instructions; `null` is none. */
+  console_session_prompt: string | null;
   projects: DocumentProject[];
 }
 
 /** The application settings an export carries when they are chosen. */
 export interface DocumentSettings {
   auto_pull_repositories: boolean;
-  /** Absent in a file exported before the setting existed; applying then leaves it as it is. */
-  auto_delete_unresumable_archives?: boolean | null;
-  /** Absent in a file exported before the setting existed; applying then leaves it as it is. */
-  auto_select_account?: boolean | null;
-  /** Absent in a file exported before the setting existed; applying then leaves it as it is. */
-  auto_switch_on_usage_limit?: boolean | null;
-  /** Absent in a file exported before the setting existed; applying then leaves it as it is. */
-  sidebar_order_by_status?: boolean | null;
-  /** Absent in a file exported before the setting existed; applying then leaves it as it is. */
-  auto_start_quota_windows?: boolean | null;
-  /** Absent in a file exported before the setting was carried; applying then leaves it as it is. */
-  auto_approve_session_requests?: boolean | null;
-  /** Absent in a file exported before the setting was carried; applying then leaves it as it is. */
-  auto_approve_resume_requests?: boolean | null;
-  /** Absent in a file exported before the setting was carried; applying then leaves it as it is. */
-  auto_approve_account_switches?: boolean | null;
-  /** Absent in a file exported before the setting was carried; applying then leaves it as it is. */
-  auto_approve_handoffs?: boolean | null;
-  /** Absent in a file exported before the setting was carried; applying then leaves it as it is. */
-  ask_questions_as_choices?: boolean | null;
-  /** Absent in a file exported before the settings were carried; applying then leaves them as they are. */
-  git_workflow?: DocumentGitWorkflowSettings | null;
-  /** Absent in a file exported before the setting was carried; applying then leaves it as it is. An agent the file does not
-   * list is left as it is. */
-  claude_compatibility?: Partial<Record<Agent, boolean>> | null;
+  auto_delete_unresumable_archives: boolean;
+  auto_select_account: boolean;
+  auto_switch_on_usage_limit: boolean;
+  sidebar_order_by_status: boolean;
+  auto_start_quota_windows: boolean;
+  auto_approve_session_requests: boolean;
+  auto_approve_resume_requests: boolean;
+  auto_approve_account_switches: boolean;
+  auto_approve_handoffs: boolean;
+  ask_questions_as_choices: boolean;
+  git_workflow: GitWorkflowSettings;
+  /** An agent the file does not list is left as it is. */
+  claude_compatibility: Partial<Record<Agent, boolean>>;
   /** The keyboard shortcuts the exporting client changed, by command id: added by the client to the
    * document it saves, never by the daemon, which only carries them through. Absent in a file
    * without them; applying then leaves the client's shortcuts as they are. */
-  keyboard_shortcuts?: Record<string, unknown> | null;
+  keyboard_shortcuts?: unknown;
 }
 
 /** What `export_configuration` answers and a user keeps as a file. The client saves it as it is
@@ -878,12 +813,12 @@ export interface DocumentSettings {
 export interface ConfigurationDocument {
   format: "octoboard-configuration";
   version: number;
-  /** The Octoboard version that exported it, for diagnosis only. Absent in an older file. */
-  exported_by?: string | null;
+  /** The Octoboard version that exported it, for diagnosis only; none when the file does not record it. */
+  exported_by: string | null;
   /** Present exactly when the application settings were exported, whichever consoles. */
-  settings?: DocumentSettings | null;
+  settings: DocumentSettings | null;
   /** Present exactly when the accounts were exported. */
-  accounts?: DocumentAccounts;
+  accounts?: DocumentAccounts | null;
   /** The consoles exported; empty when none was. */
   consoles: DocumentConsole[];
 }
@@ -891,7 +826,7 @@ export interface ConfigurationDocument {
 /** The account structure of a configuration document: never a credential, an id or a quota reading. */
 export interface DocumentAccounts {
   /** The added agents in their order; absent when the exporting machine had not decided the list. */
-  added_agents?: Agent[];
+  added_agents?: Agent[] | null;
   /** An entry for each agent with an account of its own or a named default account. */
   agents: DocumentAgentAccounts[];
 }
@@ -906,7 +841,7 @@ export interface DocumentAgentAccounts {
 /** What a document says of an agent's default account; its directory and disabled flag are not carried. */
 export interface DocumentDefaultAccount {
   /** The name the user gave it; absent or null when unnamed. */
-  name?: string | null;
+  name: string | null;
   /** How many of the agent's accounts come before it in the display order. */
   position: number;
 }
@@ -1026,53 +961,41 @@ export interface InspectedConsole {
 export interface InspectedSettings {
   auto_pull_repositories: boolean;
   current_auto_pull_repositories: boolean;
-  /** Absent when the document predates the setting. */
-  auto_delete_unresumable_archives?: boolean | null;
+  auto_delete_unresumable_archives: boolean;
   current_auto_delete_unresumable_archives: boolean;
-  /** Absent when the document predates the setting. */
-  auto_select_account?: boolean | null;
-  /** This machine's value. Absent when the reply predates the setting. */
-  current_auto_select_account?: boolean;
-  /** Absent when the document predates the setting. */
-  auto_switch_on_usage_limit?: boolean | null;
-  /** This machine's value. Absent when the reply predates the setting. */
-  current_auto_switch_on_usage_limit?: boolean;
-  /** Absent when the document predates the setting. */
-  sidebar_order_by_status?: boolean | null;
-  /** This machine's value. Absent when the reply predates the setting. */
-  current_sidebar_order_by_status?: boolean;
-  /** Absent when the document predates the setting. */
-  auto_start_quota_windows?: boolean | null;
-  /** This machine's value. Absent when the reply predates the setting. */
-  current_auto_start_quota_windows?: boolean;
-  /** Absent when the document predates the setting. */
-  auto_approve_session_requests?: boolean | null;
-  /** This machine's value. Absent when the reply predates the setting. */
-  current_auto_approve_session_requests?: boolean;
-  /** Absent when the document predates the setting. */
-  auto_approve_resume_requests?: boolean | null;
-  /** This machine's value. Absent when the reply predates the setting. */
-  current_auto_approve_resume_requests?: boolean;
-  /** Absent when the document predates the setting. */
-  auto_approve_account_switches?: boolean | null;
-  /** This machine's value. Absent when the reply predates the setting. */
-  current_auto_approve_account_switches?: boolean;
-  /** Absent when the document predates the setting. */
-  auto_approve_handoffs?: boolean | null;
-  /** This machine's value. Absent when the reply predates the setting. */
-  current_auto_approve_handoffs?: boolean;
-  /** Absent when the document predates the setting. */
-  ask_questions_as_choices?: boolean | null;
-  /** This machine's value. Absent when the reply predates the setting. */
-  current_ask_questions_as_choices?: boolean;
-  /** Absent when the document predates the settings. */
-  git_workflow?: DocumentGitWorkflowSettings | null;
-  /** This machine's values. Absent when the reply predates the settings. */
-  current_git_workflow?: GitWorkflowSettings;
-  /** Absent when the document predates the setting. */
-  claude_compatibility?: Partial<Record<Agent, boolean>> | null;
-  /** This machine's values. Absent when the reply predates the setting. */
-  current_claude_compatibility?: Partial<Record<Agent, boolean>>;
+  auto_select_account: boolean;
+  /** This machine's value. */
+  current_auto_select_account: boolean;
+  auto_switch_on_usage_limit: boolean;
+  /** This machine's value. */
+  current_auto_switch_on_usage_limit: boolean;
+  sidebar_order_by_status: boolean;
+  /** This machine's value. */
+  current_sidebar_order_by_status: boolean;
+  auto_start_quota_windows: boolean;
+  /** This machine's value. */
+  current_auto_start_quota_windows: boolean;
+  auto_approve_session_requests: boolean;
+  /** This machine's value. */
+  current_auto_approve_session_requests: boolean;
+  auto_approve_resume_requests: boolean;
+  /** This machine's value. */
+  current_auto_approve_resume_requests: boolean;
+  auto_approve_account_switches: boolean;
+  /** This machine's value. */
+  current_auto_approve_account_switches: boolean;
+  auto_approve_handoffs: boolean;
+  /** This machine's value. */
+  current_auto_approve_handoffs: boolean;
+  ask_questions_as_choices: boolean;
+  /** This machine's value. */
+  current_ask_questions_as_choices: boolean;
+  git_workflow: GitWorkflowSettings;
+  /** This machine's values. */
+  current_git_workflow: GitWorkflowSettings;
+  claude_compatibility: Partial<Record<Agent, boolean>>;
+  /** This machine's values. */
+  current_claude_compatibility: Partial<Record<Agent, boolean>>;
 }
 
 /** An `error` reply's `code`, `params` and `message`, for something an import could not do. */
@@ -1289,8 +1212,14 @@ export interface LineStats {
  * right's. `stats` is what the change adds and removes; absent where the daemon does not count it
  * (see "Changes and comparisons" in `apps/daemon/PROTOCOL.md`). */
 export type ChangeEntry =
-  | { group: ChangeGroup | "committed"; old: ChangeSide; new: ChangeSide; stats?: LineStats }
+  | TwoSidedChange<ChangeGroup>
+  | TwoSidedChange<"committed">
   | { group: "conflicted"; path: string; conflict: ConflictKind };
+
+/** The daemon writes one shape per group, so the groups are separate members of the union. */
+type TwoSidedChange<G extends string> = G extends unknown
+  ? { group: G; old: ChangeSide; new: ChangeSide; stats?: LineStats }
+  : never;
 
 /** A remote-tracking branch with the commit it is at as of the last fetch: a branch's upstream, or the
  * remote default branch, `name` being below `refs/remotes/` (such as `origin/main`). */
@@ -1380,26 +1309,13 @@ export type RequestBody =
     default_agent: Agent;
     /** Absent means project sessions follow `default_agent`. */
     project_session_agent?: Agent;
-    /** Each agent's account, by id; absent means that agent's default account. */
-    claude_account_id?: string;
-    codex_account_id?: string;
-    grok_account_id?: string;
-    /** Each agent's model and reasoning effort for the console's console sessions; absent or
-       * blank means the agent's own default. */
-    claude_console_session_model?: string;
-    claude_console_session_effort?: string;
-    codex_console_session_model?: string;
-    codex_console_session_effort?: string;
-    grok_console_session_model?: string;
-    grok_console_session_effort?: string;
-    /** Each agent's model and reasoning effort for project sessions whose project and session name
-       * none; absent or blank means the agent's own default. */
-    claude_project_session_model?: string;
-    claude_project_session_effort?: string;
-    codex_project_session_model?: string;
-    codex_project_session_effort?: string;
-    grok_project_session_model?: string;
-    grok_project_session_effort?: string;
+    /** Each agent's account, by id; an agent left out means its default account. */
+    accounts?: Partial<PerAgent<string>>;
+    /** Each agent's model and reasoning effort for the console's console sessions; an agent or a
+       * field left out, or blank, means the agent's own default. */
+    launch?: Partial<PerAgent<{ model?: string; effort?: string }>>;
+    /** The same for project sessions whose project and session name none. */
+    project_session_launch?: Partial<PerAgent<{ model?: string; effort?: string }>>;
     icon?: string;
     /** Absent or blank means no addition to the console session's instructions. */
     console_session_prompt?: string;
@@ -1412,26 +1328,14 @@ export type RequestBody =
     /** Absent leaves it alone; an explicit `null` makes project sessions follow `default_agent`
        * again. */
     project_session_agent?: Agent | null;
-    /** Each agent's account: absent leaves it alone; an explicit `null` clears it back to that
-       * agent's default account. */
-    claude_account_id?: string | null;
-    codex_account_id?: string | null;
-    grok_account_id?: string | null;
-    /** Each agent's console session model and effort: absent leaves it alone; an explicit `null`
-       * (or a blank string) clears it back to the agent's own default. */
-    claude_console_session_model?: string | null;
-    claude_console_session_effort?: string | null;
-    codex_console_session_model?: string | null;
-    codex_console_session_effort?: string | null;
-    grok_console_session_model?: string | null;
-    grok_console_session_effort?: string | null;
+    /** Each agent's account: an agent left out is left alone; an explicit `null` clears it back to
+       * that agent's default account. */
+    accounts?: Partial<PerAgent<string | null>>;
+    /** Each agent's console session model and effort: an agent or a field left out is left alone;
+       * an explicit `null` (or a blank string) clears it back to the agent's own default. */
+    launch?: Partial<PerAgent<LaunchChange>>;
     /** Each agent's project session model and effort, with the same rule. */
-    claude_project_session_model?: string | null;
-    claude_project_session_effort?: string | null;
-    codex_project_session_model?: string | null;
-    codex_project_session_effort?: string | null;
-    grok_project_session_model?: string | null;
-    grok_project_session_effort?: string | null;
+    project_session_launch?: Partial<PerAgent<LaunchChange>>;
     /** Absent leaves the avatar alone; an explicit `null` clears it back to the default glyph. */
     icon?: string | null;
     /** Absent leaves the addition alone; an explicit `null` (or a blank string) clears it. */
@@ -1447,18 +1351,11 @@ export type RequestBody =
     remote_url?: string;
     name?: string;
     default_agent?: Agent;
-    /** Each agent's account; absent or `null` means inheriting the console's reference. */
-    claude_account_id?: ProjectAccount | null;
-    codex_account_id?: ProjectAccount | null;
-    grok_account_id?: ProjectAccount | null;
-    /** Each agent's model and reasoning effort for the project's sessions; absent or blank means
-       * the agent's own default. */
-    claude_session_model?: string;
-    claude_session_effort?: string;
-    codex_session_model?: string;
-    codex_session_effort?: string;
-    grok_session_model?: string;
-    grok_session_effort?: string;
+    /** Each agent's account; an agent left out means inheriting the console's reference. */
+    accounts?: Partial<PerAgent<ProjectAccount>>;
+    /** Each agent's model and reasoning effort for the project's sessions; an agent or a field left
+       * out, or blank, means the agent's own default. */
+    launch?: Partial<PerAgent<{ model?: string; effort?: string }>>;
     /** Whether an absent `default_agent` is detected from each directory's marker files; absent
        * means true. Sent false by a client that has already shown the detection to the user. */
     detect_default_agent?: boolean;
@@ -1478,19 +1375,12 @@ export type RequestBody =
        * how the project goes back to inheriting the console's default — the two must stay
        * distinguishable, so this field is never sent as `undefined` when the user means "clear". */
     default_agent?: Agent | null;
-    /** Each agent's account: absent leaves it alone; an explicit `null` puts it back to
+    /** Each agent's account: an agent left out is left alone; an explicit `null` puts it back to
        * inheriting the console's reference. */
-    claude_account_id?: ProjectAccount | null;
-    codex_account_id?: ProjectAccount | null;
-    grok_account_id?: ProjectAccount | null;
-    /** Each agent's model and effort for the project's sessions: absent leaves it alone; an
-       * explicit `null` (or a blank string) clears it back to the agent's own default. */
-    claude_session_model?: string | null;
-    claude_session_effort?: string | null;
-    codex_session_model?: string | null;
-    codex_session_effort?: string | null;
-    grok_session_model?: string | null;
-    grok_session_effort?: string | null;
+    accounts?: Partial<PerAgent<ProjectAccount | null>>;
+    /** Each agent's model and effort for the project's sessions: an agent or a field left out is
+       * left alone; an explicit `null` (or a blank string) clears it back to the agent's own default. */
+    launch?: Partial<PerAgent<LaunchChange>>;
     /** Absent leaves the project's pin alone. */
     pinned?: boolean;
     /** Absent leaves the project's tags alone; a present array replaces them wholesale. */
@@ -1689,7 +1579,8 @@ export type RequestBody =
   /** Unbinds a bound project session from its owner, whoever it is: it becomes the user's own,
    * unbound session, keeping the sessions bound to it and its branches. */
   | { type: "release_session"; session: string }
-  | { type: "list_pages"; console_session: string }
+  | { type: "interrupt_session"; session: string }
+  | { type: "list_pages"; session: string }
   /** What a report panel form was submitted with. The page is named rather than the console
    * session: it is what the panel knows, and it names the console session the submission goes to.
    * Only that console session's newest page may be submitted from. */
@@ -1899,7 +1790,7 @@ export type RequestBody =
     type: "read_project_commit_change";
     project: string;
     commit: string;
-    parent: string | null;
+    parent?: string | null;
     change: { old: SideRef; new: SideRef };
     slot?: string;
   }
@@ -1908,7 +1799,7 @@ export type RequestBody =
     type: "read_project_commit_change_bodies";
     project: string;
     commit: string;
-    parent: string | null;
+    parent?: string | null;
     change: { old: SideRef; new: SideRef };
     old: SideVersion;
     new: SideVersion;
@@ -1921,19 +1812,19 @@ export type Request = RequestBody & { id?: string };
 
 export type Event =
   /** `unavailable` is set when the agent's record is not found or cannot be read. */
-  | { type: "session_history"; id?: string; session: string; messages: HistoryMessage[]; unavailable?: boolean }
-  | { type: "session_records_inspected"; id?: string; presence: SessionRecordsPresence }
-  | { type: "session_branches_inspected"; id?: string; items: SessionBranchItem[]; processes?: ProcessTree[] }
-  | { type: "account_trash_inspected"; id?: string; outcome: AccountTrashOutcome }
-  | { type: "processes_listed"; id?: string; trees: ProcessTree[] }
+  | { type: "session_history"; id: string | null; session: string; messages: HistoryMessage[]; unavailable?: boolean }
+  | { type: "session_records_inspected"; id: string | null; presence: SessionRecordsPresence }
+  | { type: "session_branches_inspected"; id: string | null; items: SessionBranchItem[]; processes?: ProcessTree[] }
+  | { type: "account_trash_inspected"; id: string | null; outcome: AccountTrashOutcome }
+  | { type: "processes_listed"; id: string | null; trees: ProcessTree[] }
   /** `ids` are the trees that were stopped. */
-  | { type: "processes_stopped"; id?: string; ids: string[] }
+  | { type: "processes_stopped"; id: string | null; ids: string[] }
   /** `ids` are the trees that were kept. */
-  | { type: "processes_kept"; id?: string; ids: string[] }
+  | { type: "processes_kept"; id: string | null; ids: string[] }
   /** `processes` are the project's processes, which its removal stops (`ProcessTree`s with no `session_id`).
    * `inspection` is the token the worktrees it held back are kept under, those of which whether they are or hold another
    * project's folder could not be told, for `delete_project` to send back so that they stay held back. */
-  | { type: "project_removal_inspected"; id?: string; items: SessionBranchItem[]; processes: ProcessTree[]; inspection?: string }
+  | { type: "project_removal_inspected"; id: string | null; items: SessionBranchItem[]; processes: ProcessTree[]; inspection?: string }
   | {
     type: "snapshot";
     hosts: Host[];
@@ -1991,7 +1882,7 @@ export type Event =
   | { type: "shell_terminal_deleted"; shell_terminal: string }
   /** The reply to `create_shell_terminal`. The same record is also broadcast as
    * `shell_terminal_upserted`, which carries no request id. */
-  | { type: "shell_terminal_created"; id?: string; shell_terminal: ShellTerminal }
+  | { type: "shell_terminal_created"; id: string | null; shell_terminal: ShellTerminal }
   | { type: "settings_updated"; settings: Settings }
   | { type: "session_upserted"; session: Session }
   | { type: "session_deleted"; session: string }
@@ -2004,7 +1895,7 @@ export type Event =
    * was started. The same record is also broadcast as `session_upserted`, but that broadcast
    * carries no request id, so this is the only way the caller can tell which session in the tree
    * is the one it just opened. */
-  | { type: "session_opened"; id?: string; session: Session }
+  | { type: "session_opened"; id: string | null; session: Session }
   /** A session of a project the user has not agreed Octoboard may press trust confirmations for is
    * at its agent's folder-trust confirmation, which asks whether `path` is trusted; `agent` is the
    * one asking. Broadcast once per confirmation, and sent again to a client right after each
@@ -2078,32 +1969,32 @@ export type Event =
     request_id: string;
     reason: "approved" | "refused" | "timed_out" | "withdrawn";
   }
-  | { type: "dir_listing"; id?: string; path: string; entries: DirEntry[] }
+  | { type: "dir_listing"; id: string | null; path: string; entries: DirEntry[] }
   /** The reply to `detect_directory_agent` and `probe_git_remote`: the one agent the project is set
    * up for, or null for none, several, or one known not to be installed. */
-  | { type: "agent_detected"; id?: string; agent: Agent | null }
+  | { type: "agent_detected"; id: string | null; agent: Agent | null }
   /** The reply to `list_agent_models`; `agent` and `account` echo the request. `models` is empty
    * exactly when `unavailable` says why, and a form then falls back to the agent's own default
    * rather than failing. */
   | {
     type: "agent_models";
-    id?: string;
+    id: string | null;
     agent: Agent;
     account: string | null;
     models: AgentModel[];
     unavailable: ModelsUnavailable | null;
   }
   /** The reply to `locate_conversation_to_resume`. */
-  | { type: "conversation_located"; id?: string; location: ConversationLocation }
+  | { type: "conversation_located"; id: string | null; location: ConversationLocation }
   /** The reply to `export_configuration`: the document to save as a file. */
-  | { type: "configuration_exported"; id?: string; document: ConfigurationDocument }
+  | { type: "configuration_exported"; id: string | null; document: ConfigurationDocument }
   /** The reply to `inspect_configuration`: one entry per console of the document, in its order,
    * `settings` and `accounts` when the document carries any. */
   | {
     type: "configuration_inspected";
-    id?: string;
-    settings?: InspectedSettings | null;
-    accounts?: InspectedAccounts | null;
+    id: string | null;
+    settings: InspectedSettings | null;
+    accounts: InspectedAccounts | null;
     consoles: InspectedConsole[];
   }
   /** The reply to `import_configuration`: what came of the settings and accounts asked for, and one
@@ -2111,31 +2002,31 @@ export type Event =
    * project that went wrong is reported in it rather than failing the request. */
   | {
     type: "configuration_imported";
-    id?: string;
-    settings_applied?: DocumentSettings | null;
-    settings_error?: ImportFailure | null;
+    id: string | null;
+    settings_applied: DocumentSettings | null;
+    settings_error: ImportFailure | null;
     /** Present only when `apply_accounts` was sent. */
-    accounts?: ImportedAccounts | null;
+    accounts: ImportedAccounts | null;
     consoles: ImportedConsole[];
   }
   /** The reply to `probe_path_links`: one entry per path asked, in order, `path` as asked. */
-  | { type: "path_links"; id?: string; links: { path: string; kind: PathLinkKind; view?: PathLinkView; viewer_only?: boolean }[] }
+  | { type: "path_links"; id: string | null; links: { path: string; kind: PathLinkKind; view?: PathLinkView; viewer_only?: boolean }[] }
   /** The reply to `list_pages`, oldest first. Pages are not in `snapshot` — a page carries a whole
    * HTML document — so the panel asks for them, and asks again after every `snapshot`: a client
    * that falls too far behind the daemon's broadcasts is sent a fresh snapshot in place of the
    * events it missed, on the same socket, so re-listing is the only way back to a correct list. */
-  | { type: "page_list"; id?: string; console_session_id: string; pages: Page[] }
+  | { type: "page_list"; id: string | null; session_id: string; pages: Page[] }
   /** A page a session just pushed. The panel showing that session refreshes to it. */
   | { type: "page_created"; page: Page }
-  /** Pages the session `console_session_id` withdrew with `delete_pages`, by id. The panel showing
-   * that session drops them. */
-  | { type: "pages_deleted"; console_session_id: string; pages: string[] }
-  | { type: "project_source"; id?: string; source: ProjectSourceInfo }
+  /** Pages the session `session_id` withdrew with `delete_pages`, by id. The panel showing that
+   * session drops them. */
+  | { type: "pages_deleted"; session_id: string; pages: string[] }
+  | { type: "project_source"; id: string | null; source: ProjectSourceInfo }
   /** `project`, `worktree` and `path` echo the request; `complete` is false when the listing was
    * cut at a budget or an entry could not be read. */
   | {
     type: "project_dir";
-    id?: string;
+    id: string | null;
     project: string;
     worktree: string | null;
     path: string;
@@ -2146,7 +2037,7 @@ export type Event =
   /** Recursive filename matches in canonical wire path form; incomplete when bounded or unreadable. */
   | {
     type: "project_file_matches";
-    id?: string;
+    id: string | null;
     project: string;
     query: string;
     paths: string[];
@@ -2156,7 +2047,7 @@ export type Event =
   }
   | {
     type: "project_file";
-    id?: string;
+    id: string | null;
     project: string;
     worktree: string | null;
     path: string;
@@ -2167,7 +2058,7 @@ export type Event =
    * `complete` is false when the list was cut at a budget. */
   | {
     type: "project_changes";
-    id?: string;
+    id: string | null;
     project: string;
     worktree: string | null;
     head: string | null;
@@ -2179,7 +2070,7 @@ export type Event =
    * made (an untracked file, a side outside the project). */
   | {
     type: "project_change";
-    id?: string;
+    id: string | null;
     project: string;
     worktree: string | null;
     group: ChangeGroup;
@@ -2189,13 +2080,13 @@ export type Event =
     patch: FileContent | null;
   }
   /** In byte order of the names; `complete` is false when the list was cut at a budget. */
-  | { type: "project_branches"; id?: string; project: string; branches: BranchInfo[]; complete: boolean; upstreams_complete?: boolean; default_branch?: UpstreamInfo }
+  | { type: "project_branches"; id: string | null; project: string; branches: BranchInfo[]; complete: boolean; upstreams_complete?: boolean; default_branch?: UpstreamInfo }
   /** `left` and `right` are the branches as asked for and the commits they were resolved to, and
    * `base` the commit they forked at (their merge base); every change in `changes` (all
    * `committed`) is between exactly `base` and `right`'s commit. */
   | {
     type: "project_comparison";
-    id?: string;
+    id: string | null;
     project: string;
     left: ComparisonEndpoint;
     right: ComparisonEndpoint;
@@ -2207,7 +2098,7 @@ export type Event =
    * side from `right`'s commit. */
   | {
     type: "project_comparison_change";
-    id?: string;
+    id: string | null;
     project: string;
     left: ComparisonEndpoint;
     right: ComparisonEndpoint;
@@ -2219,7 +2110,7 @@ export type Event =
   /** Both sides of the change with their whole bodies in `file`, each present or absent. */
   | {
     type: "project_change_bodies";
-    id?: string;
+    id: string | null;
     project: string;
     worktree: string | null;
     group: ChangeGroup;
@@ -2229,7 +2120,7 @@ export type Event =
   /** `left`, `right` and `base` echo the request. */
   | {
     type: "project_comparison_change_bodies";
-    id?: string;
+    id: string | null;
     project: string;
     left: ComparisonEndpoint;
     right: ComparisonEndpoint;
@@ -2241,7 +2132,7 @@ export type Event =
    * changes were cut at a budget, `commits_complete` when there were more commits than listed. */
   | {
     type: "project_commits";
-    id?: string;
+    id: string | null;
     project: string;
     base: string;
     tip: string;
@@ -2253,7 +2144,7 @@ export type Event =
    * none) and the new side from `commit`. */
   | {
     type: "project_commit_change";
-    id?: string;
+    id: string | null;
     project: string;
     commit: string;
     parent: string | null;
@@ -2264,25 +2155,28 @@ export type Event =
   /** `commit` and `parent` echo the request. */
   | {
     type: "project_commit_change_bodies";
-    id?: string;
+    id: string | null;
     project: string;
     commit: string;
     parent: string | null;
     old: SideRead;
     new: SideRead;
   }
-  | { type: "ack"; id?: string }
+  | { type: "ack"; id: string | null }
+  /** The reply to `interrupt_session`: whether the turn ended, the session's status by then, and `note`, in prose,
+   * what the caller is to know about what was or was not sent. */
+  | { type: "session_interrupted"; id: string | null; session: string; interrupted: boolean; status: SessionStatus; note: string }
   /** The answer to `set_session_model`: `unchanged` when the session had those values already, `recorded`
    * when it had no process and keeps them for its next resume, `restarted` when its process was relaunched
    * with them. `continued` is only with `restarted`: whether the relaunch was sent the prompt to carry on
    * with its task. */
-  | { type: "session_model_set"; id?: string; session: string; outcome: "unchanged" | "recorded" | "restarted"; continued?: boolean }
+  | { type: "session_model_set"; id: string | null; session: string; outcome: "unchanged" | "recorded" | "restarted"; continued?: boolean }
   /** A failure, worded from `code` and `params` (see `daemonMessage.ts`); `message` is the English
    * text, shown for a code the client does not know. A client also branches on some codes — see
    * `ALREADY_RUNNING_CODES`, `TRUST_REFUSED_CODES`, `TRUST_NOT_WAITING`,
    * `SESSION_REQUEST_NOT_WAITING`, `SESSION_REQUEST_ANSWERED`, `REQUEST_SUPERSEDED`,
    * `SOURCE_CHANGED` and `WORKTREE_UNAVAILABLE`. */
-  | { type: "error"; id?: string; code: string; params: MessageParams; message: string };
+  | { type: "error"; id: string | null; code: string; params: MessageParams; message: string };
 
 /** The named values a daemon message is filled with. `console`, `project` and `session` are record
  * ids, which `daemonMessage` shows as the record's name; the rest is text to show as is. */

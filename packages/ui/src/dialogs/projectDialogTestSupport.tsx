@@ -4,11 +4,12 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, vi } from "vitest";
 
-import { consoleOf, projectOf } from "../gallery/fixtures/builders";
-import type { Account, Agent, AgentAvailability, Console, Event, Project, RequestBody } from "../protocol";
+import { accountOf, type ConsoleExtra, consoleOf, projectOf } from "../gallery/fixtures/builders";
+import type { Account, Agent, AgentAvailability, Event, Project, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { ProjectDialog } from "./ProjectDialog";
 import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
+import { DEFAULT_SETTINGS } from "../defaultSettings";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -23,24 +24,24 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-export const work: Account = { id: "a-work", agent: "claude", name: "Work", config_dir: "/home/dev/.claude-work" };
-export const personal: Account = { id: "a-personal", agent: "claude", name: "Personal", config_dir: "/home/dev/.claude-personal" };
+export const work: Account = accountOf("a-work", "claude", "Work", "/home/dev/.claude-work");
+export const personal: Account = accountOf("a-personal", "claude", "Personal", "/home/dev/.claude-personal");
 
 export function render(
   editing?: Project,
   accounts: Account[] = [],
-  consoleOverride: Partial<Console> = {},
+  consoleOverride: ConsoleExtra = {},
   availability: Partial<Record<Agent, AgentAvailability["availability"]>> = {},
   added: Agent[] | null = null,
 ) {
   const pending: Pending[] = [];
   const daemon: Daemon = {
     store: createStateStore({
-      consoles: new Map([["c-1", consoleOf("c-1", "Main", { claude_account_id: accounts[0]?.id, ...consoleOverride })]]),
+      consoles: new Map([["c-1", consoleOf("c-1", "Main", { accounts: { claude: accounts[0]?.id }, ...consoleOverride })]]),
       agentAvailability: new Map(
-        (["claude", "codex", "grok"] as Agent[]).map((agent) => [agent, { agent, availability: availability[agent] ?? "not_determined" }]),
+        (["claude", "codex", "grok"] as Agent[]).map((agent) => [agent, { agent, availability: availability[agent] ?? "not_determined", default_account_dir: null }]),
       ),
-      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
+      settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
     }),
     request: (body) => new Promise((resolve, reject) => pending.push({ body, resolve, reject })),
     toastError: vi.fn(),
@@ -76,7 +77,7 @@ export function type(el: HTMLInputElement | HTMLTextAreaElement, value: string) 
 export const settle = (ms: number) => act(async () => void (await vi.advanceTimersByTimeAsync(ms)));
 export const click = (el: HTMLElement | undefined) => act(async () => el?.click());
 export const answer = (request: Pending | undefined, agent: Agent | null) =>
-  act(async () => request?.resolve({ type: "agent_detected", agent }));
+  act(async () => request?.resolve({ type: "agent_detected", id: null, agent }));
 
 export async function chooseSource(label: string) {
   await click(Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent?.includes("A single directory")));
@@ -100,8 +101,5 @@ export async function fillDirectory(pending: Pending[]) {
 
 export const stored = projectOf("p-1", "c-1", "Site", {
   default_agent: "claude",
-  claude_account_id: { kind: "account", id: "a-work" },
-  claude_session_model: "alpha",
-  claude_session_effort: "high",
-  codex_session_model: "retired",
+  accounts: { claude: { kind: "account", id: "a-work" } }, launch: { claude: { model: "alpha", effort: "high" }, codex: { model: "retired" } },
 });

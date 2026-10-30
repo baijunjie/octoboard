@@ -117,7 +117,7 @@ fn outcome(changed: &Session, change: ModelChange) -> Value {
 mod tests {
     use super::*;
     use crate::mcp::exec::tests::{arguments, peer_state, shared_console_state};
-    use crate::protocol::Agent;
+    use crate::protocol::{Agent, OrchestrationRole};
     use crate::term::{Launch, LaunchRequest};
     use crate::test_support::{
         output_containing, running, stand_in_launch, within, Launched, ScratchDir, StandIn,
@@ -762,7 +762,14 @@ mod tests {
         let original = live_and_watched(&state, "mine");
         assert!(state
             .store
-            .set_binding("mine", Some("starter"), "a", false, false, false)
+            .set_binding(
+                "mine",
+                Some("starter"),
+                "a",
+                OrchestrationRole::Worker,
+                false,
+                false
+            )
             .unwrap()
             .is_some());
 

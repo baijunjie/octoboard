@@ -1,9 +1,10 @@
-import { DEFAULT_GIT_WORKFLOW, FOLLOWING_GIT_WORKFLOW } from "../../gitWorkflow";
-import type { Agent, AgentAvailability, RelocationCause, Settings } from "../../protocol";
+import { DEFAULT_SETTINGS } from "../../defaultSettings";
+import { FOLLOWING_GIT_WORKFLOW } from "../../gitWorkflow";
+import type { Agent, AgentAvailability, Console, RelocationCause, Settings } from "../../protocol";
 import { describing, type Ui } from "../interact";
 import type { Scenario, Step } from "../scenario";
 import type { FixtureError } from "./projectFiles";
-import { ALL_AGENTS, SAMPLE, branchItemOf, consoleOf, keptOf, leftoverOf, minutesAgo, processTreeOf, projectOf, sessionOf, snapshotState, switchingAccount, unknownFolderWorktreeOf, worktreeItemOf } from "./builders";
+import { accountOf, ALL_AGENTS, SAMPLE, branchItemOf, consoleOf, consoleWith, keptOf, leftoverOf, minutesAgo, processTreeOf, projectOf, projectWith, sessionOf, snapshotState, switchingAccount, unknownFolderWorktreeOf, worktreeItemOf } from "./builders";
 import { agentAvailability } from "./liveChanges";
 import { SAMPLE_CODEX_MODELS } from "./agentModels";
 import { IMAGES } from "./viewerImages";
@@ -54,14 +55,12 @@ const accountsState = snapshotState({
   projects: [web, api],
   sessions,
   settings: {
-    auto_pull_repositories: false,
-    auto_delete_unresumable_archives: true,
+    ...DEFAULT_SETTINGS,
     added_agents: ALL_AGENTS,
     default_clone_dir: "/Users/dev/Projects",
-    git_workflow: DEFAULT_GIT_WORKFLOW,
     accounts: [
-      { id: "a-work", agent: "claude", name: "Work account for release coordination across all production services مرحبا 发布", config_dir: "/Users/dev/.claude-work" },
-      { id: "a-personal", agent: "claude", name: "Personal account for documentation and experimental development مرحبا 发布", config_dir: "/Users/dev/.claude-personal" },
+      accountOf("a-work", "claude", "Work account for release coordination across all production services مرحبا 发布", "/Users/dev/.claude-work"),
+      accountOf("a-personal", "claude", "Personal account for documentation and experimental development مرحبا 发布", "/Users/dev/.claude-personal"),
     ],
   },
 });
@@ -113,7 +112,7 @@ const RETIRED_EFFORT = "retired-effort-for-production-release-coordination-مر�
 // A console that carries a stored model and effort for its default agent: the model is one the
 // dialog's list no longer names, so it is offered on the end, marked.
 const launchSettingsState = snapshotState({
-  consoles: [{ ...console_, claude_console_session_model: RETIRED_MODEL, claude_console_session_effort: RETIRED_EFFORT }],
+  consoles: [consoleWith(console_, { launch: { claude: { model: RETIRED_MODEL, effort: RETIRED_EFFORT } } })],
   projects: [web, api],
   sessions,
 });
@@ -129,12 +128,11 @@ const avatarState = snapshotState({
 // refers to another account, so the project's account picker names what "Same as console" resolves to.
 const configured = projectOf("p-configured", console_.id, "Configured Site", {
   default_agent: "claude",
-  claude_account_id: { kind: "account", id: "a-work" },
-  claude_session_model: RETIRED_MODEL,
-  claude_session_effort: RETIRED_EFFORT,
+  accounts: { claude: { kind: "account", id: "a-work" } },
+  launch: { claude: { model: RETIRED_MODEL, effort: RETIRED_EFFORT } },
 });
 const configuredState = snapshotState({
-  consoles: [{ ...console_, claude_account_id: "a-personal" }],
+  consoles: [consoleWith(console_, { accounts: { claude: "a-personal" } })],
   projects: [configured],
   sessions: [],
   settings: accountsState.settings,
@@ -144,10 +142,10 @@ const configuredState = snapshotState({
 // the account picker's second entry exists for.
 const onDefault = projectOf("p-default-account", console_.id, "Default Account Site", {
   default_agent: "claude",
-  claude_account_id: { kind: "default" },
+  accounts: { claude: { kind: "default" } },
 });
 const onDefaultState = snapshotState({
-  consoles: [{ ...console_, claude_account_id: "a-personal" }],
+  consoles: [consoleWith(console_, { accounts: { claude: "a-personal" } })],
   projects: [onDefault],
   sessions: [],
   settings: accountsState.settings,
@@ -157,7 +155,7 @@ const onDefaultState = snapshotState({
 // project session model and effort: everything it shows resolves through "Same as console".
 const inheriting = projectOf("p-inheriting", console_.id, "Inheriting Site");
 const inheritingState = snapshotState({
-  consoles: [{ ...console_, claude_account_id: "a-personal", claude_project_session_model: RETIRED_MODEL, claude_project_session_effort: RETIRED_EFFORT }],
+  consoles: [consoleWith(console_, { accounts: { claude: "a-personal" }, project_session_launch: { claude: { model: RETIRED_MODEL, effort: RETIRED_EFFORT } } })],
   projects: [inheriting],
   sessions: [],
   settings: accountsState.settings,
@@ -207,11 +205,11 @@ const withAddedAgents = <S extends { settings?: Settings }>(state: S, added: Age
 // a second account to choose between; Grok Build has only its default account.
 const mixedSettings = {
   ...accountsState.settings!,
-  accounts: [...accountsState.settings!.accounts, { id: "a-codex", agent: "codex" as const, name: "Codex personal", config_dir: "/Users/dev/.codex-personal" }],
+  accounts: [...accountsState.settings!.accounts, accountOf("a-codex", "codex", "Codex personal", "/Users/dev/.codex-personal")],
 };
 const mixedState = (missing: Agent[]) => ({
   ...snapshotState({
-    consoles: [{ ...console_, project_session_agent: "codex" as const, claude_account_id: "a-work", codex_account_id: "a-codex", codex_project_session_model: SAMPLE_CODEX_MODELS[0].id }],
+    consoles: [consoleWith(console_, { project_session_agent: "codex", accounts: { claude: "a-work", codex: "a-codex" }, project_session_launch: { codex: { model: SAMPLE_CODEX_MODELS[0].id } } })],
     projects: [web, api],
     sessions,
     settings: mixedSettings,
@@ -294,13 +292,11 @@ const ROOT_LISTING = ["Applications", "Library", "System", "Users", "Volumes", "
 const dialogState = {
   ...accountsState,
   consoles: new Map([
-    [console_.id, {
-      ...launchSettingsState.consoles!.get(console_.id)!,
+    [console_.id, consoleWith(launchSettingsState.consoles!.get(console_.id)!, {
       icon: avatarState.consoles!.get(console_.id)!.icon,
-      claude_account_id: "a-personal",
-      claude_project_session_model: "sonnet",
-      claude_project_session_effort: "low",
-    }],
+      accounts: { claude: "a-personal" },
+      project_session_launch: { claude: { model: "sonnet", effort: "low" } },
+    })],
     ["c-plain", consoleOf("c-plain", "Plain console")],
   ]),
   projects: new Map([...accountsState.projects!, ...taggedState.projects!, ...configuredState.projects!, ...onDefaultState.projects!]),
@@ -317,19 +313,17 @@ const removedAgentsState = (() => {
       ...base.settings,
       accounts: [
         ...base.settings.accounts,
-        { id: "a-codex", agent: "codex" as const, name: "Codex personal", config_dir: "/Users/dev/.codex-personal" },
-        { id: "a-grok", agent: "grok" as const, name: "Grok team", config_dir: "/Users/dev/.grok-team" },
+        accountOf("a-codex", "codex", "Codex personal", "/Users/dev/.codex-personal"),
+        accountOf("a-grok", "grok", "Grok team", "/Users/dev/.grok-team"),
       ],
     },
-    consoles: new Map([[console_.id, {
-      ...console_,
-      default_agent: "grok" as const,
-      project_session_agent: "codex" as const,
-      codex_account_id: "a-codex",
-      grok_account_id: "a-grok",
-      codex_project_session_model: SAMPLE_CODEX_MODELS[0].id,
-      grok_console_session_model: "grok-code-fast-1",
-    }]]),
+    consoles: new Map([[console_.id, consoleWith(console_, {
+      default_agent: "grok",
+      project_session_agent: "codex",
+      accounts: { codex: "a-codex", grok: "a-grok" },
+      project_session_launch: { codex: { model: SAMPLE_CODEX_MODELS[0].id } },
+      launch: { grok: { model: "grok-code-fast-1" } },
+    })]]),
   };
 })();
 
@@ -393,12 +387,9 @@ const sessionLaunchState = {
   ...dialogState,
   // The open-session buttons share one label; keep the confirmation target's project alone
   // rather than depending on the first button of the alphabetically sorted sidebar.
-  projects: new Map([[web.id, {
-    ...web,
-    claude_session_model: "opus",
-    codex_session_model: SAMPLE_CODEX_MODELS[0].id,
-    codex_session_effort: "xhigh",
-  }]]),
+  projects: new Map([[web.id, projectWith(web, {
+    launch: { claude: { model: "opus" }, codex: { model: SAMPLE_CODEX_MODELS[0].id, effort: "xhigh" } },
+  })]]),
   sessions: new Map([...dialogState.sessions].filter(([, session]) => !session.project_id || session.project_id === web.id)),
 };
 
@@ -416,7 +407,7 @@ const resumeState = {
     ...accountsState.settings!,
     accounts: [
       ...accountsState.settings!.accounts,
-      { id: "a-codex-team", agent: "codex" as const, name: "Team Codex for release coordination across production services مرحبا 发布", config_dir: "/Users/dev/.codex-team" },
+      accountOf("a-codex-team", "codex", "Team Codex for release coordination across production services مرحبا 发布", "/Users/dev/.codex-team"),
     ],
   },
 };
@@ -446,13 +437,9 @@ const resumeLookup: Step[] = [
 
 const consoleSessionLaunchState = {
   ...sessionLaunchState,
-  consoles: new Map([[console_.id, {
-    ...dialogState.consoles.get(console_.id)!,
-    claude_console_session_model: "opus",
-    claude_console_session_effort: "high",
-    codex_console_session_model: SAMPLE_CODEX_MODELS[0].id,
-    codex_console_session_effort: "xhigh",
-  }]]),
+  consoles: new Map([[console_.id, consoleWith(dialogState.consoles.get(console_.id)!, {
+    launch: { claude: { model: "opus", effort: "high" }, codex: { model: SAMPLE_CODEX_MODELS[0].id, effort: "xhigh" } },
+  })]]),
 };
 
 // Three eligible Claude sessions share a console: its hub, an independent project session,
@@ -540,7 +527,7 @@ const didNotComeUp = (session: string) => ({
 
 // Three Codex sessions share a console, the second bound to the hub: a Codex account's thread database is what the
 // `thread_record` stage of a switch updates.
-const codexWork = { id: "a-codex-work", agent: "codex" as const, name: "Codex Work", config_dir: "/Users/dev/.codex-work" };
+const codexWork = accountOf("a-codex-work", "codex", "Codex Work", "/Users/dev/.codex-work");
 const codexSwitchState = snapshotState({
   consoles: [console_],
   projects: [web, api],
@@ -934,7 +921,7 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
-    state: { ...dialogState, consoles: new Map([...dialogState.consoles, [console_.id, { ...dialogState.consoles.get(console_.id)!, console_session_prompt: SESSION_INSTRUCTIONS }]]) },
+    state: { ...dialogState, consoles: new Map<string, Console>([...dialogState.consoles, [console_.id, { ...dialogState.consoles.get(console_.id)!, console_session_prompt: SESSION_INSTRUCTIONS }]]) },
     id: "dialog-edit-console-launch-settings",
     group: "Consoles",
     category: "normal",

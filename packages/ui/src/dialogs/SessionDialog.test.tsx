@@ -6,11 +6,12 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { isolate } from "../i18n/isolate";
 import type { Agent, AgentAvailability, Session } from "../protocol";
 import type { NewSessionBinding } from "./dialogRequest";
-import { sessionOf } from "../gallery/fixtures/builders";
+import { accountOf, type ProjectExtra, sessionOf } from "../gallery/fixtures/builders";
 import { DaemonProvider } from "../store";
 import { SessionDialog } from "./SessionDialog";
 import { parentConsole, project, renderDialog, hub1, buttons, optionElements, choose, pickerNamed } from "./sessionDialogTestSupport";
 import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
+import { DEFAULT_SETTINGS } from "../defaultSettings";
 
 vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
 
@@ -18,7 +19,7 @@ vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }))
  * distinctly from `agents.ts`'s own `noAgentState`, which this is only a fixture for. */
 function everyAgentUnavailable(): Map<Agent, AgentAvailability> {
   const agents: Agent[] = ["claude", "codex", "grok"];
-  return new Map(agents.map((agent) => [agent, { agent, availability: "unavailable" as const }]));
+  return new Map(agents.map((agent) => [agent, { agent, availability: "unavailable" as const, default_account_dir: null }]));
 }
 
 const hub2 = sessionOf("s-hub-2", parentConsole.id, undefined, "Hub 2", "working", { colour: "pink", started_at: 200 });
@@ -33,7 +34,7 @@ async function openWith(
   binding?: NewSessionBinding,
 ): Promise<{ request: Record<string, unknown>; options: string[]; text: string }> {
   const { container, root, daemon } = renderDialog(sessions, {}, {}, binding);
-  vi.mocked(daemon.request).mockResolvedValue({ type: "ack" } as never);
+  vi.mocked(daemon.request).mockResolvedValue({ type: "ack", id: null } as never);
   // The owner select is the one trigger showing its default, "none".
   const ownerTrigger = buttons().find((b) => b.textContent?.includes("No console session"));
   let options: string[] = [];
@@ -121,7 +122,7 @@ it("says only the owner's loss when both the fixed owner and every agent are una
 
 it("keeps the owner select, back on none, when the chosen console session is archived under it", async () => {
   const { container, root, daemon, onClose } = renderDialog([hub1]);
-  vi.mocked(daemon.request).mockResolvedValue({ type: "ack" } as never);
+  vi.mocked(daemon.request).mockResolvedValue({ type: "ack", id: null } as never);
   await act(async () => buttons().find((b) => b.textContent?.includes("No console session"))?.click());
   await act(async () => optionElements().find((o) => o.textContent === "Hub")?.click());
   expect(buttons().some((b) => b.textContent === "Hub")).toBe(true);
@@ -169,18 +170,18 @@ it("opens on a selectable agent, with the console's account for it, and sends bo
     [],
     {
       agentAvailability: new Map<Agent, AgentAvailability>([
-        ["claude", { agent: "claude", availability: "unavailable" }],
-        ["codex", { agent: "codex", availability: "available" }],
-        ["grok", { agent: "grok", availability: "available" }],
+        ["claude", { agent: "claude", availability: "unavailable", default_account_dir: null }],
+        ["codex", { agent: "codex", availability: "available", default_account_dir: null }],
+        ["grok", { agent: "grok", availability: "available", default_account_dir: null }],
       ]),
-      settings: {
+      settings: { ...DEFAULT_SETTINGS,
         auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW,
-        accounts: [{ id: "a-1", agent: "codex", name: "Work", config_dir: "/home/me/.codex-work" }],
+        accounts: [accountOf("a-1", "codex", "Work", "/home/me/.codex-work")],
       },
     },
-    { codex_account_id: "a-1" },
+    { accounts: { codex: "a-1" } },
   );
-  vi.mocked(daemon.request).mockResolvedValue({ type: "ack" } as never);
+  vi.mocked(daemon.request).mockResolvedValue({ type: "ack", id: null } as never);
   expect(pickerNamed("Agent").textContent).toContain("Codex");
   expect(pickerNamed("Codex account").textContent).toContain("Work");
 
@@ -197,21 +198,21 @@ it("opens on the account whose weekly quota resets soonest when automatic select
   const { container, root, daemon } = renderDialog(
     [],
     {
-      settings: {
+      settings: { ...DEFAULT_SETTINGS,
         auto_pull_repositories: false, auto_delete_unresumable_archives: true, auto_select_account: true, added_agents: null, default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW,
         accounts: [
-          { id: "a-1", agent: "codex", name: "Work", config_dir: "/home/me/.codex-work" },
-          { id: "a-soon", agent: "codex", name: "Soon", config_dir: "/home/me/.codex-soon" },
+          accountOf("a-1", "codex", "Work", "/home/me/.codex-work"),
+          accountOf("a-soon", "codex", "Soon", "/home/me/.codex-soon"),
         ],
       },
       accountQuotas: [
-        { agent: "codex", account: "a-1", fetched_at: now, plan: null, unavailable: null, windows: [weekly(10, now + 3 * 24 * 60 * 60 * 1000)] },
-        { agent: "codex", account: "a-soon", fetched_at: now, plan: null, unavailable: null, windows: [weekly(99, now + 60 * 60 * 1000)] },
+        { agent: "codex", account: "a-1", fetched_at: now, plan: null, unavailable: null, windows: [weekly(10, now + 3 * 24 * 60 * 60 * 1000)], email: null },
+        { agent: "codex", account: "a-soon", fetched_at: now, plan: null, unavailable: null, windows: [weekly(99, now + 60 * 60 * 1000)], email: null },
       ],
     },
-    { default_agent: "codex", codex_account_id: "a-1" },
+    { default_agent: "codex", accounts: { codex: "a-1" } },
   );
-  vi.mocked(daemon.request).mockResolvedValue({ type: "ack" } as never);
+  vi.mocked(daemon.request).mockResolvedValue({ type: "ack", id: null } as never);
   expect(pickerNamed("Codex account").textContent).toContain("Soon");
   await act(async () => buttons().find((button) => button.textContent === "Open")?.click());
   expect(daemon.request).toHaveBeenCalledWith(expect.objectContaining({ type: "open_session", agent: "codex", account: "a-soon" }));
@@ -221,10 +222,10 @@ it("opens on the account whose weekly quota resets soonest when automatic select
 
 it("hides turned-off accounts and hides their agent when every account is off", async () => {
   const settings = {
-    auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW, disabled_default_accounts: ["codex" as const],
+    ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW, disabled_default_accounts: ["codex" as const],
     accounts: [
-      { id: "a-1", agent: "codex" as const, name: "Work", config_dir: "/home/me/.codex-work", disabled: true },
-      { id: "a-2", agent: "codex" as const, name: "Spare", config_dir: "/home/me/.codex-spare" },
+      accountOf("a-1", "codex", "Work", "/home/me/.codex-work", { disabled: true }),
+      accountOf("a-2", "codex", "Spare", "/home/me/.codex-spare"),
     ],
   };
   const first = renderDialog([], { settings }, { default_agent: "codex" });
@@ -234,7 +235,7 @@ it("hides turned-off accounts and hides their agent when every account is off", 
   act(() => first.root.unmount());
   first.container.remove();
 
-  const second = renderDialog([], { settings: { ...settings, accounts: settings.accounts.map((account) => ({ ...account, disabled: true })) } }, { default_agent: "codex" });
+  const second = renderDialog([], { settings: { ...DEFAULT_SETTINGS, ...settings, accounts: settings.accounts.map((account) => ({ ...account, disabled: true })) } }, { default_agent: "codex" });
   expect(pickerNamed("Agent").textContent).toContain("Claude Code");
   await act(async () => pickerNamed("Agent").click());
   expect(optionElements().map((option) => option.textContent)).toEqual(["Claude Code", "Grok Build"]);
@@ -286,9 +287,9 @@ it("opens a console session on the console session agent whatever its project se
 it("leaves the agents known to be missing out of the agent picker", async () => {
   const { container, root } = renderDialog([], {
     agentAvailability: new Map<Agent, AgentAvailability>([
-      ["claude", { agent: "claude", availability: "available" }],
-      ["codex", { agent: "codex", availability: "unavailable" }],
-      ["grok", { agent: "grok", availability: "available" }],
+      ["claude", { agent: "claude", availability: "available", default_account_dir: null }],
+      ["codex", { agent: "codex", availability: "unavailable", default_account_dir: null }],
+      ["grok", { agent: "grok", availability: "available", default_account_dir: null }],
     ]),
   });
   await act(async () => pickerNamed("Agent").click());
@@ -299,7 +300,7 @@ it("leaves the agents known to be missing out of the agent picker", async () => 
 
 it("lists only the added agents in the agent picker, in the order they were added", async () => {
   const { container, root } = renderDialog([], {
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["grok", "claude"], default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [] },
+    settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["grok", "claude"], default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [] },
   });
   await act(async () => pickerNamed("Agent").click());
   expect(optionElements().map((o) => o.textContent)).toEqual(["Grok Build", "Claude Code"]);
@@ -309,7 +310,7 @@ it("lists only the added agents in the agent picker, in the order they were adde
 
 it("opens on the first added agent when the console's default agent is not added", () => {
   const { container, root } = renderDialog([], {
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["codex"], default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [] },
+    settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["codex"], default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [] },
   });
   expect(pickerNamed("Agent").textContent).toContain("Codex");
   act(() => root.unmount());
@@ -318,7 +319,7 @@ it("opens on the first added agent when the console's default agent is not added
 
 it("turns into the same failure modal when agents are installed but none is added", () => {
   const { container, root, onClose, daemon } = renderDialog([], {
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [] },
+    settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [] },
   });
   expect(onClose).not.toHaveBeenCalled();
   expect(daemon.toastError).not.toHaveBeenCalled();
@@ -329,23 +330,23 @@ it("turns into the same failure modal when agents are installed but none is adde
 
 /** Opens the dialog with two stored Claude Code accounts, the console pinning one and the project
  * `projectPin`, presses Open and returns the `account` sent. */
-async function openedAccount(projectPin: Partial<typeof project>): Promise<unknown> {
+async function openedAccount(projectPin: ProjectExtra): Promise<unknown> {
   const { container, root, daemon } = renderDialog(
     [],
     {
-      settings: {
+      settings: { ...DEFAULT_SETTINGS,
         auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW,
         accounts: [
-          { id: "a-console", agent: "claude", name: "Console pick", config_dir: "/home/me/.claude-console" },
-          { id: "a-project", agent: "claude", name: "Project pick", config_dir: "/home/me/.claude-project" },
+          accountOf("a-console", "claude", "Console pick", "/home/me/.claude-console"),
+          accountOf("a-project", "claude", "Project pick", "/home/me/.claude-project"),
         ],
       },
     },
-    { claude_account_id: "a-console" },
+    { accounts: { claude: "a-console" } },
     { kind: "choose" },
     projectPin,
   );
-  vi.mocked(daemon.request).mockResolvedValue({ type: "ack" } as never);
+  vi.mocked(daemon.request).mockResolvedValue({ type: "ack", id: null } as never);
   const open = Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Open");
   await act(async () => open?.click());
   const sent = vi.mocked(daemon.request).mock.calls[0][0] as { account?: unknown };
@@ -355,7 +356,7 @@ async function openedAccount(projectPin: Partial<typeof project>): Promise<unkno
 }
 
 it("opens on the project's account for the agent, over the console's, and sends it", async () => {
-  expect(await openedAccount({ claude_account_id: { kind: "account", id: "a-project" } })).toBe("a-project");
+  expect(await openedAccount({ accounts: { claude: { kind: "account", id: "a-project" } } })).toBe("a-project");
 });
 
 it("opens on the console's account when the project pins none", async () => {
@@ -377,12 +378,12 @@ it("updates the fixed owner's displayed name while the session dialog is open", 
 
 it("opens on a usable agent automatically and retains an explicit agent pick even when it cannot open", async () => {
   const { container, root, daemon } = renderDialog([], {
-    settings: {
+    settings: { ...DEFAULT_SETTINGS,
       auto_pull_repositories: false, auto_delete_unresumable_archives: true, auto_select_account: true,
       added_agents: ["claude", "codex"], disabled_default_accounts: [], accounts: [],
       default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW,
     },
-    accountQuotas: [{ agent: "claude", account: null, fetched_at: Date.now(), plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: {}, message: "signed out" } }],
+    accountQuotas: [{ agent: "claude", account: null, fetched_at: Date.now(), plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: {}, message: "signed out" }, email: null }],
   }, { default_agent: "claude" });
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
   expect(pickerNamed("Codex account")).toBeDefined();

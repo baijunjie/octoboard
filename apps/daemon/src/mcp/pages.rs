@@ -1,7 +1,7 @@
 //! The tools with which a session that faces the user, a console session or a project session that
 //! is unbound or a lead session, pushes pages to its report panel, `show_page`, reads back the ones
 //! it pushed, `list_pages`, and withdraws them, `delete_pages`. A session reads and deletes only
-//! its own pages. A session that becomes a bound project session has them all withdrawn
+//! its own pages. A session that becomes a worker has them all withdrawn
 //! ([`withdraw_pages`]).
 
 use std::sync::Arc;
@@ -23,7 +23,7 @@ pub(super) fn show_page(
     let html = required_str(arguments, "html")?.to_string();
     let page = Page {
         id: Uuid::new_v4().to_string(),
-        console_session_id: session.id.clone(),
+        session_id: session.id.clone(),
         html,
         // No agent exposes a message id to put here yet; the rewind linkage that would read it is
         // not built.
@@ -33,11 +33,8 @@ pub(super) fn show_page(
     // The role is checked in the insert itself: this call's `session` was read before a binding
     // that is being written now, and a page stored behind that binding would be offered, with its
     // form, by a session that has no tool to read what it sends.
-    if !state.store.insert_page_unless_bound(&page)? {
-        bail!(
-            "this session has the role of a bound session, which pushes no pages to the report \
-             panel"
-        );
+    if !state.store.insert_page_unless_worker(&page)? {
+        bail!("this session has the role of a worker, which pushes no pages to the report panel");
     }
     #[cfg(test)]
     BEFORE_PAGE_CREATED.with(|hook| {
@@ -57,8 +54,8 @@ pub(super) fn show_page(
         Ok(None) => {
             announce_deleted(state, &session.id, std::slice::from_ref(&page.id));
             bail!(
-                "the page was withdrawn while it was being pushed (this session became a bound \
-                 one, or its pages were deleted)"
+                "the page was withdrawn while it was being pushed (this session became a worker, \
+                 or its pages were deleted)"
             );
         }
         Err(err) => {
@@ -97,7 +94,7 @@ pub(super) fn list_pages(
         let page = state
             .store
             .get_page(&wanted)?
-            .filter(|page| page.console_session_id == session.id)
+            .filter(|page| page.session_id == session.id)
             .ok_or_else(|| anyhow!("you have pushed no page `{wanted}`"))?;
         return Ok(json!({
             "page": page.id,
@@ -166,8 +163,8 @@ pub(super) fn delete_pages(
 }
 
 /// Withdraws every page `session_id` pushed, as `delete_pages` with `all` does, for a session that
-/// has just lost the report panel's tools by becoming a bound project session: its pages would
-/// stay on the panel, and be submittable, with no way left for it to list or delete them.
+/// has just lost the report panel's tools by becoming a worker: its pages would stay
+/// on the panel, and be submittable, with no way left for it to list or delete them.
 pub(crate) fn withdraw_pages(state: &Arc<AppState>, session_id: &str) -> Result<()> {
     // With `None` the store names no id, so its `Err(id)` arm, a named id that is not the
     // session's, cannot happen.
@@ -177,15 +174,15 @@ pub(crate) fn withdraw_pages(state: &Arc<AppState>, session_id: &str) -> Result<
     Ok(())
 }
 
-/// Withdraws the pages of every session that has the role of a bound one now: those a binding
+/// Withdraws the pages of every session that has the role of a worker now: those a binding
 /// change could not withdraw (a failed withdrawal, a page stored while the binding was being
 /// written) and those pushed before pages were withdrawn on binding. Run once when the daemon
 /// starts. One session's failure is logged and does not stop the others.
 pub(crate) fn withdraw_stray_pages(state: &Arc<AppState>) -> Result<()> {
-    for session_id in state.store.session_ids_with_pages_and_bound_role()? {
+    for session_id in state.store.session_ids_with_pages_and_worker_role()? {
         if let Err(err) = withdraw_pages(state, &session_id) {
             tracing::warn!(
-                session = %session_id, %err, "withdrawing the pages of a bound session failed"
+                session = %session_id, %err, "withdrawing the pages of a worker session failed"
             );
         }
     }
@@ -196,7 +193,7 @@ pub(crate) fn withdraw_stray_pages(state: &Arc<AppState>) -> Result<()> {
 fn announce_deleted(state: &Arc<AppState>, session_id: &str, deleted: &[String]) {
     if !deleted.is_empty() {
         state.broadcast(Event::PagesDeleted {
-            console_session_id: session_id.to_string(),
+            session_id: session_id.to_string(),
             pages: deleted.to_vec(),
         });
     }
@@ -220,7 +217,7 @@ fn page_title(html: &str) -> Option<String> {
 mod tests {
     use crate::mcp::exec::call;
     use crate::mcp::exec::tests::{arguments, lead_state, peer_state};
-    use crate::protocol::Event;
+    use crate::protocol::{Event, OrchestrationRole};
     use serde_json::{json, Map};
 
     /// A console session lists, and reads in full, the pages it pushed, and no other session's.
@@ -353,7 +350,7 @@ mod tests {
                 .unwrap();
             assert_eq!(listed["pages"][0]["page"], id.as_str());
             let page = state.store.get_page(&id).unwrap().unwrap();
-            assert_eq!(page.console_session_id, caller);
+            assert_eq!(page.session_id, caller);
         }
         let err = page("mine", "<p>x</p>").await.expect_err("bound");
         assert!(err.to_string().contains("is not a tool"), "{err}");
@@ -429,14 +426,10 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(done["deleted"], json!([third]));
-        let Event::PagesDeleted {
-            console_session_id,
-            pages,
-        } = events.try_recv().unwrap()
-        else {
+        let Event::PagesDeleted { session_id, pages } = events.try_recv().unwrap() else {
             panic!("the panels must be told");
         };
-        assert_eq!(console_session_id, "starter");
+        assert_eq!(session_id, "starter");
         assert_eq!(pages, std::slice::from_ref(&third));
         assert_eq!(
             state.store.newest_page_id("starter").unwrap().as_deref(),
@@ -468,7 +461,14 @@ mod tests {
         let before_binding = state.session_record("other-project").unwrap();
         state
             .store
-            .set_binding("other-project", None, "starter", false, true, false)
+            .set_binding(
+                "other-project",
+                None,
+                "starter",
+                OrchestrationRole::Worker,
+                true,
+                false,
+            )
             .unwrap()
             .unwrap();
         let mut events = state.subscribe();
@@ -479,7 +479,7 @@ mod tests {
             &arguments(json!({ "html": "<p>x</p>" })),
         )
         .expect_err("bound by now");
-        assert!(err.to_string().contains("role of a bound session"), "{err}");
+        assert!(err.to_string().contains("role of a worker"), "{err}");
         assert!(state.store.list_pages("other-project").unwrap().is_empty());
         assert!(events.try_recv().is_err(), "no page was announced");
 
@@ -490,7 +490,7 @@ mod tests {
         assert_eq!(state.store.list_pages("starter").unwrap().len(), 1);
     }
 
-    /// At start the daemon withdraws the pages of every session with the role of a bound one, and
+    /// At start the daemon withdraws the pages of every session with the role of a worker, and
     /// no other's: a lead session's and an unbound session's stay.
     #[test]
     fn the_start_sweep_withdraws_the_pages_left_on_bound_sessions() {
@@ -514,14 +514,10 @@ mod tests {
         assert!(state.store.list_pages("mine").unwrap().is_empty());
         assert_eq!(state.store.list_pages("starter").unwrap().len(), 1);
         assert_eq!(state.store.list_pages("other-project").unwrap().len(), 1);
-        let Event::PagesDeleted {
-            console_session_id,
-            pages,
-        } = events.try_recv().unwrap()
-        else {
+        let Event::PagesDeleted { session_id, pages } = events.try_recv().unwrap() else {
             panic!("the panels must be told");
         };
-        assert_eq!(console_session_id, "mine");
+        assert_eq!(session_id, "mine");
         assert_eq!(pages.len(), 2);
         assert!(events.try_recv().is_err());
 

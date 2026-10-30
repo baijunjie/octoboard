@@ -1107,7 +1107,7 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
-    use crate::protocol::{Agent, Origin, Role, SessionStatus};
+    use crate::protocol::{Agent, OrchestrationRole, Origin, Role, SessionStatus};
 
     fn project_session(title: &str) -> Session {
         Session {
@@ -1126,7 +1126,7 @@ mod tests {
             background_tasks: Vec::new(),
             switching_account: false,
             default_effort: None,
-            orchestration_role: None,
+            orchestration_role: OrchestrationRole::Worker,
             context: None,
             observed_model: None,
             observed_effort: None,
@@ -1134,7 +1134,6 @@ mod tests {
             effort: None,
             has_conversation: true,
             bound_to: Some("console-session-1".to_string()),
-            lead: false,
             colour: None,
             ordinal: None,
             account_id: None,
@@ -1312,21 +1311,9 @@ mod tests {
             workdir: "/tmp/console-1".to_string(),
             default_agent: Agent::Claude,
             project_session_agent: None,
-            claude_project_session_model: None,
-            claude_project_session_effort: None,
-            codex_project_session_model: None,
-            codex_project_session_effort: None,
-            grok_project_session_model: None,
-            grok_project_session_effort: None,
-            claude_account_id: None,
-            codex_account_id: None,
-            grok_account_id: None,
-            claude_console_session_model: None,
-            claude_console_session_effort: None,
-            codex_console_session_model: None,
-            codex_console_session_effort: None,
-            grok_console_session_model: None,
-            grok_console_session_effort: None,
+            accounts: Default::default(),
+            launch: Default::default(),
+            project_session_launch: Default::default(),
             icon: None,
             console_session_prompt: None,
             created_at: 0,
@@ -1341,6 +1328,7 @@ mod tests {
         state.store.insert_console(&console()).unwrap();
         let mut unbound = project_session("worker");
         unbound.bound_to = None;
+        unbound.orchestration_role = OrchestrationRole::Coordinator;
         state.store.insert_session(&unbound).unwrap();
 
         let err = deliver_report(&state, &unbound.id, done_report()).expect_err("unbound");
@@ -1365,6 +1353,7 @@ mod tests {
         state.store.insert_console(&console()).unwrap();
         let mut orphaned = project_session("worker");
         orphaned.bound_to = Some("no-such-session".to_string());
+        orphaned.orchestration_role = OrchestrationRole::Worker;
         state.store.insert_session(&orphaned).unwrap();
 
         let err = deliver_report(&state, &orphaned.id, done_report()).expect_err("owner gone");
@@ -1410,7 +1399,7 @@ mod tests {
             background_tasks: Vec::new(),
             switching_account: false,
             default_effort: None,
-            orchestration_role: None,
+            orchestration_role: OrchestrationRole::Coordinator,
             context: None,
             observed_model: None,
             observed_effort: None,
@@ -1418,7 +1407,6 @@ mod tests {
             effort: None,
             has_conversation: false,
             bound_to: None,
-            lead: false,
             colour: None,
             ordinal: None,
             account_id: None,
@@ -1441,6 +1429,7 @@ mod tests {
 
         let mut worker = project_session("worker");
         worker.bound_to = Some("owner-a".to_string());
+        worker.orchestration_role = OrchestrationRole::Worker;
         state.store.insert_session(&worker).unwrap();
 
         deliver_report(&state, &worker.id, done_report()).expect("delivered");
@@ -1490,6 +1479,7 @@ mod tests {
             let session = Session {
                 id: id.to_string(),
                 bound_to: Some("hub".to_string()),
+                orchestration_role: OrchestrationRole::Worker,
                 ..project_session(id)
             };
             state.store.insert_session(&session).unwrap();
@@ -1551,6 +1541,7 @@ mod tests {
         let worker = Session {
             id: "worker".to_string(),
             bound_to: Some("starter".to_string()),
+            orchestration_role: OrchestrationRole::Worker,
             ..project_session("worker")
         };
         state.store.insert_session(&worker).unwrap();
@@ -1599,7 +1590,11 @@ mod tests {
             let session = Session {
                 id: id.to_string(),
                 bound_to: Some(owner.to_string()),
-                lead: *lead,
+                orchestration_role: if *lead {
+                    OrchestrationRole::Coordinator
+                } else {
+                    OrchestrationRole::Worker
+                },
                 status: *status,
                 ..project_session(id)
             };
@@ -2032,6 +2027,7 @@ mod tests {
                     id: id.to_string(),
                     agent,
                     bound_to: Some("hub".to_string()),
+                    orchestration_role: OrchestrationRole::Worker,
                     status: SessionStatus::Idle,
                     ..project_session(id)
                 })
@@ -2106,6 +2102,11 @@ mod tests {
                     Role::Project
                 },
                 bound_to: owner.map(str::to_string),
+                orchestration_role: if owner.is_some() {
+                    OrchestrationRole::Worker
+                } else {
+                    OrchestrationRole::Coordinator
+                },
                 status,
                 ..project_session(id)
             };
@@ -2321,6 +2322,7 @@ mod tests {
         let mut worker = project_session("worker");
         worker.id = "worker".into();
         worker.bound_to = Some("hub".into());
+        worker.orchestration_role = OrchestrationRole::Worker;
         state.store.insert_session(&worker).unwrap();
         let (transport, listener) = crate::codex_transport::test_transport();
         let live = crate::test_support::fake_live_session("hub", Agent::Codex, 120, 40, "sleep 30")

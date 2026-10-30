@@ -11,7 +11,7 @@ import { SwitchSettingRow } from "./SettingRow";
 export function AutoApproveSessionRequestsSetting(): React.ReactElement {
   const t = useT();
   const { request, toastError } = useDaemon();
-  const enabled = useDaemonStore((s) => s.settings.auto_approve_session_requests ?? false);
+  const enabled = useDaemonStore((s) => s.settings.auto_approve_session_requests);
   const description = t(enabled ? "settings.autoApproveSession.description.on" : "settings.autoApproveSession.description.off");
 
   const setEnabled = (value: boolean) =>

@@ -1,10 +1,10 @@
+import { DEFAULT_SETTINGS } from "../../defaultSettings";
 import type { Account, Agent, AgentAvailability, AccountQuota, Settings } from "../../protocol";
 import { describing } from "../interact";
 import type { Scenario } from "../scenario";
-import { ALL_AGENTS, SAMPLE, minutesAgo, sessionOf, snapshotState } from "./builders";
+import { accountOf, ALL_AGENTS, SAMPLE, minutesAgo, sessionOf, snapshotState } from "./builders";
 import { accountAdded, accountRemoved, agentAvailability } from "./liveChanges";
 import { USED_UP_MIX, manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow } from "./quotas";
-import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
 
 const GROUP = "Window layout";
 
@@ -26,7 +26,7 @@ function railQuotaState(
       consoles: [console_],
       projects: [web, api],
       sessions,
-      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts, default_account_names: defaultNames, disabled_default_accounts: turnedOffDefaults },
+      settings: { ...DEFAULT_SETTINGS, added_agents: added, default_clone_dir: "/Users/dev/Projects", accounts, default_account_names: defaultNames ?? {}, disabled_default_accounts: turnedOffDefaults ?? [] },
       accountQuotas,
     }),
     agentAvailability: new Map<Agent, AgentAvailability>(
@@ -39,12 +39,12 @@ function railQuotaState(
 }
 
 const claudeAccounts: Account[] = [
-  { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" },
-  { id: "a-long", agent: "claude", name: LONG_NAME, config_dir: "/Users/dev/.claude-long" },
+  accountOf("a-work", "claude", "Work", "/Users/dev/.claude-work"),
+  accountOf("a-long", "claude", LONG_NAME, "/Users/dev/.claude-long"),
 ];
 const codexAccounts: Account[] = [
-  { id: "a-codex", agent: "codex", name: "Personal", config_dir: "/Users/dev/.codex-personal" },
-  { id: "a-codex-auto", agent: "codex", name: "Automation", config_dir: "/Users/dev/.codex-automation" },
+  accountOf("a-codex", "codex", "Personal", "/Users/dev/.codex-personal"),
+  accountOf("a-codex-auto", "codex", "Automation", "/Users/dev/.codex-automation"),
 ];
 
 /** Every account of both tabs read: Claude Code's default account, which the user has named, with three windows, Work
@@ -78,14 +78,14 @@ const liveState = railQuotaState(
 );
 
 /** An account another window adds to Claude Code's, between its default account and Work. */
-const sideProject: Account = { id: "a-side", agent: "claude", name: "Side project", config_dir: "/Users/dev/.claude-side" };
+const sideProject: Account = accountOf("a-side", "claude", "Side project", "/Users/dev/.claude-side");
 
 /** Claude Code's accounts that give no whole reading: the default account never read (its attempt timed out), Work
  * with windows from twelve minutes ago and a failed newer attempt, and Client with no entry yet. */
 const unreadState = railQuotaState(
   [
-    { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" },
-    { id: "a-client", agent: "claude", name: "Client", config_dir: "/Users/dev/.claude-client" },
+    accountOf("a-work", "claude", "Work", "/Users/dev/.claude-work"),
+    accountOf("a-client", "claude", "Client", "/Users/dev/.claude-client"),
   ],
   [
     quotaOf("claude", null, null, [], { unavailable: quotaFailure("quota_timed_out", { agent: "Claude Code" }, "Claude Code took too long to report its usage.") }),
@@ -100,8 +100,8 @@ const unreadState = railQuotaState(
  * directory does not exist yet, and the default account is read. */
 const notSignedInState = railQuotaState(
   [
-    { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" },
-    { id: "a-client", agent: "claude", name: "Client", config_dir: "/Users/dev/.claude-client" },
+    accountOf("a-work", "claude", "Work", "/Users/dev/.claude-work"),
+    accountOf("a-client", "claude", "Client", "/Users/dev/.claude-client"),
   ],
   [
     quotaOf("claude", null, "max", [quotaWindow("session", 18, 117), quotaWindow("weekly", 5, 3 * 24 * 60 + 4 * 60)]),
@@ -113,7 +113,7 @@ const notSignedInState = railQuotaState(
 /** Three tabs whose lists all sit under the panel's scroll limit and differ in height: Claude Code's default account and
  * Work with two windows each, Codex's default account with two, and Grok Build's default account with its one. */
 const shortTabsState = railQuotaState(
-  [{ id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" }],
+  [accountOf("a-work", "claude", "Work", "/Users/dev/.claude-work")],
   [
     quotaOf("claude", null, "max", [quotaWindow("session", 18, 117), quotaWindow("weekly", 5, 3 * 24 * 60 + 4 * 60)]),
     quotaOf("claude", "a-work", "pro", [quotaWindow("session", 46, 83), quotaWindow("weekly", 62, 2 * 24 * 60 + 9 * 60)]),
@@ -134,7 +134,7 @@ const longListState = railQuotaState(many.accounts, [
 /** Hub on Claude Code's default account, whose session window was spent when it was read nine minutes ago and reset a
  * minute ago, with Work beside it, spent and not yet reset. Hub's weekly window is unaffected. */
 const resetPassedState = railQuotaState(
-  [{ id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" }],
+  [accountOf("a-work", "claude", "Work", "/Users/dev/.claude-work")],
   [
     quotaOf("claude", null, "max", [quotaWindow("session", 100, -1), quotaWindow("weekly", 41, 3 * 24 * 60 + 4 * 60)], { fetched_at: minutesAgo(9) }),
     quotaOf("claude", "a-work", "pro", [quotaWindow("session", 100, 42), quotaWindow("weekly", 63, 2 * 24 * 60 + 5 * 60)], { fetched_at: minutesAgo(9) }),
@@ -145,8 +145,8 @@ const resetPassedState = railQuotaState(
  * project used up by its weekly window while its session window has room. */
 const usedUpState = railQuotaState(
   [
-    { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" },
-    { id: "a-side", agent: "claude", name: "Side project", config_dir: "/Users/dev/.claude-side" },
+    accountOf("a-work", "claude", "Work", "/Users/dev/.claude-work"),
+    accountOf("a-side", "claude", "Side project", "/Users/dev/.claude-side"),
   ],
   [
     quotaOf("claude", null, "max", [quotaWindow("session", 18, 117), quotaWindow("weekly", 5, 3 * 24 * 60 + 4 * 60)]),
@@ -163,7 +163,7 @@ function turnedOff(accounts: Account[], ...ids: string[]): Account[] {
 /** Every agent installed and read. Claude Code: its default account and Work turned off, Side project on. Codex: its
  * default account and Personal, its only accounts, turned off. Grok Build's default account on. */
 const turnedOffHiddenState = railQuotaState(
-  turnedOff([sideProject, { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" }, { id: "a-codex", agent: "codex", name: "Personal", config_dir: "/Users/dev/.codex-personal" }], "a-work", "a-codex"),
+  turnedOff([sideProject, accountOf("a-work", "claude", "Work", "/Users/dev/.claude-work"), accountOf("a-codex", "codex", "Personal", "/Users/dev/.codex-personal")], "a-work", "a-codex"),
   [
     quotaOf("claude", null, "max", [quotaWindow("session", 18, 117), quotaWindow("weekly", 5, 3 * 24 * 60 + 4 * 60)]),
     quotaOf("claude", "a-work", "pro", [quotaWindow("session", 46, 83), quotaWindow("weekly", 62, 2 * 24 * 60 + 9 * 60)]),
@@ -179,9 +179,9 @@ const turnedOffHiddenState = railQuotaState(
 const turnedOffRunningOwnedState = railQuotaState(
   turnedOff(
     [
-      { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" },
+      accountOf("a-work", "claude", "Work", "/Users/dev/.claude-work"),
       sideProject,
-      { id: "a-client", agent: "claude", name: "Client", config_dir: "/Users/dev/.claude-client" },
+      accountOf("a-client", "claude", "Client", "/Users/dev/.claude-client"),
     ],
     "a-work",
     "a-side",
@@ -200,7 +200,7 @@ const turnedOffRunningOwnedState = railQuotaState(
 const turnedOffAgentRunningState = railQuotaState(
   turnedOff(
     [
-      { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" },
+      accountOf("a-work", "claude", "Work", "/Users/dev/.claude-work"),
       ...codexAccounts,
     ],
     "a-codex",

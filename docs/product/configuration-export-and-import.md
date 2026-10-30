@@ -49,9 +49,9 @@ Its name, its avatar image if it has one, its default agent for console sessions
 efforts it sets for its console sessions and for its project sessions, one pair of each per agent, and its console
 session instructions if it has any (see "Console session instructions" in `docs/product/consoles.md`). An import
 restores the instructions trimmed, as saving them in the console dialog does, and a document that does not carry them
-gives the console none. A document that does not carry a default agent for project sessions, such as one exported before
-consoles had one, gives the console none, so its project sessions follow its default agent for console sessions; one
-that does not carry the project session models and efforts leaves them unset.
+gives the console none. A document that does not carry a default agent for project sessions gives the console none, so
+its project sessions follow its default agent for console sessions. The project session models and efforts are always
+in the document, one entry per agent; an agent whose entry leaves a model or effort out has it unset.
 
 A console's working directory is **not** in the document. It is no directory of the user's choosing: Octoboard creates
 it under its own data directory and names it after the console, so it would carry nothing another machine could use. An
@@ -154,17 +154,13 @@ not stored at all and are in no document either (see "How a quota is read" in `d
 
 ### The application settings an export carries
 
-Thirteen, each under its own key. The first is in every document that has application settings. Each of the other
-twelve is missing from a document exported before it was carried, and applying that document's settings then leaves
-the importing machine's value as it is; the import review notes each of the ten switches after the first only when the
-document carries it as a boolean. A document exported by a build that carried a "Talk to me in the interface language"
-switch, under `reply_in_interface_language`, still imports: that key is ignored. The language the daemon holds for the
-user is not carried either (see "The language the daemon holds" in `docs/product/language.md`): applying the document's
-settings leaves it as the importing daemon holds it.
+Thirteen, each under its own key, all in every document that has application settings. The import review notes each
+of the eleven switches. A settings key the daemon does not know, such as `reply_in_interface_language`, is ignored.
+The language the daemon holds for the user is not carried either (see "The language the daemon holds" in
+`docs/product/language.md`): applying the document's settings leaves it as the importing daemon holds it.
 
 - **Automatically pull repositories** (see "Automatically pulling repositories" in
-  `docs/product/project-git-status.md`), under `auto_pull_repositories`. An import also reads it from a document that
-  carries it under the key `auto_sync_repositories`; an export writes only `auto_pull_repositories`.
+  `docs/product/project-git-status.md`), under `auto_pull_repositories`.
 - **Automatically delete archived sessions whose conversation is gone** (see "Deleting archived sessions whose
   conversation is gone" in `docs/product/deleting-sessions.md`), under `auto_delete_unresumable_archives`.
 - **Automatically select an account** (see that section in `docs/product/settings.md`), under `auto_select_account`. The
@@ -222,24 +218,19 @@ above).
 
 ### Versions
 
-The format marker tells a configuration document from any other JSON. The version is a whole number, 2 today, and is
+The format marker tells a configuration document from any other JSON. The version is a whole number, 1 today, and is
 raised only when a change would make a reader written for an older version misread a document — a field dropped, or
-given another meaning. Adding a field is not such a change, and a reader ignores a field it does not know; neither is
-renaming one whose old name an import still reads, as with `auto_sync_repositories` above. The accounts region was added
-the same way, without raising the version: a document exported before it existed carries no accounts. An import refuses
-a document whose format it does not recognize, and one whose version is 0 or newer than it reads, before it creates
-anything.
+given another meaning. Adding a field is not such a change, and a reader ignores a field it does not know. An import
+reads only version 1. It refuses a document whose format it does not recognize, and one of any other version, older or
+newer, before it creates anything. No build has been released, so there is no upgrade of an older document; once a version is released, raising it adds a
+step that upgrades the previous one.
 
-A document of an older version is not refused: before reading it, an import upgrades it to the current version one
-version at a time, so a file exported before the version was raised stays importable. The upgrade is part of the import
-and the file itself is left as it is. Upgrading a version 1 document to version 2 renames the application-wide
-`worktrees` under `settings`, and each project's `worktrees`, to `git_workflow`, and turns the boolean `use_worktrees`
-in them into `development`: `true` becomes `worktree`, `false` becomes `in_place`, and a project's `null`, following the
-application-wide value, stays `null`.
+An export always writes an entry for every agent in `accounts`, `launch` and `project_session_launch`. An import reads
+an agent's entry that is left out as unset: a console's account is then the agent's default account, a project's
+account inherits its console's reference, and the model and effort are unset.
 
 A document also carries, under `exported_by`, the version of Octoboard (its daemon) that exported it. It is there only
-for diagnosing a document that misbehaves: an import never reads it, it has no bearing on the version number, and a
-document exported before it existed does not carry it.
+for diagnosing a document that misbehaves: an import never reads it and it has no bearing on the version number.
 
 ## Importing
 
@@ -413,7 +404,7 @@ Other clients — another browser, or the desktop app — keep their own.
 
 Refused before anything at all is created:
 
-- a document that is not a configuration document, one whose version is 0 or newer than this Octoboard reads, and one
+- a document that is not a configuration document, one whose version is not the one this Octoboard reads, and one
   that cannot be read;
 - a choice for a project that cannot be right: it names a project the document does not have, it names one project
   twice, or the directory it points at is neither absolute nor starts with `~/`;

@@ -124,6 +124,7 @@ impl Dirs {
 }
 
 /// What an item was left as by an operation that could not finish it.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Left {
@@ -142,6 +143,7 @@ pub enum Left {
 
 /// Why something could not be brought in line, for a client to explain it in plain words; the
 /// failure's `detail` keeps the system's own text.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Cause {
@@ -215,6 +217,7 @@ impl Cause {
 }
 
 /// An item an operation could not bring in line.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Failure {
     /// An entry of the account's directory, or for a conversation the agent's own id of it.
@@ -224,6 +227,7 @@ pub struct Failure {
     pub detail: String,
     /// The Octoboard sessions a conversation belongs to, for a failure about one.
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[cfg_attr(test, ts(optional = nullable))]
     pub sessions: Vec<String>,
 }
 

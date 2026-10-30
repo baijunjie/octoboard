@@ -1,6 +1,6 @@
 import type { Language } from "../i18n/languages";
 import type { Agent, AgentAvailability, Session } from "../protocol";
-import type { State } from "../store";
+import { type State } from "../store";
 import type { Scenario } from "../gallery/scenario";
 import { quotaOf, quotaWindow } from "../gallery/fixtures/quotas";
 import {
@@ -19,7 +19,7 @@ import { previewCopy as chinese } from "./locales/zh-Hans";
 import { createIdleScript, createTerminalScript } from "./terminals";
 import { terminalCopy } from "./terminalScripts";
 import type { TerminalScript } from "../gallery/fakeTerminal";
-import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
+import { DEFAULT_SETTINGS } from "../defaultSettings";
 
 export type PreviewScene = "overview" | "focus" | "changes";
 
@@ -230,13 +230,7 @@ export function createPreviewScenario(
             ahead: 0,
           }),
         ),
-        settings: {
-          auto_pull_repositories: false,
-          auto_delete_unresumable_archives: true,
-          added_agents: ALL_AGENTS,
-          default_clone_dir: "/demo", git_workflow: DEFAULT_GIT_WORKFLOW,
-          accounts: [],
-        },
+        settings: { ...DEFAULT_SETTINGS, added_agents: ALL_AGENTS, default_clone_dir: "/demo" },
         accountQuotas: previewQuotas(),
       }),
       agentAvailability,
@@ -339,7 +333,7 @@ export function createPreviewScenario(
           agent: found.agent,
           status: found.status === "working" || found.status === "waiting_user" ? found.status : "idle",
           cwd: cwdOf(found),
-          background: found.background_tasks?.[0]?.description,
+          background: found.background_tasks?.[0]?.description ?? undefined,
           copy: terminalCopy(found.id, copy.terminals[found.id]),
         },
         { startedAt, animate },
