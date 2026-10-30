@@ -4,12 +4,14 @@ import type { Language } from "./languages";
 // project row's git badge and a session row's binding fact each build this twice per render, and
 // `Intl.ListFormat`'s own constructor is the expensive part of formatting, not the `format` call.
 const listFormats = new Map<Language, Intl.ListFormat>();
+const wordedListFormats = new Map<Language, Intl.ListFormat>();
 
-function listFormat(language: Language): Intl.ListFormat {
-  let format = listFormats.get(language);
+function listFormat(language: Language, style: "narrow" | "long" = "narrow"): Intl.ListFormat {
+  const formats = style === "narrow" ? listFormats : wordedListFormats;
+  let format = formats.get(language);
   if (!format) {
-    format = new Intl.ListFormat(language, { style: "narrow", type: "conjunction" });
-    listFormats.set(language, format);
+    format = new Intl.ListFormat(language, { style, type: "conjunction" });
+    formats.set(language, format);
   }
   return format;
 }
@@ -26,7 +28,17 @@ export function joinNodes<T>(language: Language, values: string[], render: (valu
  * `narrow` uses the shortest joining form, since these are independent facts read off a status
  * or a row. Its joining words depend on the runtime's locale data. */
 export function joinPhrases(language: Language, phrases: string[]): string {
-  const format = listFormat(language);
+  return joinWith(language, listFormat(language), phrases);
+}
+
+/** Joins values that sit inside one phrase of such a sentence (the ports a process listens on),
+ * with the language's joining word ("3000 and 5173"), so that they cannot be read as phrases of the
+ * sentence around them, which `joinPhrases` separates with the same punctuation. */
+export function joinValues(language: Language, values: string[]): string {
+  return joinWith(language, listFormat(language, "long"), values);
+}
+
+function joinWith(language: Language, format: Intl.ListFormat, phrases: string[]): string {
   if (language !== "zh-Hans") return format.format(phrases);
   // Only adjust the separators: user-provided names and errors must stay verbatim. Directional
   // isolates do not change whether Chinese and Latin text meet at the separator's edge.

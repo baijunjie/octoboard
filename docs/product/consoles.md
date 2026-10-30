@@ -272,6 +272,12 @@ Deleting a console asks for confirmation, and the Delete button stays disabled u
 current language — "DELETE" in English, and in any language not yet translated (see "What is translated so far" in
 `docs/product/language.md`), "删除" in Simplified Chinese — has been typed into the confirmation's field. What is typed
 is shown in capitals and compared ignoring case and surrounding spaces.
+The confirmation reads the process list of each of the console's projects as it opens, and its Delete button waits
+until every list has answered. While any of the projects has project processes, it lists them, oldest first, in a
+**Project processes** section, one row each with its details, and says how many are stopped, as the project removal's
+confirmation does (see "The project's processes" in `docs/product/removing-projects.md`). When a project's list cannot
+be read, the section shows that confirmation's warning that any that are running will still be stopped, over the rows
+of the lists that were read, and leaves the count out.
 
 Deleting a console is **refused while any of its sessions still has a running process**, or is being launched or
 resumed at that moment — those must be archived (or the application restarted, which interrupts them) first. The
@@ -280,8 +286,10 @@ error names the reason.
 When it goes through, deleting a console also deletes every project association under it, every session record belonging
 to it, archived sessions included, with the last output Octoboard kept for each, and every page its sessions pushed to
 the report panel, ends every shell terminal of its projects (see "Closing a shell terminal" in
-`docs/product/shell-terminals.md`), and removes the console's own working directory under `~/.octoboard`. No project
-directory is touched. A running shell terminal does not count as a running session: it never refuses the deletion.
+`docs/product/shell-terminals.md`), stops each project's processes (see "Removing a project" in
+`docs/product/background-processes.md`), and removes the console's own working directory under `~/.octoboard`. No
+project directory is touched. A running shell terminal does not count as a running session: it never refuses the
+deletion.
 
 Deleting the **last** console leaves the window with none, which it shows as the welcome screen (see
 `docs/product/welcome-screen.md`); the same holds when another client deletes it.

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { KeyRound, SquareTerminal, Terminal } from "lucide-react";
+import { KeyRound, SquareActivity, SquareTerminal, Terminal } from "lucide-react";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -281,6 +281,7 @@ describe("a session that is still starting", () => {
   });
 });
 
+
 describe("the Colour entry", () => {
   const hub = sessionOf("h", "c", undefined, "Hub", "idle", { colour: "cyan" });
   const entry = (session: Session, handlers = {} as SidebarHandlers) => sessionMenu(t, handlers, session, [], undefined).find((candidate) => typeof candidate === "object" && candidate.label === "Colour");
@@ -389,11 +390,12 @@ describe("a project's menu", () => {
       const panel = menu.find((entry) => typeof entry === "object" && entry.label === "Open panel") as ActionMenuSubmenu | undefined;
       return { labels, items: panel?.items.flatMap((item) => typeof item === "object" ? [item.label] : []) };
     };
-    expect(panelItems(undefined).items).toEqual(["Files", "Terminal"]);
-    expect(panelItems({ project: "other", kinds: ["files", "terminal"] }).items).toEqual(["Files", "Terminal"]);
-    expect(panelItems({ project: "p", kinds: ["files"] }).items).toEqual(["Terminal"]);
-    expect(panelItems({ project: "p", kinds: ["terminal", "report"] }).items).toEqual(["Files"]);
-    expect(panelItems({ project: "p", kinds: ["files", "terminal"] }).items).toBeUndefined();
+    expect(panelItems(undefined).items).toEqual(["Files", "Processes", "Terminal"]);
+    expect(panelItems({ project: "other", kinds: ["files", "terminal"] }).items).toEqual(["Files", "Processes", "Terminal"]);
+    expect(panelItems({ project: "p", kinds: ["files"] }).items).toEqual(["Processes", "Terminal"]);
+    expect(panelItems({ project: "p", kinds: ["terminal", "report"] }).items).toEqual(["Files", "Processes"]);
+    expect(panelItems({ project: "p", kinds: ["files", "processes"] }).items).toEqual(["Terminal"]);
+    expect(panelItems({ project: "p", kinds: ["files", "processes", "terminal"] }).items).toBeUndefined();
     const { labels } = panelItems(undefined);
     expect(labels.indexOf("Open panel") + 1).toBe(labels.indexOf("Open in"));
     expect(labels).not.toContain("Browse files");
@@ -403,10 +405,12 @@ describe("a project's menu", () => {
     const handlers = { onOpenProjectPanel: vi.fn() } as unknown as SidebarHandlers;
     const project = { id: "p" } as Project;
     const panel = projectMenu(t, handlers, project, []).find((entry) => typeof entry === "object" && entry.label === "Open panel") as ActionMenuSubmenu;
-    const [files, terminal] = panel.items as { label: string; icon: unknown; onClick: () => void }[];
+    const [files, processes, terminal] = panel.items as { label: string; icon: unknown; onClick: () => void }[];
     files.onClick();
+    processes.onClick();
     terminal.onClick();
-    expect(vi.mocked(handlers.onOpenProjectPanel).mock.calls).toEqual([[project, "files"], [project, "terminal"]]);
+    expect(vi.mocked(handlers.onOpenProjectPanel).mock.calls).toEqual([[project, "files"], [project, "processes"], [project, "terminal"]]);
+    expect(processes.icon).toBe(SquareActivity);
     expect(terminal.icon).toBe(SquareTerminal);
   });
 

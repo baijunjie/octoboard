@@ -126,7 +126,9 @@ pub(crate) fn app_state(label: &str) -> (Arc<AppState>, ScratchDir) {
         dir.join("output"),
         dir.join("consoles"),
         dir.join("handoff"),
+        crate::process_ledger::ProcessLedger::new(&dir),
     ));
+    state.process_ledger.without_scanner();
     state.host_tools.replace(host_tools());
     // Stand-in sessions run no hooks, so nothing written into one is ever reported sent; a test of
     // that check sets a wait of its own.
@@ -275,6 +277,39 @@ pub(crate) fn running(state: &Arc<AppState>, id: &str) -> StandIn {
     live
 }
 
+/// A stand-in process for the stored session `id` whose shell command leaves one process running
+/// in a terminal session of its own, as an agent's dev server is; registered and watched as a
+/// launched session's is. Answers the stand-in and that process's pid.
+pub(crate) fn running_leaving_one(state: &Arc<AppState>, dir: &Path, id: &str) -> (StandIn, i32) {
+    let pid_file = dir.join(format!("{id}-child"));
+    let live = fake_live_session(
+        id,
+        Agent::Claude,
+        80,
+        24,
+        &format!(
+            "/usr/bin/perl -MPOSIX -e 'POSIX::setsid(); {} exec \"/bin/sleep\", \"300\";' &\n\
+             exec sleep 300",
+            perl_write(&pid_file, "$$")
+        ),
+    );
+    state.register_live(live.clone());
+    state.watch_exit(live.clone());
+    let child = wait_for_pid(&pid_file);
+    (live, child)
+}
+
+/// Waits for `pid` to stop running, off the runtime, ticking the ledger's scanner in place of its
+/// thread, which a test's ledger does not start.
+pub(crate) async fn stops_running(state: &Arc<AppState>, pid: i32) -> bool {
+    let ledger = Arc::clone(&state.process_ledger);
+    within(PATIENCE, move || {
+        ledger.tick_now();
+        !is_running(pid)
+    })
+    .await
+}
+
 /// Waits until the exit watcher is done with the end of `live`'s process, so that whatever it
 /// would send the session's owner is sent: what an absence asserted behind
 /// [`heard_after_marker`] needs, since the watcher tells the owner only after recording the end.
@@ -375,16 +410,35 @@ pub(crate) type Launched = (String, Option<crate::mcp::Owner>, Option<String>);
 /// start an agent (`term::launch` cannot in a test). The process is kept in `started` and the
 /// request recorded in `launches`, for the test to read; `during` runs first, as what happens
 /// while the agent is being started.
+///
+/// The stand-in is the launch the ledger was told of: it carries the request's process tag in its
+/// environment and as its launch id, as an agent `term::launch` starts does.
 pub(crate) fn stand_in_launch(
     started: &Arc<std::sync::Mutex<Vec<StandIn>>>,
     launches: &Arc<std::sync::Mutex<Vec<Launched>>>,
     during: impl FnOnce() + Send + 'static,
 ) -> impl FnOnce(crate::term::LaunchRequest) -> anyhow::Result<crate::term::Launch> + Send + 'static
 {
-    let (started, launches) = (started.clone(), launches.clone());
+    stand_in_launch_running(started, launches, "sleep 30", during)
+}
+
+/// [`stand_in_launch`] with a stand-in that runs `script`.
+pub(crate) fn stand_in_launch_running(
+    started: &Arc<std::sync::Mutex<Vec<StandIn>>>,
+    launches: &Arc<std::sync::Mutex<Vec<Launched>>>,
+    script: &str,
+    during: impl FnOnce() + Send + 'static,
+) -> impl FnOnce(crate::term::LaunchRequest) -> anyhow::Result<crate::term::Launch> + Send + 'static
+{
+    let (started, launches, script) = (started.clone(), launches.clone(), script.to_string());
     move |request| {
         during();
-        let live = fake_live_session(&request.session_id, request.agent, 80, 24, "sleep 30");
+        let live = tagged_live_session(
+            &request.session_id,
+            request.agent,
+            &script,
+            &request.process_tag,
+        );
         crate::session::spawn_reader_thread(live.clone(), 8 * 1024);
         let process = (*live).clone();
         started.lock().unwrap().push(live);
@@ -410,14 +464,46 @@ pub(crate) fn watched_live_session(
     script: &str,
     carried_trust: Option<crate::trust::CarriedTrust>,
 ) -> StandIn {
+    stand_in(id, agent, cols, rows, script, carried_trust, None)
+}
+
+/// [`fake_live_session`] for the launch `tag` names: the stand-in carries the tag in its
+/// environment, as an agent `term::launch` starts does, and has its launch id.
+pub(crate) fn tagged_live_session(
+    id: &str,
+    agent: Agent,
+    script: &str,
+    tag: &crate::process_ledger::ProcessTag,
+) -> StandIn {
+    let live = stand_in(id, agent, 80, 24, script, None, Some(tag));
+    live.trust.end_watch();
+    live
+}
+
+fn stand_in(
+    id: &str,
+    agent: Agent,
+    cols: u16,
+    rows: u16,
+    script: &str,
+    carried_trust: Option<crate::trust::CarriedTrust>,
+    tag: Option<&crate::process_ledger::ProcessTag>,
+) -> StandIn {
     // Bash rather than `/bin/sh`: callers' scripts may use bash builtins and syntax that dash, the
     // `/bin/sh` of Debian and Ubuntu, lacks.
     let mut cmd = portable_pty::CommandBuilder::new("/bin/bash");
     cmd.args(["-c", script]);
+    if let Some(tag) = tag {
+        cmd.env(crate::process_ledger::TAG_VARIABLE, tag.value());
+    }
     let spawned = crate::pty::spawn(cmd, rows, cols).expect("the stand-in");
     StandIn(Arc::new(LiveSession::new(NewSession {
         id: id.to_string(),
         agent,
+        launch_id: tag.map_or_else(
+            || uuid::Uuid::new_v4().to_string(),
+            |tag| tag.launch_id().to_string(),
+        ),
         spawned,
         scratch_dir: None,
         resolves_approvals_itself: false,
@@ -469,6 +555,88 @@ pub(crate) fn fake_agent(dir: &Path, binary: &str, body: &str) -> HashMap<String
 /// timeout of seconds.
 pub(crate) fn read_pid_file(path: &std::path::Path) -> Option<i32> {
     std::fs::read_to_string(path).ok()?.trim().parse().ok()
+}
+
+/// Waits up to [`PATIENCE`] for `path` to hold a pid, as a fixture writes it whole (see
+/// [`perl_write`]).
+pub(crate) fn wait_for_pid(path: &Path) -> i32 {
+    let deadline = Instant::now() + PATIENCE;
+    loop {
+        if let Some(pid) = read_pid_file(path) {
+            return pid;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "{} never appeared",
+            path.display()
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+/// Perl that writes `$value` (a Perl expression: `$$`, a child's pid) to `path` whole, through a
+/// rename, so [`wait_for_pid`] never reads half of it.
+pub(crate) fn perl_write(path: &Path, value: &str) -> String {
+    let path = path.display();
+    format!(
+        "open(my $f, \">\", \"{path}.tmp\"); print $f {value}; close $f; rename \"{path}.tmp\", \"{path}\";"
+    )
+}
+
+/// Children of the test process, killed and reaped when dropped.
+pub(crate) struct Children(pub Vec<std::process::Child>);
+
+impl Drop for Children {
+    fn drop(&mut self) {
+        for child in &mut self.0 {
+            child.kill().ok();
+            child.wait().ok();
+        }
+    }
+}
+
+/// Perl that runs its arguments as a process of their own, outside any process of the test's:
+/// in a terminal session of its own, its parent gone at once. It prints that process's pid. The
+/// process ledger never attributes a direct child of the daemon — the test process, here — nor
+/// lists one as left behind, so a fixture standing for an agent's leftover is started this way.
+const DETACH: &str = "my $c = fork(); if ($c == 0) { POSIX::setsid(); \
+    open(STDIN, '<', '/dev/null'); open(STDOUT, '>', '/dev/null'); open(STDERR, '>', '/dev/null'); \
+    exec @ARGV or POSIX::_exit(1) } print \"$c\\n\";";
+
+/// Runs `program` with `args` detached (see [`DETACH`]) in `cwd`, with `env` set or, for `None`,
+/// removed, and answers its pid. The caller kills it.
+pub(crate) fn detached_in(
+    cwd: &Path,
+    program: &str,
+    args: &[&str],
+    env: &[(&str, Option<&str>)],
+) -> i32 {
+    let mut command = Command::new("/usr/bin/perl");
+    command
+        .args(["-MPOSIX", "-e", DETACH, "--", program])
+        .args(args)
+        .current_dir(cwd);
+    for (key, value) in env {
+        match value {
+            Some(value) => command.env(key, value),
+            None => command.env_remove(key),
+        };
+    }
+    let output = command.output().expect("perl ran");
+    String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .parse()
+        .expect("the detached process's pid")
+}
+
+/// [`detached_in`] the test process's own directory.
+pub(crate) fn detached(program: &str, args: &[&str], env: &[(&str, Option<&str>)]) -> i32 {
+    detached_in(
+        &std::env::current_dir().expect("the current directory"),
+        program,
+        args,
+        env,
+    )
 }
 
 /// Runs `attempt` until it returns a value, for up to [`PATIENCE`]. An attempt returns `None`

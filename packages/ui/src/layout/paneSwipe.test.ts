@@ -46,3 +46,11 @@ it("leaves the only panel of an owner as it is", () => {
 it("does nothing on a swipe towards the start with no owner", () => {
   expect(resolveSwipe("start", scene({ panelKinds: [] }))).toBeUndefined();
 });
+
+it("skips empty processes and terminals without hiding their manually opened panels", () => {
+  const panelOrder = ["report", "files", "processes", "terminal"] as const;
+  expect(resolveSwipe("start", scene({ panelOrder, panelKinds: ["report", "files"], panel: "files" }))).toEqual({ type: "open-panel", kind: "report" });
+  expect(resolveSwipe("start", scene({ panelOrder, panelKinds: ["report", "files", "terminal"], panel: "processes" }))).toEqual({ type: "open-panel", kind: "terminal" });
+  expect(resolveSwipe("start", scene({ panelOrder, panelKinds: ["files"], panel: "processes" }))).toEqual({ type: "open-panel", kind: "files" });
+  expect(resolveSwipe("start", scene({ panelOrder, panelKinds: [], panel: "processes" }))).toBeUndefined();
+});

@@ -10,30 +10,33 @@ that repository (see "What the record is" in `docs/product/branch-responsible-se
 everything in it are left as they are**, and so are the repository's branches and worktrees, unless the user chooses to
 move the folder to the Trash as well (see "Moving the project folder to the Trash" below).
 
-Removing a project asks for confirmation. **Sessions of the project that are still running do not block it**:
+Removing a project asks for confirmation. **Sessions of the project that are still running do not block it.** Under
+its message the confirmation has up to three sections, each under its own heading, in this order, each set apart from
+the one above it by a divider:
 
-- With none running, the confirmation offers **Remove**.
-- With some running, the confirmation lists them — each with its status glyph, its agent's icon and its title, in the
-  sidebar's order (see "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`) — in its
-  consequences, the body text after its options and before its buttons: a line says that that many sessions are still
-  running and will be ended, and the list follows it (see "The confirmation" in
-  `docs/product/branch-and-worktree-cleanup.md` for the lines a ticked option adds). Its button reads **End and
-  remove**. The list follows sessions starting or stopping while the confirmation is open. Confirming ends each running
-  session's process the way archiving does (see "Archiving, interruption and resuming" in
-  `docs/product/archiving-and-resuming-sessions.md`), then removes the project with all its sessions and the last output
-  Octoboard kept for each. Sessions bound to another session of the project are ended before the session they are bound
-  to, the deepest level first, so ending that one is never refused over them. A coordinator's console session belongs to
-  no project and is left as it is; the coordinator's binding to it goes with the coordinator's record (see "Coordinators
-  with a parent session" in `docs/product/hub-orchestration.md`).
+- **Sessions that will be ended (n)**, shown only while some are running: each with its status glyph, its agent's icon
+  and its title, in the sidebar's order (see "Order of projects and sessions" in
+  `docs/product/order-of-projects-and-sessions.md`). The list follows sessions starting or stopping while the
+  confirmation is open. With some running, its button reads **End and remove**, otherwise **Remove**. Confirming ends
+  each running session's process the way archiving does (see "Archiving, interruption and resuming" in
+  `docs/product/archiving-and-resuming-sessions.md`), then removes the project with all its sessions and the last
+  output Octoboard kept for each. Sessions bound to another session of the project are ended before the session they
+  are bound to, the deepest level first, so ending that one is never refused over them. A coordinator's console session
+  belongs to no project and is left as it is; the coordinator's binding to it goes with the coordinator's record (see
+  "Coordinators with a parent session" in `docs/product/hub-orchestration.md`).
+- **Project folder**, always shown: the option to also move the folder to the Trash, and what goes with it (below).
+- **Project processes**, shown while the project has any, or while its process list could not be read (see "The
+  project's processes" below).
 
-The confirmation also carries an option to **also move the project folder to the Trash**, unticked each time the
-confirmation opens, with a hint that the whole folder goes, including anything not committed to Git, and that it can be
-recovered from the Trash. Ticking it makes the message say the folder is moved to the Trash; for the confirm button's
-label, see "What a confirmation's confirm button names" in `docs/product/dialogs.md`. Ticking it also lists the
-worktrees outside the folder, and the branches, that go with it, and the worktrees outside it that stay because whether
-they are or hold another project's folder could not be checked, and offers locked worktrees under a choice of their own
-(see "With a project's folder moved to the Trash" in `docs/product/branch-and-worktree-cleanup.md`). While a removal
-runs, the button shows as pending and the option cannot be changed.
+The **Project folder** section carries an option to **also move the project folder to the Trash**, unticked each time
+the confirmation opens, with a hint that the whole folder goes, including anything not committed to Git, and that it
+can be recovered from the Trash. Ticking it makes the message say the folder is moved to the Trash; for the confirm
+button's label, see "What a confirmation's confirm button names" in `docs/product/dialogs.md`. Ticking it also lists
+the worktrees outside the folder, and the branches, that go with it, and the worktrees outside it that stay because
+whether they are or hold another project's folder could not be checked, and offers locked worktrees under a choice of
+their own, with the lines saying what goes under them (see "With a project's folder moved to the Trash" in
+`docs/product/branch-and-worktree-cleanup.md`). While a removal runs, the button shows as pending and the option cannot
+be changed.
 
 **The project's shell terminals end with it** (see "Closing a shell terminal" in `docs/product/shell-terminals.md`),
 whether their shells are busy or not; they never hold a removal up and the confirmation does not list them. They are
@@ -42,6 +45,22 @@ ended once the removal is past its refusals below.
 Removal is refused while a session of the project is being launched or resumed at that moment, since that session has
 no process yet that could be ended, and, with the Trash option ticked, for the folder reasons below. A refusal is shown
 in an error alert over the confirmation and names the reason; nothing is ended, moved or removed.
+
+## The project's processes
+
+**The project's processes are stopped with it**: the background processes no session owns, those the user kept and
+those left behind in its folder (see "Removing a project" in `docs/product/background-processes.md`), whether or not
+the folder goes to the Trash. They are stopped right after its sessions are ended and its shell terminals closed,
+before the folder is moved.
+
+The confirmation reads the project's process list as it opens, and its confirm button is pending until that list has
+answered. Its **Project processes** section lists each of them as a row: the command on one line after a crossed-out
+play glyph in the danger colour, with a **Details** disclosure under it showing the working directory and the facts (as
+in "Processes in an archive confirmation" in `docs/product/background-processes.md`), and no choice, since they are
+stopped whatever is chosen. A line under the rows says how many are stopped. When the list cannot be read, the section
+shows an amber warning instead, titled that the project processes could not be listed and saying that any that are
+running will still be stopped, announced as it appears, and no count (see "Failures shown on the screen" in
+`docs/product/error-alerts.md`).
 
 ## Moving the project folder to the Trash
 

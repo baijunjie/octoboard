@@ -14,7 +14,7 @@ import { handFocusOff } from "../components/handFocusOff";
 import { HandOffOnUnmount } from "../components/HandOffOnUnmount";
 import { InlineReference } from "../components/InlineReference";
 import { PanelHeader } from "../components/PanelHeader";
-import { FOCUSABLE } from "../components/regionFocus";
+import { FOCUSABLE, focusFellToPage } from "../components/regionFocus";
 import { ROW_ICON_BUTTON_CLASS } from "../components/RowControls";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useTabScrollLabels } from "../components/tabScrollLabels";
@@ -409,12 +409,6 @@ export function ShellTerminalPanel({
       )}
     </>
   );
-}
-
-/** Whether focus has fallen to the page, as it does when the element holding it goes. */
-function focusFellToPage(): boolean {
-  const active = document.activeElement;
-  return !active || active === document.body;
 }
 
 /** Where a close was asked from: a menu (a tab's context menu, the header's) or the terminal itself (its

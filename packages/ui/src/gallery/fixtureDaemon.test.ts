@@ -14,7 +14,7 @@ import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./fixtures/restore
 import type { FixtureFile } from "./fixtures/projectFiles";
 import { SAMPLE_GIT } from "./fixtures/projectGit";
 import { quotaFailure, quotaOf, quotaWindow } from "./fixtures/quotas";
-import { accountSharingOf, branchItemOf, consoleOf, gitStatusOf, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState, worktreeItemOf } from "./fixtures/builders";
+import { accountSharingOf, branchItemOf, consoleOf, gitStatusOf, leftoverOf, pageOf, processTreeOf, projectOf, sessionOf, shellTerminalOf, snapshotState, worktreeItemOf } from "./fixtures/builders";
 import { DEFAULT_GIT_WORKFLOW, FOLLOWING_GIT_WORKFLOW } from "../gitWorkflow";
 
 describe("the fixture daemon's session archiving", () => {
@@ -912,7 +912,7 @@ describe("the fixture daemon's bound branches and worktrees", () => {
 
   it("answers a project removal per project and refuses an unknown one", async () => {
     const daemon = createFixtureDaemon(scenario);
-    await expect(daemon.request({ type: "inspect_project_removal", project: project.id })).resolves.toEqual({ type: "project_removal_inspected", items: [worktree, unbound] });
+    await expect(daemon.request({ type: "inspect_project_removal", project: project.id })).resolves.toEqual({ type: "project_removal_inspected", items: [worktree, unbound], processes: [] });
     await expect(createFixtureDaemon({ ...scenario, projectRemovalBranches: undefined }).request({ type: "inspect_project_removal", project: project.id })).resolves.toMatchObject({ items: [] });
     await expect(daemon.request({ type: "inspect_project_removal", project: "missing" })).rejects.toMatchObject({ code: "unknown_project" });
   });
@@ -920,7 +920,14 @@ describe("the fixture daemon's bound branches and worktrees", () => {
   it("hands a project inspection's token over with the items it held back", async () => {
     const held = { ...unbound, state: "failed" as const, uncommitted: false, detail: "could not be told", cause: "project_folder_unknown" as const };
     const daemon = createFixtureDaemon({ ...scenario, projectRemovalBranches: { [project.id]: { items: [worktree, held], inspection: "token-2" } } });
-    await expect(daemon.request({ type: "inspect_project_removal", project: project.id })).resolves.toEqual({ type: "project_removal_inspected", items: [worktree, held], inspection: "token-2" });
+    await expect(daemon.request({ type: "inspect_project_removal", project: project.id })).resolves.toEqual({ type: "project_removal_inspected", items: [worktree, held], processes: [], inspection: "token-2" });
+  });
+
+  it("carries the project's processes in a removal's inspection, the oldest first", async () => {
+    const newer = leftoverOf("1:1", "vite", 10);
+    const older = leftoverOf("2:1", "esbuild", 20);
+    const daemon = createFixtureDaemon({ ...scenario, processes: { projectProcesses: { [project.id]: [newer, older] } } });
+    await expect(daemon.request({ type: "inspect_project_removal", project: project.id })).resolves.toMatchObject({ processes: [older, newer] });
   });
 
   it("hands a project inspection's refusal over with all its params, the token the removal sends back among them", async () => {
@@ -2094,5 +2101,121 @@ describe("the fixture daemon's git workflow settings", () => {
     await daemon.request({ type: "add_project", console_id: console_.id, source: "local", path: "/Users/dev/code/new", git_workflow: { development: "in_place", delivery: null } });
     const added = [...daemon.store.getState().projects.values()].find((project) => project.path === "/Users/dev/code/new");
     expect(added?.git_workflow).toEqual({ ...FOLLOWING_GIT_WORKFLOW, development: "in_place" });
+  });
+});
+
+describe("the fixture daemon's process ledger", () => {
+  const project = projectOf("p", "c", "Website");
+  const other = projectOf("p-other", "c", "Search API");
+  const running = sessionOf("running", "c", project.id, "Running", "idle");
+  const working = sessionOf("working", "c", project.id, "Working", "working");
+  const idleElsewhere = sessionOf("elsewhere", "c", other.id, "Elsewhere", "idle");
+  const interrupted = sessionOf("interrupted", "c", project.id, "Interrupted", "interrupted");
+  const old = processTreeOf("1:1", running, "pnpm dev", 90);
+  const young = processTreeOf("2:1", running, "pnpm test --watch", 0.1);
+  const mine = processTreeOf("3:1", working, "node watch.mjs", 30);
+  const away = processTreeOf("4:1", idleElsewhere, "caddy run", 30);
+  const stale = processTreeOf("5:1", interrupted, "tail -f log", 30);
+  const left = leftoverOf("6:1", "vite --port 5180", 600);
+  const scenario = {
+    id: "ledger",
+    group: "Processes" as const,
+    category: "normal" as const,
+    title: "",
+    state: snapshotState({ consoles: [consoleOf("c", "Main")], projects: [project, other], sessions: [running, working, idleElsewhere, interrupted] }),
+    processes: { trees: [young, old, mine, away, stale], projectProcesses: { [project.id]: [left] } },
+  };
+  const list = (daemon: ReturnType<typeof createFixtureDaemon>, target: { session_id: string } | { project_id: string }) =>
+    daemon.request({ type: "list_processes", ...target }).then((reply) => (reply.type === "processes_listed" ? reply.trees.map((tree) => tree.id) : []));
+
+  it("lists a running session's trees oldest first, and refuses one with no process or no record", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    await expect(list(daemon, { session_id: running.id })).resolves.toEqual(["1:1", "2:1"]);
+    await expect(daemon.request({ type: "list_processes", session_id: interrupted.id })).rejects.toMatchObject({ code: "session_not_running" });
+    await expect(daemon.request({ type: "list_processes", session_id: "missing" })).rejects.toMatchObject({ code: "unknown_session" });
+  });
+
+  it("lists a project's running sessions' trees, then its leftovers, and refuses an unknown project", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    await expect(list(daemon, { project_id: project.id })).resolves.toEqual(["1:1", "2:1", "3:1", "6:1"]);
+    await expect(list(daemon, { project_id: other.id })).resolves.toEqual(["4:1"]);
+    await expect(daemon.request({ type: "list_processes", project_id: "missing" })).rejects.toMatchObject({ code: "unknown_project" });
+  });
+
+  it("lists in an archive's inspection only the trees that have run for 30 seconds, and none unless asked", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    const inspect = (processes?: boolean) => daemon.request({ type: "inspect_session_branches", sessions: [running.id, working.id, interrupted.id], ...(processes ? { processes } : {}) });
+    await expect(inspect(true)).resolves.toMatchObject({ processes: [old, mine] });
+    expect(await inspect()).not.toHaveProperty("processes");
+    await expect(createFixtureDaemon({ ...scenario, processes: undefined }).request({ type: "inspect_session_branches", sessions: [running.id], processes: true })).resolves.not.toHaveProperty("processes");
+  });
+
+  it("stops the trees that still qualify, and leaves out the ones that do not", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    await expect(daemon.request({ type: "stop_processes", ids: ["1:1", "5:1", "6:1", "nope"] })).resolves.toEqual({ type: "processes_stopped", ids: ["1:1", "6:1"] });
+    await expect(list(daemon, { project_id: project.id })).resolves.toEqual(["2:1", "3:1"]);
+  });
+
+  it("keeps the trees of a running session that still qualify, which then stay listed as the project's, and nothing of a project process", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    await expect(daemon.request({ type: "keep_processes", ids: ["1:1", "5:1", "6:1"] })).resolves.toEqual({ type: "processes_kept", ids: ["1:1"] });
+    await expect(list(daemon, { project_id: project.id })).resolves.toEqual(["2:1", "3:1", "6:1", "1:1"]);
+    await expect(list(daemon, { session_id: running.id })).resolves.toEqual(["2:1"]);
+    const kept = await daemon.request({ type: "list_processes", project_id: project.id });
+    expect(kept.type === "processes_listed" ? kept.trees.filter((tree) => tree.kept).map((tree) => [tree.id, tree.session_id]) : []).toEqual([["1:1", undefined]]);
+  });
+
+  it("keeps nothing of a console session", async () => {
+    const hub = sessionOf("hub", "c", undefined, "Hub", "idle");
+    const own = processTreeOf("7:1", hub, "caddy run", 30);
+    const daemon = createFixtureDaemon({ ...scenario, state: snapshotState({ consoles: [consoleOf("c", "Main")], projects: [project], sessions: [hub] }), processes: { trees: [own] } });
+    await expect(daemon.request({ type: "keep_processes", ids: ["7:1"] })).resolves.toEqual({ type: "processes_kept", ids: [] });
+    await expect(list(daemon, { session_id: hub.id })).resolves.toEqual(["7:1"]);
+  });
+
+  it("ends an archived session's trees but the ones the user keeps, which stay kept when the archive is refused", async () => {
+    const archived = createFixtureDaemon(scenario);
+    await archived.request({ type: "archive_session", session: running.id, keep_process_ids: ["1:1"] });
+    await expect(list(archived, { project_id: project.id })).resolves.toEqual(["3:1", "6:1", "1:1"]);
+    const refused = createFixtureDaemon({ ...scenario, sessionArchiveError: { code: "store_io_failed", params: { detail: "Disk full" }, message: "Disk full" } });
+    await expect(refused.request({ type: "archive_session", session: running.id, keep_process_ids: ["1:1"] })).rejects.toMatchObject({ code: "store_io_failed" });
+    await expect(list(refused, { session_id: running.id })).resolves.toEqual(["2:1"]);
+  });
+
+  it("answers the first list and refuses the polls that follow it once a second has passed, when the scenario says so", async () => {
+    const error = { code: "internal_error", params: { detail: "no" }, message: "no" };
+    vi.useFakeTimers();
+    try {
+      const daemon = createFixtureDaemon({ ...scenario, processes: { ...scenario.processes, listLater: error } });
+      await expect(list(daemon, { session_id: running.id })).resolves.toEqual(["1:1", "2:1"]);
+      await expect(list(daemon, { session_id: running.id })).resolves.toEqual(["1:1", "2:1"]);
+      vi.advanceTimersByTime(3000);
+      await expect(daemon.request({ type: "list_processes", session_id: running.id })).rejects.toMatchObject({ code: "internal_error" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("refuses the list of just the project the scenario names, leaving the others and the session lists answered", async () => {
+    const error = { code: "internal_error", params: { detail: "no" }, message: "no" };
+    const daemon = createFixtureDaemon({ ...scenario, processes: { ...scenario.processes, projectList: { [project.id]: error } } });
+    await expect(daemon.request({ type: "list_processes", project_id: project.id })).rejects.toMatchObject({ code: "internal_error" });
+    await expect(list(daemon, { project_id: other.id })).resolves.toEqual(["4:1"]);
+    await expect(list(daemon, { session_id: running.id })).resolves.toEqual(["1:1", "2:1"]);
+  });
+
+  it("answers what the scenario stages: a list or an action refused, or never answered", async () => {
+    const error = { code: "internal_error", params: { detail: "no" }, message: "no" };
+    await expect(createFixtureDaemon({ ...scenario, processes: { list: error } }).request({ type: "list_processes", session_id: running.id })).rejects.toMatchObject({ code: "internal_error" });
+    await expect(createFixtureDaemon({ ...scenario, processes: { stop: error } }).request({ type: "stop_processes", ids: ["1:1"] })).rejects.toMatchObject({ code: "internal_error" });
+    await expect(createFixtureDaemon({ ...scenario, processes: { keep: error } }).request({ type: "keep_processes", ids: ["1:1"] })).rejects.toMatchObject({ code: "internal_error" });
+    for (const processes of [{ list: "pending" }, { stop: "pending" }, { keep: "pending" }] as const) {
+      const answered = vi.fn();
+      const daemon = createFixtureDaemon({ ...scenario, processes });
+      const request = "list" in processes ? { type: "list_processes" as const, session_id: running.id } : "stop" in processes ? { type: "stop_processes" as const, ids: ["1:1"] } : { type: "keep_processes" as const, ids: ["1:1"] };
+      void daemon.request(request).then(answered, answered);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(answered).not.toHaveBeenCalled();
+    }
   });
 });

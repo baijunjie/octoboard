@@ -3,8 +3,8 @@
 The **Terminal panel** is a kind of panel in the right pane's stack (see `docs/product/right-pane-panels.md`) that
 shows a project's shell terminals — the plain login shells the daemon runs for a project (see
 `docs/product/shell-terminals.md`) — as **tabs**, one tab per terminal. Only a project's stack has it: a console
-session has no Terminal panel and no Terminal toggle, since a shell needs a project's directory. It is stacked under
-the Files panel, and is **closed** until the user opens it.
+session has no Terminal panel and no Terminal toggle, since a shell needs a project's directory. It is stacked last,
+under the Files and Processes panels, and is **closed** until the user opens it.
 
 Its header's title is "Terminal", retained as an accessible heading when its visual title is hidden (see "A panel's
 header" in `docs/product/right-pane-panels.md`); for assistive technology the panel is a region named for the project's

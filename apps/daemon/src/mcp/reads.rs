@@ -159,6 +159,7 @@ pub(super) async fn get_session(
         description["resumable"] = json!(resumable[&target.id]);
     }
     description["recent_output"] = json!(output);
+    description["processes"] = json!(processes_of(state, &target.id).await);
     if state.shown_status(&target) == SessionStatus::WaitingUser {
         description["note"] = json!(
             "This session is waiting for the user, not for you. Leave it be until they have \
@@ -166,6 +167,22 @@ pub(super) async fn get_session(
         );
     }
     Ok(description)
+}
+
+/// The process trees the running process of the session `id` started that are still running,
+/// as `handover_processes` names them; none for a session with no process. Listed as a client's
+/// request for them is, so a recent listing answers again. A failed read is none, rather than an
+/// error that would take the rest of the answer down with it.
+async fn processes_of(state: &Arc<AppState>, id: &str) -> Vec<crate::process_ledger::ProcessTree> {
+    if !state.has_process(id) {
+        return Vec::new();
+    }
+    let target = crate::protocol::ProcessTarget::Session {
+        session_id: id.to_string(),
+    };
+    crate::process_requests::list(state, target)
+        .await
+        .unwrap_or_default()
 }
 
 /// The last `tail` bytes of what a session has printed, readable. A running session's comes from

@@ -38,13 +38,18 @@ one moving left towards the start; under a right-to-left language the other way 
 - with the drawer open, closes it;
 - otherwise, while the right pane has an owner (see "What the right pane shows" in `docs/product/window-layout.md`):
   - with no panel floating over the terminal, floats the panel last on screen for the owner's kind (see "Below 782 px:
-    one panel floats over the terminal" in `docs/product/right-pane-panels.md`) while its toggle is offered, or,
-    when there is none, the first panel the top bar offers a toggle for, in their order (see "The panel toggles in the
-    top bar" in `docs/product/right-pane-panels.md`); a Terminal panel opened this way starts a shell when the project
-    has none, as its toggle does;
-  - with a panel floating, puts the next panel the top bar offers in its place, the last one wrapping round to the
-    first; an owner with only one kind of panel, such as a console session with its report panel, gets nothing;
-- with no owner, does nothing.
+    one panel floats over the terminal" in `docs/product/right-pane-panels.md`) while a swipe can open it, or,
+    when it cannot, the first panel a swipe can open, in the top bar's order of toggles (see "The panel toggles in the
+    top bar" in `docs/product/right-pane-panels.md`);
+  - with a panel floating, puts the next panel a swipe can open in its place, in that order, the last one wrapping round
+    to the first; with no other panel a swipe can open, it does nothing;
+- with no owner, or with no panel a swipe can open, does nothing.
+
+**A swipe opens only a panel with something to show**: of the panels the top bar offers a toggle for, it skips the
+Processes panel once its list is known to be empty (see "Loading, refreshing and failures" in
+`docs/product/processes-panel.md`) — it still opens it while the list is not yet known or could not be read — and the
+Terminal panel while the project has no shell terminal, so a swipe never starts a shell. Their toggles still open
+them.
 
 A swipe opens and closes these as their toggles do, so the drawer and a floating panel are still never on screen
 together. With no console (the welcome screen, see `docs/product/welcome-screen.md`) there is neither a drawer nor a

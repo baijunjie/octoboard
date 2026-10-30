@@ -849,3 +849,146 @@ async fn a_session_that_is_no_longer_the_askers_is_refused() {
     assert!(fixture.launches.lock().unwrap().is_empty());
     assert_eq!(fixture.snapshot(), before);
 }
+
+/// A stand-in process for the stored session `id` whose shell command leaves one process running
+/// in a terminal session of its own, as an agent's dev server is; registered and watched as a
+/// launched session's is. Answers that process's pid.
+fn run_leaving_one(fixture: &Fixture, id: &str) -> (StandIn, i32) {
+    let pid_file = fixture.dir.join(format!("{id}-child"));
+    let live = crate::test_support::fake_live_session(
+        id,
+        Agent::Claude,
+        80,
+        24,
+        &format!(
+            "/usr/bin/perl -MPOSIX -e 'POSIX::setsid(); {} exec \"/bin/sleep\", \"300\";' &\n\
+             exec sleep 300",
+            crate::test_support::perl_write(&pid_file, "$$")
+        ),
+    );
+    fixture.state.register_live(live.clone());
+    fixture.state.watch_exit(live.clone());
+    let child = crate::test_support::wait_for_pid(&pid_file);
+    (live, child)
+}
+
+/// Waits for `pid` to stop running, off the runtime, so the exit watchers that stop it run.
+async fn stops_running(pid: i32) -> bool {
+    crate::test_support::within(crate::test_support::PATIENCE, move || {
+        !crate::test_support::is_running(pid)
+    })
+    .await
+}
+
+/// What the original's process started keeps running once the handoff's archive has ended that
+/// process: the receiving session holds it, lists it, and stops it when it is archived in turn.
+#[tokio::test(flavor = "multi_thread")]
+async fn what_the_original_started_is_carried_over_to_the_receiving_session() {
+    let fixture = Fixture::new("carry-over");
+    fixture
+        .state
+        .store
+        .insert_session(&session("original", true, "idle", None, false))
+        .unwrap();
+    let (_original, child) = run_leaving_one(&fixture, "original");
+    let _guard = crate::test_support::KillOnDrop(vec![child]);
+
+    let receiving = fixture.hand_off("original").await.unwrap();
+    let state = fixture.state.clone();
+    assert!(
+        crate::test_support::within(crate::test_support::PATIENCE, move || state
+            .live_session("original")
+            .is_none())
+        .await,
+        "the original's process was ended"
+    );
+    assert!(
+        crate::test_support::is_running(child),
+        "stopped with the original"
+    );
+    let trees = fixture.state.process_ledger.trees_of_sessions(
+        std::slice::from_ref(&receiving.id),
+        std::time::Duration::ZERO,
+    );
+    assert_eq!(trees.len(), 1, "{trees:?}");
+    assert_eq!(trees[0].session_id.as_deref(), Some(receiving.id.as_str()));
+    assert!(trees[0].id.starts_with(&format!("{child}:")));
+    assert!(fixture
+        .state
+        .process_ledger
+        .trees_of_sessions(&["original".to_string()], std::time::Duration::ZERO)
+        .is_empty());
+
+    coordinator::archive_session(&fixture.state, &receiving.id).unwrap();
+    assert!(
+        stops_running(child).await,
+        "kept running past the receiving session"
+    );
+}
+
+/// A handoff whose receiving session does not start leaves the original running with what it
+/// started, which is still stopped with it.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_receiving_session_that_does_not_start_leaves_what_the_original_started_with_it() {
+    let fixture = Fixture::new("carry-over-failed");
+    fixture
+        .state
+        .store
+        .insert_session(&session("original", true, "idle", None, false))
+        .unwrap();
+    let (original, child) = run_leaving_one(&fixture, "original");
+    let _guard = crate::test_support::KillOnDrop(vec![child]);
+
+    fixture
+        .hand_off_launching("original", Agent::Codex, |_| {
+            Err(anyhow!("the agent could not be started"))
+        })
+        .await
+        .expect_err("the receiving session did not start");
+    assert!(crate::test_support::is_running(child));
+    assert_eq!(fixture.stored("original").status, SessionStatus::Idle);
+
+    coordinator::archive_session(&fixture.state, &original.id).unwrap();
+    assert!(stops_running(child).await, "kept running past the original");
+}
+
+/// A handoff whose archive of the original fails after what the original started was marked to be
+/// carried over takes the mark back: the original stays running with it, and when it ends later
+/// the processes are stopped with it, not carried to the receiving session left running.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_failed_archive_takes_back_the_carry_over_of_what_the_original_started() {
+    let fixture = Fixture::new("carry-over-archive-failed");
+    fixture
+        .state
+        .store
+        .insert_session(&session("original", true, "idle", None, false))
+        .unwrap();
+    let (original, child) = run_leaving_one(&fixture, "original");
+    let _guard = crate::test_support::KillOnDrop(vec![child]);
+    let state = fixture.state.clone();
+    let during = fixture.launch_after(move || {
+        // The user locks the original while the receiving session starts, so archiving it fails.
+        state.store.set_session_locked("original", true).unwrap();
+    });
+
+    let err = fixture
+        .hand_off_launching("original", Agent::Codex, during)
+        .await
+        .expect_err("archiving the original failed");
+    assert!(
+        format!("{err:#}").contains("archiving the original session failed"),
+        "{err:#}"
+    );
+    assert!(crate::test_support::is_running(child));
+
+    fixture
+        .state
+        .store
+        .set_session_locked("original", false)
+        .unwrap();
+    coordinator::archive_session(&fixture.state, &original.id).unwrap();
+    assert!(
+        stops_running(child).await,
+        "carried to the receiving session though the handoff failed"
+    );
+}

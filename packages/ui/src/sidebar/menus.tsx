@@ -22,7 +22,7 @@ import type { ArchiveScope, ProjectPanelKind, SidebarHandlers } from "./types";
 /** The project panels the Open panel submenu offers, as the top bar's toggles draw them. The Report
  * panel is not among them: whether it exists depends on the selected session's pages, which the
  * menu cannot tell for a project that does not yet own the pane. */
-const PROJECT_PANELS: readonly ProjectPanelKind[] = ["files", "terminal"];
+const PROJECT_PANELS: readonly ProjectPanelKind[] = ["files", "processes", "terminal"];
 
 /** "View archive": the archive's preview (`archivePreviewSessions`), each item selecting its session
  * and showing its archive time, then "View all", which opens the full archive. */

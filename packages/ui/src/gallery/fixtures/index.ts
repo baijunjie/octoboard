@@ -15,6 +15,7 @@ import { focusScenarios } from "./focus";
 import { gitScenarios } from "./git";
 import { handoffScenarios } from "./handoff";
 import { layoutScenarios } from "./layout";
+import { processScenarios } from "./processes";
 import { projectFilesScenarios } from "./projectFiles";
 import { projectGitScenarios } from "./projectGit";
 import { noticeScenarios } from "./notices";
@@ -57,6 +58,7 @@ export const SCENARIOS: Scenario[] = [
   ...noticeScenarios,
   ...structuredErrorScenarios,
   ...archiveScenarios,
+  ...processScenarios,
   ...reportScenarios,
   ...projectFilesScenarios,
   ...projectGitScenarios,

@@ -84,6 +84,9 @@ pub struct LaunchRequest {
     pub daemon_port: u16,
     pub self_exe: String,
     pub mcp_token: String,
+    /// What every process of this launch carries, whatever the agent and the session's role; see
+    /// `crate::process_ledger`.
+    pub process_tag: crate::process_ledger::ProcessTag,
 }
 
 /// Starts one agent process. A resume assembles the full injection just as a fresh launch does,
@@ -113,6 +116,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         daemon_port,
         self_exe,
         mcp_token,
+        process_tag,
     } = request;
     let session_id = session_id.as_str();
     let cwd = cwd.as_path();
@@ -208,6 +212,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
             cmd.env(key, value);
         }
     }
+    cmd.env(crate::process_ledger::TAG_VARIABLE, process_tag.value());
     cmd.env("TERM", pty::TERM);
     cmd.cwd(cwd);
 
@@ -223,6 +228,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
     let live = Arc::new(LiveSession::new(NewSession {
         id: session_id.to_string(),
         agent,
+        launch_id: process_tag.launch_id().to_string(),
         spawned,
         scratch_dir: Some(scratch),
         resolves_approvals_itself: plan.resolves_approvals_itself,

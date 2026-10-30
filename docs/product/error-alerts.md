@@ -212,6 +212,8 @@ The places with an empty-state failure:
   failed" in `docs/product/session-history.md`);
 - the report panel's pages that could not be listed while it has no page to show (see "Paging through the history" in
   `docs/product/report-panel.md`);
+- the Processes panel's list when its first reading failed (see "Loading, refreshing and failures" in
+  `docs/product/processes-panel.md`);
 - the screens for a daemon that could not start and for a UI that failed, each the whole page, its heading the page's
   top-level heading and its raw text on the details surface, with **Quit**, where the application can quit itself,
   after the recovery or, with none, as the one action (see "The window chrome and the content panel" in
@@ -241,6 +243,15 @@ The places with a compact alert:
   request to switch a session's account or to hand a session off, what holds the session itself, whatever is chosen
   (see "The user's approval of an owner's switch" in `docs/product/switching-session-accounts.md` and "The user's
   approval of an owner's handoff" in `docs/product/handing-off-sessions.md`).
+
+Two failures that leave their component doing its job are an **amber warning alert** above or in place of what they
+concern, with a title, one sentence, **Details** where there is more to show and no other button, announced once as
+it appears:
+
+- the Processes panel's list that could not be refreshed while the last one still shows, above it (see "Loading,
+  refreshing and failures" in `docs/product/processes-panel.md`);
+- the project processes that could not be listed in the confirmation of removing a project or deleting a console, in
+  their section (see "The project's processes" in `docs/product/removing-projects.md`).
 
 Any other failure, and every warning and note — one that leaves its component doing its job, such as a failure of one
 part of a pane that still shows the rest — is neither, except a warning about a choice being made (see "Warnings about a

@@ -362,9 +362,11 @@ counts as one label (see "Filtering the project list" in `docs/product/sidebar.m
 rather than ending in an ellipsis. The same holds for action-menu items and submenu names, a select's current choice or
 placeholder and its listed options, directory-picker rows, each line of a focus mode's header — the console's name and
 the project's name in a project's focus mode, the console's name alone in a console session's — the archive view's
-heading and count, the model line on a focus mode card and on a full archive row, and the owner link in a session
-history's header (see "The owner the session reports to" in `docs/product/session-history.md`). A fixed session-owner
-label and a diff's collapsed-line label follow the same fade and marquee rules.
+heading and count, the model line on a focus mode card and on a full archive row, the owner link in a session history's
+header (see "The owner the session reports to" in `docs/product/session-history.md`), a process tree's command on a
+Processes panel card and in an archive's or a removal's confirmation, and a session group's heading in the Processes
+panel (see `docs/product/processes-panel.md`). A fixed session-owner label and a diff's collapsed-line label follow the
+same fade and marquee rules.
 
 Except for the report timestamp, clipped text then has its full text as its tooltip — for the project filter's strip,
 its conditions as the strip shows them, wrapped (see "Filtering the project list" in `docs/product/sidebar.md`),

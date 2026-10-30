@@ -897,7 +897,9 @@ mod tests {
             directory.join("output"),
             directory.join("consoles"),
             directory.join("handoff"),
+            crate::process_ledger::ProcessLedger::new(&directory),
         ));
+        state.process_ledger.without_scanner();
         let mut cursors = Cursors::default();
         collect(&state, &mut cursors);
         let after = state.session_record("s").unwrap();

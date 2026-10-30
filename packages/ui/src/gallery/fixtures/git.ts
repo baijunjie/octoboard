@@ -308,7 +308,7 @@ export const gitScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "A project's Open panel menu",
-    description: "Website's menu with no project panel on screen: below the separator, Open panel sits directly above Open in, and its submenu is open with Files and Terminal, each beside its own icon (the Terminal's is the framed one the Terminal toggle uses). There is no Report item and no Browse files.",
+    description: "Website's menu with no project panel on screen: below the separator, Open panel sits directly above Open in, and its submenu is open with Files, Processes and Terminal, each beside its own icon (Processes' is the SquareActivity glyph of its toggle, the Terminal's the framed one the Terminal toggle uses). There is no Report item and no Browse files.",
     state: snapshotState({ consoles: [SAMPLE.console], projects: [SAMPLE.web, SAMPLE.api], sessions: SAMPLE.sessions }),
     steps: [openProjectMenu(SAMPLE.web.name), (ui) => ui.press(ui.t("sidebar.project.openPanel"))],
   },

@@ -3,11 +3,12 @@ import { act, StrictMode } from "react";
 import { setInteractionModality } from "react-aria";
 import { expect, it, vi } from "vitest";
 
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import { enter, leave, mountForTooltip, openTooltip, withFakeTimers } from "../components/tooltipTestSupport";
 import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
 import { errorAlerts } from "../errorAlerts";
 import { isolate } from "../i18n/isolate";
-import type { Account, Session, SessionBranchItem } from "../protocol";
+import type { Account, Project, Session, SessionBranchItem } from "../protocol";
 import { DaemonRequestError } from "../daemon-client";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import type { DialogRequest } from "./dialogRequest";
@@ -26,11 +27,12 @@ function mount(
   dialog: DialogRequest,
   sessions: Session[],
   accounts: Account[] = [],
-  callbacks: { onClose?: () => void; request?: Daemon["request"]; onSwitchAccounts?: (sessionIds: string[], account: string | null, accountName: string) => void; strict?: boolean } = {},
+  callbacks: { projects?: Project[]; onClose?: () => void; request?: Daemon["request"]; onSwitchAccounts?: (sessionIds: string[], account: string | null, accountName: string) => void; strict?: boolean } = {},
 ): { container: HTMLElement; daemon: Daemon } {
   const daemon: Daemon = {
     store: createStateStore({
       sessions: new Map(sessions.map((s) => [s.id, s])),
+      projects: new Map((callbacks.projects ?? []).map((p) => [p.id, p])),
       settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
     }),
     request: vi.fn(callbacks.request) as never,
@@ -199,7 +201,7 @@ it("lists every bound descendant before archiving and refreshes the list while o
   const late = sessionOf("late", console_.id, project.id, "New session", "starting", { bound_to: hub.id });
   act(() => daemon.store.setState({ sessions: new Map([...daemon.store.getState().sessions, [late.id, late]]) }));
   expect(titles()).toHaveLength(4);
-  expect(document.querySelector("[role=alertdialog]")?.textContent).toContain("Their processes end.");
+  expect(document.querySelector("[role=alertdialog]")?.textContent).toContain("Archived with it (4)");
   await submitDialog();
   expect(sent(daemon, "archive_session")).toEqual([{ type: "archive_session", session: hub.id }]);
   expect(onClose).toHaveBeenCalledOnce();
@@ -265,7 +267,8 @@ it.each(TRASH_CONFIRMATIONS)("gives confirming %s its label for a ticked Trash o
     request: async (body) => {
       if (body.type === "inspect_session_branches") return { type: "session_branches_inspected", items: [] };
       if (body.type === "inspect_session_records") return { type: "session_records_inspected", presence: "present" };
-      if (body.type === "inspect_project_removal") return { type: "project_removal_inspected", items: [] };
+      if (body.type === "inspect_project_removal") return { type: "project_removal_inspected", items: [], processes: [] };
+      if (body.type === "list_processes") return { type: "processes_listed", trees: [] };
       return new Promise(() => {});
     },
   });
@@ -537,7 +540,8 @@ it.each(BRANCH_CONFIRMATIONS)("lists what git refuses to remove when %s and forc
       : { type: "session_records_inspected", presence: "absent" },
   });
   await act(async () => {});
-  expect(sent(daemon, "inspect_session_branches")).toEqual([{ type: "inspect_session_branches", sessions: [owner.id] }]);
+  // Only an archive asks for the processes it would stop.
+  expect(sent(daemon, "inspect_session_branches")).toEqual([{ type: "inspect_session_branches", sessions: [owner.id], ...(dialog.kind === "archive-session" ? { processes: true } : {}) }]);
   expect(listed()).toEqual(["/r-feature on branch feature", "feature"]);
   const text = document.querySelector("[role=alertdialog]")?.textContent;
   expect(text).toContain("This worktree has uncommitted changes:");
@@ -548,6 +552,178 @@ it.each(BRANCH_CONFIRMATIONS)("lists what git refuses to remove when %s and forc
   checkAll();
   await submitDialog();
   expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({ ...body, force_remove: [targetOf(UNCOMMITTED), targetOf(UNMERGED)] });
+});
+
+const TREE = {
+  id: "4242:1", session_id: owner.id, command: "npm run dev", cwd: "/r-feature", cwd_missing: false, kept: false,
+  started_at: 1_000, process_count: 1, memory_bytes: 1_000_000, ports: [],
+};
+
+it("lists the processes an archive stops, stops those ticked by default and keeps only unchecked ones running, and does not ask again for an inspection in hand", async () => {
+  const { daemon } = mount({ kind: "archive-session", session: owner, inspection: { sessions: [owner.id], items: [], processes: [TREE, { ...TREE, id: "4300:2", command: "tail -f log" }] } }, [owner]);
+  await act(async () => {});
+  expect(sent(daemon, "inspect_session_branches")).toEqual([]);
+  expect(document.querySelector("[role=alertdialog]")?.textContent).toContain("2 processes are stopped.");
+  expect(boxes().map((box) => box.checked)).toEqual([true, true]);
+  await submitDialog();
+  expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({ type: "archive_session", session: owner.id });
+  act(() => boxes()[1].click());
+  await submitDialog();
+  expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({ type: "archive_session", session: owner.id, keep_process_ids: ["4300:2"] });
+  act(() => boxes()[0].click());
+  expect(document.querySelector("[role=alertdialog]")?.textContent).not.toContain("selected process");
+  await submitDialog();
+  expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({ type: "archive_session", session: owner.id, keep_process_ids: [TREE.id, "4300:2"] });
+  act(() => boxes()[1].click());
+  await submitDialog();
+  expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({ type: "archive_session", session: owner.id, keep_process_ids: [TREE.id] });
+});
+
+it("heads each topic of an archive as a labelled group, with a divider only between the groups shown and a group's consequences inside it", async () => {
+  const child = sessionOf("s-child", console_.id, project.id, "Child", "idle", { bound_to: owner.id });
+  mount({ kind: "archive-session", session: owner, inspection: { sessions: [owner.id, child.id], items: [UNMERGED], processes: [TREE] } }, [owner, child]);
+  await act(async () => {});
+  act(() => boxes()[0].click());
+  const dialog = document.querySelector("[role=alertdialog]")!;
+  const groups = [...dialog.querySelectorAll("[role=group]")].filter((group) => group.querySelector(":scope > h3"));
+  expect(groups.map((group) => group.querySelector("h3")?.textContent)).toEqual(["Archived with it (1)", "Worktrees and branches", "Background processes"]);
+  expect(dialog.querySelectorAll(".groove-t")).toHaveLength(2);
+  expect(groups[1].textContent).toContain("Also permanently deletes");
+  expect(groups[2].textContent).toContain("1 process is stopped.");
+});
+
+it("lists a console session's trees as rows that are always stopped, with no checkbox, and counts them with the ticked ones", async () => {
+  const consoleSession = sessionOf("s-console", console_.id, undefined, "Main", "idle");
+  const consoleTree = { ...TREE, id: "4400:3", session_id: consoleSession.id, command: "node console.js" };
+  const bound = { ...owner, bound_to: consoleSession.id };
+  const { daemon } = mount({ kind: "archive-session", session: consoleSession, inspection: { sessions: [consoleSession.id, bound.id], items: [], processes: [consoleTree, TREE] } }, [consoleSession, bound]);
+  await act(async () => {});
+  const dialog = document.querySelector("[role=alertdialog]")!;
+  expect(boxes()).toHaveLength(1);
+  expect(dialog.textContent).toContain("A console session's processes are always stopped.");
+  expect(dialog.textContent).toContain("node console.js");
+  expect(dialog.textContent).toContain("2 processes are stopped.");
+  act(() => boxes()[0].click());
+  expect(dialog.textContent).toContain("1 process is stopped.");
+  expect(dialog.textContent).toContain("The process you keep stays running.");
+  await submitDialog();
+  expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({ type: "archive_session", session: consoleSession.id, keep_process_ids: [TREE.id] });
+});
+
+it("offers no checkbox at all when every process of an archive is a console session's", async () => {
+  const consoleSession = sessionOf("s-console", console_.id, undefined, "Main", "idle");
+  mount({ kind: "archive-session", session: consoleSession, inspection: { sessions: [consoleSession.id], items: [], processes: [{ ...TREE, session_id: consoleSession.id }] } }, [consoleSession]);
+  await act(async () => {});
+  expect(boxes()).toHaveLength(0);
+  const dialog = document.querySelector("[role=alertdialog]")!;
+  expect(dialog.textContent).not.toContain("Uncheck any");
+  expect(dialog.textContent).toContain("1 process is stopped.");
+});
+
+it("shows no section, and no divider, for an archive with nothing to list", async () => {
+  mount({ kind: "archive-session", session: owner, inspection: { sessions: [owner.id], items: [], processes: [TREE] } }, [owner]);
+  await act(async () => {});
+  const dialog = document.querySelector("[role=alertdialog]")!;
+  expect([...dialog.querySelectorAll("h3")].map((h) => h.textContent)).toEqual(["Background processes"]);
+  expect(dialog.querySelector(".groove-t")).toBeNull();
+});
+
+it("preserves process choices through another inspection and selects newly found trees for stopping", async () => {
+  const late = sessionOf("s-late", console_.id, project.id, "Late", "idle", { bound_to: owner.id });
+  const answer = deferred();
+  const { daemon } = mount({ kind: "archive-session", session: owner, inspection: { sessions: [owner.id], items: [], processes: [TREE] } }, [owner], [], {
+    request: async (body) => {
+      if (body.type !== "inspect_session_branches") return { type: "ack" };
+      await answer.promise;
+      return { type: "session_branches_inspected", items: [], processes: [TREE, { ...TREE, id: "4300:2", command: "tail -f log" }] };
+    },
+  });
+  await act(async () => {});
+  act(() => boxes()[0].click());
+  act(() => daemon.store.setState({ sessions: new Map([[owner.id, owner], [late.id, late]]) }));
+  expect(boxes()[0].checked).toBe(false);
+  await act(async () => answer.resolve());
+  expect(boxes().map((box) => box.checked)).toEqual([false, true]);
+  await submitDialog();
+  expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({ type: "archive_session", session: owner.id, keep_process_ids: [TREE.id] });
+});
+
+it.each(["rejection", "unexpected reply", "empty success"] as const)("preserves only in-scope keep choices after a reinspection %s, while a successful empty result clears them", async (outcome) => {
+  const child = sessionOf("s-child", console_.id, project.id, "Child", "idle", { bound_to: owner.id });
+  const childTree = { ...TREE, id: "4300:2", session_id: child.id, command: "node child.js" };
+  const joined = sessionOf("s-joined", console_.id, project.id, "Joined", "idle", { bound_to: owner.id });
+  const answer = deferred();
+  const { daemon } = mount({ kind: "archive-session", session: owner, inspection: { sessions: [owner.id, child.id], items: [UNMERGED], processes: [TREE, childTree] } }, [owner, child], [], {
+    request: async (body) => {
+      if (body.type !== "inspect_session_branches") return { type: "ack" };
+      await answer.promise;
+      if (outcome === "rejection") throw new Error("Inspection unavailable");
+      if (outcome === "unexpected reply") return { type: "ack" };
+      return { type: "session_branches_inspected", items: [], processes: [] };
+    },
+  });
+  await act(async () => {});
+  act(() => boxes().forEach((box) => box.click()));
+  expect(boxes().map((box) => box.checked)).toEqual([true, false, false]);
+  act(() => daemon.store.setState({ sessions: new Map([[owner.id, owner], [joined.id, joined]]) }));
+  await act(async () => answer.resolve());
+  expect(sent(daemon, "inspect_session_branches")).toEqual([{ type: "inspect_session_branches", sessions: [joined.id, owner.id].sort(), processes: true }]);
+  const dialog = document.querySelector("[role=alertdialog]")!;
+  expect(dialog.querySelector('[data-pending="true"]')).toBeNull();
+  expect(dialog.textContent).not.toContain("node child.js");
+  expect(boxes().map((box) => box.checked)).toEqual(outcome === "empty success" ? [] : [false]);
+  await submitDialog();
+  expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({
+    type: "archive_session", session: owner.id,
+    ...(outcome === "empty success" ? {} : { keep_process_ids: [TREE.id] }),
+  });
+});
+
+it("states the consequences in the order of the controls, the branch cleanup first and the processes after", async () => {
+  mount({ kind: "archive-session", session: owner, inspection: { sessions: [owner.id], items: [UNCOMMITTED, UNMERGED], processes: [TREE, { ...TREE, id: "4300:2", command: "tail -f log" }] } }, [owner]);
+  await act(async () => {});
+  expect(boxes()).toHaveLength(3);
+  act(() => boxes()[0].click());
+  act(() => boxes()[2].click());
+  const text = document.querySelector("[role=alertdialog]")!.textContent!;
+  const forced = text.indexOf("permanently deletes");
+  const stopped = text.indexOf("1 process is stopped.");
+  const kept = text.indexOf("The process you keep stays running");
+  expect(forced).toBeGreaterThan(-1);
+  expect(stopped).toBeGreaterThan(forced);
+  expect(kept).toBeGreaterThan(stopped);
+});
+
+it("keeps a process's working directory and facts, not its command, in a Details disclosure under its checkbox, collapsed until opened", async () => {
+  const command = "node server.js ".concat("--flag=value ".repeat(20)).trim();
+  mount({ kind: "archive-session", session: owner, inspection: { sessions: [owner.id], items: [], processes: [{ ...TREE, command }] } }, [owner]);
+  await act(async () => {});
+  const dialog = document.querySelector("[role=alertdialog]")!;
+  const toggle = dialog.querySelector<HTMLButtonElement>("button[aria-expanded]")!;
+  expect(toggle.textContent).toBe("Details");
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  expect(toggle.getAttribute("aria-describedby")).toBeTruthy();
+  expect(document.getElementById(toggle.getAttribute("aria-describedby")!)?.contains(boxes()[0])).toBe(true);
+  // No custom tooltip or description for assistive technology stands in for it.
+  expect(boxes()[0].getAttribute("aria-describedby")).toBeNull();
+  act(() => toggle.click());
+  expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  const text = dialog.textContent!.replace(/[\u2066-\u2069]/g, "");
+  expect(text).toContain(command);
+  const details = document.getElementById(toggle.getAttribute("aria-controls")!)!.textContent!.replace(/[\u2066-\u2069]/g, "");
+  expect(details).toContain("/r-feature");
+  expect(details).toContain("1 MB of memory");
+  expect(details).not.toContain(command);
+});
+
+it("offers no choice of processes when the archive finds none", async () => {
+  const { daemon } = mount({ kind: "archive-session", session: owner }, [owner], [], {
+    request: async () => ({ type: "session_branches_inspected", items: [] }),
+  });
+  await act(async () => {});
+  expect(document.querySelector("[role=alertdialog] input[type=checkbox]")).toBeNull();
+  await submitDialog();
+  expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({ type: "archive_session", session: owner.id });
 });
 
 it("offers nothing to force when everything bound can go or has to stay", async () => {
@@ -619,7 +795,7 @@ it("drops an answer that arrives after a newer question", async () => {
 
 it("lists what goes along with a project's folder, asked afresh each time moving it to the Trash is chosen", async () => {
   const { daemon } = mount({ kind: "delete-project", project }, [], [], {
-    request: async () => ({ type: "project_removal_inspected", items: [UNCOMMITTED, UNMERGED] }),
+    request: async () => ({ type: "project_removal_inspected", items: [UNCOMMITTED, UNMERGED], processes: [] }),
   });
   await act(async () => {});
   expect(sent(daemon, "inspect_project_removal")).toEqual([]);
@@ -634,6 +810,140 @@ it("lists what goes along with a project's folder, asked afresh each time moving
   checkAll();
   await act(async () => {});
   expect(sent(daemon, "inspect_project_removal")).toHaveLength(2);
+});
+
+/** The confirmation's section headed "Project processes", if shown. */
+const projectProcessesGroup = () => [...document.querySelectorAll("[role=alertdialog] [role=group]")].find((candidate) => candidate.querySelector(":scope > h3")?.textContent === "Project processes") ?? null;
+
+it("lists the project processes a removal stops from the project's process list as rows under their own heading, and shows no section when there are none", async () => {
+  const kept = { ...TREE, session_id: undefined, kept: true };
+  const { daemon } = mount({ kind: "delete-project", project }, [], [], {
+    request: async (body) => body.type === "list_processes" ? { type: "processes_listed", trees: [kept, { ...TREE, id: "4300:2", session_id: undefined }, TREE] } : { type: "ack" },
+  });
+  await act(async () => {});
+  expect(sent(daemon, "list_processes")).toEqual([{ type: "list_processes", project_id: project.id }]);
+  expect(sent(daemon, "inspect_project_removal")).toEqual([]);
+  const group = [...document.querySelectorAll("[role=group]")].find((candidate) => candidate.querySelector(":scope > h3")?.textContent === "Project processes")!;
+  expect(group.querySelectorAll("button[aria-expanded]")).toHaveLength(2);
+  expect(group.textContent).toContain("2 processes are stopped.");
+  expect(group.querySelector("input[type=checkbox]")).toBeNull();
+});
+
+it("lists the project processes a console's deletion stops, one request per project of the console, and none of another console's", async () => {
+  const second = projectOf("p-2", console_.id, "Docs");
+  const elsewhere = projectOf("p-3", "c-2", "Other");
+  const stray = { ...TREE, id: "4300:2", session_id: undefined };
+  const { daemon } = mount({ kind: "delete-console", console: console_ }, [], [], {
+    projects: [project, second, elsewhere],
+    request: async (body) => body.type === "list_processes" ? { type: "processes_listed", trees: "project_id" in body && body.project_id === second.id ? [{ ...stray, id: "4300:9" }, stray] : [stray, TREE] } : { type: "ack" },
+  });
+  await act(async () => {});
+  expect((sent(daemon, "list_processes") as { project_id: string }[]).map((body) => body.project_id).sort()).toEqual(["p-1", "p-2"]);
+  const dialog = document.querySelector("[role=alertdialog]")!;
+  const group = [...dialog.querySelectorAll("[role=group]")].find((candidate) => candidate.querySelector(":scope > h3")?.textContent === "Project processes")!;
+  expect(group.querySelectorAll("button[aria-expanded]")).toHaveLength(3);
+  expect(group.textContent).toContain("3 processes are stopped.");
+  expect(dialog.querySelectorAll(".groove-t")).toHaveLength(0);
+});
+
+it("shows no project processes section in a console's deletion when none of its projects has any", async () => {
+  mount({ kind: "delete-console", console: console_ }, [], [], {
+    projects: [project, projectOf("p-2", console_.id, "Docs")],
+    request: async (body) => body.type === "list_processes" ? { type: "processes_listed", trees: [TREE] } : { type: "ack" },
+  });
+  await act(async () => {});
+  expect(document.querySelector("[role=alertdialog] [role=group]")).toBeNull();
+});
+
+it("says in a console's deletion that a project's processes could not be listed, and still lists those of the others", async () => {
+  const stray = { ...TREE, id: "4300:2", session_id: undefined };
+  mount({ kind: "delete-console", console: console_ }, [], [], {
+    projects: [project, projectOf("p-2", console_.id, "Docs")],
+    request: async (body) => {
+      if (body.type !== "list_processes") return { type: "ack" };
+      if ("project_id" in body && body.project_id === "p-2") throw new Error("gone");
+      return { type: "processes_listed", trees: [stray] };
+    },
+  });
+  await act(async () => {});
+  const group = projectProcessesGroup()!;
+  expect(group.textContent).toContain("Could not list all the project processes");
+  expect(group.textContent).toContain("Any that are running will still be stopped.");
+  expect(group.textContent).not.toContain("is stopped");
+});
+
+it("says in a project's removal that its project processes could not be listed, in place of the section reading as none", async () => {
+  mount({ kind: "delete-project", project }, [], [], {
+    request: async (body) => { if (body.type === "list_processes") throw new Error("gone"); return { type: "ack" }; },
+  });
+  await act(async () => {});
+  const group = projectProcessesGroup()!;
+  expect(group.querySelector("[role=alert], [data-slot=alert-title]")).not.toBeNull();
+  expect(group.textContent).toContain("Could not list the project processes");
+  expect(group.textContent).not.toContain("are stopped");
+  expect(group.querySelector(".font-mono")).toBeNull();
+});
+
+it("announces the failed project process list once the dialog's focus has settled, not as it mounts", async () => {
+  const settle = withFakeTimers();
+  mount({ kind: "delete-project", project }, [], [], {
+    request: async (body) => { if (body.type === "list_processes") throw new Error("gone"); return { type: "ack" }; },
+  });
+  await act(async () => {});
+  const group = projectProcessesGroup()!;
+  expect(group.querySelector("[role=alert]")).toBeNull();
+  await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
+  expect(group.querySelector("[role=alert]")?.textContent).toContain("Could not list the project processes");
+  settle();
+});
+
+it.each<[string, DialogRequest]>([
+  ["a project's removal", { kind: "delete-project", project }],
+  ["a console's deletion", { kind: "delete-console", console: console_ }],
+])("holds %s until its project processes have been listed", async (_name, request) => {
+  const answer = deferred();
+  const { daemon } = mount(request, [], [], {
+    projects: [project],
+    request: async (body) => {
+      if (body.type !== "list_processes") return { type: "ack" };
+      await answer.promise;
+      return { type: "processes_listed", trees: [{ ...TREE, session_id: undefined }] };
+    },
+  });
+  await act(async () => document.body.querySelector("[role=alertdialog] form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+  expect(sent(daemon, "delete_project")).toEqual([]);
+  expect(sent(daemon, "delete_console")).toEqual([]);
+  await act(async () => answer.resolve());
+  expect(projectProcessesGroup()).not.toBeNull();
+});
+
+it("heads a project's removal by its running sessions, its folder and its project processes, a divider only between the sections shown", async () => {
+  const running = { ...owner, status: "working" as const };
+  mount({ kind: "delete-project", project }, [running], [], {
+    request: async (body) => body.type === "list_processes" ? { type: "processes_listed", trees: [{ ...TREE, session_id: undefined }] } : { type: "ack" },
+  });
+  await act(async () => {});
+  const dialog = document.querySelector("[role=alertdialog]")!;
+  const headings = () => [...dialog.querySelectorAll("[role=group] > h3")].map((h) => h.textContent);
+  expect(headings()).toEqual(["Sessions that will be ended (1)", "Project folder", "Project processes"]);
+  expect(dialog.querySelectorAll(".groove-t")).toHaveLength(2);
+  expect(dialog.textContent).not.toContain("will also be stopped");
+});
+
+it("shows only the project folder section for a project with nothing running", async () => {
+  mount({ kind: "delete-project", project }, [], [], { request: async () => ({ type: "processes_listed", trees: [] }) });
+  await act(async () => {});
+  const dialog = document.querySelector("[role=alertdialog]")!;
+  expect([...dialog.querySelectorAll("[role=group] > h3")].map((h) => h.textContent)).toEqual(["Project folder"]);
+  expect(dialog.querySelectorAll(".groove-t")).toHaveLength(0);
+});
+
+it("shows no Project processes section when the project has none", async () => {
+  mount({ kind: "delete-project", project }, [], [], {
+    request: async (body) => body.type === "list_processes" ? { type: "processes_listed", trees: [TREE] } : { type: "ack" },
+  });
+  await act(async () => {});
+  expect(projectProcessesGroup()).toBeNull();
 });
 
 it("holds a project's removal while what goes along is asked, and says more may go when that fails", async () => {
@@ -657,7 +967,7 @@ it("holds a project's removal while what goes along is asked, and says more may 
 
 it("takes a locked worktree, and the branch it has checked out, along with a project only when chosen", async () => {
   const { daemon } = mount({ kind: "delete-project", project }, [], [], {
-    request: async () => ({ type: "project_removal_inspected", items: [UNCOMMITTED, LOCKED, PINNED] }),
+    request: async () => ({ type: "project_removal_inspected", items: [UNCOMMITTED, LOCKED, PINNED], processes: [] }),
   });
   checkAll();
   await act(async () => {});
@@ -679,7 +989,7 @@ it("lists the worktrees an inspection held back as staying, and sends back its t
   const held = { ...UNCOMMITTED, path: "/r-held", branch: "held", state: "failed" as const, uncommitted: false, detail: "could not be told", cause: "project_folder_unknown" as const };
   const { daemon } = mount({ kind: "delete-project", project }, [], [], {
     request: async (body) => body.type === "inspect_project_removal"
-      ? { type: "project_removal_inspected", items: [UNCOMMITTED, held], inspection: "token-2" }
+      ? { type: "project_removal_inspected", items: [UNCOMMITTED, held], processes: [], inspection: "token-2" }
       : { type: "ack" },
   });
   checkAll();
@@ -709,7 +1019,7 @@ it("asks again what goes along once a project's removal with its folder is refus
         inspections += 1;
         if (inspections === 1) throw new DaemonRequestError("refused", "project_directory_trash_failed", { ...refusal, inspection: "token-1" });
         await second.promise;
-        return { type: "project_removal_inspected", items: [UNCOMMITTED] };
+        return { type: "project_removal_inspected", items: [UNCOMMITTED], processes: [] };
       }
       if (body.type === "delete_project" && body.inspection) throw new DaemonRequestError("refused", "project_directory_trash_failed", refusal);
       return { type: "ack" };
@@ -747,7 +1057,7 @@ it("marks that more may go along with a project beside the Trash option, outside
   mount({ kind: "delete-project", project }, [], [], {
     request: async (body) => {
       if (body.type === "inspect_project_removal") throw new Error("Connection lost");
-      return { type: "ack" };
+      return body.type === "list_processes" ? { type: "processes_listed", trees: [] } : { type: "ack" };
     },
   });
   expect(unknownMark()).toBeNull();
@@ -825,7 +1135,7 @@ it.each(CONFIRMATIONS)("is a warning modal when %s: the warning icon in the head
 
 it("forces no locked worktree once the Trash option is unticked after the locked one was ticked", async () => {
   const { daemon } = mount({ kind: "delete-project", project }, [], [], {
-    request: async () => ({ type: "project_removal_inspected", items: [LOCKED] }),
+    request: async () => ({ type: "project_removal_inspected", items: [LOCKED], processes: [] }),
   });
   checkAll();
   await act(async () => {});
@@ -888,7 +1198,7 @@ it("folds what an option covers under a Details button described by its option, 
 
 it("folds what goes with a project's folder under the Trash option, counting it", async () => {
   mount({ kind: "delete-project", project }, [], [], {
-    request: async () => ({ type: "project_removal_inspected", items: [UNCOMMITTED, UNMERGED] }),
+    request: async () => ({ type: "project_removal_inspected", items: [UNCOMMITTED, UNMERGED], processes: [] }),
   });
   checkAll();
   await act(async () => {});
@@ -901,7 +1211,7 @@ it("folds what goes with a project's folder under the Trash option, counting it"
 
 it("leaves what goes with a project's folder open when the locked option changes what it lists", async () => {
   mount({ kind: "delete-project", project }, [], [], {
-    request: async () => ({ type: "project_removal_inspected", items: [UNCOMMITTED, LOCKED, PINNED] }),
+    request: async () => ({ type: "project_removal_inspected", items: [UNCOMMITTED, LOCKED, PINNED], processes: [] }),
   });
   checkAll();
   await act(async () => {});

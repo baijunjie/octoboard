@@ -354,6 +354,14 @@ fn relationships(agent: Agent, owns: bool) -> String {
             handover_branches = tool("handover_branches"),
         ));
         lines.push(format!(
+            "- `{handover_processes}` moves process trees a session started (a dev server, say) \
+             between you and a session of yours, or from one session of yours to another, so \
+             that they keep running until the receiving session's process ends instead of the \
+             giving one's. `processes` in `{get_session}` names them. No approval is needed.",
+            handover_processes = tool("handover_processes"),
+            get_session = tool("get_session"),
+        ));
+        lines.push(format!(
             "- `{handoff_session}` hands a session of yours off to a new session of another agent \
              — when its account has run out of quota, say; `{get_account_quotas}` shows what \
              each account has left. The new session takes its place and stays yours, and the \

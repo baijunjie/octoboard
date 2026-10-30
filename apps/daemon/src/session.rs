@@ -66,6 +66,8 @@ impl TitleObserver {
 pub struct LiveSession {
     pub id: String,
     pub agent: Agent,
+    /// The launch this process is, as its processes are tagged with (`crate::process_ledger`).
+    pub launch_id: String,
     pty: PtyCore,
     title: Mutex<TitleObserver>,
     action_required: AtomicBool,
@@ -136,6 +138,8 @@ impl PtyOwner for LiveSession {
 pub struct NewSession {
     pub id: String,
     pub agent: Agent,
+    /// See `LiveSession::launch_id`.
+    pub launch_id: String,
     pub spawned: Spawned,
     /// Per-session scratch directory (Grok's `GROK_HOME` symlink farm), removed when the session's
     /// process is gone.
@@ -160,6 +164,7 @@ impl LiveSession {
             }),
             id: session.id,
             agent: session.agent,
+            launch_id: session.launch_id,
             title: Mutex::new(TitleObserver::default()),
             action_required: AtomicBool::new(false),
             resolves_approvals_itself: session.resolves_approvals_itself,

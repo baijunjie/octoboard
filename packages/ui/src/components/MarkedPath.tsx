@@ -13,20 +13,22 @@ import { FadeOverflow } from "./FadeOverflow";
  * it was a `div` (the Settings rows depend on its full width and height), so it belongs in a flex
  * container or a block, whose flex item or line it becomes. It takes the wording to show as a prop
  * and so needs no daemon; `MarkedPath` is the variant that reads the home directory from the
- * store. */
+ * store. `size` "md" sets it in body text with a 16px icon, to stand beside 14px text. */
 export function PlainMarkedPath({
   path,
   shown = path,
   icon: Icon = Folder,
+  size = "sm",
 }: {
   path: string;
   shown?: string;
   icon?: LucideIcon | React.ReactElement;
+  size?: "sm" | "md";
 }): React.ReactElement {
   return (
-    <span className="flex min-w-0 items-center gap-1.5">
-      {React.isValidElement(Icon) ? Icon : <Icon size={14} aria-hidden className="shrink-0 text-app-muted" />}
-      <PathText path={path} shown={shown} className="min-w-0 flex-1 font-mono text-xs leading-5" />
+    <span className={size === "md" ? "flex min-w-0 items-center gap-2" : "flex min-w-0 items-center gap-1.5"}>
+      {React.isValidElement(Icon) ? Icon : <Icon size={size === "md" ? 16 : 14} aria-hidden className="shrink-0 text-app-muted" />}
+      <PathText path={path} shown={shown} className={size === "md" ? "min-w-0 flex-1 font-mono text-sm leading-5" : "min-w-0 flex-1 font-mono text-xs leading-5"} />
     </span>
   );
 }
@@ -45,7 +47,7 @@ export function PathText({ path, shown = path, className }: { path: string; show
 /** A directory path in `PlainMarkedPath`, shown with the daemon host's home directory as `~`. It
  * reads the store for that home directory, which is why it is a component of its own rather than
  * an option on the plain path label. */
-export function MarkedPath({ path }: { path: string }): React.ReactElement {
+export function MarkedPath({ path, size }: { path: string; size?: "sm" | "md" }): React.ReactElement {
   const home = useDaemonStore((s) => s.homeDir);
-  return <PlainMarkedPath path={path} shown={abbreviateHome(path, home)} />;
+  return <PlainMarkedPath path={path} shown={abbreviateHome(path, home)} size={size} />;
 }

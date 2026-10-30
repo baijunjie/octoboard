@@ -13,6 +13,7 @@ use super::{
     not_shareable, sharing_failed, sharing_in_progress, status, still_sharing, take_back,
 };
 use crate::account_dirs::account_dir_key;
+use crate::process_ledger::HeldForLaunch;
 use crate::protocol::{
     error_code, notice_code, Account, CodedError, Notice, SessionStatus, SharingFailure,
     SharingPhase, SharingProgress,
@@ -238,8 +239,8 @@ async fn change(
     if !stopped.is_empty() {
         set_phase(SharingPhase::Resuming, total);
     }
-    for id in &stopped {
-        resume(state, &mut locked.lock, account, id).await;
+    for session in stopped {
+        resume(state, &mut locked.lock, account, session).await;
     }
     if !started {
         // Nothing was recorded or changed: the change did not start.
@@ -274,31 +275,63 @@ async fn change(
     }
 }
 
-/// Ends the processes of the sessions `ids`, which the change has claimed, and waits for every one
-/// to be recorded down. Answers those it ended, and, for the first that would not end, a
-/// `sharing_session_did_not_stop`: the change must not go on then, and the ones ended are resumed.
+/// A session the change ended: what its process started is held for the relaunch (`held`, none
+/// when ending the process failed), and `ended` is whether a running process was stopped.
+struct Stopped {
+    id: String,
+    held: Option<HeldForLaunch>,
+    ended: bool,
+}
+
+/// Ends the processes of the sessions `ids`, which the change has claimed, as a switch does, with
+/// what they started carried over to the relaunch, and waits for every one to be recorded down.
+/// Answers those it ended, and, for the first that would not end, a `sharing_session_did_not_stop`:
+/// the change must not go on then, and the ones ended are resumed.
 async fn stop(
     state: &Arc<AppState>,
     account: &Account,
     ids: &[String],
-) -> (Vec<String>, Option<anyhow::Error>) {
-    let mut stopped = Vec::new();
+) -> (Vec<Stopped>, Option<anyhow::Error>) {
     let mut ending = Vec::new();
     for id in ids {
-        if let Some(live) = state.live_session(id) {
-            ending.push((id.clone(), crate::coordinator::stop_process(live)));
-            stopped.push(id.clone());
+        if state.live_session(id).is_some() {
+            let (state, id) = (state.clone(), id.clone());
+            let task = {
+                let id = id.clone();
+                tokio::spawn(async move {
+                    crate::coordinator::stop_carrying_processes(&state, &id).await
+                })
+            };
+            ending.push((id, task));
         }
     }
+    let mut stopped = Vec::new();
     for (id, handle) in ending {
-        if let Err(err) = handle.await {
-            tracing::warn!(session = %id, %err, "ending a session's process for a sharing change failed");
-        }
+        let ended = handle.await.unwrap_or_else(|err| {
+            Err(anyhow::anyhow!(
+                "the task ending the session panicked: {err}"
+            ))
+        });
+        stopped.push(match ended {
+            Ok((held, ended)) => Stopped {
+                id,
+                held: Some(held),
+                ended,
+            },
+            Err(err) => {
+                tracing::warn!(session = %id, %err, "ending a session's process for a sharing change failed");
+                Stopped {
+                    id,
+                    held: None,
+                    ended: false,
+                }
+            }
+        });
     }
     let mut first = None;
-    for id in &stopped {
-        if wait_until_down(state, id).await.is_err() && first.is_none() {
-            first = Some(session_did_not_stop(account, id));
+    for session in &stopped {
+        if wait_until_down(state, &session.id).await.is_err() && first.is_none() {
+            first = Some(session_did_not_stop(account, &session.id));
         }
     }
     (stopped, first)
@@ -340,8 +373,20 @@ fn session_did_not_stop(account: &Account, session: &str) -> anyhow::Error {
 /// lets it go. A session archived or deleted meanwhile is let go as it is. One whose relaunch
 /// fails is left interrupted, and one never seen down (its process may still be running) is not
 /// relaunched; either is told as a `sharing_resume_failed` notice, without failing the change.
-async fn resume(state: &Arc<AppState>, lock: &mut AccountSharingLock, account: &Account, id: &str) {
+/// What the session's process started, held for the relaunch, is given up once that is over: kept
+/// among its project's processes when the session was not relaunched after the change ended its
+/// process (see [`crate::coordinator::give_up_what_a_restart_held`]).
+async fn resume(
+    state: &Arc<AppState>,
+    lock: &mut AccountSharingLock,
+    account: &Account,
+    stopped: Stopped,
+) {
+    let Stopped { id, held, ended } = stopped;
+    let id = id.as_str();
+    let mut relaunched = false;
     let record = state.store.get_session(id).ok().flatten();
+    let session_exists = record.is_some();
     let still_running = record
         .as_ref()
         .is_some_and(|session| state.live_session(id).is_some() || !session.status.is_dormant());
@@ -350,13 +395,22 @@ async fn resume(state: &Arc<AppState>, lock: &mut AccountSharingLock, account: &
         (Some(session), Some(_)) if session.status == SessionStatus::Interrupted => {
             lock.release_queue_for_relaunch(id);
             match lock.claim(id) {
-                Some(claim) => relaunch(state, claim, id).await,
+                Some(claim) => relaunch(state, claim, id)
+                    .await
+                    .inspect(|_| relaunched = true),
                 None => Ok(()),
             }
         }
         // Archived or deleted meanwhile: let go as it is.
         _ => Ok(()),
     };
+    if let Some(held) = held {
+        // A process not seen to end keeps what it started, as when a switch's wait fails: nothing
+        // is kept for the user then, and its trees stay its own, stopped when it ends. A session
+        // deleted meanwhile has no project to keep them in.
+        let kept = !relaunched && ended && !still_running && session_exists;
+        crate::coordinator::give_up_what_a_restart_held(state, id, held, kept).await;
+    }
     if let Err(err) = resumed {
         tracing::warn!(session = %id, %err, still_running, "resuming a session after a sharing change failed");
         let detail = format!("{err:#}");

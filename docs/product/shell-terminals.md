@@ -19,6 +19,10 @@ attached to.
 
 Shell terminals are live state: they are held in memory only, never saved, and none survives the daemon.
 
+A shell terminal and the processes in its terminal session are excluded from the agent background-process lists and
+cleanup (see "Automatic stopping and its boundaries" in `docs/product/background-processes.md`). Their lifecycle stays
+with the terminal under the rules below.
+
 A project may have any number of shell terminals. Each belongs to one project; a console has none of its own.
 
 ## Starting a shell terminal

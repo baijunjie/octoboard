@@ -192,6 +192,16 @@ describe("gallery scenarios", () => {
     }
   });
 
+  it("give each process tree a unique id, on a session or a project the scenario has", () => {
+    for (const scenario of SCENARIOS.filter(({ processes }) => processes)) {
+      const { trees = [], projectProcesses = {} } = scenario.processes!;
+      const ids = [...trees, ...Object.values(projectProcesses).flat()].map((tree) => tree.id);
+      expect(new Set(ids).size, scenario.id).toBe(ids.length);
+      expect(trees.filter((tree) => !scenario.state?.sessions?.has(tree.session_id)).map((tree) => tree.id), scenario.id).toEqual([]);
+      expect(Object.keys(projectProcesses).filter((project) => !scenario.state?.projects?.has(project)), scenario.id).toEqual([]);
+    }
+  });
+
   it("write no width the gallery already opens at, which would be a scenario carrying nothing", () => {
     expect(SCENARIOS.filter((s) => s.width === DEFAULT_WIDTH).map((s) => s.id)).toEqual([]);
   });

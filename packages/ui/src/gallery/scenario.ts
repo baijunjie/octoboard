@@ -6,7 +6,7 @@ import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/importPlan";
 import type { AvailableUpdate, MacosPermissionsStatus, UpdateChannel, UpdateProgress } from "../platform";
 import type { OwnerKind, PanelKind } from "../panels/stackState";
-import type { Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, MessageParams, ModelsUnavailable, PathLinkKind, PathLinkRefusedCause, PathLinkView, SessionBranchItem, SessionRecordsPresence } from "../protocol";
+import type { Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, MessageParams, ModelsUnavailable, PathLinkKind, PathLinkRefusedCause, PathLinkView, ProcessTree, SessionBranchItem, SessionRecordsPresence } from "../protocol";
 import type { FixtureError, FixtureFiles } from "./fixtures/projectFiles";
 import type { GroupTitle } from "./fixtures/groups";
 import type { FixtureGit } from "./fixtures/changeFixtures";
@@ -99,6 +99,35 @@ export interface LiveChange {
 /** The document event the gallery shell dispatches into a scenario's frame to apply a live change; its detail is
  * the change's `id`. */
 export const LIVE_CHANGE_EVENT = "gallery:live-change";
+
+/** The daemon's process ledger as a scenario sets it, for the Processes panel and the archive
+ * confirmation's stop options (`fixtureDaemon.ts` answers `list_processes`, `stop_processes`,
+ * `keep_processes` and the processes of `inspect_session_branches` from it). Stopping a tree, a project process
+ * included, takes it out of the list the panel reads; keeping a session's tree makes it a kept project process, which
+ * stays listed, and archiving a session ends its trees but the ones kept. */
+export interface ProcessesFixture {
+  /** The trees of running launches, each naming its session. A session that is not running has no
+   * process, so its trees are never listed. */
+  trees?: (ProcessTree & { session_id: string })[];
+  /** The project processes of a project, by project id: trees no session owns, kept ones and ones left behind in a
+   * removed directory, which a project's removal stops. */
+  projectProcesses?: Record<string, Omit<ProcessTree, "session_id">[]>;
+  /** What `list_processes` answers instead of the trees: `"pending"` is a list that is never answered
+   * (the panel's loading line), an error one the daemon refuses. */
+  list?: "pending" | FixtureError;
+  /** What `list_processes` answers for a project's own list (the request a removal confirmation makes per project)
+   * instead of its trees, by project id: the refusal, while the other projects' lists, and the session lists, are
+   * answered as usual. */
+  projectList?: Record<string, FixtureError>;
+  /** What `list_processes` answers instead of the trees once a second has passed since the first ask: the list is
+   * answered at first and its next poll (the panel asks again every few seconds while it is on screen) is refused, so
+   * the panel shows the trees with the refresh failure over them. */
+  listLater?: FixtureError;
+  /** What `stop_processes` answers instead of stopping: never answered, or refused. */
+  stop?: "pending" | FixtureError;
+  /** What `keep_processes` answers instead of keeping: never answered, or refused. */
+  keep?: "pending" | FixtureError;
+}
 
 /** The window the gallery page opens a scenario at when the scenario names none and no width has been
  * chosen above the window. */
@@ -299,6 +328,9 @@ export interface Scenario {
    * so an archive or deletion shows no section about them; `"pending"` is an inspection that is never
    * answered, so Confirm stays pending; an error is an inspection the daemon fails. */
   sessionBranches?: SessionBranchItem[] | "pending" | FixtureError;
+  /** The process ledger behind the Processes panel and the archive confirmation's processes. Without it
+   * no session has a process. */
+  processes?: ProcessesFixture;
   /** What `inspect_project_removal` finds per project: the worktrees and branches its removal with
    * the folder in the Trash takes along, or the error the inspection fails with. A project not
    * listed has none. `{ items, inspection }` is an answer that holds worktrees back (items with a `cause`), carrying the

@@ -22,7 +22,7 @@ failure). On its own `wrap` has no scroll region at all, so wherever the block's
 the Details popover included — a wrapped block takes `tall` too, or long text overflows the popover's surface. A
 change to how raw text looks goes into the component, not into one caller.
 
-## A destructive confirmation's options sit apart from its consequences, which are one block under them
+## A destructive confirmation's options sit apart from their consequences, which come under them
 
 This is the user's design rule for every destructive confirmation in `packages/ui` (removing, deleting, archiving)
 that offers options, such as taking more along with what is deleted. A confirmation that is not destructive, such as
@@ -33,19 +33,29 @@ otherwise").
 - A checkbox never goes inside the consequences. It is a plain block of its own: its label says what ticking it
   deletes (and how many), its note is kept short so it does not repeat the consequence line below, and the items it
   covers go under it in a Details disclosure that starts collapsed.
-- The consequences are one block, passed as `ConfirmDialog`'s `consequences`, which renders it as body text under the
-  options and over the buttons, so a line it gains never moves a checkbox; passing it makes the dialog a warning
-  modal (see `docs/ui-accessibility.md`, "Where an error is shown"), never a modal with a warning box in its body. What
-  the dialog says it takes along before any option is ticked (the sessions it ends) is that same block, not one above
-  the options.
-- Every option, whatever it covers, adds its consequence line to that block while it is ticked. If the dialog had
-  nothing else to say, the block appears with the first ticked option and goes away when none are.
+- Consequence lines sit under the options they follow, so a line gained never moves a checkbox. Every option,
+  whatever it covers, adds its consequence line while it is ticked.
 - A disclosure stays the way the user left it. Never collapse it or remount it because something else in the dialog
   changed.
 
-The block is `ConfirmConsequences` in `packages/ui/src/dialogs/RequestedDialog.tsx`, whose `lines` are the ticked
-options' consequences; the remove-project dialog's Trash option, in `packages/ui/src/dialogs/BranchCleanupOptions.tsx`,
-shows the option's shape.
+The consequences take one of two shapes, and each dialog keeps the shape it has:
+
+- **Topic sections** — archiving a session, removing a project, deleting a console. The user had these rebuilt from
+  one pooled consequences block because it read as disorganised, so never fold them back into one. Each topic (the
+  sessions taken along or ended, the branches and worktrees, the folder, the processes) is a `ConfirmSection` in
+  `packages/ui/src/dialogs/RequestedDialog.tsx`, rendered from `extraControl`: an `<h3>`-headed labelled group with a
+  groove above it only when another section is shown above it, holding that topic's options and, right under them, its
+  own consequence lines (`ConsequenceLines`). A sectioned dialog that is not `destructive` until an option is ticked
+  (the archive) still passes `consequences={null}`, which keeps the warning icon.
+- **One block** — deleting a session, deleting archived sessions. The consequences are one block, `ConfirmConsequences`
+  passed as `ConfirmDialog`'s `consequences`, which renders it as body text under the options and over the buttons;
+  passing it makes the dialog a warning modal (see `docs/ui-accessibility.md`, "Where an error is shown"), never a
+  modal with a warning box in its body. What the dialog says it takes along before any option is ticked (the sessions
+  it ends) is that same block, not one above the options. If the dialog had nothing else to say, the block appears
+  with the first ticked option and goes away when none are.
+
+The remove-project dialog's Trash option, in `packages/ui/src/dialogs/BranchCleanupOptions.tsx`, shows the option's
+shape.
 
 ## Read the project's placeholder standard before adding or changing a field
 

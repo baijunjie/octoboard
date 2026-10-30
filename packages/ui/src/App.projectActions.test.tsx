@@ -37,6 +37,10 @@ vi.mock("./terminal/TerminalController", () => ({
     mount() {}
     dispose() {}
     fit() {}
+    focus() {}
+    attach() {}
+    setColorTheme() {}
+    paste() {}
     syncSize() {}
     setInputLabel() {}
     detach() {}
@@ -209,6 +213,26 @@ it.each([false, true])("opens the project's Terminal panel from Open panel, star
   expect(creates()).toEqual([[{ type: "create_shell_terminal", project: project.id }]]);
   expect(toggle("Hide terminal panel")).not.toBeNull();
   expect(daemon.request).not.toHaveBeenCalledWith(expect.objectContaining({ type: "open_project_terminal" }));
+});
+
+it.each([false, true])("opens the project's Processes panel from Open panel, listing every session's processes even with one selected; narrow=%s", async (narrow) => {
+  const { daemon, project } = mountApp(narrow, undefined, true);
+  const tree = (id: string, command: string, session_id: string | undefined) => ({ id, session_id, command, cwd: "/p", cwd_missing: false, kept: session_id === undefined, started_at: Date.now(), process_count: 1, memory_bytes: 0, ports: [] });
+  vi.mocked(daemon.request).mockImplementation(async (body) => body.type === "list_processes" ? {
+    type: "processes_listed",
+    trees: [tree("t1", "vite of the selected", "s-archive"), tree("t2", "vite of another", "s-other"), tree("t3", "vite of the project", undefined)],
+  } : { type: "ack" });
+  if (narrow) await press("Show sessions");
+  const row = Array.from(document.querySelectorAll<HTMLElement>("[aria-label]")).find((element) => element.getAttribute("aria-label")!.includes("Fix bug") && !element.getAttribute("aria-label")!.startsWith("Actions for"));
+  expect(row, "the session's row").toBeDefined();
+  await act(async () => row!.click());
+  await openProjectMenu(project.name);
+  await openPanel("Processes");
+  expect(toggle("Hide processes panel")).not.toBeNull();
+  expect(vi.mocked(daemon.request).mock.calls.filter(([body]) => body.type === "list_processes").at(-1)).toEqual([{ type: "list_processes", project_id: project.id }]);
+  expect(document.body.textContent).toContain("All sessions");
+  for (const command of ["vite of the selected", "vite of another", "vite of the project"]) expect(document.body.textContent).toContain(command);
+  expect(vi.mocked(daemon.request).mock.calls.filter(([body]) => body.type === "create_shell_terminal")).toEqual([]);
 });
 
 it("starts no shell from Open panel when the project already has one", async () => {
@@ -407,6 +431,55 @@ it("asks after all when a session was bound to it while its inspection was out",
   expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
 });
 
+it("reinspects the expanded archive scope when a child binds during the preflight, holding confirmation until its choices are ready", async () => {
+  const { daemon } = mountApp(false, undefined, true);
+  let answerOriginal!: () => void;
+  let answerExpanded!: () => void;
+  const original = new Promise<void>((resolve) => { answerOriginal = resolve; });
+  const expanded = new Promise<void>((resolve) => { answerExpanded = resolve; });
+  vi.mocked(daemon.request).mockImplementation(async (body) => {
+    if (body.type !== "inspect_session_branches") return { type: "ack" };
+    if (body.sessions.length === 1) {
+      await original;
+      return { type: "session_branches_inspected", items: [], processes: [TREE] };
+    }
+    await expanded;
+    return {
+      type: "session_branches_inspected",
+      items: [{
+        kind: "branch", repository: "/r/.git", branch: "child-feature", path: null, project: "p-actions",
+        session: "s-bound", state: "unmerged", uncommitted: false, detail: null,
+      }],
+      processes: [TREE, { ...TREE, id: "4300:2", session_id: "s-bound", command: "node child-server.js" }],
+    };
+  });
+  await archiveFromMenu();
+  await act(async () => daemon.store.setState((state) => ({
+    sessions: new Map(state.sessions).set("s-bound", sessionOf("s-bound", "c-actions", "p-actions", "Bound", "working", { bound_to: "s-archive" })),
+  })));
+  await act(async () => answerOriginal());
+  expect(sentOf(daemon, "inspect_session_branches").map(([body]) => body)).toEqual([
+    { type: "inspect_session_branches", sessions: ["s-archive"], processes: true },
+    { type: "inspect_session_branches", sessions: ["s-archive", "s-bound"], processes: true },
+  ]);
+  const dialog = document.querySelector('[role="alertdialog"]')!;
+  expect(dialog.querySelector('[data-pending="true"]')).not.toBeNull();
+  await act(async () => dialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+  expect(sentOf(daemon, "archive_session")).toHaveLength(0);
+  await act(async () => answerExpanded());
+  expect(dialog.querySelector('[data-pending="true"]')).toBeNull();
+  expect(dialog.textContent).toContain("child-feature");
+  expect(dialog.textContent).toContain("node child-server.js");
+  const boxes = [...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
+  expect(boxes.map((box) => box.checked)).toEqual([false, true, true]);
+  await act(async () => boxes[2].click());
+  await act(async () => dialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+  expect(daemon.request).toHaveBeenCalledWith({
+    type: "archive_session", session: "s-archive", keep_process_ids: ["4300:2"],
+    keep: [{ kind: "branch", repository: "/r/.git", branch: "child-feature", path: null, state: "unmerged", uncommitted: false }],
+  });
+});
+
 it("leaves a dialog opened while the inspection was out in place", async () => {
   const { daemon, answer } = mountWithPendingInspection([{
     kind: "branch", repository: "/r/.git", branch: "feature", path: null, project: "p-actions",
@@ -446,9 +519,45 @@ it("asks before archiving an idle session that has a bound worktree git refuses 
     : { type: "ack" });
   await press(`Actions for session ${isolate("Fix bug")}`);
   await press("Archive");
-  expect(daemon.request).toHaveBeenCalledWith({ type: "inspect_session_branches", sessions: ["s-archive"] });
+  expect(daemon.request).toHaveBeenCalledWith({ type: "inspect_session_branches", sessions: ["s-archive"], processes: true });
   expect(daemon.request).not.toHaveBeenCalledWith(expect.objectContaining({ type: "archive_session" }));
   expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("has uncommitted changes");
+});
+
+/** A process tree the archive's inspection found, running for a while. */
+const TREE = {
+  id: "4242:1", session_id: "s-archive", command: "npm run dev", cwd: "/r-feature", cwd_missing: false, kept: false,
+  started_at: 1_000, process_count: 3, memory_bytes: 120_000_000, ports: [5173],
+};
+
+it("asks before archiving an idle session that has left a process running, and sends the ones kept", async () => {
+  const { daemon } = mountApp(false, undefined, true);
+  vi.mocked(daemon.request).mockImplementation(async (body) => body.type === "inspect_session_branches"
+    ? { type: "session_branches_inspected", items: [], processes: [TREE, { ...TREE, id: "4300:2", command: "tail -f log" }] }
+    : { type: "ack" });
+  await press(`Actions for session ${isolate("Fix bug")}`);
+  await press("Archive");
+  expect(daemon.request).not.toHaveBeenCalledWith(expect.objectContaining({ type: "archive_session" }));
+  const dialog = document.querySelector('[role="alertdialog"]')!;
+  expect(dialog.textContent).toContain("npm run dev");
+  expect(dialog.textContent).toContain("2 processes are stopped.");
+  const boxes = [...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
+  expect(boxes.map((box) => box.checked)).toEqual([true, true]);
+  await act(async () => boxes[0].click());
+  expect(dialog.textContent).toContain("1 process is stopped.");
+  await act(async () => dialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+  expect(daemon.request).toHaveBeenCalledWith({ type: "archive_session", session: "s-archive", keep_process_ids: ["4242:1"] });
+});
+
+it("archives an idle session at once when no process it left running has run long enough to ask about", async () => {
+  const { daemon } = mountApp(false, undefined, true);
+  vi.mocked(daemon.request).mockImplementation(async (body) => body.type === "inspect_session_branches"
+    ? { type: "session_branches_inspected", items: [] }
+    : { type: "ack" });
+  await press(`Actions for session ${isolate("Fix bug")}`);
+  await press("Archive");
+  expect(daemon.request).toHaveBeenCalledWith({ type: "archive_session", session: "s-archive" });
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
 });
 
 it("opens the project repository through the platform and reports an opening failure", async () => {

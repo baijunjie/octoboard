@@ -5,11 +5,11 @@ panels**. Each **panel** is a card of its own, of one **kind**, and which kinds 
 
 | Owner | Kinds |
 |---|---|
-| A project | **Report**, the **report panel**: the pages the selected project session pushed, only while it has some (see "A project session's Report panel" below and `docs/product/report-panel.md`); **Files**, the **Files panel**: the project's files and its repository's changes (see `docs/product/project-pane.md`); **Terminal**, the **Terminal panel**: the project's shell terminals as tabs (see `docs/product/terminal-panel.md`) |
-| A console session | **Report**, the **report panel**: the pages the console session pushed (see `docs/product/report-panel.md`) |
+| A project | **Report**, the **report panel**: the pages the selected project session pushed, only while it has some (see "A project session's Report panel" below and `docs/product/report-panel.md`); **Files**, the **Files panel**: the project's files and its repository's changes (see `docs/product/project-pane.md`); **Processes**, the **Processes panel**: the background processes of the project's sessions and the project's own (see `docs/product/processes-panel.md`); **Terminal**, the **Terminal panel**: the project's shell terminals as tabs (see `docs/product/terminal-panel.md`) |
+| A console session | **Report**, the **report panel**: the pages the console session pushed (see `docs/product/report-panel.md`); **Processes**, the **Processes panel**: the console session's background processes (see `docs/product/processes-panel.md`) |
 
-A project's Files and Terminal panels are the project's own, the same whichever of its sessions is selected; its Report
-panel is the selected project session's own.
+A project's Files, Processes and Terminal panels are the project's own, the same whichever of its sessions is selected;
+its Report panel is the selected project session's own.
 
 **The right pane is on screen while at least one of its owner's panels is open**, docked beside the terminal in a
 window **782 px** wide or wider; with none open there is no right pane in the row, and its width goes to the terminal.
@@ -43,15 +43,15 @@ Every panel starts with a **header**, laid out as the sidebar's floating card's 
 size and weight, and icon buttons. Header heights and alignment are in "The window chrome and the content panel" in
 `docs/product/window-layout.md`. It holds, from its leading side:
 
-- the panel's **title** — the project's name for the Files panel, "Terminal" for the Terminal panel, "Report" for the
-  report panel;
+- the panel's **title** — the project's name for the Files panel, "Processes" for the Processes panel, "Terminal" for
+  the Terminal panel, "Report" for the report panel;
 - whatever the kind puts beside its title — the Files panel's Files and Changes tabs (see "Opening a project's files"
   in `docs/product/project-pane.md`), the Terminal panel's tabs (see "Tabs" in `docs/product/terminal-panel.md`), the
   report panel's pager (see "Paging through the history" in `docs/product/report-panel.md`);
 - the kind's own icon buttons, at the trailing side;
 - in the Terminal panel's header only, **Maximize panel**, or **Restore panel size** while it is maximized, there
   whenever the panel is open in the pane's column, alone or not, and not while it only floats in or floats over the
-  terminal below 782 px (see "Maximizing the Terminal panel" below); the Files and report panels have neither;
+  terminal below 782 px (see "Maximizing the Terminal panel" below); the other panels have neither;
 - **Close panel** (see "Opening and closing panels" below).
 
 The title is at most 160 px wide; a longer one fades out, with its full text as its tooltip while it is cut (see
@@ -77,7 +77,7 @@ floats over the terminal" below.
 
 - **Each kind is in its owner's stack at most once.**
 - **Panels are stacked in a fixed order of kinds**, whatever order they were opened in, top to bottom: Report, Files,
-  Terminal.
+  Processes, Terminal.
 - **Close panel** takes a panel out of the stack. Its height goes to the panels that remain, in proportion to theirs.
 - **Closing the last panel hides the right pane**, at once; the terminal takes its width back.
 - **Open panel** in a project's action menu opens the chosen panel in the project's stack, and so puts the pane on
@@ -92,13 +92,15 @@ resized (see "Output, scrollback and size" in `docs/product/session-terminal.md`
 
 At the top bar's end there is **one toggle per kind of the current owner's panels**, in their stacking order: the
 Report toggle (only while the selected project session's Report panel is offered, see "A project session's Report
-panel" below), the Files toggle and the Terminal toggle while a project owns the right pane, the Report toggle while a
-console session does, and none while nothing owns it (see "The top bar" in `docs/product/window-layout.md`).
+panel" below), the Files, Processes and Terminal toggles while a project owns the right pane, the Report and Processes
+toggles while a console session does, and none while nothing owns it (see "The top bar" in
+`docs/product/window-layout.md`).
 
 | Toggle | Icon | Label while its panel is not on screen | Label while it is |
 |---|---|---|---|
 | Report | a document | Show report panel | Hide report panel |
 | Files | a closed folder | Show files panel | Hide files panel |
+| Processes | a square with a pulse line across it | Show processes panel | Hide processes panel |
 | Terminal | a terminal window with a prompt | Show terminal panel | Hide terminal panel |
 
 - **The label says what pressing it will do**, and is also its tooltip.
@@ -127,13 +129,13 @@ chrome's controls" in `docs/product/window-layout.md`), except that below 782 px
 
 **Open panel** is a submenu of a project's action menu — on its row and by right-clicking it (see "Project rows" in
 `docs/product/sidebar-project-rows.md`), in its focus mode's header, and on its heading in a console session's focus
-mode (see `docs/product/focus-mode.md`). It holds **Files**, then **Terminal**, each drawn with its toggle's icon; the
-Report panel is not offered there. The submenu's own icon, a window with a panel at its side, is mirrored under a
-right-to-left language (see "What is mirrored" in `docs/product/right-to-left-layout.md`).
+mode (see `docs/product/focus-mode.md`). It holds **Files**, then **Processes**, then **Terminal**, each drawn with its
+toggle's icon; the Report panel is not offered there. The submenu's own icon, a window with a panel at its side, is
+mirrored under a right-to-left language (see "What is mirrored" in `docs/product/right-to-left-layout.md`).
 
 - **An entry is left out while its panel of that project is on screen** (see "The panel toggles in the top bar" above)
   **or floating in** on hover (see "Floating a panel in" below), and offered otherwise — in particular whenever the right
-  pane belongs to another owner, or that panel is closed. With both entries left out, the submenu is left out.
+  pane belongs to another owner, or that panel is closed. With every entry left out, the submenu is left out.
 - **Choosing an entry** gives the right pane to the project (see "What the right pane shows" in
   `docs/product/window-layout.md`) and opens that panel in the project's stack, as pressing its toggle while the panel
   is not open does: docking the pane at once if no panel was open, with a maximized Terminal panel staying maximized;
@@ -141,6 +143,8 @@ right-to-left language (see "What is mirrored" in `docs/product/right-to-left-la
   below). It selects, starts and resumes no session.
 - **Files** shows the Files panel in its Files mode (see "Opening a project's files" in
   `docs/product/project-pane.md`).
+- **Processes** lists the processes of all the project's sessions and its project processes, with the session filter
+  empty even while a session of the project is selected (see "The session filter" in `docs/product/processes-panel.md`).
 - **Terminal** starts a shell only when the project has none, as the toggle does (see "Starting a terminal" in
   `docs/product/terminal-panel.md`).
 
@@ -247,8 +251,8 @@ stands in its place, the archive view included — and nothing else:
   through. The covered area cannot be used, with the pointer or the keyboard, while it is covered.
 - **The sidebar keeps its own state**, docked, hidden, floating in or as a drawer, and a floating sidebar or its drawer
   comes up above the maximized card as usual.
-- **The other open panels stay docked in the column** — Report, Files — sharing the column's full height; the right
-  pane's width handle stays with the column.
+- **The other open panels stay docked in the column** — Report, Files, Processes — sharing the column's full height; the
+  right pane's width handle stays with the column.
 - **With no other panel open, the column folds away**: the terminal's area, and the maximized card over it, reach the
   window's end edge, and the pane's width handle goes with the column. Opening or closing another panel meanwhile — its
   toggle, Open panel in a project's action menu — brings the column back or folds it again, and leaves the Terminal
@@ -288,8 +292,8 @@ pushes pages. With no project session of that project selected, the stack has no
   when the session is selected; until that listing answers, a session not known to have pages has neither the panel nor
   the Report toggle. When the window reloads its state from the daemon, the last answer for the session stands until
   the new listing answers, so the panel and its toggle do not go and come back.
-- While it is not offered, it has no toggle in the top bar and is not in the stack: the Files and Terminal toggles are
-  the only ones, and the pane is on screen only while one of those panels is open.
+- While it is not offered, it has no toggle in the top bar and is not in the stack: the Files, Processes and Terminal
+  toggles are the only ones, and the pane is on screen only while one of those panels is open.
 - **A page pushed** to a session with none brings the panel and its toggle in, the panel open unless the user closed it
   for that session (see "What is remembered" below).
 - **When the session's last page is deleted** (see "Withdrawing pages" in `docs/product/report-panel.md`), the panel
@@ -307,7 +311,7 @@ direction; the card keeps its width and position throughout. Only a card already
 project changes plays it: a panel that docks, floats in or is opened — the pane passing to a project from a console
 session or from no owner, as the window starts, say, included — plays none, and nor does a panel opened beside
 another after a switch. Moving between sessions of the same project, changing views or refreshing play none either.
-The report panel plays none. The system's Reduce motion setting disables it.
+The report and Processes panels play none. The system's Reduce motion setting disables it.
 
 ## What is remembered
 
@@ -319,10 +323,11 @@ the page is reloaded.
 There are two stacks, one for projects and one for console sessions: every project shares the first and every console
 session the second, so passing the right pane to another project keeps the open panels, their heights and whether the
 Terminal panel is maximized, and passing it to another console session keeps its panels and heights. Until the user
-changes it, the Files panel is open and the Terminal panel closed in the projects' stack, and the report panel is open
-in the console sessions' stack, so the right pane is shown. A stored stack that cannot be read counts as that default.
-Which panel floats over the terminal below 782 px is not part of the stacks and is not remembered. A right pane the user
-had hidden with the earlier pane toggle of Octoboard starts with no panel open in either stack.
+changes it, the Files panel is open and the Processes and Terminal panels closed in the projects' stack, and the report
+panel is open and the Processes panel closed in the console sessions' stack, so the right pane is shown. A stored stack
+that cannot be read counts as that default. Which panel floats over the terminal below 782 px is not part of the stacks
+and is not remembered. A right pane the user had hidden with the earlier pane toggle of Octoboard starts with no panel
+open in either stack.
 
 **Whether a project session's Report panel is open is kept per session**, not in the projects' stack: it is open by
 default, and closing it is remembered for that session alone, so another session of the project still has its own
@@ -331,11 +336,11 @@ Report panel open again. They are kept in the same browser storage as the stacks
 
 ## Panels and keyboard focus
 
-Each panel is a **named region** — the Files panel named for the project's files, the Terminal panel for the project's
-terminals, the report panel "Report" — and each is a stop of its own in the `F6` cycle, in stacking order (Report,
-Files, Terminal), except that a maximized Terminal panel comes first (see "Moving focus between regions with F6" in
-`docs/product/moving-focus-between-regions.md`). A panel only floating in is not a stop; a panel floating over the
-terminal below 782 px is.
+Each panel is a **named region** — the Files panel named for the project's files, the Processes panel "Processes", the
+Terminal panel for the project's terminals, the report panel "Report" — and each is a stop of its own in the `F6` cycle,
+in stacking order (Report, Files, Processes, Terminal), except that a maximized Terminal panel comes first (see "Moving
+focus between regions with F6" in `docs/product/moving-focus-between-regions.md`). A panel only floating in is not a
+stop; a panel floating over the terminal below 782 px is.
 
 **Closing a panel that holds keyboard focus hands focus to the terminal** — or, where the terminal cannot take it,
 where it goes instead (see "With no session selected" in `docs/product/session-terminal.md`). So does the right pane

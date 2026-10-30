@@ -10,11 +10,12 @@ pages (see "When a session becomes a worker" below).
 **Pages belong to the session that pushed them**, not to its console or project: each session has its own pages, and
 the panel shows those of the selected session only, so two sessions never share a history.
 
-- **A console session**: the report panel is its one kind of panel. Selecting the console session gives it the right
-  pane, where the report panel shows while it is open.
-- **A project session**: its Report panel sits in its project's right pane, above the project's Files and Terminal
-  panels, which stay the project's own and are shared by all its sessions. It is offered only while the selected
-  project session has pages, or listing them failed (see "A project session's Report panel" in
+- **A console session**: the report panel heads its right pane, above its Processes panel (see
+  `docs/product/processes-panel.md`). Selecting the console session gives it the right pane, where the report panel
+  shows while it is open.
+- **A project session**: its Report panel sits in its project's right pane, above the project's Files, Processes and
+  Terminal panels, which stay the project's own and are shared by all its sessions. It is offered only while the
+  selected project session has pages, or listing them failed (see "A project session's Report panel" in
   `docs/product/right-pane-panels.md`).
 
 When the right pane shows something else instead — a project's Files panel in a console session's place, or nothing —

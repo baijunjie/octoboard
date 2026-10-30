@@ -229,13 +229,15 @@ moment, and is answered as in "When an approval cannot be carried out" in `docs/
 
 ## What a switch does
 
-A switch ends the session's process the way archiving does, copies the session's conversation into the target account's
-config directory, records the new account and directory on the session, and relaunches it as a resume does, with
-everything Octoboard injects reassembled. It archives nothing: while the process is down the session reads as
-*interrupted*, and it comes back in *awaiting instructions* like any resumed session, unless it is sent the prompt to
-continue its turn (see "Continuing after a switch" below). It is sent no message about the switch itself. Ending an
-owner's process this way does not itself switch or archive the sessions bound to it; a confirmation whose set takes them
-in switches each of them separately.
+A switch ends the session's process the way archiving does, except that the processes the session left running in the
+background are carried over to the relaunch rather than stopped (see "Automatic stopping and its boundaries" in
+`docs/product/background-processes.md`), copies the session's conversation into the target account's config directory,
+records the new account and directory on the session, and relaunches it as a resume does, with everything Octoboard
+injects reassembled. It archives nothing: while the process is down the session reads as *interrupted*, and it comes
+back in *awaiting instructions* like any resumed session, unless it is sent the prompt to continue its turn (see
+"Continuing after a switch" below). It is sent no message about the switch itself. Ending an owner's process this way
+does not itself switch or archive the sessions bound to it; a confirmation whose set takes them in switches each of them
+separately.
 
 - **The session reads the target account's configuration and keeps its explicit model and reasoning effort choices.**
   An account's directory holds the agent's global configuration as well as its login. Settings kept only in the old

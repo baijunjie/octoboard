@@ -111,9 +111,21 @@ pub(crate) async fn hand_off_with(
     let moved = move_place(state, &original, &receiving, &hold).await?;
     tell(state, &original, &moved, request.asked_by.as_deref()).await;
     forward_queued(state, &original.id, &moved.receiving.id).await;
+    // What the original's process started is carried over to the receiving session when the
+    // archive ends that process, rather than stopped with it.
+    let carried = state.live_session(&original.id).map(|live| {
+        state
+            .process_ledger
+            .hand_over(&live.launch_id, &moved.receiving.id);
+        live.launch_id.clone()
+    });
     // No branch cleanup follows the archive: the branches the original was responsible for have
     // moved to the receiving session, and any that could not move are not the archive's to remove.
     coordinator::archive_session(state, &original.id).map_err(|err| {
+        // The original stays as it is, and what it started stays its own.
+        if let Some(launch) = &carried {
+            state.process_ledger.withdraw_hand_over(launch);
+        }
         anyhow!(
             "the work was handed off to `{}`, but archiving the original session failed: {err:#}",
             receiving.id

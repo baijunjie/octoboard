@@ -1,5 +1,6 @@
 import {
   Archive,
+  Cpu,
   Download,
   FileCog,
   FileText,
@@ -35,6 +36,7 @@ export const GROUPS = [
   { title: "Project filter", icon: Funnel },
   { title: "Focus mode", icon: Focus },
   { title: "Archive view", icon: Archive },
+  { title: "Processes", icon: Cpu },
   { title: "Terminal", icon: SquareTerminal },
   { title: "Terminal panel", icon: Terminal },
   { title: "Report panel", icon: Presentation },

@@ -187,6 +187,14 @@ Waiting and stopping are left out when there is nothing to wait for or to stop, 
 stopped. While its process is down, an ended session reads as *starting* everywhere, not *interrupted*: in every
 client, and in the agents' session tools, whose `list_sessions` lists it among the running sessions.
 
+**What the sessions' processes started is carried over.** The processes an ended session's agent left running in the
+background (a dev server, say) are not stopped with it: they are carried over to its resumed process and listed under
+the session as before, as in an account switch (see "Automatic stopping and its boundaries" in
+`docs/product/background-processes.md`). When the session is not resumed after its process was ended (its relaunch
+fails, or none is attempted), they are kept as project processes of its project; those of a console session, and of a
+session archived or deleted meanwhile, are stopped, and a session that had ended by itself has nothing carried. While
+the change runs, no process of such a session can be handed to another session or received from one.
+
 **Messages sent during the restart are held.** A message Octoboard is asked to send to a claimed session is held from
 the moment it is claimed and written into the resumed process. If the session is not resumed, the held messages are
 dropped: told by the `sharing_messages_dropped` notice about the session when it was not relaunched, and covered by

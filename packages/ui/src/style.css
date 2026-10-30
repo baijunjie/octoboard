@@ -586,6 +586,9 @@ html {
   --sidebar-fill-hover: oklch(0 0 0 / 0.12);
   --control-fill: oklch(0.92 0.004 286);
   --control-fill-hover: oklch(0.89 0.004 286);
+  /* A hand-built card lying on the panel's surface (a process row): lighter than the panel in both themes,
+     white in light. Its dark value is in the dark block. */
+  --panel-row: var(--surface);
 }
 
 .dark,
@@ -608,6 +611,12 @@ html {
   --sidebar-fill: oklch(1 0 0 / 0.07);
   --sidebar-fill-hover: oklch(1 0 0 / 0.11);
   --control-fill: oklch(0.33 0.006 286);
+  /* Lighter than the panel (L 0.27, 1.07:1) where HeroUI's own card colour (L 0.21) falls below it, but not
+     lighter still: a secondary button's `--control-fill` (L 0.33) stays 1.16:1 off it, where it vanished on
+     a card of its own colour, and a danger-soft label reads 4.47:1 on it (4.2:1 with the button hovered),
+     the lighter the card the lower. That shortfall in dark is kept by the user's decision; see
+     docs/ui-accessibility.md, "Conformance level and exceptions". */
+  --panel-row: oklch(0.29 0.006 286);
   --control-fill-hover: oklch(0.36 0.006 286);
   /* The dark floating surfaces and what is drawn on them (see the rule that applies them, below), and the edge every
      dark overlay takes in place of HeroUI's faint inset line: a hairline and a drop shadow, which sets one floating
@@ -702,6 +711,23 @@ html {
 .dark,
 [data-theme="dark"] {
   --app-muted: var(--muted);
+}
+
+/* The clear button inside a search field and a select. HeroUI gives it a round fill that is the field's own at rest
+   and one step off it on hover (`--default` / `--default-hover`); once the pointer is over the field or the field
+   holds focus, the field itself turns to that hover colour or keeps its own, and the circle all but vanishes against
+   it. While the field is hovered or focused the circle is therefore set a little darker than the field, and a little
+   more under the pointer or a press; at rest it keeps HeroUI's look, × colour included (docs/ui-accessibility.md's
+   "Clear buttons"). */
+:is(.search-field__group, .select__trigger):is(:hover, [data-hovered="true"], :focus-within, [data-focus-within="true"], [data-focus-visible="true"], [data-open="true"])
+  :is(.search-field__clear-button, .select__clear-button) {
+  background-color: color-mix(in oklab, var(--default-hover) 88%, var(--default-foreground));
+
+  &:hover,
+  &[data-hovered="true"],
+  &[data-pressed="true"] {
+    background-color: color-mix(in oklab, var(--default-hover) 80%, var(--default-foreground));
+  }
 }
 
 /* An Alert draws two things itself (`ErrorAlert`, which `FailureAlert` is built on). Its background is HeroUI's soft
