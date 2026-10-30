@@ -155,11 +155,10 @@ impl ServerHandler for OctoboardMcp {
         .map_err(|err| ErrorData::internal_error(err.to_string(), None))?;
         let path = format!("/mcp/{}", self.token);
         // Only the calls in `WITHDRAWN_ON_CANCEL` are withdrawn when cancelled: those waiting for the
-        // user's answer. Any other call is left to finish in the daemon, which stops serving a call
-        // whose connection goes, so a `new_session` or a `report` cut off part-way would leave its
-        // work half done.
+        // user's answer. The daemon runs any other call to its end whatever becomes of its
+        // connection, so that connection is left to carry the answer.
         let cancelled = async {
-            if WITHDRAWN_ON_CANCEL.contains(&&*request.name) {
+            if super::WITHDRAWN_ON_CANCEL.contains(&&*request.name) {
                 context.ct.cancelled().await;
             } else {
                 std::future::pending::<()>().await;
@@ -225,17 +224,6 @@ enum Forwarded {
     Cancelled,
 }
 
-/// The tools whose call the daemon has to learn the agent cancelled: a session request, or a switch
-/// or a handoff the user is asked to approve, waits in front of the user and is withdrawn when its
-/// call's connection to the daemon goes. A switch or a handoff that runs without asking finishes
-/// on a task of its own, so the connection going leaves it alone.
-const WITHDRAWN_ON_CANCEL: &[&str] = &[
-    "request_session",
-    "request_resume_session",
-    "switch_session_account",
-    "handoff_session",
-];
-
 /// Forwards one call to the daemon and waits for its answer, unless `cancelled` completes first —
 /// for a call the agent cancels (`notifications/cancelled`, which cancels the call's context). A
 /// cancelled call's connection is shut down rather than left to finish: that is how the daemon
@@ -284,7 +272,8 @@ fn failure_message(session: &str, err: &std::io::Error) -> String {
     use std::io::ErrorKind;
     match err.kind() {
         ErrorKind::TimedOut | ErrorKind::WouldBlock => format!(
-            "Octoboard did not answer for session {session} within {} seconds.",
+            "Octoboard did not answer for session {session} within {} seconds. The call may still \
+             finish in Octoboard: check what it was to do before calling again.",
             CALL_TIMEOUT.as_secs()
         ),
         _ => format!("Octoboard could not be reached for session {session}: {err}"),
@@ -384,6 +373,7 @@ mod tests {
         for kind in [ErrorKind::TimedOut, ErrorKind::WouldBlock] {
             let message = failure_message("s-1", &Error::from(kind));
             assert!(message.contains("did not answer"), "{message}");
+            assert!(message.contains("may still finish"), "{message}");
             assert!(!message.contains("could not be reached"), "{message}");
         }
         let refused = failure_message("s-1", &Error::from(ErrorKind::ConnectionRefused));

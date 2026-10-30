@@ -160,7 +160,7 @@ the request id as if it were a record id.
 | `add_agent` | `agent` | Puts the agent at the end of `Settings.added_agents`. An undecided list is filled first, once availability is determined (announced by `settings_updated`), so a refusal can follow a change. Refused: `agent_not_installed` when the agent has been determined unavailable, `agent_availability_pending` while availability is not determined yet (the list is not decided until it is, so it cannot be edited before), `agent_already_added`. Broadcasts `settings_updated` |
 | `remove_agent` | `agent` | Takes the agent off `Settings.added_agents`; an undecided list is filled first, as for `add_agent`, and is refused with `added_agents_undecided` while it stays undecided. Its accounts stay in `Settings.accounts` untouched, and the consoles, projects and sessions that use it are left as they are. Answered with `ack` and no `settings_updated` of its own when the agent is not on the list; otherwise broadcasts `settings_updated` |
 | `reorder_agents` | `agents` | Puts `Settings.added_agents` in the given order, which carries the whole list: it must name exactly the agents on it, each once (a permutation of the current list). An undecided list is filled first, as for `add_agent`. Refused: `agent_order_invalid` when an agent is missing, repeated or not added, `added_agents_undecided` while the list stays undecided. A request that leaves the order as it is is answered with `ack` and no `settings_updated` of its own; otherwise broadcasts `settings_updated`. The order is the one every client lists agents in |
-| `reorder_accounts` | `agent`, `accounts: (string|null)[]` | Sets `Settings.account_order[agent]` for display. The list must name every owned account of the agent and its default (`null`), each exactly once; missing, repeated, unknown or other-agent accounts are refused with `account_order_invalid`. A changed order broadcasts `settings_updated`; an unchanged order answers with `ack` only. Does not affect automatic quota-based account selection |
+| `reorder_accounts` | `agent`, `accounts: (string|null)[]` | Sets `Settings.account_order[agent]`, the order clients list the agent's accounts in. The list must name every owned account of the agent and its default (`null`), each exactly once; missing, repeated, unknown or other-agent accounts are refused with `account_order_invalid`. A changed order broadcasts `settings_updated`; an unchanged order answers with `ack` only. Automatic account selection takes the accounts in this order (see `Settings.account_order`) |
 | `set_default_account_name` | `agent`, `name` | Names the agent's default account (`Settings.default_account_names`). `name` is trimmed; a blank name, or `Default` in any letter case, clears it, back to the client's own word for the default. Refused with `account_name_taken` when another account of the `agent` has the name (trimmed, case-insensitive); the same check refuses `create_account` and `update_account` a name the default account has been given. The word the daemon reserves for the default (`Default`) stays refused to accounts either way. Broadcasts `settings_updated` only when the stored name changed. The directory of the default account is not editable |
 | `set_account_disabled` | `agent`, `account` (id or `null`), `disabled` | Turns an account off for new work, or back on; a null `account` names the agent's default account (`Settings.disabled_default_accounts`, by wire name), a stored one is `Account.disabled`. A disabled account is skipped by automatic account selection and refused by `open_session`, the handoff and `switch_session_account` as `account_disabled`; sessions already on it are untouched, and nothing turns it back on but this request. No usage window is started automatically on a disabled account (see `auto_start_quota_windows`); turning an account back on, with that setting on, starts at once the window its held reading shows unstarted, as turning the setting on does. Refused with `unknown_account` for an id that is no account of the `agent`. Broadcasts `settings_updated` only when the flag changed |
 | `set_codex_approval_reviewer` | `reviewer` (`user`, `auto_review` or `null`) | Sets the Codex approval reviewer for every Codex account, the default account included; a null reviewer follows each account's own configuration. Broadcasts `settings_updated` only when changed. Takes effect on the next launch or resume; running sessions keep their current reviewer |
@@ -668,7 +668,9 @@ account. Clients ignore deleted IDs and append accounts not yet present in the o
 order. An agent with no saved order uses the default account first, then its owned accounts in their original list
 order. The order is machine-local, changed only by the user's client, and omitted from agents' settings tools. A
 configuration export that includes the accounts carries it as the order of each agent's `accounts`, with the default
-account's place beside them. It does not change which account automatic quota selection chooses.
+account's place beside them. Automatic account selection takes an agent's accounts in this order: it breaks a tie
+between accounts ranked alike and, when none ranks and the inherited account cannot open, decides which other account
+is taken (see `auto_select_account`).
 
 `Settings.added_agents` is the ordered list of agents the user has added, persisted with the other settings and sent
 with them; only these are offered for a new choice. `add_agent` appends an installed agent and `remove_agent` takes one
@@ -960,19 +962,20 @@ taken under another directory does not count; nor does a disabled account (`set_
 logged in (see `account_not_signed_in`) or an account whose sharing change is running. Among those accounts, the window
 that ranks is an account-wide weekly window, or a credit period of about a week (`window_minutes` from 6 to 8 days). A
 model's own weekly window, a 5-hour window and a monthly credit period do not rank. `used_percent` must be finite and
-below 100, and the reset must be strictly ahead; a reset that has passed or is missing does not rank. The default
-account is a candidate, ahead of that agent's stored accounts in the order they are kept. Soonest reset wins, so quota
+below 100, and the reset must be strictly ahead; a reset that has passed or is missing does not rank. Candidates are
+taken in the user's saved account order for the agent (`reorder_accounts`), the session dialog's; accounts it does not
+name follow, the default account ahead of the stored accounts in the order they are kept. Soonest reset wins, so quota
 about to reset is spent first; a larger remainder breaks a tie, and an earlier candidate wins one that is still tied.
 The inherited account is resolved as follows: in the caller's own console, the caller's own
 account when it is the same agent and that account can open the session, otherwise the project's for the agent, else the
 console's; in another console, the project's, else the console's, with no fall-back to the caller; a handoff's session
-is always in the caller's own console and uses this inherited account when no weekly window ranks. Agents may read and
+is always in the caller's own console. Agents may read and
 change the setting. A full configuration export carries it; a
 document exported before it existed omits it, and importing that document leaves the stored value unchanged.
 
-For a new `open_session`, `new_session` or `request_session` with automatic selection on and no explicit account, the
-preferred agent is tried first: its weekly pick, then the inherited account above, then its first usable account (saved
-account order, default before stored accounts when unset). Accounts with no quota reading remain usable. If no account
+For a new `open_session`, `new_session`, `request_session` or `handoff_session` with automatic selection on and no
+explicit account, the preferred agent is tried first: its weekly pick, then the inherited account above, then its first
+usable account in the candidate order above. Accounts with no quota reading remain usable. If no account
 works and no agent was explicitly named, other installed agents on the added list are tried in that list's order, using
 each agent's weekly, inherited and first-usable account order. An undecided added list uses the built-in agent order. An
 explicit agent restricts selection to that agent; an explicit account preserves both agent and account. A resume,
@@ -2702,9 +2705,12 @@ the three are kept in this order, 8 minutes < 10 minutes < the agent's as Octobo
 
 When the agent cancels one of those calls (`notifications/cancelled`; a `switch_session_account` or
 `handoff_session` that runs without asking is not one), the child closes that call's connection to the daemon, which
-withdraws the request, and the agent gets a tool error saying the call was cancelled. A cancelled call of any other tool
-is left to finish in the daemon. The waiting, the endings and which waiting requests a later one replaces are described
-in `docs/product/session-requests.md` ("Waiting for the answer", "How a request ends").
+withdraws the request, and the agent gets a tool error saying the call was cancelled. Any other call, cancelled or not,
+runs to its end in the daemon even when its connection closes part-way (the child exiting with the agent, say), so no
+tool is left with its work half done; a `set_session_model` call gone by the end has its outcome written into the
+caller's session as a message. The forwarding limit therefore ends only the agent's wait: the child tells the agent the
+call may still finish and to check before calling again. The waiting, the endings and which waiting requests a later
+one replaces are described in `docs/product/session-requests.md` ("Waiting for the answer", "How a request ends").
 
 ### The tools of each role
 

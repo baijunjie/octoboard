@@ -25,9 +25,25 @@ use serde_json::Value;
 use crate::line_file;
 use crate::protocol::Agent;
 
-/// The prompt a continued session is sent, in Claude Code's own words for its auto-resume.
-pub const CONTINUE_PROMPT: &str = "Continue the task you were working on when it was \
-                                   interrupted; do not repeat work that is already complete.";
+/// What a continued session is told to do, in Claude Code's own words for its auto-resume. A macro
+/// so that [`CONTINUE_PROMPT`] can be built on it with `concat!`.
+macro_rules! continue_words {
+    () => {
+        "Continue the task you were working on when it was interrupted; do not repeat work that \
+         is already complete."
+    };
+}
+
+/// The prompt a continued session is sent: a notice from Octoboard, so that the session's history
+/// tells it from what the user typed.
+pub const CONTINUE_PROMPT: &str = concat!(
+    crate::reporting::notice_prefix!(),
+    ": your session was restarted. ",
+    continue_words!()
+);
+
+/// What follows a notice the continued session is sent with, in place of [`CONTINUE_PROMPT`].
+pub const CONTINUE_AFTER_NOTICE: &str = continue_words!();
 
 /// What Claude Code writes as the user's turn when an Esc interrupts the model, or a tool.
 const INTERRUPT_MARKERS: [&str; 2] = [

@@ -184,7 +184,8 @@ See "Recovery and unexpected errors" in `docs/product/error-alerts.md` for its r
 The agent and account stay the same. A running session is restarted, keeping its conversation; one with no conversation
 yet starts fresh. It shows as starting in every window and in session reads from when the change claims the running
 session, including time spent checking the settings, until it ends. A refusal before the restart restores its prior
-presentation. A turn the restart cuts off, or one stopped by a usage limit, receives a prompt to continue its task;
+presentation. A turn the restart cuts off, or one stopped by a usage limit, receives a prompt to continue its task, the
+same one a switch of account sends (see "Continuing after a switch" in `docs/product/switching-session-accounts.md`);
 otherwise the session returns awaiting instructions. The processes the session's agent left running in the background
 are carried over to the restarted session rather than stopped, as in an account switch, and kept as project processes
 when the restart fails after it ended the process (see "Automatic stopping and its boundaries" in

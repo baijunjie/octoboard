@@ -133,6 +133,22 @@ pub struct Outbox {
     kept: Mutex<Keeps>,
 }
 
+/// A session's drain claim, from [`Outbox::claim`].
+struct DrainClaim<'a> {
+    outbox: &'a Outbox,
+    id: &'a str,
+}
+
+impl Drop for DrainClaim<'_> {
+    fn drop(&mut self) {
+        self.outbox
+            .draining
+            .lock()
+            .expect("outbox claim lock poisoned")
+            .remove(self.id);
+    }
+}
+
 #[derive(Default)]
 struct Keeps {
     /// Ticket to row, for a message still queued or being written.
@@ -248,12 +264,12 @@ impl Outbox {
             if self.is_held(id) || self.is_paused(id) {
                 return Drain::Pending;
             }
-            if !self.claim(id) {
+            let Some(claim) = self.claim(id) else {
                 // Another drainer owns it and will take whatever was just pushed.
                 return Drain::Pending;
-            }
+            };
             let outcome = self.drain_once(id, write, prompts);
-            self.release(id);
+            drop(claim);
             match outcome {
                 Drain::Clear if self.len(id) > 0 => continue,
                 outcome => return outcome,
@@ -501,18 +517,16 @@ impl Outbox {
             .collect()
     }
 
-    fn claim(&self, id: &str) -> bool {
-        self.draining
+    /// Makes the caller the session's one drainer until the claim is dropped, or `None` when
+    /// another drainer is. Released on `Drop`, so a write that panics cannot leave the session's
+    /// queue with a claim nobody holds, and so never drained again.
+    fn claim<'a>(&'a self, id: &'a str) -> Option<DrainClaim<'a>> {
+        let claimed = self
+            .draining
             .lock()
             .expect("outbox claim lock poisoned")
-            .insert(id.to_string())
-    }
-
-    fn release(&self, id: &str) {
-        self.draining
-            .lock()
-            .expect("outbox claim lock poisoned")
-            .remove(id);
+            .insert(id.to_string());
+        claimed.then(|| DrainClaim { outbox: self, id })
     }
 
     fn pop(&self, id: &str) -> Option<(Ticket, String, Option<Instant>)> {
@@ -843,17 +857,29 @@ mod tests {
     #[test]
     fn only_one_drainer_at_a_time_owns_a_session() {
         let outbox = Outbox::default();
-        assert!(outbox.claim("s"));
-        assert!(!outbox.claim("s"));
-        outbox.release("s");
-        assert!(outbox.claim("s"));
+        let claim = outbox.claim("s");
+        assert!(claim.is_some());
+        assert!(outbox.claim("s").is_none());
+        drop(claim);
+        assert!(outbox.claim("s").is_some());
+    }
+
+    #[test]
+    fn a_drain_whose_write_panics_leaves_the_session_drainable() {
+        let outbox = Outbox::default();
+        outbox.push("s", "first");
+        let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            outbox.drain_with("s", &mut |_, _, _| panic!("the write failed"), &MidTurn)
+        }));
+        assert!(panicked.is_err());
+        assert!(outbox.claim("s").is_some());
     }
 
     #[test]
     fn a_drain_a_concurrent_drainer_already_owns_reports_pending() {
         let outbox = Outbox::default();
         outbox.push("s", "first");
-        assert!(outbox.claim("s"));
+        let _claim = outbox.claim("s").unwrap();
         assert_eq!(
             outbox.drain_with("s", &mut |_, _, _| Ok(()), &MidTurn),
             Drain::Pending

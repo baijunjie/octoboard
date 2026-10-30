@@ -745,8 +745,9 @@ export interface Settings {
   /** Every account of every agent, application-wide. The default account of each agent is not
    * among these — it is the state of pinning nothing, not a row. */
   accounts: Account[];
-  /** Display order per agent, including null for its default account. Missing IDs are appended
-   * and stale IDs ignored. Optional for clients with settings from an older daemon. */
+  /** The user's order of each agent's accounts, including null for its default account, which clients
+   * list them in and automatic account selection takes them in. Missing IDs are appended and stale IDs
+   * ignored. Optional for clients with settings from an older daemon. */
   account_order?: Partial<Record<Agent, (string | null)[]>>;
   /** The agents the user has added, in the order the user set; a newly added agent goes last. `null` while the daemon has not
    * yet decided the list (it waits for the agents' availability, and a failed shell snapshot

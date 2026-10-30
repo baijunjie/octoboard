@@ -97,9 +97,10 @@ in "When quotas are read" in `docs/product/account-quotas.md`; waiting adds no s
   A fresh reading meeting these rules allows an account left for a usage limit in the last 30 minutes to be used
   again. Other accounts' held readings do not trigger a switch.
 - **The original account can recover too.** Octoboard restarts the session on that account without copying its
-  conversation. The session is told that its quota recovered and to continue the work its usage limit stopped.
-  Its owner is told it resumed and whether it was sent a continuation prompt; the user gets no account-switched
-  toast. Moving to a different account has the success notices in "When the switch succeeds" below.
+  conversation. The session is sent a message from Octoboard saying its account's usage quota has recovered, followed by
+  the request to continue its task (see "Continuing after a switch" in `docs/product/switching-session-accounts.md`).
+  Its owner is told it resumed and whether it was sent a continuation prompt; the user gets no account-switched toast.
+  Moving to a different account has the success notices in "When the switch succeeds" below.
 - **The wait belongs to this failed turn and its running process.** New input or a queued message, a new turn, a
   manual resume, restart, account switch, model or effort change, an interruption, archiving, deleting, or the process
   exiting invalidates it. Changing the session's account configuration also invalidates it. A session waiting for
@@ -124,11 +125,13 @@ nothing else changed, and then asks it to continue its task, as any switch that 
 turn the switch's rules do not continue is sent that notice as a message instead, telling it to carry on or to wait
 for its next instruction.
 
-- **Its owner**, when it has one that is not archived, is written a message naming the session and both accounts,
-  saying the conversation came along and either that the session was sent a prompt to continue its task, so the owner
-  is not to send one, or that it is back awaiting instructions and is to be sent its next step. An interrupted owner
-  has the message kept for its resume, and one in the middle of an operation is waited for (see "Reports and notices
-  for an interrupted owner" in `docs/product/reporting-to-owners.md`).
+- **Its owner**, when it has one that is not archived, is written a message naming the session and both accounts, saying
+  the conversation came along and either that the session was sent a prompt to continue its task, so the owner is not to
+  send one, or that it is back awaiting instructions and is to be sent its next step. An interrupted owner has the
+  message kept for its resume, and one in the middle of an operation is waited for (see "Reports and notices for an
+  interrupted owner" in `docs/product/reporting-to-owners.md`). Where the switch is made as the failed turn ends, this
+  message, or the one for a session resumed on its own account, takes the place of the report Octoboard would otherwise
+  synthesise for that turn (see "When a session does not report" in `docs/product/reporting-to-owners.md`).
 - **The user** gets a toast titled with where the session is, saying that the account reached its usage limit, so
   Octoboard switched the session, named by its displayed name, to the other account (see `docs/product/toasts.md`).
   The daemon sends it as a `session_notice` with the code `account_switched_automatically`.

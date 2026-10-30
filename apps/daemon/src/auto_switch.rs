@@ -412,27 +412,48 @@ fn park(state: &Arc<AppState>, id: &str, wait: PendingRecovery) -> bool {
 #[cfg(test)]
 pub(crate) static ASKED: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
 
+/// The sessions whose switch [`after_failed_turn`] answers as having moved them under test, each
+/// once the test sends on the channel kept for it; a session not named here is answered as not
+/// moved at once.
+#[cfg(test)]
+pub(crate) static MOVES: std::sync::Mutex<Vec<(String, tokio::sync::oneshot::Receiver<bool>)>> =
+    std::sync::Mutex::new(Vec::new());
+
 /// Moves the session `id` to another account if its turn that has just failed stopped on the
-/// usage limit and the setting is on. Runs in the background, off the turn's path.
-pub fn after_failed_turn(state: &Arc<AppState>, id: &str) {
+/// usage limit and the setting is on. Runs in the background, off the turn's path; the task it
+/// runs on ends in whether the session was moved, or resumed on its own account, which its owner
+/// is then told of. `None` when the setting is off, and nothing is judged.
+pub fn after_failed_turn(state: &Arc<AppState>, id: &str) -> Option<tokio::task::JoinHandle<bool>> {
     match state.store.auto_switch_on_usage_limit() {
         Ok(true) => {}
-        Ok(false) => return,
+        Ok(false) => return None,
         Err(err) => {
             tracing::warn!(%err, "reading whether sessions are switched automatically failed");
-            return;
+            return None;
         }
     }
     let trigger = state.quota_recovery.capture(state, id).ok().flatten();
     // The switch itself starts an agent, which a test cannot; it only sees that one was asked for.
     #[cfg(test)]
-    let _ = trigger;
-    #[cfg(test)]
-    ASKED.lock().unwrap().push(id.to_string());
+    {
+        let _ = trigger;
+        ASKED.lock().unwrap().push(id.to_string());
+        let mut moves = MOVES.lock().unwrap();
+        let answer = moves
+            .iter()
+            .position(|(session, _)| session == id)
+            .map(|index| moves.remove(index).1);
+        Some(tokio::spawn(async move {
+            match answer {
+                Some(answer) => answer.await.unwrap_or(false),
+                None => false,
+            }
+        }))
+    }
     #[cfg(not(test))]
     {
         let (state, id) = (state.clone(), id.to_string());
-        tokio::spawn(async move {
+        Some(tokio::spawn(async move {
             switch_after_failed_turn_captured(
                 &state,
                 &id,
@@ -440,8 +461,8 @@ pub fn after_failed_turn(state: &Arc<AppState>, id: &str) {
                 crate::env_shell::launch_snapshot,
                 crate::term::launch,
             )
-            .await;
-        });
+            .await
+        }))
     }
 }
 
@@ -454,28 +475,45 @@ async fn switch_after_failed_turn(
     id: &str,
     snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
     launch: impl Fn(LaunchRequest) -> Result<Launch> + Clone + Send + 'static,
-) {
+) -> bool {
     let trigger = state.quota_recovery.capture(state, id).ok().flatten();
-    switch_after_failed_turn_captured(state, id, trigger, snapshot, launch).await;
+    switch_after_failed_turn_captured(state, id, trigger, snapshot, launch).await
 }
 
+/// Judges the failed turn `trigger` stands for, as [`try_switch_captured`] does; whether the
+/// session was moved, or resumed on its own account.
 async fn switch_after_failed_turn_captured(
     state: &Arc<AppState>,
     id: &str,
     trigger: Option<PendingRecovery>,
     snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
     launch: impl Fn(LaunchRequest) -> Result<Launch> + Clone + Send + 'static,
-) {
+) -> bool {
     match try_switch_captured(state, id, trigger, snapshot, launch).await {
-        Ok(()) => {}
+        Ok(moved) => moved,
         // Archived or deleted while it was being switched, or the daemon shutting down.
-        Err(err) if is_quiet(&err) || state.is_shutting_down() => {}
-        Err(err) => tracing::warn!(
-            session = %id,
-            err = %format!("{err:#}"),
-            "switching a session off the account whose usage limit it reached failed"
-        ),
+        Err(err) if is_quiet(&err) || state.is_shutting_down() => false,
+        Err(err) => {
+            tracing::warn!(
+                session = %id,
+                err = %format!("{err:#}"),
+                "switching a session off the account whose usage limit it reached failed"
+            );
+            false
+        }
     }
+}
+
+/// [`try_switch_captured`] with the trigger captured now.
+#[cfg(test)]
+async fn try_switch(
+    state: &Arc<AppState>,
+    id: &str,
+    snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
+    launch: impl Fn(LaunchRequest) -> Result<Launch> + Clone + Send + 'static,
+) -> Result<bool> {
+    let trigger = state.quota_recovery.capture(state, id)?;
+    try_switch_captured(state, id, trigger, snapshot, launch).await
 }
 
 /// Switches the session `id` to the account a new session would be given, if the setting is on,
@@ -490,30 +528,20 @@ async fn switch_after_failed_turn_captured(
 /// session was moved to another during that wait. What was decided on the records read here is
 /// held to under the switch's claim as well: the account the limit was found on (the session is
 /// left alone if it changed during the wait), that it has a process, that it does not wait for the
-/// user, and that its last turn stopped on the usage limit.
-#[cfg(test)]
-async fn try_switch(
-    state: &Arc<AppState>,
-    id: &str,
-    snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
-    launch: impl Fn(LaunchRequest) -> Result<Launch> + Clone + Send + 'static,
-) -> Result<()> {
-    let trigger = state.quota_recovery.capture(state, id)?;
-    try_switch_captured(state, id, trigger, snapshot, launch).await
-}
-
+/// user, and that its last turn stopped on the usage limit. `trigger` is the one captured when the
+/// turn failed. Whether the session was moved, or resumed on its own account.
 async fn try_switch_captured(
     state: &Arc<AppState>,
     id: &str,
     trigger: Option<PendingRecovery>,
     snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
     launch: impl Fn(LaunchRequest) -> Result<Launch> + Clone + Send + 'static,
-) -> Result<()> {
+) -> Result<bool> {
     if !state.store.auto_switch_on_usage_limit()? {
-        return Ok(());
+        return Ok(false);
     }
     let Some(trigger) = trigger else {
-        return Ok(());
+        return Ok(false);
     };
     // The account the turn that triggered this ran on, which the wait for a claim may change.
     let Some(triggered_on) = state
@@ -521,14 +549,14 @@ async fn try_switch_captured(
         .get_session(id)?
         .map(|session| session.account_id)
     else {
-        return Ok(());
+        return Ok(false);
     };
     wait_for_claim(state, id).await;
     let Some(session) = switchable_session(state, id)? else {
-        return Ok(());
+        return Ok(false);
     };
     if session.account_id != triggered_on {
-        return Ok(());
+        return Ok(false);
     }
     // The snapshot is taken for the record's sake only where finding it needs one (the default
     // account has no directory of its own); the switch is given it in place of the original, which
@@ -543,15 +571,15 @@ async fn try_switch_captured(
         (None, Box::new(snapshot))
     };
     if !coordinator::wait_for_usage_limit(&session, shell_env).await? {
-        return Ok(());
+        return Ok(false);
     }
     // The wait took time: what the session is doing is read again, and the account the limit was
     // found on must be the one it is on still.
     let Some(waited) = switchable_session(state, id)? else {
-        return Ok(());
+        return Ok(false);
     };
     if waited.account_id != session.account_id || !trigger.still_due(state) {
-        return Ok(());
+        return Ok(false);
     }
     // A trigger that has been held once is judged as any other when its hold ends.
     if trigger.hold_until.is_none() {
@@ -564,7 +592,7 @@ async fn try_switch_captured(
             if park(state, id, held) {
                 schedule_end_hold(state, id, token, until);
             }
-            return Ok(());
+            return Ok(false);
         }
     }
     // A hold that has ended was for the session's own account. Its reading may have landed while the
@@ -586,7 +614,7 @@ async fn try_switch_captured(
     }
     let Some(target) = pick_target(state, &waited)? else {
         park(state, id, trigger);
-        return Ok(());
+        return Ok(false);
     };
     switch_to_with_recovery(state, &waited, target, snapshot, launch, Some(&trigger)).await
 }
@@ -717,9 +745,13 @@ async fn switch_to(
     snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
     launch: impl Fn(LaunchRequest) -> Result<Launch> + Clone + Send + 'static,
 ) -> Result<()> {
-    switch_to_with_recovery(state, session, target, snapshot, launch, None).await
+    switch_to_with_recovery(state, session, target, snapshot, launch, None)
+        .await
+        .map(|_| ())
 }
 
+/// [`switch_to`], for the wait `recovery` when one triggered it; whether the session was moved, or
+/// resumed on its own account.
 async fn switch_to_with_recovery(
     state: &Arc<AppState>,
     session: &Session,
@@ -727,13 +759,13 @@ async fn switch_to_with_recovery(
     snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
     launch: impl Fn(LaunchRequest) -> Result<Launch> + Clone + Send + 'static,
     recovery: Option<&PendingRecovery>,
-) -> Result<()> {
+) -> Result<bool> {
     let id = session.id.as_str();
     let same_account = session.account_id == target;
     let from = account_name(state, session, session.account_id.as_deref());
     let to = account_name(state, session, target.as_deref());
     let note = if same_account {
-        format!("{NOTICE_PREFIX} Your account's usage quota has recovered. Continue the work that its usage limit stopped.")
+        format!("{NOTICE_PREFIX}: your account's usage quota has recovered.")
     } else {
         note_to_session(session.agent, &from, &to)
     };
@@ -782,7 +814,7 @@ async fn switch_to_with_recovery(
                 // The session is as it was (or, for a process that did not stop in time, may still
                 // run): a refusal of the time is no error, any other failure is logged.
                 return if is_wrong_time(&err) {
-                    Ok(())
+                    Ok(false)
                 } else {
                     Err(err)
                 };
@@ -792,7 +824,7 @@ async fn switch_to_with_recovery(
             }
             // The restore would be refused, and the switch is neither told nor logged.
             if state.is_shutting_down() {
-                return Ok(());
+                return Ok(false);
             }
             tracing::warn!(
                 session = %id,
@@ -800,7 +832,9 @@ async fn switch_to_with_recovery(
                 "switching a session off the account whose usage limit it reached failed after its \
                  process was ended; bringing it back up on the account it had"
             );
-            return restore(state, session, target.as_deref(), launch).await;
+            return restore(state, session, target.as_deref(), launch)
+                .await
+                .map(|()| false);
         }
     };
     let moved = state.session_record(id)?;
@@ -819,7 +853,7 @@ async fn switch_to_with_recovery(
             });
         })
         .await?;
-        return Ok(());
+        return Ok(true);
     }
     // The default account has no id, so its param is left out.
     let mut params = vec![
@@ -848,7 +882,7 @@ async fn switch_to_with_recovery(
         tell_sessions(&state, &moved, &from, &to, &note, continued)
     })
     .await?;
-    Ok(())
+    Ok(true)
 }
 
 /// Brings `session` back up on the account it had after a switch to `target` failed past ending its
@@ -1244,8 +1278,8 @@ mod tests {
         }
 
         /// The end of a turn that failed, run as the daemon runs it, with a relaunch that starts
-        /// a stand-in.
-        async fn failed_turn(&self) {
+        /// a stand-in: whether the switch moved the session, or resumed it on its own account.
+        async fn failed_turn(&self) -> bool {
             let (started, launches) = (self.started.clone(), self.launches.clone());
             let env = self.env();
             switch_after_failed_turn(
@@ -1254,7 +1288,7 @@ mod tests {
                 move || Ok(env),
                 move |request| stand_in_launch(&started, &launches, || {})(request),
             )
-            .await;
+            .await
         }
 
         /// A relaunch that fails its first `failures` calls and starts a stand-in on the rest.
@@ -1415,7 +1449,7 @@ mod tests {
         assert!(fixture
             .prompt_of(0)
             .unwrap()
-            .ends_with(crate::switch_continue::CONTINUE_PROMPT));
+            .ends_with(crate::switch_continue::CONTINUE_AFTER_NOTICE));
     }
 
     #[tokio::test]
@@ -1426,10 +1460,9 @@ mod tests {
         fixture.refresh_quota(None, 5.0).await.unwrap();
         fixture.recovered().await;
         assert_eq!(fixture.worker().account_id, None);
-        assert!(fixture
-            .prompt_of(0)
-            .unwrap()
-            .contains("usage quota has recovered"));
+        assert!(fixture.prompt_of(0).unwrap().starts_with(&format!(
+            "{NOTICE_PREFIX}: your account's usage quota has recovered"
+        )));
         assert!(notices(&mut events, notice_code::ACCOUNT_SWITCHED_AUTOMATICALLY).is_empty());
         let heard = output_containing(&fixture.owner, "resumed automatically");
         assert!(heard.contains("resumed automatically"), "{heard}");
@@ -1843,7 +1876,7 @@ mod tests {
             let fixture = Fixture::new(label, status);
             let mut events = fixture.state.subscribe();
 
-            fixture.failed_turn().await;
+            assert!(fixture.failed_turn().await, "moved");
 
             assert_eq!(fixture.worker().account_id.as_deref(), Some("claude-a"));
             assert_eq!(fixture.launched(), 1);
@@ -1857,7 +1890,7 @@ mod tests {
                 "{prompt}"
             );
             assert!(
-                prompt.ends_with(crate::switch_continue::CONTINUE_PROMPT),
+                prompt.ends_with(crate::switch_continue::CONTINUE_AFTER_NOTICE),
                 "{prompt}"
             );
             let owner = output_containing(&fixture.owner, "switched it to");
@@ -1898,7 +1931,7 @@ mod tests {
         let soon = Fixture::new("auto-switch-hold-soon", SessionStatus::Idle);
         hold_used_up_resetting_in(&soon, 4);
 
-        soon.failed_turn().await;
+        assert!(!soon.failed_turn().await, "held, not moved");
 
         assert_eq!(soon.worker().account_id, None);
         assert_eq!(soon.launched(), 0);
@@ -1914,7 +1947,7 @@ mod tests {
         let later = Fixture::new("auto-switch-hold-later", SessionStatus::Idle);
         hold_used_up_resetting_in(&later, 10);
 
-        later.failed_turn().await;
+        assert!(later.failed_turn().await, "moved");
 
         assert_eq!(later.worker().account_id.as_deref(), Some("claude-a"));
         assert_eq!(later.launched(), 1);
@@ -2246,7 +2279,7 @@ mod tests {
         fixture.hold(None, 100.0);
         fixture.end_on_a_tool_call();
 
-        fixture.failed_turn().await;
+        assert!(!fixture.failed_turn().await, "not a usage limit");
 
         assert_eq!(fixture.worker().account_id, None);
         assert_eq!(fixture.launched(), 0);
@@ -2304,7 +2337,7 @@ mod tests {
         };
         // The default account is the session's own and reads fine; `claude-b` is not read yet.
         fixture.hold(Some("claude-a"), 100.0);
-        fixture.failed_turn().await;
+        assert!(!fixture.failed_turn().await, "no account qualifies");
         assert_eq!(fixture.launched(), 0, "used up, and nothing else qualifies");
 
         fixture.hold(Some("claude-a"), 30.0);
@@ -2554,7 +2587,7 @@ mod tests {
         )
         .await;
 
-        outcome.expect("restored, so not an error");
+        assert!(!outcome.expect("restored, so not an error"), "not moved");
         assert!(fixture
             .state
             .recently_left_for_limit("w", LEFT_FOR_LIMIT_FOR)

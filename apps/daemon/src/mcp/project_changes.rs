@@ -303,8 +303,9 @@ async fn list_branch(
                     "`{wanted}` is not one of the commits `branch` made since it forked from `base`"
                 ),
                 (false, _) => bail!(
-                    "`{wanted}` is not among the newest 100 commits `branch` made since it forked \
-                     from `base`, which are the ones listed; it may be an older one"
+                    "`{wanted}` is not among the newest {} commits `branch` made since it forked \
+                     from `base`, which are the ones listed; it may be an older one",
+                    budget::MAX_COMMITS
                 ),
                 (true, false) => bail!(
                     "`{wanted}` is not among the commits listed, which the daemon cut short at its \

@@ -405,15 +405,15 @@ Who makes the pick:
 - The **Resume conversation** tab does not follow the pick. It sends the agent and account that hold the conversation,
   shown locked, when that account can still be selected (see
   `docs/product/resuming-a-conversation-by-its-session-id.md`).
-- `handoff_session`, when `account` is left out or blank, has the daemon prefer the same weekly ranking within its
-  receiving agent (see "Handing off from an owner's tool" in `docs/product/handing-off-sessions.md`).
+- `handoff_session`, when `account` is left out or blank, has the daemon make the same pick among its receiving
+  agent's accounts only (see "Handing off from an owner's tool" in `docs/product/handing-off-sessions.md`).
 
-For `new_session` and `request_session`, the caller's usable account can take the place of the inherited account when
-both sessions are in the same console and use the same agent; see "The agent and account of a session a session starts"
-in `docs/product/hub-orchestration.md`. Their automatically chosen agent and account are settled when the call is made,
-so a session request keeps that pair while waiting for approval. A handoff's account selection stays within its
-receiving agent and follows "Handing off from an owner's tool" or "Handing off from the window" in
-`docs/product/handing-off-sessions.md`.
+For `new_session`, `request_session` and `handoff_session`, the caller's usable account can take the place of the
+inherited account when both sessions are in the same console and use the same agent; see "The agent and account of a
+session a session starts" in `docs/product/hub-orchestration.md`. Their automatically chosen agent and account are
+settled when the call is made, so a session request keeps that pair while waiting for approval. A handoff's account
+selection stays within its receiving agent and follows "Handing off from an owner's tool" or "Handing off from the
+window" in `docs/product/handing-off-sessions.md`.
 
 With automatic selection off, the new-session and handoff dialogs, and quick creation, still pass over an inherited
 account that is used up, not logged in, turned off or changing its sharing, choosing the first usable account of the
@@ -429,7 +429,9 @@ The dialog and the daemon rank the same way:
   an account off" in `docs/product/agent-accounts.md`), whatever its quota, while it is not logged in (see "An account
   that is not logged in" in `docs/product/account-quotas.md`), or while a change of its sharing of the default
   configuration runs.
-- The default account is a candidate ahead of that agent's stored accounts, in the order they are kept.
+- Candidates are taken in the user's order of that agent's accounts, the one the session dialog lists them in (see
+  "Reordering accounts" in `docs/product/agent-accounts.md`); accounts that order does not name follow, the default
+  account first, then the stored accounts in the order they are kept.
 - The window that ranks is an account-wide weekly window, or a credit pool whose period is about a week (6 to 8 days,
   the ends included), the window "Quota windows" in `docs/product/account-quotas.md` calls **Weekly**. A five-hour
   window, a model-specific weekly window, and a monthly credit pool are not that window. How much of the five-hour
@@ -457,12 +459,12 @@ When no account of the initial agent can be used and no other agent has one eith
 the initial agent that becomes usable soonest: of the accounts kept off only by a used-up quota (not turned off, not
 logged out, with no sharing change running), the one whose blocking window resets first. Where several windows of an
 account are used up, that is the one that resets last, and a blocking window with no reset time counts as never. Equal
-times keep the candidate order, the default account first and then the stored accounts in the order they are kept.
-With none of those, or with automatic selection off, the dialog keeps the inherited account. The daemon settles the
-account the same way for a session that leaves it out (`new_session`, `request_session`, `handoff_session`):
-`new_session` and `request_session` are refused naming that account. An automatically approved handoff is refused
-naming it too; a handoff that asks the user starts its approval form on it. With no qualifying account, or with
-automatic selection off, the daemon falls back to the caller or project/console inheritance rules above.
+times keep the candidate order above. With none of those, or with automatic selection off, the dialog keeps the
+inherited account. The daemon settles the account the same way for a session that leaves it out (`new_session`,
+`request_session`, `handoff_session`): `new_session` and `request_session` are refused naming that account. An
+automatically approved handoff is refused naming it too; a handoff that asks the user starts its approval form on it.
+With no qualifying account, or with automatic selection off, the daemon falls back to the caller or project/console
+inheritance rules above.
 
 ## Which model and reasoning effort a session uses
 

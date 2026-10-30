@@ -281,15 +281,10 @@ export function preferExpiringWeekly(entries: ChoiceEntry[], now: number): Choic
   return best?.entry;
 }
 
-/** The entries of `agent` in the order automatic selection takes them: the default account, then the stored
- * accounts as they are kept, which the daemon uses to break a tie. */
-function selectionEntries(groups: ChoiceGroup[], accounts: Account[], agent: Agent): ChoiceEntry[] {
-  const entries = groups.find((candidate) => candidate.agent === agent)?.entries ?? [];
-  const byAccount = new Map(entries.map((entry) => [entry.account, entry]));
-  return orderedAccounts(agent, accounts, undefined).flatMap((account) => {
-    const entry = byAccount.get(account?.id ?? null);
-    return entry ? [entry] : [];
-  });
+/** The entries of `agent` in the order automatic selection takes them, which breaks a tie as the daemon does:
+ * the group's, the user's saved account order. */
+function selectionEntries(groups: ChoiceGroup[], agent: Agent): ChoiceEntry[] {
+  return groups.find((candidate) => candidate.agent === agent)?.entries ?? [];
 }
 
 /** The entry that becomes usable soonest, among those kept off only by a used-up quota (not turned off, not
@@ -312,7 +307,7 @@ export function soonestAvailable(entries: ChoiceEntry[]): ChoiceEntry | undefine
 
 /** The account a new session of `agent` opens on. With `autoSelect`, the one whose quota is to be spent first
  * (`preferExpiringWeekly`) when one ranks; otherwise the account the project or console resolves to. Equal
- * readings keep the daemon's selection order: default account first, then named accounts in stored order. */
+ * readings keep the daemon's selection order, the group's. */
 export function accountOpenedOn(
   owner: Console,
   project: Project | undefined,
@@ -322,7 +317,7 @@ export function accountOpenedOn(
   autoSelect?: { now: number },
 ): string | null {
   if (autoSelect) {
-    const preferred = preferExpiringWeekly(selectionEntries(groups, accounts, agent), autoSelect.now);
+    const preferred = preferExpiringWeekly(selectionEntries(groups, agent), autoSelect.now);
     if (preferred) return preferred.account;
   }
   return inheritedAccount(owner, project, agent, accounts);
@@ -353,7 +348,7 @@ export function agentOpeningChoice(
   const choice = avoidUnavailableAccount({ agent, account: accountOpenedOn(owner, project, agent, accounts, groups, autoSelect) }, groups);
   const entry = findEntry(groups, choiceKey(choice));
   if (!autoSelect || !entry?.selectable || !(entry.exhaustedBy || entry.changingSharing || entry.signedOut || entry.disabled)) return choice;
-  const soonest = soonestAvailable(selectionEntries(groups, accounts, agent));
+  const soonest = soonestAvailable(selectionEntries(groups, agent));
   return soonest ? { agent, account: soonest.account } : choice;
 }
 

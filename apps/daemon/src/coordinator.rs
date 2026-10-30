@@ -5140,7 +5140,7 @@ pub(crate) async fn switch_session_account_if(
         }
 
         let prompt_to_carry_on = match only_if.note {
-            Some(note) => format!("{note}\n\n{}", switch_continue::CONTINUE_PROMPT),
+            Some(note) => format!("{note}\n\n{}", switch_continue::CONTINUE_AFTER_NOTICE),
             None => switch_continue::CONTINUE_PROMPT.to_string(),
         };
         if let Err(err) = relaunch_session_with(
@@ -6287,12 +6287,8 @@ pub(crate) fn account_can_open(
     if state.store.account_disabled(agent, account_id)? {
         return Ok(false);
     }
-    let config_dir = match account_id {
-        None => None,
-        Some(id) => match account_of_agent(state, agent, id)? {
-            Some(account) => Some(account.config_dir),
-            None => return Ok(false),
-        },
+    let Some(config_dir) = candidate_dir(state, agent, account_id)? else {
+        return Ok(false);
     };
     if state
         .account_quotas
@@ -6353,23 +6349,7 @@ pub(crate) fn automatic_open_choice(
         if usable(agent, account.as_deref())? {
             return Ok(Some((agent, account)));
         }
-        let mut accounts = vec![None];
-        accounts.extend(
-            state
-                .store
-                .list_accounts()?
-                .into_iter()
-                .filter(|account| account.agent == agent)
-                .map(|account| Some(account.id)),
-        );
-        let order = state.store.account_order(agent)?;
-        accounts.sort_by_key(|account| {
-            order
-                .iter()
-                .position(|id| id == account)
-                .unwrap_or(usize::MAX)
-        });
-        for account in accounts {
+        for account in account_candidates(state, agent)? {
             if usable(agent, account.as_deref())? {
                 return Ok(Some((agent, account)));
             }
@@ -6393,26 +6373,57 @@ fn open_now(state: &Arc<AppState>, agent: Agent, account: Option<&str>) -> Resul
     )
 }
 
-/// The account of `agent` that becomes usable soonest, for a new session that leaves its account
-/// out while automatic selection is on and no account of the agent can be used. `Some(None)` is
-/// the default account. Only an account kept off by a used-up quota alone qualifies (not one turned
-/// off, logged out or with a sharing change running); it is usable when the window that blocks it
-/// resets, and a blocking window with no reset time counts as never. The earlier candidate keeps a
-/// tie, in the order the session dialog uses: the default account, then the stored accounts as
-/// they are kept. `None` when an account of the agent is usable, or none qualifies.
-pub(crate) fn soonest_available_account(
-    state: &Arc<AppState>,
-    agent: Agent,
-) -> Result<Option<Option<String>>> {
+/// Every account of `agent`, `None` the default account, in the order the user keeps them in
+/// (`Store::account_order`), which the session dialog lists them in: where an automatic choice
+/// finds candidates alike, the earlier one wins. Accounts the saved order does not name follow,
+/// the default account first and then the stored accounts as they are kept. The window's dialogs
+/// rank in the same order to preselect what this would pick (`packages/ui/src/accountChoices.ts`),
+/// so a change to the ranking or its order is made on both sides.
+fn account_candidates(state: &Arc<AppState>, agent: Agent) -> Result<Vec<Option<String>>> {
     let mut candidates = vec![None];
     for account in state.store.list_accounts()? {
         if account.agent == agent {
             candidates.push(Some(account.id));
         }
     }
+    let order = state.store.account_order(agent)?;
+    candidates.sort_by_key(|candidate| {
+        order
+            .iter()
+            .position(|id| id == candidate)
+            .unwrap_or(usize::MAX)
+    });
+    Ok(candidates)
+}
+
+/// The directory of the account candidate `account_id` of `agent` (`Some(None)` for the default
+/// account, which has none of its own), or `None` when it is no longer one of the agent's
+/// accounts.
+fn candidate_dir(
+    state: &Arc<AppState>,
+    agent: Agent,
+    account_id: Option<&str>,
+) -> Result<Option<Option<String>>> {
+    Ok(match account_id {
+        None => Some(None),
+        Some(id) => account_of_agent(state, agent, id)?.map(|account| Some(account.config_dir)),
+    })
+}
+
+/// The account of `agent` that becomes usable soonest, for a new session that leaves its account
+/// out while automatic selection is on and no account of the agent can be used. `Some(None)` is
+/// the default account. Only an account kept off by a used-up quota alone qualifies (not one turned
+/// off, logged out or with a sharing change running); it is usable when the window that blocks it
+/// resets, and a blocking window with no reset time counts as never. The earlier candidate in
+/// [`account_candidates`] keeps a tie. `None` when an account of the agent is usable, or none
+/// qualifies.
+pub(crate) fn soonest_available_account(
+    state: &Arc<AppState>,
+    agent: Agent,
+) -> Result<Option<Option<String>>> {
     let now = now_millis();
     let mut soonest: Option<(i64, Option<String>)> = None;
-    for account_id in candidates {
+    for account_id in account_candidates(state, agent)? {
         if open_now(state, agent, account_id.as_deref())? {
             return Ok(None);
         }
@@ -6425,12 +6436,8 @@ pub(crate) fn soonest_available_account(
         {
             continue;
         }
-        let config_dir = match account_id.as_deref() {
-            None => None,
-            Some(id) => match account_of_agent(state, agent, id)? {
-                Some(account) => Some(account.config_dir),
-                None => continue,
-            },
+        let Some(config_dir) = candidate_dir(state, agent, account_id.as_deref())? else {
+            continue;
         };
         if state
             .account_quotas
@@ -6463,8 +6470,8 @@ pub(crate) fn soonest_available_account(
 /// weekly reset wins, except that weekly resets less than one session window apart from the
 /// soonest count as tied. Among the tied, an account whose 5-hour session window is running goes
 /// first, then the sooner session reset, the sooner weekly reset and the larger remainder, in
-/// that order (see [`account_quotas::preferred_signal`]); an earlier candidate wins one that is
-/// still tied — the default account, then the stored accounts in the order they are kept. Rank
+/// that order (see [`account_quotas::preferred_signal`]); the earlier candidate in
+/// [`account_candidates`] wins one that is still tied. Rank
 /// from the reading held for the account's current directory. The list of readings carries no
 /// directory, so one still stored under another directory would be chosen.
 pub(crate) fn preferred_weekly_account(
@@ -6484,32 +6491,17 @@ pub(crate) fn preferred_weekly_account_except(
     except: &[Option<String>],
     readable_only: bool,
 ) -> Result<Option<Option<String>>> {
-    let mut candidates = vec![None];
-    for account in state.store.list_accounts()? {
-        if account.agent == agent {
-            candidates.push(Some(account.id));
-        }
-    }
+    let mut candidates = account_candidates(state, agent)?;
     candidates.retain(|candidate| !except.contains(candidate));
     let now = now_millis();
     let mut signals = Vec::new();
     let mut accounts = Vec::new();
     for account_id in candidates {
-        if !account_can_open(state, agent, account_id.as_deref())? {
+        if !open_now(state, agent, account_id.as_deref())? {
             continue;
         }
-        if account_id
-            .as_deref()
-            .is_some_and(|id| state.sharing_locked(id).is_some())
-        {
+        let Some(config_dir) = candidate_dir(state, agent, account_id.as_deref())? else {
             continue;
-        }
-        let config_dir = match account_id.as_deref() {
-            None => None,
-            Some(id) => match account_of_agent(state, agent, id)? {
-                Some(account) => Some(account.config_dir),
-                None => continue,
-            },
         };
         let Some(quota) =
             state
@@ -9136,6 +9128,62 @@ mod tests {
                 .account_id
                 .as_deref(),
             Some("second")
+        );
+    }
+
+    /// Accounts an automatic choice finds alike are taken in the order the user keeps them in: a
+    /// weekly tie, and a tie on when a used-up quota resets.
+    #[test]
+    fn automatic_choices_break_a_tie_in_the_users_account_order() {
+        use crate::protocol::{AccountQuota, QuotaWindow, QuotaWindowKind};
+        let (state, _dir) = state_for_opening("automatic-tie-account-order");
+        for id in ["first", "second"] {
+            insert_claude_account(&state, id, false);
+        }
+        let resets_at = now_millis() + 60_000;
+        for id in ["first", "second"] {
+            state.account_quotas.hold_in_dir_for_test(
+                &AccountQuota {
+                    agent: Agent::Claude,
+                    account: Some(id.to_string()),
+                    fetched_at: 1,
+                    plan: None,
+                    email: None,
+                    windows: vec![QuotaWindow {
+                        kind: QuotaWindowKind::Weekly,
+                        label: None,
+                        used_percent: 10.0,
+                        resets_at: Some(resets_at),
+                        window_minutes: None,
+                    }],
+                    unavailable: None,
+                },
+                &format!("/tmp/{id}"),
+            );
+        }
+        assert_eq!(
+            preferred_weekly_account(&state, Agent::Claude).unwrap(),
+            Some(Some("first".to_string()))
+        );
+        state
+            .store
+            .reorder_accounts(
+                Agent::Claude,
+                &[Some("second".to_string()), None, Some("first".to_string())],
+            )
+            .unwrap();
+        assert_eq!(
+            preferred_weekly_account(&state, Agent::Claude).unwrap(),
+            Some(Some("second".to_string()))
+        );
+
+        let hour = 3_600_000;
+        for account in [None, Some("first"), Some("second")] {
+            hold_used_up(&state, account, Some(hour), false);
+        }
+        assert_eq!(
+            soonest_available_account(&state, Agent::Claude).unwrap(),
+            Some(Some("second".to_string()))
         );
     }
 

@@ -55,6 +55,25 @@ pub(crate) use bindings::{
 };
 pub(crate) use pages::{withdraw_pages, withdraw_stray_pages};
 
+/// The tools whose call the daemon has to learn the agent cancelled: a session request, or a switch
+/// or a handoff the user is asked to approve, waits in front of the user and is withdrawn when its
+/// call's connection to the daemon goes. A switch or a handoff that runs without asking finishes
+/// on a task of its own, so the connection going leaves it alone.
+pub(crate) const WITHDRAWN_ON_CANCEL: &[&str] = &[
+    "request_session",
+    "request_resume_session",
+    "switch_session_account",
+    "handoff_session",
+];
+
+/// Whether `tool`'s call runs on the task serving its connection, and so stops wherever it is when
+/// that connection goes: the calls in [`WITHDRAWN_ON_CANCEL`], and `set_session_model`, which runs
+/// its operation on a task of its own and tells its caller the outcome when the call is gone. Every
+/// other call runs to its end.
+pub(crate) fn runs_on_the_call(tool: &str) -> bool {
+    WITHDRAWN_ON_CANCEL.contains(&tool) || tool == "set_session_model"
+}
+
 /// The key the adapters register the server under. It must not collide with a server the project
 /// defines: on Claude Code a colliding key means the *project's* definition is silently never
 /// spawned.
@@ -2549,6 +2568,24 @@ fn object_schema(properties: Value, required: &[&str]) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Only the calls withdrawn when cancelled, and the one that sees to its own end, run on the
+    /// call's own task.
+    #[test]
+    fn only_the_withdrawn_calls_and_the_model_change_run_on_the_call() {
+        for tool in WITHDRAWN_ON_CANCEL {
+            assert!(runs_on_the_call(tool), "{tool}");
+        }
+        assert!(runs_on_the_call("set_session_model"));
+        for tool in [
+            "new_session",
+            "report",
+            "transfer_session",
+            "handover_branches",
+        ] {
+            assert!(!runs_on_the_call(tool), "{tool}");
+        }
+    }
 
     /// A project session that owns sessions may choose another agent for work that fits it better,
     /// where a console session starts another agent's session only when the user asked: both the

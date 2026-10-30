@@ -69,7 +69,34 @@ use super::settings::{
 
 /// Runs one tool call. The `Err` case is what the model is shown as the reason the call failed, so
 /// the messages are written for it rather than for a log.
+///
+/// The call is cancelled by dropping it, as the route serving it does when the caller's connection
+/// goes, and with it its future at whichever `.await` it had reached. So every tool but those meant
+/// to stop with the call, or that see to their own end ([`super::runs_on_the_call`]), runs on a
+/// task of its own that the drop leaves to finish: a session opened and its branches not yet
+/// moved, or a report delivered and its reporter's clean-up not yet started, would otherwise be
+/// left half done.
 pub async fn call(
+    state: &Arc<AppState>,
+    session_id: &str,
+    tool: &str,
+    arguments: &Map<String, Value>,
+) -> Result<Value> {
+    if super::runs_on_the_call(tool) {
+        return dispatch(state, session_id, tool, arguments).await;
+    }
+    let (state, session_id, tool, arguments) = (
+        state.clone(),
+        session_id.to_string(),
+        tool.to_string(),
+        arguments.clone(),
+    );
+    tokio::spawn(async move { dispatch(&state, &session_id, &tool, &arguments).await })
+        .await
+        .map_err(|err| anyhow!("the call did not finish: {err}"))?
+}
+
+async fn dispatch(
     state: &Arc<AppState>,
     session_id: &str,
     tool: &str,
@@ -405,11 +432,12 @@ fn session_in(
     let follows_callers_agent =
         in_own_console && !(caller.role == Role::Console && project.is_some());
     let chosen_agent = optional_agent(arguments, "agent")?;
+    // Read once: the agent and the account are both settled on it.
+    let automatic = state.store.auto_select_account()?;
     let mut agent = match chosen_agent {
         Some(agent) => Some(agent),
         None if follows_callers_agent
-            && (state.store.auto_select_account()?
-                || coordinator::agent_can_open(state, caller.agent)?) =>
+            && (automatic || coordinator::agent_can_open(state, caller.agent)?) =>
         {
             Some(caller.agent)
         }
@@ -418,29 +446,28 @@ fn session_in(
     // An account is one agent's, so it is read for the agent the session will be of, as
     // `coordinator::session_agent` settles it.
     let session_agent = coordinator::session_agent(agent, project.as_ref(), console);
-    let mut account = match optional_string(arguments, "account") {
+    let account = match optional_string(arguments, "account") {
         Some(wanted) => Some(resolve_account(state, session_agent, &wanted)?),
-        None if state.store.auto_select_account()? => None,
-        None => account_when_unset(state, caller, session_agent, in_own_console)?,
-    };
-    if optional_string(arguments, "account").is_none() && state.store.auto_select_account()? {
-        let inherited = if in_own_console {
-            callers_account(state, caller, caller.agent)?.map(|account| (caller.agent, account))
-        } else {
-            None
-        };
-        if let Some((picked_agent, picked_account)) = coordinator::automatic_open_choice(
-            state,
-            session_agent,
-            console,
-            project.as_ref(),
-            inherited,
-            chosen_agent.is_none(),
-        )? {
-            agent = Some(picked_agent);
-            account = Some(picked_account);
+        None if automatic => {
+            match automatic_choice(
+                state,
+                caller,
+                session_agent,
+                console,
+                project.as_ref(),
+                chosen_agent.is_none(),
+            )? {
+                Some((picked_agent, picked_account)) => {
+                    agent = Some(picked_agent);
+                    Some(picked_account)
+                }
+                None => None,
+            }
         }
-    }
+        None if in_own_console => callers_account(state, caller, session_agent)?,
+        // Inherit the project, else the console.
+        None => None,
+    };
     Ok(OpenRequest {
         console_id: console.id.clone(),
         project_id: project.map(|project| project.id),
@@ -465,34 +492,26 @@ fn session_in(
     })
 }
 
-/// The account of a session of `agent` that `caller` starts, or hands one off to, when the call
-/// names none: with automatic account selection on, the one ranked first by
-/// [`coordinator::preferred_weekly_account`] (mostly the soonest weekly reset, a running 5-hour
-/// window deciding between close ones), else, when no account of the agent can be used, the one
-/// that becomes usable soonest ([`coordinator::soonest_available_account`]); otherwise, or when
-/// none ranks, `caller`'s own (`callers_account`) in its own console, else the project's account
-/// for the agent, else the console's.
-pub(super) fn account_when_unset(
+/// The agent and account of a session `caller` starts, or hands one off to, in `project` of
+/// `console` (none for a console session), when the call names no account and automatic account
+/// selection is on: what [`coordinator::automatic_open_choice`] picks, as for a session the user
+/// opens without choosing one, of `agent` alone unless `other_agents`. `caller`'s own account
+/// (`callers_account`) is what the session inherits in `caller`'s own console. `None` when nothing
+/// is picked: the session then takes the project's account for its agent, else the console's.
+pub(super) fn automatic_choice(
     state: &Arc<AppState>,
     caller: &Session,
     agent: Agent,
-    in_own_console: bool,
-) -> Result<Option<Option<String>>> {
-    if state.store.auto_select_account()? {
-        if let Some(picked) = coordinator::preferred_weekly_account(state, agent)? {
-            // `Some(None)` is an explicit choice of the default account.
-            return Ok(Some(picked));
-        }
-        if let Some(soonest) = coordinator::soonest_available_account(state, agent)? {
-            return Ok(Some(soonest));
-        }
-    }
-    if in_own_console {
-        callers_account(state, caller, agent)
+    console: &Console,
+    project: Option<&Project>,
+    other_agents: bool,
+) -> Result<Option<(Agent, Option<String>)>> {
+    let inherited = if caller.console_id == console.id {
+        callers_account(state, caller, caller.agent)?.map(|account| (caller.agent, account))
     } else {
-        // Inherit the project, else the console.
-        Ok(None)
-    }
+        None
+    };
+    coordinator::automatic_open_choice(state, agent, console, project, inherited, other_agents)
 }
 
 /// The account a session of `agent` that `caller` starts runs on when the call names none:
@@ -1892,6 +1911,37 @@ pub(super) mod tests {
                 "{task}"
             );
         }
+    }
+
+    /// A call whose connection goes while it runs is not stopped part-way: a `report` cut off
+    /// while it waits for its session's hook events to be applied still reaches the owner.
+    #[tokio::test]
+    async fn a_call_cut_off_part_way_still_runs_to_its_end() {
+        let (state, _dir) = shared_console_state("cut-off-call");
+        let owner = running(&state, "a");
+        // An event still being applied holds the report back until it is done.
+        state
+            .hook_queues
+            .push("of-a", bytes::Bytes::from_static(b"{}"));
+        let report = arguments(json!({
+            "summary": "finished-although-cut-off",
+            "status": "needs_decision",
+        }));
+
+        let cut_off = tokio::time::timeout(
+            std::time::Duration::from_millis(200),
+            call(&state, "of-a", "report", &report),
+        )
+        .await;
+        assert!(cut_off.is_err(), "the report waited for the hook event");
+        state.hook_queues.complete("of-a");
+
+        let heard = tokio::task::spawn_blocking(move || {
+            output_containing(&owner, "finished-although-cut-off")
+        })
+        .await
+        .unwrap();
+        assert!(heard.contains("finished-although-cut-off"), "{heard}");
     }
 
     /// The opening prompt says the user approved the request, or that Octoboard did under the

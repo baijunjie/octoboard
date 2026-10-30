@@ -497,13 +497,13 @@ describe("settledInitialChoice with automatic account selection", () => {
   ];
   const groups = (listed: AccountQuota[] = quotas) => choiceGroups(stored, availability({}), null, () => "", { quotas: listed, now: NOW });
 
-  it("keeps automatic selection ties in stored order when the default account is displayed last", () => {
+  it("breaks automatic selection ties in the saved account order, as the daemon does", () => {
     const readings = [reading(null, [windowOf()]), reading("w", [windowOf()]), reading("soon", [windowOf()])];
     const reordered = choiceGroups(stored, availability({}), null, () => "", { quotas: readings, now: NOW }, undefined, undefined, { claude: ["soon", "w", null] });
     expect(reordered.find((group) => group.agent === "claude")!.entries.map((entry) => entry.account)).toEqual(["soon", "w", null]);
-    expect(settledInitialChoice(owner, undefined, stored, availability({}), null, reordered, { now: NOW }).choice).toEqual({ agent: "claude", account: null });
-    const noDefaultReading = choiceGroups(stored, availability({}), null, () => "", { quotas: readings.slice(1), now: NOW }, undefined, undefined, { claude: ["soon", "w", null] });
-    expect(settledInitialChoice(owner, undefined, stored, availability({}), null, noDefaultReading, { now: NOW }).choice).toEqual({ agent: "claude", account: "w" });
+    expect(settledInitialChoice(owner, undefined, stored, availability({}), null, reordered, { now: NOW }).choice).toEqual({ agent: "claude", account: "soon" });
+    const defaultFirst = choiceGroups(stored, availability({}), null, () => "", { quotas: readings, now: NOW }, undefined, undefined, { claude: [null, "w", "soon"] });
+    expect(settledInitialChoice(owner, undefined, stored, availability({}), null, defaultFirst, { now: NOW }).choice).toEqual({ agent: "claude", account: null });
   });
 
   it("keeps the inherited account when automatic selection is not asked for", () => {

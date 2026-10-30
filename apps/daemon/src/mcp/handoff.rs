@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use serde_json::{json, Map, Value};
 
 use crate::coordinator;
@@ -17,7 +17,7 @@ use crate::session_request::{self, Change, Edits, Perform, Performed};
 use crate::state::AppState;
 
 use super::args::{optional_string, parse_agent, present_text, required_str};
-use super::exec::{account_when_unset, resolve_owned_session};
+use super::exec::{automatic_choice, callers_account, resolve_owned_session};
 use super::settings::resolve_account;
 
 /// Hands a session of the caller's off to a new session of another agent, which takes its place and
@@ -40,8 +40,7 @@ pub(super) async fn handoff_session(
     let agent = parse_agent(required_str(arguments, "agent")?)?;
     let account = match optional_string(arguments, "account") {
         Some(wanted) => Some(resolve_account(state, agent, &wanted)?),
-        // A session the caller owns is always in the caller's own console.
-        None => account_when_unset(state, caller, agent, true)?,
+        None => unnamed_account(state, caller, &target, agent)?,
     };
     let asked = Asked {
         agent,
@@ -104,6 +103,34 @@ pub(super) async fn handoff_session(
     .await
 }
 
+/// The account of the session of `agent` that `target` is handed off to when neither the call nor
+/// the user names one: as for a session the caller starts in `target`'s project naming `agent`
+/// ([`automatic_choice`], of that agent alone, while automatic account selection is on), so `None`
+/// leaves it to the project's account for the agent, else the console's.
+fn unnamed_account(
+    state: &Arc<AppState>,
+    caller: &Session,
+    target: &Session,
+    agent: Agent,
+) -> Result<Option<Option<String>>> {
+    if !state.store.auto_select_account()? {
+        // A session the caller owns is always in the caller's own console.
+        return callers_account(state, caller, agent);
+    }
+    let console = state
+        .store
+        .get_console(&target.console_id)?
+        .ok_or_else(|| anyhow!("the console of `{}` no longer exists", target.id))?;
+    let project = match target.project_id.as_deref() {
+        Some(id) => state.store.get_project(id)?,
+        None => None,
+    };
+    Ok(
+        automatic_choice(state, caller, agent, &console, project.as_ref(), false)?
+            .map(|(_, account)| account),
+    )
+}
+
 /// What the call asked for.
 struct Asked {
     agent: Agent,
@@ -159,7 +186,7 @@ async fn perform(
         // Another agent than the call named, and no account chosen: as a call naming that agent.
         None => {
             let caller = state.session_record(caller_id)?;
-            account_when_unset(state, &caller, agent, true)?
+            unnamed_account(state, &caller, target, agent)?
         }
     };
     let (model, effort) = if as_asked {
@@ -409,6 +436,57 @@ mod tests {
         assert_eq!(record.agent, Agent::Codex);
         assert_eq!(record.account_id.as_deref(), Some("codex-work"));
         assert_eq!(record.title, "修复构建");
+    }
+
+    /// With automatic account selection on, a handoff that names no account settles it as a new
+    /// session does: the caller's own account is passed over while a sharing change runs on it,
+    /// where a launch on it would be refused.
+    #[tokio::test]
+    async fn a_handoff_passes_over_the_callers_account_while_its_sharing_change_runs() {
+        let (state, _dir) = shared_console_state("handoff-sharing-caller");
+        state.store.set_auto_approve_handoffs(true).unwrap();
+        state.store.set_auto_select_account(true).unwrap();
+        let account = crate::protocol::Account {
+            id: "codex-work".to_string(),
+            agent: Agent::Codex,
+            name: "Work".to_string(),
+            config_dir: "/tmp/codex-work".to_string(),
+            share_default_config: false,
+            share_default_config_incomplete: false,
+            disabled: false,
+        };
+        state.store.insert_account(&account).unwrap();
+        state
+            .save_session(&Session {
+                agent: Agent::Codex,
+                ..state.session_record("a").unwrap()
+            })
+            .unwrap();
+        state
+            .store
+            .set_session_account("a", Some("codex-work"), Some("/tmp/codex-work"))
+            .unwrap();
+        let (_, _sharing) = state.lock_account_sharing(&account, |_, _| Ok(())).unwrap();
+        let _caller = running(&state, "a");
+        let _original = running(&state, "of-a");
+        let (launches, started) = (Launches::default(), Started::default());
+
+        let result = handoff_session(
+            &state,
+            &state.session_record("a").unwrap(),
+            &arguments(json!({ "session": "of-a", "agent": "codex" })),
+            stand_in_launch(&started, &launches, || {}),
+        )
+        .await
+        .unwrap();
+
+        let record = state
+            .store
+            .get_session(result["session"].as_str().unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(record.agent, Agent::Codex);
+        assert_eq!(record.account_id, None);
     }
 
     /// With automatic account selection on, a handoff that names no account takes the account

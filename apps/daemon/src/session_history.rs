@@ -184,6 +184,66 @@ mod tests {
     use super::*;
     use crate::agent_records::Stretch;
 
+    /// The prompt a restarted session is sent to carry on is Octoboard's, not the user's.
+    #[test]
+    fn the_prompt_to_carry_on_after_a_restart_is_octoboards() {
+        assert!(from_octoboard(crate::switch_continue::CONTINUE_PROMPT));
+    }
+
+    /// Every opening a message Octoboard writes is defined with (a constant named `*_OPENING`) is
+    /// matched here: named in this file, or built on the notice prefix that is. A new kind of
+    /// message left out would show in the history as the user's own words.
+    #[test]
+    fn every_opening_octoboard_writes_with_is_matched() {
+        fn sources(dir: &Path, found: &mut Vec<std::path::PathBuf>) {
+            for entry in std::fs::read_dir(dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    sources(&path, found);
+                } else if path.extension().is_some_and(|ext| ext == "rs") {
+                    found.push(path);
+                }
+            }
+        }
+        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = Vec::new();
+        sources(&src, &mut files);
+        let this_file = include_str!("session_history.rs");
+        let mut checked = 0;
+        for file in files {
+            let text = std::fs::read_to_string(&file).unwrap();
+            for line in text.lines() {
+                let Some(name) = line
+                    .split("const ")
+                    .nth(1)
+                    .and_then(|rest| rest.split(':').next())
+                    .filter(|name| name.ends_with("_OPENING"))
+                else {
+                    continue;
+                };
+                checked += 1;
+                // Built on the prefix only where its value begins with it.
+                let on_the_prefix = line
+                    .split_once('=')
+                    .and_then(|(_, value)| value.trim().strip_prefix("concat!("))
+                    .is_some_and(|args| {
+                        args.trim_start()
+                            .trim_start_matches("crate::")
+                            .trim_start_matches("reporting::")
+                            .starts_with("notice_prefix!()")
+                    });
+                assert!(
+                    this_file.contains(&format!("::{name}")) || on_the_prefix,
+                    "`{name}` ({}) is not matched by `from_octoboard`",
+                    file.display()
+                );
+            }
+        }
+        // A floor, not a count: a scan that stops finding the declarations would pass the check
+        // above without proving anything.
+        assert!(checked >= 5, "found only {checked} openings");
+    }
+
     fn history(agent: Agent, fixture: &str) -> Vec<HistoryMessage> {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("testdata")
