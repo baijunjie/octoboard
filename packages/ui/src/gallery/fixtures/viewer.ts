@@ -801,8 +801,6 @@ async function allChanges(language: Language): Promise<ViewerSubject[]> {
     change(t, "lib", present("lib/index.ts"), present("lib"), OUT_OF_ITSELF_PATCH),
     change(t, "src/moved-in.ts", { state: "out_of_scope", repositoryPath: "packages/shared/src/moved-in.ts" }, present("src/moved-in.ts", newSession)),
     change(t, "src/moved-out.ts", present("src/moved-out.ts", oldSession), { state: "out_of_scope", repositoryPath: "packages/shared/src/moved-out.ts" }),
-    change(t, "assets/logo.png", present("assets/logo.png", before), present("assets/logo.png", after)),
-    untracked("assets/new.png", after),
     untracked("src/scratch.ts", text("src/scratch.ts", NEW_SESSION)),
     untracked("docs/draft.md", text("docs/draft.md", MARKDOWN)),
     untrackedNotFile("src/config.local.ts", "symlink"),
@@ -1319,11 +1317,27 @@ export const viewerScenarios: Scenario[] = [
     },
   },
   {
+    id: "viewer-image-changes",
+    group: GROUP,
+    category: "normal",
+    title: "Image changes",
+    description: "The added image uses the same transparency checkerboard on the empty Before side and the image's After side, without an inner border or rounded corners. Both headings have space above, below and beside their text. Next shows two images with the same heading spacing; narrow the window to compare the stacked layout.",
+    viewer: {
+      subjects: async (language) => {
+        const t: Translate = (key, ...args) => format(language, key, ...args);
+        return [
+          change(t, "assets/new.png", { state: "absent" }, present("assets/new.png", after)),
+          change(t, "assets/logo.png", present("assets/logo.png", before), present("assets/logo.png", after)),
+        ];
+      },
+    },
+  },
+  {
     id: "viewer-changes",
     group: GROUP,
     category: "normal",
     title: "Changes",
-    description: "Successful modified, added, deleted, renamed, type-changed, untracked and compared changes. Includes images, binary notices, empty diffs, and the notes and warnings that stand as marks after the path: a patch too large to draw, a missing newline at the end of a file, a side outside the project (warning), and an unchanged file or rename shown in full. Previous / Next stays within normal subjects; compare the soft status badges beside the title (untracked is neutral), long comparison subtitles and layout controls. File manager and Default application end the header row of the working-copy changes (staged, unstaged, untracked and conflicted) but not of the ones whose file is gone from the working copy (src/legacy.ts, src/moved-out.ts) nor of the committed ones, which carry a comparison under the title.",
+    description: "Successful modified, added, deleted, renamed, type-changed, untracked and compared changes. Includes binary notices, empty diffs, and the notes and warnings that stand as marks after the path: a patch too large to draw, a missing newline at the end of a file, a side outside the project (warning), and an unchanged file or rename shown in full. Previous / Next stays within normal subjects; compare the soft status badges beside the title (untracked is neutral), long comparison subtitles and layout controls. File manager and Default application end the header row of the working-copy changes (staged, unstaged, untracked and conflicted) but not of the ones whose file is gone from the working copy (src/legacy.ts, src/moved-out.ts) nor of the committed ones, which carry a comparison under the title.",
     viewer: { subjects: changes },
   },
 ];

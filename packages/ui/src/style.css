@@ -681,8 +681,8 @@ html {
 
 /* HeroUI's `--separator`, the 1px line its own components divide their parts with (the action
    menu's separator), and which the app still draws with itself where a groove does not fit: the
-   session tree's branch connectors and the dashed outline of an empty column in the file viewer. It
-   is set a step further from the surfaces than HeroUI's own, whose dark value (L 0.25) is the dark
+   session tree's branch connectors. It is set a step further from the surfaces than HeroUI's own,
+   whose dark value (L 0.25) is the dark
    sidebar's own colour and vanishes there, as a branch connector on the dark sidebar would. This is
    a quiet line on every surface it divides: 1.29 / 1.22 against `--panel` and `--panel-sidebar` in
    light, 1.35 / 1.23 in dark (a floating surface takes its own, below), lighter than the dark

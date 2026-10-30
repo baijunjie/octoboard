@@ -70,7 +70,8 @@ the commit's first parent — the empty tree for a commit with none — and its 
 - **An image change** — of a binary image format the file viewer displays (see "What it shows" in
   `docs/product/file-viewer.md`); an SVG, being text, is a text change — shows the two images, Before and After, side by
   side where the viewer is wide enough (Before on the left, mirrored under a right-to-left language, see
-  `docs/product/right-to-left-layout.md`) and one above the other otherwise. A side with no file says so. Each side is
+  `docs/product/right-to-left-layout.md`) and one above the other otherwise. Both sides use a checkerboard background,
+  including a side with no file or no content to show, whose explanation is centred on that background. Each side is
   headed Before or After, and what is said about one side's own content stands beside its heading rather than in the
   viewer's header (see "Notices and stand-ins" in `docs/product/file-viewer.md`).
 - **Any other binary change**, or an image changed to or from text, says it cannot be shown as a diff, with the size
