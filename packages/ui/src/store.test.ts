@@ -307,3 +307,28 @@ it("does not bring back a deleted page when a list computed before the deletion 
   } as unknown as Event, stale]);
   expect(ids()).toEqual(["a-1", "a-2"]);
 });
+
+// The daemon announces only the console's or the project's deletion, not each session it takes along.
+it.each([
+  { type: "console_deleted", console: "c" },
+  { type: "project_deleted", project: "p" },
+] as Event[])("drops what is held for the sessions a $type takes with it, and only theirs", (deletion) => {
+  const daemon = createDaemon("http://localhost:1234");
+  const request = { type: "session_request" as const, role: "project" as const, console: "c", project: "p", agent: "claude" as const, branches: [], requested_at: 1, action: "start" as const, target: null, owner: null, reopened_owners: [], account: null, conversation: null };
+  client.onEvents!(["a", "b"].flatMap((id): Event[] => [
+    { type: "session_upserted", session: sessionOf(id, id === "a" ? "c" : "d", id === "a" ? "p" : "q", id, "waiting_user", { switching_account: true }) },
+    { type: "page_created", page: pageOf(`${id}-1`, id, "<p>1</p>", 2) },
+    { type: "page_created", page: pageOf(`${id}-2`, id, "<p>2</p>", 1) },
+    { type: "pages_deleted", console_session_id: id, pages: [`${id}-2`] },
+    { type: "trust_prompt", session: id, agent: "claude", project: "p", path: "/work/app", trust_dir: null },
+    { ...request, session: id, request_id: `r-${id}` },
+  ]));
+  client.onEvents!([deletion]);
+  const state = daemon.store.getState();
+  expect([...state.sessions.keys()]).toEqual(["b"]);
+  expect([...state.pages.keys()]).toEqual(["b"]);
+  expect([...state.deletedPages.keys()]).toEqual(["b"]);
+  expect(state.trustPrompts.map((p) => p.session)).toEqual(["b"]);
+  expect(state.sessionRequests.map((r) => r.session)).toEqual(["b"]);
+  expect([...state.daemonSwitching]).toEqual(["b"]);
+});
