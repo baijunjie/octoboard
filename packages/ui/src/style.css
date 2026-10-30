@@ -1213,6 +1213,18 @@ html.pane-resizing * {
   inset-inline-end: 1.75rem;
 }
 
+/* A hovered tab keeps full opacity; HeroUI dims it. Both of HeroUI's hover selectors are matched: react-aria's
+   `data-hovered` outlives `:hover` by a frame when the pointer leaves, and dimming in that frame starts an
+   opacity transition that has WKWebView repaint the whole masked tab strip, shaking every tab's icon and label.
+   An approved exception (`docs/ui-accessibility.md`'s "Confirmed visual choices"). In `@layer components`, after
+   HeroUI's rule, so a tab's own opacity utility still wins. */
+@layer components {
+  .tabs__tab:not([data-selected="true"]):not([data-disabled="true"]):hover,
+  .tabs__tab[data-hovered="true"]:not([data-selected="true"]):not([data-disabled="true"]) {
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .panel-switch::after {
     content: "";

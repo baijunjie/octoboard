@@ -200,12 +200,12 @@ export function SettingsDialog({
               {/* HeroUI sizes a vertical list to its widest tab; it fills the column here, and its
                   tabs read from the start like any list of names rather than centred. */}
               <Tabs.List aria-label={t("settings.sections")} className="max-docked:min-w-0 max-docked:p-1.5 docked:w-full">
-                {/* Keep hovered labels at full opacity and use the foreground colour for clear feedback. */}
+                {/* Hovered labels take the foreground colour for clear feedback. */}
                 {SECTIONS.map(({ id, label, Icon }) => (
                   <Tabs.Tab
                     key={id}
                     id={id}
-                    className="justify-start gap-2 whitespace-nowrap hover:text-foreground hover:opacity-100 max-docked:w-auto max-docked:flex-none max-docked:scroll-mx-1.5"
+                    className="justify-start gap-2 whitespace-nowrap hover:text-foreground max-docked:w-auto max-docked:flex-none max-docked:scroll-mx-1.5"
                     ref={id === sectionId ? attachSelected : undefined}
                     {...(id === sectionId && !sectionTakesFocus && openingFocus(true))}
                   >

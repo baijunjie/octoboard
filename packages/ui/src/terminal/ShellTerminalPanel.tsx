@@ -313,7 +313,7 @@ export function ShellTerminalPanel({
                       // part-way when its tab renders again within the frame it was selected in,
                       // which a tab created and selected in one go does. Content-wide, not filling the
                       // strip, which keeps its width while a closed tab's neighbours slide up.
-                      className={`group/tab h-6 w-auto flex-none scroll-mx-1.5 gap-0.5 ps-1.5 pe-0.5 whitespace-nowrap hover:text-foreground hover:opacity-100 data-[selected=true]:bg-(--segment) data-[selected=true]:shadow-(--surface-shadow)${closingIds.has(terminal.id) ? " opacity-50" : ""}${terminal.state === "exited" ? " text-app-muted" : ""}`}
+                      className={`group/tab h-6 w-auto flex-none scroll-mx-1.5 gap-0.5 ps-1.5 pe-0.5 whitespace-nowrap hover:text-foreground data-[selected=true]:bg-(--segment) data-[selected=true]:shadow-(--surface-shadow)${closingIds.has(terminal.id) ? " opacity-50" : ""}${terminal.state === "exited" ? " text-app-muted" : ""}`}
                     >
                       {/* First among what goes away with the tab, so focus inside it is still found. */}
                       <HandOffOnUnmount from={`[data-key="${CSS.escape(terminal.id)}"]`} to={focusShownTab} />

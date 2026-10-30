@@ -301,12 +301,12 @@ export function SessionDialog({
         }} className="gap-4">
           <Tabs.ListContainer className="w-max max-w-full self-start" render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
             <Tabs.List aria-label={t("dialog.session.conversation")} className="w-max min-w-0 p-1.5">
-              {/* Keep hovered labels at full opacity and use the foreground colour for clear feedback. */}
-              <Tabs.Tab id="new" className="w-auto flex-none scroll-mx-1.5 whitespace-nowrap hover:text-foreground hover:opacity-100">
+              {/* Hovered labels take the foreground colour for clear feedback. */}
+              <Tabs.Tab id="new" className="w-auto flex-none scroll-mx-1.5 whitespace-nowrap hover:text-foreground">
                 {t("dialog.session.conversationNew")}
                 <Tabs.Indicator />
               </Tabs.Tab>
-              <Tabs.Tab id="resume" className="w-auto flex-none scroll-mx-1.5 whitespace-nowrap hover:text-foreground hover:opacity-100">
+              <Tabs.Tab id="resume" className="w-auto flex-none scroll-mx-1.5 whitespace-nowrap hover:text-foreground">
                 {t("dialog.session.conversationResume")}
                 <Tabs.Indicator />
               </Tabs.Tab>

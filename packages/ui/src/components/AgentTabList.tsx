@@ -254,7 +254,7 @@ function AgentTab({ agent, tabRef, notInstalledTip, elements, onDragStart, onEle
         setHasFocus(false);
         setFocusCount((count) => count + 1);
       }}
-      className={`w-auto flex-none scroll-mx-1.5 gap-2 whitespace-nowrap hover:text-foreground hover:opacity-100 ${reserve ? "pe-9" : ""}`}
+      className={`w-auto flex-none scroll-mx-1.5 gap-2 whitespace-nowrap hover:text-foreground ${reserve ? "pe-9" : ""}`}
     >
       <AgentIcon agent={agent} />
       {AGENT_LABEL[agent]}

@@ -94,7 +94,7 @@ export function ConsoleLaunchFields({
               {listed.map((option) => {
                 const badge = agentChoiceBadge(t, agentAvailability, addedAgents, option);
                 return (
-                  <Tabs.Tab key={option} id={option} data-list-motion={option} className="w-auto flex-none scroll-mx-1.5 gap-2 whitespace-nowrap hover:text-foreground hover:opacity-100">
+                  <Tabs.Tab key={option} id={option} data-list-motion={option} className="w-auto flex-none scroll-mx-1.5 gap-2 whitespace-nowrap hover:text-foreground">
                     <AgentIcon agent={option} />
                     {AGENT_LABEL[option]}
                     {badge && <StatusBadge>{badge}</StatusBadge>}
