@@ -147,13 +147,15 @@ pub(super) fn settings_files(
 }
 
 /// Whether Claude Code would run an HTTP hook for `url` given `files`: it does unless some file
-/// defines `allowedHttpHookUrls`, whose arrays merge across files, and no merged pattern matches.
-/// A pattern's `*` stands for anything; a file that is absent, is not a regular file once links
-/// are followed, or cannot be parsed counts for nothing. A regular file that cannot be read here
-/// answers no: Claude Code may still read what is refused here (a project file linked out of
-/// `project`, which is the canonical working directory, or a file above the size bound), and an
-/// allowlist in it leaving the daemon out would drop every HTTP hook without a word, while the
-/// command form always runs.
+/// defines `allowedHttpHookUrls`, whose arrays merge across files, and no merged pattern matches. A
+/// pattern's `*` stands for anything. As in Claude Code, which parses each pattern as a URL
+/// (2.1.314), only the scheme and authority (the host) compare without regard to case; the path and
+/// query do not, so a pattern naming `/HOOK/*` lets no hook to `/hook/…` through. A file that is
+/// absent, is not a regular file once links are followed, or cannot be parsed counts for nothing. A
+/// regular file that cannot be read here answers no: Claude Code may still read what is refused
+/// here (a project file linked out of `project`, which is the canonical working directory, or a
+/// file above the size bound), and an allowlist in it leaving the daemon out would drop every HTTP
+/// hook without a word, while the command form always runs.
 pub(super) fn http_hooks_allowed(url: &str, files: &[SettingsFile], project: &Path) -> bool {
     let mut patterns: Option<Vec<String>> = None;
     for file in files {
@@ -174,16 +176,29 @@ pub(super) fn http_hooks_allowed(url: &str, files: &[SettingsFile], project: &Pa
         {
             patterns.get_or_insert_with(Vec::new).extend(
                 list.iter()
-                    .filter_map(|p| p.as_str().map(str::to_lowercase)),
+                    .filter_map(|p| p.as_str().map(fold_scheme_and_host)),
             );
         }
     }
-    let url = url.to_lowercase();
+    let url = fold_scheme_and_host(url);
     patterns.is_none_or(|patterns| {
         patterns
             .iter()
             .any(|pattern| wildcard_matches(pattern, &url))
     })
+}
+
+/// `text` with its scheme and authority lower-cased and the rest, from the path on, left as it is.
+/// Text with no `://` is left as it is too.
+fn fold_scheme_and_host(text: &str) -> String {
+    let Some(scheme_end) = text.find("://") else {
+        return text.to_owned();
+    };
+    let authority = scheme_end + "://".len();
+    let end = text[authority..]
+        .find(['/', '?', '#'])
+        .map_or(text.len(), |at| authority + at);
+    format!("{}{}", text[..end].to_lowercase(), &text[end..])
 }
 
 /// Whether `text` matches `pattern`, in which `*` stands for any run of characters.
@@ -565,6 +580,39 @@ mod tests {
         assert!(allowed(&[&loopback]));
         // The arrays merge, so one file naming the daemon is enough.
         assert!(allowed(&[&other, &none, &loopback]));
+        // Only the scheme and host fold case, as in Claude Code: a path or query in other case
+        // leaves the daemon out.
+        let folded = file(
+            "folded.json",
+            r#"{"allowedHttpHookUrls":["HTTP://127.0.0.1:*/hook/*?key=*"]}"#,
+        );
+        let upper_path = file(
+            "upper-path.json",
+            r#"{"allowedHttpHookUrls":["http://127.0.0.1:*/HOOK/*"]}"#,
+        );
+        let upper_query = file(
+            "upper-query.json",
+            r#"{"allowedHttpHookUrls":["http://127.0.0.1:*/hook/*?KEY=*"]}"#,
+        );
+        assert!(allowed(&[&folded]));
+        assert!(!allowed(&[&upper_path]));
+        assert!(!allowed(&[&upper_query]));
+        assert!(http_hooks_allowed(
+            "HTTP://127.0.0.1:4321/hook/session-1?key=feedface",
+            &others(&[&folded]),
+            &project
+        ));
+        assert!(!http_hooks_allowed(
+            "http://127.0.0.1:4321/HOOK/session-1?key=feedface",
+            &others(&[&folded]),
+            &project
+        ));
+        assert_eq!(
+            fold_scheme_and_host("HTTP://LocalHost:9/A/b?C=D#E"),
+            "http://localhost:9/A/b?C=D#E"
+        );
+        assert_eq!(fold_scheme_and_host("HTTP://Host?Q"), "http://host?Q");
+        assert_eq!(fold_scheme_and_host("*"), "*");
         assert!(wildcard_matches("http://*/hook/*", url));
         assert!(wildcard_matches("http://127.0.0.1:*", url));
         assert!(!wildcard_matches("http://*/hook", url));
