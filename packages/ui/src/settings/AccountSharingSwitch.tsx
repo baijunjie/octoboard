@@ -1,6 +1,7 @@
 import { Label, ProgressBar } from "@heroui/react";
 import React, { useId, useRef, useState } from "react";
 
+import { defaultAccountName } from "../agents";
 import { SharingCauseLine, SharingCauseSummary, SharingDetails, SharingFailureReason } from "../components/SharingFailure";
 import { HandOffOnUnmount } from "../components/HandOffOnUnmount";
 import { HelpTip } from "../components/HelpTip";
@@ -45,6 +46,7 @@ export function AccountSharingSwitch({ account, opensFocused }: { account: Accou
   const t = useT();
   const { request } = useDaemon();
   const sharing = useDaemonStore((s) => s.accountSharing.get(account.id));
+  const defaultName = useDaemonStore((s) => defaultAccountName(t, s.settings.default_account_names, account.agent));
   const [busy, setBusy] = useState(false);
   const id = useId();
   const label = t("settings.accounts.sharing.switchLabel", { name: isolate(account.name) });
@@ -138,7 +140,10 @@ export function AccountSharingSwitch({ account, opensFocused }: { account: Accou
       }
       description={
         <>
-          {!progress && !unfinished && t(shared ? "settings.accounts.sharing.describeOn" : "settings.accounts.sharing.describeOff")}
+          {!progress && !unfinished && <Message
+            id={shared ? "settings.accounts.sharing.describeOnAccount" : "settings.accounts.sharing.describeOffAccount"}
+            params={{ name: <InlineReference dir="auto" wrap>{defaultName}</InlineReference> }}
+          />}
           {caption !== undefined && <p id={`${id}-caption`} className="text-xs">{caption}</p>}
         </>
       }

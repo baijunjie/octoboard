@@ -2202,6 +2202,8 @@ export const zhHans: Translation<"other"> = {
   "settings.accounts.sharing.helpOff": "关闭共享后，此账户的 {appName} 会话会取回各自的对话，其余对话留在默认目录。",
   "settings.accounts.sharing.describeOff": "开启后，此账户的配置和对话历史会链接到默认账户的目录。",
   "settings.accounts.sharing.describeOn": "此账户的配置和对话历史已链接到默认账户的目录。",
+  "settings.accounts.sharing.describeOffAccount": "开启后，此账户的配置和对话历史会链接到账户 {name} 的目录。",
+  "settings.accounts.sharing.describeOnAccount": "此账户的配置和对话历史已链接到账户 {name} 的目录。",
   "settings.accounts.sharing.inUseSessions": {
     other: "此账户有 {count} 个会话正在工作，需等它们完成才能更改共享。",
   },

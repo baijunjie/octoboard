@@ -154,14 +154,15 @@ configuration export that includes the accounts carries it, and an import gives 
 that one has no name of its own and no account of the agent has the name (see "The accounts" and "Importing accounts"
 in `docs/product/configuration-export-and-import.md`).
 
-The name the user gave is what the default account is called everywhere it is named: in this section, the rail's account
-quota panel, the console, project and session dialogs' account pickers (see "Agent config directories" in
-`docs/product/consoles.md` for how the console dialog names it), a session row's Switch account submenu, the agent
-icon's tooltip and the accessible name of a session in the sidebar, the archive view and confirmations, a focus mode
-card's model line, agent icon tooltip and accessible name, an archive view row's model line, the agent icon's tooltip
-and the accessible name of focus mode's archived rows, the menu bar icon's quota submenus, and what a console session's
-settings tools answer (see "Application settings: `get_settings` and `update_settings`" in
-`docs/product/agent-settings-tools.md` and `docs/product/switching-session-accounts.md`).
+The name the user gave is what the default account is called everywhere it is named: in this section, including the
+Share default configuration row's description, the rail's account quota panel, the console, project and session
+dialogs' account pickers (see "Agent config directories" in `docs/product/consoles.md` for how the console dialog
+names it), a session row's Switch account submenu, the agent icon's tooltip and the accessible name of a session in
+the sidebar, the archive view and confirmations, a focus mode card's model line, agent icon tooltip and accessible
+name, an archive view row's model line, the agent icon's tooltip and the accessible name of focus mode's archived
+rows, the menu bar icon's quota submenus, and what a console session's settings tools answer (see "Application
+settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and
+`docs/product/switching-session-accounts.md`).
 
 ## The accounts the user owns
 
@@ -345,10 +346,12 @@ settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-
 
 Every account the user owns has a **Share default configuration** row in its account settings dialog, above **Disable
 account** (see "The account settings dialog" above): the name with a "?" help tip, a line under it, and the switch at
-the row's end. The line follows the switch: while it is off, "Turning this on links the account's configuration and
-conversation history to the default account's directory."; while it is on, "The account's configuration and conversation
-history are linked to the default account's directory." The line is left out while a change runs and while the last
-change is incomplete. The default account has none. The switch's accessible name
+the row's end. The line follows the switch: while it is off, it explains that turning sharing on links the account's
+configuration and conversation history to its agent's default account's directory; while it is on, it confirms that
+these are linked. Both name that default account by its current name, using the current language's standard name when
+it has no custom name, and show the name in the inline reference style. Renaming the default account updates the line
+while the dialog is open. The line is left out while a change runs and while the last change is incomplete. The default
+account has none. The switch's accessible name
 identifies the account. A change is carried out at once or not at all (see "When a change is carried out" in
 `docs/product/sharing-the-default-configuration.md`), so the switch is either free to use or unavailable, and says
 which. Unavailable, it looks disabled but stays focusable and is marked unavailable for assistive technology; a press on
