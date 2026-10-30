@@ -558,7 +558,10 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           const reply = scenario.sessionAccountSwitches?.[body.session];
           if (reply === "pending") return new Promise<Event>(() => {});
           if (reply) {
-            applyDaemonEvent(store, { type: "session_upserted", session: resting });
+            // A relaunch under the new account that ended at once leaves the session interrupted on the account it had;
+            // any other refusal leaves it as it was.
+            const interrupted = reply.code === "switch_did_not_come_up";
+            applyDaemonEvent(store, { type: "session_upserted", session: interrupted ? { ...resting, status: "interrupted" } : resting });
             return fail(reply);
           }
           applyDaemonEvent(store, { type: "session_upserted", session: { ...resting, account_id: account?.id, config_dir: account?.config_dir } });

@@ -285,7 +285,7 @@ async fn outcome_of(call: tokio::task::JoinHandle<Result<Value>>) -> Result<Valu
         .unwrap()
 }
 
-fn code_of(err: &anyhow::Error) -> Option<&'static str> {
+fn code_of(err: &anyhow::Error) -> Option<crate::protocol::Code> {
     err.downcast_ref::<CodedError>().map(|coded| coded.code)
 }
 

@@ -756,7 +756,7 @@ mod tests {
         super::search_files(scope, query, true, &git, cancel)
     }
 
-    fn code(err: anyhow::Error) -> &'static str {
+    fn code(err: anyhow::Error) -> crate::protocol::Code {
         err.downcast_ref::<CodedError>()
             .expect("a coded refusal")
             .code

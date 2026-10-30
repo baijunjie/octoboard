@@ -385,8 +385,10 @@ seconds stops the switch, with nothing copied and nothing recorded, and that pro
 process has been ended, a change of the target's sharing that started meanwhile, a copy that does not complete (a Codex
 account's database that cannot be updated included), a relaunch the launch rules refuse and a relaunch whose process
 ends at once are each reported as a failed switch, not as a success: the session is left *interrupted* on its old
-account, resumable as before, and already reads so everywhere by the time the failure is shown. Octoboard tells that
-last case from a success by the process ending within a few seconds of the relaunch, never by reading what the agent
+account, resumable as before, and already reads so everywhere by the time the failure is shown. A relaunch whose
+process ended at once (`switch_did_not_come_up`) is a failure with a known remedy, not an unexpected one: its remedy
+says that a session that ended this way is no longer running and is to be resumed to carry on, and it brings no
+**Report issue** (see "The alert for failed switches" above). Octoboard tells that last case from a success by the process ending within a few seconds of the relaunch, never by reading what the agent
 printed. An account that is not signed in but has no reading saying so — not read yet, or its last reading failed for
 another reason — is therefore not a failed switch: every agent, Grok Build included, comes up on its own sign-in rather
 than exiting, so the switch succeeds and the session's terminal shows that agent's sign-in, which may start its sign-in

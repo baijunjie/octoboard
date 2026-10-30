@@ -228,7 +228,7 @@ pub enum ImportStatus {
 /// Why something was not created or applied: an `error` reply's `code`, `params` and `message`.
 #[derive(Debug, Clone, Serialize)]
 pub struct ImportFailure {
-    pub code: String,
+    pub code: crate::protocol::Code,
     pub params: Params,
     pub message: String,
 }
@@ -1008,7 +1008,7 @@ mod tests {
     use crate::test_support::{app_state, ScratchDir, PATIENCE};
     use serde_json::json;
 
-    pub(super) fn code_of(err: &anyhow::Error) -> &'static str {
+    pub(super) fn code_of(err: &anyhow::Error) -> crate::protocol::Code {
         err.downcast_ref::<CodedError>().expect("coded").code
     }
 
@@ -1641,25 +1641,22 @@ mod tests {
         .await
         .expect("a failing project does not fail the import");
 
-        let outcomes: Vec<(ImportStatus, Option<String>)> = imported[0]
+        let outcomes: Vec<(ImportStatus, Option<crate::protocol::Code>)> = imported[0]
             .projects
             .iter()
-            .map(|p| (p.status, p.error.as_ref().map(|e| e.code.clone())))
+            .map(|p| (p.status, p.error.as_ref().map(|e| e.code)))
             .collect();
         assert_eq!(
             outcomes,
             [
+                (ImportStatus::Failed, Some(error_code::PATH_NOT_FOUND)),
                 (
                     ImportStatus::Failed,
-                    Some(error_code::PATH_NOT_FOUND.to_string())
+                    Some(error_code::IMPORT_CHOICE_UNAVAILABLE)
                 ),
                 (
                     ImportStatus::Failed,
-                    Some(error_code::IMPORT_CHOICE_UNAVAILABLE.to_string())
-                ),
-                (
-                    ImportStatus::Failed,
-                    Some(error_code::IMPORT_CHOICE_UNAVAILABLE.to_string())
+                    Some(error_code::IMPORT_CHOICE_UNAVAILABLE)
                 ),
                 (ImportStatus::Created, None),
                 (ImportStatus::LeftOut, None),
@@ -1782,7 +1779,7 @@ mod tests {
         for (document, resolutions, code) in refusals {
             let err = apply(&state, &document, resolutions, false, None, true)
                 .await
-                .expect_err(code);
+                .expect_err(code.as_str());
             assert_eq!(code_of(&err), code);
             // A refused avatar names the console it belongs to.
             let coded = err.downcast_ref::<CodedError>().unwrap();

@@ -8,7 +8,7 @@ export type ErrorRecovery =
   | "unlock" | "stopSessions" | "wait" | "trust" | "conversation" | "session" | "ownerGone"
   | "configuration" | "exportSelection" | "image" | "avatarSize" | "avatarImage" | "clipboard" | "fileRead" | "fileWrite" | "gitFailure" | "gitSwitchFailure" | "gitRestoreFailure" | "gitHistory" | "branch"
   | "refresh" | "scope" | "limit" | "openExternal" | "openTerminal" | "openFileManager" | "openDefaultApplication" | "issueAddress"
-  | "hostPathGone" | "readAccess" | "sourceGone" | "sourceLink" | "sourceNotFolder" | "sourceUnreadable" | "pathExists" | "uniqueName" | "launchSetting" | "changeModelSetting" | "modelChange" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
+  | "hostPathGone" | "readAccess" | "sourceGone" | "sourceLink" | "sourceNotFolder" | "sourceUnreadable" | "pathExists" | "uniqueName" | "launchSetting" | "changeModelSetting" | "modelChange" | "switchRelaunch" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
   | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "submitRetry" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "accountDisabled" | "accountNotSignedIn" | "grokSandbox"
   | "pathLinkAmbiguous" | "pathLinkLaunchable" | "pathLinkNotPrivate"
   | "fileBusy" | "codexConfig" | "sqliteHome" | "symlink" | "notRestored" | "notRestoredAutomatic"
@@ -35,6 +35,8 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   // A relaunch that ends at once with a new model most likely does not take that model, and leaves the session not
   // running.
   modelChange: ["model_change_did_not_come_up"],
+  // A switch whose relaunch ended at once leaves the session interrupted on the account it had, resumable as before.
+  switchRelaunch: ["switch_did_not_come_up"],
   accountDirectory: ["config_dir_taken"],
   access: ["directory_unreadable"],
   // A read of the project's files the system denied, where there is no folder to choose instead and nothing is written.
@@ -87,7 +89,7 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   sessionBranches: ["session_branches_not_removed"],
   projectBranches: ["project_branches_not_determined"],
   branch: ["not_on_a_branch", "restore_not_on_branch", "invalid_branch_name", "unknown_branch", "worktree_unavailable"],
-  refresh: ["account_order_invalid", "source_changed", "unknown_commit", "page_not_current", "unknown_page", "unknown_project", "unknown_console", "queued_messages_lost", "queued_messages_dropped"],
+  refresh: ["account_order_invalid", "source_changed", "unknown_commit", "page_not_current", "unknown_page", "unknown_project", "unknown_console", "unknown_shell_terminal", "queued_messages_lost", "queued_messages_dropped"],
   scope: ["outside_scope", "unsupported_file_type", "clean_filtered"],
   limit: ["limit_exceeded"],
   // One group per application the host opens, so each remedy names only the one that failed. `openExternal` is the
@@ -101,8 +103,9 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   // `console_session_never_bound` and `session_not_bound_to_owner` cannot come from the UI: the window sends
   // release_session without an owner, and offers Unbind only on a bound project session. `path_link_refused` is a path
   // link the daemon will not open; its `cause` picks the remedy (`PATH_LINK_REFUSED_RECOVERY`), which is none for the
-  // causes whose sentence says it all.
-  none: ["quick_create_unavailable", "daemon_shutting_down", "git_operation_in_progress", "push_in_progress", "path_link_refused", "sharing_resume_failed", "trust_not_carried_over", "account_sharing_repair_failed", "console_session_never_bound", "session_not_bound_to_owner", "message_acceptance_unconfirmed", "terminal_input_lost"],
+  // causes whose sentence says it all. `login_codex_busy` has a step of its own (`RECOVERY_CODES`), and the login dialog
+  // takes up a login already running and ignores a cancel of one that has ended.
+  none: ["quick_create_unavailable", "daemon_shutting_down", "git_operation_in_progress", "push_in_progress", "path_link_refused", "sharing_resume_failed", "trust_not_carried_over", "account_sharing_repair_failed", "console_session_never_bound", "session_not_bound_to_owner", "message_acceptance_unconfirmed", "terminal_input_lost", "login_codex_busy", "login_already_running", "login_not_running"],
 };
 const DOMAIN_RECOVERY = new Map(Object.entries(GROUPS).flatMap(([recovery, codes]) => codes.map((code) => [code, recovery as ErrorRecovery] as const)));
 const OS_RECOVERY: Record<string, ErrorRecovery> = {

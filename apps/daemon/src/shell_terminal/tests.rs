@@ -48,10 +48,10 @@ async fn request(state: &Arc<AppState>, json: &str) -> anyhow::Result<Option<Eve
     crate::coordinator::handle(state, request.id, request.body).await
 }
 
-fn code_of(err: &anyhow::Error) -> &str {
+fn code_of(err: &anyhow::Error) -> crate::protocol::Code {
     err.downcast_ref::<CodedError>()
-        .map(|coded| coded.code)
-        .unwrap_or("uncoded")
+        .expect("a coded error")
+        .code
 }
 
 fn process(state: &AppState, terminal: &ShellTerminal) -> Arc<ShellProcess> {

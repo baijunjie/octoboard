@@ -762,6 +762,13 @@ describe("the fixture daemon's account switches", () => {
     expect(done.store.getState().daemonSwitching).toEqual(new Set());
   });
 
+  it("leaves a session whose relaunch under the new account ended at once interrupted on the account it had", async () => {
+    const daemon = createFixtureDaemon({ ...scenario, sessionAccountSwitches: { s: { code: "switch_did_not_come_up", params: { session: "s" }, message: "x" } } });
+    await expect(daemon.request({ type: "switch_session_account", session: "s", account: "work" })).rejects.toMatchObject({ code: "switch_did_not_come_up" });
+    expect(daemon.store.getState().sessions.get("s")).toEqual({ ...session, status: "interrupted" });
+    expect(daemon.store.getState().daemonSwitching).toEqual(new Set());
+  });
+
   it("refuses invalid targets and configured failures without changing the session", async () => {
     const daemon = createFixtureDaemon({ ...scenario, sessionAccountSwitches: { s: { code: "internal_error", params: { detail: "Could not restart the agent" }, message: "Could not restart the agent" } } });
     await expect(daemon.request({ type: "switch_session_account", session: "s", account: "codex" })).rejects.toMatchObject({ code: "unknown_account" });

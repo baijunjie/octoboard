@@ -12,7 +12,7 @@ use anyhow::Result;
 use uuid::Uuid;
 
 use crate::hostfs::place::Looking;
-use crate::protocol::{error_code, CodedError, Params, Project};
+use crate::protocol::{error_code, Code, CodedError, Params, Project};
 use crate::state::AppState;
 use crate::trash_safety::{
     looked_at_for_trash, Blocked, Failure, Overlap, Unresolved, TRASH_LOOK_DEADLINE,
@@ -21,7 +21,7 @@ use crate::trash_safety::{
 /// A refusal of a move to the Trash, kept so that it can be said again.
 #[derive(Clone, Debug)]
 struct Refusal {
-    code: &'static str,
+    code: Code,
     message: String,
     params: Params,
     /// Whether a path that could not be resolved decided it, so that another look may decide
@@ -30,7 +30,7 @@ struct Refusal {
 }
 
 impl Refusal {
-    fn new(code: &'static str, message: String, pairs: &[(&str, &str)], unresolved: bool) -> Self {
+    fn new(code: Code, message: String, pairs: &[(&str, &str)], unresolved: bool) -> Self {
         Self {
             code,
             message,
@@ -370,17 +370,13 @@ mod tests {
     }
 
     /// The refusal `result` holds: its code and its message.
-    fn refusal(result: Result<Option<PathBuf>>) -> (&'static str, String) {
+    fn refusal(result: Result<Option<PathBuf>>) -> (Code, String) {
         let err = coded(result);
         (err.code, err.message)
     }
 
     /// The code `directory_to_trash` refuses `deleted` with, among `others`.
-    async fn trash_refusal(
-        state: &AppState,
-        deleted: &Project,
-        others: &[Project],
-    ) -> &'static str {
+    async fn trash_refusal(state: &AppState, deleted: &Project, others: &[Project]) -> Code {
         refusal(directory_to_trash(state, deleted, others, None).await).0
     }
 

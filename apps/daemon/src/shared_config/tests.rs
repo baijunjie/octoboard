@@ -114,7 +114,7 @@ fn backups(dir: &Path, name: &str) -> Vec<PathBuf> {
     found
 }
 
-fn code_of(err: &anyhow::Error) -> &'static str {
+fn code_of(err: &anyhow::Error) -> crate::protocol::Code {
     err.downcast_ref::<CodedError>()
         .expect("a coded error")
         .code
@@ -663,7 +663,8 @@ async fn a_codex_state_database_the_catalog_does_not_name_is_told_before_a_launc
     write(&account, "state_6.sqlite", "");
     let session = fixture.session("s", Agent::Codex);
     let prepared = before_launch(&fixture.state, &session).await.unwrap();
-    let codes: Vec<&str> = prepared.notices.iter().map(|notice| notice.code).collect();
+    let codes: Vec<crate::protocol::Code> =
+        prepared.notices.iter().map(|notice| notice.code).collect();
     assert_eq!(codes, vec![notice_code::UNSHARED_STATE_DATABASE]);
     assert_eq!(
         prepared.notices[0].params["path"],
@@ -941,7 +942,8 @@ async fn a_default_directory_that_moved_refuses_a_retry_and_holds_the_repair_bac
     let session = fixture.session("s", Agent::Claude);
     let prepared = before_launch(&fixture.state, &session).await.unwrap();
     assert_eq!(prepared.shared_default_dir, Some(real(&default)));
-    let codes: Vec<&str> = prepared.notices.iter().map(|notice| notice.code).collect();
+    let codes: Vec<crate::protocol::Code> =
+        prepared.notices.iter().map(|notice| notice.code).collect();
     assert_eq!(codes, vec![notice_code::ACCOUNT_SHARING_REPAIR_FAILED]);
     assert_eq!(prepared.notices[0].params["cause"], "default_moved");
     assert!(!is_link(&account.join("settings.json")));

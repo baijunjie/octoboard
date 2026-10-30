@@ -5,15 +5,22 @@
 The window classifies a daemon error by its code (`classifyError` in `packages/ui/src/errorRecovery.ts`), and for a few
 codes by their `cause` param as well. If the code is not in that file's `GROUPS`, the window shows it as an unexpected
 failure. That alert says the failure may be a bug and asks the user to file an Issue, even when the refusal is
-deliberate and the user can fix the cause. No type check or test links the codes the daemon returns to that table, so
-nothing fails when a new code is missing from it. So when daemon code starts returning a new error code, the same change
-adds, in `packages/ui`:
+deliberate and the user can fix the cause. `packages/ui/src/daemonCodes.test.ts` reads every code the daemon declares
+and fails for one with no words in the catalogs, or (an `error_code`, or a notice `noticeKind` treats as an error) one
+that classifies as unexpected; it checks none of the per-code tables below, so getting those right is still on you. So
+when daemon code starts sending a new code, the same change:
 
-- `daemon.<code>` in every message catalog under `packages/ui/src/i18n/messages/`. It says what happened, and no
-  remedy beyond a code-specific step as set out below. Its params are listed in `packages/ui/src/daemonMessage.ts`. A
-  param shown as code goes in `CODE_PARAMS`, and a param shown as a name goes in `NAME_PARAMS`. An account param that
-  can hold the default account goes in `DEFAULT_ACCOUNT_NAME_PARAMS` too.
-- The code in a `GROUPS` entry of `packages/ui/src/errorRecovery.ts`. Reuse a group whose remedy fits, or add an
+- Declares it in `apps/daemon/src/protocol.rs`, as its own `pub const NAME: Code = Code("code");` in the code module
+  for its kind (`error_code`, `notice_code`, `models_unavailable_code`, `quota_unavailable_code`,
+  `login_failure_code`); every wire `code` field is a `Code`, which nothing outside that file can make. A code of a
+  quota reading, a models list or a login is shown where it is read, so it needs only its words, not a group.
+- Adds `daemon.<code>` in every message catalog under `packages/ui/src/i18n/messages/`. It says what happened, and no
+  remedy beyond a code-specific step as set out below. Where `messageCode` words the code only by a param (one key per
+  `kind` or `cause`), the key it resolves to with no such param is still needed: it is what a newer daemon's variant
+  the window does not know is shown with, so word it for any of them, not as a placeholder. Its params are listed in
+  `packages/ui/src/daemonMessage.ts`. A param shown as code goes in `CODE_PARAMS`, and a param shown as a name goes in
+  `NAME_PARAMS`. An account param that can hold the default account goes in `DEFAULT_ACCOUNT_NAME_PARAMS` too.
+- Puts the code in a `GROUPS` entry of `packages/ui/src/errorRecovery.ts`. Reuse a group whose remedy fits, or add an
   `ErrorRecovery` with its `error.recovery.<name>` text in every catalog, and add the code to the classification cases
   in `packages/ui/src/errorRecovery.test.ts`. The group's remedy, the general advice for its kind of failure, goes in
   that `error.recovery.<name>` text, never in `daemon.<code>`. The group does not decide the remedy on its own:
@@ -21,7 +28,11 @@ adds, in `packages/ui`:
   `reason` or the message, which a failure built from the system's error carries) before it looks at `GROUPS`, and that
   remedy (`access`, `diskSpace`) is about writing. Where the group's remedy must hold whatever the system text says, as
   `readAccess` does for `permission_denied`, give that group an early return in `classifyError` ahead of the signature,
-  and cover the code with a signature in its `detail` in the test.
+  and cover the code with a signature in its `detail` in the test. Leave a failure out of `GROUPS` only where the
+  unexpected alert is right for it — a refusal of a request the window never makes, a failure the daemon did not
+  foresee, or one classified by another code or `cause` it carries — and then add it, with why, to
+  `NOT_CLASSIFIED_BY_CODE` in `daemonCodes.test.ts`. A refusal the user can run into and fix, however rare, gets a
+  group (`none` where its own sentence says it all).
 - Only where the code calls for a step of its own, one the group's remedy does not say ("Reopen it first."): the code
   in `RECOVERY_CODES` (`packages/ui/src/daemonMessage.ts`), with `daemon.<code>.summary` saying what happened,
   `daemon.<code>.recovery` that step, and `daemon.<code>` both sentences, for text-only consumers. An alert whose body

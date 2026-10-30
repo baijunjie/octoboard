@@ -236,7 +236,11 @@ mod tests {
             .account_quotas
             .hold_for_test(&quota(Agent::Claude, None, vec![weekly(30.5, future)]));
         let mut failed = quota(Agent::Claude, Some("claude-b"), vec![weekly(120.0, future)]);
-        failed.unavailable = Some(QuotaUnavailable::new("command_failed", "it failed", &[]));
+        failed.unavailable = Some(QuotaUnavailable::new(
+            crate::protocol::quota_unavailable_code::COMMAND_FAILED,
+            "it failed",
+            &[],
+        ));
         state
             .account_quotas
             .hold_in_dir_for_test(&failed, "/tmp/claude-b");
@@ -405,8 +409,9 @@ mod tests {
         available(&state, &[Agent::Codex]);
         insert_account(&state, Agent::Codex, "codex-a");
         insert_account(&state, Agent::Codex, "codex-b");
-        let unavailable =
-            |code: &'static str| Some(QuotaUnavailable::new(code, "x", &[("agent", "Codex")]));
+        let unavailable = |code: crate::protocol::Code| {
+            Some(QuotaUnavailable::new(code, "x", &[("agent", "Codex")]))
+        };
         for (id, code) in [
             (
                 "codex-a",

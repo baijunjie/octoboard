@@ -470,9 +470,9 @@ mod tests {
             .expect("the channel is open")
     }
 
-    fn code_of(event: &Event) -> Option<&str> {
+    fn code_of(event: &Event) -> Option<crate::protocol::Code> {
         match event {
-            Event::Error { code, .. } => Some(code),
+            Event::Error { code, .. } => Some(*code),
             _ => None,
         }
     }

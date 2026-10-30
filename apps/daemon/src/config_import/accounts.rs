@@ -664,13 +664,21 @@ mod tests {
                 (Existing, None, None),
                 (New, None, None),
                 (DirectoryInUse, Some("Work"), None),
-                (Invalid, None, Some(error_code::ACCOUNT_NAME_TAKEN)),
-                (Invalid, None, Some(error_code::FIELD_REQUIRED)),
-                (Invalid, None, Some(error_code::CONFIG_DIR_NOT_ABSOLUTE)),
+                (Invalid, None, Some(error_code::ACCOUNT_NAME_TAKEN.as_str())),
+                (Invalid, None, Some(error_code::FIELD_REQUIRED.as_str())),
+                (
+                    Invalid,
+                    None,
+                    Some(error_code::CONFIG_DIR_NOT_ABSOLUTE.as_str())
+                ),
                 (DirectoryInUse, Some("Fresh"), None),
-                (Invalid, None, Some(error_code::ACCOUNT_NAME_TAKEN)),
+                (Invalid, None, Some(error_code::ACCOUNT_NAME_TAKEN.as_str())),
                 (DirectoryInUse, Some("Default"), None),
-                (Invalid, None, Some(error_code::CONFIG_DIR_NOT_ABSOLUTE)),
+                (
+                    Invalid,
+                    None,
+                    Some(error_code::CONFIG_DIR_NOT_ABSOLUTE.as_str())
+                ),
                 (New, None, None),
             ]
         );

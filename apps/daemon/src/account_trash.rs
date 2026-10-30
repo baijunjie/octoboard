@@ -585,7 +585,7 @@ mod tests {
         config_dir: &Path,
         home: &Path,
         data: &Path,
-    ) -> (&'static str, Params) {
+    ) -> (crate::protocol::Code, Params) {
         let err = judged_at(state, config_dir, home, data).await.unwrap_err();
         (coded(&err).code, coded(&err).params.clone())
     }

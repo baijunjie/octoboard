@@ -2107,7 +2107,7 @@ mod tests {
         let mut announced = false;
         while let Ok(event) = events.try_recv() {
             announced |= matches!(event, Event::SessionNotice { ref session, ref code, .. }
-                if session == "s" && code == crate::protocol::notice_code::MESSAGE_NOT_SENT);
+                if session == "s" && *code == crate::protocol::notice_code::MESSAGE_NOT_SENT);
         }
         assert!(announced);
 

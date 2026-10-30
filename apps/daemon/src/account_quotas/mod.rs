@@ -58,7 +58,7 @@ use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 
 use crate::protocol::{
-    now_millis, quota_unavailable_code as code, AccountQuota, Agent, Availability, Event,
+    now_millis, quota_unavailable_code as code, AccountQuota, Agent, Availability, Code, Event,
     QuotaUnavailable, QuotaWindow, QuotaWindowKind,
 };
 use crate::state::AppState;
@@ -295,7 +295,7 @@ impl AccountQuotas {
         self.held(agent, account, config_dir)
             .and_then(|quota| quota.unavailable)
             .is_some_and(|reason| {
-                [code::NOT_SIGNED_IN, code::CONFIG_DIR_MISSING].contains(&reason.code.as_str())
+                [code::NOT_SIGNED_IN, code::CONFIG_DIR_MISSING].contains(&reason.code)
             })
     }
 
@@ -422,8 +422,8 @@ impl AccountQuotas {
             let keeps_windows = quota
                 .unavailable
                 .as_ref()
-                .filter(|u| !is_account_state(&u.code));
-            let failures = if keeps_windows.is_some_and(|u| is_failure(&u.code)) {
+                .filter(|u| !is_account_state(u.code));
+            let failures = if keeps_windows.is_some_and(|u| is_failure(u.code)) {
                 previous.map_or(0, |entry| entry.failures).saturating_add(1)
             } else {
                 0
@@ -902,13 +902,13 @@ pub fn preferred_signal(signals: &[AccountSignal]) -> Option<usize> {
 }
 
 /// Whether `code` is one of an account's states rather than a failure to read it.
-fn is_account_state(code: &str) -> bool {
+fn is_account_state(code: Code) -> bool {
     code == self::code::CONFIG_DIR_MISSING || code == self::code::NOT_SIGNED_IN
 }
 
 /// Whether `code` is a failure to read the account, which backs it off: neither one of its states
 /// nor the CLI having no quota to report.
-fn is_failure(code: &str) -> bool {
+fn is_failure(code: Code) -> bool {
     !is_account_state(code) && code != self::code::NO_WINDOWS
 }
 
@@ -1272,7 +1272,7 @@ fn read(
         Err(_) => None,
     };
     let email = match &result {
-        Err(unavailable) if is_account_state(&unavailable.code) => None,
+        Err(unavailable) if is_account_state(unavailable.code) => None,
         _ => env.and_then(|env| {
             account_email(key.agent, key.config_dir.as_deref().map(Path::new), env)
         }),
@@ -1545,7 +1545,7 @@ mod tests {
         assert_eq!(held.windows, good.windows);
         assert_eq!((held.fetched_at, held.plan.as_deref()), (7, Some("plus")));
         assert_eq!(
-            held.unavailable.as_ref().map(|u| u.code.as_str()),
+            held.unavailable.as_ref().map(|u| u.code),
             Some(code::TIMED_OUT)
         );
 
@@ -1597,7 +1597,7 @@ mod tests {
         let held = &quotas.list()[0];
         assert_eq!(held.windows, good.windows);
         assert_eq!(
-            held.unavailable.as_ref().map(|u| u.code.as_str()),
+            held.unavailable.as_ref().map(|u| u.code),
             Some(code::NO_WINDOWS)
         );
     }
@@ -1729,7 +1729,7 @@ mod tests {
         let held = state.account_quotas.list();
         assert!(held[0].windows.is_empty());
         assert_eq!(
-            held[0].unavailable.as_ref().map(|u| u.code.as_str()),
+            held[0].unavailable.as_ref().map(|u| u.code),
             Some(code::NOT_SIGNED_IN)
         );
         // And is read again after the ordinary interval, however long it has been so.
