@@ -7,6 +7,35 @@ remembering to clean them up. The status an agent reports is separate (see "Work
 `docs/product/session-statuses.md`). The user sees, stops and keeps these processes in the right pane's Processes panel
 (see `docs/product/processes-panel.md`).
 
+## Which processes belong to a launch
+
+Whether a process belongs to an agent launch, and so is stopped when that launch ends, is decided by **attribution**
+alone: whether that launch started it. A process is the launch's when its chain of parents reaches the agent or another
+process of the launch, when its environment carries the launch's tag (`OCTOBOARD_PROCESS_TAG`, which everything the
+launch starts inherits; see "The launch environment" in `docs/product/launching-agents.md`), or when it runs in a
+terminal session that one of the launch's processes started. A process stays attributed when it is later reparented or
+moves into a terminal session of its own. Nothing else enters into it: not a process's name, its kind, the ports it
+listens on, or whether other programs are using it. Octoboard keeps no list of services to spare or to stop, and does
+not try to judge what a process is.
+
+So everything a launch started is stopped when the session's process ends, by design, a per-user shared service
+included: a terminal multiplexer server, a key agent or a build daemon that the agent brought up is stopped with the
+launch even when other programs have come to use it since. A shared service that was already running when the agent
+connected to it was not started by the launch: it is not the session's, and the session's end does not stop it.
+
+The user's way to spare a process the launch started is to keep it: **Keep** on its card in the Processes panel (see
+"Stop and Keep" in `docs/product/processes-panel.md`), or unchecking it in an archive confirmation to keep it running
+(see "Processes in an archive confirmation" below). Nothing else exempts a process. What Octoboard keeps without being
+asked, after a restart that fails or when its saved records cannot be read, and the processes outside these rules
+altogether (the daemon's own, the user's shell terminals, the agent's own terminal session), are in "Automatic stopping
+and its boundaries" below.
+
+Attribution cannot follow everything. Octoboard cannot attribute a program whose environment macOS withholds (a system
+binary such as `/bin/sleep` or `/usr/bin/tail`) that a command left running in the background when the shell that
+started it exits within one process-table scan, about **2 seconds**: such a process is neither listed nor stopped with
+the launch. A limit that concerns kept processes is described with keeping, in "Automatic stopping and its boundaries"
+below.
+
 ## Automatic stopping and its boundaries
 
 When an agent's process ends, Octoboard stops the processes it can attribute to that launch, except those the user chose
@@ -47,10 +76,6 @@ Stopping first sends `SIGTERM` and allows **3 seconds** to exit, then sends `SIG
 includes its start time: a reused process ID is not permission to stop its replacement. A process still alive after
 `SIGKILL`, for example in an uninterruptible sleep, may remain; automatic cleanup retries it after **5 minutes**, or
 when another launch ends. Cleanup is not proof that every process has already disappeared.
-
-Octoboard cannot attribute a program whose environment macOS withholds (a system binary such as `/bin/sleep` or
-`/usr/bin/tail`) that a command left running in the background when the shell that started it exits within one
-process-table scan, about **2 seconds**: such a process is neither listed nor stopped with the launch.
 
 After a daemon restart, Octoboard uses its saved process records and launch identities to stop what its previous run
 left behind, while preserving kept processes. A terminal session it saved, which reaches the processes in it that it
