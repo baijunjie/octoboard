@@ -115,7 +115,7 @@ same set of fields:
 | `accounts` | Its account setting for every agent, as above. |
 | `launch` | Its model and reasoning effort for every agent, as above; for a value it leaves unset, its sessions take its console's `project_session_launch` (see "The console's own settings: `get_console` and `update_console`" below). |
 | `effective` | What `default_agent`, `accounts` and `launch` resolve to under the project's console, worked out as a launch works them out, as `{"default_agent": …, "accounts": …, "launch": …}`: the agent a session opened in the project without a choice runs on (the project's own, else the console's `project_session_agent`, else its `default_agent`); for every agent the account such a session of it gets, by id, or `default` for the agent's default account (the project's own, else the console's); and for every agent the model and reasoning effort it gets (each the project's own, else the console's `project_session_launch`; `null` is the agent's own default). A session's own choices come before these at a launch, and so do the agent and account automatic selection picks and the starting session's own agent and account (see "The agent and account of a session a session starts" in `docs/product/hub-orchestration.md`). |
-| `git_workflow` | Its git workflow settings (see `docs/product/git-workflow-settings.md`) as `{"override": …, "effective": …}`: under `override` the project's own value for each of `development`, `rebase_before_merge`, `delivery` and `revert_gate`, `null` for one it leaves to the application-wide value; under `effective` the four resolved values for it now (`rebase_before_merge` and `delivery` apply only while `development` is not `in_place`; `revert_gate` applies whatever `development` is). |
+| `git_workflow` | Its git workflow settings (see `docs/product/git-workflow-settings.md`) as `{"override": …, "effective": …}`: under `override` the project's own value for each of `development`, `squash_before_delivery`, `rebase_before_merge`, `delivery` and `revert_gate`, `null` for one it leaves to the application-wide value; under `effective` the five resolved values for it now (`squash_before_delivery`, `rebase_before_merge` and `delivery` apply only while `development` is not `in_place`; `revert_gate` applies whatever `development` is). |
 
 Each also carries `git_status`, the project's git state as the daemon last read it, read-only (see "Reading the status
 from a session" in `docs/product/project-git-status.md`).
@@ -163,7 +163,7 @@ Takes `project` — an id, or a name that names exactly one project of the conso
 | `pinned` | Pins or unpins it. |
 | `default_agent` | An agent, or `null` to follow the console's again (its `project_session_agent`, else its `default_agent`). |
 | `accounts`, `launch` | As above. |
-| `git_workflow` | An object of any of `development` (`in_place`, `branch` or `worktree`), `rebase_before_merge` (`true` or `false`), `delivery` (`ask`, `merge` or `pull_request`) and `revert_gate` (`true` or `false`); each item given becomes the project's own value, `null` for an item puts it back to following the application-wide value, and an item left out stays as it is. |
+| `git_workflow` | An object of any of `development` (`in_place`, `branch` or `worktree`), `squash_before_delivery` (`true` or `false`), `rebase_before_merge` (`true` or `false`), `delivery` (`ask`, `merge` or `pull_request`) and `revert_gate` (`true` or `false`); each item given becomes the project's own value, `null` for an item puts it back to following the application-wide value, and an item left out stays as it is. |
 
 `tags` beside `add_tags` or `remove_tags` is refused. Tags end up normalised as in `docs/product/project-tags.md`.
 Anything left out is left as it is, and the call answers with the project's settings as stored.
@@ -195,7 +195,7 @@ working directory. Neither the avatar itself nor the console's console session i
 | `auto_select_account` | Whether a new session whose account was not named chooses a usable account automatically, preferring the initial agent's soonest weekly reset and trying another added agent when needed (see "Automatically select an account" in `docs/product/settings.md` and "Which account a session uses" in `docs/product/opening-sessions.md`). |
 | `sidebar_order_by_status` | Whether the user's sidebar ranks sessions and projects by status (see "Order the sidebar by status" in `docs/product/settings.md` and "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`). |
 | `default_clone_dir` | The default clone directory (see "Default clone directory" in `docs/product/settings.md`). |
-| `git_workflow` | The application-wide git workflow settings, as `development`, `rebase_before_merge`, `delivery` and `revert_gate` (see "The four settings" in `docs/product/git-workflow-settings.md`); `rebase_before_merge` and `delivery` apply only while `development` is not `in_place`; `revert_gate` applies whatever `development` is. |
+| `git_workflow` | The application-wide git workflow settings, as `development`, `squash_before_delivery`, `rebase_before_merge`, `delivery` and `revert_gate` (see "The five settings" in `docs/product/git-workflow-settings.md`); `squash_before_delivery`, `rebase_before_merge` and `delivery` apply only while `development` is not `in_place`; `revert_gate` applies whatever `development` is. |
 | `claude_compatibility` | For each agent other than Claude Code, by its name (`codex`, `grok`), whether its sessions load Claude Code's configuration: the value in effect, the default included while the user has made no choice (see "Claude compatibility" in `docs/product/per-agent-settings.md`). |
 | `accounts` | Every account, each with `id`, `agent`, `name`, `default` and `disabled`, which is true for an account the user turned off, so that no new session can be opened on it (see "Turning an account off" in `docs/product/agent-accounts.md`). Each agent's default account is listed first among that agent's, with the id `default` and, as its `name`, the name the user gave it, else `Default` (see "The default account" in `docs/product/agent-accounts.md`). An account's directory is never given. |
 | `trusted_directories` | The trusted folders (see "Trusted folders" in `docs/product/folder-trust.md`). Read-only. |
@@ -203,18 +203,19 @@ working directory. Neither the avatar itself nor the console's console session i
 `update_settings` takes `auto_pull_repositories`, `auto_delete_unresumable_archives`, `auto_select_account`,
 `sidebar_order_by_status`, `default_clone_dir`, `git_workflow` and `claude_compatibility`, under the rules of the same
 settings in Settings: the switches take `true` or `false`, a clone directory must be absolute or start with `~/`, and a
-blank one goes back to the built-in default. `git_workflow` is an object of any of the four git workflow settings, with
-the values `update_project`'s takes (`rebase_before_merge` and `delivery` apply only while `development` is not
-`in_place`, and keep their values while it is); an item left out, or given as `null`, stays as it is.
-`claude_compatibility` is an object of `codex` and `grok`, each `true` or `false`; an agent left out stays as it is, and
-an agent given is recorded as the user's choice, which then holds whatever agents are added, as turning its switch in
-Settings does. A refused value leaves the others unapplied too. An `auto_approve_session_requests`, `auto_approve_resume_requests`, `auto_approve_account_switches`,
-`auto_approve_handoffs`, `auto_start_quota_windows`, `auto_switch_on_usage_limit`, `ask_questions_as_choices` or
-`interface_language` argument is ignored — the setting stays as it is, `get_settings` never lists any of them, and the rest of the call applies as usual.
-Turning `auto_pull_repositories` on fast-forwards the projects already known to be behind at once, as turning the switch
-on in Settings does, which changes files in the user's repositories. Turning `auto_delete_unresumable_archives` on
-deletes nothing at once, and turning it off stops a deletion pass under way, exactly as the switch in Settings does.
-Turning `auto_select_account` on or off changes no session already open; it is read when a later `new_session`,
+blank one goes back to the built-in default. `git_workflow` is an object of any of the five git workflow settings, with
+the values `update_project`'s takes (`squash_before_delivery`, `rebase_before_merge` and `delivery` apply only while
+`development` is not `in_place`, and keep their values while it is); an item left out, or given as `null`, stays as it
+is. `claude_compatibility` is an object of `codex` and `grok`, each `true` or `false`; an agent left out stays as it is,
+and an agent given is recorded as the user's choice, which then holds whatever agents are added, as turning its switch
+in Settings does. A refused value leaves the others unapplied too. An `auto_approve_session_requests`,
+`auto_approve_resume_requests`, `auto_approve_account_switches`, `auto_approve_handoffs`, `auto_start_quota_windows`,
+`auto_switch_on_usage_limit`, `ask_questions_as_choices` or `interface_language` argument is ignored — the setting stays
+as it is, `get_settings` never lists any of them, and the rest of the call applies as usual. Turning
+`auto_pull_repositories` on fast-forwards the projects already known to be behind at once, as turning the switch on in
+Settings does, which changes files in the user's repositories. Turning `auto_delete_unresumable_archives` on deletes
+nothing at once, and turning it off stops a deletion pass under way, exactly as the switch in Settings does. Turning
+`auto_select_account` on or off changes no session already open; it is read when a later `new_session`,
 `request_session` or `handoff_session` leaves the account out (see "Which account a session uses" in
 `docs/product/opening-sessions.md`). The call answers as `get_settings` does.
 
@@ -225,18 +226,18 @@ sessions opened afterwards, and a changed model or effort reaches a session's ne
 that value (see `docs/product/model-and-reasoning-effort.md`). That holds for the calling console session too: its own
 console's model and effort reach it when it is next launched, and its console's account only console sessions opened
 afterwards. A changed `project_session_launch` reaches a project session at its next launch, unless its project or the
-session sets that value itself. A changed `development`, `rebase_before_merge` or `delivery`, application-wide or a
-project's own, is sure to reach only project sessions begun after it (see "When a change reaches a session" in
-`docs/product/git-workflow-settings.md`). A changed `revert_gate` reaches running sessions at once (see "The switch" in
-`docs/product/revert-gate.md`). A changed `claude_compatibility` reaches a session of that agent when it next starts or
-resumes, an account switch included.
+session sets that value itself. A changed `development`, `squash_before_delivery`, `rebase_before_merge` or `delivery`,
+application-wide or a project's own, is sure to reach only project sessions begun after it (see "When a change reaches a
+session" in `docs/product/git-workflow-settings.md`). A changed `revert_gate` reaches running sessions at once (see "The
+switch" in `docs/product/revert-gate.md`). A changed `claude_compatibility` reaches a session of that agent when it next
+starts or resumes, an account switch included.
 
 ## Refusals
 
 A refused call comes back as a tool error carrying the reason in prose and changes nothing, as for every Octoboard
 tool. Besides the refusals above, an argument of the wrong type — a boolean, a list or a text given as something else —
 is refused with a reason rather than read as left out. So is a `git_workflow` object, for a project or
-application-wide, that holds a key other than the four git workflow settings, a `development` other than `in_place`,
+application-wide, that holds a key other than the five git workflow settings, a `development` other than `in_place`,
 `branch` and `worktree`, or a `delivery` other than `ask`, `merge` and `pull_request`,
 so that a misspelt item is not taken for a change that changed nothing. So is a `claude_compatibility` object that
 names `claude`, which has no such setting, or anything that is not an agent, or holds a value other than `true` or

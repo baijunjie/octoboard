@@ -22,8 +22,8 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::config_export::{
-    self, AccountName, ConfigurationDocument, DocumentConsole, DocumentProject, DocumentSettings,
-    ProjectAccountRef,
+    self, AccountName, ConfigurationDocument, DocumentConsole, DocumentGitWorkflowSettings,
+    DocumentProject, DocumentSettings, ProjectAccountRef,
 };
 use crate::config_upgrade;
 use crate::coordinator::{
@@ -177,7 +177,7 @@ pub struct InspectedSettings {
     pub ask_questions_as_choices: Option<bool>,
     pub current_ask_questions_as_choices: bool,
     /// Absent when the document predates the settings, which applying it then leaves as they are.
-    pub git_workflow: Option<GitWorkflowSettings>,
+    pub git_workflow: Option<DocumentGitWorkflowSettings>,
     pub current_git_workflow: GitWorkflowSettings,
     /// Absent when the document predates the setting, which applying it then leaves as it is.
     pub claude_compatibility: Option<BTreeMap<String, bool>>,
@@ -2216,6 +2216,7 @@ mod tests {
         source.store.insert_console(&hub).unwrap();
         let own = GitWorkflowOverride {
             development: Some(Development::InPlace),
+            squash_before_delivery: Some(false),
             delivery: Some(Delivery::PullRequest),
             ..GitWorkflowOverride::default()
         };
@@ -2225,6 +2226,7 @@ mod tests {
         source
             .store
             .change_git_workflow_settings(&crate::git_workflow::GitWorkflowSettingsChanges {
+                squash_before_delivery: Some(true),
                 rebase_before_merge: Some(false),
                 delivery: Some(Delivery::Merge),
                 ..Default::default()
@@ -2237,6 +2239,14 @@ mod tests {
         )
         .unwrap();
         assert_eq!(full["settings"]["git_workflow"]["delivery"], "merge");
+        assert_eq!(
+            full["settings"]["git_workflow"]["squash_before_delivery"],
+            true
+        );
+        assert_eq!(
+            full["consoles"][0]["projects"][0]["git_workflow"]["squash_before_delivery"],
+            false
+        );
         assert_eq!(
             full["consoles"][0]["projects"][0]["git_workflow"]["delivery"],
             "pull_request"
@@ -2258,7 +2268,7 @@ mod tests {
 
         let (target, _target_dir) = app_state("import-git-workflow-target");
         let settings = inspect(&target, &full).await.unwrap().settings.unwrap();
-        assert_eq!(settings.git_workflow, Some(global));
+        assert_eq!(settings.git_workflow, Some(global.into()));
         assert_eq!(
             settings.current_git_workflow,
             GitWorkflowSettings::default()
@@ -2331,6 +2341,36 @@ mod tests {
             stored_projects(&state)[0].git_workflow,
             GitWorkflowOverride::default()
         );
+    }
+
+    #[tokio::test]
+    async fn a_workflow_document_without_squash_preserves_the_current_choice() {
+        let (state, _dir) = app_state("import-before-squash");
+        state
+            .store
+            .change_git_workflow_settings(&GitWorkflowSettingsChanges {
+                squash_before_delivery: Some(true),
+                ..Default::default()
+            })
+            .unwrap();
+        let mut document = serde_json::to_value(
+            config_export::build(&state.store, &config_export::Selection::full(true)).unwrap(),
+        )
+        .unwrap();
+        let workflow = document["settings"]["git_workflow"]
+            .as_object_mut()
+            .unwrap();
+        workflow.remove("squash_before_delivery");
+        workflow.insert("rebase_before_merge".into(), json!(false));
+        let inspected = inspect(&state, &document).await.unwrap().settings.unwrap();
+        assert_eq!(inspected.git_workflow.unwrap().squash_before_delivery, None);
+        assert!(inspected.current_git_workflow.squash_before_delivery);
+        apply(&state, &document, Vec::new(), true, None, true)
+            .await
+            .unwrap();
+        let stored = state.store.git_workflow_settings().unwrap();
+        assert!(stored.squash_before_delivery);
+        assert!(!stored.rebase_before_merge);
     }
 
     /// A document of version 1 carries the git workflow settings as `worktrees` with a boolean

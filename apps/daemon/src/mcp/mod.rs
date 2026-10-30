@@ -1845,7 +1845,8 @@ const GET_PROJECT: ToolDef = ToolDef {
          (`null` is the agent's own default) a session of each agent gets when nothing names \
          otherwise, before session-specific selection, and `git_workflow` (the project's own \
          `override` of the git workflow settings, `null` following the application-wide value, \
-         and the `effective` resolved values; `rebase_before_merge` and `delivery` apply only \
+         and the `effective` resolved values; `squash_before_delivery`, `rebase_before_merge` \
+         and `delivery` apply only \
          while `development` is not `in_place`), and `git_status`. ",
         git_status_field!(),
         " With `refresh` the status is checked against the remote first, as the application's \
@@ -2479,7 +2480,7 @@ enum GitWorkflowFor {
     NewProject,
 }
 
-/// The `git_workflow` argument: the four git workflow settings, application-wide or as a project's
+/// The `git_workflow` argument: the five git workflow settings, application-wide or as a project's
 /// own.
 fn git_workflow_schema(whose: GitWorkflowFor) -> Value {
     let project = whose != GitWorkflowFor::Application;
@@ -2505,7 +2506,7 @@ fn git_workflow_schema(whose: GitWorkflowFor) -> Value {
         "type": nullable(json!("string")),
         "description": format!(
             "Where project sessions develop: `in_place` (directly on the current branch; they are \
-             given no rule), `branch` (on a branch of their own in the project directory, which \
+             given no branch or worktree rule), `branch` (on a branch of their own in the project directory, which \
              they share, so it suits one session at a time) or `worktree` (on a branch of their \
              own in a worktree of their own). {RULE_REACHES}"
         ),
@@ -2536,11 +2537,27 @@ fn git_workflow_schema(whose: GitWorkflowFor) -> Value {
         ),
         "properties": {
             "development": development,
+            "squash_before_delivery": {
+                "type": nullable(json!("boolean")),
+                "description": format!(
+                    "Whether to consolidate the branch's commits so each resulting commit covers \
+                     one complete change and can be reverted on its own, before delivering finished \
+                     work by merge, push or pull request. Use the common ancestor of the current \
+                     branch and its target branch as the base, and rewrite only the current \
+                     branch's commits. Preserve existing `Reverts:` lines marking deliberate \
+                     reverts in the original commit messages. Squash before any requested rebase. \
+                     Never rewrite a pushed branch that other people or sessions also use. \
+                     Applies only while `development` is not `in_place`. Default off. {RULE_REACHES}"
+                ),
+            },
             "rebase_before_merge": {
                 "type": nullable(json!("boolean")),
                 "description": format!(
-                    "Whether a branch is rebased onto its target branch before it is merged. \
-                     Applies only while `development` is not `in_place`. {RULE_REACHES}"
+                    "Whether to rebase a branch onto its target branch before delivering finished \
+                     work (merge, push or pull request), after any requested squash. The key keeps \
+                     its earlier spelling for compatibility. Never rewrite a pushed branch \
+                     that other people or sessions also use. Applies only while `development` is \
+                     not `in_place`. {RULE_REACHES}"
                 ),
             },
             "delivery": delivery,

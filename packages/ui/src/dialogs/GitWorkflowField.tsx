@@ -13,7 +13,7 @@ import { OptionSelect, type Option } from "./OptionSelect";
 const FOLLOW = "follow";
 type Follow = typeof FOLLOW;
 
-/** A project's own git workflow settings (see `Project.git_workflow`): each of the four items is "Same as global
+/** A project's own git workflow settings (see `Project.git_workflow`): each item is "Same as global
  * setting", with the application-wide value in a badge, or a value of its own. `value` holds `null` for an item that
  * follows. The group stands under a tab of its own, which names it on the screen, so its own name is kept off the
  * screen (it still names the group). */
@@ -29,7 +29,7 @@ export function GitWorkflowField({
   const t = useT();
   const global = useDaemonStore((s) => s.settings.git_workflow);
   const onOff = (on: boolean) => t(on ? "settings.gitWorkflow.on" : "settings.gitWorkflow.off");
-  // Rebase and delivery only matter while sessions work on a branch of their own (the rule they shape is left out
+  // Squashing, rebase and delivery only matter while sessions work on a branch of their own (the rule they shape is left out
   // otherwise), so they are not shown on the current branch; their values are kept. The revert gate does not depend on it.
   const onOwnBranch = (value.development ?? global.development) !== "in_place";
   // Another window, or an agent's update, can put the effective development on the current branch under a focused
@@ -45,7 +45,7 @@ export function GitWorkflowField({
     ...development,
   ];
 
-  const flagPicker = (item: "rebase_before_merge" | "revert_gate", label: string) => {
+  const flagPicker = (item: "squash_before_delivery" | "rebase_before_merge" | "revert_gate", label: string) => {
     const options: Option<Follow | "on" | "off">[] = [
       { value: FOLLOW, label: sameAsGlobal, badge: onOff(global[item]), badgeInLabel: true },
       { value: "on", label: onOff(true) },
@@ -88,7 +88,8 @@ export function GitWorkflowField({
           </GroupRow>
           {onOwnBranch && (
             <>
-              {flagPicker("rebase_before_merge", t("settings.gitWorkflow.rebase.label"))}
+              {flagPicker("squash_before_delivery", t("settings.gitWorkflow.squash.label"))}
+              {flagPicker("rebase_before_merge", t("settings.gitWorkflow.rebaseBeforeDelivery.label"))}
               <GroupRow label={deliveryLabel}>
                 <OptionSelect
                   hideLabel

@@ -68,7 +68,7 @@ pub enum ReorderOutcome {
 /// has been released, the change also adds the step from that version to `settle_existing_file`,
 /// keyed on `user_version` rather than on probing for columns, with a test that opens a database
 /// at the old version; without the step, a released user's database is moved aside.
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 
 /// Every table, index and trigger of the current schema.
 const SCHEMA: &str = r#"
@@ -182,6 +182,7 @@ CREATE TABLE projects (
     description   TEXT,
     -- NULL follows the application-wide value; see `Store::git_workflow_settings`.
     development         TEXT,
+    squash_before_delivery INTEGER,
     rebase_before_merge INTEGER,
     delivery            TEXT,
     revert_gate         INTEGER
@@ -338,6 +339,7 @@ CREATE TABLE settings (
     -- `Store::claude_compatibility_choices`.
     claude_compatibility   TEXT,
     development         TEXT NOT NULL DEFAULT 'worktree',
+    squash_before_delivery INTEGER NOT NULL DEFAULT 0,
     rebase_before_merge INTEGER NOT NULL DEFAULT 1,
     delivery            TEXT NOT NULL DEFAULT 'ask',
     revert_gate         INTEGER NOT NULL DEFAULT 0
@@ -750,9 +752,9 @@ impl Store {
                                    codex_session_model, codex_session_effort, grok_session_model,
                                    grok_session_effort, trust_consent, pinned, tags,
                                    description, development, rebase_before_merge, delivery,
-                                   revert_gate)
+                                   revert_gate, squash_before_delivery)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
-                     ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)",
+                     ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29)",
             params![
                 project.id,
                 project.console_id,
@@ -782,6 +784,7 @@ impl Store {
                 project.git_workflow.rebase_before_merge,
                 project.git_workflow.delivery.as_ref().map(enum_to_text),
                 project.git_workflow.revert_gate,
+                project.git_workflow.squash_before_delivery,
             ],
         )?;
         Ok(())
@@ -821,7 +824,7 @@ impl Store {
                                  grok_session_model = ?14, grok_session_effort = ?15,
                                  pinned = ?16, tags = ?17, description = ?18,
                                  development = ?19, rebase_before_merge = ?20, delivery = ?21,
-                                 revert_gate = ?22
+                                 revert_gate = ?22, squash_before_delivery = ?23
              WHERE id = ?1",
             params![
                 project.id,
@@ -846,6 +849,7 @@ impl Store {
                 project.git_workflow.rebase_before_merge,
                 project.git_workflow.delivery.as_ref().map(enum_to_text),
                 project.git_workflow.revert_gate,
+                project.git_workflow.squash_before_delivery,
             ],
         )?;
         Ok(())
@@ -1148,7 +1152,7 @@ impl Store {
         }
         conn.execute(
             "UPDATE settings SET development = ?2, rebase_before_merge = ?3, delivery = ?4,
-                                 revert_gate = ?5
+                                 revert_gate = ?5, squash_before_delivery = ?6
              WHERE id = ?1",
             params![
                 SETTINGS_ID,
@@ -1156,6 +1160,7 @@ impl Store {
                 next.rebase_before_merge,
                 enum_to_text(&next.delivery),
                 next.revert_gate,
+                next.squash_before_delivery,
             ],
         )?;
         Ok(true)
@@ -2811,8 +2816,9 @@ fn user_version(conn: &Connection) -> Result<i64> {
 ///
 /// - at [`SCHEMA_VERSION`], or holding no tables at all (an empty file, which `open` initializes):
 ///   left as it is;
-/// - at versions 1 and 2: upgraded in place, adding the account display order (version 2) where
-///   needed and the collector's private observation boundary (version 3);
+/// - at versions 1 through 3: upgraded in place, adding the account display order (version 2),
+///   the collector's private observation boundary (version 3), and delivery squash settings
+///   (version 4) where needed;
 /// - at an older version without an upgrade step, which includes every database from before
 ///   versions were recorded: moved aside, so `open` starts a fresh one. The old file is renamed
 ///   rather than deleted, so a user who needs what was in it still has it on disk; see "Files
@@ -2828,12 +2834,18 @@ fn settle_existing_file(path: &Path) -> Result<()> {
         if version == SCHEMA_VERSION {
             return Ok(());
         }
-        if version == 1 || version == 2 {
+        if (1..=3).contains(&version) {
             let tx = conn.unchecked_transaction()?;
             if version == 1 {
                 tx.execute_batch("ALTER TABLE settings ADD COLUMN account_order TEXT")?;
             }
-            tx.execute_batch("ALTER TABLE sessions ADD COLUMN observed_boundary TEXT")?;
+            if version <= 2 {
+                tx.execute_batch("ALTER TABLE sessions ADD COLUMN observed_boundary TEXT")?;
+            }
+            tx.execute_batch(
+                "ALTER TABLE settings ADD COLUMN squash_before_delivery INTEGER NOT NULL DEFAULT 0;
+                 ALTER TABLE projects ADD COLUMN squash_before_delivery INTEGER",
+            )?;
             tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
             tx.commit()?;
             return Ok(());
@@ -2890,7 +2902,7 @@ const PROJECT_COLUMNS: &str = "id, console_id, host_id, name, path, default_agen
                                claude_session_model, claude_session_effort, codex_session_model,
                                codex_session_effort, grok_session_model, grok_session_effort,
                                trust_consent, pinned, tags, description, development,
-                               rebase_before_merge, delivery, revert_gate";
+                               rebase_before_merge, delivery, revert_gate, squash_before_delivery";
 
 /// What the agent's records gave a session, to be stored if it differs from what is.
 pub struct RecordUpdate {
@@ -3070,12 +3082,13 @@ fn read_account(row: &Row<'_>) -> rusqlite::Result<Account> {
 
 fn read_git_workflow_settings(conn: &Connection) -> Result<GitWorkflowSettings> {
     Ok(conn.query_row(
-        "SELECT development, rebase_before_merge, delivery, revert_gate
+        "SELECT development, rebase_before_merge, delivery, revert_gate, squash_before_delivery
          FROM settings WHERE id = ?1",
         params![SETTINGS_ID],
         |row| {
             Ok(GitWorkflowSettings {
                 development: enum_from_row(row, 0)?,
+                squash_before_delivery: row.get(4)?,
                 rebase_before_merge: row.get(1)?,
                 delivery: enum_from_row(row, 2)?,
                 revert_gate: row.get(3)?,
@@ -3111,6 +3124,7 @@ fn read_project(row: &Row<'_>) -> rusqlite::Result<Project> {
         description: row.get(23)?,
         git_workflow: GitWorkflowOverride {
             development: enum_from_row_opt(row, 24)?,
+            squash_before_delivery: row.get(28)?,
             rebase_before_merge: row.get(25)?,
             delivery: enum_from_row_opt(row, 26)?,
             revert_gate: row.get(27)?,
@@ -3450,12 +3464,63 @@ mod tests {
     }
 
     #[test]
+    fn delivery_squash_upgrade_preserves_version_three_settings_and_projects() {
+        let path = temp_db("delivery-squash-upgrade");
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(
+                &SCHEMA
+                    .replace("    squash_before_delivery INTEGER,\n", "")
+                    .replace(
+                        "    squash_before_delivery INTEGER NOT NULL DEFAULT 0,\n",
+                        "",
+                    ),
+            )
+            .unwrap();
+            conn.pragma_update(None, "user_version", 3).unwrap();
+            conn.execute(
+                "INSERT INTO settings (id, rebase_before_merge, delivery) VALUES (?1, 0, 'merge')",
+                params![SETTINGS_ID],
+            )
+            .unwrap();
+            conn.execute_batch(
+                "INSERT INTO consoles (id, name, workdir, default_agent, created_at)
+                 VALUES ('kept-console', 'Kept', '/kept', 'claude', 1);
+                 INSERT INTO projects (id, console_id, host_id, name, path, source,
+                                       rebase_before_merge, delivery)
+                 VALUES ('kept-project', 'kept-console', 'local', 'Kept', '/kept', 'local',
+                         1, 'pull_request')",
+            )
+            .unwrap();
+        }
+        let store = Store::open(&path).unwrap();
+        let global = store.git_workflow_settings().unwrap();
+        assert!(!global.squash_before_delivery);
+        assert!(!global.rebase_before_merge);
+        assert_eq!(global.delivery, Delivery::Merge);
+        let project = store.get_project("kept-project").unwrap().unwrap();
+        assert_eq!(project.git_workflow.squash_before_delivery, None);
+        assert_eq!(project.git_workflow.rebase_before_merge, Some(true));
+        assert_eq!(project.git_workflow.delivery, Some(Delivery::PullRequest));
+        assert_eq!(user_version(&store.lock()).unwrap(), SCHEMA_VERSION);
+        assert!(moved_aside(&path).is_empty());
+    }
+
+    #[test]
     fn observation_boundary_upgrade_preserves_version_two_sessions() {
         let path = temp_db("model-boundary-upgrade");
         {
             let conn = Connection::open(&path).unwrap();
-            conn.execute_batch(&SCHEMA.replace("    observed_boundary TEXT,\n", ""))
-                .unwrap();
+            conn.execute_batch(
+                &SCHEMA
+                    .replace("    observed_boundary TEXT,\n", "")
+                    .replace("    squash_before_delivery INTEGER,\n", "")
+                    .replace(
+                        "    squash_before_delivery INTEGER NOT NULL DEFAULT 0,\n",
+                        "",
+                    ),
+            )
+            .unwrap();
             conn.pragma_update(None, "user_version", 2).unwrap();
             let store = Store {
                 conn: Mutex::new(conn),
@@ -3479,6 +3544,11 @@ mod tests {
             conn.execute_batch(
                 &SCHEMA
                     .replace("    account_order          TEXT,\n", "")
+                    .replace("    squash_before_delivery INTEGER,\n", "")
+                    .replace(
+                        "    squash_before_delivery INTEGER NOT NULL DEFAULT 0,\n",
+                        "",
+                    )
                     .replace("    observed_boundary TEXT,\n", ""),
             )
             .unwrap();
@@ -5065,6 +5135,7 @@ mod tests {
             store.git_workflow_settings().unwrap(),
             GitWorkflowSettings {
                 development: Development::Worktree,
+                squash_before_delivery: false,
                 rebase_before_merge: true,
                 delivery: Delivery::PullRequest,
                 revert_gate: true,
@@ -5093,6 +5164,7 @@ mod tests {
         let mut edited = stored();
         edited.git_workflow = GitWorkflowOverride {
             development: Some(Development::InPlace),
+            squash_before_delivery: Some(false),
             delivery: Some(Delivery::Merge),
             ..GitWorkflowOverride::default()
         };
@@ -5106,6 +5178,7 @@ mod tests {
         store
             .change_git_workflow_settings(&GitWorkflowSettingsChanges {
                 development: Some(Development::Branch),
+                squash_before_delivery: Some(true),
                 rebase_before_merge: Some(false),
                 delivery: Some(Delivery::PullRequest),
                 revert_gate: Some(true),
@@ -5115,6 +5188,7 @@ mod tests {
             git_workflow::effective(&store, &stored()).unwrap(),
             GitWorkflowSettings {
                 development: Development::InPlace,
+                squash_before_delivery: false,
                 rebase_before_merge: false,
                 delivery: Delivery::Merge,
                 revert_gate: true,
@@ -5125,6 +5199,11 @@ mod tests {
         cleared.git_workflow = GitWorkflowOverride::default();
         store.update_project(&cleared).expect("update");
         assert_eq!(stored().git_workflow, GitWorkflowOverride::default());
+        assert!(
+            git_workflow::effective(&store, &stored())
+                .unwrap()
+                .squash_before_delivery
+        );
     }
 
     /// Turning a default account off and on records it per agent, a repeat write reports no change,

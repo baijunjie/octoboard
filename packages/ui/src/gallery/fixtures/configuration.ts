@@ -138,7 +138,7 @@ const project = (extra: Partial<InspectedProject> & Pick<InspectedProject, "name
 });
 
 /** The git workflow settings the full export carries: not the ones this machine starts with. */
-const FILE_GIT_WORKFLOW: GitWorkflowSettings = { development: "branch", rebase_before_merge: false, delivery: "merge", revert_gate: true };
+const FILE_GIT_WORKFLOW: GitWorkflowSettings = { development: "branch", squash_before_delivery: false, rebase_before_merge: false, delivery: "merge", revert_gate: true };
 
 /** The Claude compatibility the full export carries: only what the user chose on the exporting machine, here Codex's off,
  * where this machine has every agent's on. */

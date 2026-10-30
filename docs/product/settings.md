@@ -190,10 +190,10 @@ in `docs/product/application-lifecycle.md`.
 
 ## Git
 
-Three groups, each under a heading (see "Group headings" above): **Repository**, holding **Default clone directory**
-and then **Automatically pull repositories**; **Development**, holding **Where sessions develop**, **Rebase before
-merging** and **Delivery** (see "Development" below); and **Protection**, holding **Revert gate** (see "Protection"
-below).
+Three groups, each under a heading (see "Group headings" above): **Repository**, holding **Default clone directory** and
+then **Automatically pull repositories**; **Development**, holding **Where sessions develop**, **Squash commits before
+delivery**, **Rebase before delivery** and **Delivery** (see "Development" below); and **Protection**, holding **Revert
+gate** (see "Protection" below).
 
 ### Default clone directory
 
@@ -234,21 +234,25 @@ every window shows the same. As with the other switches here, while a switch is 
 turning it on will do, and while it is on it says what is happening now.
 
 - **Where sessions develop**, a choice of **On the current branch**, **On a branch of its own** and **In a worktree of
-  its own**, In a worktree of its own to begin with. Its description follows the choice. On the current branch, it
-  says that a project session works directly on the current branch and is given no rule for branches or worktrees,
-  that a change reaches only sessions begun after it, and that Rebase and Delivery are shown once sessions work on a
-  branch of their own. On a branch of its own, it says that a project session is asked to create a branch of its own
-  in the project directory before it changes files, that the branch shares that directory so this suits one session at
-  a time, that a change reaches only sessions begun after it, and that a project's own rules for worktrees and branches
-  come first. In a worktree of its own, it says that a project session is asked to create a branch and a worktree of
-  its own before it changes files, that a change reaches only sessions begun after it, and that a project's own rules
-  for worktrees and branches come first. While it is on the current branch the other two rows of the group are not
-  shown: their values are kept, and the rows come back with them when a branch or a worktree of its own is chosen
-  again. When a row that goes had keyboard focus — another window or a console session can change the choice — focus
-  moves to this row's picker.
-- **Rebase before merging**, a switch, on to begin with. Its description says that a branch is rebased onto its target
-  branch before it is merged, that a change reaches only sessions begun after it, and that a project's own rules come
-  first.
+  its own**, In a worktree of its own to begin with. Its description follows the choice. On the current branch, it says
+  that a project session works directly on the current branch and is given no rule for branches or worktrees, that a
+  change reaches only sessions begun after it, and that Squashing, Rebase and Delivery are shown once sessions work on a
+  branch of their own. On a branch of its own, it says that a project session is asked to create a branch of its own in
+  the project directory before it changes files, that the branch shares that directory so this suits one session at a
+  time, that a change reaches only sessions begun after it, and that a project's own rules for worktrees and branches
+  come first. In a worktree of its own, it says that a project session is asked to create a branch and a worktree of its
+  own before it changes files, that a change reaches only sessions begun after it, and that a project's own rules for
+  worktrees and branches come first. While it is on the current branch the other three rows of the group are not shown:
+  their values are kept, and the rows come back with them when a branch or a worktree of its own is chosen again. When a
+  row that goes had keyboard focus — another window or a console session can change the choice — focus moves to this
+  row's picker.
+- **Squash commits before delivery**, a switch, off to begin with. Its description says that commits are consolidated
+  into independently meaningful, revertible commits before delivering finished work by merging, pushing or opening a
+  pull request, before any rebase, that a change reaches only sessions begun after it, and that a project's own rules
+  come first.
+- **Rebase before delivery**, a switch, on to begin with. Its description says that a branch is rebased onto its target
+  branch before delivering finished work by merging, pushing or opening a pull request, that a change reaches only
+  sessions begun after it, and that a project's own rules come first.
 - **Delivery**, a choice of **Ask each time**, **Merge locally** and **Open a pull request**, Ask each time to begin
   with. Its description says that it is how a session delivers finished work when nobody has said how, that a change
   reaches only sessions begun after it, and that a project's own rules come first.
@@ -262,7 +266,7 @@ turning it on will do, and while it is on it says what is happening now.
   leaves — and how a deliberate undo passes: made with `git revert`, or with a `Reverts: <sha>` line in the message of
   the commit that undoes it (see "A deliberate revert" in `docs/product/revert-gate.md`).
 
-A console session may read and change all four git workflow settings, and a configuration export that includes the
+A console session may read and change all five git workflow settings, and a configuration export that includes the
 application settings carries them (see "Application settings: `get_settings` and `update_settings`" in
 `docs/product/agent-settings-tools.md` and "The application settings an export carries" in
 `docs/product/configuration-export-and-import.md`).

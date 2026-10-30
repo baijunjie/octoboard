@@ -188,7 +188,7 @@ One card, with a line for each setting the document carries — one an older doc
 the setting with a badge for what applying would change from what is set now: **Turns on**, with what then follows in
 that setting's own words (see "The application settings an export carries" in
 `docs/product/configuration-export-and-import.md`); **Turns off**; or **No change**. A document that carries the
-application-wide git workflow settings adds one line for all four, named **Git workflow**, badged **Set to the
+application-wide git workflow settings adds one line for all five, named **Git workflow**, badged **Set to the
 file's** when they differ from the current ones and **No change** when they do not. A document that carries a Claude
 compatibility choice for an agent that has the setting adds one line for them all, named **Claude compatibility**,
 badged **Set to the file's** when applying would change the value of an agent this machine reports and **No change**

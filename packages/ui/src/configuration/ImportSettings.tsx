@@ -41,7 +41,7 @@ export function ImportSettings({
           return typeof wanted === "boolean" && typeof now === "boolean" && <BooleanSettingLine key={field} label={t(label)} wanted={wanted} current={now} consequence={consequence} />;
         })}
         {settings.git_workflow && settings.current_git_workflow && (
-          sameValue(settings.git_workflow, settings.current_git_workflow)
+          sameValue({ ...settings.git_workflow, squash_before_delivery: settings.git_workflow.squash_before_delivery ?? settings.current_git_workflow.squash_before_delivery }, settings.current_git_workflow)
             ? <SettingLine label={t("configuration.import.gitWorkflow")} badge={t("configuration.import.settings.badge.same")} />
             : <SettingLine label={t("configuration.import.gitWorkflow")} badge={t("configuration.import.settings.badge.changes")} tone="accent" />
         )}

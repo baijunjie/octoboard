@@ -139,7 +139,7 @@ that brings the changes back, never to force-push or reset.
 
 ## The switch
 
-The gate runs whenever the project's effective `revert_gate` setting is on (see "The four settings" in
+The gate runs whenever the project's effective `revert_gate` setting is on (see "The five settings" in
 `docs/product/git-workflow-settings.md`), application-wide with a per-project override. `revert_gate` is off by
 default: Octoboard does not assume a project wants it, so a project, or the whole installation, opts in.
 The setting is read every time the gate runs, so turning it off or on reaches running sessions at once, without

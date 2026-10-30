@@ -273,7 +273,7 @@ it("tells of the git workflow settings when they were applied, and not otherwise
   });
   const render = (settings_applied: ImportedSettings) =>
     act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles: [], settings_applied }} /></DaemonProvider>));
-  render({ auto_pull_repositories: true, git_workflow: { development: "worktree", rebase_before_merge: true, delivery: "ask", revert_gate: true } });
+  render({ auto_pull_repositories: true, git_workflow: { development: "worktree", squash_before_delivery: false, rebase_before_merge: true, delivery: "ask", revert_gate: true } });
   expect(settingLines(container)["Git workflow"]).toEqual({ badge: "Matches the file" });
   render({ auto_pull_repositories: true });
   expect(container.textContent).not.toContain("Git workflow");

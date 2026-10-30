@@ -4476,6 +4476,7 @@ pub(super) mod tests {
             read["git_workflow"],
             json!({
                 "development": "worktree",
+                "squash_before_delivery": false,
                 "rebase_before_merge": true,
                 "delivery": "ask",
                 "revert_gate": false,
@@ -4486,11 +4487,12 @@ pub(super) mod tests {
             &state,
             "a",
             "update_settings",
-            &arguments(json!({ "git_workflow": { "delivery": "merge", "revert_gate": true } })),
+            &arguments(json!({ "git_workflow": { "delivery": "merge", "revert_gate": true, "squash_before_delivery": true } })),
         )
         .await
         .unwrap();
         assert_eq!(updated["git_workflow"]["delivery"], "merge");
+        assert_eq!(updated["git_workflow"]["squash_before_delivery"], true);
         assert_eq!(updated["git_workflow"]["revert_gate"], true);
         assert_eq!(updated["git_workflow"]["development"], "worktree");
         for bad in [
@@ -4512,7 +4514,7 @@ pub(super) mod tests {
             "update_project",
             &arguments(json!({
                 "project": "project-1",
-                "git_workflow": { "development": "in_place", "delivery": "pull_request" },
+                "git_workflow": { "development": "in_place", "delivery": "pull_request", "squash_before_delivery": false },
             })),
         )
         .await
@@ -4521,6 +4523,7 @@ pub(super) mod tests {
             project["git_workflow"]["override"],
             json!({
                 "development": "in_place",
+                "squash_before_delivery": false,
                 "rebase_before_merge": null,
                 "delivery": "pull_request",
                 "revert_gate": null,
@@ -4530,6 +4533,7 @@ pub(super) mod tests {
             project["git_workflow"]["effective"],
             json!({
                 "development": "in_place",
+                "squash_before_delivery": false,
                 "rebase_before_merge": true,
                 "delivery": "pull_request",
                 "revert_gate": true,
@@ -4543,7 +4547,7 @@ pub(super) mod tests {
             "update_project",
             &arguments(json!({
                 "project": "project-1",
-                "git_workflow": { "delivery": null, "revert_gate": false },
+                "git_workflow": { "delivery": null, "revert_gate": false, "squash_before_delivery": null },
             })),
         )
         .await
@@ -4555,6 +4559,11 @@ pub(super) mod tests {
         assert!(project["git_workflow"]["override"]["delivery"].is_null());
         assert_eq!(project["git_workflow"]["effective"]["delivery"], "merge");
         assert_eq!(project["git_workflow"]["effective"]["revert_gate"], false);
+        assert!(project["git_workflow"]["override"]["squash_before_delivery"].is_null());
+        assert_eq!(
+            project["git_workflow"]["effective"]["squash_before_delivery"],
+            true
+        );
 
         let message = refused(
             &state,
@@ -5146,6 +5155,7 @@ pub(super) mod tests {
             added["projects"][0]["git_workflow"]["override"],
             json!({
                 "development": "in_place",
+                "squash_before_delivery": null,
                 "rebase_before_merge": null,
                 "delivery": "merge",
                 "revert_gate": null,

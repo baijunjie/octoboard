@@ -45,14 +45,14 @@ Enabling it during an animation stops the effects already in progress and clears
 
 ## A collection's height following its rows
 
-The Development group of Settings' Git section (see "Development" in `docs/product/settings.md`) is the only
-collection whose own height follows its rows. When Rebase before merging and Delivery leave or come back with the
-Where sessions develop choice, or a row grows or shrinks on its own, as when the Where sessions develop description
-changes how many lines it takes, the group's height changes over the same **300 ms**, easing out like the surviving
-rows, so the Protection group below it glides along instead of jumping. Meanwhile what the group holds is clipped at its
-top and bottom edges: departing rows are never drawn over what follows the group, and an entering row, or the new part
-of a row that grew, shows as the group's edge reaches it. A change that arrives while another is still playing starts
-from the height shown at that moment.
+The Development group of Settings' Git section (see "Development" in `docs/product/settings.md`) is the only collection
+whose own height follows its rows. When Squash commits before delivery, Rebase before delivery and Delivery leave or
+come back with the Where sessions develop choice, or a row grows or shrinks on its own, as when the Where sessions
+develop description changes how many lines it takes, the group's height changes over the same **300 ms**, easing out
+like the surviving rows, so the Protection group below it glides along instead of jumping. Meanwhile what the group
+holds is clipped at its top and bottom edges: departing rows are never drawn over what follows the group, and an
+entering row, or the new part of a row that grew, shows as the group's edge reaches it. A change that arrives while
+another is still playing starts from the height shown at that moment.
 
 When the panel holding the Settings section on screen is scrolled to its end and the group shrinks, the scroll
 position comes down with the group over the same time instead of jumping at once.

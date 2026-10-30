@@ -167,37 +167,39 @@ settings leaves it as the importing daemon holds it.
   carries it under the key `auto_sync_repositories`; an export writes only `auto_pull_repositories`.
 - **Automatically delete archived sessions whose conversation is gone** (see "Deleting archived sessions whose
   conversation is gone" in `docs/product/deleting-sessions.md`), under `auto_delete_unresumable_archives`.
-- **Automatically select an account** (see that section in `docs/product/settings.md`), under `auto_select_account`.
-  The review's line for turning it on says that a new session then uses the account whose weekly limit resets soonest.
+- **Automatically select an account** (see that section in `docs/product/settings.md`), under `auto_select_account`. The
+  review's line for turning it on says that a new session then uses the account whose weekly limit resets soonest.
 - **Automatically switch accounts at the usage limit** (see that section in `docs/product/settings.md`), under
   `auto_switch_on_usage_limit`. The review's line for turning it on says that a session that stops at its account's
   usage limit is then switched to another account with usage left and carries on.
-- **Order the sidebar by status** (see that section in `docs/product/settings.md`), under `sidebar_order_by_status`.
-  The review's line for turning it on says that sessions and projects in the sidebar then move as their status changes.
+- **Order the sidebar by status** (see that section in `docs/product/settings.md`), under `sidebar_order_by_status`. The
+  review's line for turning it on says that sessions and projects in the sidebar then move as their status changes.
 - **Start usage windows automatically** (see that section in `docs/product/settings.md`), under
-  `auto_start_quota_windows`. The review's line for turning it on says that a usage window that has not started
-  counting is then started with one small request, which counts a little toward the account's usage limits.
+  `auto_start_quota_windows`. The review's line for turning it on says that a usage window that has not started counting
+  is then started with one small request, which counts a little toward the account's usage limits.
 - **Automatically approve session requests** (see "Approving requests automatically" in
   `docs/product/session-requests.md`), under `auto_approve_session_requests`. The review's line for turning it on says
   that a session's request to start a session that reports to the user is then approved without asking first.
-- **Automatically approve resume requests** (see the same section), under `auto_approve_resume_requests`. The
-  review's line for turning it on says that a session's request to reopen or resume a session, or to resume a
-  conversation in a new session, is then approved without asking first.
-- **Automatically approve account switches** (see the same section), under `auto_approve_account_switches`. The
-  review's line for turning it on says that a session's request to switch the account of one of its sessions is then
-  approved without asking first.
+- **Automatically approve resume requests** (see the same section), under `auto_approve_resume_requests`. The review's
+  line for turning it on says that a session's request to reopen or resume a session, or to resume a conversation in a
+  new session, is then approved without asking first.
+- **Automatically approve account switches** (see the same section), under `auto_approve_account_switches`. The review's
+  line for turning it on says that a session's request to switch the account of one of its sessions is then approved
+  without asking first.
 - **Automatically approve handoffs** (see the same section), under `auto_approve_handoffs`. The review's line for
   turning it on says that a session's request to hand one of its sessions off to another agent is then approved without
   asking first.
 - **Ask questions as choices** (see that section in `docs/product/settings.md`), under `ask_questions_as_choices`. The
   review's line for turning it on says that Octoboard then asks sessions started afterwards to put a question that needs
   the user's decision as options to pick from.
-- **The application-wide git workflow settings** (see "The four settings" in `docs/product/git-workflow-settings.md`),
-  under `git_workflow`, an object holding all four of `development`, `rebase_before_merge`, `delivery` and
-  `revert_gate`.
-  Applying the document's settings sets all four to the document's values, and a document without it, or with `null`
-  there, leaves them as they are. The import review and its result each have one line for all four (see "The import
-  review" and "The import result" in `docs/product/configuration-export-and-import-dialogs.md`).
+- **The application-wide git workflow settings** (see "The five settings" in `docs/product/git-workflow-settings.md`),
+  under `git_workflow`, an object holding all five of `development`, `squash_before_delivery`, `rebase_before_merge`,
+  `delivery` and `revert_gate`. Applying the document's settings sets the carried items to the document's values, and a
+  document without it, or with `null` there, leaves them as they are. A carried `git_workflow` object that omits
+  `squash_before_delivery` leaves that item at its current application-wide value, in both the import review and the
+  applied settings. A project override that omits it follows the application-wide value.
+  The import review and its result each have one line for all five (see "The import review" and "The import result" in
+  `docs/product/configuration-export-and-import-dialogs.md`).
 - **Claude compatibility** (see "Claude compatibility" in `docs/product/per-agent-settings.md`), under
   `claude_compatibility`, an object keyed by agent (`codex`, `grok`) holding `true` or `false`. It carries only the
   choices the user made: an agent never chosen for is absent, so on the importing machine it keeps following that

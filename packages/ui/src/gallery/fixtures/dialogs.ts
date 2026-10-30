@@ -163,22 +163,21 @@ const inheritingState = snapshotState({
   settings: accountsState.settings,
 });
 
-// A project that holds its own delivery and revert gate and follows the application-wide value for development and
-// rebase, which are set apart from the defaults so that each badge names a value that is not the one the project holds.
+// A project that holds its own squashing, delivery and revert gate, while development and rebase follow global values.
 const gitWorkflowProject = projectOf("p-git-workflow", console_.id, "Workflow Site", {
-  git_workflow: { ...FOLLOWING_GIT_WORKFLOW, delivery: "merge", revert_gate: false },
+  git_workflow: { ...FOLLOWING_GIT_WORKFLOW, squash_before_delivery: false, delivery: "merge", revert_gate: false },
 });
 const gitWorkflowState = snapshotState({
   consoles: [console_],
   projects: [gitWorkflowProject],
   sessions: [],
-  settings: { ...accountsState.settings!, git_workflow: { development: "branch", rebase_before_merge: false, delivery: "pull_request", revert_gate: true } },
+  settings: { ...accountsState.settings!, git_workflow: { development: "branch", squash_before_delivery: true, rebase_before_merge: false, delivery: "pull_request", revert_gate: true } },
 });
 
 // A project that develops on the current branch for itself while the application-wide setting has worktrees, and holds a
-// value of its own for rebase and delivery: those two stay as stored, out of sight.
+// value of its own for squashing, rebase and delivery: all three stay as stored, out of sight.
 const inPlaceProject = projectOf("p-in-place", console_.id, "Scratch Site", {
-  git_workflow: { ...FOLLOWING_GIT_WORKFLOW, development: "in_place", rebase_before_merge: true, delivery: "merge" },
+  git_workflow: { ...FOLLOWING_GIT_WORKFLOW, development: "in_place", squash_before_delivery: true, rebase_before_merge: true, delivery: "merge" },
 });
 const inPlaceState = snapshotState({
   consoles: [console_],
@@ -1000,7 +999,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Add project",
-    description: "Description follows Name, empty, with the placeholder No description and a note under it saying what it is for. Advanced is open, framed, with the tabs Launch settings and Git workflow in a row at its top and Git workflow selected: its four pickers, in the order Where sessions develop, Rebase before merging, Delivery and Revert gate, all read Same as global setting, each followed by a grey badge with the current global value (In a worktree of its own, On, Ask each time, Off), and the note on how the items follow the global setting ends the tab. The group has no heading of its own above the pickers, since the tab names it. The window is tall enough for the whole dialog, which scrolls in a shorter one.",
+    description: "Description follows Name, empty, with the placeholder No description and a note under it saying what it is for. Advanced is open, framed, with the tabs Launch settings and Git workflow in a row at its top and Git workflow selected: its five pickers, in the order Where sessions develop, Squash commits before delivery, Rebase before delivery, Delivery and Revert gate, all read Same as global setting, each followed by a grey badge with the current global value (In a worktree of its own, Off, On, Ask each time, Off), and the note on how the items follow the global setting ends the tab. The group has no heading of its own above the pickers, since the tab names it. The window is tall enough for the whole dialog, which scrolls in a shorter one.",
     height: 1400,
     steps: [
       consoleActions,
@@ -1629,7 +1628,28 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Project git workflow, some its own",
-    description: "Advanced is open on its Git workflow tab (the tab beside Launch settings), which holds a picker for each setting in the order Where sessions develop, Rebase before merging, Delivery, Revert gate (last). Delivery reads Merge locally and Revert gate reads Off, the project's own values with no badge; Where sessions develop and Rebase before merging read Same as global setting, followed by a grey badge with the global value (On a branch of its own and Off). The window is tall enough for the whole dialog, which scrolls in a shorter one.",
+    description: "Advanced is open on its Git workflow tab (the tab beside Launch settings), which holds a picker for each setting in the order Where sessions develop, Squash commits before delivery, Rebase before delivery, Delivery, Revert gate (last). Squash commits before delivery reads Off, Delivery reads Merge locally and Revert gate reads Off, the project's own values with no badge; Where sessions develop and Rebase before delivery read Same as global setting, followed by a grey badge with the global value (On a branch of its own and Off). The window is tall enough for the whole dialog, which scrolls in a shorter one.",
+    height: 1200,
+    steps: [
+      (ui) => projectActions(ui, gitWorkflowProject.name),
+      (ui) => ui.press(ui.t("sidebar.project.edit")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+      (ui) => ui.press(ui.t("dialog.project.gitWorkflow.title")),
+    ],
+  },
+  {
+    ...dialogFixture,
+    state: snapshotState({
+      consoles: [console_],
+      projects: [{ ...gitWorkflowProject, git_workflow: { ...FOLLOWING_GIT_WORKFLOW, squash_before_delivery: true } }],
+      sessions: [],
+      settings: accountsState.settings,
+    }),
+    id: "dialog-edit-project-git-squash",
+    group: "Projects",
+    category: "normal",
+    title: "Project git workflow, squashing on for this project",
+    description: "Squash commits before delivery reads On with no global badge, while the global setting is Off. The other four pickers follow the global settings and show their current values in grey badges. This project's squashing choice remains independent of the global setting.",
     height: 1200,
     steps: [
       (ui) => projectActions(ui, gitWorkflowProject.name),
@@ -1645,7 +1665,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Project git workflow, developing on the current branch for the project",
-    description: "On the Git workflow tab of Advanced, Where sessions develop reads On the current branch, the project's own value, while the global value is In a worktree of its own. Rebase before merging and Delivery are not shown, though the project's own values for them are kept and come back with another choice; Revert gate is still shown, reading Same as global setting with its grey badge. The window is tall enough for the whole dialog, which scrolls in a shorter one.",
+    description: "On the Git workflow tab of Advanced, Where sessions develop reads On the current branch, the project's own value, while the global value is In a worktree of its own. Squash commits before delivery, Rebase before delivery and Delivery are not shown, though the project's own values for them are kept and come back with another choice; Revert gate is still shown, reading Same as global setting with its grey badge. The window is tall enough for the whole dialog, which scrolls in a shorter one.",
     height: 1200,
     steps: [
       (ui) => projectActions(ui, inPlaceProject.name),
@@ -1985,7 +2005,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Parent directory source",
-    description: "Default agent is a single field with a \"?\" at the end of its label and the visible line that an agent chosen here applies to every repository; the way Detect from files decides is in the tip. There are no Name and Description fields: both apply to a single project only. Advanced is open in a frame with the same tab row as a single project, but with one tab only, Git workflow (Detect from files offers no model or effort), selected. It holds four pickers in the order Where sessions develop, Rebase before merging, Delivery and Revert gate, all reading Same as global setting with a grey badge showing the global value, and the note on how the items follow the global setting. There is no separate Git workflow heading above the pickers, since the tab names it.",
+    description: "Default agent is a single field with a \"?\" at the end of its label and the visible line that an agent chosen here applies to every repository; the way Detect from files decides is in the tip. There are no Name and Description fields: both apply to a single project only. Advanced is open in a frame with the same tab row as a single project, but with one tab only, Git workflow (Detect from files offers no model or effort), selected. It holds five pickers in the order Where sessions develop, Squash commits before delivery, Rebase before delivery, Delivery and Revert gate, all reading Same as global setting with a grey badge showing the global value, and the note on how the items follow the global setting. There is no separate Git workflow heading above the pickers, since the tab names it.",
     height: 1000,
     steps: [
       consoleActions,

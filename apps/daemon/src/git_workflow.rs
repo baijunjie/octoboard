@@ -38,8 +38,9 @@ pub enum Development {
 }
 
 /// The wire names of the items, the same in every shape below.
-pub const ITEMS: [&str; 4] = [
+pub const ITEMS: [&str; 5] = [
     "development",
+    "squash_before_delivery",
     "rebase_before_merge",
     "delivery",
     "revert_gate",
@@ -49,8 +50,13 @@ pub const ITEMS: [&str; 4] = [
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GitWorkflowSettings {
     pub development: Development,
-    /// Whether a branch is rebased onto its target branch before it is merged. Moot while
-    /// `development` is `InPlace`.
+    /// Whether commits are consolidated into independently meaningful, revertible commits before
+    /// delivering finished work by merge, push or pull request. Moot while `development` is
+    /// `InPlace`.
+    #[serde(default)]
+    pub squash_before_delivery: bool,
+    /// Whether a branch is rebased onto its target branch before delivery (merge, push or pull
+    /// request). The wire name is kept for compatibility. Moot while `development` is `InPlace`.
     pub rebase_before_merge: bool,
     /// Moot while `development` is `InPlace`.
     pub delivery: Delivery,
@@ -64,6 +70,7 @@ impl Default for GitWorkflowSettings {
     fn default() -> Self {
         Self {
             development: Development::Worktree,
+            squash_before_delivery: false,
             rebase_before_merge: true,
             delivery: Delivery::Ask,
             revert_gate: false,
@@ -75,6 +82,7 @@ impl Default for GitWorkflowSettings {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GitWorkflowOverride {
     pub development: Option<Development>,
+    pub squash_before_delivery: Option<bool>,
     pub rebase_before_merge: Option<bool>,
     pub delivery: Option<Delivery>,
     pub revert_gate: Option<bool>,
@@ -85,6 +93,8 @@ pub struct GitWorkflowOverride {
 pub struct GitWorkflowSettingsChanges {
     #[serde(default)]
     pub development: Option<Development>,
+    #[serde(default)]
+    pub squash_before_delivery: Option<bool>,
     #[serde(default)]
     pub rebase_before_merge: Option<bool>,
     #[serde(default)]
@@ -100,6 +110,7 @@ impl GitWorkflowSettingsChanges {
             &current,
             &GitWorkflowOverride {
                 development: self.development,
+                squash_before_delivery: self.squash_before_delivery,
                 rebase_before_merge: self.rebase_before_merge,
                 delivery: self.delivery,
                 revert_gate: self.revert_gate,
@@ -113,6 +124,7 @@ impl From<GitWorkflowSettings> for GitWorkflowSettingsChanges {
     fn from(settings: GitWorkflowSettings) -> Self {
         Self {
             development: Some(settings.development),
+            squash_before_delivery: Some(settings.squash_before_delivery),
             rebase_before_merge: Some(settings.rebase_before_merge),
             delivery: Some(settings.delivery),
             revert_gate: Some(settings.revert_gate),
@@ -127,6 +139,8 @@ pub struct GitWorkflowOverrideChanges {
     #[serde(default, deserialize_with = "present_option")]
     pub development: Option<Option<Development>>,
     #[serde(default, deserialize_with = "present_option")]
+    pub squash_before_delivery: Option<Option<bool>>,
+    #[serde(default, deserialize_with = "present_option")]
     pub rebase_before_merge: Option<Option<bool>>,
     #[serde(default, deserialize_with = "present_option")]
     pub delivery: Option<Option<Delivery>>,
@@ -139,6 +153,9 @@ impl GitWorkflowOverrideChanges {
     pub fn applied_to(&self, current: GitWorkflowOverride) -> GitWorkflowOverride {
         GitWorkflowOverride {
             development: self.development.unwrap_or(current.development),
+            squash_before_delivery: self
+                .squash_before_delivery
+                .unwrap_or(current.squash_before_delivery),
             rebase_before_merge: self
                 .rebase_before_merge
                 .unwrap_or(current.rebase_before_merge),
@@ -152,6 +169,9 @@ impl GitWorkflowOverrideChanges {
 pub fn resolve(global: &GitWorkflowSettings, project: &GitWorkflowOverride) -> GitWorkflowSettings {
     GitWorkflowSettings {
         development: project.development.unwrap_or(global.development),
+        squash_before_delivery: project
+            .squash_before_delivery
+            .unwrap_or(global.squash_before_delivery),
         rebase_before_merge: project
             .rebase_before_merge
             .unwrap_or(global.rebase_before_merge),
@@ -180,6 +200,7 @@ mod tests {
             GitWorkflowSettings::default(),
             GitWorkflowSettings {
                 development: Development::Worktree,
+                squash_before_delivery: false,
                 rebase_before_merge: true,
                 delivery: Delivery::Ask,
                 revert_gate: false,
@@ -189,6 +210,7 @@ mod tests {
             GitWorkflowOverride::default(),
             GitWorkflowOverride {
                 development: None,
+                squash_before_delivery: None,
                 rebase_before_merge: None,
                 delivery: None,
                 revert_gate: None,
@@ -200,6 +222,7 @@ mod tests {
     fn an_item_the_project_holds_wins_and_the_rest_follow_the_global_value() {
         let global = GitWorkflowSettings {
             development: Development::InPlace,
+            squash_before_delivery: false,
             rebase_before_merge: false,
             delivery: Delivery::Merge,
             revert_gate: false,
@@ -214,11 +237,44 @@ mod tests {
             resolve(&global, &own),
             GitWorkflowSettings {
                 development: Development::Branch,
+                squash_before_delivery: false,
                 rebase_before_merge: false,
                 delivery: Delivery::PullRequest,
                 revert_gate: false,
             }
         );
+    }
+
+    #[test]
+    fn squash_changes_distinguish_inheritance_from_explicit_false() {
+        let global = GitWorkflowSettings {
+            squash_before_delivery: true,
+            ..GitWorkflowSettings::default()
+        };
+        let own = GitWorkflowOverride {
+            squash_before_delivery: Some(false),
+            ..GitWorkflowOverride::default()
+        };
+        assert!(!resolve(&global, &own).squash_before_delivery);
+        let absent: GitWorkflowOverrideChanges = serde_json::from_str("{}").unwrap();
+        assert_eq!(absent.applied_to(own), own);
+        let inherit: GitWorkflowOverrideChanges =
+            serde_json::from_str(r#"{"squash_before_delivery":null}"#).unwrap();
+        assert!(resolve(&global, &inherit.applied_to(own)).squash_before_delivery);
+        let off: GitWorkflowSettingsChanges =
+            serde_json::from_str(r#"{"squash_before_delivery":false}"#).unwrap();
+        assert!(!off.applied_to(global).squash_before_delivery);
+    }
+
+    #[test]
+    fn older_configuration_defaults_squash_off_and_projects_to_inheriting() {
+        let settings: GitWorkflowSettings = serde_json::from_str(
+            r#"{"development":"worktree","rebase_before_merge":true,"delivery":"ask","revert_gate":false}"#,
+        )
+        .unwrap();
+        assert!(!settings.squash_before_delivery);
+        let own: GitWorkflowOverride = serde_json::from_str("{}").unwrap();
+        assert_eq!(own.squash_before_delivery, None);
     }
 
     #[test]
@@ -259,6 +315,7 @@ mod tests {
             changes.applied_to(current),
             GitWorkflowOverride {
                 development: None,
+                squash_before_delivery: None,
                 rebase_before_merge: None,
                 delivery: Some(Delivery::Merge),
                 revert_gate: Some(false),

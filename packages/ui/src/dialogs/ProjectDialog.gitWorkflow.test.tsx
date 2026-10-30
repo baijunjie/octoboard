@@ -25,16 +25,16 @@ const save = (label: string) => click(Array.from(document.body.querySelectorAll(
 it("offers every item as following the application-wide value, with that value in a badge", async () => {
   await renderOnGitWorkflowTab();
   expect(Array.from(document.body.querySelectorAll('[role="group"]')).some((g) => document.getElementById(g.getAttribute("aria-labelledby")!)?.textContent === "Git workflow")).toBe(true);
-  for (const name of ["Where sessions develop", "Rebase before merging", "Delivery", "Revert gate"]) {
+  for (const name of ["Where sessions develop", "Squash commits before delivery", "Rebase before delivery", "Delivery", "Revert gate"]) {
     expect(pickerNamed(name).textContent).toContain("Same as global setting");
   }
   expect(pickerNamed("Delivery").textContent).toContain("Ask each time");
   expect(pickerNamed("Where sessions develop").textContent).toContain("In a worktree of its own");
 });
 
-it("lists the pickers in order: Where sessions develop, Rebase before merging, Delivery, Revert gate", async () => {
+it("lists the pickers in order: Where sessions develop, Squash commits before delivery, Rebase before delivery, Delivery, Revert gate", async () => {
   await renderOnGitWorkflowTab();
-  const pickers = ["Where sessions develop", "Rebase before merging", "Delivery", "Revert gate"].map(pickerNamed);
+  const pickers = ["Where sessions develop", "Squash commits before delivery", "Rebase before delivery", "Delivery", "Revert gate"].map(pickerNamed);
   pickers.slice(1).forEach((picker, i) => expect(pickers[i].compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy());
 });
 
@@ -56,7 +56,7 @@ it("adds without git_workflow when every item follows", async () => {
 });
 
 it("shows the project's own values and sends only the changed items when editing, null for one back to following", async () => {
-  const pending = await renderOnGitWorkflowTab(projectOf("p-1", "c-1", "Site", { git_workflow: { development: "in_place", rebase_before_merge: null, delivery: "merge", revert_gate: null } }));
+  const pending = await renderOnGitWorkflowTab(projectOf("p-1", "c-1", "Site", { git_workflow: { development: "in_place", squash_before_delivery: null, rebase_before_merge: null, delivery: "merge", revert_gate: null } }));
   expect(pickerNamed("Where sessions develop").textContent).toContain("On the current branch");
   await choose("Where sessions develop", "Same as global setting");
   expect(pickerNamed("Delivery").textContent).toContain("Merge locally");
@@ -86,17 +86,17 @@ it("keeps the pickers disabled while the form is locked and enables them once it
 const shown = (picker: string) => Array.from(document.body.querySelectorAll("[aria-label]")).some((el) => el.getAttribute("aria-label") === picker);
 
 it("shows the development picker and the revert gate while the project's own development is on the current branch, and keeps the hidden values", async () => {
-  const pending = await renderOnGitWorkflowTab(projectOf("p-1", "c-1", "Site", { git_workflow: { development: "in_place", rebase_before_merge: false, delivery: "merge", revert_gate: null } }));
-  for (const name of ["Rebase before merging", "Delivery"]) expect(shown(name)).toBe(false);
+  const pending = await renderOnGitWorkflowTab(projectOf("p-1", "c-1", "Site", { git_workflow: { development: "in_place", squash_before_delivery: false, rebase_before_merge: false, delivery: "merge", revert_gate: null } }));
+  for (const name of ["Squash commits before delivery", "Rebase before delivery", "Delivery"]) expect(shown(name)).toBe(false);
   for (const name of ["Where sessions develop", "Revert gate"]) expect(shown(name)).toBe(true);
   await save("Save");
   expect(sentOf(pending, "update_project")).not.toHaveProperty("git_workflow");
 });
 
 it.each(["On a branch of its own", "In a worktree of its own"])("shows rebase and delivery again when Where sessions develop is turned back to %s", async (option) => {
-  await renderOnGitWorkflowTab(projectOf("p-1", "c-1", "Site", { git_workflow: { development: "in_place", rebase_before_merge: null, delivery: "merge", revert_gate: null } }));
+  await renderOnGitWorkflowTab(projectOf("p-1", "c-1", "Site", { git_workflow: { development: "in_place", squash_before_delivery: null, rebase_before_merge: null, delivery: "merge", revert_gate: null } }));
   await choose("Where sessions develop", option);
-  for (const name of ["Rebase before merging", "Revert gate", "Delivery"]) expect(shown(name)).toBe(true);
+  for (const name of ["Squash commits before delivery", "Rebase before delivery", "Revert gate", "Delivery"]) expect(shown(name)).toBe(true);
   expect(pickerNamed("Delivery").textContent).toContain("Merge locally");
 });
 
@@ -134,4 +134,12 @@ it("keeps the Git workflow tab, alone and selected, under Detect from files", as
   await chooseSource("A parent directory");
   expect(tabs().map((tab) => [tab.textContent, tab.getAttribute("aria-selected")])).toEqual([["Git workflow", "true"]]);
   expect(pickerNamed("Where sessions develop")).toBeDefined();
+});
+
+it("sets and clears the project's squash override without changing other workflow items", async () => {
+  const pending = await renderOnGitWorkflowTab(projectOf("p-1", "c-1", "Site", { git_workflow: { ...stored.git_workflow, squash_before_delivery: true } }));
+  expect(pickerNamed("Squash commits before delivery").textContent).toContain("On");
+  await choose("Squash commits before delivery", "Same as global setting");
+  await save("Save");
+  expect(sentOf(pending, "update_project")).toMatchObject({ git_workflow: { squash_before_delivery: null } });
 });

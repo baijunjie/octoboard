@@ -323,13 +323,18 @@ export type GitDelivery = "ask" | "merge" | "pull_request";
  * own in the project directory, or on a branch of its own in a worktree of its own. */
 export type GitDevelopment = "in_place" | "branch" | "worktree";
 
-/** The four git workflow settings' values, application-wide (`Settings.git_workflow`). */
+/** The git workflow settings' values, application-wide (`Settings.git_workflow`). */
 export interface GitWorkflowSettings {
   development: GitDevelopment;
+  squash_before_delivery: boolean;
+  /** Rebase before delivery; the wire key is retained for compatibility. */
   rebase_before_merge: boolean;
   delivery: GitDelivery;
   revert_gate: boolean;
 }
+
+/** A configuration document may predate the squash setting; omitting it leaves the current value as it is. */
+export type DocumentGitWorkflowSettings = Omit<GitWorkflowSettings, "squash_before_delivery"> & { squash_before_delivery?: boolean | null };
 
 /** A project's own git workflow settings: an item that is `null` follows the application-wide value. */
 export type GitWorkflowOverride = { [K in keyof GitWorkflowSettings]: GitWorkflowSettings[K] | null };
@@ -857,7 +862,7 @@ export interface DocumentSettings {
   /** Absent in a file exported before the setting was carried; applying then leaves it as it is. */
   ask_questions_as_choices?: boolean | null;
   /** Absent in a file exported before the settings were carried; applying then leaves them as they are. */
-  git_workflow?: GitWorkflowSettings | null;
+  git_workflow?: DocumentGitWorkflowSettings | null;
   /** Absent in a file exported before the setting was carried; applying then leaves it as it is. An agent the file does not
    * list is left as it is. */
   claude_compatibility?: Partial<Record<Agent, boolean>> | null;
@@ -1061,7 +1066,7 @@ export interface InspectedSettings {
   /** This machine's value. Absent when the reply predates the setting. */
   current_ask_questions_as_choices?: boolean;
   /** Absent when the document predates the settings. */
-  git_workflow?: GitWorkflowSettings | null;
+  git_workflow?: DocumentGitWorkflowSettings | null;
   /** This machine's values. Absent when the reply predates the settings. */
   current_git_workflow?: GitWorkflowSettings;
   /** Absent when the document predates the setting. */
