@@ -1203,7 +1203,8 @@ the scope) has none. The buttons take the Alert's status colour, as HeroUI's own
 is the solid button of that colour (HeroUI's `danger` variant in a danger Alert; the same solid treatment from
 `--warning` / `--warning-foreground` in a warning one, HeroUI having no warning button), and Details is the soft button
 of that colour (`danger-soft`, or its warning counterpart), so neither reads as a neutral control dropped onto a
-coloured box.
+coloured box. A Details shown outside an Alert, on a line of a result, takes that line's status the same way: the
+warning's beside a warning, danger under a failure (`AlertStatusContext`).
 
 Every Alert — an error, a warning — has a title. HeroUI centres the indicator on the title's 24px line, so an Alert
 that opens with its 20px description draws its first line off the glyph's centre; the title is what keeps them

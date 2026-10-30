@@ -4,7 +4,7 @@ import { isolate } from "../i18n/isolate";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { openDetails, press } from "../components/detailsTestSupport";
+import { detailsButton, openDetails, press } from "../components/detailsTestSupport";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import { ErrorAlerts } from "../dialogs/ErrorAlerts";
 import { errorAlerts } from "../errorAlerts";
@@ -106,6 +106,32 @@ it("gives each console a card named by its heading with its own outcome, and a r
   expect(cards[1].querySelectorAll("li")).toHaveLength(1);
   expect(cards[2].querySelectorAll("li")).toHaveLength(0);
   expect(cards[2].textContent).toContain("This console has no projects.");
+});
+
+it("colours a row's Details by its line: the warning's beside a reached outcome, danger under a failure", () => {
+  const daemon = { store: createStateStore({}) } as Daemon;
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  const failure = { code: "internal_error", message: "boom", params: { detail: "raw diagnostic text" } };
+  const accounts = {
+    agents_added: [],
+    agents: [{
+      agent: "claude" as const,
+      default_name_applied: false,
+      accounts: [
+        { name: "Work", status: "created" as const, account: "a1", error: null, sharing_warning: failure },
+        { name: "Sandbox", status: "failed" as const, account: null, error: failure, sharing_warning: null },
+      ],
+    }],
+  };
+  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles: [], accounts }} /></DaemonProvider>));
+  const details = (name: string) => detailsButton([...container.querySelectorAll("li")].find((li) => li.textContent?.startsWith(name))!)!;
+  expect(details("Work").className).toContain("alert-button--warning-soft");
+  expect(details("Sandbox").className).toContain("button--danger-soft");
 });
 
 it("says nothing failed for the consoles and the accounts beside a failure to apply the settings", async () => {
