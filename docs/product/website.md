@@ -529,8 +529,8 @@ Its disclosures distinguish:
 - repository operations, including remote status checks, which can contact configured Git remotes;
 - task information passed between agent sessions, which can consequently reach more than one provider;
 - the static website, which uses a same-site cookie to remember the selected or detected language for one year and
-  adds no analytics or advertising trackers; GitHub Pages also logs visitor IP addresses for security, with a link
-  to GitHub's privacy statement;
+  uses Google Analytics to understand website visits, with cookies and usage data sent to Google; GitHub Pages also
+  logs visitor IP addresses for security, with a link to GitHub's privacy statement;
 - information voluntarily supplied through email or GitHub Issues, including the visibility of public issues.
 
 The local-data explanation is not a promise that all workflow data remains on one device. There is no separate

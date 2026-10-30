@@ -32,7 +32,9 @@ useSeoMeta({
         <span class="privacy-number">0{{ index + 1 }}</span>
         <div>
           <h2>{{ t(`privacy${section}Title`) }}</h2>
-          <p>{{ t(`privacy${section}Body`) }}</p>
+          <p>
+            {{ t(section === "Website" ? "privacyWebsiteAnalyticsBody" : `privacy${section}Body`) }}
+          </p>
           <a
             v-if="section === 'Website'"
             class="text-link"
