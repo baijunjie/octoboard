@@ -96,6 +96,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             frontend_exit_heartbeat,
             confirm_quit,
+            sidecar::daemon_exit_detail,
             set_menu_labels,
             tray::set_tray_menu,
             background::bring_to_front,

@@ -77,7 +77,8 @@ function screen(): React.ReactElement {
   if (!daemon) {
     // Neither a `?key=` nor `VITE_DAEMON_KEY` gave a key; or there is no `?port=` or
     // `VITE_DAEMON_PORT` and the page's own origin is not one that can be the daemon — there is
-    // nothing to connect to, so say so instead of guessing.
+    // nothing to connect to, so say so instead of guessing. Only a page loaded by hand gets here: the
+    // packaged shell always passes a port and a key, or an error.
     return <StartupScreen message={<NoAddressMessage />} />;
   }
   return (

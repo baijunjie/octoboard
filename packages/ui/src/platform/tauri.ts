@@ -169,7 +169,23 @@ function tauriExit(): ExitCapability {
         // stop it from doing.
         const { listen } = await import("@tauri-apps/api/event");
         track(await listen("exit-requested", () => onQuitRequested()));
-        track(await listen<string>("daemon-exited", (event) => onDaemonExited(event.payload)));
+        // The shell gives up on the daemon once, for good, so this page reports that once: from the
+        // event, or from asking the shell below. The event reaches only a page already listening,
+        // and a page that loads while the daemon dies again — the window pointed at a restarted
+        // daemon that ended at once — would otherwise never hear of it. Undoing the registration
+        // counts as reported, so a stale answer raises nothing.
+        let reported = false;
+        const daemonExited = (detail: string) => {
+          if (reported) return;
+          reported = true;
+          onDaemonExited(detail);
+        };
+        track(() => {
+          reported = true;
+        });
+        track(await listen<string>("daemon-exited", (event) => daemonExited(event.payload)));
+        const missed = await invoke<string | null>("daemon_exit_detail").catch(() => null);
+        if (missed !== null) daemonExited(missed);
       })();
 
       return undo;

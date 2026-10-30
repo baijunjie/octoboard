@@ -67,7 +67,8 @@ export interface ExitHandlers {
    * close button is one only while the user has not chosen to run in the background (see
    * `BackgroundRunCapability`): the shell then takes it as a quit gesture. */
   onQuitRequested: () => void;
-  /** The shell's daemon sidecar exited on its own; `detail` says how. */
+  /** The shell's daemon sidecar exited on its own and is not started again; `detail` says how. Called at most once
+   * per registration, also when the daemon was given up on before this registration. */
   onDaemonExited: (detail: string) => void;
 }
 

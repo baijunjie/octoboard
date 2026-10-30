@@ -11,8 +11,19 @@ class FakeChannel<T> {
   onmessage: (message: T) => void = () => {};
 }
 vi.mock("@tauri-apps/api/core", () => ({ invoke: (...args: unknown[]) => invoke(...args), Channel: FakeChannel }));
+/** The shell's events by name, as the adapter listens to them: the test emits one by calling its handler. */
+const listeners = new Map<string, (event: { payload: unknown }) => void>();
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: async (name: string, handler: (event: { payload: unknown }) => void) => {
+    listeners.set(name, handler);
+    return () => listeners.delete(name);
+  },
+}));
 
-afterEach(() => invoke.mockReset());
+afterEach(() => {
+  invoke.mockReset();
+  listeners.clear();
+});
 
 it.each([
   { shell: { kind: "too_large" }, kind: "too_large", detail: "" },
@@ -97,4 +108,59 @@ it("ignores progress the shell sends after the install has settled", async () =>
   await tauriPlatform().updater!.install(progress);
   channel!.onmessage({ downloaded: 30, total: 100 });
   expect(progress).not.toHaveBeenCalled();
+});
+
+/** Registers for the exit flow with the shell answering `daemon_exit_detail` with `answer`, and returns what was
+ * reported once the registration has settled. */
+async function registerExit(answer: Promise<string | null>) {
+  invoke.mockImplementation((command: string) => (command === "daemon_exit_detail" ? answer : Promise.resolve()));
+  const onDaemonExited = vi.fn();
+  const undo = tauriPlatform().exit!.register({ onQuitRequested: () => {}, onDaemonExited });
+  await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("daemon_exit_detail"));
+  return { onDaemonExited, undo, emitExited: (detail: string) => listeners.get("daemon-exited")?.({ payload: detail }) };
+}
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+it("reports a daemon end the shell gave up on before the page was listening", async () => {
+  const { onDaemonExited } = await registerExit(Promise.resolve("restarted 3 times"));
+  await settle();
+  expect(onDaemonExited.mock.calls).toEqual([["restarted 3 times"]]);
+});
+
+it("reports the end once when the event arrives as well, in either order", async () => {
+  let answer!: (detail: string) => void;
+  const first = await registerExit(new Promise((resolve) => (answer = resolve)));
+  first.emitExited("restarted 3 times");
+  answer("restarted 3 times");
+  await settle();
+  expect(first.onDaemonExited.mock.calls).toEqual([["restarted 3 times"]]);
+
+  const second = await registerExit(Promise.resolve("exit code 0"));
+  await settle();
+  second.emitExited("exit code 0");
+  expect(second.onDaemonExited.mock.calls).toEqual([["exit code 0"]]);
+});
+
+it("reports nothing while the shell has not given up, and the event still once it does", async () => {
+  const { onDaemonExited, emitExited } = await registerExit(Promise.resolve(null));
+  await settle();
+  expect(onDaemonExited).not.toHaveBeenCalled();
+  emitExited("restarted 3 times");
+  expect(onDaemonExited.mock.calls).toEqual([["restarted 3 times"]]);
+});
+
+it("reports nothing for an answer that comes after the registration was undone", async () => {
+  let answer!: (detail: string) => void;
+  const { onDaemonExited, undo } = await registerExit(new Promise((resolve) => (answer = resolve)));
+  undo();
+  answer("restarted 3 times");
+  await settle();
+  expect(onDaemonExited).not.toHaveBeenCalled();
+});
+
+it("reports nothing when the shell cannot be asked", async () => {
+  const { onDaemonExited } = await registerExit(Promise.reject(new Error("not allowed")));
+  await settle();
+  expect(onDaemonExited).not.toHaveBeenCalled();
 });

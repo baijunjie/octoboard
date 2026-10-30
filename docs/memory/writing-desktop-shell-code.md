@@ -14,6 +14,21 @@ finished delivering the chosen item's action), queue it with `NSOperationQueue::
 block rather than when queueing it. From a background thread, `run_on_main_thread` is still the way onto the main
 thread.
 
+## A state the shell announces with an event must also be readable by a command the page calls after subscribing
+
+Applies to any event the shell emits to tell the page something that stays true afterwards (the daemon has ended and
+will not be restarted), as against a momentary gesture (a menu item chosen, a quit requested). `app.emit` reaches only
+a page that has already registered its `listen`, with no error otherwise, and the page can be loading at any moment,
+not only at launch: the shell itself reloads the window when it points it at a restarted daemon (`point_window_at` in
+`apps/desktop/src-tauri/src/recovery.rs`), so an event emitted during that navigation, or before the new page's first
+`listen`, reaches nobody. The query parameters the window is navigated with do not cover it either: they describe the
+state when the navigation started.
+
+So keep the state in the shell and expose it through a command that the page invokes once its `listen` is registered,
+reporting once whichever of the two arrives first: the shape of `daemon-exited` with `daemon_exit_detail`
+(`apps/desktop/src-tauri/src/sidecar.rs`) and its caller in `packages/ui/src/platform/tauri.ts`. The loss shows only
+when the state changes while a page is loading, which spaced-out manual checks do not hit.
+
 ## After raising Tauri, tray-icon or muda, check each native hook into their internals in the running app
 
 Applies to any change that moves `tauri`, `tray-icon` or `muda` in `Cargo.lock`, including a move pulled in only
