@@ -13,12 +13,12 @@ const tree = (extra: Partial<ProcessTree> = {}): ProcessTree => ({
 });
 
 it("gives memory and age, then the ports and the process count only when there are any", () => {
-  expect(processFacts(translate("en"), "en", tree(), NOW)).toBe("3.4 MB of memory, started 2 hours ago");
-  expect(processFacts(translate("en"), "en", tree({ ports: [8080], process_count: 2 }), NOW)).toBe("3.4 MB of memory, listening on port \u20688080\u2069, started 2 hours ago, 2 processes");
+  expect(processFacts(translate("en"), "en", tree(), NOW)).toBe("3.4 MB of memory · started 2 hours ago");
+  expect(processFacts(translate("en"), "en", tree({ ports: [8080], process_count: 2 }), NOW)).toBe("3.4 MB of memory · listening on port \u20688080\u2069 · started 2 hours ago · 2 processes");
 });
 
 it("says a tree that has just started so", () => {
-  expect(processFacts(translate("en"), "en", tree({ started_at: NOW - 10_000 }), NOW)).toBe("3.4 MB of memory, started just now");
+  expect(processFacts(translate("en"), "en", tree({ started_at: NOW - 10_000 }), NOW)).toBe("3.4 MB of memory · started just now");
 });
 
 it("is worded in the viewing language", () => {
@@ -27,6 +27,6 @@ it("is worded in the viewing language", () => {
 
 it("joins several ports with the language's own word, each isolated, so they are not another fact of the line", () => {
   const ports = (language: Language) => processFacts(translate(language), language, tree({ ports: [3000, 5173, 24678] }), NOW);
-  expect(ports("en")).toContain("listening on ports \u20683000\u2069, \u20685173\u2069, and \u206824678\u2069, started");
+  expect(ports("en")).toContain("listening on ports \u20683000\u2069, \u20685173\u2069, and \u206824678\u2069 · started");
   expect(ports("zh-Hans")).toMatch(/监听端口 \u20683000\u2069(、|和)/);
 });
