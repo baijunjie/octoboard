@@ -29,7 +29,7 @@ useSeoMeta({
     class="home-page"
     :class="{ 'motion-paused': paused }"
   >
-    <section class="hero">
+    <section id="overview" class="hero">
       <div class="hero-grid" aria-hidden="true" />
       <AmbientParticles :paused="paused" />
       <div class="hero-layout wrap">
@@ -42,7 +42,7 @@ useSeoMeta({
             ><span>{{ t("workspaceTitleSecond") }}</span
             ><span class="metal-type">{{ t("workspaceTitleAccent") }}</span>
           </h1>
-          <p class="hero-description">{{ t("workspaceDescription") }}</p>
+          <p class="hero-description">{{ t("workspaceIntroduction") }}</p>
           <div class="hero-actions">
             <a :href="releasesUrl" class="button"
             ><SiteIcon name="download-simple" />{{ t("heroCta") }}</a
@@ -100,13 +100,14 @@ useSeoMeta({
       </div>
     </section>
 
-    <section id="benefits" class="continuity-section wrap section-space" data-reveal>
+    <section id="benefits" class="continuity-section wrap section-space">
       <SectionHeading
         number="01"
-        :label="t('continuityEyebrow')"
-        :title="t('continuityTitle')"
+        :label="t('featureWallEyebrow')"
+        :title="t('featureWallTitle')"
+        :description="t('featureWallDescription')"
       />
-      <ContinuityFeatures />
+      <FeatureWall />
     </section>
 
     <section
@@ -133,7 +134,7 @@ useSeoMeta({
         number="03"
         :label="t('coordinationEyebrow')"
         :title="t('coordinationTitle')"
-        :description="t('coordinationDescription')"
+        :description="t('coordinationWalkthroughDescription')"
       />
       <WorkflowDemo :paused="paused" />
       <div class="workflow-steps">
@@ -195,7 +196,7 @@ useSeoMeta({
           </div>
         </div>
       </article>
-      <div class="platform-intro">
+      <div id="platforms" class="platform-intro">
         <h3>{{ t("platformsTitle") }}</h3>
         <p>{{ t("platformsDescription") }}</p>
       </div>
@@ -237,7 +238,7 @@ useSeoMeta({
       </div>
     </section>
 
-    <section class="final-cta">
+    <section id="download" class="final-cta">
       <div class="wrap final-cta-content" data-reveal>
         <div class="cta-brand">
           <img

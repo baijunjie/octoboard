@@ -37,10 +37,11 @@ Run these commands from the repository root:
   specifier that does not resolve and `nuxt generate` fails as the prerenderer starts.
 - [`apps/web/seo/site-seo.ts`](seo/site-seo.ts) owns locale registration, `robots.txt`, Open
   Graph locale values, canonical and Markdown path helpers, and JSON-LD construction.
-- [`apps/web/seo/page-outline.ts`](seo/page-outline.ts) lists the homepage features, steps, questions, and
-  platforms, the hero agents (a name plus an icon file in [`apps/web/public/agents/`](public/agents/)), the
-  workflow project roles and eight `workflowNodes`, and the privacy sections. The Vue app and the Markdown
-  renderer both walk it.
+- [`apps/web/seo/page-outline.ts`](seo/page-outline.ts) owns the homepage's `featureGroups`, the flattened
+  `homeFeatures` shared by Markdown and JSON-LD, and `homeSections` shared by the page directory and scroll
+  tracking. It also lists the steps, questions, platforms, hero agents (a name plus an icon file in
+  [`apps/web/public/agents/`](public/agents/)), workflow project roles and eight `workflowNodes`, and privacy
+  sections. The Vue app and the Markdown renderer both walk it.
 - [`apps/web/seo/agent-documents.ts`](seo/agent-documents.ts) renders, from the locale catalogs and that
   outline, one Markdown file per homepage and privacy page, plus `llms.txt`, `llms-full.txt`, and
   `sitemap.md`. It reads catalogs with `node:fs` and is imported from `apps/web/nuxt.config.ts` and the Node
@@ -59,9 +60,12 @@ Run these commands from the repository root:
   homepage features and workflow; `LanguageSelect.vue` is shared by the header's desktop and mobile controls.
 - [`apps/web/app/components/SectionHeading.vue`](app/components/SectionHeading.vue) supplies the homepage's shared
   numbered section heading.
-- [`apps/web/app/components/ContinuityFeatures.vue`](app/components/ContinuityFeatures.vue) renders the account
-  switching, agent handoff and usage feature rows from `homeFeatures` in
-  [`apps/web/seo/page-outline.ts`](seo/page-outline.ts), with localized copy and illustrative visuals.
+- [`apps/web/app/components/FeatureWall.vue`](app/components/FeatureWall.vue) renders the grouped feature cards
+  from `featureGroups` in [`apps/web/seo/page-outline.ts`](seo/page-outline.ts), with localized copy.
+- [`apps/web/app/components/SectionNavigation.vue`](app/components/SectionNavigation.vue) owns the homepage's
+  desktop directory rail and narrow-screen directory menu; [`apps/web/app/components/SectionLinks.vue`](app/components/SectionLinks.vue)
+  supplies their shared section and feature-group links. [`apps/web/app/composables/useHomeSection.ts`](app/composables/useHomeSection.ts)
+  supplies the active section and feature group from scroll position.
 - [`apps/web/app/components/HeroMascot.vue`](app/components/HeroMascot.vue) owns the layered SVG animation of the
   existing mascot artwork; [`apps/web/app/composables/useVisibleMotion.ts`](app/composables/useVisibleMotion.ts)
   supplies element visibility, document visibility and reduced-motion gating for it and the workflow.
