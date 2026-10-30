@@ -1,6 +1,6 @@
 [package]
 name = "octoboardd"
-version = "0.1.0"
+version.workspace = true
 description = "Octoboard daemon: host role (PTYs, agent processes, repositories) and coordinator role (console / project / session data)."
 authors.workspace = true
 license.workspace = true

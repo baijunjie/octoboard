@@ -10,12 +10,14 @@
 // the stale daemon. Run this by hand before verifying any daemon-side change through the app.
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { UNIVERSAL_ARCHITECTURES as ARCHITECTURES, UNIVERSAL_TARGET as UNIVERSAL } from "./bundle.mjs";
+import {
+  appDir,
+  repoRoot,
+  UNIVERSAL_ARCHITECTURES as ARCHITECTURES,
+  UNIVERSAL_TARGET as UNIVERSAL,
+} from "./bundle.mjs";
 
-const appDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const repoRoot = path.dirname(path.dirname(appDir));
 const binariesDir = path.join(appDir, "src-tauri", "binaries");
 
 // A universal release (`pnpm release`, which passes `--target universal-apple-darwin` to `tauri build`) is
@@ -26,11 +28,13 @@ const universal = process.env.TAURI_ENV_TARGET_TRIPLE === UNIVERSAL || process.a
 
 mkdirSync(binariesDir, { recursive: true });
 
-// Both crates are members of the root Cargo workspace, so the build runs from the repository root
-// and writes into the one build directory there.
+// Both crates are members of the root Cargo workspace, so the build runs from the repository root and writes into the
+// one build directory there. A universal build is a release, built `--locked` from the dependencies `Cargo.lock`
+// records: a lockfile that no longer matches the manifests fails at the first compile instead of being rewritten under
+// the release.
 if (universal) {
   const built = ARCHITECTURES.map((triple) => {
-    execFileSync("cargo", ["build", "--release", "--target", triple, "-p", "octoboardd"], {
+    execFileSync("cargo", ["build", "--release", "--locked", "--target", triple, "-p", "octoboardd"], {
       cwd: repoRoot,
       stdio: "inherit",
     });

@@ -68,7 +68,7 @@ export const RULES = [
   { match: [notMarkdown("apps/daemon/")], consumers: ["daemon"], why: "the daemon crate" },
   { match: [notMarkdown("apps/desktop/src-tauri/")], consumers: ["native"], why: "the desktop shell crate" },
   { match: ["apps/desktop/scripts/"], consumers: ["desktop"], why: "the desktop build and release scripts and their tests" },
-  { match: ["apps/desktop/package.json"], consumers: ["desktop", "native"], why: "its scripts are the desktop scripts' commands, and `tauri.conf.json` runs them as the shell's build commands" },
+  { match: ["apps/desktop/package.json"], consumers: ["desktop", "native"], why: "its scripts are the desktop scripts' commands, `tauri.conf.json` runs them as the shell's build commands, and its version is the application's, which the shell's build script checks" },
 
   // Cargo features unify across workspace members, so a manifest of either crate changes how both build.
   { match: ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "rustfmt.toml", ".cargo/", /\/Cargo\.toml$/], consumers: RUST_PACKAGES, why: "the Cargo workspace, its feature set and toolchain are shared by both crates" },

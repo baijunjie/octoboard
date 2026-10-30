@@ -18,8 +18,7 @@ Run these commands from the repository root:
 - `pnpm --filter @octoboard/web test` — runs the website's Node test; the sitemap check reads the generated output, so
   it is skipped until `build` has run.
 - `pnpm --filter @octoboard/web build` — builds the React product preview and generates the static website in
-  `apps/web/.output/public`.
-- `pnpm --filter @octoboard/web generate` — exposes the same static generation command for deployment.
+  `apps/web/.output/public`; the deployment runs the same command.
 - `pnpm --filter @octoboard/web generate:og-images` — runs `python3 scripts/generate-og-images.py` to draw one
   share image per language.
 - `pnpm --filter @octoboard/web preview` — serves the generated output locally at the configured base path.

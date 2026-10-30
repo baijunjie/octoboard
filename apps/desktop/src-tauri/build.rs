@@ -11,6 +11,10 @@ fn main() {
     // `OCTOBOARD_APP_NAME` and `OCTOBOARD_REPOSITORY_URL`, and fails the build when a copy of it
     // that Tauri or Cargo force to live elsewhere has drifted: the `productName` in
     // `tauri.conf.json` and the workspace `repository` and `license` in the root `Cargo.toml`.
+    // It also fails it when the application's version has two values: `tauri.conf.json` reads it
+    // from `apps/desktop/package.json`, and the root `Cargo.toml` repeats it as the workspace
+    // version both crates take (the daemon reports it in the configuration export and to the agent
+    // CLIs it talks to).
     let config = read_json("../../../config/app.json");
     let name = config["name"]
         .as_str()
@@ -40,6 +44,30 @@ fn main() {
         std::env::var("CARGO_PKG_LICENSE").unwrap_or_default(),
         license,
         "the workspace `license` in the root Cargo.toml must equal config/app.json `license`"
+    );
+
+    assert_eq!(
+        tauri_conf["version"].as_str(),
+        Some("../package.json"),
+        "tauri.conf.json `version` must be \"../package.json\", which holds the application's version"
+    );
+    let version = read_json("../package.json")["version"]
+        .as_str()
+        .expect("apps/desktop/package.json `version` is a string")
+        .to_owned();
+    assert_eq!(
+        std::env::var("CARGO_PKG_VERSION").unwrap_or_default(),
+        version,
+        "the workspace `version` in the root Cargo.toml must equal apps/desktop/package.json `version`"
+    );
+    let daemon_manifest = "../../daemon/Cargo.toml";
+    println!("cargo:rerun-if-changed={daemon_manifest}");
+    assert!(
+        fs::read_to_string(daemon_manifest)
+            .unwrap_or_else(|e| panic!("read {daemon_manifest}: {e}"))
+            .lines()
+            .any(|line| line.trim() == "version.workspace = true"),
+        "apps/daemon/Cargo.toml must take the workspace version (`version.workspace = true`)"
     );
 
     println!("cargo:rustc-env=OCTOBOARD_APP_NAME={name}");

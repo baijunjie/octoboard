@@ -26,7 +26,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
       - name: Check the tag and the secrets
@@ -55,6 +55,11 @@ jobs:
             echo "::error::These repository secrets are not set:$missing. See apps/desktop/README.md."
             exit 1
           fi
+      # The release builds `--locked`; a `Cargo.lock` that no longer matches the manifests would otherwise fail only
+      # once the full checks have run and the build has started.
+      - run: rustup toolchain install
+      - name: Check that Cargo.lock is up to date
+        run: cargo metadata --locked --format-version 1 > /dev/null
 
   checks:
     needs: validate
@@ -67,7 +72,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Read the release notes
         env:
           TAG: ${{ github.ref_name }}
@@ -80,8 +85,8 @@ jobs:
             echo "::error::The selected Xcode is $(xcodebuild -version | head -n 1), and the build needs Xcode 26."
             exit 1
           fi
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "24"
           cache: pnpm
