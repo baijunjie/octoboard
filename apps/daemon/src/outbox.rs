@@ -1,87 +1,31 @@
-//! The per-session queue for messages Octoboard writes into a running agent: a report reaching a
-//! console session, an instruction the console session sent, an instruction handed to a session
-//! being reopened.
+//! The per-session FIFO for automatic messages, with one drainer per session.
 //!
-//! Four properties, each of which something upstream depends on:
+//! Each ticket keeps its first delivery-attempt time across retries. Draft protection can delay
+//! writing only for a bounded grace period; afterwards a write may include unfinished user input.
+//! Lifecycle holds, trust confirmations and agent dialogs remain separate reasons to wait.
 //!
-//! - **Order-preserving.** A message that cannot be written yet does not let a later one past it.
-//!   Reports from several project sessions arriving at one console session, and a console
-//!   session's follow-up landing after the report it answers, both rest on this.
-//! - **Nothing is dropped once accepted**, with three exceptions: a half-written message (below),
-//!   whose drain reports the loss; a message a view of the agent's took instead of the
-//!   conversation (below), which is reported too; and a session whose process ends, which takes
-//!   its queue with it. Short of those, whoever queued a message was told not to send it again and
-//!   is right. A message kept in the store for a session that was interrupted is backed by its row
-//!   there, which goes only once the message is written (or lost in a half-write), so a process
-//!   ending before then leaves it for the next resume.
-//! - **A held queue is kept and not written.** A handoff holds the original's queue: messages are
-//!   still accepted, a drain in progress stops at its next message, and the queue survives the
-//!   session's process ending, so that its holder can forward it to the session that takes over
-//!   (`AppState::hold_outbox`).
-//! - **One drainer per session.** Two of them interleaving between a pop and its write would
-//!   reorder the queue.
+//! A physical partial write cannot be repeated without duplicating its accepted prefix. It and
+//! the queue behind it are reported lost, because another paste would join the unterminated one.
+//! An uncertain native submission instead consumes only its own ticket and retains later ones:
+//! there is no terminal fragment, but repeating the request could deliver the message twice.
 //!
-//! It is not the only writer to a session's PTY: the terminal socket writes the user's own
-//! keystrokes straight through (`server.rs`), which is deliberate — a keystroke must not wait behind
-//! a queue — and means the queue serialises Octoboard's own messages against each other, not against
-//! the person typing. Keystrokes still skip the queue, but they wait behind a message write that is
-//! already in flight on the session's input lock and can no longer interleave with it.
-//!
-//! **A half-written message is dropped, not retried.** A PTY write can be accepted in part and then
-//! time out, leaving a truncated bracketed paste in the child's input buffer with no terminator;
-//! writing the message again would deliver that prefix twice, and writing the *next* one would
-//! append it inside the dangling paste. So the message goes no further, the rest of the queue is
-//! abandoned with it — the next message written into that session is run together with the fragment,
-//! so it would arrive spoiled, and delivering it spoiled is worse than reporting it undelivered. The
-//! drain reports the loss so the sender whose call hit it can be told rather than left believing its
-//! message was accepted. A sender whose message was already queued behind it is not told; the user's
-//! notice and the log line are all there is for those.
-//!
-//! Nothing here tries to *recover* the input line. What state it is actually left in, and what clears
-//! it, is not established for any of the three agents; what is known is that the next write closes
-//! the fragment, which bounds the damage at one spoiled message rather than a session that stays
-//! unusable. Refusing to write until some signal said the line was clean was tried and abandoned:
-//! no available signal proves it, and a wrong one leaves a console silently unable to orchestrate.
-//!
-//! **A message written but not sent holds the queue.** Claude Code can take a write and still not
-//! send it, leaving the text in its input box (see "Writing into a running session" in
-//! `docs/agent-cli-reference.md`). So a message written to an agent that reports each prompt it
-//! sends and is at its prompt, not mid-turn, is followed by a short wait for that report. With none
-//! the message is reported unsent, and nothing more is written into the session until the agent
-//! next reports a prompt sent — whoever sends it — since whatever came next would land in the same
-//! input box. The message itself is not put back: its text is already in the session. A message
-//! written mid-turn is not checked, since the agent sends nothing until its turn ends. The mark
-//! that holds the queue is the running process's, kept beside its count of prompts sent
-//! ([`PromptSignal`]), so it goes with that process and never holds the next one's queue.
-//!
-//! **A message a dialog threw away is put back.** A modal dialog that appears at launch (Claude
-//! Code's "Resume this conversation?") discards a paste and lets the Enter pick a row, so the
-//! message is nowhere. Such a dialog is held for before any write (`PromptSignal::sighting`), and
-//! when one is seen to have come up between a write and the end of the wait for its report, the
-//! message goes back to the front of the queue with its ticket and no unsent mark is set. The
-//! screen is looked at on every chunk of output while a checked write is in flight
-//! (`PromptSignal::watch_screen`), because the write itself can close such a dialog within
-//! milliseconds, leaving nothing on screen to see once the wait is over.
-//!
-//! **A message a view took is not put back.** Claude Code's views of its background agents take
-//! what is written into them: it reaches a subagent or starts another session. Writing it again
-//! would deliver it twice, so it is neither queued again nor marked unsent; the drain reports it
-//! and stops, and the queue waits behind the view like any other dialog.
-//!
-//! Recovery from the ordinary case — nothing written, because the session could not take it — has
-//! no timer of its own: the message waits at the front of the queue for the next drain, which
-//! something outside triggers (a status a hook reported, or another message being queued). The
-//! same goes for a queue held behind an unsent message: the hook reporting the next prompt sent
-//! triggers the drain that goes on.
+//! A complete write missing its prompt acknowledgement briefly holds later messages. Its payload
+//! never goes back into the queue; the running session owns the bounded submit-key retry.
+//! For the delivery contract see docs/product/message-delivery.md's
+//! "Messages held until a session can take them" section.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use crate::agent_dialogs::Sighting;
 use crate::ptyio::PartialWrite;
 use crate::session::LiveSession;
 use crate::term;
+
+/// How long draft preservation may delay an automatic message before combined delivery is allowed.
+pub(crate) const DRAFT_WAIT: Duration = Duration::from_secs(3);
 
 /// What a drain amounted to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,8 +36,10 @@ pub enum Drain {
     Pending,
     /// A message was written in part, so it is gone and the queue behind it with it.
     Lost,
+    /// The native queue may have accepted this ticket; it is never submitted again.
+    Uncertain(Ticket),
     /// The message with this ticket was written, but the agent did not report sending it. Its text
-    /// is in the session's input box, and the rest of the queue waits for the next prompt sent.
+    /// is not repeated; later messages wait for a prompt acknowledgement or a bounded submit retry.
     Unsent(Ticket),
     /// The message with this ticket was written while a dialog came up that threw it away. It is
     /// back at the front of the queue, which waits for the dialog to be answered.
@@ -118,9 +64,14 @@ pub trait PromptSignal {
     fn wait_past(&self, before: u64) -> bool;
     /// Records that a message written when the count stood at `before` was not sent.
     fn mark_unsent(&self, before: u64);
-    /// Whether a message marked unsent is still waiting, which it is until the count moves past
-    /// the one it was marked at.
+    /// Whether a message marked unsent still holds delivery before acknowledgement or submit retry.
     fn unsent_waiting(&self) -> bool;
+    fn mark_submission_uncertain(&self, before: u64) {
+        self.mark_unsent(before);
+    }
+    fn submission_uncertain(&self) -> bool {
+        false
+    }
     /// Looks at the agent's screen now: whether it shows a dialog only the user can answer, which
     /// a message written into it would answer destructively, and how many times dialogs of each
     /// kind have come up so far, including any that have gone again.
@@ -138,6 +89,10 @@ pub trait PromptSignal {
     }
     /// Records that a message went into the agent in the middle of a turn.
     fn note_written_mid_turn(&self) {}
+    /// A complete message reached the CLI, whose native draft restoration is still pending.
+    fn input_recovery_pending(&self) -> bool {
+        false
+    }
 }
 
 /// A screen watch that ends when it is dropped, so no return from a drain leaves it on.
@@ -158,7 +113,7 @@ impl<P: PromptSignal> Drop for ScreenWatch<'_, P> {
 
 #[derive(Default)]
 pub struct Outbox {
-    queues: Mutex<HashMap<String, VecDeque<(Ticket, String)>>>,
+    queues: Mutex<HashMap<String, VecDeque<(Ticket, String, Option<Instant>)>>>,
     /// The ticket the next message pushed gets.
     next_ticket: AtomicU64,
     /// The sessions a drainer currently owns.
@@ -197,7 +152,7 @@ impl Outbox {
         queues
             .entry(id.to_string())
             .or_default()
-            .push_back((ticket, text.to_string()));
+            .push_back((ticket, text.to_string(), None));
         ticket
     }
 
@@ -219,7 +174,7 @@ impl Outbox {
         queues
             .entry(id.to_string())
             .or_default()
-            .push_back((ticket, text.to_string()));
+            .push_back((ticket, text.to_string(), None));
         Some(ticket)
     }
 
@@ -264,22 +219,24 @@ impl Outbox {
     pub fn drain(&self, session: &LiveSession, prompts: &impl PromptSignal) -> Drain {
         self.drain_with(
             &session.id,
-            &mut |text| term::send_message(session, text),
+            &mut |ticket, text, allow_mixed| {
+                term::send_message_with_id(
+                    session,
+                    text,
+                    &format!("{}:{ticket}", session.launch_id),
+                    allow_mixed,
+                )
+            },
             prompts,
         )
     }
 
     /// The body of [`Self::drain`], with the write and the agent's prompt signal as parameters so
     /// the queue's own rules can be exercised without a PTY or an agent behind them.
-    ///
-    /// `fragmented` is read **under the claim**, and again before every write. That is what makes it
-    /// enforceable: only the claim holder can set the mark, so a reading taken inside the claim
-    /// cannot go stale while this drain runs. Read outside it, the mark could be set between the
-    /// reading and the write — which is the same check-then-act hole the mark exists to close.
     fn drain_with(
         &self,
         id: &str,
-        write: &mut impl FnMut(&str) -> Result<(), PartialWrite>,
+        write: &mut impl FnMut(Ticket, &str, bool) -> Result<(), PartialWrite>,
         prompts: &impl PromptSignal,
     ) -> Drain {
         // Re-claimed around each pass. A producer that pushed while the previous pass was between
@@ -307,7 +264,7 @@ impl Outbox {
     fn drain_once(
         &self,
         id: &str,
-        write: &mut impl FnMut(&str) -> Result<(), PartialWrite>,
+        write: &mut impl FnMut(Ticket, &str, bool) -> Result<(), PartialWrite>,
         prompts: &impl PromptSignal,
     ) -> Drain {
         loop {
@@ -315,7 +272,10 @@ impl Outbox {
             if self.is_held(id) || self.is_paused(id) {
                 return Drain::Pending;
             }
-            if prompts.unsent_waiting() || prompts.trust_holds_writes() {
+            if prompts.unsent_waiting()
+                || prompts.submission_uncertain()
+                || prompts.trust_holds_writes()
+            {
                 return Drain::Pending;
             }
             // Asked afresh for every message: once one is sent the agent reads as working, and what
@@ -329,16 +289,21 @@ impl Outbox {
             if seen.current.is_some() {
                 return Drain::Pending;
             }
-            let Some((ticket, text)) = self.pop(id) else {
+            let Some((ticket, text, protection_started)) = self.pop(id) else {
                 return Drain::Clear;
             };
+            let protection_started = protection_started.unwrap_or_else(Instant::now);
             let before = prompts.sent();
             let mid_turn = prompts.mid_turn();
-            let written = write(&text);
+            let written = write(ticket, &text, protection_started.elapsed() >= DRAFT_WAIT);
             if mid_turn && written.is_ok() {
                 prompts.note_written_mid_turn();
             }
             match written {
+                Ok(()) if prompts.input_recovery_pending() => {
+                    self.mark_written(ticket);
+                    return Drain::Pending;
+                }
                 Ok(()) if !checked || prompts.wait_past(before) => self.mark_written(ticket),
                 Ok(()) => {
                     let now = prompts.sighting();
@@ -346,7 +311,7 @@ impl Outbox {
                         // Its paste went to a dialog that discarded it, so unlike an unsent
                         // message nothing of it is in the input box.
                         tracing::warn!(session = %id, "a dialog discarded a written message");
-                        self.push_front(id, ticket, text);
+                        self.push_front(id, ticket, text, protection_started);
                         return Drain::Discarded(ticket);
                     }
                     if now.diverted_seen > seen.diverted_seen {
@@ -364,9 +329,22 @@ impl Outbox {
                 // reported state does not show. Put it back at the front and stop: letting the next
                 // one through would reorder them.
                 Err(partial) if partial.written == 0 => {
-                    tracing::warn!(session = %id, error = %partial.error, "a queued message could not be written yet");
-                    self.push_front(id, ticket, text);
+                    if partial.error.kind() != std::io::ErrorKind::WouldBlock {
+                        tracing::warn!(session = %id, error = %partial.error, "a queued message could not be written yet");
+                    }
+                    self.push_front(id, ticket, text, protection_started);
                     return Drain::Pending;
+                }
+                Err(partial)
+                    if partial.error.get_ref().is_some_and(|error| {
+                        error.is::<crate::codex_transport::UncertainSubmission>()
+                    }) =>
+                {
+                    self.mark_written(ticket);
+                    prompts.mark_submission_uncertain(before);
+                    tracing::error!(session = %id, error = %partial.error,
+                        "the native queue did not confirm accepting a message; it will not be resent");
+                    return Drain::Uncertain(ticket);
                 }
                 Err(partial) => {
                     // The queue behind it goes too. The next message written into this session is
@@ -418,7 +396,7 @@ impl Outbox {
             .expect("outbox lock poisoned")
             .remove(id)
             .unwrap_or_default();
-        for (ticket, _) in &queue {
+        for (ticket, _, _) in &queue {
             self.mark_written(*ticket);
         }
         queue.len()
@@ -434,7 +412,7 @@ impl Outbox {
             .expect("outbox lock poisoned")
             .remove(id)
             .unwrap_or_default();
-        self.unkeep(queue.iter().map(|(ticket, _)| *ticket));
+        self.unkeep(queue.iter().map(|(ticket, _, _)| *ticket));
         queue.len()
     }
 
@@ -512,14 +490,14 @@ impl Outbox {
         let kept = self.kept.lock().expect("outbox kept lock poisoned");
         let rows: Vec<Option<i64>> = queue
             .iter()
-            .map(|(ticket, _)| kept.queued.get(ticket).copied())
+            .map(|(ticket, _, _)| kept.queued.get(ticket).copied())
             .collect();
         drop(kept);
-        self.unkeep(queue.iter().map(|(ticket, _)| *ticket));
+        self.unkeep(queue.iter().map(|(ticket, _, _)| *ticket));
         queue
             .into_iter()
             .zip(rows)
-            .map(|((_, text), row)| (text, row))
+            .map(|((_, text, _), row)| (text, row))
             .collect()
     }
 
@@ -537,7 +515,7 @@ impl Outbox {
             .remove(id);
     }
 
-    fn pop(&self, id: &str) -> Option<(Ticket, String)> {
+    fn pop(&self, id: &str) -> Option<(Ticket, String, Option<Instant>)> {
         let mut queues = self.queues.lock().expect("outbox lock poisoned");
         let queue = queues.get_mut(id)?;
         let next = queue.pop_front();
@@ -547,13 +525,13 @@ impl Outbox {
         next
     }
 
-    fn push_front(&self, id: &str, ticket: Ticket, text: String) {
+    fn push_front(&self, id: &str, ticket: Ticket, text: String, protection_started: Instant) {
         self.queues
             .lock()
             .expect("outbox lock poisoned")
             .entry(id.to_string())
             .or_default()
-            .push_front((ticket, text));
+            .push_front((ticket, text, Some(protection_started)));
     }
 }
 
@@ -612,6 +590,7 @@ mod tests {
         watching: Cell<i32>,
         watched_during_wait: Cell<bool>,
         trust_holds: Cell<bool>,
+        recovering_input: Cell<bool>,
     }
 
     impl AtPrompt {
@@ -628,6 +607,7 @@ mod tests {
                 watching: Cell::new(0),
                 watched_during_wait: Cell::new(false),
                 trust_holds: Cell::new(false),
+                recovering_input: Cell::new(false),
             }
         }
 
@@ -646,6 +626,10 @@ mod tests {
     impl PromptSignal for AtPrompt {
         fn sent(&self) -> u64 {
             self.sent.get()
+        }
+
+        fn input_recovery_pending(&self) -> bool {
+            self.recovering_input.get()
         }
         fn expects_send(&self) -> bool {
             !self.busy.get()
@@ -707,7 +691,7 @@ mod tests {
         assert_eq!(
             outbox.drain_with(
                 "s",
-                &mut |text| {
+                &mut |_, text, _| {
                     written.push(text.to_string());
                     Ok(())
                 },
@@ -731,7 +715,7 @@ mod tests {
         let mut drain = |outbox: &Outbox| {
             outbox.drain_with(
                 "s",
-                &mut |text| {
+                &mut |_, text, _| {
                     written.push(text.to_string());
                     Ok(())
                 },
@@ -759,7 +743,7 @@ mod tests {
         assert_eq!(
             outbox.drain_with(
                 "s",
-                &mut |text| {
+                &mut |_, text, _| {
                     written.push(text.to_string());
                     if !pushed_late {
                         pushed_late = true;
@@ -786,7 +770,7 @@ mod tests {
         assert!(outbox.push_kept("s", "kept", 7).is_none());
         assert_eq!(outbox.len("s"), 1);
         assert_eq!(
-            outbox.drain_with("s", &mut |_| Ok(()), &MidTurn),
+            outbox.drain_with("s", &mut |_, _, _| Ok(()), &MidTurn),
             Drain::Clear
         );
         assert_eq!(outbox.take_written(), [7]);
@@ -805,7 +789,7 @@ mod tests {
         outbox.push_kept("s", "second", 2);
         outbox.push("s", "plain");
         assert_eq!(
-            outbox.drain_with("s", &mut |_| Err(partial(3)), &MidTurn),
+            outbox.drain_with("s", &mut |_, _, _| Err(partial(3)), &MidTurn),
             Drain::Lost
         );
         let mut rows = outbox.take_written();
@@ -821,7 +805,7 @@ mod tests {
         outbox.push("s", "first");
         outbox.push("s", "second");
         assert_eq!(
-            outbox.drain_with("s", &mut |_| Err(partial(0)), &MidTurn),
+            outbox.drain_with("s", &mut |_, _, _| Err(partial(0)), &MidTurn),
             Drain::Pending
         );
         assert_eq!(outbox.len("s"), 2);
@@ -830,7 +814,7 @@ mod tests {
         assert_eq!(
             outbox.drain_with(
                 "s",
-                &mut |text| {
+                &mut |_, text, _| {
                     written.push(text.to_string());
                     Ok(())
                 },
@@ -850,7 +834,7 @@ mod tests {
         outbox.push("s", "first");
         outbox.push("s", "second");
         assert_eq!(
-            outbox.drain_with("s", &mut |_| Err(partial(3)), &MidTurn),
+            outbox.drain_with("s", &mut |_, _, _| Err(partial(3)), &MidTurn),
             Drain::Lost
         );
         assert_eq!(outbox.len("s"), 0);
@@ -871,7 +855,7 @@ mod tests {
         outbox.push("s", "first");
         assert!(outbox.claim("s"));
         assert_eq!(
-            outbox.drain_with("s", &mut |_| Ok(()), &MidTurn),
+            outbox.drain_with("s", &mut |_, _, _| Ok(()), &MidTurn),
             Drain::Pending
         );
         assert_eq!(outbox.len("s"), 1);
@@ -898,7 +882,7 @@ mod tests {
         let mut written = Vec::new();
         let outcome = outbox.drain_with(
             "s",
-            &mut |text| {
+            &mut |_, text, _| {
                 written.push(text.to_string());
                 Ok(())
             },
@@ -919,7 +903,7 @@ mod tests {
         outbox.push("s", "second");
         let agent = AtPrompt::new(false);
         let mut written = Vec::new();
-        let mut write = |text: &str| {
+        let mut write = |_: Ticket, text: &str, _: bool| {
             written.push(text.to_string());
             Ok(())
         };
@@ -945,7 +929,7 @@ mod tests {
         let agent = AtPrompt::new(true);
         agent.show(Some(dialog(WrittenMessage::Draft)));
         let mut written = Vec::new();
-        let mut write = |text: &str| {
+        let mut write = |_: Ticket, text: &str, _: bool| {
             written.push(text.to_string());
             Ok(())
         };
@@ -965,7 +949,7 @@ mod tests {
         let agent = AtPrompt::new(true);
         agent.trust_holds.set(true);
         let mut written = Vec::new();
-        let mut write = |text: &str| {
+        let mut write = |_: Ticket, text: &str, _: bool| {
             written.push(text.to_string());
             Ok(())
         };
@@ -988,7 +972,7 @@ mod tests {
             .dialog_on_wait
             .set(Some((dialog(WrittenMessage::Discarded), true)));
         let mut written = Vec::new();
-        let mut write = |text: &str| {
+        let mut write = |_: Ticket, text: &str, _: bool| {
             written.push(text.to_string());
             Ok(())
         };
@@ -1018,7 +1002,7 @@ mod tests {
             .dialog_on_wait
             .set(Some((dialog(WrittenMessage::Diverted), false)));
         let mut written = Vec::new();
-        let mut write = |text: &str| {
+        let mut write = |_: Ticket, text: &str, _: bool| {
             written.push(text.to_string());
             Ok(())
         };
@@ -1046,9 +1030,120 @@ mod tests {
             .dialog_on_wait
             .set(Some((dialog(WrittenMessage::Draft), false)));
         assert_eq!(
-            outbox.drain_with("s", &mut |_| Ok(()), &agent),
+            outbox.drain_with("s", &mut |_, _, _| Ok(()), &agent),
             Drain::Unsent(first)
         );
         assert_eq!(outbox.len("s"), 0);
+    }
+    #[test]
+    fn a_written_message_with_pending_draft_recovery_is_not_retried_or_marked_unsent() {
+        let outbox = Outbox::default();
+        outbox.push("s", "already written");
+        outbox.push("s", "still queued");
+        let agent = AtPrompt::new(false);
+        agent.recovering_input.set(true);
+        let mut written = Vec::new();
+        assert_eq!(
+            outbox.drain_with(
+                "s",
+                &mut |_, text, _| {
+                    written.push(text.to_string());
+                    Ok(())
+                },
+                &agent
+            ),
+            Drain::Pending
+        );
+        assert_eq!(written, ["already written"]);
+        assert_eq!(outbox.len("s"), 1);
+        assert!(!agent.unsent_waiting());
+        assert_eq!(agent.waits.get(), 0);
+    }
+
+    #[test]
+    fn uncertain_native_acceptance_preserves_later_messages_without_resending() {
+        let outbox = Outbox::default();
+        let first = outbox.push("s", "first");
+        outbox.push("s", "second");
+        let agent = AtPrompt::new(true);
+        let mut attempts = Vec::new();
+        let outcome = outbox.drain_with(
+            "s",
+            &mut |ticket, text, _| {
+                attempts.push((ticket, text.to_string()));
+                Err(PartialWrite {
+                    written: 1,
+                    error: std::io::Error::other(crate::codex_transport::UncertainSubmission(
+                        "connection closed after add".into(),
+                    )),
+                })
+            },
+            &agent,
+        );
+        assert_eq!(outcome, Drain::Uncertain(first));
+        assert_eq!(attempts, [(first, "first".to_string())]);
+        assert_eq!(outbox.len("s"), 1);
+        assert_eq!(
+            outbox.drain_with("s", &mut |_, _, _| panic!("held"), &agent),
+            Drain::Pending
+        );
+        agent.prompt_sent();
+        assert_eq!(
+            outbox.drain_with(
+                "s",
+                &mut |ticket, text, _| {
+                    attempts.push((ticket, text.to_string()));
+                    Ok(())
+                },
+                &agent
+            ),
+            Drain::Clear
+        );
+        assert_eq!(attempts[1].1, "second");
+    }
+    #[test]
+    fn an_unsubmitted_draft_does_not_prevent_delivery_after_the_grace_period() {
+        let outbox = Outbox::default();
+        let live = crate::test_support::fake_live_session(
+            "bounded-draft",
+            crate::protocol::Agent::Claude,
+            120,
+            40,
+            "sleep 30",
+        )
+        .with_composer();
+        live.on_output(include_bytes!("../testdata/claude_input_restored.bin"));
+        live.write_terminal_input(b"unfinished user input").unwrap();
+        outbox.push(&live.id, "automatic message");
+        let before = live.input_writes();
+        assert_eq!(outbox.drain(&live, &MidTurn), Drain::Pending);
+        assert_eq!(live.input_writes(), before);
+        let queued = outbox.pop(&live.id).unwrap();
+        outbox.push_front(&live.id, queued.0, queued.1, Instant::now() - DRAFT_WAIT);
+        assert_eq!(outbox.drain(&live, &MidTurn), Drain::Clear);
+        assert_eq!(live.input_writes(), before + 1);
+        assert_eq!(outbox.len(&live.id), 0);
+    }
+
+    #[test]
+    fn draft_wait_expires_for_the_same_ticket_across_retries() {
+        let outbox = Outbox::default();
+        let ticket = outbox.push("s", "automatic");
+        let mut allowances = Vec::new();
+        let mut write = |seen, _: &str, allow_mixed| {
+            assert_eq!(seen, ticket);
+            allowances.push(allow_mixed);
+            Err(PartialWrite {
+                written: 0,
+                error: std::io::ErrorKind::WouldBlock.into(),
+            })
+        };
+        assert_eq!(outbox.drain_with("s", &mut write, &MidTurn), Drain::Pending);
+        let queued = outbox.pop("s").unwrap();
+        assert!(queued.2.is_some());
+        outbox.push_front("s", queued.0, queued.1, Instant::now() - DRAFT_WAIT);
+        assert_eq!(outbox.drain_with("s", &mut write, &MidTurn), Drain::Pending);
+        assert_eq!(outbox.drain_with("s", &mut write, &MidTurn), Drain::Pending);
+        assert_eq!(allowances, [false, true, true]);
     }
 }

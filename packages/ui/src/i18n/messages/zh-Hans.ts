@@ -123,6 +123,8 @@ export const zhHans: Translation<"other"> = {
   "error.recovery.sharingLostMessages": "这些消息从未写入终端，会话可能已停止运行。如仍需使用该会话，请先恢复，再重新发送这些消息。",
   "error.recovery.lostMessages": "请打开这些消息原本要发往的会话或接手的会话，检查其终端。未送达的内容请重新发送。",
   "error.recovery.unsentMessage": "请打开此会话，检查输入框中等待发送的消息，然后按 {enter} 发送。",
+  "error.recovery.submitRetry":
+    "请打开此会话，先检查自动重试的结果。如消息仍在输入框中，再按 {enter} 发送，不要重新粘贴消息。",
   "error.recovery.trust": "请打开相关会话的终端，处理其中等待回答的提示。信任文件夹时仅选择项目文件夹，然后重试。",
   "error.recovery.conversation": "请检查对话 ID 和所选账户；上方提示已有会话时请继续该会话，或创建新会话。",
   "error.recovery.unresumable": "如果此会话尚未归档，请先归档，再将其删除，并新建会话继续工作。",
@@ -544,6 +546,8 @@ export const zhHans: Translation<"other"> = {
     "账户的共享更改期间，{appName} 为某个会话暂存的消息已被丢弃，因为该会话没有重新启动。",
   "daemon.message_not_sent":
     "{appName} 写入此会话的一条消息未被 {agent} 发送，仍停留在会话的输入框中。在发送任何提示之前，{appName} 不会再向此会话写入内容。",
+  "daemon.message_not_sent.retry":
+    "{agent} 尚未确认发送 {appName} 写入此会话的消息。{appName} 会再尝试提交一次输入框中的现有内容，不会重复粘贴消息。如有待回答的弹窗，请先处理。",
   "daemon.message_discarded_by_dialog":
     "{appName} 向此会话写入消息时，{agent} 弹出了对话框并丢弃了这条消息。对话框被回应后，{appName} 会重新写入。",
   "daemon.message_diverted_by_view":

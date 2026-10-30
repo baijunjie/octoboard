@@ -14,8 +14,8 @@ const PROMPT_MARK: char = '\u{276F}';
 
 /// The text in the agent's input box as `screen` (the visible rows) shows it, one row a line with
 /// the indent taken off and empty rows at the end dropped; empty for an empty box, `None` where no
-/// input box is recognised, and always for Codex, whose prompt it leaves empty after an Esc.
-pub(super) fn input_box(agent: Agent, screen: &str) -> Option<String> {
+/// input box is recognised. Codex requires a recognised final status footer to locate its box.
+pub(crate) fn input_box(agent: Agent, screen: &str) -> Option<String> {
     let mut lines = input_box_rows(agent, screen)?;
     while lines.last().is_some_and(|line| line.is_empty()) {
         lines.pop();
@@ -29,7 +29,7 @@ pub(super) fn input_box_rows(agent: Agent, screen: &str) -> Option<Vec<String>> 
     match agent {
         Agent::Claude => claude_input(screen),
         Agent::Grok => grok_composer(screen),
-        Agent::Codex => None,
+        Agent::Codex => codex_composer(screen),
     }
 }
 
@@ -47,6 +47,71 @@ fn box_rows<'a>(rows: impl Iterator<Item = &'a str>) -> Vec<String> {
         .collect()
 }
 
+/// Codex has no composer border. Its last visible row is a measured status footer, separated
+/// from the composer by one blank row. Unknown footer shapes hold delivery instead of guessing
+/// where a draft ends; empty lines inside the composer remain text.
+fn codex_composer(screen: &str) -> Option<Vec<String>> {
+    let rows: Vec<&str> = screen.lines().map(str::trim_end).collect();
+    let footer = rows.iter().rposition(|row| !row.trim().is_empty())?;
+    if !codex_footer(rows[footer].trim()) || footer < 2 || !rows[footer - 1].trim().is_empty() {
+        return None;
+    }
+    let start = rows[..footer - 1]
+        .iter()
+        .rposition(|row| row.starts_with('›'))?;
+    let mut composer = rows[start..footer - 1]
+        .iter()
+        .map(|row| row.trim().to_string())
+        .collect::<Vec<_>>();
+    composer[0] = composer[0].trim_start_matches('›').trim().to_string();
+    Some(composer)
+}
+
+fn codex_footer(row: &str) -> bool {
+    let body = if let Some((body, warning)) = row.rsplit_once('⚠') {
+        let warning = warning.trim();
+        let count = warning
+            .strip_suffix(" warning · f2 to view")
+            .filter(|count| count.trim() == "1")
+            .or_else(|| {
+                warning
+                    .strip_suffix(" warnings · f2 to view")
+                    .filter(|count| count.trim().parse::<u32>().is_ok_and(|count| count > 1))
+            });
+        if count.is_none() {
+            return false;
+        }
+        let body = body.trim_end();
+        // A live spinner can remain between the directory and its warnings while startup settles.
+        match body.rsplit_once(" · ") {
+            Some((body, spinner))
+                if !spinner.is_empty()
+                    && spinner
+                        .chars()
+                        .all(|c| ('\u{2800}'..='\u{28ff}').contains(&c)) =>
+            {
+                body
+            }
+            _ => body,
+        }
+    } else {
+        row
+    };
+    let model_directory = body.strip_suffix(" · ← for agents").unwrap_or(body);
+    if let Some((model, directory)) = model_directory.split_once(" · ") {
+        if model.split_whitespace().count() >= 2
+            && !directory.contains(" · ")
+            && std::path::Path::new(directory).is_absolute()
+        {
+            return true;
+        }
+    }
+    let Some(percent) = body.strip_suffix("% context left") else {
+        return false;
+    };
+    percent.parse::<u8>().is_ok_and(|percent| percent <= 100)
+}
+
 /// The rows of Grok Build's composer: those of the last box drawn with `╭─╮` and `╰─╯`, each
 /// between its `│` borders, the first starting with `❯`.
 fn grok_composer(screen: &str) -> Option<Vec<String>> {
@@ -54,7 +119,11 @@ fn grok_composer(screen: &str) -> Option<Vec<String>> {
     let top = rows.iter().rposition(|row| {
         row.strip_prefix('\u{256D}')
             .and_then(|row| row.strip_suffix('\u{256E}'))
-            .is_some_and(|rule| rule.chars().count() >= 20 && rule.chars().all(|c| c == '\u{2500}'))
+            .is_some_and(|rule| {
+                let rule = rule.replace("Stashed", "");
+                rule.chars().filter(|c| *c == '\u{2500}').count() >= 20
+                    && rule.chars().all(|c| c == '\u{2500}' || c.is_whitespace())
+            })
     })?;
     let bottom = top
         + 1
@@ -189,6 +258,83 @@ mod tests {
         );
         assert_eq!(
             input_box(Agent::Claude, "Not Claude Code\n> prompt\n"),
+            None
+        );
+    }
+
+    #[test]
+    fn codex_reads_the_whole_composer_including_empty_leading_rows() {
+        let read = |bytes: &[u8]| {
+            let mut screen = crate::terminal_snapshot::TerminalSnapshot::new(45, 140);
+            screen.process(bytes);
+            input_box(Agent::Codex, &screen.visible_text_undimmed())
+        };
+        assert_eq!(
+            read(include_bytes!("../../testdata/codex_fresh_empty.bin")).as_deref(),
+            Some("")
+        );
+        assert_eq!(
+            read(include_bytes!("../../testdata/codex_hooked_empty.bin")).as_deref(),
+            Some("")
+        );
+        assert_eq!(
+            read(include_bytes!("../../testdata/codex_fresh_draft.bin")).as_deref(),
+            Some("FRESH_DRAFT_ONE\nFRESH_DRAFT_TWO")
+        );
+        assert_eq!(
+            read(include_bytes!("../../testdata/codex_blank_first_draft.bin")).as_deref(),
+            Some("\nFRESH_BLANK_FIRST_ROW\nLAST_DRAFT_ROW")
+        );
+        assert_eq!(
+            read(include_bytes!(
+                "../../testdata/codex_blank_first_no_status_draft.bin"
+            ))
+            .as_deref(),
+            Some("\n\n\nFRESH_BLANK_FIRST_ROW\nLAST_DRAFT_ROW")
+        );
+        assert_eq!(read(b"unrecognised screen"), None);
+    }
+
+    #[test]
+    fn a_status_like_draft_row_does_not_end_codex_s_composer() {
+        let screen = "›\n\n  100% context left\n\n  99% context left\n";
+        assert_eq!(
+            input_box(Agent::Codex, screen).as_deref(),
+            Some("\n\n100% context left")
+        );
+        assert_eq!(
+            input_box(
+                Agent::Codex,
+                "›\n\n  100% context left\n\n  unknown footer\n"
+            ),
+            None
+        );
+        assert_eq!(
+            input_box(Agent::Codex, "›\n  100% context left\n"),
+            None,
+            "a separator row is required"
+        );
+        assert_eq!(
+            input_box(
+                Agent::Codex,
+                "›\n\n  probe default · /tmp/project            ⚠ 1 warning · f2 to view\n"
+            )
+            .as_deref(),
+            Some("")
+        );
+        assert_eq!(
+            input_box(
+                Agent::Codex,
+                "›\n\n  100% context left  ⚠ 1 warning · f2 to view\n"
+            )
+            .as_deref(),
+            Some("")
+        );
+        assert_eq!(
+            input_box(
+                Agent::Codex,
+                "›\n\n  100% context left  ⚠ 0 warnings · f2 to view\n"
+            ),
             None
         );
     }

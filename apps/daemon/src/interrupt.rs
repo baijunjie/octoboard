@@ -279,7 +279,8 @@ fn judge(state: &Arc<AppState>, session: &Session) -> Result<Option<Arc<LiveSess
         Some(WriteHold::AgentDialog(_) | WriteHold::AgentAction) => return Err(waiting(id)),
         Some(WriteHold::Handoff | WriteHold::SharingChange) => return Err(busy(id)),
         // A session held only for these is at its prompt or in a turn like any other.
-        Some(WriteHold::AgentError | WriteHold::UnsentMessage) | None => {}
+        Some(WriteHold::AgentError | WriteHold::UnsentMessage | WriteHold::SubmissionUncertain)
+        | None => {}
     }
     // A trust screen a failed press or a cursor key left up keeps its hand raised after the write
     // hold has let go of it.
@@ -396,7 +397,11 @@ fn press(state: &Arc<AppState>, live: &Arc<LiveSession>) -> Result<Pressed> {
     // The turn's end is told by this count moving on rather than by the status, which a message
     // the agent had queued can take back to `Working` within milliseconds of the cancel.
     let ends = state.turn_ends(&live.id);
-    let mut input_before = input_box(agent, &live.screen_text_undimmed());
+    // Codex does not restore the prompt after a cancel. Its composer is read for delivery only;
+    // treating an empty screen as permission to clear here could erase a user's pending edit.
+    let mut input_before = (agent != Agent::Codex)
+        .then(|| input_box(agent, &live.screen_text_undimmed()))
+        .flatten();
     let stops = live.title_activity().stops();
     // Paused while keys may still go in, so no message of Octoboard's joins what the agent puts
     // back in its box; let go, and the queue flushed, when this returns.
@@ -602,7 +607,7 @@ fn left_in_input_box(live: &LiveSession) -> Restored {
     }
 }
 
-mod input_box;
+pub(crate) mod input_box;
 
 #[cfg(test)]
 mod tests;

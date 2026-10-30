@@ -212,6 +212,14 @@ pub fn write_message(
         Drain::Diverted(diverted) if diverted == ticket => Ok(Delivery::Unsent),
         Drain::Diverted(diverted) if diverted < ticket => Ok(Delivery::Queued),
         Drain::Diverted(_) => Ok(Delivery::Written),
+        Drain::Uncertain(uncertain) if uncertain < ticket => Ok(Delivery::Queued),
+        Drain::Uncertain(uncertain) if uncertain > ticket => Ok(Delivery::Written),
+        Drain::Uncertain(_) => Err(crate::codex_transport::UncertainSubmission(
+            "the native message queue did not confirm acceptance; the message may already be \
+             queued and will not be sent again, so check the conversation before retrying"
+                .into(),
+        )
+        .into()),
         Drain::Lost => Err(CodedError::raised(
             error_code::QUEUED_MESSAGES_LOST,
             lost_message(),
@@ -911,9 +919,9 @@ pub async fn write_message_off_runtime(
 /// The session is credited with having reported before delivery, even if its owner cannot take the
 /// message yet, so its stop does not also produce a synthesised report. The credit is given after
 /// the session's queued hooks, whose turn start would otherwise reset it, and is taken back
-/// whenever delivery failed, so the owner gets a synthesised report instead of neither. A failure
-/// after the owner already has the report would make that a duplicate, which is the better way
-/// round.
+/// when delivery definitely failed, so the owner gets a synthesised report instead of neither.
+/// An uncertain native submission keeps its credit: synthesising another report could duplicate
+/// one the native queue already accepted.
 pub async fn deliver_own_report(
     state: &Arc<AppState>,
     session_id: &str,
@@ -943,7 +951,11 @@ pub async fn deliver_own_report(
         .map_err(anyhow::Error::from)
         .and_then(|delivered| delivered)
     };
-    let (note, archived, delivery) = delivered.inspect_err(|_| state.clear_reported(session_id))?;
+    let (note, archived, delivery) = delivered.inspect_err(|error| {
+        if !error.is::<crate::codex_transport::UncertainSubmission>() {
+            state.clear_reported(session_id);
+        }
+    })?;
     cleanup::remove_in_background(state, archived);
     Ok((note, delivery))
 }
@@ -2165,5 +2177,94 @@ mod tests {
         // A single long word still has to be cut, and on a character boundary.
         let unbroken = title_from_goal(&"日".repeat(80));
         assert_eq!(unbroken.chars().count(), 49);
+    }
+    #[tokio::test]
+    async fn uncertain_native_report_keeps_credit_and_is_not_synthesised_again() {
+        use tokio_tungstenite::tungstenite::{accept, Message};
+        let (state, _dir) = crate::test_support::app_state("reporting-native-uncertain");
+        state.store.insert_console(&console()).unwrap();
+        let hub = Session {
+            id: "hub".into(),
+            role: Role::Console,
+            bound_to: None,
+            agent: Agent::Codex,
+            ..project_session("hub")
+        };
+        state.store.insert_session(&hub).unwrap();
+        let mut worker = project_session("worker");
+        worker.id = "worker".into();
+        worker.bound_to = Some("hub".into());
+        state.store.insert_session(&worker).unwrap();
+        let (transport, listener) = crate::codex_transport::test_transport();
+        let live = crate::test_support::fake_live_session("hub", Agent::Codex, 120, 40, "sleep 30")
+            .with_codex_transport(transport);
+        state.register_live(live.clone());
+        state.turn_started("worker", Some("work"));
+        let server = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let mut socket = accept(stream).unwrap();
+            loop {
+                let request: serde_json::Value =
+                    serde_json::from_str(&socket.read().unwrap().into_text().unwrap()).unwrap();
+                match request["method"].as_str().unwrap() {
+                    "initialize" => socket
+                        .send(Message::Text(
+                            serde_json::json!({
+                                "id":request["id"], "result":{},
+                            })
+                            .to_string(),
+                        ))
+                        .unwrap(),
+                    "initialized" => {}
+                    "thread/loaded/list" => socket
+                        .send(Message::Text(
+                            serde_json::json!({
+                                "id":request["id"], "result":{"data":["thread"],"nextCursor":null},
+                            })
+                            .to_string(),
+                        ))
+                        .unwrap(),
+                    "thread/queue/add" => {
+                        assert!(request["params"]["input"][0]["text"]
+                            .as_str()
+                            .unwrap()
+                            .contains("summary"));
+                        socket.close(None).unwrap();
+                        break;
+                    }
+                    other => panic!("unexpected request: {other}"),
+                }
+            }
+        });
+        let error = deliver_own_report(
+            &state,
+            "worker",
+            "summary".into(),
+            ReportStatus::Done,
+            vec![],
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            error.is::<crate::codex_transport::UncertainSubmission>(),
+            "{error:#}"
+        );
+        assert_eq!(
+            state.close_turn("worker", false),
+            crate::state::TurnClose::Reported
+        );
+        assert_eq!(
+            state.store.get_session("worker").unwrap().unwrap().status,
+            SessionStatus::Idle
+        );
+        assert_eq!(
+            state.write_hold("hub"),
+            Some(crate::state::WriteHold::SubmissionUncertain)
+        );
+        assert_eq!(state.queued_count("hub"), 0);
+        server.join().unwrap();
     }
 }

@@ -1345,10 +1345,18 @@ fn write_hold_explanation(hold: WriteHold) -> &'static str {
              configuration, and is resumed on its conversation afterwards. Messages for it are \
              queued and written into the resumed process."
         }
+        WriteHold::SubmissionUncertain => {
+            "Its native message queue did not confirm accepting a message. That message may already \
+             be queued and will not be sent again. Later messages are held for at most three \
+             seconds, or until the agent reports another submitted prompt. Check the conversation before retrying manually; its input \
+             box still contains the user's own draft."
+        }
         WriteHold::UnsentMessage => {
-            "A message written into it was not sent by its agent and is waiting in its input box; \
-             the user has been told. Nothing more is written into it until a prompt is sent \
-             there, and messages for it are queued until then. Do not send it again."
+            "A message written into it has not been confirmed sent; the user has been told. \
+             After a three-second grace period its submit key is retried once, without repeating \
+             the message text, unless a prompt was already submitted. Later messages wait for that \
+             attempt or a submitted prompt; dialogs and trust confirmations must be answered first. \
+             Do not send the message text again."
         }
     }
 }

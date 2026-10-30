@@ -1,5 +1,6 @@
 //! The HTTP and WebSocket surface described in `apps/daemon/PROTOCOL.md`, bound to localhost only.
 
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
@@ -375,6 +376,7 @@ async fn term_ws(
 }
 
 /// What a terminal socket is attached to: an agent session's process, or a shell terminal's.
+#[derive(Clone)]
 enum Terminal {
     Session(Arc<LiveSession>),
     Shell(Arc<ShellProcess>),
@@ -390,10 +392,116 @@ impl Terminal {
 
     fn write_input(&self, data: &[u8]) -> Result<(), crate::ptyio::PartialWrite> {
         match self {
-            Terminal::Session(session) => session.write_input(data),
+            Terminal::Session(session) => session.write_terminal_input(data),
             Terminal::Shell(shell) => shell.write(data),
         }
     }
+    fn write_reply(&self, data: &[u8]) -> Result<(), crate::ptyio::PartialWrite> {
+        match self {
+            Terminal::Session(session) => session.write_terminal_reply(data),
+            Terminal::Shell(shell) => shell.write(data),
+        }
+    }
+}
+
+/// Retains whole user frames when a draft transaction temporarily stops accepting keys.
+/// Query replies bypass this queue while the socket is readable. Beyond the connection's byte
+/// budget, socket backpressure bounds memory until the CLI accepts more input.
+#[derive(Default)]
+struct DeferredInput {
+    frames: VecDeque<Vec<u8>>,
+    bytes: usize,
+    replies: VecDeque<Vec<u8>>,
+}
+
+#[derive(Debug)]
+enum InputFrame {
+    User(Vec<u8>),
+    Reply(Vec<u8>),
+}
+
+impl InputFrame {
+    fn len(&self) -> usize {
+        match self {
+            Self::User(data) | Self::Reply(data) => data.len(),
+        }
+    }
+}
+
+impl DeferredInput {
+    fn push(&mut self, data: Vec<u8>) {
+        self.enqueue(InputFrame::User(data));
+    }
+
+    fn push_reply(&mut self, data: Vec<u8>) {
+        self.enqueue(InputFrame::Reply(data));
+    }
+
+    fn enqueue(&mut self, frame: InputFrame) {
+        let (data, queue) = match frame {
+            InputFrame::User(data) => (data, &mut self.frames),
+            InputFrame::Reply(data) => (data, &mut self.replies),
+        };
+        if data.is_empty() {
+            return;
+        }
+        self.bytes += data.len();
+        // Small websocket frames are consecutive bytes to the terminal. Coalescing bounds queue
+        // overhead too, including replies waiting behind an atomic paste write.
+        if let Some(last) = queue.back_mut() {
+            if last.len().saturating_add(data.len()) <= 64 * 1024 {
+                last.extend_from_slice(&data);
+                return;
+            }
+        }
+        queue.push_back(data);
+    }
+
+    fn next(&mut self, user_ready: bool) -> Option<InputFrame> {
+        self.replies.pop_front().map(InputFrame::Reply).or_else(|| {
+            user_ready
+                .then(|| self.frames.pop_front())
+                .flatten()
+                .map(InputFrame::User)
+        })
+    }
+
+    /// Bytes stay charged while a blocking task owns them. Only a definite zero-byte refusal
+    /// returns a user frame to the queue; a partial write must never be retried as a whole.
+    fn complete(
+        &mut self,
+        frame: InputFrame,
+        result: Result<(), crate::ptyio::PartialWrite>,
+    ) -> Result<bool, crate::ptyio::PartialWrite> {
+        match (frame, result) {
+            (InputFrame::User(data), Err(error))
+                if error.written == 0 && error.error.kind() == std::io::ErrorKind::WouldBlock =>
+            {
+                self.frames.push_front(data);
+                Ok(false)
+            }
+            (InputFrame::User(_), Err(error)) => Err(error),
+            (frame, result) => {
+                self.bytes -= frame.len();
+                if let Err(error) = result {
+                    tracing::debug!(%error, "writing a query reply failed");
+                }
+                Ok(true)
+            }
+        }
+    }
+}
+
+type InputWrite = (InputFrame, Result<(), crate::ptyio::PartialWrite>);
+
+fn start_input_write(terminal: Terminal, frame: InputFrame) -> tokio::task::JoinHandle<InputWrite> {
+    tokio::task::spawn_blocking(move || {
+        let result = match &frame {
+            InputFrame::User(data) => terminal.write_input(data),
+            InputFrame::Reply(data) => terminal.write_reply(data),
+        };
+        (frame, result)
+    })
 }
 
 async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, id: String) {
@@ -456,14 +564,23 @@ async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, id: String) {
         let _ = socket.send(Message::Close(None)).await;
         return;
     };
+    let mut deferred = DeferredInput::default();
+    let mut retry = tokio::time::interval(std::time::Duration::from_millis(25));
+    retry.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut writing: Option<tokio::task::JoinHandle<InputWrite>> = None;
+    let mut user_ready = true;
+    let mut failure = None;
     loop {
+        if writing.is_none() {
+            if let Some(frame) = deferred.next(user_ready) {
+                writing = Some(start_input_write(terminal.clone(), frame));
+            }
+        }
         tokio::select! {
-            incoming = socket.recv() => {
+            incoming = socket.recv(), if deferred.bytes < 64 * 1024 * 1024 => {
                 match incoming {
                     Some(Ok(Message::Binary(data))) => {
-                        if let Err(err) = terminal.write_input(&data) {
-                            tracing::debug!(terminal = %id, %err, "writing terminal input failed");
-                        }
+                        deferred.push(data);
                     }
                     Some(Ok(Message::Text(text))) => {
                         match serde_json::from_str::<TermControl>(&text) {
@@ -476,9 +593,7 @@ async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, id: String) {
                                 if !pty.admit_reply(client, offset) {
                                     continue;
                                 }
-                                if let Err(err) = terminal.write_input(data.as_bytes()) {
-                                    tracing::debug!(terminal = %id, %err, "writing a query reply failed");
-                                }
+                                deferred.push_reply(data.into_bytes());
                             }
                             Err(err) => tracing::debug!(terminal = %id, %err, "unreadable terminal control frame"),
                         }
@@ -487,6 +602,28 @@ async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, id: String) {
                     Some(Ok(_)) => {}
                     Some(Err(err)) => {
                         tracing::debug!(terminal = %id, %err, "terminal socket error");
+                        break;
+                    }
+                }
+            }
+            _ = retry.tick(), if !user_ready && !deferred.frames.is_empty() => {
+                user_ready = true;
+            }
+            completed = async { writing.as_mut().expect("an active input write").await }, if writing.is_some() => {
+                writing = None;
+                let result = match completed {
+                    Ok((frame, result)) => deferred.complete(frame, result),
+                    Err(error) => Err(crate::ptyio::PartialWrite {
+                        written: 0,
+                        error: std::io::Error::other(format!("the terminal input task failed: {error}")),
+                    }),
+                };
+                match result {
+                    Ok(ready) => {
+                        if !ready { user_ready = false; }
+                    }
+                    Err(error) => {
+                        failure = Some(error.to_string());
                         break;
                     }
                 }
@@ -504,6 +641,27 @@ async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, id: String) {
                 }
             }
         }
+    }
+    // Closing the subscriber releases a reader blocked on delivery while its last write settles.
+    // A blocking PTY write cannot be cancelled after bytes may have reached the child.
+    drop(live);
+    if let Some(writing) = writing {
+        match writing.await {
+            Ok((frame, result)) => {
+                if let Err(error) = deferred.complete(frame, result) {
+                    failure = Some(error.to_string());
+                }
+            }
+            Err(error) => failure = Some(error.to_string()),
+        }
+    }
+    if failure.is_some() || !deferred.frames.is_empty() {
+        let detail = failure
+            .map(|error| format!(": {error}"))
+            .unwrap_or_default();
+        state.broadcast(Event::from_error(None, &anyhow::anyhow!(
+            "Terminal input for {id} was not fully accepted before the terminal disconnected{detail}; check the draft before continuing."
+        )));
     }
 }
 
@@ -702,7 +860,7 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
                         // the agent reads as working by the time the outbox sees the count move.
                         if prompt_sent {
                             if let Some(live) = state.live_session(session_id) {
-                                live.note_prompt_sent();
+                                live.note_prompt_sent(hooks::submitted_prompt(agent, &payload));
                             }
                         }
                         // Releasing a message queued while the session could not take one writes
@@ -979,6 +1137,133 @@ mod tests {
     use crate::outbox::Drain;
     use crate::state::WriteHold;
     use crate::test_support::{app_state, PATIENCE};
+
+    #[test]
+    fn deferred_user_input_retries_in_order_without_repeating_accepted_frames() {
+        let mut pending = DeferredInput::default();
+        pending.push(b"first".to_vec());
+        let first = pending.next(true).unwrap();
+        assert_eq!(pending.bytes, 5, "in-flight input remains charged");
+        pending.push(b"second".to_vec());
+        pending.complete(first, Ok(())).unwrap();
+        let second = pending.next(true).unwrap();
+        pending
+            .complete(
+                second,
+                Err(crate::ptyio::PartialWrite {
+                    written: 0,
+                    error: std::io::Error::from(std::io::ErrorKind::WouldBlock),
+                }),
+            )
+            .unwrap();
+        pending.push(b"third".to_vec());
+        assert!(
+            pending.next(false).is_none(),
+            "refused user input waits for the retry tick"
+        );
+        pending.push_reply(b"reply".to_vec());
+        let reply = pending.next(false).unwrap();
+        assert!(matches!(&reply, InputFrame::Reply(data) if data == b"reply"));
+        pending.complete(reply, Ok(())).unwrap();
+        let second = pending.next(true).unwrap();
+        assert!(matches!(&second, InputFrame::User(data) if data == b"secondthird"));
+        pending.complete(second, Ok(())).unwrap();
+        assert!(pending.frames.is_empty());
+        assert_eq!(pending.bytes, 0);
+    }
+
+    #[test]
+    fn deferred_small_frames_have_bounded_overhead() {
+        let mut pending = DeferredInput::default();
+        for _ in 0..100_000 {
+            pending.push(Vec::new());
+            pending.push(b"x".to_vec());
+        }
+        assert_eq!(pending.bytes, 100_000);
+        assert_eq!(pending.frames.len(), 2);
+        assert_eq!(
+            pending.frames.iter().map(Vec::len).sum::<usize>(),
+            pending.bytes
+        );
+    }
+
+    #[test]
+    fn deferred_user_input_stops_on_partial_failure() {
+        let mut pending = DeferredInput::default();
+        pending.push(b"first".to_vec());
+        let first = pending.next(true).unwrap();
+        pending.push(b"second".to_vec());
+        let error = pending
+            .complete(
+                first,
+                Err(crate::ptyio::PartialWrite {
+                    written: 2,
+                    error: std::io::Error::from(std::io::ErrorKind::BrokenPipe),
+                }),
+            )
+            .unwrap_err();
+        assert_eq!(error.written, 2);
+        assert_eq!(pending.frames.len(), 1);
+        assert_eq!(
+            pending.frames.front().unwrap(),
+            b"second",
+            "the partially accepted first frame is never put back"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_terminal_write_keeps_draining_echo_while_the_input_is_in_flight() {
+        use tokio_tungstenite::tungstenite::Message as Frame;
+
+        let (state, dir) = app_state("server-input-echo");
+        let live = crate::test_support::fake_live_session(
+            "echo",
+            Agent::Claude,
+            80,
+            24,
+            "stty raw -echo; printf READY; cat",
+        );
+        crate::session::spawn_reader_thread(live.clone(), 8 * 1024);
+        state.register_live(live.clone());
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let served = state.clone();
+        let server = tokio::spawn(async move { axum::serve(listener, router(served)).await });
+        let (mut socket, _) =
+            tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/ws/term/echo"))
+                .await
+                .unwrap();
+        let mut ready = Vec::new();
+        while !ready.windows(5).any(|text| text == b"READY") {
+            if let Some(Ok(Frame::Binary(data))) =
+                tokio::time::timeout(PATIENCE, socket.next()).await.unwrap()
+            {
+                ready.extend_from_slice(&data);
+            }
+        }
+        // One frame exceeds both the PTY and subscriber queues, so writing it synchronously
+        // prevents the echo from draining and times out even though the child is healthy.
+        let payload = vec![b'x'; 4 * 1024 * 1024];
+        socket.send(Frame::Binary(payload.clone())).await.unwrap();
+        let echoed = tokio::time::timeout(PATIENCE, async {
+            let mut echoed = Vec::with_capacity(payload.len());
+            while echoed.len() < payload.len() {
+                match socket.next().await {
+                    Some(Ok(Frame::Binary(data))) => echoed.extend_from_slice(&data),
+                    Some(Ok(Frame::Text(_))) => {}
+                    other => panic!("input stopped before its echo completed: {other:?}"),
+                }
+            }
+            echoed
+        })
+        .await
+        .expect("the write and its echo make progress together");
+        assert_eq!(echoed, payload);
+        socket.close(None).await.unwrap();
+        server.abort();
+        let _ = server.await;
+        drop((live, dir));
+    }
 
     /// A sink that records what it is sent, or — `stalled` — never takes anything.
     struct RecordingSink {

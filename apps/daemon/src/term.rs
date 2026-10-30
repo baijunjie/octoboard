@@ -2,6 +2,7 @@
 
 mod image_path;
 mod invisible;
+mod stash;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -191,29 +192,47 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         mcp_token: &mcp_token,
     };
     let plan = adapter.plan(&spec)?;
+    let native_stash = stash::supported(agent, &spec, &plan);
 
     let binary = binary?;
 
-    let mut cmd = CommandBuilder::new(&binary);
-    cmd.args(&plan.args);
-    cmd.env_clear();
-    for (key, value) in &shell_env {
-        cmd.env(key, value);
-    }
-    for (key, value) in &plan.env {
-        cmd.env(key, value);
-    }
-    // A project session's git reports the branches it creates. A console session works in a
-    // directory of Octoboard's own and has no project a branch could be attributed in.
+    let mut environment = shell_env.clone();
+    environment.extend(plan.env.iter().cloned());
     if role == Role::Project {
-        let report =
-            branch_origin::git_hooks::session_env(&shell_env, &self_exe, session_id, daemon_port);
-        for (key, value) in report {
-            cmd.env(key, value);
-        }
+        environment.extend(branch_origin::git_hooks::session_env(
+            &shell_env,
+            &self_exe,
+            session_id,
+            daemon_port,
+        ));
     }
-    cmd.env(crate::process_ledger::TAG_VARIABLE, process_tag.value());
-    cmd.env("TERM", pty::TERM);
+    environment.insert(
+        crate::process_ledger::TAG_VARIABLE.to_string(),
+        process_tag.value(),
+    );
+    environment.insert("TERM".to_string(), pty::TERM.to_string());
+    let codex_transport = plan
+        .codex_server
+        .as_ref()
+        .map(|private| {
+            crate::codex_transport::CodexTransport::start(&binary, private, &environment, cwd)
+                .map(Arc::new)
+        })
+        .transpose()?;
+    let args = match (&plan.codex_server, &codex_transport) {
+        (Some(private), Some(transport)) => {
+            let mut args = private.tui_args.clone();
+            args.extend(["--remote".to_string(), transport.endpoint()]);
+            args
+        }
+        _ => plan.args.clone(),
+    };
+    let mut cmd = CommandBuilder::new(&binary);
+    cmd.args(&args);
+    cmd.env_clear();
+    for (key, value) in &environment {
+        cmd.env(key, value);
+    }
     cmd.cwd(cwd);
 
     let spawned = pty::spawn(cmd, pty::INITIAL_ROWS, pty::INITIAL_COLS)
@@ -230,13 +249,33 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         agent,
         launch_id: process_tag.launch_id().to_string(),
         spawned,
+        checks_composer: true,
+        codex_transport: codex_transport.clone(),
         scratch_dir: Some(scratch),
         resolves_approvals_itself: plan.resolves_approvals_itself,
         carried_trust: plan.carried_trust,
-        before_scratch_removal: plan
-            .shared_config_writeback
-            .map(|writeback| Box::new(move || writeback.publish()) as Box<dyn FnOnce() + Send>),
+        before_scratch_removal: {
+            let writeback = plan.shared_config_writeback;
+            codex_transport
+                .is_some()
+                .then_some(())
+                .or(writeback.as_ref().map(|_| ()))
+                .map(|_| {
+                    Box::new(move || {
+                        if let Some(transport) = codex_transport {
+                            transport.stop();
+                        }
+                        if let Some(writeback) = writeback {
+                            writeback.publish();
+                        }
+                    }) as Box<dyn FnOnce() + Send>
+                })
+        },
     }));
+    live.enable_native_stash(native_stash);
+    if let Some(prompt) = task.as_deref().and_then(launch_prompt) {
+        live.note_launch_prompt(prompt);
+    }
     session::spawn_reader_thread(live.clone(), pty::READ_BUF);
 
     Ok(Launch {
@@ -262,26 +301,60 @@ pub const FRAGMENT_HAZARD: &str = concat!(
      together with it, so check the session before sending anything else."
 );
 
-/// Writes a message into a running session as bracketed paste + Enter.
+#[cfg(test)]
+pub fn send_message(session: &LiveSession, text: &str) -> Result<(), crate::ptyio::PartialWrite> {
+    send_message_with_id(session, text, &Uuid::new_v4().to_string(), false)
+}
+
+/// Submits a message through Codex's private RPC connection or checked bracketed paste + Enter.
 ///
-/// A failure's `written` counts bytes of the **framed** buffer, not of `text`, so `written == 0` is
+/// On the PTY path, a failure's `written` counts bytes of the **framed** buffer, not `text`, so zero is
 /// the one case where nothing of the message reached the session. Any other count may have left an
 /// unterminated paste in the input line, or — for a count short of the paste introducer — a
 /// truncated escape sequence; either way the message may not be written again.
 ///
-/// The caller is responsible for the gate: nothing may be written while a modal dialog is up,
+/// A native RPC acceptance failure carries `UncertainSubmission`; no terminal input is written.
+/// The input write checks for an empty, acknowledged composer or saves and restores the draft
+/// through a supported native stash. Preservation has a bounded grace period; after expiry,
+/// delivery may include unfinished user input and retained keys are released into the current editor.
+/// The caller also holds messages while a modal dialog is up,
 /// because the paste is discarded but the trailing Enter confirms whatever option is highlighted —
 /// at Claude Code's trust dialog that exits the session, and at Grok's approval modal it selects
 /// always-approve. Writing mid-turn is safe and is the better path: every agent queues the message
 /// itself and consumes it when the turn ends.
-pub fn send_message(session: &LiveSession, text: &str) -> Result<(), crate::ptyio::PartialWrite> {
-    session.write_input(&frame_message(session.agent, text))
+pub fn send_message_with_id(
+    session: &LiveSession,
+    text: &str,
+    logical_id: &str,
+    allow_mixed: bool,
+) -> Result<(), crate::ptyio::PartialWrite> {
+    if let Some(transport) = &session.codex_transport {
+        if session.is_frozen()
+            || session.trust.holds_writes()
+            || session.look_for_dialog().current.is_some()
+        {
+            return Err(crate::ptyio::PartialWrite {
+                written: 0,
+                error: std::io::Error::new(
+                    std::io::ErrorKind::WouldBlock,
+                    "the Codex session is not accepting automatic messages",
+                ),
+            });
+        }
+        return transport.send(&shaped(text), logical_id);
+    }
+    let framed = frame_message(session.agent, text);
+    let prompt = std::str::from_utf8(
+        &framed[PASTE_START.len()..framed.len() - PASTE_END.len() - SUBMIT.len()],
+    )
+    .expect("framed UTF-8 prompt");
+    session.write_message_input(&framed, prompt, allow_mixed)
 }
 
-/// Shapes a message into the bracketed-paste buffer `send_message` writes: see [`shaped`], then
+/// Shapes a message into the bracketed-paste buffer `send_message_with_id` writes: see [`shaped`], then
 /// whatever the receiving agent needs on top, then frame. Pulled out as a pure function so the
 /// ordering — both strips before the slash guard, not after — is something a test can pin
-/// directly, rather than re-deriving it from a copy of this logic; `send_message` itself needs a
+/// directly, rather than re-deriving it from a copy of this logic; the send path itself needs a
 /// `LiveSession` and a PTY, which is why it is not tested directly.
 pub(crate) fn frame_message(agent: Agent, text: &str) -> Vec<u8> {
     let text = shaped(text);

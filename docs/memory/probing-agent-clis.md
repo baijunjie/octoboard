@@ -35,6 +35,15 @@ the login shell resolves (`$SHELL -l -i -c 'command -v <cli>'`), since that is t
 not be the newest. Write the version into every finding that goes into `docs/agent-cli-reference.md`, and when the
 installs disagree, measure both and record the older behaviour as its own case rather than generalising from either.
 
+## Verify a capability with the launch overrides Octoboard actually passes
+
+Before choosing a CLI capability for Octoboard, reproduce its adapter's launch arguments and injection in the isolated
+probe, including hook, MCP and instruction overrides even when the capability does not use them. Those overrides can
+select a different runtime, so success in a bare CLI launch is only a control, not proof that Octoboard can use it.
+The injection is described in `docs/product/per-agent-launch-specifics.md`'s "How each agent is given the injection"
+section; measured message-delivery constraints are in `docs/agent-cli-reference.md`'s "Writing into a running session"
+section.
+
 ## `--help` is not the authority on what a CLI supports
 
 Whole feature surfaces are missing from it. Claude Code's hook-event list does not appear in `--help` at all and has

@@ -20,7 +20,7 @@ conversation, so the owner has not read it, the user has been told, and it must 
 written but not sent" and "A message a dialog discarded or a view took" in `docs/product/message-delivery.md`). The
 note calls the owner a console session or a project session according to which it is.
 
-Reporting fails, and leaves the session exactly as it was, when:
+Reporting is refused, or fails without accepting the report, when:
 
 - the session is independent, so there is nobody to report to;
 - its owner is no longer on record;
@@ -41,6 +41,12 @@ Reporting fails, and leaves the session exactly as it was, when:
 - the session is a coordinator with a parent, the report has `status: done` and no open items, and a session bound to it
   is not archived, unless a lock blocks automatic archiving (see "Automatic archiving" below). The reason names those
   sessions. Its other reports go through, and none of them archives it.
+
+If a Codex owner's independent queue may have accepted the report but cannot confirm it, reporting returns an error
+and the reporting session is not archived. The report still counts as that session having reported for the turn:
+Octoboard does not synthesise a second report when it stops, since that could duplicate one already accepted. It does
+not resend the original report automatically. The delivery hold and recovery rules are in
+`docs/product/message-delivery.md`'s "A message whose acceptance is uncertain" section.
 
 ## When a session does not report
 
@@ -173,6 +179,10 @@ synthesised when the turn ends. Nothing archives the session later by itself, an
 again: a later qualifying report or an explicit archive, by its owner or the user, must do so. A report that was only
 queued is different: it archives the session on acceptance, as above, so if it is later written and left unsent, the
 session is already archived, and only the notice the user gets tells anyone.
+
+The one-time automatic submit-key retry in `docs/product/message-delivery.md`'s "A message written but not sent"
+section does not archive a reporting session later by itself either. A report whose independent-queue acceptance is
+uncertain likewise archives nothing, as described above.
 
 Anything else — open items, `failed`, `needs_decision` — leaves the session running and awaiting
 instructions, for its owner to continue with `instruct_session` or to archive explicitly.

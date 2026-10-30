@@ -331,6 +331,8 @@ pub fn account_command_of(
 #[derive(Default)]
 pub struct LaunchPlan {
     pub args: Vec<String>,
+    /// Codex's private server and the client arguments for an explicit remote connection.
+    pub codex_server: Option<codex::PrivateServerPlan>,
     /// Environment entries layered on top of the shell snapshot. The launch sets `TERM` after
     /// these, and in a project session `GIT_CONFIG_*`, `OCTOBOARD_SESSION_ID` and
     /// `OCTOBOARD_DAEMON_PORT` too, so an adapter can neither see nor override their final values.

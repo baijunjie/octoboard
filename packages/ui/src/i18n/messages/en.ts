@@ -139,6 +139,8 @@ export const en = {
   "error.recovery.sharingLostMessages": "The messages were never written to a terminal, and the session may not be running. Resume the session if you still need it, and send the messages again.",
   "error.recovery.lostMessages": "Open the session they were meant for, or the one that took over, and check its terminal. Send again anything that did not arrive.",
   "error.recovery.unsentMessage": "Open the session, check the message waiting in its input box, and press {enter} to send it.",
+  "error.recovery.submitRetry":
+    "Open the session and check the automatic retry first. If the message is still waiting, press {enter} to send it; do not paste it again.",
   "error.recovery.trust": "Open the affected session’s terminal and answer its pending prompt. For folder trust, choose only the project’s folder, then retry.",
   "error.recovery.conversation": "Check the conversation ID and selected account. Resume the existing session when one is named above, or start a new session.",
   "error.recovery.unresumable": "Archive this session if it is not already, delete it, and start a new session to carry on the work.",
@@ -611,6 +613,8 @@ export const en = {
     "{appName} dropped messages held back for a session while its account's sharing changed, because the session was not restarted.",
   "daemon.message_not_sent":
     "{agent} did not send a message {appName} wrote into this session, so it is waiting in the session's input box. {appName} writes nothing more into the session until a prompt is sent.",
+  "daemon.message_not_sent.retry":
+    "{agent} has not confirmed sending a message {appName} wrote into this session. {appName} will try submitting the current input once more, without pasting the message again. Answer any pending dialog first.",
   "daemon.message_discarded_by_dialog":
     "{agent} showed a dialog while {appName} wrote a message into this session and discarded the message. {appName} will write it again once the dialog has been answered.",
   "daemon.message_diverted_by_view":

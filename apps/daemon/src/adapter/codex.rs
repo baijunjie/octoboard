@@ -1,6 +1,7 @@
 //! Codex adapter. Everything is injected through repeated `-c` overrides, which are
-//! per-invocation and persisted nowhere — so the complete set has to be re-passed on every
-//! `codex resume` too.
+//! per-invocation and persisted nowhere. Verified releases run those overrides in a private app
+//! server and explicitly connect the TUI to it. Both receive the overrides: rendering and startup
+//! notices are client-side settings, while hooks and model execution belong to the server.
 //!
 //! `CODEX_HOME` must not be used to *inject* anything: it makes Codex ignore the user's entire
 //! global setup (`~/.codex/AGENTS.md`, model choice, approval policy, skills, plugins), not just add
@@ -53,10 +54,9 @@
 //! Actual action prompts are observed separately from the terminal activity title, since automatic
 //! review does not rule out manual approvals.
 //!
-//! Codex cannot pre-allocate a session id, and in the interactive TUI the thread is created lazily
-//! on the first prompt submission — so a session the user opens without a task has no
-//! `agent_session_id` until they type something. The id then arrives on the `SessionStart` hook
-//! payload, and thread id and session id are the same value.
+//! Codex allocates its own thread ids. A private server exposes its loaded thread before the first
+//! submission, allowing independent messages even while the user is composing the first prompt.
+//! The persisted conversation id still arrives through the hooks; thread id and session id match.
 
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
@@ -93,6 +93,17 @@ const HOOK_EVENTS: &[&str] = &[
 ];
 
 pub struct CodexAdapter;
+
+pub struct PrivateServerPlan {
+    pub args: Vec<String>,
+    pub tui_args: Vec<String>,
+    pub hook_command: String,
+    pub resume_thread: Option<String>,
+}
+
+fn private_server_supported(version: Option<super::AgentVersion>) -> bool {
+    version == Some((0, 163, 0))
+}
 
 /// What the user typed, from one parsed line of a rollout: the `user_message` event of older Codex,
 /// or the `item_completed` event of a `UserMessage` item of newer. The user-role response items
@@ -133,6 +144,31 @@ impl AgentAdapter for CodexAdapter {
 
     fn uses_hook_script(&self) -> bool {
         true
+    }
+
+    fn installed_version(&self, binary: &str) -> Option<super::AgentVersion> {
+        let binary = std::fs::canonicalize(binary).ok()?;
+        for directory in binary.ancestors().skip(1).take(4) {
+            for name in ["codex-package.json", "package.json"] {
+                let Ok(text) = read_regular_text(&directory.join(name), SMALL_FILE_LIMIT) else {
+                    continue;
+                };
+                let value: serde_json::Value = serde_json::from_str(&text).ok()?;
+                if name == "package.json"
+                    && value.get("name").and_then(|value| value.as_str()) != Some("@openai/codex")
+                {
+                    continue;
+                }
+                let mut parts = value.get("version")?.as_str()?.split('.');
+                let version = (
+                    parts.next()?.parse().ok()?,
+                    parts.next()?.parse().ok()?,
+                    parts.next()?.parse().ok()?,
+                );
+                return parts.next().is_none().then_some(version);
+            }
+        }
+        None
     }
 
     /// Codex's title is a list of items joined by ` | `: a spinner, a status such as `[ ! ] Action
@@ -217,6 +253,7 @@ impl AgentAdapter for CodexAdapter {
             })?;
         }
         let mut args = Vec::new();
+        let mut server_args = Vec::new();
 
         // `resume` is a subcommand, so it comes before the overrides.
         if let Some(id) = spec.resume_agent_session_id {
@@ -226,8 +263,8 @@ impl AgentAdapter for CodexAdapter {
 
         let command = spec.hook_script.to_string_lossy().into_owned();
         for event in HOOK_EVENTS {
-            args.push("-c".to_string());
-            args.push(format!(
+            server_args.push("-c".to_string());
+            server_args.push(format!(
                 "hooks.{event}=[{{hooks=[{{type=\"command\",command={},timeout={},async=true}}]}}]",
                 toml_string(&command),
                 HOOK_TIMEOUT_SECS
@@ -237,13 +274,13 @@ impl AgentAdapter for CodexAdapter {
 
         let (mcp_command, mcp_args) = super::mcp_server_command(spec);
         let key = mcp::SERVER_KEY;
-        args.push("-c".to_string());
-        args.push(format!(
+        server_args.push("-c".to_string());
+        server_args.push(format!(
             "mcp_servers.{key}.command={}",
             toml_string(&mcp_command)
         ));
-        args.push("-c".to_string());
-        args.push(format!(
+        server_args.push("-c".to_string());
+        server_args.push(format!(
             "mcp_servers.{key}.args=[{}]",
             mcp_args
                 .iter()
@@ -258,16 +295,16 @@ impl AgentAdapter for CodexAdapter {
         // do — and under an approval policy of `never` it does not even ask, it refuses the call
         // outright without sending it. The key is per server, so nothing else the session may need
         // approval for is widened.
-        args.push("-c".to_string());
-        args.push(format!(
+        server_args.push("-c".to_string());
+        server_args.push(format!(
             "mcp_servers.{key}.default_tools_approval_mode=\"approve\""
         ));
         // Codex abandons a tool call at a limit of its own and sends the server nothing when it
         // does, so a call that outlasts it never returns its result — and a call Octoboard holds
         // for the user (`session_request::ANSWER_TIME_LIMIT`) alone outlasts Codex's default.
         // Hence `super::MCP_TOOL_TIMEOUT_SECS`, where the reasoning for the value is.
-        args.push("-c".to_string());
-        args.push(format!(
+        server_args.push("-c".to_string());
+        server_args.push(format!(
             "mcp_servers.{key}.tool_timeout_sec={}",
             super::MCP_TOOL_TIMEOUT_SECS
         ));
@@ -302,28 +339,28 @@ impl AgentAdapter for CodexAdapter {
                 &taken,
             );
             for server_override in servers.overrides {
-                args.push("-c".to_string());
-                args.push(server_override);
+                server_args.push("-c".to_string());
+                server_args.push(server_override);
             }
             env.extend(servers.env);
         }
 
         // Codex's own update prompt ("Update now / Skip") would otherwise come up before its trust
         // screen, unrecognised and in the way of it. Off for this launch only.
-        args.push("-c".to_string());
-        args.push("check_for_update_on_startup=false".to_string());
+        server_args.push("-c".to_string());
+        server_args.push("check_for_update_on_startup=false".to_string());
 
-        args.push("-c".to_string());
-        args.push(format!("tui.terminal_title={TERMINAL_TITLE}"));
+        server_args.push("-c".to_string());
+        server_args.push(format!("tui.terminal_title={TERMINAL_TITLE}"));
         if spec.resume_agent_session_id.is_some() {
-            args.push("-c".to_string());
-            args.push("tui.resume_cwd=\"current\"".to_string());
+            server_args.push("-c".to_string());
+            server_args.push("tui.resume_cwd=\"current\"".to_string());
         }
-        args.push("-c".to_string());
-        args.push("notice.hide_rate_limit_model_nudge=true".to_string());
+        server_args.push("-c".to_string());
+        server_args.push("notice.hide_rate_limit_model_nudge=true".to_string());
         if let Some(upgrades) = model_migrations(&home) {
-            args.push("-c".to_string());
-            args.push(format!("notice.model_migrations={upgrades}"));
+            server_args.push("-c".to_string());
+            server_args.push(format!("notice.model_migrations={upgrades}"));
         }
 
         let mut instructions = mcp::role::role_description(
@@ -336,8 +373,8 @@ impl AgentAdapter for CodexAdapter {
             instructions.push_str("\n\n");
             instructions.push_str(&claude_compatibility_instructions(spec.shell_env));
         }
-        args.push("-c".to_string());
-        args.push(format!(
+        server_args.push("-c".to_string());
+        server_args.push(format!(
             "developer_instructions={}",
             toml_string(&instructions)
         ));
@@ -347,12 +384,12 @@ impl AgentAdapter for CodexAdapter {
         // task, which Codex takes last. A model that does not advertise the effort is refused by
         // Codex itself, at launch.
         if let Some(model) = spec.model {
-            args.push("-c".to_string());
-            args.push(format!("model={}", toml_string(model)));
+            server_args.push("-c".to_string());
+            server_args.push(format!("model={}", toml_string(model)));
         }
         if let Some(effort) = spec.effort {
-            args.push("-c".to_string());
-            args.push(format!("model_reasoning_effort={}", toml_string(effort)));
+            server_args.push("-c".to_string());
+            server_args.push(format!("model_reasoning_effort={}", toml_string(effort)));
         }
 
         if let Some(reviewer) = spec.approval_reviewer {
@@ -361,9 +398,11 @@ impl AgentAdapter for CodexAdapter {
                 crate::protocol::ApprovalReviewer::AutoReview => "auto_review",
             };
             // Repeated on resume like the other launch overrides; the user's file stays intact.
-            args.push("-c".to_string());
-            args.push(format!("approvals_reviewer={}", toml_string(value)));
+            server_args.push("-c".to_string());
+            server_args.push(format!("approvals_reviewer={}", toml_string(value)));
         }
+
+        args.extend(server_args.iter().cloned());
 
         if spec.resume_agent_session_id.is_none() {
             if let Some(task) = spec.task {
@@ -371,8 +410,18 @@ impl AgentAdapter for CodexAdapter {
             }
         }
 
+        let codex_server =
+            private_server_supported(spec.agent_version).then(|| PrivateServerPlan {
+                args: server_args,
+                // Explicit --remote selects the server even with -c. Omitting the client overrides
+                // would lose its terminal title, resume cwd and startup-notice settings.
+                tui_args: args.clone(),
+                hook_command: command,
+                resume_thread: spec.resume_agent_session_id.map(str::to_string),
+            });
         Ok(LaunchPlan {
             args,
+            codex_server,
             env,
             resolves_approvals_itself: resolves_approvals_itself(spec, &config),
             ..LaunchPlan::default()
@@ -649,6 +698,61 @@ pub(super) fn toml_string(value: &str) -> String {
 mod tests {
     use super::*;
     use crate::adapter::tests::spec_fixture;
+
+    #[test]
+    fn verified_private_server_keeps_client_and_server_overrides() {
+        let mut fixture = spec_fixture();
+        fixture.agent_version = Some((0, 163, 0));
+        fixture.model = Some("probe-model".to_string());
+        fixture.effort = Some("high".to_string());
+        let mut spec = fixture.spec();
+        spec.task = Some("first task");
+        let plan = CodexAdapter.plan(&spec).unwrap();
+        let private = plan.codex_server.as_ref().unwrap();
+        assert_eq!(overrides(&private.args), overrides(&plan.args));
+        assert_eq!(private.tui_args, plan.args);
+        assert_eq!(
+            private.tui_args.last().map(String::as_str),
+            Some("first task")
+        );
+        assert_eq!(private.hook_command, spec.hook_script.to_string_lossy());
+        spec.resume_agent_session_id = Some("thread-to-resume");
+        let resumed = CodexAdapter.plan(&spec).unwrap();
+        let private = resumed.codex_server.unwrap();
+        assert_eq!(private.resume_thread.as_deref(), Some("thread-to-resume"));
+        assert_eq!(private.tui_args, resumed.args);
+        assert_eq!(&private.tui_args[..2], ["resume", "thread-to-resume"]);
+        fixture.agent_version = None;
+        assert!(CodexAdapter
+            .plan(&fixture.spec())
+            .unwrap()
+            .codex_server
+            .is_none());
+        fixture.agent_version = Some((0, 164, 0));
+        assert!(CodexAdapter
+            .plan(&fixture.spec())
+            .unwrap()
+            .codex_server
+            .is_none());
+    }
+
+    #[test]
+    fn standalone_installs_report_the_version_from_the_resolved_package() {
+        let fixture = crate::test_support::ScratchDir::new("codex-installed-version");
+        std::fs::create_dir_all(fixture.join("release/bin")).unwrap();
+        std::fs::write(fixture.join("release/bin/codex"), "").unwrap();
+        std::fs::write(
+            fixture.join("release/codex-package.json"),
+            r#"{"version":"0.163.0"}"#,
+        )
+        .unwrap();
+        std::os::unix::fs::symlink(fixture.join("release/bin/codex"), fixture.join("codex"))
+            .unwrap();
+        assert_eq!(
+            CodexAdapter.installed_version(fixture.join("codex").to_str().unwrap()),
+            Some((0, 163, 0))
+        );
+    }
 
     #[test]
     fn terminal_titles_keep_only_the_task_between_the_spinner_and_the_project() {

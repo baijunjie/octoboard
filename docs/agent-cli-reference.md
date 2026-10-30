@@ -2103,10 +2103,76 @@ What Octoboard sends to answer each is under "How a confirmation is pressed" in 
 
 ### Writing into a running session
 
-The sequence for all three agents is `ESC[200~`, the text with LF separators, `ESC[201~`, then `CR`; multi-line text
-arrives as one message with no delay between paste and Enter. Every agent queues a message written mid-turn and consumes
-it when the turn ends. (Codex additionally has `codex queue --thread <session id>`.) Seven rules, each failing silently
-or destructively if ignored:
+**A terminal paste submits any existing draft too.** With Claude Code 2.1.274 and 2.1.314, and Grok Build 1.0.70,
+typing a draft without Enter and then writing a bracketed paste followed by CR submits the draft and the pasted
+message together. Isolated runs with fake keys and local HTTP endpoints confirmed both markers in the same user
+message in the actual inference request. A terminal input lock prevents byte interleaving, but does not separate a
+message from text already in the composer. Reading an empty composer is not sufficient either: user input can have
+reached the PTY before the agent renders it.
+
+Grok Build 1.0.70 reports the submitted text in the top-level `prompt` field of its `UserPromptSubmit` hook. A
+181-line, 6,694-character prompt reached that field unchanged, including 180 LF separators, without a paste wrapper.
+Not every Enter submits a prompt, and background wakes also produce this hook, so an Enter count alone cannot
+associate a hook with a person's input.
+
+Codex 0.163.0 also reports a top-level `prompt` in `UserPromptSubmit`. With the same `-c` injection style as an
+Octoboard launch, a long multi-line paste and one with a blank first line reached that field without a paste
+wrapper; leading and trailing whitespace was trimmed, while inner LF separators were preserved.
+
+**Claude Code and Grok Build can stash their own editor state.** Claude Code 2.1.274 and 2.1.314, and Grok
+Build 1.0.70, accept Ctrl-S with a nonempty composer, show a stash indicator, and leave an empty composer. After a
+separate bracketed paste and CR, they automatically restore the saved draft, even while the new model request is
+still running. Do not press Ctrl-S again after submission: it toggles the stash and would hide the restored draft.
+A second stash can replace the person's existing stash, so an occupied stash must be left alone. In Grok, sending
+Ctrl-S and the paste in one PTY write merged the draft with the message; observe the stashed, empty composer before
+writing the payload instead of relying on a delay. Claude's `› stashed` indicator is dimmed, so the undimmed screen
+cannot establish this transition; Grok's top composer border includes `Stashed`.
+
+Isolated local-endpoint runs confirmed exact restoration of Chinese text, multiline drafts, and collapsed long
+pastes, including a 4,699-character draft. Claude retained the cursor; Grok restored it at the end. Attachments were
+not tested. Claude's source retains its pasted-content records, and Grok documents image retention, but these do not
+replace a measured attachment round trip. Claude's `chat:stash` action is customizable through `keybindings.json`;
+Ctrl-S must not be assumed to stash when its binding is unknown or overridden.
+
+**Codex has a separate message queue.** Codex 0.163.0's ordinary `codex queue` works with the shared daemon, but
+passing even one `-c` override disables implicit shared-daemon selection and uses embedded mode unless an
+explicit remote is selected. The command can enqueue without an idle embedded
+TUI waking up; an interrupted thread can also retain queued messages without starting them. Neither successful
+queueing nor a missing immediate turn justifies sending the message again.
+
+A private app-server supports the launch overrides and independent delivery together. Start the same binary as
+`codex -c <overrides> app-server --listen unix://<private-socket>`, then its TUI with
+`codex --remote unix://<private-socket>` and the original launch flags and `-c` overrides. The Unix socket carries WebSocket frames
+with handshake URI `ws://localhost/rpc`. An explicit `--remote` takes precedence over the `-c` rule, so the same
+launch overrides can be supplied to both processes. The TUI needs its own copy for local settings: with an account
+setting `tui.terminal_title=[]`, a server-only title override produced no OSC 0 titles, while copying the overrides
+to the explicitly remote TUI restored them and retained working, idle, cancelled-turn, hook, and draft behavior.
+Initialize with `capabilities.experimentalApi: true`, then send the `initialized` notification. Before any user submission, `thread/loaded/list` returns the new TUI's thread ID even
+though `thread/list` is still empty. A private server with exactly one loaded thread avoids guessing from a shared
+history or working directory. Creating a thread through `thread/start` and then resuming it instead raised a hook
+review modal despite the TUI's bypass flag; that bootstrap path does not preserve the ordinary fresh-launch flow.
+
+Persistent remote resumes ignore hook-trust bypass too. `hooks/list` exposes each hook's native key, source, command,
+and current hash. A resume can trust only Octoboard's generated `sessionFlags` command with invocation-local
+`hooks.state` overrides, leaving user hooks untouched. Pass the complete state table as one TOML assignment:
+`-c 'hooks.state={"/<session-flags>/config.toml:stop:0:0"={trusted_hash="sha256:..."}}'`. A quoted dotted key passed
+through `-c` was split incorrectly at the native key's `.toml`; the complete table retained it exactly. An isolated
+existing-thread resume using this method confirmed no extra review for the injected hooks, independent message
+delivery, and draft and cursor preservation. No user's trust file was changed.
+
+`thread/queue/add` accepts `threadId`, text `input`, and a stable `clientUserMessageId`. Its response includes
+`queuedSubmission.id`, passed with `threadId` to `thread/queue/start`. In idle sessions the add can start the item
+before start arrives; a subsequent “queued submission not found” is not grounds to enqueue again. During a turn,
+start reports an active or pending turn and the queue consumes the item afterwards. After cancellation, explicit
+start wakes the interrupted thread too. Isolated tests using the actual hook, MCP, and developer-instruction
+injection confirmed their execution, separate inference messages, and preservation of multiline and 6,018-character
+collapsed drafts and cursor positions, including a fresh TUI with no prior user submission. No composer keystrokes
+are needed for this delivery path.
+
+The terminal paste sequence all three agents accept is `ESC[200~`, the text with LF separators, `ESC[201~`, then `CR`;
+multi-line text arrives as one message with no delay between paste and Enter. Every agent queues a message written
+mid-turn and consumes it when the turn ends. (Codex additionally has `codex queue --thread <session id>`.) Seven rules,
+each failing silently or destructively if ignored:
 
 - A message starting with `/` runs as a slash command even inside a bracketed paste; prefix a single space. The same
   holds for a prompt given on the command line (Claude Code 2.1.308, a fresh launch against a stub endpoint under a

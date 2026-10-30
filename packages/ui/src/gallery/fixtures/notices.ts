@@ -614,9 +614,9 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Message written but not sent by the agent",
-    description: "An error alert tied to a console session, Hub. It is titled \"Message not sent\", and the first line of the body is the session line, \"Session: Hub — Main's console session\", with the session and the console each a chip, which names the console rather than a project. Then the body names the agent, says the message waits in the session's input box and that nothing more is written into the session until a prompt is sent, then gives the recovery of opening the session and pressing Enter.",
+    description: "An error alert tied to a console session, Hub. It is titled \"Message not sent\", and the body starts with separate Session and Console lines, with Hub and Main each a name chip. Then the body names the agent and explains the single retry of the current input without pasting the message again. Pending dialogs must be answered first. The recovery asks the person to check the automatic retry before pressing Enter if the message still waits in the input box, and not to paste it again.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
-    toasts: [{ kind: "error", code: "message_not_sent", params: { agent: "Claude Code" }, message: "", session: SAMPLE.consoleSession.id }],
+    toasts: [{ kind: "error", code: "message_not_sent", params: { agent: "Claude Code", submit_retry: "once" }, message: "", session: SAMPLE.consoleSession.id }],
   },
   {
     id: "toast-message-not-sent-long-title",
@@ -625,7 +625,7 @@ export const noticeScenarios: Scenario[] = [
     title: "Message not sent, session with a long title",
     description: "The session line of the alert, when the session's title is long and holds a word with no break opportunity: look that the session's chip wraps inside the dialog, keeps the project chip (Website) readable after it, and leaves the dialog's width, the title above it and the message below it undisturbed.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions: [...sessions, longTitled] }),
-    toasts: [{ kind: "error", code: "message_not_sent", params: { agent: "Claude Code" }, message: "", session: longTitled.id }],
+    toasts: [{ kind: "error", code: "message_not_sent", params: { agent: "Claude Code", submit_retry: "once" }, message: "", session: longTitled.id }],
   },
   {
     id: "toast-queued-messages-dropped",

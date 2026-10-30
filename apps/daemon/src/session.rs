@@ -2,9 +2,13 @@
 //! the agent, its title, its folder-trust watch and the count of writes into its input.
 
 use std::io;
+mod draft;
+mod swap;
+use draft::Draft;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
+pub(crate) use swap::RecoveryPhase;
 
 use crate::agent_dialogs::{self, Dialog, Sighting};
 use crate::protocol::Agent;
@@ -69,6 +73,8 @@ pub struct LiveSession {
     /// The launch this process is, as its processes are tagged with (`crate::process_ledger`).
     pub launch_id: String,
     pty: PtyCore,
+    pub(crate) codex_transport: Option<Arc<crate::codex_transport::CodexTransport>>,
+    pub(crate) checks_composer: bool,
     title: Mutex<TitleObserver>,
     action_required: AtomicBool,
     /// Permission hooks can describe automatic reviews without a dialog. Visible action prompts
@@ -82,14 +88,19 @@ pub struct LiveSession {
     /// input lock, so that the trust path's check of the count and its key are one step that no
     /// other writer can fall between. See [`Self::write_input`].
     input_writes: AtomicU64,
+    draft: Mutex<Draft>,
+    swap: Mutex<swap::InputSwap>,
+    native_stash: AtomicBool,
+    recovery_scheduled: AtomicBool,
     /// How many prompts the agent's hooks have reported it sending (`UserPromptSubmit`), counted
     /// once the event's status has been applied. What the outbox waits on to know that a message
     /// it wrote was sent rather than left in the input box.
     prompts_sent: AtomicU64,
-    /// The count of prompts sent at which a message the outbox wrote was left unsent, while that
-    /// message is taken to be waiting in the input box. Kept with the count it is compared with,
-    /// so that it ends with this process.
-    unsent_at: Mutex<Option<u64>>,
+    /// The acknowledgement count and grace-period start of an unconfirmed message. A prompt
+    /// acknowledgement or one bounded submit-key retry releases its hold for this process.
+    unsent_at: Mutex<Option<(u64, Instant)>>,
+    unsent_retry_scheduled: AtomicBool,
+    uncertain_at: Mutex<Option<(u64, Instant)>>,
     /// When the agent stopped on an error. It holds the session's writes for [`AGENT_ERROR_SETTLE`]
     /// after that, or until the next prompt is sent; gone with the process.
     agent_error_at: Mutex<Option<Instant>>,
@@ -141,6 +152,9 @@ pub struct NewSession {
     /// See `LiveSession::launch_id`.
     pub launch_id: String,
     pub spawned: Spawned,
+    pub codex_transport: Option<Arc<crate::codex_transport::CodexTransport>>,
+    /// Real agents have a composer; stand-in PTYs can explicitly opt out of its screen check.
+    pub checks_composer: bool,
     /// Per-session scratch directory (Grok's `GROK_HOME` symlink farm), removed when the session's
     /// process is gone.
     pub scratch_dir: Option<std::path::PathBuf>,
@@ -162,6 +176,8 @@ impl LiveSession {
                 kill_session_leftovers: true,
                 before_scratch_removal: session.before_scratch_removal,
             }),
+            codex_transport: session.codex_transport,
+            checks_composer: session.checks_composer,
             id: session.id,
             agent: session.agent,
             launch_id: session.launch_id,
@@ -170,8 +186,14 @@ impl LiveSession {
             resolves_approvals_itself: session.resolves_approvals_itself,
             trust: TrustState::new(session.agent, session.carried_trust),
             input_writes: AtomicU64::new(0),
+            draft: Mutex::new(Draft::default()),
+            swap: Mutex::new(swap::InputSwap::default()),
+            native_stash: AtomicBool::new(false),
+            recovery_scheduled: AtomicBool::new(false),
             prompts_sent: AtomicU64::new(0),
             unsent_at: Mutex::new(None),
+            unsent_retry_scheduled: AtomicBool::new(false),
+            uncertain_at: Mutex::new(None),
             agent_error_at: Mutex::new(None),
             dialogs: Mutex::new(Sighting::default()),
             screen_watchers: AtomicU32::new(0),
@@ -188,6 +210,21 @@ impl LiveSession {
         observer.state = Arc::downgrade(state);
         observer.runtime = tokio::runtime::Handle::try_current().ok();
         observer.publish(self);
+    }
+
+    /// Consult hook and lifecycle holds without retaining the observer lock across state reads.
+    fn allows_automatic_input(&self) -> bool {
+        let state = self
+            .title
+            .lock()
+            .expect("title observer lock poisoned")
+            .state
+            .clone();
+        match state.upgrade() {
+            Some(state) => state.permits_automatic_input(&self.id),
+            // Isolated sessions have no observer; a formerly bound session fails closed.
+            None => state.ptr_eq(&Weak::new()),
+        }
     }
 
     /// What the agent's terminal title has said about its turns so far.
@@ -295,6 +332,7 @@ impl LiveSession {
         if titled {
             self.trust.note_title();
         }
+        self.schedule_input_recovery();
     }
 
     /// Writes raw input. The error says how many bytes went in, because a caller deciding whether
@@ -310,7 +348,38 @@ impl LiveSession {
     /// traffic all the time and none of it answers a screen. A mouse button press is counted: it
     /// is the person acting.
     pub fn write_input(&self, data: &[u8]) -> Result<(), ptyio::PartialWrite> {
+        self.write_raw_input(data, false)
+    }
+
+    pub(crate) fn write_terminal_input(&self, data: &[u8]) -> Result<(), ptyio::PartialWrite> {
+        if self.buffer_terminal_input(data)? {
+            return Ok(());
+        }
+        self.write_raw_input(data, true)
+    }
+
+    pub(crate) fn write_terminal_reply(&self, data: &[u8]) -> Result<(), ptyio::PartialWrite> {
         let input = self.pty.lock_input();
+        if self.pty.is_frozen() {
+            return Err(swap::blocked("the session output has been archived"));
+        }
+        self.pty.write_locked(&input, data)
+    }
+
+    fn write_raw_input(&self, data: &[u8], user: bool) -> Result<(), ptyio::PartialWrite> {
+        let input = self.pty.lock_input();
+        let track_draft = if user {
+            match self.route_terminal_input(data)? {
+                swap::InputRoute::Buffered => return Ok(()),
+                swap::InputRoute::Dialog => false,
+                swap::InputRoute::Direct => true,
+            }
+        } else {
+            false
+        };
+        if !user && self.input_swap_active() && !is_terminal_protocol(data) {
+            return Err(swap::blocked("an input replacement is in progress"));
+        }
         if self.pty.is_frozen() {
             return Err(ptyio::PartialWrite {
                 written: 0,
@@ -322,8 +391,70 @@ impl LiveSession {
         }
         if !is_terminal_protocol(data) {
             self.input_writes.fetch_add(1, Ordering::AcqRel);
+            if track_draft {
+                self.draft.lock().expect("draft lock poisoned").input(data);
+            }
         }
         self.pty.write_locked(&input, data)
+    }
+
+    /// Checks the composer and the unacknowledged user input under the same lock as the write.
+    /// A rendered empty box alone cannot acknowledge keys still waiting in the child's input.
+    /// An expired protection budget bypasses editor checks but never dialogs or process lifetime.
+    fn write_empty_message_input(
+        &self,
+        data: &[u8],
+        prompt: &str,
+        allow_mixed: bool,
+    ) -> Result<(), ptyio::PartialWrite> {
+        let input = self.pty.lock_input();
+        if self.pty.is_frozen() {
+            return Err(ptyio::PartialWrite {
+                written: 0,
+                error: io::Error::new(
+                    io::ErrorKind::BrokenPipe,
+                    "the session output has been archived",
+                ),
+            });
+        }
+        if self.input_swap_active() {
+            return Err(swap::blocked("an input replacement holds the composer"));
+        }
+        if !self.allows_automatic_input()
+            || self.trust.holds_writes()
+            || self.look_for_dialog().current.is_some()
+        {
+            return Err(swap::blocked(
+                "the session is waiting for user action or showing a dialog or trust confirmation",
+            ));
+        }
+        let mut draft = self.draft.lock().expect("draft lock poisoned");
+        if self.checks_composer
+            && !allow_mixed
+            && (self.stash_shown()
+                || draft.holds()
+                || crate::interrupt::input_box::input_box(self.agent, &self.screen_text_undimmed())
+                    .as_deref()
+                    != Some(""))
+        {
+            return Err(ptyio::PartialWrite {
+                written: 0,
+                error: io::Error::new(
+                    io::ErrorKind::WouldBlock,
+                    "the session's composer is not known to be empty",
+                ),
+            });
+        }
+        draft.submission(None, prompt.to_string());
+        self.input_writes.fetch_add(1, Ordering::AcqRel);
+        self.pty.write_locked(&input, data)
+    }
+
+    pub(crate) fn note_launch_prompt(&self, prompt: String) {
+        self.draft
+            .lock()
+            .expect("draft lock poisoned")
+            .submission(None, prompt);
     }
 
     /// Writes `data` only if nobody else has written into the input since the count read as
@@ -335,7 +466,7 @@ impl LiveSession {
         data: &[u8],
     ) -> Result<bool, ptyio::PartialWrite> {
         let input = self.pty.lock_input();
-        if self.input_writes.load(Ordering::Acquire) != expected {
+        if self.input_swap_active() || self.input_writes.load(Ordering::Acquire) != expected {
             return Ok(false);
         }
         self.pty.write_locked(&input, data).map(|()| true)
@@ -362,7 +493,10 @@ impl LiveSession {
                 ),
             });
         }
-        if self.input_writes.load(Ordering::Acquire) != expected || !gate() {
+        if self.input_swap_active()
+            || self.input_writes.load(Ordering::Acquire) != expected
+            || !gate()
+        {
             return Ok(false);
         }
         self.input_writes.fetch_add(1, Ordering::AcqRel);
@@ -378,7 +512,11 @@ impl LiveSession {
 
     /// Counts a prompt the agent's hooks reported it sending, which also ends the hold an agent
     /// error put on the session's writes.
-    pub fn note_prompt_sent(&self) {
+    pub fn note_prompt_sent(&self, prompt: Option<&str>) {
+        self.draft
+            .lock()
+            .expect("draft lock poisoned")
+            .prompt_sent(prompt, self.agent);
         self.prompts_sent.fetch_add(1, Ordering::AcqRel);
         *self
             .agent_error_at
@@ -414,17 +552,112 @@ impl LiveSession {
 
     /// Records that a message written when the count stood at `before` was not sent.
     pub fn mark_unsent(&self, before: u64) {
-        *self.unsent_at.lock().expect("unsent mark lock poisoned") = Some(before);
+        *self.unsent_at.lock().expect("unsent mark lock poisoned") = Some((before, Instant::now()));
     }
 
     /// Whether a message marked unsent is still taken to be waiting in the input box: until the
-    /// agent reports a prompt sent after it, whoever sent it.
+    /// agent reports a prompt sent after it or the bounded submit-key retry runs.
     pub fn unsent_waiting(&self) -> bool {
         let mut unsent_at = self.unsent_at.lock().expect("unsent mark lock poisoned");
         match *unsent_at {
-            Some(before) if self.prompts_sent() <= before => true,
+            Some((before, _)) if self.prompts_sent() <= before => true,
             Some(_) => {
                 *unsent_at = None;
+                false
+            }
+            None => false,
+        }
+    }
+
+    fn retry_unsent_submit(
+        &self,
+        permits_submit: impl FnOnce() -> bool,
+    ) -> Result<bool, ptyio::PartialWrite> {
+        let input = self.pty.lock_input();
+        if self.is_frozen()
+            || self.poll_exit()
+            || self.trust.holds_writes()
+            || self.look_for_dialog().current.is_some()
+            || self.input_swap_active()
+            || self.needs_user_action()
+            || !permits_submit()
+        {
+            return Ok(false);
+        }
+        let mut unsent = self.unsent_at.lock().expect("unsent mark lock poisoned");
+        let Some((before, started)) = *unsent else {
+            return Ok(false);
+        };
+        if self.prompts_sent() > before {
+            *unsent = None;
+            return Ok(false);
+        }
+        if started.elapsed() < crate::outbox::DRAFT_WAIT {
+            return Ok(false);
+        }
+        // The payload was already written. Retry only its submit key, once, rather than appending
+        // it a second time. New user text in the composer may be included under delivery priority.
+        *unsent = None;
+        drop(unsent);
+        self.native_stash.store(false, Ordering::Release);
+        self.input_writes.fetch_add(1, Ordering::AcqRel);
+        self.pty.write_locked(&input, b"\r")?;
+        Ok(true)
+    }
+
+    pub(crate) fn schedule_unsent_submit_retry(&self) {
+        let due = self
+            .unsent_at
+            .lock()
+            .expect("unsent mark lock poisoned")
+            .is_some_and(|(_, started)| started.elapsed() >= crate::outbox::DRAFT_WAIT);
+        if !due || self.unsent_retry_scheduled.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        let observer = self.title.lock().expect("title observer lock poisoned");
+        let state = observer.state.upgrade();
+        let runtime = observer.runtime.clone();
+        drop(observer);
+        let (Some(state), Some(runtime)) = (state, runtime) else {
+            self.unsent_retry_scheduled.store(false, Ordering::Release);
+            return;
+        };
+        let id = self.id.clone();
+        let launch = self.launch_id.clone();
+        runtime.spawn_blocking(move || {
+            let Some(live) = state.live_session(&id).filter(|live| live.launch_id == launch) else { return; };
+            if let Err(error) = live.retry_unsent_submit(|| state.permits_automatic_input(&id)) {
+                state.broadcast(crate::protocol::Event::from_error(None, &anyhow::anyhow!(
+                    "Session {id} could not retry submitting its pending message: {error}. Check its input before continuing."
+                )));
+            }
+            live.unsent_retry_scheduled.store(false, Ordering::Release);
+            state.retry_pending_outbox(&id);
+        });
+    }
+
+    /// Briefly holds later deliveries after native acceptance became unknown, without touching the editor.
+    pub fn mark_submission_uncertain(&self, before: u64) {
+        *self
+            .uncertain_at
+            .lock()
+            .expect("uncertain submission lock poisoned") = Some((before, Instant::now()));
+    }
+
+    pub fn submission_uncertain(&self) -> bool {
+        let mut at = self
+            .uncertain_at
+            .lock()
+            .expect("uncertain submission lock poisoned");
+        match *at {
+            Some((before, started))
+                if self.prompts_sent() <= before
+                    && started.elapsed() < crate::outbox::DRAFT_WAIT =>
+            {
+                true
+            }
+            Some(_) => {
+                *at = None;
                 false
             }
             None => false,
@@ -435,6 +668,7 @@ impl LiveSession {
     /// first so that what it draws on the way out does not replace it. **Blocks**; see
     /// [`PtyCore::stop`].
     pub fn terminate(&self) {
+        self.note_input_recovery_ended();
         if self.pty.poll_exit() {
             return;
         }
@@ -582,6 +816,152 @@ fn is_terminal_protocol(chunk: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::is_terminal_protocol;
+
+    #[test]
+    fn a_submit_retry_waits_for_a_dialog_without_resetting_its_deadline() {
+        let live = crate::test_support::fake_live_session(
+            "unsent-dialog",
+            crate::protocol::Agent::Claude,
+            120,
+            40,
+            "sleep 30",
+        );
+        live.mark_unsent(0);
+        *live.unsent_at.lock().unwrap() =
+            Some((0, std::time::Instant::now() - crate::outbox::DRAFT_WAIT));
+        live.on_output(
+            b"\x1b[2J\x1b[1;1HResume this conversation?\r\nEnter to confirm - Esc to dismiss",
+        );
+        let before = live.input_writes();
+        assert!(!live.retry_unsent_submit(|| true).unwrap());
+        assert!(live.unsent_waiting());
+        assert_eq!(live.input_writes(), before);
+        live.on_output(b"\x1b[2J\x1b[1;1H");
+        assert!(live.retry_unsent_submit(|| true).unwrap());
+        assert!(!live.unsent_waiting());
+    }
+
+    #[test]
+    fn an_unconfirmed_submit_gets_one_bounded_enter_retry_without_repeating_text() {
+        let live = crate::test_support::fake_live_session(
+            "unsent-bounded",
+            crate::protocol::Agent::Claude,
+            120,
+            40,
+            "sleep 30",
+        );
+        live.mark_unsent(0);
+        assert!(!live.retry_unsent_submit(|| true).unwrap());
+        *live.unsent_at.lock().unwrap() =
+            Some((0, std::time::Instant::now() - crate::outbox::DRAFT_WAIT));
+        let before = live.input_writes();
+        assert!(!live.retry_unsent_submit(|| false).unwrap());
+        assert!(live.unsent_waiting());
+        assert_eq!(live.input_writes(), before);
+        assert!(live.retry_unsent_submit(|| true).unwrap());
+        assert_eq!(live.input_writes(), before + 1);
+        assert!(!live.unsent_waiting());
+        assert!(!live.retry_unsent_submit(|| true).unwrap());
+        assert_eq!(live.input_writes(), before + 1);
+
+        live.mark_unsent(0);
+        *live.unsent_at.lock().unwrap() =
+            Some((0, std::time::Instant::now() - crate::outbox::DRAFT_WAIT));
+        live.note_prompt_sent(None);
+        assert!(!live.retry_unsent_submit(|| true).unwrap());
+        assert_eq!(live.input_writes(), before + 1);
+    }
+
+    #[test]
+    fn uncertain_native_acceptance_cannot_hold_later_messages_forever() {
+        let live = crate::test_support::fake_live_session(
+            "uncertain-bounded",
+            crate::protocol::Agent::Codex,
+            120,
+            40,
+            "sleep 30",
+        );
+        live.mark_submission_uncertain(0);
+        assert!(live.submission_uncertain());
+        assert!(!live.unsent_waiting());
+        *live.uncertain_at.lock().unwrap() =
+            Some((0, std::time::Instant::now() - crate::outbox::DRAFT_WAIT));
+        assert!(!live.submission_uncertain());
+        assert_eq!(*live.uncertain_at.lock().unwrap(), None);
+    }
+
+    #[test]
+    fn a_stale_empty_screen_cannot_send_keys_that_have_not_been_rendered() {
+        use crate::protocol::Agent;
+        let live = crate::test_support::fake_live_session(
+            "draft-gate",
+            Agent::Claude,
+            120,
+            40,
+            "sleep 30",
+        )
+        .with_composer();
+        live.on_output(include_bytes!("../testdata/claude_input_placeholder.bin"));
+        assert_eq!(
+            crate::interrupt::input_box::input_box(Agent::Claude, &live.screen_text_undimmed())
+                .as_deref(),
+            Some("")
+        );
+        live.write_terminal_input(b"unrendered draft").unwrap();
+        let before = live.input_writes();
+        let error = live
+            .write_message_input(b"must not be written", "program", false)
+            .unwrap_err();
+        assert_eq!(error.written, 0);
+        assert_eq!(live.input_writes(), before);
+        live.note_prompt_sent(None);
+        assert!(
+            live.write_message_input(b"still held", "program", false)
+                .is_err(),
+            "a hook without a user submission candidate does not clear edits"
+        );
+        live.write_terminal_input(b"\rnext").unwrap();
+        live.note_prompt_sent(Some("unrendered draft"));
+        assert!(
+            live.write_message_input(b"still held", "program", false)
+                .is_err(),
+            "a hook for Enter cannot clear later input"
+        );
+        live.write_terminal_input(b"\r").unwrap();
+        live.note_prompt_sent(Some("next"));
+        live.write_message_input(b"now empty and acknowledged", "program", false)
+            .unwrap();
+    }
+
+    #[test]
+    fn a_known_draft_or_unknown_composer_prevents_a_message_for_all_three_agents() {
+        use crate::protocol::Agent;
+        for (agent, draft) in [
+            (
+                Agent::Claude,
+                &include_bytes!("../testdata/claude_input_restored.bin")[..],
+            ),
+            (
+                Agent::Grok,
+                &include_bytes!("../testdata/grok_composer_draft.bin")[..],
+            ),
+            (
+                Agent::Codex,
+                &include_bytes!("../testdata/codex_blank_first_draft.bin")[..],
+            ),
+        ] {
+            let live =
+                crate::test_support::fake_live_session("composer-gate", agent, 140, 45, "sleep 30")
+                    .with_composer();
+            assert!(live
+                .write_message_input(b"unknown", "unknown", false)
+                .is_err());
+            live.on_output(draft);
+            let before = live.input_writes();
+            assert!(live.write_message_input(b"draft", "draft", false).is_err());
+            assert_eq!(live.input_writes(), before);
+        }
+    }
 
     #[test]
     fn only_a_terminals_own_protocol_traffic_is_told_apart_from_input() {

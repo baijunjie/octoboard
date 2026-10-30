@@ -60,7 +60,7 @@ screens, terminal titles and session records the tests replay.
 |---|---|
 | `build.rs` | Exposes the app name from the repo-root `config/app.json` as `OCTOBOARD_APP_NAME` |
 | `src/main.rs` | CLI entry point: parses the seven modes, opens the store, binds the port, prints the handshake line the application waits for, runs the server |
-| `src/server.rs`, `src/access.rs` | The HTTP/WebSocket router described in `PROTOCOL.md` (the control, terminal, MCP, hook, git-ref, revert-gate and context-window routes), and the middleware refusing with `403` a request whose `Host` or `Origin` is not a local client's or the application's own UI's |
+| `src/server.rs`, `src/access.rs` | The HTTP/WebSocket router described in `PROTOCOL.md` (the control, terminal, MCP, hook, git-ref, revert-gate and context-window routes), terminal input dispatch through one background writer per connection with bounded deferred input and priority for query replies, and the middleware refusing with `403` a request whose `Host` or `Origin` is not a local client's or the application's own UI's |
 | `src/protocol.rs` | Rust types for the wire protocol (kept in sync by hand with `PROTOCOL.md` and `packages/ui/src/protocol.ts`), the console session colours, `Session::orchestration_role` and `Session::is_worker` (derived coordinator or worker capability), and the one mapping from a failure to an `error` reply |
 | `src/git_ref_mode.rs`, `src/gate_hook_mode.rs`, `src/status_line_mode.rs`, `src/hook_mode.rs`, `src/loopback.rs` | The `git-ref`, `gate-hook`, `status-line` and `hook` CLI modes, and the minimal HTTP client for the daemon's own loopback address they share (`mcp` is `src/mcp/stdio.rs`, `revert-gate` is `src/revert_gate/`) |
 
@@ -87,7 +87,7 @@ screens, terminal titles and session records the tests replay.
 |---|---|
 | `src/store.rs` | The coordinator's SQLite storage: consoles, projects, sessions, pages, agent accounts and their choices, the added agents list, owed parent-change notices, messages kept for interrupted sessions (shared information, and the reports and notices for a parent session; table `pending_info`), branch origins, trusted folders, user settings and the host table |
 | `src/state.rs` | Shared daemon state (`AppState`): session status and turn bookkeeping, the shell terminal registry, each project's live git status, pending session requests, launch claims, agent availability, the model cache, account quotas and logins, pending quota recovery waits, and the hook queues; `shown_status` is the status a client is shown |
-| `src/outbox.rs` | The per-session ordered queue every message Octoboard writes into an agent passes through, and what a drain does when a dialog of the agent's is up |
+| `src/outbox.rs` | The per-session ordered queue every message Octoboard writes into an agent passes through, stable message identities, and drain outcomes for dialogs, partial writes, pending draft recovery and uncertain native submissions |
 | `src/config_export.rs`, `src/config_import/`, `src/config_upgrade.rs` | Building the configuration document `export_configuration` answers with, reading one back (`inspect` and `apply`; `mod.rs` for the document, projects and settings, `accounts.rs` for its accounts), and upgrading an older document before an import reads it |
 | `src/launch_settings.rs`, `src/agent_models.rs` | Normalising and checking a model and reasoning effort, and listing the models an agent offers for an account (`ModelCache`) |
 | `src/paths.rs`, `src/instance_lock.rs` | Where Octoboard keeps its files under `~/.octoboard`, and one daemon per data directory |
@@ -122,13 +122,15 @@ screens, terminal titles and session records the tests replay.
 | Path | Role |
 |---|---|
 | `src/pty.rs`, `src/ptyio.rs`, `src/ringbuf.rs` | The PTY core every process on a PTY shares (`PtyCore`): spawn, output fan-out over a replay ring and a parsed screen, input, resize, stop with escalation, and non-blocking PTY I/O |
-| `src/session.rs`, `src/term.rs`, `src/term/` | One running agent process (`LiveSession`) and what is the agent's own on top of the PTY: launching an agent and writing messages into a running session |
+| `src/session.rs`, `src/session/` | One running agent process (`LiveSession`), terminal input and message-write gates; `draft.rs` tracks user edits, input boundaries and submitted prompts reported by hooks; `swap.rs` owns native composer-stash transactions, retained keyboard input and recovery for the same launch |
+| `src/term.rs`, `src/term/` | Launching agents with their owned sidecars and routing automatic messages to checked PTY writes or native submission; `stash.rs` checks whether a launch supports the native stash binding |
+| `src/codex_transport.rs` | `CodexTransport::start`, `endpoint`, `send` and `stop`: owns a launch's private Codex app server, provides its remote TUI endpoint, and submits messages through the Unix WebSocket queue independently of the composer |
 | `src/shell_terminal.rs`, `src/shell_terminal/` | Shell terminals: a project's plain login shell on a PTY (`ShellTerminals` on `AppState`) with create, rename, close and a watcher for exit and busyness; the wire contract is "Shell terminals" in [`PROTOCOL.md`](PROTOCOL.md) |
 | `src/terminal_snapshot.rs`, `src/terminal_title.rs`, `src/saved_output.rs` | Parsed terminal snapshots and dormant previews, OSC title parsing, and previews persisted per ended session |
 | `src/reply_route.rs` | Which answers to a terminal program's queries reach it: with several clients attached to one terminal, each runs an emulator that answers, so the daemon lets one client's answer for a point in the output through and drops the rest and the stale; also tells a client attaching how much of its replay is settled |
 | `src/crash_cleanup.rs` | Ending every process on a PTY when the daemon goes down on an internal failure |
 | `src/trust/` | Each agent's folder-trust confirmation: recognising the screen, pressing it, and holding a session's writes meanwhile |
-| `src/agent_dialogs.rs` | Recognising dialogs an agent raises that only a person can answer, and the per-session watch that holds writes while one is up |
+| `src/agent_dialogs.rs` | Recognising dialogs an agent raises that only a person can answer, and the per-session watch that holds writes while one is up and retries pending message delivery |
 | `src/interrupt.rs`, `src/interrupt/` | `interrupt_session`, shared by the control request and the MCP tool: stops the turn a running session is in with the agent's own interrupt key |
 | [`src/process_ledger/`](src/process_ledger/README.md) | The agent-launch process ledger: attributing the processes an agent launch started, wherever they went, from the native process table; listing them as trees, stopping, keeping or moving them, carrying them over to another launch, and stopping what a launch left when it ends |
 | `src/process_requests.rs` | The client-facing process requests: selects the sessions, the projects and their local directories for `list`, `stop`, `keep` and an archive inspection's `long_running`, and runs the ledger's blocking work off the async runtime |
@@ -227,7 +229,7 @@ injected when a session starts, along with the agent's approval override where t
 |---|---|
 | `mod.rs` | The adapter trait and the agent-agnostic launch/resume flow shared by all three, and `account_command`, the command for a short query of an agent's CLI as an account would run it |
 | `claude/` | Claude Code, with `settings.rs` reading the settings files a launch depends on |
-| `codex.rs` | Codex, and `unarchive`, which brings an archived rollout back before a resume |
+| `codex.rs` | Codex, including `PrivateServerPlan` for the app server and remote TUI launch, and `unarchive`, which brings an archived rollout back before a resume |
 | `grok.rs` | Grok Build |
 | `claude_mcp.rs`, `claude_compatibility.md` | The per-agent Claude compatibility setting for Codex and Grok Build: `claude_mcp.rs` reads the MCP servers Claude Code would load and turns them into Codex `-c mcp_servers.*` overrides, secrets carried in the environment; `claude_compatibility.md` is the text appended to Codex's developer instructions |
 | `files.rs` | Bounded, non-blocking text-file readers: `read_bounded_text` for project-scoped adapter configuration, and `read_regular_text` shared across the daemon for agent-owned configuration, caches and install manifests |

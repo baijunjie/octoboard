@@ -304,9 +304,16 @@ fn is_a_wait_for_the_user(dialog: &Dialog) -> bool {
 async fn poll(state: Arc<AppState>, live: Weak<LiveSession>) {
     let mut output = 0;
     let mut acted_at = 0;
+    let mut retry_at = std::time::Instant::now();
     loop {
         tokio::time::sleep(POLL).await;
         let Some(live) = live.upgrade() else { return };
+        if retry_at.elapsed() >= Duration::from_secs(2) {
+            live.schedule_input_recovery();
+            live.schedule_unsent_submit_retry();
+            state.retry_pending_outbox(&live.id);
+            retry_at = std::time::Instant::now();
+        }
         let total = live.output_total();
         if total == output {
             continue;

@@ -437,6 +437,8 @@ pub enum WriteHold {
     SharingChange,
     /// A message written into it was not sent and is still in its input box.
     UnsentMessage,
+    /// A native submission may have been accepted; it must not be submitted again.
+    SubmissionUncertain,
 }
 
 impl WriteHold {
@@ -450,6 +452,7 @@ impl WriteHold {
             Self::Handoff => "handoff",
             Self::SharingChange => "sharing_change",
             Self::UnsentMessage => "unsent_message",
+            Self::SubmissionUncertain => "submission_uncertain",
         }
     }
 
@@ -600,6 +603,18 @@ impl HookPrompts<'_> {
 }
 
 impl PromptSignal for HookPrompts<'_> {
+    fn mark_submission_uncertain(&self, before: u64) {
+        self.live.mark_submission_uncertain(before);
+    }
+
+    fn submission_uncertain(&self) -> bool {
+        self.live.submission_uncertain()
+    }
+
+    fn input_recovery_pending(&self) -> bool {
+        self.live.input_recovery_pending().is_some()
+    }
+
     fn sent(&self) -> u64 {
         self.live.prompts_sent()
     }
@@ -1077,6 +1092,7 @@ impl AppState {
         session.status == SessionStatus::Idle
             && !process.waits_for_user()
             && !process.unsent_waiting()
+            && !process.submission_uncertain()
             && !self.outbox.is_pending(&session.id)
             && self.background_tasks_of(&session.id).is_empty()
     }
@@ -2351,19 +2367,19 @@ impl AppState {
             .live_session(id)
             .is_some_and(|current| Arc::ptr_eq(&current, &live));
         if matches!(outcome, Drain::Unsent(_)) && still_running {
-            // The sender may be told, but only the user can see the input box and send what is in
-            // it; and whoever sent a message queued behind it is told nothing at all.
+            // The user can inspect a retry that submits the current composer, including any new
+            // edits they made. A later message must not repeat the already written payload.
             self.broadcast(
                 Notice::new(
                     notice_code::MESSAGE_NOT_SENT,
                     format!(
-                        "{} wrote a message into this session, but {} did not send it: it is \
-                         waiting in the session's input box. Check it and send it; nothing more \
-                         is written into the session until a prompt is sent.",
+                        "{} wrote a message into this session, but {} has not confirmed sending it. \
+                         After three seconds its submit key is retried once, without repeating \
+                         the text, and later messages may proceed. Answer pending dialogs first.",
                         crate::APP_NAME,
                         live.agent.label()
                     ),
-                    &[("agent", live.agent.label())],
+                    &[("agent", live.agent.label()), ("submit_retry", "once")],
                 )
                 .about(id),
             );
@@ -2417,6 +2433,11 @@ impl AppState {
                 }
             }
         }
+        if matches!(outcome, Drain::Uncertain(_)) && still_running {
+            self.broadcast(Event::from_error(None, &anyhow::anyhow!(
+                "The native message queue for session {id} did not confirm accepting a message. It may already be queued and will not be sent again. Later messages are held for at most three seconds or until another prompt is submitted; check the conversation before retrying manually."
+            )));
+        }
         if outcome == Drain::Lost {
             // Nobody is waiting on a return value for most of these drains, and a message Octoboard
             // accepted and then could not deliver is the user's business — the more so because the
@@ -2436,6 +2457,26 @@ impl AppState {
         }
         self.note_activity(id);
         outcome
+    }
+
+    pub(crate) fn permits_automatic_input(&self, id: &str) -> bool {
+        self.session_record(id).is_ok_and(|record| {
+            matches!(
+                self.agent_status(&record),
+                SessionStatus::Idle | SessionStatus::Working
+            ) && matches!(
+                self.write_hold(id),
+                None | Some(WriteHold::UnsentMessage | WriteHold::SubmissionUncertain)
+            )
+        })
+    }
+
+    pub(crate) fn retry_pending_outbox(self: &Arc<Self>, id: &str) {
+        if self.outbox.len(id) > 0 {
+            if let Ok(record) = self.session_record(id) {
+                self.spawn_flush_outbox(id, self.agent_status(&record));
+            }
+        }
     }
 
     /// Drains this session's queue off the runtime. Used wherever releasing a message is a side
@@ -2561,6 +2602,8 @@ impl AppState {
             Some(WriteHold::SharingChange)
         } else if self.outbox.is_held(id) {
             Some(WriteHold::Handoff)
+        } else if live.submission_uncertain() {
+            Some(WriteHold::SubmissionUncertain)
         } else if live.unsent_waiting() {
             Some(WriteHold::UnsentMessage)
         } else {
@@ -2741,6 +2784,7 @@ impl AppState {
                 })
             };
             let _ = tokio::join!(saving, ending);
+            live.note_input_recovery_ended();
             state.unregister_live(&live);
             match state.store.get_session(&live.id) {
                 Ok(Some(mut session)) => {
@@ -3570,6 +3614,26 @@ mod tests {
     use crate::store::LOCAL_HOST_ID;
     use crate::test_support::{app_state, fake_live_session, PATIENCE};
 
+    #[test]
+    fn submit_retry_respects_hook_permissions_and_lifecycle_holds() {
+        let (state, dir) = app_state("submit-retry-permissions");
+        insert_record(&state, &dir, "s", SessionStatus::WaitingUser);
+        let live = fake_live_session("s", Agent::Claude, 120, 40, "sleep 30");
+        state.register_live(live.clone());
+        assert!(!state.permits_automatic_input("s"));
+        state.apply_hook_status("s", SessionStatus::Idle).unwrap();
+        live.mark_unsent(0);
+        assert!(state.permits_automatic_input("s"));
+        state.outbox.hold("s", false);
+        assert!(!state.permits_automatic_input("s"));
+        state.outbox.release_hold("s");
+        assert!(state.permits_automatic_input("s"));
+        let mut record = state.session_record("s").unwrap();
+        record.status = SessionStatus::Interrupted;
+        state.save_session(&record).unwrap();
+        assert!(!state.permits_automatic_input("s"));
+    }
+
     fn session_record(id: &str, status: SessionStatus) -> Session {
         Session {
             id: id.to_string(),
@@ -3895,6 +3959,33 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
         assert!(!live.needs_user_action());
+    }
+
+    #[tokio::test]
+    async fn a_prompt_hook_before_the_composer_redraw_is_retried_without_another_hook() {
+        let (state, dir) = app_state("draft-redraw-retry");
+        insert_record(&state, &dir, "s", SessionStatus::Working);
+        let live = fake_live_session("s", Agent::Claude, 120, 40, "sleep 30").with_composer();
+        state.register_live(live.clone());
+        live.on_output(include_bytes!("../testdata/claude_input_restored.bin"));
+        live.write_terminal_input(b"typed\r").unwrap();
+        live.note_prompt_sent(Some("typed"));
+        state.queue_message("s", "peer message");
+        assert_eq!(
+            state.flush_outbox("s", SessionStatus::Working),
+            Drain::Pending
+        );
+        crate::agent_dialogs::watch(&state, &live);
+        live.on_output(b"\x1b[2J\x1b[H");
+        live.on_output(include_bytes!("../testdata/claude_input_placeholder.bin"));
+        let deadline = Instant::now() + PATIENCE;
+        while state.outbox.len("s") > 0 {
+            assert!(
+                Instant::now() < deadline,
+                "the clean composer never released the queued message"
+            );
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
     }
 
     const LAUNCH_DIALOG: &str = "  Resume this conversation?\r\n  \u{276f} 1. Resume\r\n    2. Start a new conversation\r\n  Enter to confirm \u{b7} Esc to resume\r\n";

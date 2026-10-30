@@ -470,6 +470,7 @@ export const UI_PARAMS: Record<string, MessageParams> = {
  * (`account`, `default_account` or `project`), worded as `daemon.account_directory_shared.<kind>`; `outside_scope` of a
  * refused link click, with `action` `open`, worded as `daemon.outside_scope.open`). */
 export function messageCode(code: string, params: MessageParams): string {
+  if (code === "message_not_sent" && params.submit_retry === "once") return "message_not_sent.retry";
   if (code === "field_too_long" && (params.field === "name" || params.field === "description")) return `${code}.${params.field}`;
   if (code === "account_quota_exhausted" && /^\d+$/.test(params.resets_at ?? "")) return "account_quota_exhausted.resets";
   if (code === "sharing_resume_failed" && params.still_running === "true") return "sharing_resume_failed.running";
