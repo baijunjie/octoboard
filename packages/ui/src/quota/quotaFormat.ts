@@ -107,10 +107,11 @@ export function quotaResetsIn(t: Translate, window: QuotaWindow, now: number): s
   return t("quota.resetsIn", { time: countdown(t, window.resets_at, now) });
 }
 
-/** The plan as the agent names it (`max`, `plus`, `SuperGrok`) in display case: a name that
+/** The plan in display case, with a short name for Codex's self-serve Business Pro Lite tier: a name that
  * already has a capital after its first letter keeps its own casing, any other has each word
  * capitalised. */
 export function planLabel(plan: string): string {
+  if (plan === "self_serve_business_prolite") return "Business Pro Lite";
   if (/.[A-Z]/.test(plan)) return plan;
   return plan
     .split(/[\s_-]+/)
