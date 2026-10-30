@@ -5,5 +5,5 @@
 
 [[permission]]
 identifier = "allow-exit-lifecycle"
-description = "Allows the frontend to register as the exit-flow handler (and ping its liveness thereafter) and to confirm an already-approved quit."
-commands.allow = ["frontend_exit_heartbeat", "confirm_quit"]
+description = "Allows the frontend to register as the exit-flow handler (and ping its liveness thereafter), to ask how the daemon ended once the shell has given up on it, and to confirm an already-approved quit."
+commands.allow = ["frontend_exit_heartbeat", "daemon_exit_detail", "confirm_quit"]

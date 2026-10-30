@@ -42,7 +42,8 @@ pub struct DaemonState {
     /// How many recovery threads are running, which a restart waits out before it launches the next
     /// instance.
     pub(crate) recovering: AtomicUsize,
-    /// Where the daemon is now, or how it ended, for a window that opens later to be built from.
+    /// Where the daemon is now, or how it ended, for a window that opens later to be built from,
+    /// and for a page that loads in the window to ask whether the shell gave up on it.
     status: Mutex<DaemonStatus>,
     /// The number of the latest daemon spawned, or retired by `retire_and_kill`. What a daemon's
     /// events say about it counts only while its own number is this one.
@@ -167,26 +168,48 @@ pub fn mark_daemon_stopping(app: &AppHandle) {
 
 /// Records that there is no daemon, and `detail` as what a window opened from now on is told.
 pub fn mark_daemon_down(app: &AppHandle, detail: String) {
+    record_no_daemon(app, DaemonStatus::Down(detail));
+}
+
+fn record_no_daemon(app: &AppHandle, gone: DaemonStatus) {
     let state = app.state::<DaemonState>();
     // Both under the status lock, as a start attempt sets them, so the two never disagree.
     let mut status = state.status.lock().unwrap_or_else(|e| e.into_inner());
     state.stopped.store(true, Ordering::SeqCst);
-    *status = DaemonStatus::Down(detail);
+    *status = gone;
+}
+
+/// Records that the daemon ended and no other is started in its place, with `detail` saying how
+/// it ended, and tells the window, which raises the alert asking the user to restart the
+/// application. A page that was loading meanwhile misses the event, so it asks for the same
+/// detail once it has loaded (`daemon_exit_detail`).
+pub fn give_up_on_daemon(app: &AppHandle, detail: String) {
+    record_no_daemon(app, DaemonStatus::GaveUp(detail.clone()));
+    let _ = app.emit("daemon-exited", detail);
+}
+
+/// How the daemon ended, when the shell has given up on it: what the page that loads in the window
+/// raises the daemon-exited alert with, since the `daemon-exited` event reaches only a page that
+/// was already listening — one pointed at a restarted daemon that died again while it loaded never
+/// hears of it. `None` while the daemon is up, starting, being started again or failed its first
+/// start, which the window's own query reports.
+#[tauri::command]
+pub fn daemon_exit_detail(state: tauri::State<DaemonState>) -> Option<String> {
+    state
+        .status
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .exit_detail()
+        .map(str::to_owned)
 }
 
 /// The query parameters a window opened now gets: where the daemon is, or why there is none.
 pub fn window_params(app: &AppHandle) -> String {
-    let status = app
-        .state::<DaemonState>()
+    app.state::<DaemonState>()
         .status
         .lock()
         .unwrap_or_else(|e| e.into_inner())
-        .clone();
-    match status {
-        DaemonStatus::Up(address) => daemon_params(&address),
-        DaemonStatus::Down(detail) => error_param(&detail),
-        DaemonStatus::Starting => error_param("the daemon has not started"),
-    }
+        .window_params()
 }
 
 /// Where the daemon is now, when it is up.
@@ -206,14 +229,34 @@ fn error_param(detail: &str) -> String {
     format!("error={}", crate::percent_encode_query_value(detail))
 }
 
-/// Where the daemon is, as far as a window that does not exist yet needs to know.
-#[derive(Clone, Default)]
+/// Where the daemon is, as far as a window that does not exist yet needs to know, and whether the
+/// shell has given up on it, as far as a page that loads in the window needs to know.
+#[derive(Default)]
 enum DaemonStatus {
     #[default]
     Starting,
     Up(DaemonAddress),
     /// There is none, with the words for why.
     Down(String),
+    /// There is none and none is started again, with the words for how the last one ended.
+    GaveUp(String),
+}
+
+impl DaemonStatus {
+    fn window_params(&self) -> String {
+        match self {
+            DaemonStatus::Up(address) => daemon_params(address),
+            DaemonStatus::Down(detail) | DaemonStatus::GaveUp(detail) => error_param(detail),
+            DaemonStatus::Starting => error_param("the daemon has not started"),
+        }
+    }
+
+    fn exit_detail(&self) -> Option<&str> {
+        match self {
+            DaemonStatus::GaveUp(detail) => Some(detail),
+            _ => None,
+        }
+    }
 }
 
 /// Starts the daemon for the first time, trying up to `STARTUP_ATTEMPTS` times with a short pause
@@ -446,10 +489,9 @@ fn daemon_ended(app: &AppHandle, generation: u64, code: Option<i32>) {
         }
         ExitAction::Stopped => {
             diagnostic!("the daemon ended with {ended}");
-            mark_daemon_down(app, ended.clone());
             // The daemon was up and serving, then ended (a requested shutdown, or a restart or quit
             // in progress) — tell the window; the UI ignores it while it is quitting itself.
-            let _ = app.emit("daemon-exited", ended);
+            give_up_on_daemon(app, ended);
         }
     }
 }
@@ -689,5 +731,26 @@ mod startup_tests {
         };
         assert_eq!(daemon_params(&address), "port=4242&key=0a1b2c");
         assert!(!format!("{address:?}").contains("0a1b2c"));
+    }
+
+    #[test]
+    fn only_a_daemon_given_up_on_has_an_exit_detail_for_the_page_to_raise() {
+        let given_up = DaemonStatus::GaveUp("restarted 3 times".to_string());
+        assert_eq!(given_up.exit_detail(), Some("restarted 3 times"));
+        // A window opened afterwards is told there is no daemon, as with any other end.
+        assert_eq!(given_up.window_params(), "error=restarted%203%20times");
+        let up = DaemonStatus::Up(DaemonAddress {
+            port: 4242,
+            key: "0a1b2c".to_string(),
+        });
+        // Being started again, or a first start that failed: the window's query tells those, and
+        // neither asks the user to restart.
+        for status in [
+            DaemonStatus::Starting,
+            up,
+            DaemonStatus::Down("It is being restarted.".to_string()),
+        ] {
+            assert_eq!(status.exit_detail(), None);
+        }
     }
 }

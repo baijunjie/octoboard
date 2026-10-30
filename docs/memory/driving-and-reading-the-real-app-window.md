@@ -18,8 +18,10 @@ capture, not only when one comes back empty.
 With the screen unlocked, the same blank reading comes from an instance that has no window on screen — hidden into
 the background, or not brought up since it launched: its accessibility tree exposes only the native menu bar and the
 status item's menu, `AXWindows` holds no web window, and a capture of its window comes back black. That is neither a
-missing Accessibility or Screen Recording grant nor a missing tool. Reopen the instance by its bundle identifier
-(`open -b <identifier>`; a reopen brings a hidden window back through `show_main_window`), then `AXRaise` its window
+missing Accessibility or Screen Recording grant nor a missing tool. Reopen the instance by the path of the bundle it
+runs from (`open <path to the .app>`, without `-n`; a reopen brings a hidden window back through `show_main_window`),
+not by its bundle identifier: `open -b <identifier>` has failed for a running scratch verification bundle
+(`LSCopyApplicationURLsForBundleIdentifier() failed`) where the path reopened it. Then `AXRaise` its window
 and make it `AXMain`; the WebKit accessibility tree appears once the window is showing. Capture only that window,
 with `screencapture -l <CGWindowID>` and the ID taken from `CGWindowListCopyWindowInfo` filtered to the instance's own
 PID.

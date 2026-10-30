@@ -10,12 +10,12 @@
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 
 use crate::diagnostics::diagnostic;
 use crate::sidecar::{
-    daemon_params, mark_daemon_down, start_attempt, wait_for, DaemonAddress, DaemonState,
-    DAEMON_PARAMS,
+    daemon_params, give_up_on_daemon, mark_daemon_down, start_attempt, wait_for, DaemonAddress,
+    DaemonState, DAEMON_PARAMS,
 };
 use crate::MAIN_WINDOW_LABEL;
 
@@ -132,8 +132,7 @@ fn run(app: &AppHandle, mut ended: String) {
             Err(restarts) => {
                 let detail = budget_spent_detail(&ended, restarts);
                 diagnostic!("giving up on the daemon: {detail}");
-                mark_daemon_down(app, detail.clone());
-                let _ = app.emit("daemon-exited", detail);
+                give_up_on_daemon(app, detail);
                 return;
             }
         };

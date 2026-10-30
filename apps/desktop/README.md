@@ -184,10 +184,13 @@ signature, and `publish-release` refuses it. Delete the release but keep the tag
 
 ## External interfaces
 
-The shell defines fourteen Tauri IPC commands, permitted through `src-tauri/capabilities/default.json` and
+The shell defines fifteen Tauri IPC commands, permitted through `src-tauri/capabilities/default.json` and
 `src-tauri/permissions/*.toml`:
 
 - `frontend_exit_heartbeat` — marks the webview as the one handling the exit flow, and is re-invoked on every quit gesture.
+- `daemon_exit_detail` (`sidecar.rs`) — how the daemon ended, once the shell has given up on it (its restart budget spent, or it
+  ended with exit code 0), and nothing otherwise; the UI asks it after subscribing to `daemon-exited`, so a page that
+  loaded after the event was emitted still raises the alert.
 - `confirm_quit` — marks a pending quit as user-confirmed and exits, or, with `restart`, relaunches the application instead
   (how an installed update takes effect), after making sure the daemon has exited (SIGTERM after two seconds, then a kill after
   five more), off the main thread, since the new instance's daemon cannot start while the old one holds its instance lock.
@@ -209,7 +212,7 @@ Events the shell emits to the webview: `settings-requested` (the menu's Settings
 About item, which the UI answers by opening Settings on its About section; there is no native About panel),
 `tray-session-chosen` (a session line of the menu bar icon's menu, carrying the session id), `tray-menu-opened` (that
 menu begins to open), `exit-requested` (a quit gesture needing the UI's exit flow) and `daemon-exited` (the sidecar
-ended and is not being restarted). `packages/ui/src/platform/tauri.ts` maps commands and events onto the platform adapter's capabilities.
+ended and is not being restarted, with how it ended; `daemon_exit_detail` answers the same for a page that loaded too late to hear it). `packages/ui/src/platform/tauri.ts` maps commands and events onto the platform adapter's capabilities.
 `capabilities/default.json` also allowlists the notification, clipboard read and write text, shell open, Dock badge,
 window theme, window show and window drag/zoom commands the UI uses.
 
@@ -225,7 +228,7 @@ window theme, window show and window drag/zoom commands the UI uses.
 | `src-tauri/src/tray_icon.rs` | Composes the menu bar icon's template image and attention-dot layer with an optional two-layer quota capsule (a main bar and, when given, a thinner weekly bar) |
 | `src-tauri/src/tray_lines.rs` | The menu bar icon's custom menu rows (session headings, account headers, notes, quota windows and the two-layer 5-hour/weekly `meter` row), plus `dress_quota_openers`, which attaches quota bars to native submenu titles while preserving AppKit's submenu handling |
 | `src-tauri/src/menu.rs` | The native macOS menu bar built from the UI's labels, including the About item (a plain item that emits `about-requested`, not the native panel) and the Settings… item, whose accelerator the UI sets at runtime |
-| `src-tauri/src/sidecar.rs` | Starts `octoboardd` (off the main thread, with retries and a timeout per attempt), parses its startup line into a `DaemonAddress` (port and key), keeps `DaemonState` (the daemon's status, which the window's URL is built from, and the sidecar's child) and a bounded tail of its stderr, reports how it ended, and `stop_daemon`, which a restart waits on |
+| `src-tauri/src/sidecar.rs` | Starts `octoboardd` (off the main thread, with retries and a timeout per attempt), parses its startup line into a `DaemonAddress` (port and key), keeps `DaemonState` (the daemon's status, which the window's URL is built from, and the sidecar's child) and a bounded tail of its stderr, reports how it ended (the `daemon-exited` event and `daemon_exit_detail`), and `stop_daemon`, which a restart waits on |
 | `src-tauri/src/recovery.rs` | Restarting a daemon that ended unexpectedly: classifying the exit, the restart budget and backoff, rebuilding the window's query and pointing the window at the new daemon, and telling the window (`daemon-exited`) when the budget is spent |
 | `src-tauri/src/diagnostics.rs` | The `diagnostic!` lines the shell writes to stderr and to `desktop.log` under `~/.octoboard/logs/`, rotated when it is opened |
 | `src-tauri/src/permissions.rs` | The macOS privacy permission commands and `capture_launch_state()` |
