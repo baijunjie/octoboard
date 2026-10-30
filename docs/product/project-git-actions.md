@@ -7,21 +7,25 @@ menu's other action, **Pull current branch**, and the branch badge these actions
 
 ## Pushing the current branch
 
-**Push current branch**, under **Git** in the project's action menu, pushes that project's current branch and only
-that branch. It is offered only while the project's status says the directory is a git repository (see "Project
-rows" in `docs/product/sidebar-project-rows.md`). Choosing it closes the menu at once. The push is waited on until
-`git push` has exited. When the push is accepted, the window that asked shows a notice toast saying the current branch
-was pushed.
-A refusal is an error alert worded from the code below. Pushing does not fetch and does not fast-forward, and a
-pull never pushes (see "Automatically pulling repositories" in `docs/product/project-git-status.md`). A local
-branch that is behind its upstream stays behind; if the remote rejects the update, the push fails and the branch
-stays where it was.
+**Push current branch**, under **Git** in the project's action menu, pushes that project's current branch and only that
+branch. It is offered only while the project's status says the directory is a git repository (see "Project rows" in
+`docs/product/sidebar-project-rows.md`). In every placement of that menu, it is disabled while a push of the project is
+in flight. No separate reason is shown on the disabled item: the branch badge beside the project's name shows the push
+(see "The branch badge" in `docs/product/project-git-status.md`). Choosing it closes the menu at once. The push is
+waited on until `git push` has exited, including the repository's `pre-push` hook. When the push is accepted, the window
+that asked shows a notice toast saying the current branch was pushed. A refusal is an error alert worded from the code
+below. Pushing does not fetch and does not fast-forward, and a pull never pushes (see "Automatically pulling
+repositories" in `docs/product/project-git-status.md`). A local branch that is behind its upstream stays behind; if the
+remote rejects the update, the push fails and the branch stays where it was.
 
 The push never uses `--force`, and it is never a bare `git push`, which would follow `push.default` and can publish
-every branch whose name exists on the remote. The one branch is named explicitly, so only that branch is published.
-The user's git configuration and credential helpers are used as they stand. `git` cannot stop to ask for a
-credential, a passphrase or a host key — the same refusal as a fetch (see "The environment a check runs `git` in"
-in `docs/product/project-git-status.md`) — and the push itself is given at most two minutes.
+every branch whose name exists on the remote. The one branch is named explicitly, so only that branch is published. The
+user's git configuration and credential helpers are used as they stand. `git` cannot stop to ask for a credential, a
+passphrase or a host key — the same refusal as a fetch (see "The environment a check runs `git` in" in
+`docs/product/project-git-status.md`). The push, including its hook, is given at most 30 minutes; the local branch reads
+still have at most two minutes each. Hooks run as configured in the repository. If a hook refuses the push, its output
+is carried as the failure's `detail` and shown under **Error details**, following "Names and diagnostic details" in
+`docs/product/error-alerts.md`.
 
 Once the directory is a repository, the branch is read first, locally, and what it says — the branch, its upstream
 and the counts — is published to every window showing the project before the push is shown in flight. So the ahead
@@ -48,6 +52,9 @@ fails comes after the branch read was published, so the badge already shows that
 - The project directory is not a git repository when the push runs: `not_a_git_repository`. The rule is the badge's
   (see "What one check does" in `docs/product/project-git-status.md`): `.git` must be in the project directory
   itself. A subdirectory of a repository is not one.
+- A push of the same project is already in flight: `push_in_progress`. The alert says to wait for it to finish,
+  without a separate remedy line or an Issue-reporting action. This guard is reached after the branch read, so an
+  earlier repository or branch-read failure is reported instead.
 - `HEAD` is detached: `not_on_a_branch`.
 - The branch has no commit yet: `no_commits_to_push`.
 - The upstream names no configured remote of this repository: `upstream_not_a_remote`.
@@ -60,16 +67,17 @@ fails comes after the branch read was published, so the badge already shows that
 - The branch cannot be read, or the remotes cannot be read: `git_push_failed`. The branch's reason is `git`'s own
   message, or that the read did not finish in time. The remotes' reason says they could not be read.
 - `git push` itself fails, including a remote that rejects the update, a missing credential, or a push that does
-  not finish within two minutes: `git_push_failed`, with `git`'s own message, or that it did not finish in time.
+  not finish within 30 minutes: `git_push_failed`, with `git`'s own message, or that it did not finish in time.
 
 A project that no longer exists is `unknown_project`.
 
 The push and a check are not ordered. **Pull current branch**, or a scheduled check, that arrives during a push is
 handled as it would be with no push in flight: it is not queued behind the push. The badge shows the push in flight
 while the check can still update its branch, counts and error. When the push ends, a check or pull still in flight is
-shown again. A second push of the same project is not refused while one is still running; the pushing state stays until
-the last push ends. The pushing state begins once the branch read has been published, covers the remotes read as well
-as `git push`, and ends on a refusal too.
+shown again. Only one push of the same project may run at once, across windows; another request that reaches the guard
+is refused as `push_in_progress`. The pushing state begins after the branch read has been published and the guard
+accepts the push, covers the remotes read as well as `git push`, and ends on a refusal too. A push ending after its
+project was removed and registered again cannot clear a newer push's in-flight indication.
 
 A successful push does not edit the project's files and does not move the working tree. It updates the remote, and
 in the repository it updates the remote-tracking refs `git` updates for that push. When the branch had no upstream,

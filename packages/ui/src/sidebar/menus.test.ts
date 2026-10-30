@@ -520,6 +520,14 @@ describe("archive previews in menus", () => {
   });
 });
 
+it.each([[false, false], [true, true]])("with pushing %s, the project's Push item is disabled: %s", (pushing, disabled) => {
+  const handlers = {} as unknown as SidebarHandlers;
+  const git = projectMenu(t, handlers, { id: "p" } as Project, [], { gitRepository: true, pushing }).find((entry) => typeof entry === "object" && "items" in entry && entry.label === "Git");
+  const items = (git as { items: { label: string; disabled?: boolean }[] }).items;
+  expect(items.find((item) => item.label === "Push current branch")?.disabled ?? false).toBe(disabled);
+  expect(items.find((item) => item.label === "Pull current branch")?.disabled ?? false).toBe(false);
+});
+
 it("asks for confirmation before restoring project changes", () => {
   const project = { id: "p" } as Project;
   const handlers = { onOpenDialog: vi.fn() } as unknown as SidebarHandlers;

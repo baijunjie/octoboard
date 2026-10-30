@@ -66,9 +66,12 @@ impl PushPlan {
     }
 }
 
-/// Pushes the project's current branch. Answered only once `git push` has exited. The local branch
-/// header is re-read first, so the push shows against the current ahead count, and again after a
-/// success, so that count drops without a fetch.
+/// Pushes the project's current branch. Answered only once `git push` has exited, which includes
+/// the repository's `pre-push` hook, so the wait may be minutes and a failed hook's output is what
+/// the error carries. The local branch header is re-read first, so the push shows against the
+/// current ahead count, and again after a success, so that count drops without a fetch. A project
+/// takes one push at a time: a second request while one is in flight is refused with
+/// `push_in_progress`, since it would run the `pre-push` hook again alongside the first.
 pub fn push_current_branch(state: &AppState, project: &Project) -> Result<(), anyhow::Error> {
     let path = Path::new(&project.path);
     if !hostfs::is_git_repo(path) {
@@ -82,14 +85,20 @@ pub fn push_current_branch(state: &AppState, project: &Project) -> Result<(), an
     // Published before the push is marked in flight: the badge draws the push on its ahead count,
     // which a commit nothing has re-read yet would leave at zero, and nothing drawn.
     state.publish_git_reread(&project.id, Ok(header.clone()));
-    let _activity = state.begin_git_push(&project.id);
+    let Some(_activity) = state.begin_git_push(&project.id) else {
+        return Err(CodedError::raised(
+            error_code::PUSH_IN_PROGRESS,
+            "A push of this project is still running.",
+            &[],
+        ));
+    };
     let run = git_remote::runner(path);
     let inspection = git_remote::inspect(&run)
         .ok_or_else(|| push_failed("the repository's remotes could not be read"))?;
     let plan = plan_push(&header, &inspection.remotes).map_err(refusal)?;
     let args = plan.args();
     let refs: Vec<&str> = args.iter().map(String::as_str).collect();
-    git_status::run_git_write(path, &refs).map_err(|detail| push_failed(&detail))?;
+    git_status::run_git_push(path, &refs).map_err(|detail| push_failed(&detail))?;
     git_status::publish_reread(state, project);
     Ok(())
 }

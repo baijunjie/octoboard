@@ -156,7 +156,7 @@ export function ProjectFocusView({
           <NewSessionButton shortcut label={t("sidebar.project.openSession")} quickLabel={t("sidebar.project.openSessionQuick")} target={newSession} onOpen={handlers.onOpenDialog} onQuickCreate={handlers.onQuickCreateSession} />
           <ActionMenu
             label={t("sidebar.project.actions", { name: isolate(project.name) })}
-            items={projectMenu(t, handlers, project, archived, { placement: "focused", gitRepository: gitStatus?.repository })}
+            items={projectMenu(t, handlers, project, archived, { placement: "focused", gitRepository: gitStatus?.repository, pushing: gitStatus?.activity === "pushing" })}
             contextTargetRef={headerRef}
           />
         </RowIconGroup>
@@ -398,7 +398,7 @@ const FocusProjectGroup = memo(function FocusProjectGroup({
 }): React.ReactElement {
   const t = useT();
   const { store } = useDaemon();
-  // Read as `ProjectFocusView` does, for the Git submenu.
+  // Read as `ProjectFocusView` does, for the Git badge and submenu.
   const gitStatus = useDaemonStore((s) => s.gitStatuses.get(project.id));
   const boundHere = useDaemonStoreEqual((s) => focusGroupRows(sessionsOf(indexSessions(s.sessions).byConsole, parentConsole.id), project, consoleSessionId, ordersByStatus(s.settings)));
   const sessions = useProjectSessions(project.id);
@@ -412,14 +412,20 @@ const FocusProjectGroup = memo(function FocusProjectGroup({
   const openSessionHolder = useRef<HTMLDivElement>(null);
   return (
     <>
-      <div ref={headerRef} className="mb-1 flex min-h-7 items-center gap-1 px-(--row-content-inset)">
-        <h4 className="min-w-0 flex-1">
+      {/* A `group`, as `TreeRow` is: `RowControls` shows the "+" and the menu while the heading is
+          hovered or holds focus, or a menu is open, and they take no width while hidden. */}
+      <div ref={headerRef} className="group mb-1 flex min-h-7 items-center gap-1 [--row-controls-gap:4px] px-(--row-content-inset)">
+        {/* The sidebar's project row sizes its name the same way: `min-w-16` on this flex item is
+            the floor, leaving `GitBadge`'s branch track as the part that gives way. */}
+        <h4 className="min-w-16 flex-1">
           <RowLabel title={project.name} className="block min-w-0">
             <span className="text-sm font-medium">{project.name}</span>
           </RowLabel>
         </h4>
-        <RowIconGroup>
-          {project.pinned && <PinButton name={project.name} onUnpin={() => handlers.onSetPinned({ project }, false)} returnFocusTo={openSessionHolder} />}
+        {/* After the heading rather than in it, so the name stays the heading's whole text. Shown
+            here so the actions menu's disabled Push has its cause in view. */}
+        <GitBadge status={gitStatus} touchPopover returnFocusTo={headerRef} />
+        <RowControls fixed={project.pinned ? <PinButton name={project.name} onUnpin={() => handlers.onSetPinned({ project }, false)} returnFocusTo={openSessionHolder} /> : undefined}>
           {/* Named for its project: the header's "+" is beside it in the same view. */}
           <NewSessionButton
             ref={openSessionHolder}
@@ -433,10 +439,10 @@ const FocusProjectGroup = memo(function FocusProjectGroup({
           />
           <ActionMenu
             label={t("sidebar.project.actions", { name: isolate(project.name) })}
-            items={projectMenu(t, handlers, project, archived, { placement: "nested", gitRepository: gitStatus?.repository, archiveScope: { console: parentConsole.id, consoleSession: consoleSessionId } })}
+            items={projectMenu(t, handlers, project, archived, { placement: "nested", gitRepository: gitStatus?.repository, pushing: gitStatus?.activity === "pushing", archiveScope: { console: parentConsole.id, consoleSession: consoleSessionId } })}
             contextTargetRef={headerRef}
           />
-        </RowIconGroup>
+        </RowControls>
       </div>
       <SessionCards handlers={handlers} sessions={boundHere} selectedSessionId={selectedSessionId} />
     </>

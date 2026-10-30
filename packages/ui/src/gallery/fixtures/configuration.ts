@@ -1553,7 +1553,7 @@ export const configurationScenarios: Scenario[] = [
     title: "Import result, the raw diagnostic behind a failure's Details",
     state: state,
     configuration: reviewing(),
-    description: "Details under the Design System failure is open: a popover opening below the button holds the git output as the raw text, in a block whose long lines scroll sideways. The sentence that git could not clone the repository stays on the row above it, and the other failed rows keep their own reasons and buttons.",
+    description: "Details under the Design System failure is open: a popover opening below the button holds the git output as the raw text, in a block whose long lines wrap. The sentence that git could not clone the repository stays on the row above it, and the other failed rows keep their own reasons and buttons.",
     steps: [
       ...importFromSettings,
       chooseFile,

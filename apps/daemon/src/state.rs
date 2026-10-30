@@ -185,7 +185,8 @@ pub struct AppState {
     /// The hook events received and not yet applied, per session (`crate::hook_queue`).
     pub hook_queues: crate::hook_queue::HookQueues,
     /// Each project's live git status, broadcast as `project_git_status` on every change and
-    /// replayed in a `snapshot`, with a counter overlaying its activity while pushes run.
+    /// replayed in a `snapshot`, with each project's in-flight push marker overlaying its activity
+    /// while the push runs and excluding a second push of that project.
     /// Derived, never stored in SQLite — see `GitStatus`.
     git_statuses: RwLock<GitStatuses>,
     /// The ids of the projects whose git status is being checked right now, so
@@ -2979,20 +2980,28 @@ impl AppState {
             .collect()
     }
 
-    /// Marks one push in flight, without excluding another push or a background check. The
-    /// guard restores the latest underlying check activity on every exit, including a failure.
-    pub(crate) fn begin_git_push(&self, project_id: &str) -> GitPushActivity<'_> {
+    /// Marks one push in flight, without excluding a background check. `None` when the project
+    /// already has a push in flight: one repository runs one `pre-push` hook at a time, so the
+    /// second push is refused rather than started alongside. The guard restores the latest
+    /// underlying check activity on every exit, including a failure.
+    pub(crate) fn begin_git_push(&self, project_id: &str) -> Option<GitPushActivity<'_>> {
         if let Ok(None) = self.store.get_project(project_id) {
-            return GitPushActivity {
+            return Some(GitPushActivity {
                 state: self,
                 project_id: project_id.to_string(),
-            };
+                token: None,
+            });
         }
         let mut statuses = self
             .git_statuses
             .write()
             .expect("git statuses lock poisoned");
-        *statuses.pushes.entry(project_id.to_string()).or_default() += 1;
+        if statuses.pushes.contains_key(project_id) {
+            return None;
+        }
+        let token = statuses.next_push_token;
+        statuses.next_push_token += 1;
+        statuses.pushes.insert(project_id.to_string(), token);
         let status = statuses
             .statuses
             .entry(project_id.to_string())
@@ -3002,10 +3011,11 @@ impl AppState {
         self.broadcast(Event::ProjectGitStatus {
             status: statuses.visible(status),
         });
-        GitPushActivity {
+        Some(GitPushActivity {
             state: self,
             project_id: project_id.to_string(),
-        }
+            token: Some(token),
+        })
     }
 
     /// The underlying check status for one project, without the push overlay.
@@ -3393,7 +3403,10 @@ fn blank_git_status(project_id: &str) -> GitStatus {
 #[derive(Default)]
 struct GitStatuses {
     statuses: HashMap<String, GitStatus>,
-    pushes: HashMap<String, usize>,
+    /// Projects with a push in flight, each with the token of the push that marked it, so a
+    /// finishing push removes only its own marker.
+    pushes: HashMap<String, u64>,
+    next_push_token: u64,
 }
 
 impl GitStatuses {
@@ -3408,20 +3421,24 @@ impl GitStatuses {
 pub(crate) struct GitPushActivity<'a> {
     state: &'a AppState,
     project_id: String,
+    /// The token of the marker this push set; `None` for a project no longer in the store, which
+    /// holds no marker to release.
+    token: Option<u64>,
 }
 
 impl Drop for GitPushActivity<'_> {
     fn drop(&mut self) {
+        let Some(token) = self.token else {
+            return;
+        };
         let mut statuses = self
             .state
             .git_statuses
             .write()
             .expect("git statuses lock poisoned");
-        let Some(count) = statuses.pushes.get_mut(&self.project_id) else {
-            return;
-        };
-        *count -= 1;
-        if *count == 0 {
+        // The marker may be gone, or a newer push's: the project was removed and registered again
+        // while this push ran.
+        if statuses.pushes.get(&self.project_id) == Some(&token) {
             statuses.pushes.remove(&self.project_id);
         }
         if let Some(status) = statuses.statuses.get(&self.project_id) {
@@ -4580,14 +4597,12 @@ mod tests {
     }
 
     #[test]
-    fn overlapping_pushes_overlay_checks_until_the_last_push_ends() {
+    fn a_push_overlays_checks_until_it_ends() {
         let (state, dir) = app_state("state-git-push-overlap");
         git_project(&state, &dir);
         state.publish_git_status(git_reading());
-        let mut first_window = state.subscribe();
-        let mut second_window = state.subscribe();
-        let first = state.begin_git_push("p1");
-        let second = state.begin_git_push("p1");
+        let mut window = state.subscribe();
+        let push = state.begin_git_push("p1").unwrap();
         state.publish_git_status(GitStatus {
             activity: GitActivity::Checking,
             ..git_reading()
@@ -4602,30 +4617,70 @@ mod tests {
                 ..Default::default()
             }),
         );
-        drop(first);
         let status = state.git_statuses().pop().unwrap();
         assert_eq!(status.activity, GitActivity::Pushing);
         assert_eq!(status.branch.as_deref(), Some("main"));
         assert_eq!((status.ahead, status.behind), (0, 1));
         assert_eq!(status.error.as_deref(), Some("fetch failed"));
-        drop(second);
+        drop(push);
         assert_eq!(state.git_statuses()[0].activity, GitActivity::Checking);
-        for window in [&mut first_window, &mut second_window] {
-            for expected in [
-                GitActivity::Pushing,
-                GitActivity::Pushing,
-                GitActivity::Pushing,
-                GitActivity::Pushing,
-                GitActivity::Pushing,
-                GitActivity::Checking,
-            ] {
-                let Event::ProjectGitStatus { status } = window.try_recv().unwrap() else {
-                    panic!("git status event")
-                };
-                assert_eq!(status.activity, expected);
-            }
-            assert!(window.try_recv().is_err());
+        for expected in [
+            GitActivity::Pushing,
+            GitActivity::Pushing,
+            GitActivity::Pushing,
+            GitActivity::Checking,
+        ] {
+            let Event::ProjectGitStatus { status } = window.try_recv().unwrap() else {
+                panic!("git status event")
+            };
+            assert_eq!(status.activity, expected);
         }
+        assert!(window.try_recv().is_err());
+    }
+
+    #[test]
+    fn a_second_push_is_refused_until_the_first_ends() {
+        let (state, dir) = app_state("state-git-push-exclusive");
+        git_project(&state, &dir);
+        state.publish_git_status(git_reading());
+        let first = state.begin_git_push("p1").unwrap();
+        let mut window = state.subscribe();
+        assert!(state.begin_git_push("p1").is_none());
+        // The refused request leaves the first push's marker and broadcasts alone.
+        assert_eq!(state.git_statuses()[0].activity, GitActivity::Pushing);
+        assert!(window.try_recv().is_err());
+        drop(first);
+        assert_eq!(state.git_statuses()[0].activity, GitActivity::Idle);
+        drop(state.begin_git_push("p1").unwrap());
+    }
+
+    #[test]
+    fn a_push_finishing_after_its_project_is_registered_again_leaves_the_newer_marker() {
+        let (state, dir) = app_state("state-git-push-reregistered");
+        git_project(&state, &dir);
+        let old = state.begin_git_push("p1").unwrap();
+        state.remove_git_status("p1");
+        let newer = state.begin_git_push("p1").unwrap();
+        drop(old);
+        assert_eq!(state.git_statuses()[0].activity, GitActivity::Pushing);
+        assert!(state.begin_git_push("p1").is_none());
+        drop(newer);
+        assert_eq!(state.git_statuses()[0].activity, GitActivity::Idle);
+    }
+
+    #[test]
+    fn a_push_request_during_a_push_is_answered_push_in_progress() {
+        let (state, _dir) = app_state("state-git-push-request-refused");
+        let repo =
+            crate::test_support::repo_with("state-git-push-refused-repo", &[(b"file", b"one")]);
+        let project = git_project(&state, &repo);
+        let first = state.begin_git_push("p1").unwrap();
+        let err = crate::git_push::push_current_branch(&state, &project).unwrap_err();
+        let coded = err.downcast_ref::<crate::protocol::CodedError>().unwrap();
+        assert_eq!(coded.code, crate::protocol::error_code::PUSH_IN_PROGRESS);
+        assert_eq!(state.git_statuses()[0].activity, GitActivity::Pushing);
+        drop(first);
+        assert_eq!(state.git_statuses()[0].activity, GitActivity::Idle);
     }
 
     #[test]
@@ -4634,7 +4689,7 @@ mod tests {
         git_project(&state, &dir);
         state.publish_git_status(git_reading());
         let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let _push = state.begin_git_push("p1");
+            let _push = state.begin_git_push("p1").unwrap();
             state.publish_git_status(GitStatus {
                 activity: GitActivity::Pulling,
                 ..git_reading()
@@ -4692,13 +4747,13 @@ mod tests {
     fn a_push_finishing_after_its_project_is_removed_does_not_restore_a_status() {
         let (state, dir) = app_state("state-git-push-removed");
         git_project(&state, &dir);
-        let push = state.begin_git_push("p1");
+        let push = state.begin_git_push("p1").unwrap();
         state.remove_git_status("p1");
         let mut events = state.subscribe();
         drop(push);
         assert!(state.git_statuses().is_empty());
         assert!(events.try_recv().is_err());
-        let _missing = state.begin_git_push("ghost");
+        let _missing = state.begin_git_push("ghost").unwrap();
         assert!(state.git_statuses().is_empty());
     }
 

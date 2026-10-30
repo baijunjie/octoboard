@@ -2072,7 +2072,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "exceptional",
     title: "Model command failed, raw diagnostics in the mark's popover",
-    description: "The warning mark beside the Model row's name is pressed, so its popover is open with focus inside it: the sentence that Claude Code could not list its models, then the command's multiline diagnostics as a raw block that scrolls sideways at its fade, with the right-to-left path kept legible. There is no Try again, and the one mark serves both the Console sessions and the Project sessions field.",
+    description: "The warning mark beside the Model row's name is pressed, so its popover is open with focus inside it: the sentence that Claude Code could not list its models, then the command's multiline diagnostics as a raw block whose long lines wrap rather than scroll sideways, with the right-to-left path kept legible. There is no Try again, and the one mark serves both the Console sessions and the Project sessions field.",
     state: dialogState,
     agentModels: { claude: { models: [], unavailable: {
       code: "models_command_failed",

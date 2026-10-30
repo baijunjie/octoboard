@@ -172,9 +172,13 @@ empty row is plain text (see "When no agent can open a session" in `docs/product
   session bound to another
   console session, to a project session that is not under this one, or to none, is not shown, and neither is a project
   with nothing under this console session. With none, a compact row saying there are no bound sessions takes their
-  place, carrying no action of its own — the header's **+** below is the way to open one. Each project's name carries
-  its pin button while it is pinned (see "Pinning" in `docs/product/order-of-projects-and-sessions.md`), its own **+**,
-  which opens a new session in that project, and its action menu, which is the project row's without its Focus mode item
+  place, carrying no action of its own — the header's **+** below is the way to open one. Each project's heading shows
+  its name, then the branch badge (see "The branch badge" in `docs/product/project-git-status.md`), followed by its
+  controls. The project's name keeps its floor of room while the branch name gives way as the heading gets tight.
+  The pin button stays visible while the project is pinned (see "Pinning" in
+  `docs/product/order-of-projects-and-sessions.md`). Its own **+**, which opens a new session in that project, and its
+  action-menu button show only while the heading is hovered, holds keyboard focus or has a menu open; while hidden
+  they take no width. The action menu is the project row's without its Focus mode item
   — a project has no focus mode to be entered from here — and keeps **Pin** / **Unpin**. That menu's **View archive**
   covers only the project's share of this console session's archive: the project's archived sessions bound to this
   console session, or bound to an archived coordinator that is bound to it, previewed as any archive preview is (see

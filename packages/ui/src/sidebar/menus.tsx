@@ -97,7 +97,10 @@ export type MenuPlacement = "list" | "focused" | "nested";
  * session's archive and opens the whole of it.
  * Git is a submenu, offered only while the project is known to be a git repository
  * (`gitRepository`, from its git status): pull the current branch, push the current branch, switch
- * to a local branch through its own submenu, and restore tracked file changes after confirmation. */
+ * to a local branch through its own submenu, and restore tracked file changes after confirmation.
+ * Push is disabled, with no reason, while a push of the project is in flight (`pushing`, from its git
+ * status): the daemon refuses a second one, and the git badge, drawn beside the project's name in
+ * every placement, already shows why. */
 export function projectMenu(
   t: Translate,
   handlers: SidebarHandlers,
@@ -106,8 +109,9 @@ export function projectMenu(
   {
     placement = "list",
     gitRepository = false,
+    pushing = false,
     archiveScope = { console: project.console_id, project: project.id },
-  }: { placement?: MenuPlacement; gitRepository?: boolean; archiveScope?: ArchiveScope } = {},
+  }: { placement?: MenuPlacement; gitRepository?: boolean; pushing?: boolean; archiveScope?: ArchiveScope } = {},
 ): ActionMenuEntry[] {
   const repository = repositoryLink(project.remote_url);
   const onScreen = handlers.visibleProjectPanels?.project === project.id ? handlers.visibleProjectPanels.kinds : [];
@@ -141,7 +145,7 @@ export function projectMenu(
           icon: GitBranch,
           items: [
             { label: t("sidebar.project.pullBranch"), icon: Download, onClick: () => handlers.onPullProjectBranch(project) },
-            { label: t("sidebar.project.pushBranch"), icon: Upload, onClick: () => handlers.onPushProjectBranch(project) },
+            { label: t("sidebar.project.pushBranch"), icon: Upload, disabled: pushing, onClick: () => handlers.onPushProjectBranch(project) },
             { label: t("sidebar.project.switchBranch"), icon: ArrowLeftRight, items: [], loadItems: () => handlers.onLoadProjectBranches(project) },
             "separator" as const,
             { label: t("sidebar.project.restoreChanges"), icon: Undo2, onClick: () => handlers.onOpenDialog({ kind: "restore-project-changes", project }), destructive: true },

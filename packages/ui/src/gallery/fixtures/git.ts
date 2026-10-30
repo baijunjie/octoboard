@@ -162,6 +162,28 @@ const openSwitch = [...openGitSubmenu(restoreProject.name), (ui: Ui) => ui.press
 const hostState = snapshotState({ consoles: [console_], projects: [restoreProject], gitStatuses: [gitStatusOf(restoreProject.id, { ahead: 2 })] });
 const openIn = (item: "sidebar.project.systemTerminal" | "common.fileManager") => [openProjectMenu(restoreProject.name), (ui: Ui) => ui.press(ui.t("common.openIn")), (ui: Ui) => ui.wait(300), (ui: Ui) => ui.press(ui.t(item)), (ui: Ui) => ui.wait(300)];
 
+/** What a repository's `pre-push` hook (`pnpm verify`) prints before it refuses the push: a run of check lines with
+ * a few failures whose file path and message are far longer than the dialog is wide, then Git's own closing line. */
+const PUSH_HOOK_OUTPUT = [
+  "> search-api@0.0.0 verify /Users/dev/code/search-api",
+  "> node scripts/verify.mjs --base origin/main",
+  "",
+  "verify: baseline origin/main (3 packages affected)",
+  ...Array.from({ length: 36 }, (_, i) => `  ok    lint        packages/api/src/handlers/route-${String(i + 1).padStart(2, "0")}.ts (${12 + ((i * 7) % 41)} ms)`),
+  "  FAIL  typecheck   packages/api/src/handlers/searchIndexRebuildScheduler/rebuildSchedulerWithBackoffAndJitter.ts:214:31 - error TS2345: Argument of type '{ shardId: string; reason: \"scheduled\" | \"manual\" | \"retry\"; attempts: number; backoff: { initialMs: number; maxMs: number; jitter: number } }' is not assignable to parameter of type 'RebuildRequest'.",
+  "          Object literal may only specify known properties, and 'attempts' does not exist in type 'RebuildRequest'.",
+  ...Array.from({ length: 18 }, (_, i) => `  ok    typecheck   packages/api/src/indexing/segment-${String(i + 1).padStart(2, "0")}.ts`),
+  "  FAIL  test        packages/api/src/handlers/__tests__/searchIndexRebuildScheduler.test.ts > rebuild scheduler > keeps the retry delay within the configured maximum when the previous attempt failed repeatedly",
+  "          AssertionError: expected 61440 to be less than or equal to 30000",
+  "            at /Users/dev/code/search-api/packages/api/src/handlers/__tests__/searchIndexRebuildScheduler.test.ts:88:41",
+  "            at processTicksAndRejections (node:internal/process/task_queues:105:5)",
+  ...Array.from({ length: 24 }, (_, i) => `  ok    test        packages/api/src/indexing/__tests__/segment-${String(i + 1).padStart(2, "0")}.test.ts (${3 + ((i * 5) % 19)} tests)`),
+  "  FAIL  format      packages/api/src/handlers/searchIndexRebuildScheduler/rebuildSchedulerWithBackoffAndJitter.ts (not formatted; run `pnpm format` to rewrite it)",
+  "",
+  "verify: 3 of 78 checks failed (typecheck 1, test 1, format 1) in 4m 52s",
+  "error: failed to push some refs to 'https://github.com/octoboard/search-api.git'",
+].join("\n");
+
 export const gitScenarios: Scenario[] = [
   ...[
     { id: "github", host: "GitHub", remote: "https://github.com/octoboard/search-api" },
@@ -180,6 +202,15 @@ export const gitScenarios: Scenario[] = [
     }),
     steps: [openProjectMenu(restoreProject.name), (ui) => ui.press(ui.t("common.openIn"))],
   })),
+  {
+    id: "project-push-disabled-while-pushing",
+    group: "Projects",
+    category: "normal",
+    title: "Push unavailable while a push is running",
+    description: "The project's push is still running (its badge shows the spinning loader), and the Git submenu of its actions menu is open: Push current branch is dimmed and cannot be chosen, with no reason beside it, while the other Git items stay available.",
+    state: snapshotState({ consoles: [console_], projects: [restoreProject], gitStatuses: [gitStatusOf(restoreProject.id, { activity: "pushing", ahead: 2 })] }),
+    steps: openGitSubmenu(restoreProject.name),
+  },
   {
     id: "git-transfer-badges", group: GROUP, category: "normal",
     title: "Push and pull count indicators",
@@ -301,6 +332,26 @@ export const gitScenarios: Scenario[] = [
     description: "A refused push is reported in the error alert dialog, which requires OK: its title says the branch could not be pushed and its body goes straight to what to do, with Git's own message only in the Error details disclosure, closed here.",
     state: hostState,
     projectPushError: { code: "git_push_failed", params: { detail: "To https://github.com/octoboard/search-api.git\n ! [rejected]        main -> main (fetch first)\nerror: failed to push some refs to 'https://github.com/octoboard/search-api.git'" }, message: "Git push failed" },
+    steps: [...openGitSubmenu(restoreProject.name), (ui) => ui.press(ui.t("sidebar.project.pushBranch")), (ui) => ui.wait(300)],
+  },
+  {
+    id: "git-push-hook-output-error",
+    group: "Projects",
+    category: "exceptional",
+    title: "Push failed with long hook output",
+    description: "The push was stopped by a pre-push hook that printed about ninety lines, with Error details open. The raw text sits in a block that wraps its long lines (the file paths and type error) instead of scrolling sideways, is capped at 40% of the window's height and, when the output exceeds that cap, scrolls inside itself with a fade at the edge; scroll the block to reach the last line, Git's own failed to push some refs. Resize the window's height with the controls to see the cap follow it.",
+    state: hostState,
+    projectPushError: { code: "git_push_failed", params: { detail: PUSH_HOOK_OUTPUT }, message: "Git push failed" },
+    steps: [...openGitSubmenu(restoreProject.name), (ui) => ui.press(ui.t("sidebar.project.pushBranch")), (ui) => ui.wait(300), (ui) => ui.press(ui.t("error.diagnostics"))],
+  },
+  {
+    id: "git-push-in-progress-error",
+    group: "Projects",
+    category: "exceptional",
+    title: "Push refused while another is running",
+    description: "A push refused because the project's previous push is still running (from a second window, or one that has not yet seen the pushing status) is reported in the error alert dialog, which requires OK: its title says the branch could not be pushed and its body is two plain sentences, saying that the project's push is still running and to wait for it to finish, with no remedy line after them and no Error details disclosure.",
+    state: hostState,
+    projectPushError: { code: "push_in_progress", params: {}, message: "A push of this project is still running." },
     steps: [...openGitSubmenu(restoreProject.name), (ui) => ui.press(ui.t("sidebar.project.pushBranch")), (ui) => ui.wait(300)],
   },
   {

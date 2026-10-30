@@ -289,15 +289,16 @@ pressing a change row's status letter opens the change. So such a mark is no dea
 
 On a touch screen a tap on a mark opens its tooltip's content in a popover (see "How a tooltip behaves" above) where the
 tap has nothing else to do: the status glyph on the top bar's breadcrumb, the status glyph and agent icon of each
-session a confirmation lists, the branch badge in a project's focus mode header and the context-size chip beside the
-Session history's heading (see "The context-size chip" in `docs/product/session-context.md`) and the Conflicted tag in
-the file viewer's title. On a device with a touch screen such a mark answers a press, and a hover, across at least 24 by
-24 pixels, even where it is drawn smaller. A mark inside a row, a button or an option opens none, as the tap there
-selects, folds, switches or chooses: the status glyph, agent icon, context-size chip and binding badge on a sidebar row,
-a focus mode card or archived row and an archive view row, the relative time on a focus mode card or archived row and on
-an item of a View archive submenu, the branch badge on a project's sidebar row, the activity marker, and the
-responsible-session badge in the Git mode's branch lists. A touch has no route to what such a mark's tooltip says;
-assistive technology has it in the accessible name of what holds the mark.
+session a confirmation lists, the branch badge in either focus-mode placement (see "The branch badge" in
+`docs/product/project-git-status.md`) and the context-size chip beside the Session history's heading (see "The
+context-size chip" in `docs/product/session-context.md`) and the Conflicted tag in the file viewer's title. On a device
+with a touch screen such a mark answers a press, and a hover, across at least 24 by 24 pixels, even where it is drawn
+smaller. A mark inside a row, a button or an option opens none, as the tap there selects, folds, switches or chooses:
+the status glyph, agent icon, context-size chip and binding badge on a sidebar row, a focus mode card or archived row
+and an archive view row, the relative time on a focus mode card or archived row and on an item of a View archive
+submenu, the branch badge on a project's sidebar row, the activity marker, and the responsible-session badge in the Git
+mode's branch lists. A touch has no route to what such a mark's tooltip says; assistive technology has it in the
+accessible name of what holds the mark.
 
 These are:
 
@@ -323,13 +324,12 @@ These are:
   full local date and time; the time's own name carries the same dates, and the card's or row's description or the
   item's name takes it in (see "What both views show" in `docs/product/focus-mode.md` and "The archive view" in
   `docs/product/archive-view.md`);
-- a project's branch badge, on its sidebar row and in focus mode's header, which carries **one tooltip for the whole
-  badge** rather than one per mark: resting the mouse on its state glyph, on the branch name or on either upstream
-  count shows the same sentence, the one the badge's whole state is said in — the branch and each count while it is
-  not zero. It shows whether or not the badge's text is cut, and the one state that says in visible text that the
-  repository has no commits yet carries no tooltip. A failed check is not in it: it is a failure mark of its own at the
-  badge's start, a button with a popover and no tooltip (see "The branch badge" in
-  `docs/product/project-git-status.md`);
+- a project's branch badge, wherever it is shown, which carries **one tooltip for the whole badge** rather than one per
+  mark: resting the mouse on its state glyph, on the branch name or on either upstream count shows the same sentence,
+  the one the badge's whole state is said in — the branch and each count while it is not zero. It shows whether or not
+  the badge's text is cut, and the one state that says in visible text that the repository has no commits yet carries no
+  tooltip. A failed check is not in it: it is a failure mark of its own at the badge's start, a button with a popover
+  and no tooltip (see "The branch badge" in `docs/product/project-git-status.md`);
 - the responsible-session badge, the ring a branch carries in the Git mode's branch lists, whose tooltip names the
   session working on the branch, says so differently when that session no longer exists and when it is the selected
   one, and is on the ring itself rather than on the row around it (see "The responsible-session badge" in
@@ -379,14 +379,13 @@ and pressing the name still runs nothing. A tooltip giving a label's full text s
 (see "How a tooltip behaves" above). The diff separator's tooltip follows the operating system's rules instead.
 
 **A path is cut at its start instead**, so that its last folder stays in view (see
-`docs/product/right-to-left-layout.md`). **So is a branch name**, so that its end — the part that tells sibling
-branches apart — stays in view: in a project's branch badge, on its sidebar row and in its focus mode's header; in the
-Git mode's branch selector, both its current choice and its listed options; and in the project menu's **Switch branch**
-submenu. The short commit id a detached `HEAD` shows in the badge and the session ID under the **Copy session ID**
-item's label, each known by its beginning, the badge's text saying the repository has no commits yet and the branch
-selector's placeholder asking for a branch are cut at their end, like every other label. Everything this section says
-holds for a label cut at its start, mirrored: it rests pinned to its end, fades at its start, and carries its full text
-as its tooltip while it is cut.
+`docs/product/right-to-left-layout.md`). **So is a branch name**, so that its end — the part that tells sibling branches
+apart — stays in view: in a project's branch badge wherever it is shown; in the Git mode's branch selector, both its
+current choice and its listed options; and in the project menu's **Switch branch** submenu. The short commit id a
+detached `HEAD` shows in the badge and the session ID under the **Copy session ID** item's label, each known by its
+beginning, the badge's text saying the repository has no commits yet and the branch selector's placeholder asking for a
+branch are cut at their end, like every other label. Everything this section says holds for a label cut at its start,
+mirrored: it rests pinned to its end, fades at its start, and carries its full text as its tooltip while it is cut.
 
 **A label that reads left to right whatever the language** — a path, a branch name, the session ID under the **Copy
 session ID** item's label, the file viewer's file name, an account's sign-in email (see
