@@ -346,7 +346,8 @@ impl LiveSession {
     /// Code turns focus reporting on as it draws its trust screen, and Grok Build turns on
     /// reporting every mouse movement as it draws its own, so an attached terminal writes that
     /// traffic all the time and none of it answers a screen. A mouse button press is counted: it
-    /// is the person acting.
+    /// is the person acting. Where mouse reporting is off, as at Codex's trust screen, the wheel
+    /// arrives as arrow keys, which are counted too.
     pub fn write_input(&self, data: &[u8]) -> Result<(), ptyio::PartialWrite> {
         self.write_raw_input(data, false)
     }
@@ -733,11 +734,9 @@ impl LiveSession {
 /// byte, any other final byte — the arrow keys included — a mouse button press, and a sequence cut
 /// short all say no.
 ///
-/// Movement and the wheel are let through because Grok Build reports every mouse movement while
-/// its trust screen is up, and a pointer passing or scrolling over the terminal is not the person
-/// answering it. Where mouse reporting is off, as at Codex's screen, the terminal turns the wheel
-/// into arrow keys, which are counted.
-fn is_terminal_protocol(chunk: &[u8]) -> bool {
+/// A pointer passing or scrolling over the terminal is not the person typing. Where mouse
+/// reporting is off the terminal turns the wheel into arrow keys, which say no.
+pub(crate) fn is_terminal_protocol(chunk: &[u8]) -> bool {
     if chunk.is_empty() {
         return false;
     }
