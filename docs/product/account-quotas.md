@@ -160,8 +160,10 @@ five-hour window, then the account-wide weekly window, then a credit pool, then 
 Windows within the same kind keep the order the agent reported, including the model-specific limits.
 
 The plan is shown as the agent names it, with each word capitalised (`max` as **Max**, `plus` as **Plus**, `pro_lite`
-as **Pro Lite**); a name that already has capitals inside it keeps its own casing (**SuperGrok**). Only the plan and
-these windows are shown: extra usage, spend, credit balances and pace estimates are not.
+as **Pro Lite**); a name that already has capitals inside it keeps its own casing (**SuperGrok**). Codex's exact plan
+identifier `self_serve_business_prolite` is displayed as **Business Pro Lite**; the quota reading and session tools retain
+the source identifier. Only the plan and these windows are shown: extra usage, spend, credit balances and pace estimates
+are not.
 
 ## How an account's quota is shown
 

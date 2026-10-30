@@ -97,6 +97,7 @@ it("has no countdown for a window that gives no reset time", () => {
 it.each([
   ["max", "Max"],
   ["plus", "Plus"],
+  ["self_serve_business_prolite", "Business Pro Lite"],
   ["SuperGrok", "SuperGrok"],
   ["pro_lite", "Pro Lite"],
   ["team-plan", "Team Plan"],
