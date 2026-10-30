@@ -456,7 +456,7 @@ it("shows a project image and does not fetch one that leaves the project", async
     request: (async (body) => {
       if (body.type !== "read_project_file") throw new Error(body.type);
       requested.push(body.path);
-      if (body.slot !== undefined) throw new Error("slot");
+      if (body.slot !== "document-image") throw new Error("slot");
       return {
         type: "project_file" as const,
         project: body.project,

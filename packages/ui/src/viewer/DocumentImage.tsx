@@ -4,16 +4,18 @@ import { useT } from "../i18n/react";
 import { useDaemon } from "../store";
 import { RENDER_BUDGETS } from "./budgets";
 import { bodyFromFileContent } from "./content";
+import { readDocumentImage } from "./documentImageReads";
 import { SpotNotice } from "./notices";
 import { resolveProjectAddress } from "./projectAddress";
 
 type Read = { path: string; url?: string; failed?: boolean; tooLarge?: boolean };
 
 /**
- * An image the document names. Only a path that resolves to a project file is read, and the read
- * takes no viewer slot, so it does not cancel the document's own read or another image's. The
- * bytes are shown as a `data:` URL the way a file opened as an image is, which does not run a
- * script or fetch anything further. Anything else — an address outside the project, an absolute
+ * An image the document names. Only a path that resolves to a project file is read, in the
+ * window's lane for document images, never the viewer's slot, so it does not cancel the document's
+ * own read; the read is let go of when the image goes, with its document or its path. The bytes
+ * are shown as a `data:` URL the way a file opened as an image is, which does not run a script or
+ * fetch anything further. Anything else — an address outside the project, an absolute
  * one, a path that resolves to nothing — is the description alone and is never requested.
  *
  * While the read is out, the description is what is shown, so there is no empty gap. A read that
@@ -41,7 +43,8 @@ export function DocumentImage({
   useEffect(() => {
     if (!project || !path || overBudget) return;
     let live = true;
-    void request({ type: "read_project_file", project, path })
+    const reading = new AbortController();
+    void readDocumentImage(request, project, path, reading.signal)
       .then((reply) => {
         if (!live || reply.type !== "project_file" || reply.path !== path) return;
         if (reply.file.size > RENDER_BUDGETS.documentImageBytes) {
@@ -56,6 +59,7 @@ export function DocumentImage({
       });
     return () => {
       live = false;
+      reading.abort();
     };
   }, [project, path, overBudget, request]);
 

@@ -1,6 +1,7 @@
 /** Window-wide lane shared by recursive file searches and Git list requests. Its two places,
- * including requests completing after a mode switch, fit beside directory listings and viewer
- * reads under the daemon's outstanding-request bound (see useDirectoryListings.ts). */
+ * including requests completing after a mode switch, and a unit for each place's request replaced
+ * in its slot past the bound, fit beside directory listings and viewer reads under the daemon's
+ * outstanding-request bound (see useDirectoryListings.ts). */
 const MAX_WINDOW_LIST_IN_FLIGHT = 2;
 
 let inFlight = 0;
