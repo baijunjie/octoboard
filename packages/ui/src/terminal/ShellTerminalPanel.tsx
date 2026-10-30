@@ -14,8 +14,8 @@ import { handFocusOff } from "../components/handFocusOff";
 import { HandOffOnUnmount } from "../components/HandOffOnUnmount";
 import { InlineReference } from "../components/InlineReference";
 import { PanelHeader } from "../components/PanelHeader";
-import { FOCUSABLE, focusFellToPage } from "../components/regionFocus";
-import { ROW_ICON_BUTTON_CLASS } from "../components/RowControls";
+import { focusFellToPage } from "../components/regionFocus";
+import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../components/RowControls";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useTabScrollLabels } from "../components/tabScrollLabels";
 import { TitledControl } from "../components/TitledControl";
@@ -31,6 +31,7 @@ import { Message, useT } from "../i18n/react";
 import type { Project, ShellTerminal } from "../protocol";
 import { useDaemon, type Daemon } from "../store";
 import { ringForAutomaticFocus } from "../touchInput";
+import { shellTerminalTitle } from "./shellTerminalTitle";
 import { setActiveShellTerminal, startShellTerminal, takeShellTerminalFocus, useActiveShellTerminal, useProjectShellTerminals, useShellTerminalStarting } from "./shellTerminals";
 import { ShellTerminalView, type ShellTerminalViewHandle } from "./ShellTerminalView";
 
@@ -47,7 +48,7 @@ import { ShellTerminalView, type ShellTerminalViewHandle } from "./ShellTerminal
  *
  * Closing a tab whose shell is running something asks first; an idle or exited one closes at once.
  * Tabs that arrive or go while the strip is shown move with the shared list motion.
- * A tab's name is the terminal's title, which follows the shell's until the user renames it.
+ * Tabs sit below the header, with automatic path titles shortened to their last folder.
  */
 export function ShellTerminalPanel({
   project,
@@ -128,21 +129,21 @@ export function ShellTerminalPanel({
   }, [activeTab]);
   const latest = useLatest({ activeId, keyboard: useFocusVisible().isFocusVisible });
 
-  /** Focus for the panel once what held it has gone: the shown terminal, or the panel's first
-   * control when it has none. Deferred to the frame after the commit that changed the tabs. */
+  /** Focus for the panel once what held it has gone: the shown terminal, or New terminal
+   * when it has none. Deferred to the frame after the commit that changed the tabs. */
   const focusShown = () =>
     requestAnimationFrame(() => {
       const view = latest.current.activeId === undefined ? undefined : views.current.get(latest.current.activeId);
       if (view) view.focus();
-      else rootRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+      else newRef.current?.focus();
     });
 
-  /** The shown tab, or the panel's first control when no tab is left. */
+  /** The shown tab, or New terminal when no tab is left. */
   const focusShownTabNow = () => {
     const id = latest.current.activeId;
     const tab = id === undefined ? undefined : tabs.current.get(id);
     if (tab) tab.focus();
-    else rootRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+    else newRef.current?.focus();
   };
 
   /** Focus for the strip once the tab that held it (or its context menu) has gone: the shown tab, or
@@ -263,8 +264,16 @@ export function ShellTerminalPanel({
   };
   useLayoutEffect(linkPanel);
 
-  const tabLabel = (terminal: ShellTerminal) =>
-    terminal.state === "exited" ? t("shellTerminal.tab.exited", { title: isolate(terminal.title) }) : terminal.title;
+  const tabLabel = (terminal: ShellTerminal, title = shellTerminalTitle(terminal)) =>
+    terminal.state === "exited" ? t("shellTerminal.tab.exited", { title: isolate(title) }) : title;
+
+  const newTerminalButton = (
+    <TitledControl title={t("shellTerminal.new")}>
+      <Button ref={newRef} data-region-landing={terminals.length === 0 ? "" : undefined} isIconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={t("shellTerminal.new")} preventFocusOnPress onPress={() => void start()}>
+        <Plus aria-hidden="true" className="size-4" />
+      </Button>
+    </TitledControl>
+  );
 
   return (
     <>
@@ -274,57 +283,45 @@ export function ShellTerminalPanel({
           onSelectionChange={(key) => select(String(key))}
           className="flex flex-none flex-col gap-0"
         >
-          <PanelHeader
-            title={t("panel.terminal.name")}
-            hideTitleWhenNarrow
-            actions={
-              <>
-                <TitledControl title={t("shellTerminal.new")}>
-                  <Button ref={newRef} isIconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={t("shellTerminal.new")} preventFocusOnPress onPress={() => void start()}>
-                    <Plus aria-hidden="true" className="size-4" />
-                  </Button>
-                </TitledControl>
-                {activeTerminal && (
-                  <ActionMenu
-                    label={t("shellTerminal.actions", { title: isolate(activeTerminal.title) })}
-                    items={actionsOf(activeTerminal)}
-                  />
-                )}
-              </>
-            }
-          >
+          <PanelHeader title={t("panel.terminal.name")} />
+          <div className="flex min-h-11 min-w-0 items-center groove-b px-[calc(var(--pane-inset)-6px)]">
             {terminals.length > 0 && (
               <Tabs.ListContainer
                 // HeroUI lays its scroll buttons over the strip's ends, which here would cover a
-                // tab's close mark: while the strip scrolls, its ends are padded to hold them.
-                className="min-w-0 rounded-none bg-transparent has-[>:is([data-left-scroll=true],[data-right-scroll=true],[data-left-right-scroll=true])]:px-6"
+                // tab's close mark: reserve space only at an edge that has a scroll button.
+                className="min-w-0 flex-initial rounded-none bg-transparent has-[>:is([data-left-scroll=true],[data-left-right-scroll=true])]:ps-6 has-[>:is([data-right-scroll=true],[data-left-right-scroll=true])]:pe-6"
                 render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
                 {/* The scroller clips outside this padding; leave room for the focus ring and its offset.
                     Positioned, so a departing tab's visual stays in the strip's scroll. */}
-                <Tabs.List ref={stripRef} aria-label={t("shellTerminal.tabs")} className="relative w-max min-w-0 p-1.5">
+                <Tabs.List ref={stripRef} aria-label={t("shellTerminal.tabs")} className="relative w-max min-w-0 gap-1 p-1.5">
                   {terminals.map((terminal) => (
                     <Tabs.Tab
                       key={terminal.id}
                       id={terminal.id}
+                      aria-label={tabLabel(terminal, terminal.title)}
                       ref={registerTab}
                       data-list-motion={terminal.id}
-                      // The selected tab is drawn with the fill HeroUI's sliding indicator has, as a
-                      // fill of its own: the indicator's shared-element transition is left stuck
-                      // part-way when its tab renders again within the frame it was selected in,
-                      // which a tab created and selected in one go does. Content-wide, not filling the
-                      // strip, which keeps its width while a closed tab's neighbours slide up.
-                      className={`group/tab h-6 w-auto flex-none scroll-mx-1.5 gap-0.5 ps-1.5 pe-0.5 whitespace-nowrap hover:text-foreground data-[selected=true]:bg-(--segment) data-[selected=true]:shadow-(--surface-shadow)${closingIds.has(terminal.id) ? " opacity-50" : ""}${terminal.state === "exited" ? " text-app-muted" : ""}`}
+                      className={`h-8 w-auto flex-none scroll-mx-1.5 gap-2 rounded-md border border-transparent px-2 whitespace-nowrap hover:bg-default hover:text-foreground data-[selected=true]:border-accent data-[selected=true]:bg-accent-soft data-[selected=true]:text-accent-soft-foreground${closingIds.has(terminal.id) ? " opacity-50" : ""}${terminal.state === "exited" ? " text-app-muted" : ""}`}
                     >
                       {/* First among what goes away with the tab, so focus inside it is still found. */}
                       <HandOffOnUnmount from={`[data-key="${CSS.escape(terminal.id)}"]`} to={focusShownTab} />
-                      <FadeOverflow as="span" dir="auto" className="max-w-40 min-w-0" titleWhenClipped={tabLabel(terminal)}>{tabLabel(terminal)}</FadeOverflow>
+                      <FadeOverflow as="span" dir="auto" className="max-w-40 min-w-0" title={shellTerminalTitle(terminal) !== terminal.title ? tabLabel(terminal, terminal.title) : undefined} titleWhenClipped={tabLabel(terminal)}>{tabLabel(terminal)}</FadeOverflow>
                       <TabCloseMark title={t("shellTerminal.close")} onClose={() => requestClose(terminal, "terminal")} />
                     </Tabs.Tab>
                   ))}
                 </Tabs.List>
               </Tabs.ListContainer>
             )}
-          </PanelHeader>
+            <RowIconGroup className="ms-auto px-1.5">
+              {newTerminalButton}
+              {activeTerminal && (
+                <ActionMenu
+                  label={t("shellTerminal.actions", { title: isolate(activeTerminal.title) })}
+                  items={actionsOf(activeTerminal)}
+                />
+              )}
+            </RowIconGroup>
+          </div>
         </Tabs>
         {/* Outside `Tabs`, which renders a hidden copy of all it holds to build its collection: a
             terminal view in that copy would be a second emulator with a connection of its own to
@@ -411,7 +408,7 @@ export function ShellTerminalPanel({
   );
 }
 
-/** Where a close was asked from: a menu (a tab's context menu, the header's) or the terminal itself (its
+/** Where a close was asked from: a menu (a tab's context menu, the tab row's) or the terminal itself (its
  * tab's close mark, its view's Close button), which decides where focus goes once a confirmed close has
  * taken away what held it. */
 type CloseOrigin = "menu" | "terminal";
@@ -426,14 +423,14 @@ async function closeShellTerminal(daemon: Pick<Daemon, "request" | "toastError">
 }
 
 /** A tab's context menu (a right-click, or Shift+F10 and the menu key on the focused tab), with the
- * actions the header's menu has for the shown tab. It attaches to `tab` as it mounts, so it is
+ * actions the tab row's menu has for the shown tab. It attaches to `tab` as it mounts, so it is
  * mounted once the tab is. `onGone` is called when it unmounts with focus in its open menu, as the
  * tab goes while the menu is up. */
 function TabContextMenu({ label, items, tab, onGone }: { label: string; items: ActionMenuEntry[]; tab: HTMLElement; onGone: () => void }): React.ReactElement {
   const [target] = useState<React.RefObject<HTMLElement | null>>(() => ({ current: tab }));
   // Kept past the wrapper's unmount, whose ref is cleared before the hand-off looks for the menu.
   const scope = useRef<HTMLDivElement | null>(null);
-  // Only this menu: another one open (the header's) keeps its focus when a tab goes. The menu is
+  // Only this menu: another one open (the tab row's) keeps its focus when a tab goes. The menu is
   // labelled by its hidden trigger, in the wrapper.
   const ownMenu = () => {
     const trigger = scope.current?.querySelector("button")?.id;
@@ -465,8 +462,8 @@ function revealInScroller(scroller: HTMLElement, tab: HTMLElement): void {
 }
 
 /** A tab's close mark, for the pointer only and kept out of the tab's own press so it closes rather
- * than selects: the keyboard closes a tab from the header's menu or the tab's context menu, as a
- * tab holds no control of its own. Drawn at 16, round as the pill-shaped tab it sits in, and hit at
+ * than selects: the keyboard closes a tab from the tab row's menu or the tab's context menu, as a
+ * tab holds no control of its own. Drawn at 16 and hit at
  * 24 (`::after`), and its tooltip is anchored, as a tab cannot hold a trigger. */
 function TabCloseMark({ title, onClose }: { title: string; onClose: () => void }): React.ReactElement {
   const ref = useRef<HTMLSpanElement>(null);
@@ -476,7 +473,7 @@ function TabCloseMark({ title, onClose }: { title: string; onClose: () => void }
       <span
         ref={ref}
         aria-hidden="true"
-        className="relative flex size-4 items-center justify-center rounded-full opacity-0 after:absolute after:-inset-1 after:content-[''] group-hover/tab:opacity-100 group-data-[selected=true]/tab:opacity-100 hover:bg-default"
+        className="relative flex size-4 items-center justify-center rounded-sm text-app-muted after:absolute after:-inset-1 after:content-[''] transition-colors duration-100 hover:bg-foreground/15 hover:text-foreground active:bg-foreground/25 active:text-foreground motion-reduce:transition-none"
         onPointerEnter={() => setHovered(true)}
         onPointerLeave={() => setHovered(false)}
         onPointerDown={(event) => event.stopPropagation()}

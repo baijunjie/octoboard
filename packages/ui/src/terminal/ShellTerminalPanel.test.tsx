@@ -9,6 +9,7 @@ import { setGitModeWorktree } from "../browser/browserState";
 import { DaemonRequestError } from "../daemon-client";
 import { presence, stubListMotion } from "../components/listMotionTestSupport";
 import { isolate } from "../i18n/isolate";
+import { PanelFrameProvider, type PanelFrame } from "../components/PanelHeader";
 import { PlatformProvider } from "../platform/react";
 import type { Event, Project, RequestBody, ShellTerminal } from "../protocol";
 import { applyDaemonEvent, createStateStore, DaemonProvider, seedShellTerminal, type Daemon } from "../store";
@@ -49,7 +50,7 @@ afterEach(() => {
 // `eventFirst`: the broadcast of the new record arrives before the reply that names it; otherwise
 // it arrives after, as `lateEvent` releases it. The broadcast carries a newer title than the reply
 // does, as one that came after a rename would.
-function mount(terminals: ShellTerminal[], { holdCreate, eventFirst = true }: { holdCreate?: Promise<void>; eventFirst?: boolean } = {}) {
+function mount(terminals: ShellTerminal[], { holdCreate, eventFirst = true, frame }: { holdCreate?: Promise<void>; eventFirst?: boolean; frame?: PanelFrame } = {}) {
   const store = createStateStore({ shellTerminals: new Map(terminals.map((terminal) => [terminal.id, terminal])) });
   const broadcast = () => applyDaemonEvent(store, { type: "shell_terminal_upserted", shell_terminal: shell("new", 99, { title: "newer" }) });
   const request = vi.fn(async (body: RequestBody): Promise<Event> => {
@@ -76,7 +77,9 @@ function mount(terminals: ShellTerminal[], { holdCreate, eventFirst = true }: { 
     root.render(
       <PlatformProvider value={{ kind: "browser" }}>
         <DaemonProvider value={daemon}>
-          <ShellTerminalPanel project={project} switching={false} />
+          <PanelFrameProvider value={frame}>
+            <ShellTerminalPanel project={project} switching={false} />
+          </PanelFrameProvider>
         </DaemonProvider>
       </PlatformProvider>,
     ),
@@ -96,6 +99,18 @@ function mount(terminals: ShellTerminal[], { holdCreate, eventFirst = true }: { 
     shown: () => container.querySelector("[data-shown=true]")?.getAttribute("data-view"),
   };
 }
+
+it("keeps the New terminal button and its focus when another client adds or removes the last terminal", () => {
+  const panel = mount([]);
+  const button = panel.container.querySelector<HTMLButtonElement>('button[aria-label="New terminal"]')!;
+  act(() => button.focus());
+  for (const terminals of [[shell("remote", 1)], []]) {
+    act(() => panel.store.setState({ shellTerminals: new Map(terminals.map((terminal) => [terminal.id, terminal])) }));
+    expect(panel.container.querySelector('button[aria-label="New terminal"]')).toBe(button);
+    expect(document.activeElement).toBe(button);
+    expect(button.hasAttribute("data-region-landing")).toBe(terminals.length === 0);
+  }
+});
 
 it("lists the project's terminals oldest first, shows the newest, and names the box of terminals as that tab's panel", () => {
   const panel = mount([shell("b", 2), shell("a", 1, { state: "exited" }), { ...shell("x", 3), project_id: "other" }]);
@@ -331,6 +346,15 @@ function pointerModality() {
   act(() => setInteractionModality("pointer"));
   onTestFinished(() => act(() => Reflect.apply(setInteractionModality, undefined, [before])));
 }
+
+it.each([true, false])("focuses New terminal after the last tab goes with canMaximize=%s", async (canMaximize) => {
+  const panel = mount([shell("a", 1)], {
+    frame: { canMaximize, maximized: false, onToggleMaximized: vi.fn(), onClose: vi.fn() },
+  });
+  act(() => panel.tabs()[0].focus());
+  remove(panel, "a");
+  await vi.waitFor(() => expect(document.activeElement).toBe(panel.container.querySelector('button[aria-label="New terminal"]')));
+});
 
 it("hands focus on a tab that goes to the shown tab, with the focus ring, never to the departing copy", async () => {
   stubListMotion();

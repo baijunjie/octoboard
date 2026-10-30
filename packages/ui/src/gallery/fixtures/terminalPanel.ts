@@ -13,8 +13,7 @@ const stateOf = (shellTerminals: ReturnType<typeof shellTerminalOf>[]) =>
 /** The Terminal panel alone in the stack (Files closed), so the panel takes the pane's height. */
 const TERMINAL_ONLY: Preferences = { panelStacks: { project: { open: ["terminal"], shares: {} } } };
 
-/** The Terminal panel alone, in a pane widened so that three tabs fit the strip unclipped: at the
- * default width they already scroll, which "Many tabs" is for. */
+/** The Terminal panel alone, with room to compare several complete tab labels. */
 const WIDE_TERMINAL: Preferences = { ...TERMINAL_ONLY, asideWidth: 560 };
 
 const openWebsite = (ui: Ui) => ui.press(ui.session("Fix the summary layout"));
@@ -23,8 +22,8 @@ const showTerminal = (ui: Ui) => ui.showPanel("terminal");
 /** Opens the session, then lets the Files panel read its folder, which draws nothing until it has. */
 const openWebsiteWithFiles = [openWebsite, (ui: Ui) => ui.wait(400)];
 
-/** The header's actions button for the shown tab, named after it. */
-const headerMenu = (ui: Ui, title: string) => ui.press(ui.t("shellTerminal.actions", { title }));
+/** The tab row's actions button for the shown terminal, named after it. */
+const terminalMenu = (ui: Ui, title: string) => ui.press(ui.t("shellTerminal.actions", { title }));
 
 const oneShell = [shellTerminalOf("sh-1", web, "zsh", 0)];
 
@@ -48,7 +47,7 @@ export const terminalPanelScenarios: Scenario[] = [
     category: "normal",
     title: "Terminal panel with one tab",
     description:
-      "The Terminal panel alone in the right pane, as the top bar's Terminal toggle (pressed) opens it. Its header runs the Terminal name, the tab strip with the single shell selected and its close mark, New terminal, the tab's actions menu, then Maximize panel, then Close panel: Terminal offers maximize even as the only panel. The shell draws on the card's own terminal background, inset as the agent terminal is. Choose Phone (420px) to see it float over the agent terminal as a card, with a dimmed strip of the terminal beside it, and no Maximize panel, which a floating card does not offer; Escape closes the card only outside the shell: typing in the shell leaves it open. At 360px or less the strip narrows from 48px to 24px to leave the card room, and the header still fits the Terminal name, the tab with its close mark, New terminal, the actions menu and Close panel.",
+      "The Terminal panel alone in the right pane, as the top bar's Terminal toggle (pressed) opens it. Its first row runs only the Terminal name, Maximize panel and Close panel. The selected shell and its always-visible close mark sit on the left of a separate row below; New terminal and the terminal actions menu stay fixed on that row's right. The selected tab is a rounded rectangle with a blue outline and tinted fill. Terminal offers maximize even as the only panel. The shell draws on the card's own terminal background, inset as the agent terminal is. Choose Phone (420px) to see it float over the agent terminal as a card, with a dimmed strip of the terminal beside it, and no Maximize panel, which a floating card does not offer; Escape closes the card only outside the shell: typing in the shell leaves it open. At 360px or less the strip narrows from 48px to 24px to leave the card room, and the first row still shows the Terminal name and panel controls, with the tab and terminal controls kept on the second row. Compare desktop, 420px and 360px with the width controls.",
     state: stateOf(oneShell),
     preferences: TERMINAL_ONLY,
     steps: [openWebsite, (ui) => ui.showPanel("terminal")],
@@ -59,10 +58,10 @@ export const terminalPanelScenarios: Scenario[] = [
     category: "normal",
     title: "Several tabs",
     description:
-      "Three shells in the order they were started, the newest selected with the raised fill and the others muted until hovered. The pane is widened to 560px so the three tabs fit the strip whole, as at the default width they already scroll (see Many tabs). Hover or select a tab to see its close mark; press New terminal for another tab, selected at once. The \"Live changes\" buttons make what another window would: its new terminal joins the strip at the end without being selected, and closing the shown one hands the view to a neighbour, and reopening it afterwards brings it back without selecting it, so the view stays on the neighbour. Tabs fade in or out while the ones after them slide into place; with reduced motion they appear and disappear at once.",
+      "Three evenly spaced, rounded rectangular tabs in the order the shells were started, the newest selected with a blue outline and tinted fill. Every tab keeps its close mark visible. The pane is widened to 560px so the three tabs fit whole on their own row below the title and panel controls. New terminal and the terminal actions menu stay fixed on the right of that row; press New terminal for another tab, selected at once. The \"Live changes\" buttons make what another window would: its new terminal joins the strip at the end without being selected, and closing the shown one hands the view to a neighbour, and reopening it afterwards brings it back without selecting it, so the view stays on the neighbour. Tabs fade in or out while the ones after them slide into place; with reduced motion they appear and disappear at once.",
     state: stateOf(severalShells),
     preferences: WIDE_TERMINAL,
-    steps: [openWebsite],
+    steps: [openWebsite, showTerminal],
     liveChanges: [
       terminalOpened("open-htop", "Another window opens htop", shellTerminalOf("sh-4", web, "htop", 3)),
       terminalClosed("close-htop", "Another window closes htop", "sh-4"),
@@ -71,15 +70,31 @@ export const terminalPanelScenarios: Scenario[] = [
     ],
   },
   {
+    id: "shell-panel-path-titles",
+    group: GROUP,
+    category: "normal",
+    title: "Short directory titles with full paths on hover",
+    description:
+      "Automatic directory titles show only the last folder: website from a user@host-prefixed absolute path, and src (exited) from a home-relative path. Hover either shortened title to see its full original title, even when the short name fits. The command git log and the manually named ~/keep tab stay unchanged. The pane is widened to 560px. Evenly spaced, rounded rectangular tabs occupy their own row below the always-visible Terminal title and panel controls. The selected ~/keep tab has a blue outline and tinted fill; every tab shows its close mark, and New terminal and the terminal actions menu stay fixed on the right, outside the scrolling strip. Hover a close mark to see its background, then hold the pointer down to see a stronger pressed fill. Compare light and dark themes at desktop, 420px and 360px widths, using the strip's scroll buttons where needed.",
+    state: stateOf([
+      shellTerminalOf("sh-1", web, "developer@workstation:/Volumes/Projects/website", 0),
+      shellTerminalOf("sh-2", web, "~/code/website/src", 1, { state: "exited" }),
+      shellTerminalOf("sh-3", web, "git log", 2),
+      shellTerminalOf("sh-4", web, "~/keep", 3, { renamed: true }),
+    ]),
+    preferences: WIDE_TERMINAL,
+    steps: [openWebsite, showTerminal],
+  },
+  {
     id: "shell-panel-many-tabs",
     group: GROUP,
     category: "normal",
     title: "Many tabs, the strip scrolling",
     description:
-      "Twelve shells, more than the strip holds: the strip scrolls, with the Terminal title kept whole and the scroll buttons in padding at its ends, clear of every tab. The newest tab is the one shown and is scrolled into view, so only the button toward the earlier tabs shows. Press it or scroll the strip sideways to reach them.",
+      "Twelve shells, more than the strip holds: the rounded rectangular tabs scroll on the second row. A scroll button reserves space only at the edge where it appears, clear of every close mark. New terminal and the terminal actions menu stay fixed on the right, outside the scrolling strip. The Terminal title and panel controls stay on the first row, visible at desktop, 420px and 360px widths. Every tab keeps its close mark visible. The newest tab has a blue outline and tinted fill and is scrolled into view, so only the button toward the earlier tabs shows. Compare light and dark themes with the theme control. Press it or scroll the strip sideways to reach them.",
     state: stateOf(manyShells),
     preferences: TERMINAL_ONLY,
-    steps: [openWebsite],
+    steps: [openWebsite, showTerminal],
   },
   {
     id: "shell-panel-exited",
@@ -90,7 +105,7 @@ export const terminalPanelScenarios: Scenario[] = [
       "The selected tab reads \"zsh (exited)\", muted beside the running one, and the shell's last screen stays up with the notice over its bottom edge: the shell has exited, with Close terminal. The notice offers no restart. The pane is widened to 560px so both tabs show whole.",
     state: stateOf([shellTerminalOf("sh-1", web, "pnpm dev", 0, { busy: true }), shellTerminalOf("sh-2", web, "zsh", 1, { state: "exited" })]),
     preferences: WIDE_TERMINAL,
-    steps: [openWebsite, (ui) => ui.wait(500)],
+    steps: [openWebsite, showTerminal, (ui) => ui.wait(500)],
   },
   {
     id: "shell-panel-stacked",
@@ -101,7 +116,7 @@ export const terminalPanelScenarios: Scenario[] = [
       "Terminal and Files each have their own card and header. The sidebar starts hidden and the pane widened so Terminal and Files stand side by side. Drag the pane width handle: at 530px of content width or more, Terminal fills the first column and Files the second; below 530px they stack, Terminal above Files. In the stacked layout, drag the height separator, or focus it and use the arrow keys, to share the height; double-click resets an even split. Only Terminal offers Maximize panel. The top bar lists Terminal before Files, both pressed. Choose Narrow (800px) to see them stack; choose Phone (420px) to see a single floating card.",
     state: stateOf(severalShells),
     preferences: { sidebarVisible: false, asideWidth: 720, panelStacks: { project: { open: ["terminal", "files"], shares: {} } } },
-    steps: openWebsiteWithFiles,
+    steps: [...openWebsiteWithFiles, showTerminal],
   },
   {
     id: "shell-panel-maximized",
@@ -148,10 +163,10 @@ export const terminalPanelScenarios: Scenario[] = [
     category: "normal",
     title: "Terminal panel with no terminals",
     description:
-      "The panel open for a project with no shell: \"No terminals\", the line saying a terminal runs your own shell for this project, and New terminal, which starts one. The header has New terminal but no actions menu, since there is no tab to act on. Opening the panel from the top bar's toggle starts a shell on its own, so this is the panel as it stands when the last tab was closed.",
-    state: stateOf([]),
+      "The panel open for a project with no shell: \"No terminals\", the line saying a terminal runs your own shell for this project, and New terminal, which starts one. The header keeps the Terminal title and panel controls. The second row remains below it with New terminal alone on the right; the terminal actions menu disappears when the last tab closes. Compare desktop, 420px and 360px with the width controls. Opening the panel from the top bar's toggle starts a shell on its own, so this is the panel as it stands when the last tab was closed.",
+    state: stateOf(oneShell),
     preferences: TERMINAL_ONLY,
-    steps: [openWebsite],
+    steps: [openWebsite, showTerminal, ...terminalClosed("close-last-shell", "Close the last terminal", "sh-1").steps],
   },
   {
     id: "shell-panel-starting",
@@ -159,7 +174,7 @@ export const terminalPanelScenarios: Scenario[] = [
     category: "normal",
     title: "Terminal panel starting a shell",
     description:
-      "New terminal pressed on the empty panel while the daemon has not yet answered: a spinner and \"Starting terminal…\" take the place of the empty state, which would offer a second start. The header keeps its New terminal, and no tab appears until the shell does.",
+      "New terminal pressed on the empty panel while the daemon has not yet answered: a spinner and \"Starting terminal…\" take the place of the empty state, which would offer a second start. The first row keeps the Terminal title and panel controls. The second row keeps New terminal fixed on the right while no tabs have appeared yet.",
     state: stateOf([]),
     preferences: TERMINAL_ONLY,
     shellTerminalStart: "pending",
@@ -184,10 +199,10 @@ export const terminalPanelScenarios: Scenario[] = [
     category: "normal",
     title: "Actions menu of the shown tab",
     description:
-      "The header's actions button open on the shown tab, named after it: Rename terminal and Close terminal. It is the keyboard's way to a tab's actions, as a tab has no close control the keyboard can reach.",
+      "The actions button at the right of the tab row, beside New terminal, is open for the shown tab and named after it: Rename terminal and Close terminal. It is the keyboard's way to a tab's actions, as a tab has no close control the keyboard can reach.",
     state: stateOf(severalShells),
     preferences: TERMINAL_ONLY,
-    steps: [openWebsite, showTerminal, (ui) => headerMenu(ui, "git log")],
+    steps: [openWebsite, showTerminal, (ui) => terminalMenu(ui, "git log")],
   },
   {
     id: "shell-panel-tab-menu",
@@ -224,7 +239,7 @@ export const terminalPanelScenarios: Scenario[] = [
       "The Rename terminal dialog opened from the actions menu, its Name field holding the shell's current title. A name of blanks is refused with \"Name is required.\".",
     state: stateOf(severalShells),
     preferences: TERMINAL_ONLY,
-    steps: [openWebsite, showTerminal, (ui) => headerMenu(ui, "git log"), (ui) => ui.press(ui.t("shellTerminal.rename"))],
+    steps: [openWebsite, showTerminal, (ui) => terminalMenu(ui, "git log"), (ui) => ui.press(ui.t("shellTerminal.rename"))],
   },
   {
     id: "shell-close-busy",
@@ -235,7 +250,7 @@ export const terminalPanelScenarios: Scenario[] = [
       "Closing the shown tab, whose shell is running pnpm dev, asks first: a warning modal titled Close terminal whose first sentence names the terminal as a chip, then the warning that closing ends what runs there, and a destructive Close terminal button. An idle or exited tab closes without asking.",
     state: stateOf([shellTerminalOf("sh-1", web, "zsh", 0), shellTerminalOf("sh-2", web, "pnpm dev", 1, { busy: true })]),
     preferences: TERMINAL_ONLY,
-    steps: [openWebsite, showTerminal, (ui) => headerMenu(ui, "pnpm dev"), (ui) => ui.press(ui.t("shellTerminal.close"))],
+    steps: [openWebsite, showTerminal, (ui) => terminalMenu(ui, "pnpm dev"), (ui) => ui.press(ui.t("shellTerminal.close"))],
   },
   {
     id: "shell-panel-reconnecting",
