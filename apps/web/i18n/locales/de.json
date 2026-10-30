@@ -43,6 +43,7 @@
   "ctaNote": "Früher Prototyp · MIT-Lizenz",
   "footerTagline": "Eigenständige Agenten. Gemeinsame Arbeit.",
   "footerPrivacy": "Datenschutz",
+  "footerAnalyticsSettings": "Analyse-Einstellungen",
   "footerLicense": "MIT-Lizenz",
   "footerContact": "Kontakt",
   "footerCopyright": "© {year} {operatorName}. Open Source unter der MIT-Lizenz.",
@@ -59,7 +60,7 @@
   "privacySharingTitle": "Informationsaustausch bei der Zusammenarbeit",
   "privacySharingBody": "Zur Koordination der Arbeit werden Aufgabenbeschreibungen, Berichte und relevanter Kontext zwischen den beteiligten Sitzungen ausgetauscht. Gelangen diese Informationen in die Sitzung eines anderen Agenten, können sie von dessen konfiguriertem Anbieter verarbeitet werden. Bei der Zusammenarbeit von Agenten verschiedener Anbieter können Aufgabeninformationen daher an mehrere Anbieter weitergegeben werden.",
   "privacyWebsiteTitle": "Diese Website",
-  "privacyWebsiteAnalyticsBody": "Diese statische Website wird auf GitHub Pages gehostet. Wir verwenden ein Cookie, um die für diesen Browser ausgewählte oder erkannte Sprache ein Jahr lang zu speichern. Wir verwenden Google Analytics, um Websitebesuche zu verstehen. Der Dienst verwendet Cookies und sendet Nutzungsdaten an Google. GitHub erfasst IP-Adressen von Besuchern zu Sicherheitszwecken; Einzelheiten findest du in der Datenschutzerklärung von GitHub.",
+  "privacyWebsiteAnalyticsBody": "Diese statische Website wird auf GitHub Pages gehostet. Wir verwenden ein Cookie, um die für diesen Browser ausgewählte oder erkannte Sprache ein Jahr lang zu speichern. Google Analytics verwenden wir, um Websitebesuche zu verstehen, und nur, wenn du es auf Nachfrage dieser Website erlaubst. Der Dienst verwendet dann Cookies und sendet Nutzungsdaten an Google. Lehnst du ab, wird Google Analytics nicht geladen. Wir speichern deine Antwort ein Jahr lang in einem Cookie; du kannst sie jederzeit über „Analyse-Einstellungen“ unten auf jeder Seite ändern. GitHub erfasst IP-Adressen von Besuchern zu Sicherheitszwecken; Einzelheiten findest du in der Datenschutzerklärung von GitHub.",
   "privacyGithubLink": "Datenschutzerklärung von GitHub",
   "privacyContactTitle": "Informationen, die du uns freiwillig sendest",
   "privacyContactBody": "Wenn du uns per E-Mail oder über GitHub Issues kontaktierst, erhalten wir die von dir bereitgestellten Informationen und verwenden sie, um deine Anfrage zu beantworten. Angaben in einem öffentlichen Issue sind für andere sichtbar. Bei Fragen zum Datenschutz erreichst du {operatorName} unter der unten angegebenen E-Mail-Adresse.",
@@ -239,5 +240,9 @@
   "faqParallelWorkAnswer": "Sitzungen teilen sich standardmäßig den Projektordner. Gleichzeitige Änderungen an derselben Datei können daher Konflikte verursachen. Bitte die Agenten bei paralleler Arbeit, getrennte Git-Worktrees zu verwenden. Damit liegen ihre Änderungen in getrennten Arbeitsverzeichnissen. Prüfe die Änderungen vor dem Zusammenführen.",
   "faqCliResumeAnswer": "Ja. Projektdateien bleiben in ihren ursprünglichen Ordnern, und jeder Agent behält seine eigenen Gesprächsaufzeichnungen. Solange der ursprüngliche Agent eine Gesprächsaufzeichnung noch hat, kannst du das Gespräch mit seinem Kommandozeilenwerkzeug fortsetzen. Starte das Werkzeug bei einem zusätzlichen Konto mit dessen Konfigurationsverzeichnis.",
   "faqRemoteExecutionAnswer": "Noch nicht. Projektagenten auf einem anderen Server oder Computer auszuführen ist geplant, aber noch nicht verfügbar.",
-  "privacyRemoteExecutionBody": "Die Ausführung von Agenten auf einem anderen Server oder Computer ist geplant, aber noch nicht verfügbar. Diese Richtlinie deckt diese Funktion nicht ab."
+  "privacyRemoteExecutionBody": "Die Ausführung von Agenten auf einem anderen Server oder Computer ist geplant, aber noch nicht verfügbar. Diese Richtlinie deckt diese Funktion nicht ab.",
+  "consentLabel": "Einwilligung zur Analyse",
+  "consentBody": "Dürfen wir Google Analytics verwenden, um zu verstehen, wie diese Website besucht wird? Der Dienst setzt Cookies und sendet Nutzungsdaten an Google. Ohne deine Erlaubnis wird Google Analytics nicht geladen.",
+  "consentAllow": "Erlauben",
+  "consentDecline": "Ablehnen"
 }

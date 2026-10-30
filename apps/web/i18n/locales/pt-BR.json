@@ -43,6 +43,7 @@
   "ctaNote": "Protótipo inicial · Licença MIT",
   "footerTagline": "Agentes independentes. Trabalho coordenado.",
   "footerPrivacy": "Privacidade",
+  "footerAnalyticsSettings": "Configurações de análise",
   "footerLicense": "Licença MIT",
   "footerContact": "Contato",
   "footerCopyright": "© {year} {operatorName}. Código aberto sob a licença MIT.",
@@ -59,7 +60,7 @@
   "privacySharingTitle": "Informações compartilhadas durante a colaboração",
   "privacySharingBody": "Para coordenar o trabalho, descrições de tarefas, relatórios e contexto relevante circulam entre as sessões participantes. Quando essas informações entram na sessão de outro agente, podem ser processadas pelo provedor configurado para ele. Trabalhar com agentes de provedores diferentes pode, portanto, envolver o compartilhamento de informações sobre tarefas com vários provedores.",
   "privacyWebsiteTitle": "Este site",
-  "privacyWebsiteAnalyticsBody": "Este é um site estático hospedado no GitHub Pages. Usamos um cookie para lembrar por um ano o idioma selecionado ou detectado para este navegador. Usamos o Google Analytics para entender as visitas ao site. O serviço usa cookies e envia dados de uso ao Google. O GitHub registra os endereços IP dos visitantes por motivos de segurança; consulte sua declaração de privacidade.",
+  "privacyWebsiteAnalyticsBody": "Este é um site estático hospedado no GitHub Pages. Usamos um cookie para lembrar por um ano o idioma selecionado ou detectado para este navegador. Usamos o Google Analytics para entender as visitas ao site somente se você permitir quando o site perguntar; nesse caso, o serviço usa cookies e envia dados de uso ao Google. Se você recusar, o Google Analytics não é carregado. Lembramos sua resposta em um cookie por um ano, e você pode alterá-la a qualquer momento em “Configurações de análise”, no rodapé de cada página. O GitHub registra os endereços IP dos visitantes por motivos de segurança; consulte sua declaração de privacidade.",
   "privacyGithubLink": "Declaração de privacidade do GitHub",
   "privacyContactTitle": "Informações que você escolhe nos enviar",
   "privacyContactBody": "Se você entrar em contato por e-mail ou pelo GitHub Issues, receberemos as informações que escolher fornecer e as usaremos para responder à sua solicitação. Informações publicadas em uma issue pública ficam visíveis para outras pessoas. Para dúvidas sobre privacidade, entre em contato com {operatorName} pelo endereço de e-mail abaixo.",
@@ -239,5 +240,9 @@
   "faqParallelWorkAnswer": "As sessões compartilham a pasta do projeto por padrão, então edições simultâneas no mesmo arquivo podem gerar conflitos. Para trabalhar em paralelo, peça aos agentes que usem worktrees do Git separados, que mantêm as alterações em diretórios de trabalho distintos, e revise as alterações antes de mesclar.",
   "faqCliResumeAnswer": "Sim. Os arquivos do projeto permanecem nas pastas originais e cada agente mantém seus próprios registros de conversas. Enquanto o agente original mantiver o registro, você poderá retomar a conversa pela ferramenta de linha de comando dele. Com uma conta extra, inicie a ferramenta usando o diretório de configuração dessa conta.",
   "faqRemoteExecutionAnswer": "Ainda não. Executar agentes de projeto em outro servidor ou computador está nos planos, mas ainda não está disponível.",
-  "privacyRemoteExecutionBody": "O suporte para executar agentes em outro servidor ou computador está nos planos e ainda não está disponível. Esta política não cobre esse recurso."
+  "privacyRemoteExecutionBody": "O suporte para executar agentes em outro servidor ou computador está nos planos e ainda não está disponível. Esta política não cobre esse recurso.",
+  "consentLabel": "Consentimento de análise",
+  "consentBody": "Podemos usar o Google Analytics para entender as visitas a este site? O serviço define cookies e envia dados de uso ao Google. O Google Analytics não é carregado sem a sua permissão.",
+  "consentAllow": "Permitir",
+  "consentDecline": "Recusar"
 }

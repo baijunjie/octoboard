@@ -170,7 +170,14 @@ Development plan docs and bug tickets are temporary and are not listed here.
   restarting a daemon that dies, closing, quitting, crashes, logs and owned files.
 - [In-app updates](product/in-app-updates.md) — update channels, checking, notice, download and restart.
 - [Menu bar icon](product/menu-bar-icon.md) — the macOS menu bar icon, its dot and menu.
-- [Website](product/website.md) — the official site: pages, languages, indexing, privacy disclosures.
+- [Website](product/website.md) — the official site: publishing, pages and languages, the homepage and navigation,
+  platform availability, motion and missing pages.
+- [Website search indexing](product/website-search-indexing.md) — the sitemap, robots.txt, canonical and language
+  alternates, share images, structured data and the Markdown and `llms.txt` copies.
+- [Website product preview](product/website-product-preview.md) — the embedded and standalone product preview: scenes,
+  sample data, layout and loading failures.
+- [Website privacy](product/website-privacy.md) — what the privacy page discloses and the Google Analytics consent
+  prompt and cookie.
 
 ## Reference
 

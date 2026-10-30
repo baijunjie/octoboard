@@ -57,6 +57,14 @@ Run these commands from the repository root:
   script on the home and privacy pages.
 - [`apps/web/app/components/`](app/components/) owns navigation, language selection, the footer and the illustrative
   homepage features and workflow; `LanguageSelect.vue` is shared by the header's desktop and mobile controls.
+- [`apps/web/app/components/AnalyticsConsent.vue`](app/components/AnalyticsConsent.vue) is the analytics consent
+  prompt, mounted by `apps/web/app/app.vue` on pages with the site chrome and reopened by the footer's "Analytics
+  settings" button in [`apps/web/app/components/SiteFooter.vue`](app/components/SiteFooter.vue).
+  [`apps/web/app/composables/useAnalyticsConsent.ts`](app/composables/useAnalyticsConsent.ts) holds the visitor's
+  answer (the `octoboard_analytics_consent` cookie) and loads or disables Google Analytics, which `nuxt-gtag` is
+  configured in `apps/web/nuxt.config.ts` not to load by itself (`initMode: "manual"`);
+  [`apps/web/app/plugins/analytics-consent.client.ts`](app/plugins/analytics-consent.client.ts) runs it when the app
+  mounts: it loads Google Analytics for a visitor who allowed it, and opens the prompt for one who has not answered.
 - [`apps/web/app/components/SectionHeading.vue`](app/components/SectionHeading.vue) supplies the homepage's shared
   numbered section heading.
 - [`apps/web/app/components/FeatureWall.vue`](app/components/FeatureWall.vue) renders the grouped feature cards

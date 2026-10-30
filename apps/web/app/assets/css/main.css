@@ -20,9 +20,12 @@
 html {
   scroll-behavior: smooth;
   scroll-padding-top: calc(24px + 64px + 24px);
+  /* Set while the analytics prompt covers the bottom of the window. */
+  scroll-padding-bottom: var(--analytics-consent-inset, 0px);
 }
 body {
   margin: 0;
+  padding-bottom: var(--analytics-consent-inset, 0px);
 }
 a {
   color: inherit;
@@ -301,15 +304,23 @@ select:focus-visible {
   line-height: 20px;
   color: #b8b8b8;
 }
-.footer-links a {
+.footer-links a,
+.footer-links button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-height: 44px;
   transition: color 700ms var(--ease);
 }
+.footer-links button {
+  padding: 0;
+  border: 0;
+  background: none;
+}
 .footer-links a:hover,
-.footer-links a:active {
+.footer-links a:active,
+.footer-links button:hover,
+.footer-links button:active {
   color: #fff;
 }
 .footer-bottom {
@@ -325,6 +336,65 @@ select:focus-visible {
 @media (max-width: 700px) {
   .footer-identity {
     flex-direction: column;
+  }
+}
+/* Above the page and its header, below the skip link. */
+.analytics-consent {
+  position: fixed;
+  z-index: 40;
+  inset-inline: 24px;
+  bottom: 24px;
+  display: grid;
+  gap: 16px;
+  max-width: 560px;
+  margin-inline: auto;
+  padding: 20px 24px;
+  background: var(--surface);
+  border: 1px solid var(--edge);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 0.5);
+  font-size: 14px;
+  line-height: 20px;
+  color: #ddd;
+}
+.analytics-consent:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 4px;
+}
+.analytics-consent .text-link {
+  margin-inline-start: 0.4em;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.analytics-consent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+/* Allowing and declining weigh the same, so neither answer is the obvious one to click. */
+.consent-button {
+  min-height: 44px;
+  padding: 10px 20px;
+  background: transparent;
+  border: 1px solid #f5f5f5;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  transition:
+    background 200ms,
+    color 200ms;
+}
+.consent-button:hover {
+  background: #f5f5f5;
+  color: #111;
+}
+@media (max-width: 700px) {
+  .analytics-consent {
+    inset-inline: 16px;
+    bottom: 16px;
+    padding: 16px;
+  }
+  .consent-button {
+    flex: 1;
   }
 }
 .privacy-page {

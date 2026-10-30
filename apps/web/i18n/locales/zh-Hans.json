@@ -43,6 +43,7 @@
   "ctaNote": "早期原型 · MIT 许可证",
   "footerTagline": "智能体独立运行，协同完成工作。",
   "footerPrivacy": "隐私政策",
+  "footerAnalyticsSettings": "分析设置",
   "footerLicense": "MIT 许可证",
   "footerContact": "联系",
   "footerCopyright": "© {year} {operatorName}。以 MIT 许可证开源。",
@@ -59,7 +60,7 @@
   "privacySharingTitle": "协作中的信息传递",
   "privacySharingBody": "为协调工作，任务说明、工作报告及相关上下文会在参与协作的会话之间传递。当这些信息进入另一个智能体的会话后，可能由该智能体所接入的服务提供商处理。因此，不同厂商的智能体协作时，任务信息可能由多个服务提供商处理。",
   "privacyWebsiteTitle": "本网站",
-  "privacyWebsiteAnalyticsBody": "本网站是托管于 GitHub Pages 的静态网站。我们使用 Cookie 保存此浏览器的语言设置，包括你选择的语言或自动检测到的语言，保存期限为一年。我们使用 Google Analytics 了解网站访问情况。该服务使用 Cookie，并向 Google 发送使用数据。GitHub 会出于安全目的记录访客的 IP 地址，详情请参阅 GitHub 隐私声明。",
+  "privacyWebsiteAnalyticsBody": "本网站是托管于 GitHub Pages 的静态网站。我们使用 Cookie 保存此浏览器的语言设置，包括你选择的语言或自动检测到的语言，保存期限为一年。只有在本网站询问时你选择允许，我们才会使用 Google Analytics 了解网站访问情况；此时该服务会使用 Cookie，并向 Google 发送使用数据。如果你拒绝，Google Analytics 不会加载。我们使用 Cookie 记住你的选择，保存期限为一年，你可以随时通过每个页面底部的“分析设置”更改。GitHub 会出于安全目的记录访客的 IP 地址，详情请参阅 GitHub 隐私声明。",
   "privacyGithubLink": "GitHub 隐私声明",
   "privacyContactTitle": "你主动提供的信息",
   "privacyContactBody": "如果你通过电子邮件或 GitHub Issues 联系我们，我们会接收你主动提供的信息，并用于回应你的请求。公开 Issue 中的信息可被其他人查看。如有隐私相关问题，请通过下方邮箱联系 {operatorName}。",
@@ -239,5 +240,9 @@
   "faqCliResumeAnswer": "可以。项目文件仍在原目录，对话记录也由各智能体保存。只要原智能体保存的对话记录仍可用，就能通过它的命令行工具恢复该会话；使用额外账号时，需要以该账号的配置目录启动命令行工具。",
   "faqRemoteExecutionAnswer": "目前还不能。让项目智能体在另一台服务器或电脑上运行的远程主机支持仍在规划中，尚未提供。",
   "privacyRemoteExecutionBody": "让智能体在另一台服务器或电脑上运行的远程主机支持仍在规划中，尚未提供。本政策不涉及该功能。",
-  "privacyRemoteExecutionTitle": "远程主机支持"
+  "privacyRemoteExecutionTitle": "远程主机支持",
+  "consentLabel": "分析许可",
+  "consentBody": "我们可以使用 Google Analytics 了解本网站的访问情况吗？它会设置 Cookie，并向 Google 发送使用数据。未经你允许，不会加载任何分析内容。",
+  "consentAllow": "允许",
+  "consentDecline": "拒绝"
 }

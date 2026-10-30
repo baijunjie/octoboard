@@ -2,6 +2,9 @@
 const { t } = useSiteCopy();
 const config = useRuntimeConfig();
 const localePath = useLocalePath();
+// `data-analytics-settings` marks the button the analytics prompt hands focus to when it has
+// nowhere else to return it.
+const { open, reopen } = useAnalyticsConsent();
 </script>
 
 <template>
@@ -39,7 +42,15 @@ const localePath = useLocalePath();
         }}</a
         ><a :href="`mailto:${config.public.contactEmail}`">{{
           t("footerContact")
-        }}</a>
+        }}</a
+        ><button
+          type="button"
+          data-analytics-settings
+          :aria-expanded="open"
+          @click="reopen($event)"
+        >
+          {{ t("footerAnalyticsSettings") }}
+        </button>
       </nav>
       <p>{{ t("footerCopyright", { year: 2026 }) }}</p>
     </div>
