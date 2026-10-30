@@ -87,15 +87,31 @@ it("pins tw-animate-css to the version @heroui/styles depends on", () => {
   expect(own, "tw-animate-css in package.json").toBe(heroui);
 });
 
+/** `style.css` without its comments and without the blocks it puts in a cascade layer itself. */
+function unlayeredStyle(): string {
+  const css = readFileSync(new URL("style.css", SRC), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  let unlayered = "";
+  let from = 0;
+  for (const match of css.matchAll(/@layer\s+[\w-]+\s*\{/g)) {
+    if (match.index < from) continue;
+    unlayered += css.slice(from, match.index);
+    let depth = 0;
+    let end = match.index + match[0].length - 1;
+    do depth += css[end] === "{" ? 1 : css[end] === "}" ? -1 : 0;
+    while (depth > 0 && ++end < css.length);
+    from = end + 1;
+  }
+  return unlayered + css.slice(from);
+}
+
 // HeroUI's popover-level overlays (menus, popovers, tooltips, select and combo box lists) zoom and fade in and out
 // whatever the motion preference, so `style.css` stops every overlay's entering and exiting animation itself. The
 // rule has to stay outside any cascade layer: an unlayered declaration is the only kind that wins over the
 // components layer the sheets are imported into, whatever their selectors' specificity.
 it("stops every imported overlay's enter and exit animation under reduced motion, outside the cascade layers", () => {
-  const style = readFileSync(new URL("style.css", SRC), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const style = unlayeredStyle();
   const animated = imported.filter((name) => /\[data-(entering|exiting)="true"\][^{]*\{[^}]*animate-(in|out)/.test(readFileSync(new URL(`${name}.css`, STYLES_DIST), "utf8")));
   expect(animated, "imported sheets that animate an overlay in or out").not.toEqual([]);
-  expect(style).not.toMatch(/@layer\s+[\w-]+\s*\{/);
   const reduced = [...style.matchAll(/@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\}/g)].map((match) => match[1]);
   expect(reduced.some((block) => /\[data-entering="true"\],\s*\[data-exiting="true"\]\s*\{\s*animation: none;\s*\}/.test(block))).toBe(true);
 });
@@ -161,8 +177,7 @@ it("stops under reduced motion every transition an imported HeroUI sheet leaves 
 // lets nothing transition there. jsdom runs no transition, so this reads the rule; the gallery's directory picker
 // over Add project (`dialog-directory-picker`), closed by a script's click on Cancel, shows the focus it guards.
 it("lets nothing transition inside folded disclosure content, outside the cascade layers", () => {
-  const style = readFileSync(new URL("style.css", SRC), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const style = unlayeredStyle();
   expect(imported).toContain("disclosure");
-  expect(style).not.toMatch(/@layer\s+[\w-]+\s*\{/);
   expect(style).toMatch(/(^|\n)\[hidden="until-found"\] \*\s*\{\s*transition-property: none;\s*\}/);
 });
