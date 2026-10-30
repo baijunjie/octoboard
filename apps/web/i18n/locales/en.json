@@ -43,6 +43,7 @@
   "ctaNote": "Early prototype · MIT License",
   "footerTagline": "Independent agents. Connected work.",
   "footerPrivacy": "Privacy",
+  "footerAnalyticsSettings": "Analytics settings",
   "footerLicense": "MIT License",
   "footerContact": "Contact",
   "footerCopyright": "© {year} {operatorName}. Open source under the MIT License.",
@@ -59,7 +60,7 @@
   "privacySharingTitle": "Information shared during collaboration",
   "privacySharingBody": "To coordinate work, task descriptions, reports, and relevant context pass between participating sessions. When this information enters another agent's session, it may be processed by that agent's configured provider. Working with agents from different providers may therefore involve sharing task information with multiple providers.",
   "privacyWebsiteTitle": "This website",
-  "privacyWebsiteAnalyticsBody": "This is a static website hosted on GitHub Pages. We use a cookie to remember the language selected or detected for this browser for one year. We use Google Analytics to understand website visits. It uses cookies and sends usage data to Google. GitHub records visitors' IP addresses for security purposes; see GitHub's privacy statement.",
+  "privacyWebsiteAnalyticsBody": "This is a static website hosted on GitHub Pages. We use a cookie to remember the language selected or detected for this browser for one year. We use Google Analytics to understand website visits only if you allow it when this website asks; it then uses cookies and sends usage data to Google. If you decline, Google Analytics is not loaded. We remember your answer in a cookie for one year, and you can change it at any time with “Analytics settings” at the bottom of each page. GitHub records visitors' IP addresses for security purposes; see GitHub's privacy statement.",
   "privacyGithubLink": "GitHub privacy statement",
   "privacyContactTitle": "Information you choose to send us",
   "privacyContactBody": "If you contact us by email or through GitHub Issues, we receive the information you choose to provide and use it to respond to your request. Information posted in a public issue is visible to others. For privacy questions, contact {operatorName} at the email address below.",
@@ -239,5 +240,9 @@
   "faqCliResumeAnswer": "Yes. Project files stay in their original folders and each agent keeps its own conversation records. While the original agent still has a conversation record, you can resume that conversation through its command-line tool. With an extra account, start the tool using that account’s configuration directory.",
   "faqRemoteExecutionAnswer": "Not yet. Running project agents on another server or computer is planned, but is not available.",
   "privacyRemoteExecutionBody": "Support for running agents on another server or computer is planned and is not available yet. This policy does not cover that feature.",
-  "privacyRemoteExecutionTitle": "Remote host support"
+  "privacyRemoteExecutionTitle": "Remote host support",
+  "consentLabel": "Analytics consent",
+  "consentBody": "May we use Google Analytics to understand how this website is visited? It sets cookies and sends usage data to Google. Google Analytics is not loaded unless you allow it.",
+  "consentAllow": "Allow",
+  "consentDecline": "Decline"
 }

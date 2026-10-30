@@ -43,6 +43,7 @@
   "ctaNote": "Prototipo iniziale · Licenza MIT",
   "footerTagline": "Agenti indipendenti. Lavoro coordinato.",
   "footerPrivacy": "Privacy",
+  "footerAnalyticsSettings": "Impostazioni di analisi",
   "footerLicense": "Licenza MIT",
   "footerContact": "Contatti",
   "footerCopyright": "© {year} {operatorName}. Open source con licenza MIT.",
@@ -59,7 +60,7 @@
   "privacySharingTitle": "Informazioni condivise durante la collaborazione",
   "privacySharingBody": "Per coordinare il lavoro, descrizioni delle attività, report e contesto rilevante vengono scambiati tra le sessioni coinvolte. Quando queste informazioni entrano nella sessione di un altro agente, possono essere trattate dal fornitore configurato per quell’agente. Collaborare con agenti di fornitori diversi può quindi comportare la condivisione di informazioni sulle attività con più fornitori.",
   "privacyWebsiteTitle": "Questo sito web",
-  "privacyWebsiteAnalyticsBody": "Questo è un sito statico ospitato su GitHub Pages. Usiamo un cookie per ricordare per un anno la lingua selezionata o rilevata per questo browser. Usiamo Google Analytics per comprendere le visite al sito. Il servizio utilizza cookie e invia dati di utilizzo a Google. GitHub registra gli indirizzi IP dei visitatori per motivi di sicurezza; consulta la sua informativa sulla privacy.",
+  "privacyWebsiteAnalyticsBody": "Questo è un sito statico ospitato su GitHub Pages. Usiamo un cookie per ricordare per un anno la lingua selezionata o rilevata per questo browser. Usiamo Google Analytics per comprendere le visite al sito solo se lo consenti quando il sito te lo chiede; in tal caso il servizio utilizza cookie e invia dati di utilizzo a Google. Se rifiuti, Google Analytics non viene caricato. Ricordiamo la tua risposta in un cookie per un anno e puoi cambiarla in qualsiasi momento da “Impostazioni di analisi” in fondo a ogni pagina. GitHub registra gli indirizzi IP dei visitatori per motivi di sicurezza; consulta la sua informativa sulla privacy.",
   "privacyGithubLink": "Informativa sulla privacy di GitHub",
   "privacyContactTitle": "Informazioni che scegli di inviarci",
   "privacyContactBody": "Se ci contatti via e-mail o tramite GitHub Issues, riceviamo le informazioni che scegli di fornire e le utilizziamo per rispondere alla tua richiesta. Le informazioni pubblicate in una issue pubblica sono visibili ad altre persone. Per domande sulla privacy, contatta {operatorName} all’indirizzo e-mail indicato di seguito.",
@@ -239,5 +240,9 @@
   "faqParallelWorkAnswer": "Le sessioni condividono la cartella del progetto per impostazione predefinita, quindi modifiche simultanee allo stesso file possono causare conflitti. Per il lavoro in parallelo, chiedi agli agenti di usare worktree Git separati, che mantengono le modifiche in directory di lavoro distinte, ed esamina le modifiche prima di unirle.",
   "faqCliResumeAnswer": "Sì. I file del progetto restano nelle cartelle originali e ogni agente conserva i propri registri delle conversazioni. Finché l’agente originale conserva il registro, puoi riprendere la conversazione dal suo strumento da riga di comando. Con un account aggiuntivo, avvia lo strumento usando la directory di configurazione di quell’account.",
   "faqRemoteExecutionAnswer": "Non ancora. L’esecuzione degli agenti di progetto su un altro server o computer è prevista, ma non è disponibile.",
-  "privacyRemoteExecutionBody": "Il supporto per l’esecuzione degli agenti su un altro server o computer è previsto, ma non è ancora disponibile. Questa informativa non riguarda tale funzionalità."
+  "privacyRemoteExecutionBody": "Il supporto per l’esecuzione degli agenti su un altro server o computer è previsto, ma non è ancora disponibile. Questa informativa non riguarda tale funzionalità.",
+  "consentLabel": "Consenso all’analisi",
+  "consentBody": "Possiamo usare Google Analytics per capire come viene visitato questo sito? Il servizio imposta cookie e invia dati di utilizzo a Google. Google Analytics non viene caricato senza il tuo permesso.",
+  "consentAllow": "Consenti",
+  "consentDecline": "Rifiuta"
 }

@@ -43,6 +43,7 @@
   "ctaNote": "초기 프로토타입 · MIT 라이선스",
   "footerTagline": "에이전트는 독립적으로, 작업은 함께.",
   "footerPrivacy": "개인정보 처리방침",
+  "footerAnalyticsSettings": "분석 설정",
   "footerLicense": "MIT 라이선스",
   "footerContact": "문의",
   "footerCopyright": "© {year} {operatorName}. MIT 라이선스로 공개된 오픈 소스입니다.",
@@ -59,7 +60,7 @@
   "privacySharingTitle": "협업 중 공유되는 정보",
   "privacySharingBody": "작업을 조율하기 위해 작업 설명, 보고서 및 관련 맥락이 참여 세션 간에 전달됩니다. 이 정보가 다른 에이전트의 세션에 들어가면 해당 에이전트에 설정된 제공업체가 처리할 수 있습니다. 따라서 서로 다른 제공업체의 에이전트가 협업할 때는 작업 정보가 여러 제공업체와 공유될 수 있습니다.",
   "privacyWebsiteTitle": "이 웹사이트",
-  "privacyWebsiteAnalyticsBody": "이 웹사이트는 GitHub Pages에서 호스팅하는 정적 사이트입니다. 이 브라우저에서 선택한 언어나 자동 감지한 언어를 1년 동안 기억하기 위해 쿠키를 사용합니다. 웹사이트 방문 현황을 파악하기 위해 Google Analytics를 사용합니다. 이 서비스는 쿠키를 사용하고 이용 데이터를 Google에 전송합니다. GitHub는 보안을 위해 방문자의 IP 주소를 기록합니다. 자세한 내용은 GitHub 개인정보 처리방침을 확인해 주세요.",
+  "privacyWebsiteAnalyticsBody": "이 웹사이트는 GitHub Pages에서 호스팅하는 정적 사이트입니다. 이 브라우저에서 선택한 언어나 자동 감지한 언어를 1년 동안 기억하기 위해 쿠키를 사용합니다. 웹사이트 방문 현황을 파악하기 위한 Google Analytics는 웹사이트가 요청할 때 허용한 경우에만 사용합니다. 이 경우 이 서비스는 쿠키를 사용하고 이용 데이터를 Google에 전송합니다. 거부하면 Google Analytics를 불러오지 않습니다. 선택 내용은 쿠키에 1년 동안 저장되며, 각 페이지 하단의 “분석 설정”에서 언제든지 변경할 수 있습니다. GitHub는 보안을 위해 방문자의 IP 주소를 기록합니다. 자세한 내용은 GitHub 개인정보 처리방침을 확인해 주세요.",
   "privacyGithubLink": "GitHub 개인정보 처리방침",
   "privacyContactTitle": "직접 제공하는 정보",
   "privacyContactBody": "이메일이나 GitHub Issues로 문의하면 사용자가 직접 제공한 정보를 받아 요청에 응답하는 데 사용합니다. 공개 이슈에 게시한 정보는 다른 사람도 볼 수 있습니다. 개인정보 관련 문의는 아래 이메일 주소로 {operatorName}에게 보내 주세요.",
@@ -239,5 +240,9 @@
   "faqParallelWorkAnswer": "세션은 기본적으로 프로젝트 폴더를 공유하므로 같은 파일을 동시에 수정하면 충돌할 수 있습니다. 병렬 작업에서는 변경 사항을 별도 작업 디렉터리에 보관하는 독립적인 Git worktree를 사용하도록 에이전트에게 요청하고 병합 전에 변경 사항을 검토해 주세요.",
   "faqCliResumeAnswer": "네. 프로젝트 파일은 원래 폴더에 남고 각 에이전트가 자신의 대화 기록을 보관합니다. 원래 에이전트가 대화 기록을 보관하는 동안에는 해당 명령줄 도구로 대화를 재개할 수 있습니다. 추가 계정의 경우 해당 계정의 설정 디렉터리를 사용해 도구를 시작해 주세요.",
   "faqRemoteExecutionAnswer": "아직 지원하지 않습니다. 프로젝트 에이전트를 다른 서버나 컴퓨터에서 실행하는 기능은 계획 중이며 현재 사용할 수 없습니다.",
-  "privacyRemoteExecutionBody": "에이전트를 다른 서버나 컴퓨터에서 실행하는 기능은 계획 중이며 아직 사용할 수 없습니다. 이 정책은 해당 기능을 다루지 않습니다."
+  "privacyRemoteExecutionBody": "에이전트를 다른 서버나 컴퓨터에서 실행하는 기능은 계획 중이며 아직 사용할 수 없습니다. 이 정책은 해당 기능을 다루지 않습니다.",
+  "consentLabel": "분석 동의",
+  "consentBody": "웹사이트 방문 현황을 파악하기 위해 Google Analytics를 사용해도 될까요? Google Analytics는 쿠키를 설정하고 이용 데이터를 Google에 전송합니다. 허용하지 않으면 Google Analytics를 불러오지 않습니다.",
+  "consentAllow": "허용",
+  "consentDecline": "거부"
 }

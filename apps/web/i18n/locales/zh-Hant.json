@@ -43,6 +43,7 @@
   "ctaNote": "早期原型 · MIT 授權條款",
   "footerTagline": "代理獨立運作，協作完成任務。",
   "footerPrivacy": "隱私權政策",
+  "footerAnalyticsSettings": "分析設定",
   "footerLicense": "MIT 授權條款",
   "footerContact": "聯絡",
   "footerCopyright": "© {year} {operatorName}。以 MIT 授權條款開源。",
@@ -59,7 +60,7 @@
   "privacySharingTitle": "協作時傳遞的資訊",
   "privacySharingBody": "為協調工作，任務說明、工作報告與相關脈絡會在參與協作的工作階段之間傳遞。當這些資訊進入另一個代理的工作階段後，可能由此代理使用的服務供應商處理。因此，不同廠商的代理協作時，任務資訊可能由多個服務供應商處理。",
   "privacyWebsiteTitle": "本網站",
-  "privacyWebsiteAnalyticsBody": "本網站是託管於 GitHub Pages 的靜態網站。我們使用 Cookie 儲存你為此瀏覽器選擇的語言，或自動偵測到的語言，保存期限為一年。我們使用 Google Analytics 瞭解網站瀏覽情況。此服務使用 Cookie，並將使用資料傳送給 Google。GitHub 會基於安全目的記錄訪客的 IP 位址，詳情請參閱 GitHub 隱私權聲明。",
+  "privacyWebsiteAnalyticsBody": "本網站是託管於 GitHub Pages 的靜態網站。我們使用 Cookie 儲存你為此瀏覽器選擇的語言，或自動偵測到的語言，保存期限為一年。只有在本網站詢問時你選擇允許，我們才會使用 Google Analytics 瞭解網站瀏覽情況；此時該服務會使用 Cookie，並將使用資料傳送給 Google。如果你拒絕，Google Analytics 不會載入。我們使用 Cookie 記住你的選擇，保存期限為一年，你可以隨時透過每個頁面底部的「分析設定」變更。GitHub 會基於安全目的記錄訪客的 IP 位址，詳情請參閱 GitHub 隱私權聲明。",
   "privacyGithubLink": "GitHub 隱私權聲明",
   "privacyContactTitle": "你主動提供的資訊",
   "privacyContactBody": "如果你透過電子郵件或 GitHub Issues 聯絡我們，我們會收到你主動提供的資訊，並用於回應你的請求。公開 Issue 中的資訊可被其他人查看。如有隱私權相關問題，請透過下方信箱聯絡 {operatorName}。",
@@ -239,5 +240,9 @@
   "faqParallelWorkAnswer": "工作階段預設共用專案資料夾，同時修改同一個檔案可能產生衝突。並行工作時，可要求代理使用獨立的 Git worktree，讓各自的變更放在不同工作目錄，並在合併前審查。",
   "faqCliResumeAnswer": "可以。專案檔案保留在原本的資料夾，各代理也會保存自己的對話紀錄。只要原代理仍保有對話紀錄，你就能透過它的命令列工具恢復對話。使用額外帳號時，請以該帳號的設定目錄啟動工具。",
   "faqRemoteExecutionAnswer": "目前還不行。讓專案代理在另一台伺服器或電腦上執行的功能仍在規劃中，尚未提供。",
-  "privacyRemoteExecutionBody": "讓代理在另一台伺服器或電腦上執行的功能仍在規劃中，尚未提供。本政策不涵蓋此功能。"
+  "privacyRemoteExecutionBody": "讓代理在另一台伺服器或電腦上執行的功能仍在規劃中，尚未提供。本政策不涵蓋此功能。",
+  "consentLabel": "分析許可",
+  "consentBody": "我們可以使用 Google Analytics 瞭解本網站的瀏覽情況嗎？它會設定 Cookie，並將使用資料傳送給 Google。未經你允許，不會載入任何分析內容。",
+  "consentAllow": "允許",
+  "consentDecline": "拒絕"
 }

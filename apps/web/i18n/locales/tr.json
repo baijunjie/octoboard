@@ -43,6 +43,7 @@
   "ctaNote": "Erken prototip · MIT lisansı",
   "footerTagline": "Bağımsız ajanlar. Birlikte yürüyen işler.",
   "footerPrivacy": "Gizlilik",
+  "footerAnalyticsSettings": "Analiz ayarları",
   "footerLicense": "MIT lisansı",
   "footerContact": "İletişim",
   "footerCopyright": "© {year} {operatorName}. MIT lisansıyla açık kaynak.",
@@ -59,7 +60,7 @@
   "privacySharingTitle": "İş birliği sırasında paylaşılan bilgiler",
   "privacySharingBody": "Çalışmayı koordine etmek için görev açıklamaları, raporlar ve ilgili bağlam katılımcı oturumlar arasında aktarılır. Bu bilgiler başka bir ajanın oturumuna girdiğinde, o ajan için yapılandırılmış sağlayıcı tarafından işlenebilir. Bu nedenle farklı sağlayıcılardan ajanlarla çalışmak, görev bilgilerinin birden fazla sağlayıcıyla paylaşılmasını gerektirebilir.",
   "privacyWebsiteTitle": "Bu web sitesi",
-  "privacyWebsiteAnalyticsBody": "Bu, GitHub Pages üzerinde barındırılan statik bir web sitesidir. Bu tarayıcı için seçilen veya algılanan dili bir yıl boyunca hatırlamak üzere çerez kullanıyoruz. Web sitesi ziyaretlerini anlamak için Google Analytics kullanıyoruz. Bu hizmet çerez kullanır ve kullanım verilerini Google’a gönderir. GitHub güvenlik amacıyla ziyaretçilerin IP adreslerini kaydeder; ayrıntılar için gizlilik bildirimine bakın.",
+  "privacyWebsiteAnalyticsBody": "Bu, GitHub Pages üzerinde barındırılan statik bir web sitesidir. Bu tarayıcı için seçilen veya algılanan dili bir yıl boyunca hatırlamak üzere çerez kullanıyoruz. Web sitesi ziyaretlerini anlamak için Google Analytics’i yalnızca site sorduğunda izin verirseniz kullanıyoruz; bu durumda hizmet çerez kullanır ve kullanım verilerini Google’a gönderir. Reddederseniz Google Analytics yüklenmez. Yanıtınızı bir yıl boyunca bir çerezde hatırlıyoruz; bunu istediğiniz zaman her sayfanın altındaki “Analiz ayarları” düğmesinden değiştirebilirsiniz. GitHub güvenlik amacıyla ziyaretçilerin IP adreslerini kaydeder; ayrıntılar için gizlilik bildirimine bakın.",
   "privacyGithubLink": "GitHub gizlilik bildirimi",
   "privacyContactTitle": "Bize göndermeyi seçtiğiniz bilgiler",
   "privacyContactBody": "Bize e-posta veya GitHub Issues üzerinden ulaşırsanız, sağlamayı seçtiğiniz bilgileri alır ve talebinize yanıt vermek için kullanırız. Herkese açık bir issue’da paylaşılan bilgiler başkaları tarafından görülebilir. Gizlilik soruları için aşağıdaki e-posta adresinden {operatorName} ile iletişime geçebilirsiniz.",
@@ -239,5 +240,9 @@
   "faqParallelWorkAnswer": "Oturumlar varsayılan olarak proje klasörünü paylaşır; bu nedenle aynı dosyada eşzamanlı düzenlemeler çakışabilir. Paralel çalışma için ajanlardan, değişiklikleri ayrı çalışma dizinlerinde tutan bağımsız Git worktree’leri kullanmalarını isteyin ve birleştirmeden önce değişiklikleri inceleyin.",
   "faqCliResumeAnswer": "Evet. Proje dosyaları mevcut klasörlerinde kalır ve her ajan kendi konuşma kayıtlarını saklar. İlk ajan konuşma kaydını koruduğu sürece konuşmayı kendi komut satırı aracı üzerinden sürdürebilirsiniz. Ek hesap kullanırken aracı o hesabın yapılandırma diziniyle başlatın.",
   "faqRemoteExecutionAnswer": "Henüz değil. Proje ajanlarını başka bir sunucuda veya bilgisayarda çalıştırmak planlanıyor, ancak henüz kullanılamıyor.",
-  "privacyRemoteExecutionBody": "Ajanları başka bir sunucuda veya bilgisayarda çalıştırma desteği planlanıyor ve henüz kullanılamıyor. Bu politika söz konusu özelliği kapsamaz."
+  "privacyRemoteExecutionBody": "Ajanları başka bir sunucuda veya bilgisayarda çalıştırma desteği planlanıyor ve henüz kullanılamıyor. Bu politika söz konusu özelliği kapsamaz.",
+  "consentLabel": "Analiz izni",
+  "consentBody": "Bu web sitesinin nasıl ziyaret edildiğini anlamak için Google Analytics kullanabilir miyiz? Bu hizmet çerez yerleştirir ve kullanım verilerini Google’a gönderir. İzin vermediğiniz sürece Google Analytics yüklenmez.",
+  "consentAllow": "İzin ver",
+  "consentDecline": "Reddet"
 }

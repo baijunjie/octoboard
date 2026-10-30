@@ -43,6 +43,7 @@
   "ctaNote": "Nguyên mẫu ban đầu · Giấy phép MIT",
   "footerTagline": "Agent độc lập, cùng phối hợp làm việc.",
   "footerPrivacy": "Quyền riêng tư",
+  "footerAnalyticsSettings": "Cài đặt phân tích",
   "footerLicense": "Giấy phép MIT",
   "footerContact": "Liên hệ",
   "footerCopyright": "© {year} {operatorName}. Mã nguồn mở theo giấy phép MIT.",
@@ -59,7 +60,7 @@
   "privacySharingTitle": "Thông tin chia sẻ trong quá trình cộng tác",
   "privacySharingBody": "Để điều phối công việc, mô tả nhiệm vụ, báo cáo và ngữ cảnh liên quan được chuyển giữa các phiên tham gia. Khi thông tin đi vào phiên của một agent khác, nhà cung cấp được cấu hình cho agent đó có thể xử lý thông tin. Vì vậy, cộng tác với agent từ các nhà cung cấp khác nhau có thể dẫn đến việc chia sẻ thông tin nhiệm vụ với nhiều nhà cung cấp.",
   "privacyWebsiteTitle": "Trang web này",
-  "privacyWebsiteAnalyticsBody": "Đây là trang web tĩnh được lưu trữ trên GitHub Pages. Chúng tôi dùng cookie để ghi nhớ ngôn ngữ bạn chọn hoặc ngôn ngữ được tự động nhận diện cho trình duyệt này trong một năm. Chúng tôi sử dụng Google Analytics để tìm hiểu lượt truy cập trang web. Dịch vụ này sử dụng cookie và gửi dữ liệu sử dụng đến Google. GitHub ghi lại địa chỉ IP của khách truy cập vì mục đích bảo mật; xem tuyên bố quyền riêng tư của GitHub để biết thêm chi tiết.",
+  "privacyWebsiteAnalyticsBody": "Đây là trang web tĩnh được lưu trữ trên GitHub Pages. Chúng tôi dùng cookie để ghi nhớ ngôn ngữ bạn chọn hoặc ngôn ngữ được tự động nhận diện cho trình duyệt này trong một năm. Chúng tôi chỉ sử dụng Google Analytics để tìm hiểu lượt truy cập trang web nếu bạn cho phép khi trang web hỏi; khi đó dịch vụ này sử dụng cookie và gửi dữ liệu sử dụng đến Google. Nếu bạn từ chối, Google Analytics sẽ không được tải. Chúng tôi ghi nhớ lựa chọn của bạn trong cookie trong một năm và bạn có thể thay đổi bất cứ lúc nào qua “Cài đặt phân tích” ở cuối mỗi trang. GitHub ghi lại địa chỉ IP của khách truy cập vì mục đích bảo mật; xem tuyên bố quyền riêng tư của GitHub để biết thêm chi tiết.",
   "privacyGithubLink": "Tuyên bố về quyền riêng tư của GitHub",
   "privacyContactTitle": "Thông tin bạn chủ động gửi",
   "privacyContactBody": "Nếu bạn liên hệ qua email hoặc GitHub Issues, chúng tôi nhận thông tin bạn chọn cung cấp và sử dụng để phản hồi yêu cầu. Thông tin đăng trong issue công khai có thể được người khác xem. Với câu hỏi về quyền riêng tư, hãy liên hệ {operatorName} qua địa chỉ email bên dưới.",
@@ -239,5 +240,9 @@
   "faqParallelWorkAnswer": "Các phiên dùng chung thư mục dự án theo mặc định, nên sửa cùng một tệp đồng thời có thể gây xung đột. Khi làm việc song song, yêu cầu các agent dùng Git worktree riêng để lưu thay đổi trong các thư mục làm việc tách biệt, rồi xem xét thay đổi trước khi hợp nhất.",
   "faqCliResumeAnswer": "Có. Tệp dự án vẫn nằm trong thư mục ban đầu và mỗi agent giữ bản ghi cuộc trò chuyện riêng. Khi agent ban đầu vẫn giữ bản ghi, bạn có thể tiếp tục cuộc trò chuyện qua công cụ dòng lệnh của agent đó. Với tài khoản bổ sung, khởi chạy công cụ bằng thư mục cấu hình của tài khoản đó.",
   "faqRemoteExecutionAnswer": "Chưa. Tính năng chạy agent dự án trên máy chủ hoặc máy tính khác đang được lên kế hoạch và chưa khả dụng.",
-  "privacyRemoteExecutionBody": "Tính năng chạy agent trên máy chủ hoặc máy tính khác đang được lên kế hoạch và chưa khả dụng. Chính sách này không bao gồm tính năng đó."
+  "privacyRemoteExecutionBody": "Tính năng chạy agent trên máy chủ hoặc máy tính khác đang được lên kế hoạch và chưa khả dụng. Chính sách này không bao gồm tính năng đó.",
+  "consentLabel": "Đồng ý phân tích",
+  "consentBody": "Chúng tôi có thể dùng Google Analytics để tìm hiểu lượt truy cập trang web này không? Dịch vụ này đặt cookie và gửi dữ liệu sử dụng đến Google. Google Analytics sẽ không được tải nếu bạn không cho phép.",
+  "consentAllow": "Cho phép",
+  "consentDecline": "Từ chối"
 }

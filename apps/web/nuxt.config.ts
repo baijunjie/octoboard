@@ -35,6 +35,8 @@ export default defineNuxtConfig({
   gtag: {
     id: "G-9SK49010BJ",
     enabled: process.env.NODE_ENV === "production",
+    // Google Analytics loads only once the visitor allows it.
+    initMode: "manual",
   },
   devtools: { enabled: false },
   telemetry: false,
@@ -102,8 +104,9 @@ export default defineNuxtConfig({
     sitemaps: false,
     // The error page is prerendered for the static host but is not a page to index.
     exclude: ["/404", "/404/"],
-    // The sitemap lists pages and their language alternates only (docs/product/website.md,
-    // "Search indexing and agent-readable copies"); image entries would fall outside that.
+    // The sitemap lists pages and their language alternates only
+    // (docs/product/website-search-indexing.md, "Search indexing and agent-readable copies"); image
+    // entries would fall outside that.
     discoverImages: false,
   },
   hooks: {

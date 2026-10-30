@@ -43,6 +43,7 @@
   "ctaNote": "Purwarupa awal · Lisensi MIT",
   "footerTagline": "Agen bekerja mandiri, pekerjaan tetap terkoordinasi.",
   "footerPrivacy": "Privasi",
+  "footerAnalyticsSettings": "Pengaturan analitik",
   "footerLicense": "Lisensi MIT",
   "footerContact": "Kontak",
   "footerCopyright": "© {year} {operatorName}. Sumber terbuka dengan Lisensi MIT.",
@@ -59,7 +60,7 @@
   "privacySharingTitle": "Informasi yang dibagikan selama kolaborasi",
   "privacySharingBody": "Untuk mengoordinasikan pekerjaan, deskripsi tugas, laporan, dan konteks yang relevan diteruskan di antara sesi yang terlibat. Saat informasi ini masuk ke sesi agen lain, informasi tersebut dapat diproses oleh penyedia yang dikonfigurasikan untuk agen itu. Karena itu, bekerja dengan agen dari penyedia berbeda dapat melibatkan pembagian informasi tugas kepada beberapa penyedia.",
   "privacyWebsiteTitle": "Situs ini",
-  "privacyWebsiteAnalyticsBody": "Ini adalah situs statis yang dihosting di GitHub Pages. Kami menggunakan cookie untuk mengingat bahasa yang Anda pilih atau yang terdeteksi otomatis untuk browser ini selama satu tahun. Kami menggunakan Google Analytics untuk memahami kunjungan situs. Layanan ini menggunakan cookie dan mengirimkan data penggunaan ke Google. GitHub mencatat alamat IP pengunjung untuk keamanan; lihat pernyataan privasi GitHub untuk detailnya.",
+  "privacyWebsiteAnalyticsBody": "Ini adalah situs statis yang dihosting di GitHub Pages. Kami menggunakan cookie untuk mengingat bahasa yang Anda pilih atau yang terdeteksi otomatis untuk browser ini selama satu tahun. Kami menggunakan Google Analytics untuk memahami kunjungan situs hanya jika Anda mengizinkannya saat situs menanyakannya; dalam hal itu, layanan ini menggunakan cookie dan mengirimkan data penggunaan ke Google. Jika Anda menolak, Google Analytics tidak dimuat. Kami mengingat jawaban Anda dalam cookie selama satu tahun, dan Anda dapat mengubahnya kapan saja melalui “Pengaturan analitik” di bagian bawah setiap halaman. GitHub mencatat alamat IP pengunjung untuk keamanan; lihat pernyataan privasi GitHub untuk detailnya.",
   "privacyGithubLink": "Pernyataan privasi GitHub",
   "privacyContactTitle": "Informasi yang Anda pilih untuk dikirimkan",
   "privacyContactBody": "Jika Anda menghubungi kami melalui email atau GitHub Issues, kami menerima informasi yang Anda pilih untuk diberikan dan menggunakannya untuk menanggapi permintaan Anda. Informasi yang diposting dalam issue publik dapat dilihat orang lain. Untuk pertanyaan privasi, hubungi {operatorName} melalui alamat email di bawah ini.",
@@ -239,5 +240,9 @@
   "faqParallelWorkAnswer": "Sesi berbagi folder proyek secara default, sehingga penyuntingan file yang sama secara bersamaan dapat menimbulkan konflik. Untuk bekerja secara paralel, minta agen menggunakan Git worktree terpisah agar perubahan mereka berada di direktori kerja berbeda, lalu tinjau perubahan sebelum menggabungkannya.",
   "faqCliResumeAnswer": "Ya. File proyek tetap di folder asalnya dan setiap agen menyimpan catatan percakapannya sendiri. Selama agen asal masih menyimpan catatan percakapan, Anda dapat melanjutkannya melalui alat baris perintah agen itu. Untuk akun tambahan, jalankan alat menggunakan direktori konfigurasi akun tersebut.",
   "faqRemoteExecutionAnswer": "Belum. Menjalankan agen proyek di server atau komputer lain masih direncanakan dan belum tersedia.",
-  "privacyRemoteExecutionBody": "Dukungan untuk menjalankan agen di server atau komputer lain masih direncanakan dan belum tersedia. Kebijakan ini tidak mencakup fitur tersebut."
+  "privacyRemoteExecutionBody": "Dukungan untuk menjalankan agen di server atau komputer lain masih direncanakan dan belum tersedia. Kebijakan ini tidak mencakup fitur tersebut.",
+  "consentLabel": "Persetujuan analitik",
+  "consentBody": "Bolehkah kami menggunakan Google Analytics untuk memahami kunjungan ke situs ini? Layanan ini memasang cookie dan mengirimkan data penggunaan ke Google. Google Analytics tidak dimuat tanpa izin Anda.",
+  "consentAllow": "Izinkan",
+  "consentDecline": "Tolak"
 }

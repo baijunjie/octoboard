@@ -62,5 +62,6 @@ useSeoMeta({
     <SiteHeader v-if="route.meta.siteChrome !== false" />
     <NuxtPage />
     <SiteFooter v-if="route.meta.siteChrome !== false" />
+    <AnalyticsConsent v-if="route.meta.siteChrome !== false" />
   </div>
 </template>

@@ -43,6 +43,7 @@
   "ctaNote": "Prototipo inicial · Licencia MIT",
   "footerTagline": "Agentes independientes. Trabajo coordinado.",
   "footerPrivacy": "Privacidad",
+  "footerAnalyticsSettings": "Ajustes de analítica",
   "footerLicense": "Licencia MIT",
   "footerContact": "Contacto",
   "footerCopyright": "© {year} {operatorName}. Código abierto bajo la licencia MIT.",
@@ -59,7 +60,7 @@
   "privacySharingTitle": "Información compartida durante la colaboración",
   "privacySharingBody": "Para coordinar el trabajo, las sesiones participantes intercambian descripciones de tareas, informes y contexto relevante. Cuando esta información llega a la sesión de otro agente, puede ser tratada por el proveedor configurado para ese agente. Por tanto, colaborar con agentes de distintos proveedores puede implicar compartir información sobre las tareas con varios proveedores.",
   "privacyWebsiteTitle": "Este sitio web",
-  "privacyWebsiteAnalyticsBody": "Este es un sitio web estático alojado en GitHub Pages. Usamos una cookie para recordar durante un año el idioma seleccionado o detectado para este navegador. Usamos Google Analytics para conocer las visitas al sitio web. Este servicio utiliza cookies y envía datos de uso a Google. GitHub registra las direcciones IP de los visitantes por motivos de seguridad; consulta su declaración de privacidad.",
+  "privacyWebsiteAnalyticsBody": "Este es un sitio web estático alojado en GitHub Pages. Usamos una cookie para recordar durante un año el idioma seleccionado o detectado para este navegador. Usamos Google Analytics para conocer las visitas al sitio web solo si lo permites cuando el sitio te lo pregunta; en ese caso, el servicio utiliza cookies y envía datos de uso a Google. Si lo rechazas, Google Analytics no se carga. Recordamos tu respuesta en una cookie durante un año, y puedes cambiarla en cualquier momento desde “Ajustes de analítica”, al pie de cada página. GitHub registra las direcciones IP de los visitantes por motivos de seguridad; consulta su declaración de privacidad.",
   "privacyGithubLink": "Declaración de privacidad de GitHub",
   "privacyContactTitle": "Información que decides enviarnos",
   "privacyContactBody": "Si nos contactas por correo electrónico o mediante GitHub Issues, recibimos la información que decidas facilitar y la utilizamos para responder a tu solicitud. La información publicada en una incidencia pública es visible para otras personas. Para consultas sobre privacidad, contacta con {operatorName} en la dirección de correo indicada a continuación.",
@@ -239,5 +240,9 @@
   "faqParallelWorkAnswer": "Las sesiones comparten la carpeta del proyecto de forma predeterminada, por lo que editar el mismo archivo a la vez puede causar conflictos. Para trabajar en paralelo, pide a los agentes que usen worktrees de Git independientes, que guardan sus cambios en directorios de trabajo separados, y revisa los cambios antes de fusionarlos.",
   "faqCliResumeAnswer": "Sí. Los archivos del proyecto permanecen en sus carpetas originales y cada agente conserva sus propios registros de conversación. Mientras el agente original conserve el registro, puedes reanudar la conversación con su herramienta de línea de comandos. Si usas una cuenta adicional, inicia la herramienta con el directorio de configuración de esa cuenta.",
   "faqRemoteExecutionAnswer": "Todavía no. Está previsto ejecutar agentes de proyecto en otro servidor u ordenador, pero aún no está disponible.",
-  "privacyRemoteExecutionBody": "Está previsto permitir la ejecución de agentes en otro servidor u ordenador, pero aún no está disponible. Esta política no cubre esa función."
+  "privacyRemoteExecutionBody": "Está previsto permitir la ejecución de agentes en otro servidor u ordenador, pero aún no está disponible. Esta política no cubre esa función.",
+  "consentLabel": "Consentimiento de analítica",
+  "consentBody": "¿Podemos usar Google Analytics para conocer las visitas a este sitio web? Este servicio usa cookies y envía datos de uso a Google. Google Analytics no se carga a menos que lo permitas.",
+  "consentAllow": "Permitir",
+  "consentDecline": "Rechazar"
 }
