@@ -708,11 +708,16 @@ fn keep_note(
 /// they can go without forcing anything. What will stay is judged before the archive, since the
 /// answer has to be on its way before the process is ended.
 async fn archive_self(state: &Arc<AppState>, caller: &Session) -> Result<Value> {
-    // Held across the checks and the archive, so a lock set in between cannot slip past them.
-    let _removal = state.claim_session_removal();
     let caller = archivable_self(state, caller)?;
     let left = cleanup::left_by(state, vec![caller.clone()]).await;
-    let archived = coordinator::archive_session(state, &caller.id)?;
+    // Taken only now, and the checks made again under it, so a lock set while the branches were
+    // judged cannot slip past them; held across that wait, it would refuse every change of a lock
+    // in the daemon for as long as the judging took.
+    let archived = {
+        let _removal = state.claim_session_removal();
+        let caller = archivable_self(state, &caller)?;
+        coordinator::archive_session(state, &caller.id)?
+    };
     cleanup::remove_in_background(state, archived);
     let mut answer = json!({
         "session": caller.id,

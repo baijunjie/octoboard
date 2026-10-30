@@ -1,12 +1,19 @@
-//! The daemon's shared state: the session records and their status transitions, the live sessions
-//! and the claim that keeps two launches of the same session from racing, the per-session MCP
-//! tokens, the turn bookkeeping a synthesised report rests on, a facade over the write queue in
-//! `crate::outbox`, and each project's live git status together with the claim that keeps two
-//! checks of one project from racing and the timestamp that keeps them from piling up across
-//! several clients, each ended session's saved terminal output, and the session requests waiting
-//! for the user's answer (`crate::session_request`) together with the status
-//! each of those sessions' agents is at while the request holds the record at waiting for the
-//! user, and the shell terminals (`crate::shell_terminal`).
+//! The daemon's shared state, [`AppState`]: the store and the session records' writes, each of
+//! which writes only its own columns (see `crate::store`), and the status transitions made through
+//! them; the live sessions, the exit watcher that records how each process ended, and the claims
+//! that keep two launches of one session, an archive or deletion and a lock change, or two of the
+//! operations that must have a session to themselves from racing; the per-session MCP tokens; the
+//! turn bookkeeping a synthesised report rests on; a facade over the write queue in
+//! `crate::outbox`; the hands a waiting session request raises (`crate::session_request`) and the
+//! status each such session's agent is at meanwhile; each session's background tasks, record
+//! watch and saved terminal output; the accounts a session left for a usage limit and the
+//! handoff packages; each project's live git status, with the claim that keeps two checks of one
+//! project from racing and the timestamp that keeps them from piling up across several clients;
+//! the stalled directory passes per console; and the shell terminals (`crate::shell_terminal`).
+//!
+//! What is held in memory for a session, project or console is dropped where its record is
+//! removed, the records the store removes by cascade included, except for what a later pass drops
+//! by itself (the default efforts, which the record collector trims to the sessions on record).
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -353,6 +360,19 @@ impl<K: Eq + std::hash::Hash> StalledPasses<K> {
             passes.remove(key);
         }
         stuck
+    }
+
+    /// Drops what was recorded for `key`, which is gone: its threads are left to finish on their
+    /// own, with nothing waiting on them.
+    pub fn forget<Q>(&self, key: &Q)
+    where
+        K: std::borrow::Borrow<Q>,
+        Q: Eq + std::hash::Hash + ?Sized,
+    {
+        self.0
+            .lock()
+            .expect("stalled pass lock poisoned")
+            .remove(key);
     }
 
     /// Records that the work for `key` outran its deadline; `pass` is held strongly by the thread
@@ -1618,8 +1638,10 @@ impl AppState {
             .any(|entry| entry.restarting.contains(id))
     }
 
-    /// Writes a session record and tells every client about it. A record deleted in the meantime
-    /// is not written and not announced: publishing it would leave a ghost row in every client.
+    /// Writes a whole session record and tells every client about it, for tests to put a session
+    /// in a state; see [`Store::update_session`]. A record deleted in the meantime is not written
+    /// and not announced: publishing it would leave a ghost row in every client.
+    #[cfg(test)]
     pub fn save_session(&self, session: &Session) -> Result<()> {
         let live = session
             .status
@@ -1639,8 +1661,56 @@ impl AppState {
         Ok(())
     }
 
+    /// Runs `write`, a store write that leaves the session dormant, and tells every client about the
+    /// record it returns. A record deleted in the meantime is not announced: publishing it would
+    /// leave a ghost row in every client.
+    fn write_dormant(
+        &self,
+        id: &str,
+        write: impl FnOnce() -> Result<Option<Session>>,
+    ) -> Result<()> {
+        // Titles and new control snapshots can publish the row independently, so freeze before
+        // the database exposes dormancy, and undo that freeze if the write fails.
+        let written = match self.live_session(id) {
+            Some(live) => {
+                let mut written = None;
+                live.freeze_output_for(|| {
+                    written = write()?;
+                    Ok(written.is_some())
+                })?;
+                written
+            }
+            None => write()?,
+        };
+        if let Some(session) = written {
+            self.publish_session(&session);
+        }
+        Ok(())
+    }
+
+    /// Archives the session as of now and tells every client; see [`Store::archive_session`].
+    pub fn archive_session_record(&self, id: &str) -> Result<()> {
+        self.write_dormant(id, || self.store.archive_session(id, now_millis()))
+    }
+
+    /// Interrupts the session as of now unless it is archived, and tells every client; see
+    /// [`Store::interrupt_session`].
+    pub fn interrupt_session_record(&self, id: &str) -> Result<()> {
+        self.write_dormant(id, || self.store.interrupt_session(id, now_millis()))
+    }
+
+    /// Writes the session's title and tells every client. Returns the record as it now stands.
+    pub fn set_session_title(&self, id: &str, title: &str) -> Result<Session> {
+        let session = self
+            .store
+            .set_session_title(id, title)?
+            .ok_or_else(|| CodedError::unknown_session(id))?;
+        self.publish_session(&session);
+        Ok(session)
+    }
+
     /// Records the account a session runs under and its directory, and tells every client. A
-    /// record deleted in the meantime is not written and not announced, as with [`Self::save_session`].
+    /// record deleted in the meantime is not written and not announced.
     pub fn set_session_account(
         &self,
         id: &str,
@@ -1722,14 +1792,39 @@ impl AppState {
     /// What follows a session's record being deleted: dropping what the daemon holds for it and
     /// telling every client.
     fn forget_deleted(&self, id: &str) {
+        self.forget_held_for_session(id);
+        self.broadcast(Event::SessionDeleted {
+            session: id.to_string(),
+        });
+    }
+
+    /// What follows sessions' records going with their console or project, which the store
+    /// cascades: dropping what the daemon holds for each. No event is sent for them, since every
+    /// client drops a console's or project's sessions on its own deletion event.
+    pub fn forget_cascaded_sessions(&self, ids: &[impl AsRef<str>]) {
+        for id in ids {
+            self.forget_held_for_session(id.as_ref());
+        }
+    }
+
+    /// What follows projects' records being deleted, on their own or with their console: dropping
+    /// what the daemon holds for each and stopping the watch on its repository.
+    pub fn forget_deleted_projects(&self, ids: &[impl AsRef<str>]) {
+        for id in ids {
+            let id = id.as_ref();
+            self.remove_git_status(id);
+            self.unresolved_removals.forget(id);
+            crate::git_watch::remove(self, id);
+        }
+    }
+
+    /// What the daemon holds in memory for a session whose record is gone, whichever way it went.
+    fn forget_held_for_session(&self, id: &str) {
         self.forget_saved_output(id);
         self.forget_left_for_limit(id);
         crate::shared_config::forget_session(self, id);
         self.forget_handoff_package(id);
         self.forget_request_hand(id);
-        self.broadcast(Event::SessionDeleted {
-            session: id.to_string(),
-        });
     }
 
     /// Applies a status reported by a hook, unless a waiting session request is holding the
@@ -1750,13 +1845,13 @@ impl AppState {
         } else {
             status
         };
-        let mut session = self.session_record(id)?;
-        if session.status.is_dormant() || session.status == status {
-            return Ok(false);
+        match self.store.set_running_status(id, status)? {
+            Some(session) => {
+                self.publish_session(&session);
+                Ok(true)
+            }
+            None => Ok(false),
         }
-        session.status = status;
-        self.save_session(&session)?;
-        Ok(true)
     }
 
     /// Raises the hand of a session whose request for a session has started waiting, remembering
@@ -1768,14 +1863,16 @@ impl AppState {
             .request_hands
             .lock()
             .expect("request hands lock poisoned");
-        let mut session = self.session_record(id)?;
+        let session = self.session_record(id)?;
         if session.status.is_dormant() {
             return Ok(());
         }
         hands.entry(id.to_string()).or_insert(session.status);
-        if session.status != SessionStatus::WaitingUser {
-            session.status = SessionStatus::WaitingUser;
-            self.save_session(&session)?;
+        if let Some(session) = self
+            .store
+            .set_running_status(id, SessionStatus::WaitingUser)?
+        {
+            self.publish_session(&session);
         }
         Ok(())
     }
@@ -1808,6 +1905,15 @@ impl AppState {
         // A message queued while the hand was up is still queued, and no hook event is coming to
         // release it.
         self.spawn_flush_outbox(id, remembered);
+    }
+
+    /// Whether [`Self::raise_request_hand`] has something remembered for the session.
+    #[cfg(test)]
+    pub fn has_request_hand(&self, id: &str) -> bool {
+        self.request_hands
+            .lock()
+            .expect("request hands lock poisoned")
+            .contains_key(id)
     }
 
     /// Drops what [`Self::raise_request_hand`] remembered for a session that is going away.
@@ -2712,22 +2818,26 @@ impl AppState {
     /// Records that the session has had a turn, so a later resume reopens the stored conversation
     /// instead of failing on an id the agent never wrote.
     pub fn mark_conversation_started(&self, id: &str) -> Result<()> {
-        let mut session = self.session_record(id)?;
-        if session.has_conversation {
-            return Ok(());
+        match self.store.mark_conversation_started(id)? {
+            Some(session) => self.publish_session(&session),
+            // Already recorded; a session that is gone fails as it always has.
+            None => {
+                self.session_record(id)?;
+            }
         }
-        session.has_conversation = true;
-        self.save_session(&session)
+        Ok(())
     }
 
     /// Forgets the conversation of a session whose agent no longer has it, so that its next launch
     /// opens a fresh one, as for a session that has had no turn. The new conversation's id is
     /// recorded by its first hook, as for any session.
     pub fn forget_conversation(&self, id: &str) -> Result<()> {
-        let mut session = self.session_record(id)?;
-        session.has_conversation = false;
-        session.agent_session_id = None;
-        self.save_session(&session)
+        let session = self
+            .store
+            .forget_conversation(id)?
+            .ok_or_else(|| CodedError::unknown_session(id))?;
+        self.publish_session(&session);
+        Ok(())
     }
 
     /// Gives the exit watcher back the end of the session's process, which a launch under a claim
@@ -2740,12 +2850,14 @@ impl AppState {
     }
 
     pub fn set_agent_session_id(&self, id: &str, agent_session_id: &str) -> Result<()> {
-        let mut session = self.session_record(id)?;
-        if session.agent_session_id.as_deref() == Some(agent_session_id) {
-            return Ok(());
+        match self.store.set_agent_session_id(id, agent_session_id)? {
+            Some(session) => self.publish_session(&session),
+            // Unchanged; a session that is gone fails as it always has.
+            None => {
+                self.session_record(id)?;
+            }
         }
-        session.agent_session_id = Some(agent_session_id.to_string());
-        self.save_session(&session)
+        Ok(())
     }
 
     /// Watches one session's process and records where it ended up. A session whose status was
@@ -2785,40 +2897,39 @@ impl AppState {
             };
             let _ = tokio::join!(saving, ending);
             live.note_input_recovery_ended();
+            // Recorded while the process is still the session's: no launch can be claimed while
+            // it is registered (`begin_launch`), so the row cannot belong to a relaunch yet — one
+            // that reopened an archived session the moment the entry went would otherwise be made
+            // interrupted by this write.
+            let exit = state
+                .live_session(&live.id)
+                .is_some_and(|current| Arc::ptr_eq(&current, &live))
+                .then(|| state.store.record_session_exit(&live.id, now_millis()));
             state.unregister_live(&live);
-            match state.store.get_session(&live.id) {
-                Ok(Some(mut session)) => {
-                    let unasked = !matches!(
-                        session.status,
-                        SessionStatus::Archived | SessionStatus::Interrupted
-                    ) && !live.was_ended_on_purpose()
+            match exit {
+                Some(Ok(Some((before, session)))) => {
+                    state.publish_session(&session);
+                    let unasked = !before.is_dormant()
+                        && !live.was_ended_on_purpose()
                         && !live.is_watched_under_claim();
-                    if session.status != SessionStatus::Archived {
-                        session.status = SessionStatus::Interrupted;
-                    }
-                    session.ended_at = Some(now_millis());
-                    match state.save_session(&session) {
-                        Ok(()) if unasked && session.bound_to.is_some() => {
-                            // Delivery writes into the owner's PTY, which blocks.
-                            let state = state.clone();
-                            let _ = tokio::task::spawn_blocking(move || {
-                                crate::reporting::tell_owner_it_ended(&state, &session)
-                            })
-                            .await;
-                        }
-                        Ok(()) => {}
-                        Err(err) => {
-                            tracing::warn!(session = %live.id, %err, "recording the session's exit failed");
-                        }
+                    if unasked && session.bound_to.is_some() {
+                        // Delivery writes into the owner's PTY, which blocks.
+                        let state = state.clone();
+                        let _ = tokio::task::spawn_blocking(move || {
+                            crate::reporting::tell_owner_it_ended(&state, &session)
+                        })
+                        .await;
                     }
                 }
                 // Deleted while its process was still exiting, which is allowed.
-                Ok(None) => {
+                Some(Ok(None)) => {
                     tracing::debug!(session = %live.id, "the session was deleted while exiting")
                 }
-                Err(err) => {
-                    tracing::warn!(session = %live.id, %err, "reading the exited session failed")
+                Some(Err(err)) => {
+                    tracing::warn!(session = %live.id, %err, "recording the session's exit failed")
                 }
+                // Another process is the session's now, and the record is its.
+                None => {}
             }
             live.settle_exit();
         });
@@ -2830,19 +2941,8 @@ impl AppState {
         self.shutting_down.store(true, Ordering::Release);
         let sessions = self.live_sessions();
         for live in &sessions {
-            match self.session_record(&live.id) {
-                Ok(mut session) => {
-                    if session.status != SessionStatus::Archived {
-                        session.status = SessionStatus::Interrupted;
-                        session.ended_at = Some(now_millis());
-                        if let Err(err) = self.save_session(&session) {
-                            tracing::warn!(session = %live.id, %err, "marking the session interrupted failed");
-                        }
-                    }
-                }
-                Err(err) => {
-                    tracing::warn!(session = %live.id, %err, "stopping a session with no record")
-                }
+            if let Err(err) = self.interrupt_session_record(&live.id) {
+                tracing::warn!(session = %live.id, %err, "marking the session interrupted failed");
             }
         }
         // What the agents started a moment ago is attributed while their chains through the
