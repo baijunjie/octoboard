@@ -457,8 +457,12 @@ When no account of the initial agent can be used and no other agent has one eith
 the initial agent that becomes usable soonest: of the accounts kept off only by a used-up quota (not turned off, not
 logged out, with no sharing change running), the one whose blocking window resets first. Where several windows of an
 account are used up, that is the one that resets last, and a blocking window with no reset time counts as never. Equal
-times keep the candidate order. With none of those, or with automatic selection off, the dialog keeps the inherited
-account. A new session the daemon opens in this situation is refused, naming the inherited account.
+times keep the candidate order, the default account first and then the stored accounts in the order they are kept.
+With none of those, or with automatic selection off, the dialog keeps the inherited account. The daemon settles the
+account the same way for a session that leaves it out (`new_session`, `request_session`, `handoff_session`):
+`new_session` and `request_session` are refused naming that account. An automatically approved handoff is refused
+naming it too; a handoff that asks the user starts its approval form on it. With no qualifying account, or with
+automatic selection off, the daemon falls back to the caller or project/console inheritance rules above.
 
 ## Which model and reasoning effort a session uses
 

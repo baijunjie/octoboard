@@ -468,9 +468,10 @@ fn session_in(
 /// The account of a session of `agent` that `caller` starts, or hands one off to, when the call
 /// names none: with automatic account selection on, the one ranked first by
 /// [`coordinator::preferred_weekly_account`] (mostly the soonest weekly reset, a running 5-hour
-/// window deciding between close ones); otherwise, or when none ranks, `caller`'s own
-/// (`callers_account`) in its own console, else the project's account for the agent, else the
-/// console's.
+/// window deciding between close ones), else, when no account of the agent can be used, the one
+/// that becomes usable soonest ([`coordinator::soonest_available_account`]); otherwise, or when
+/// none ranks, `caller`'s own (`callers_account`) in its own console, else the project's account
+/// for the agent, else the console's.
 pub(super) fn account_when_unset(
     state: &Arc<AppState>,
     caller: &Session,
@@ -481,6 +482,9 @@ pub(super) fn account_when_unset(
         if let Some(picked) = coordinator::preferred_weekly_account(state, agent)? {
             // `Some(None)` is an explicit choice of the default account.
             return Ok(Some(picked));
+        }
+        if let Some(soonest) = coordinator::soonest_available_account(state, agent)? {
+            return Ok(Some(soonest));
         }
     }
     if in_own_console {
@@ -6420,6 +6424,74 @@ pub(super) mod tests {
         assert_eq!(answer["account_name"], "Second");
         assert_eq!(answer["model"], "sonnet");
         assert_eq!(answer["effort"], "high");
+    }
+
+    /// With automatic selection on and no usable account, `new_session` is refused naming the
+    /// account that becomes usable soonest, not the caller's own.
+    #[tokio::test]
+    async fn new_session_with_no_usable_account_is_refused_on_the_soonest_one() {
+        use crate::protocol::{AccountQuota, QuotaWindow, QuotaWindowKind};
+        use crate::test_support::{stand_in_launch, Launched, StandIn};
+        use std::sync::Mutex;
+
+        let (state, _dir) = shared_console_state("new-session-soonest-available");
+        state.store.set_auto_select_account(true).unwrap();
+        state
+            .store
+            .set_added_agents_if_undecided(&[Agent::Claude])
+            .unwrap();
+        let hold = |account: Option<&str>, resets_in: i64| {
+            let quota = AccountQuota {
+                agent: Agent::Claude,
+                account: account.map(str::to_string),
+                fetched_at: 1,
+                plan: None,
+                email: None,
+                windows: vec![QuotaWindow {
+                    kind: QuotaWindowKind::Session,
+                    label: None,
+                    used_percent: 100.0,
+                    resets_at: Some(crate::protocol::now_millis() + resets_in),
+                    window_minutes: None,
+                }],
+                unavailable: None,
+            };
+            match account {
+                None => state.account_quotas.hold_for_test(&quota),
+                Some(id) => state
+                    .account_quotas
+                    .hold_in_dir_for_test(&quota, &format!("/tmp/{id}")),
+            }
+        };
+        state
+            .store
+            .insert_account(&Account {
+                id: "claude-b".to_string(),
+                agent: Agent::Claude,
+                name: "Second".to_string(),
+                config_dir: "/tmp/claude-b".to_string(),
+                share_default_config: false,
+                share_default_config_incomplete: false,
+                disabled: false,
+            })
+            .unwrap();
+        hold(None, 7_200_000);
+        hold(Some("claude-b"), 3_600_000);
+        let caller = state.session_record("a").unwrap();
+        let launches = Arc::new(Mutex::new(Vec::<Launched>::new()));
+        let started = Arc::new(Mutex::new(Vec::<StandIn>::new()));
+
+        let err = new_session(
+            &state,
+            &caller,
+            &arguments(json!({ "project": "project-1", "brief": { "goal": "x" } })),
+            stand_in_launch(&started, &launches, || {}),
+        )
+        .await
+        .expect_err("refused");
+
+        assert!(err.to_string().starts_with("Second "), "{err}");
+        assert!(launches.lock().unwrap().is_empty());
     }
 
     #[tokio::test]

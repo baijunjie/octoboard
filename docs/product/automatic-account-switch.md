@@ -80,6 +80,9 @@ and is backing off, or the window that blocked it was out of date and another st
 session is judged as any other: switched to another account if one qualifies, else left waiting as below, where a
 successful reading of any account of the agent can resume it. A hold is never taken twice for the same failed turn.
 
+When the hold ends, a fresh successful reading of the original account takes priority: the session resumes there,
+including when recovery is confirmed while a switch to another account is being prepared, before the process stops.
+
 ## When no account qualifies
 
 The session stays stopped on its limit. While the setting remains on, Octoboard remembers that failed turn and can
@@ -101,6 +104,8 @@ in "When quotas are read" in `docs/product/account-quotas.md`; waiting adds no s
   manual resume, restart, account switch, model or effort change, an interruption, archiving, deleting, or the process
   exiting invalidates it. Changing the session's account configuration also invalidates it. A session waiting for
   the user is left alone, including when that wait appears while a restart is being prepared.
+  A later failed turn replaces an earlier wait; overlapping work on that earlier wait cannot restore it over the
+  newer one.
 - **Turning the setting off cancels these waits.** Turning it back on does not recover them. The waits are held only
   while the daemon runs and do not survive its restart.
 

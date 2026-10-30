@@ -335,7 +335,10 @@ and caller. An explicit agent or account wins; automatic selection can change an
   exclude an account. If no account of the initial agent is usable and `agent` was not named, the other added,
   installed agents are tried in added-agent order, each with the same preferences. A fallback to the caller's agent
   within the same console still considers the caller's account; in another console it never does. The resulting
-  agent and account are fixed when the call is made, including for a request that waits for approval.
+  agent and account are fixed when the call is made, including for a request that waits for approval. If no added agent
+  has a usable account, the call is refused on the initial agent's account that becomes usable soonest, as set out in
+  "Which account a session uses" in `docs/product/opening-sessions.md`; when no such account qualifies, the ordinary
+  caller or project/console inheritance rules apply.
 - **With automatic selection off**, a left-out or blank account is the caller's own account when the destination is
   in the same console, uses the same agent and that account can still open a session. A removed, turned-off, used-up
   or not-logged-in caller account is passed over. Otherwise the account comes from the project, else the console,

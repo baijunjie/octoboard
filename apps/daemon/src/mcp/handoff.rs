@@ -524,6 +524,121 @@ mod tests {
         assert!(!state.session_requests.is_waiting_for("a"));
     }
 
+    /// With automatic selection on and no usable account of the agent, a handoff that names none is
+    /// refused naming the account that becomes usable soonest; with automatic selection off it
+    /// names the inherited one, here the turned-off default account.
+    #[tokio::test]
+    async fn a_handoff_with_no_usable_account_names_the_soonest_one_when_selection_is_on() {
+        let (state, _dir) = shared_console_state("handoff-soonest-available");
+        state.store.set_auto_approve_handoffs(true).unwrap();
+        state.store.set_auto_select_account(true).unwrap();
+        state
+            .store
+            .set_default_account_disabled(Agent::Codex, true)
+            .unwrap();
+        let used_up = |resets_in: i64| crate::protocol::QuotaWindow {
+            kind: crate::protocol::QuotaWindowKind::Session,
+            label: None,
+            used_percent: 100.0,
+            resets_at: Some(crate::protocol::now_millis() + resets_in),
+            window_minutes: None,
+        };
+        for (id, resets_in) in [("codex-work", 7_200_000), ("sooner", 3_600_000)] {
+            let dir = format!("/tmp/{id}");
+            state
+                .store
+                .insert_account(&crate::protocol::Account {
+                    id: id.to_string(),
+                    agent: Agent::Codex,
+                    name: id.to_string(),
+                    config_dir: dir.clone(),
+                    share_default_config: false,
+                    share_default_config_incomplete: false,
+                    disabled: false,
+                })
+                .unwrap();
+            state.account_quotas.hold_in_dir_for_test(
+                &crate::protocol::AccountQuota {
+                    agent: Agent::Codex,
+                    account: Some(id.to_string()),
+                    fetched_at: 1,
+                    plan: None,
+                    email: None,
+                    windows: vec![used_up(resets_in)],
+                    unavailable: None,
+                },
+                &dir,
+            );
+        }
+        state
+            .save_session(&Session {
+                agent: Agent::Codex,
+                ..state.session_record("a").unwrap()
+            })
+            .unwrap();
+        state
+            .store
+            .set_session_account("a", Some("codex-work"), Some("/tmp/codex-work"))
+            .unwrap();
+        let _caller = running(&state, "a");
+        let _original = running(&state, "of-a");
+        let (launches, started) = (Launches::default(), Started::default());
+        let caller = state.session_record("a").unwrap();
+        let input = arguments(json!({ "session": "of-a", "agent": "codex" }));
+
+        let err = handoff_session(
+            &state,
+            &caller,
+            &input,
+            stand_in_launch(&started, &launches, || {}),
+        )
+        .await
+        .expect_err("refused");
+        assert!(err.to_string().starts_with("sooner "), "{err}");
+
+        state.store.set_auto_select_account(false).unwrap();
+        let err = handoff_session(
+            &state,
+            &caller,
+            &input,
+            stand_in_launch(&started, &launches, || {}),
+        )
+        .await
+        .expect_err("refused");
+        assert!(err.to_string().starts_with("Default "), "{err}");
+
+        state.store.set_auto_select_account(true).unwrap();
+        state.store.set_auto_approve_handoffs(false).unwrap();
+        let call = {
+            let (state, caller, input) = (state.clone(), caller.clone(), input.clone());
+            let launch = stand_in_launch(&started, &launches, || {});
+            tokio::spawn(async move { handoff_session(&state, &caller, &input, launch).await })
+        };
+        let Event::SessionRequest {
+            request_id,
+            account,
+            ..
+        } = crate::mcp::exec::tests::wait_for_request(&state, "a").await
+        else {
+            panic!("a session request");
+        };
+        assert_eq!(account.as_deref(), Some("sooner"));
+        let refused = session_request::answer(&state, &request_id, true, Edits::default())
+            .await
+            .expect_err("the displayed account is still used up");
+        assert!(refused.to_string().starts_with("sooner "), "{refused}");
+        let refused = call.await.unwrap().expect_err("refused at approval");
+        assert!(
+            refused.to_string().contains("sooner has used up"),
+            "{refused}"
+        );
+        assert!(launches.lock().unwrap().is_empty());
+        assert_eq!(
+            state.session_record("of-a").unwrap().status,
+            SessionStatus::Idle
+        );
+    }
+
     /// What is not the caller's to hand off (another owner's session, the caller itself), what the
     /// operation refuses (a session in the middle of a turn), a bad agent and an account of
     /// another agent are all refused in prose: nothing is launched and no session changes.

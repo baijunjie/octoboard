@@ -5040,6 +5040,15 @@ pub(crate) async fn switch_session_account_if(
             NoLongerDue("the quota recovery was cancelled while preparing the restart").into(),
         );
     }
+    if !same_account {
+        if let Some(wait) = only_if.recovery {
+            if wait.own_account_recovered(state)? {
+                return Err(
+                    NoLongerDue("the held account recovered while preparing the switch").into(),
+                );
+            }
+        }
+    }
     let (held_for_relaunch, ended_a_process) = stop_carrying_processes(state, id).await?;
     wait_until_down(state, id).await?;
     // From here the process is down. A failure that follows leaves the session interrupted when
@@ -6263,12 +6272,7 @@ pub(crate) fn automatic_open_choice(
     inherited: Option<(Agent, Option<String>)>,
     allow_other_agents: bool,
 ) -> Result<Option<(Agent, Option<String>)>> {
-    let usable = |agent, account: Option<&str>| -> Result<bool> {
-        Ok(
-            !account.is_some_and(|id| state.sharing_locked(id).is_some())
-                && account_can_open(state, agent, account)?,
-        )
-    };
+    let usable = |agent, account: Option<&str>| open_now(state, agent, account);
     let mut agents = vec![preferred];
     if allow_other_agents {
         for agent in state
@@ -6322,7 +6326,84 @@ pub(crate) fn automatic_open_choice(
             }
         }
     }
+    // No agent has a usable account: the preferred agent decides, as in the session dialog.
+    if agent_can_open(state, preferred)? {
+        if let Some(account) = soonest_available_account(state, preferred)? {
+            return Ok(Some((preferred, account)));
+        }
+    }
     Ok(None)
+}
+
+/// Whether a new session of `agent` could open on `account` now: [`account_can_open`] and no
+/// sharing change running on it (the launch would be refused as `account_sharing_in_progress`).
+fn open_now(state: &Arc<AppState>, agent: Agent, account: Option<&str>) -> Result<bool> {
+    Ok(
+        !account.is_some_and(|id| state.sharing_locked(id).is_some())
+            && account_can_open(state, agent, account)?,
+    )
+}
+
+/// The account of `agent` that becomes usable soonest, for a new session that leaves its account
+/// out while automatic selection is on and no account of the agent can be used. `Some(None)` is
+/// the default account. Only an account kept off by a used-up quota alone qualifies (not one turned
+/// off, logged out or with a sharing change running); it is usable when the window that blocks it
+/// resets, and a blocking window with no reset time counts as never. The earlier candidate keeps a
+/// tie, in the order the session dialog uses: the default account, then the stored accounts as
+/// they are kept. `None` when an account of the agent is usable, or none qualifies.
+pub(crate) fn soonest_available_account(
+    state: &Arc<AppState>,
+    agent: Agent,
+) -> Result<Option<Option<String>>> {
+    let mut candidates = vec![None];
+    for account in state.store.list_accounts()? {
+        if account.agent == agent {
+            candidates.push(Some(account.id));
+        }
+    }
+    let now = now_millis();
+    let mut soonest: Option<(i64, Option<String>)> = None;
+    for account_id in candidates {
+        if open_now(state, agent, account_id.as_deref())? {
+            return Ok(None);
+        }
+        if state.store.account_disabled(agent, account_id.as_deref())? {
+            continue;
+        }
+        if account_id
+            .as_deref()
+            .is_some_and(|id| state.sharing_locked(id).is_some())
+        {
+            continue;
+        }
+        let config_dir = match account_id.as_deref() {
+            None => None,
+            Some(id) => match account_of_agent(state, agent, id)? {
+                Some(account) => Some(account.config_dir),
+                None => continue,
+            },
+        };
+        if state
+            .account_quotas
+            .signed_out(agent, account_id.as_deref(), config_dir.as_deref())
+        {
+            continue;
+        }
+        let Some(exhausted) = used_up_quota(
+            state,
+            agent,
+            account_id.as_deref(),
+            config_dir.as_deref(),
+            now,
+        ) else {
+            continue;
+        };
+        let at = exhausted.resets_at.unwrap_or(i64::MAX);
+        if soonest.as_ref().is_none_or(|(best, _)| at < *best) {
+            soonest = Some((at, account_id));
+        }
+    }
+    Ok(soonest.map(|(_, account)| account))
 }
 
 /// The account of `agent` to use when a new session leaves its account out and
@@ -9042,6 +9123,142 @@ mod tests {
             .unwrap()
             .account_id,
             None
+        );
+    }
+
+    /// Holds a reading of a Claude account whose session window is used up, resetting in
+    /// `resets_in` milliseconds (`None` no reset time), as `signed_out` or not.
+    fn hold_used_up(
+        state: &Arc<AppState>,
+        account: Option<&str>,
+        resets_in: Option<i64>,
+        signed_out: bool,
+    ) {
+        use crate::protocol::{AccountQuota, QuotaUnavailable, QuotaWindow, QuotaWindowKind};
+        let quota = AccountQuota {
+            agent: Agent::Claude,
+            account: account.map(str::to_string),
+            fetched_at: 1,
+            plan: None,
+            email: None,
+            unavailable: signed_out.then(|| {
+                QuotaUnavailable::new(
+                    crate::protocol::quota_unavailable_code::NOT_SIGNED_IN,
+                    "not signed in",
+                    &[],
+                )
+            }),
+            windows: vec![QuotaWindow {
+                kind: QuotaWindowKind::Session,
+                label: None,
+                used_percent: 100.0,
+                resets_at: resets_in.map(|span| now_millis() + span),
+                window_minutes: None,
+            }],
+        };
+        match account {
+            None => state.account_quotas.hold_for_test(&quota),
+            Some(id) => state
+                .account_quotas
+                .hold_in_dir_for_test(&quota, &format!("/tmp/{id}")),
+        }
+    }
+
+    fn insert_claude_account(state: &Arc<AppState>, id: &str, disabled: bool) {
+        state
+            .store
+            .insert_account(&Account {
+                id: id.to_string(),
+                agent: Agent::Claude,
+                name: id.to_string(),
+                config_dir: format!("/tmp/{id}"),
+                share_default_config: false,
+                share_default_config_incomplete: false,
+                disabled,
+            })
+            .unwrap();
+    }
+
+    /// With automatic selection on and no usable account, the session opens on the account of the
+    /// preferred agent that becomes usable soonest, so the refusal names it; an account that is
+    /// turned off or logged out is not chosen, a missing reset time counts as never, and an equal
+    /// time keeps the default account.
+    #[test]
+    fn automatic_open_without_a_usable_account_is_refused_on_the_soonest_one() {
+        let (state, _dir) = state_for_opening("automatic-open-soonest");
+        state.store.set_auto_select_account(true).unwrap();
+        state
+            .store
+            .set_added_agents_if_undecided(&[Agent::Claude])
+            .unwrap();
+        for (id, disabled) in [
+            ("later", false),
+            ("soonest", false),
+            ("off", true),
+            ("out", false),
+        ] {
+            insert_claude_account(&state, id, disabled);
+        }
+        let hour = 3_600_000;
+        hold_used_up(&state, None, Some(5 * hour), false);
+        hold_used_up(&state, Some("later"), Some(3 * hour), false);
+        hold_used_up(&state, Some("soonest"), Some(2 * hour), false);
+        hold_used_up(&state, Some("off"), Some(hour), false);
+        hold_used_up(&state, Some("out"), Some(hour / 2), true);
+
+        let refused = resolve_open(&state, &open_request()).err().unwrap();
+        let coded = refused.downcast_ref::<CodedError>().expect("a coded error");
+        assert_eq!(coded.code, error_code::ACCOUNT_QUOTA_EXHAUSTED);
+        assert!(coded.message.starts_with("soonest "), "{}", coded.message);
+        assert_eq!(
+            soonest_available_account(&state, Agent::Claude).unwrap(),
+            Some(Some("soonest".to_string()))
+        );
+
+        // A reset time that is missing counts as never; equal times keep the earlier candidate.
+        hold_used_up(&state, Some("soonest"), None, false);
+        let mut tied = state
+            .account_quotas
+            .held(Agent::Claude, None, None)
+            .unwrap();
+        tied.account = Some("later".to_string());
+        state
+            .account_quotas
+            .hold_in_dir_for_test(&tied, "/tmp/later");
+        assert_eq!(
+            soonest_available_account(&state, Agent::Claude).unwrap(),
+            Some(None)
+        );
+        assert_eq!(
+            resolve_open_with(&state, &open_request(), false)
+                .unwrap()
+                .account_id,
+            None
+        );
+
+        // A usable account of the agent, or automatic selection off, leaves it as it was.
+        insert_claude_account(&state, "fresh", false);
+        assert_eq!(
+            soonest_available_account(&state, Agent::Claude).unwrap(),
+            None
+        );
+        assert_eq!(
+            resolve_open(&state, &open_request())
+                .unwrap()
+                .account_id
+                .as_deref(),
+            Some("fresh")
+        );
+        state.store.delete_account("fresh").unwrap();
+        state.store.set_auto_select_account(false).unwrap();
+        let refused = resolve_open(&state, &open_request()).err().unwrap();
+        assert!(
+            refused
+                .downcast_ref::<CodedError>()
+                .unwrap()
+                .message
+                .starts_with("Default "),
+            "{refused}"
         );
     }
 
