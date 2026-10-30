@@ -28,6 +28,16 @@ scrolled to the bottom; under mouse reporting it never sends arrow keys. `Ctrl+C
 `Shift+Tab`. `F6` and `Shift+F6` never do: they move keyboard focus to another region of the window (see "Moving focus
 between regions with F6" in `docs/product/moving-focus-between-regions.md`).
 
+On macOS, the terminal sends conventional editing commands for these keys:
+
+- `Command+Left` / `Command+Right`: move to the start / end of the input line (`Ctrl+A` / `Ctrl+E`).
+- `Command+Backspace`: delete towards the start of the input line (`Ctrl+U`).
+- `Option+Left` / `Option+Right`: move backward / forward by a word (`Escape`, then `b` / `f`).
+
+These mappings apply with only the modifier shown, outside input-method composition. The running program decides
+how it interprets the commands, including where they move in a multiline prompt. Other Option combinations retain
+their normal character input.
+
 ## Copy, paste and selection
 
 With a session selected that is not archived, right-clicking its terminal opens an editing menu in both the desktop app

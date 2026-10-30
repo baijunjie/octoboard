@@ -5,11 +5,12 @@ import { type IBuffer, type IBufferRange, Terminal } from "@xterm/xterm";
 
 import type { TermControl, TermEvent } from "../protocol";
 import { interactionIsTouch } from "../touchInput";
-import { isSecondaryPress } from "../useWindowShortcut";
+import { IS_MAC, isSecondaryPress } from "../useWindowShortcut";
 import { TerminalLinkColors } from "./linkColors";
 import { OSC_52, osc52ClipboardText } from "./osc52";
 import { installPathLinks, type PathAnswer, type PathLinkCache, type PathLinkTarget } from "./pathLinks";
 import { watchPointerForLinks } from "./pointerLinks";
+import { macEditingSequence } from "./terminalKeys";
 import {
   brokenUrlLinkProvider,
   type HoveredTerminalLink,
@@ -357,6 +358,12 @@ export class TerminalController {
     // written directly, bypassing xterm's own key-to-data pipeline entirely.
     this.term.attachCustomKeyEventHandler((event) => {
       keepModifiersFromArming(event);
+      const data = IS_MAC ? macEditingSequence(event) : undefined;
+      if (data !== undefined) {
+        event.preventDefault();
+        if (event.type === "keydown") this.term.input(data, true);
+        return false;
+      }
       if (
         event.type === "keydown" &&
         event.ctrlKey &&
