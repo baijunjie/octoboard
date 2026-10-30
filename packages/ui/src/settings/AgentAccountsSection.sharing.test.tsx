@@ -42,7 +42,7 @@ it("offers the sharing switch on each owned account and none on the default acco
   expect(switches[0]!.hasAttribute("aria-disabled")).toBe(false);
   // Free, nothing stands under the switch; what turning it on does is its description, and the rest is in the help tip.
   expect(captionOf(container, switches[0]!)).toBe("");
-  expect(container.textContent).toContain("Turning this on links the account’s configuration and conversation history to the default account’s directory.");
+  expect(container.textContent).toContain("Turning this on links the account’s configuration and conversation history to Default’s directory.");
   expect(container.textContent).not.toContain("Applies at once");
   expect(container.textContent).not.toContain("has not been applied to the account’s directory yet");
   expect(container.querySelector('[role="progressbar"]')).toBeNull();
@@ -54,7 +54,21 @@ it("says what is the case now when the account shares", async () => {
   const [sharing] = sharingSwitches(container);
   expect(sharing!.checked).toBe(true);
   expect(captionOf(container, sharing!)).toBe("");
-  expect(container.textContent).toContain("The account’s configuration and conversation history are linked to the default account’s directory.");
+  expect(container.textContent).toContain("The account’s configuration and conversation history are linked to Default’s directory.");
+});
+
+it.each([
+  [false, "Turning this on links the account’s configuration and conversation history to"],
+  [true, "The account’s configuration and conversation history are linked to"],
+] as const)("follows the current agent’s default account name in the description when sharing is %s", async (shared, description) => {
+  settings.accounts[1]!.share_default_config = shared;
+  settings.default_account_names = { claude: "Personal", codex: "Team" };
+  const { container, render } = await mountSettings("Codex");
+  expect(container.textContent).toContain(`${description} Team’s directory.`);
+  settings.default_account_names = { ...settings.default_account_names, codex: "Office" };
+  render();
+  expect(container.textContent).toContain(`${description} Office’s directory.`);
+  expect(container.textContent).not.toContain("Team’s directory.");
 });
 
 it.each([["Claude Code", [".claude.json", "plans/"]], ["Grok Build", ["trusted_folders.toml", "hooks-paths"]]])(
