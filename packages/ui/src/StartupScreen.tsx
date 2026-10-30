@@ -118,29 +118,29 @@ export function DaemonFailedScreen({ error }: { error: string }): React.ReactEle
   );
 }
 
-/** What the screen says when there is no daemon address to connect to, and how to give it one. */
+/** What the screen says when there is no daemon address or key to connect with, and how to give them. */
 export function NoAddressMessage(): React.ReactElement {
   const t = useT();
-  const code = (text: string) => <InlineReference monospace wrap>{text}</InlineReference>;
+  const code = (text: string) => <InlineReference monospace wrap unbroken>{text}</InlineReference>;
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <StartupHeading>{t("startup.noAddress.title")}</StartupHeading>
       <ErrorAlert announce={false} title={t("startup.noAddress.alertTitle")}>{t("startup.noAddress.description")}</ErrorAlert>
       <p>
-        <Message id="startup.noAddress.shell" params={{ port: code("?port=") }} />
+        <Message id="startup.noAddress.shell" params={{ port: code("?port="), key: code("?key=") }} />
       </p>
       <p>
         <Message id="startup.noAddress.dev" params={{ dev: code("vite dev") }} />
       </p>
       <ul className="list-disc space-y-3 ps-5">
         <li>
-          <Message id="startup.noAddress.query" params={{ port: code("?port=") }} />
+          <Message id="startup.noAddress.query" params={{ port: code("?port="), key: code("?key=") }} />
         </li>
         <li>
-          <Message id="startup.noAddress.env" params={{ portVar: code("VITE_DAEMON_PORT") }} />
+          <Message id="startup.noAddress.env" params={{ portVar: code("VITE_DAEMON_PORT"), keyVar: code("VITE_DAEMON_KEY") }} />
         </li>
         <li>
-          <Message id="startup.noAddress.proxy" params={{ proxyVar: code("OCTOBOARD_DAEMON_PORT") }} />
+          <Message id="startup.noAddress.proxy" params={{ proxyVar: code("OCTOBOARD_DAEMON_PORT"), key: code("?key="), keyVar: code("VITE_DAEMON_KEY") }} />
         </li>
       </ul>
     </div>

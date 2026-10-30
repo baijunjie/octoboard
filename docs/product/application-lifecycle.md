@@ -26,11 +26,27 @@ from it and what the daemon does today, not a finished behaviour.
 ## Starting up
 
 In the desktop form the daemon is started as part of the application. Whoever starts it, it listens on `127.0.0.1`
-only, on a port the operating system assigns, and prints that address on its standard output: the application reads
-the port from there, and it is never fixed and never guessed. The daemon also writes the port to a file in the
-temporary directory, for a developer attaching to a daemon started by hand (see "Files Octoboard owns" below). Neither
-fits the server form: nothing off the server can reach loopback, and a port that changes on every start cannot be
-bookmarked or written into a tunnel command; the address the daemon listens on there does not exist yet.
+only, on a port the operating system assigns, makes a new key for this launch (see "Who can reach the daemon" below),
+and prints both on its standard output as its first line, `octoboardd listening on 127.0.0.1:<port> with key <key>`:
+the application reads the port and the key from there, and neither is ever fixed or guessed. The daemon also writes the
+port, without the key, to a file in the temporary directory, for a developer attaching to a daemon started by hand, who
+takes the key from that startup line (see "Files Octoboard owns" below). Neither fits the server form: nothing off the
+server can reach loopback, and a port that changes on every start cannot be bookmarked or written into a tunnel
+command; the address the daemon listens on there does not exist yet.
+
+A page of the UI given no key — or no port, where its own address cannot be the daemon's — connects to nothing and
+shows a screen saying there is no daemon address or key, and how to give them to a page run against a daemon started by hand:
+`?port=` and `?key=` in the page's address, `VITE_DAEMON_PORT` and `VITE_DAEMON_KEY` for the dev server, or
+`OCTOBOARD_DAEMON_PORT` to have the dev server proxy to the daemon, the key still given by `?key=` or `VITE_DAEMON_KEY`.
+The desktop application always gives its window both.
+
+**At launch, starting the daemon is tried up to 3 times.** An attempt fails when the daemon cannot be started, ends before it has
+reported its port and key, or has not reported them within **10 seconds**, in which case it is stopped. The next attempt
+follows **1 second** after the first failure and **2 seconds** after the second. The application stays responsive
+meanwhile, and its window opens once the daemon has started or the last attempt has failed; a quit before then is
+immediate and also stops a daemon still being started. When every attempt failed, the window opens on the screen for a
+daemon that could not start, its reason saying how many attempts were made and what the last one did, the daemon's
+own error output included where it ended early.
 
 On every daemon start:
 
@@ -41,11 +57,10 @@ On every daemon start:
   `docs/product/background-processes.md`.
 
 **One Octoboard at a time.** A second daemon running against the same `~/.octoboard` would own a second set of agent
-processes while sharing one database, so it refuses to start. The application then opens its window anyway, on a screen
-that says the daemon failed to start and offers to quit — a failed start never leaves a window with no explanation. The
-daemon's own reason is on that screen under its explanation (the screen is described in "The window chrome and the
-content panel" in `docs/product/window-layout.md`); the error alert shown over
-the screen, titled "The daemon failed to start", says that the daemon is the background process that runs the user's
+processes while sharing one database, so it refuses to start, on every attempt. The application then opens its window
+anyway, on a screen that says the daemon failed to start and offers to quit — a failed start never leaves a window with
+no explanation. The reason is on that screen under its explanation (the screen is described in "The window chrome and
+the content panel" in `docs/product/window-layout.md`); the error alert shown over the screen, titled "The daemon failed to start", says that the daemon is the background process that runs the user's
 sessions and terminals, then that Octoboard cannot work without it and that opening Octoboard again tries once more,
 with the same reason in a block under its **Error details**. It is a known failure, not an unexpected one: it asks for
 no report and has no **Report issue** (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`). With no
@@ -53,11 +68,25 @@ daemon running there is nothing to keep running, so closing the window quits wha
 the window" below). The lock is per data directory, so on a server it is one daemon per Unix user, whose `~/.octoboard`
 is the daemon's (see "The daemon on its own" below).
 
-If the daemon starts but dies later, the application says so in an error alert titled "The daemon exited
+**A daemon that dies later is started again.** When the daemon has started and then ends on its own, with a non-zero
+exit status or by a signal, the application starts a new one after **1**, then **2**, then **4 seconds**, at most **3
+times in any 10 minutes**; a relaunch that fails counts too, and the next one follows. Once one succeeds, the window is
+reloaded onto the new daemon with no notice of its own (until then it has lost its connection to the daemon, see
+"Losing the daemon connection" below), and a window closed into the background stays there. The daemon's end has
+interrupted every session as any daemon end does, and each resumes with a click (see the list above).
+While the daemon is down there is nothing to keep running, so a close or quit meanwhile behaves as with no daemon (see
+"Closing the window" and "Quitting" below). Nothing is started again once a quit or a restart is under way, and
+there is no button to start the daemon by hand.
+
+When the daemon is not started again — those 3 relaunches in the last 10 minutes are spent, or it ended with exit
+status 0, as on a requested shutdown or `SIGTERM` — the application says so in an error alert titled "The daemon exited
 unexpectedly", which says that the daemon runs the user's sessions and terminals, that Octoboard cannot work without
-it, and asks the user to restart Octoboard; it does not silently keep showing a stale session list. The alert treats
-it as an unexpected failure, offering **Report issue**, with the daemon's exit reason behind **Error details** rather
-than in its sentence (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`).
+it, and asks the user to restart Octoboard; it does not silently keep showing a stale session list. The alert treats it
+as an unexpected failure, offering **Report issue**, with the detail behind **Error details** rather than in its
+sentence (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`): how the daemon ended (its exit
+status, or a signal, or why the last relaunch failed) and, when the relaunches are spent, that it was restarted that
+many times in the last ten minutes and is not restarted again. A daemon stopped by the application's own quit or
+restart raises no alert (see "Quitting" below).
 
 **The window appears already themed.** It is created hidden and shown only once the UI has applied the chosen appearance
 (see "Light, dark and follow the system" in `docs/product/appearance.md`), so a launch never flashes the operating
@@ -73,11 +102,13 @@ when the daemon failed to start, which never gets a choice to hand over — quit
 
 ## Who can reach the daemon
 
-The daemon has no login or token, and no notion of who is connected: whoever reaches it is let in, and every client
-is the same client. In the desktop form that means **any program running on this machine can connect to it and do
-everything the application can**: create consoles and sessions, start agents, type into their terminals, and open a
-shell terminal and run any command in it (see `docs/product/shell-terminals.md`). It is safe
-there only because the daemon listens on loopback, so whoever can reach it already has the machine.
+The daemon has no login and no notion of who is connected: whoever reaches it with its key is let in, and every client
+is the same client. The key keeps web pages out, not programs: it is in the command lines and environment of the agents
+and helpers the daemon starts, where any program on this machine can read it. In the desktop form that means **any
+program running on this machine can connect to the daemon and do everything the application can**: create consoles and
+sessions, start agents, type into their terminals, and open a shell terminal and run any command in it (see
+`docs/product/shell-terminals.md`). It is safe there only because the daemon listens on loopback, so whoever can reach
+it already has the machine.
 
 In the server form the same sentence reads **anyone who can reach the port can do everything** — start agents, type into
 terminals and run any command in a shell terminal on the server, as the Unix user the daemon runs as — which is no
@@ -86,10 +117,12 @@ lets it be: it binds to loopback and nowhere else, and it refuses any request wh
 loopback address. A reverse proxy in front of it does not change that: the daemon also refuses a request whose `Origin`
 — which a browser sends on every WebSocket upgrade — is neither the application's, nor loopback, nor the same as `Host`,
 so a proxy would have to rewrite both headers, and the daemon behind it would be open to whatever the proxy lets through
-with nothing of its own to tell it apart. What the form still lacks is the whole of an access model: a credential
-checked on every route, the UI and the WebSocket upgrades included; one credential per device of the owner's, so that a
-lost or retired device can be revoked without re-issuing the rest; and TLS, which a browser needs before it will show a
-notification or touch the clipboard from a page at a network address at all. None of that exists yet.
+with nothing of its own to tell it apart but the key, which is one for every client, changes on every start and is
+readable by any process on the server. What the form still lacks is the whole of an access model: a credential that
+lasts and is kept like one, checked on every route, the UI and the WebSocket upgrades included; one credential per
+device of the owner's, so that a lost or retired device can be revoked without re-issuing the rest; and TLS, which a
+browser needs before it will show a notification or touch the clipboard from a page at a network address at all. None
+of that exists yet.
 
 The server form is the same user reaching their own daemon from another machine, not a daemon shared by several people.
 The daemon will not tell clients apart even then: whoever holds a credential is taken for the owner and can do
@@ -97,14 +130,24 @@ everything the owner can, so a credential is to be kept like a password. That is
 gap left open.
 
 The one way a browser on another machine reaches today's daemon is a tunnel that ends on the server's loopback — an
-SSH port forward. The page is then at `http://localhost:<port>`, a loopback address, which the check below admits and
-which a browser treats as a secure context, so notifications and the clipboard work through it.
+SSH port forward. The page is then at `http://localhost:<port>`, a loopback address, which the checks below admit once
+the page carries the key of the daemon's current launch, and which a browser treats as a secure context, so
+notifications and the clipboard work through it.
 
-**A web page open in a browser cannot, unless it is Octoboard's own.** When a browser makes a request on behalf of a
-page, the daemon answers `403` unless that page is the application's own window or is served over `http` or `https`
-from this machine's loopback address, on any port. A site that makes its own name resolve to `127.0.0.1` is refused as
-well. Programs that are not browsers, such as scripts, are not subject to this check, and neither is the application's
-own window.
+**A web page open in a browser cannot, unless it is Octoboard's own.** Every request, on every route and every
+WebSocket upgrade, passes two checks in turn:
+
+- **Where it comes from.** When a browser makes a request on behalf of a page, the daemon answers `403` unless that page
+  is the application's own window or is served over `http` or `https` from this machine's loopback address, on any
+  port. A site that makes its own name resolve to `127.0.0.1` is refused as well. Programs that are not browsers, such
+  as scripts, are not subject to this check, and neither is the application's own window.
+- **The key.** A request that passed the first check is answered `401` unless it carries, as its `key` query parameter,
+  the key the daemon made for this launch. This is what keeps out the pages the first check lets through: any page on a
+  local dev server, and any other Tauri application, all of which share the application window's origin. The desktop
+  application hands the key to its own window, and to the window it reloads onto a daemon started again (see "Starting
+  up" above); the daemon hands it to the agents' helpers it starts, beside the port. A key is good only for the launch
+  that made it: after any daemon start, a page or program holding an earlier one is refused until it is given the new
+  one.
 
 ## Losing the daemon connection
 
@@ -122,7 +165,7 @@ the restriction while a menu is open are in "Moving focus between regions with F
 `docs/product/moving-focus-between-regions.md`.
 
 Failures a user has to know about use the acknowledgement dialog described in "Error alerts" in
-`docs/product/error-alerts.md`, including a daemon process that exits unexpectedly, a failed report-page submission, and
+`docs/product/error-alerts.md`, including a daemon process that exits and is not started again, a failed report-page submission, and
 the failure of a dialog's own action. Session notices that are not failures use toasts; see `docs/product/toasts.md`.
 What is wrong with one field is said under that field instead (see "Errors under a field" in
 `docs/product/error-alerts.md`).
@@ -151,8 +194,8 @@ the Dock, and the menu bar icon's menu keeps following the sessions (see `docs/p
 
 - **In native fullscreen** the window first leaves fullscreen and is hidden once that is done, about 0.8 seconds later,
   so no empty fullscreen space is left behind. Brought back within that time, it is not hidden.
-- **When the daemon is not running** — it failed to start, or has exited — there is nothing to keep running, so
-  closing the window quits at once and asks nothing, whatever the switch says.
+- **When the daemon is not running** — it failed to start, or has exited, or is being started again — there is nothing
+  to keep running, so closing the window quits at once and asks nothing, whatever the switch says.
 - Hide Octoboard (`Cmd+H`) is not a close: it hides the application as macOS always does, and Octoboard stays in the
   Dock.
 - The menu bar icon is there whatever the switch says (see `docs/product/menu-bar-icon.md`).
@@ -174,9 +217,9 @@ and position it had:
 - opening Octoboard again while it runs — from the Finder, Spotlight or `open`;
 - anything else that activates Octoboard, such as clicking one of its notifications;
 - a quit that has to ask for confirmation (see "Quitting" below);
-- the daemon exiting unexpectedly: the window comes back showing the notice that it exited (see "Losing the daemon
-  connection" above). A daemon that exits while the window is shown only shows the notice, and does not take the
-  focus from whatever the user is doing.
+- the daemon exiting and not being started again: the window comes back showing the notice that it exited (see
+  "Starting up" above). A daemon that exits while the window is shown only shows the notice, and does not take the
+  focus from whatever the user is doing. A daemon that is started again brings nothing back.
 
 Octoboard then returns to the Dock, comes to the front, and its Dock badge shows the current waiting count again.
 
@@ -217,7 +260,8 @@ which the close gestures have no part in.
 - With no session *starting*, *working*, *waiting for the user* or *working in background* — none at all, or only ones
   *awaiting instructions* — and no busy shell terminal, quitting is immediate and asks nothing, and a window closed into
   the background is not brought back for it.
-- While the daemon is not running — it failed to start, or has exited — every quit is immediate and asks nothing.
+- While the daemon is not running — it failed to start, or has exited, or is being started again — every quit is
+  immediate and asks nothing, and no daemon is started again after it.
 - The daemon stopping as part of a quit is not reported as the daemon exiting: no notice is shown and a closed window is
   not brought back for it.
 - Quitting does not depend on the daemon answering: if it does not, the application exits anyway after a short wait.
@@ -302,7 +346,8 @@ nothing that the form will need and does not have yet claimed to exist.
   ended and every one of those sessions is left *interrupted*, never archived, every shell terminal ends, and nobody
   is asked first. Started
   without an application to follow, the daemon runs until it is stopped; exiting with the application is a watch the
-  desktop form asks for and the server form never does. A command-line surface for starting it in the background,
+  desktop form asks for and the server form never does. Nothing starts it again when it dies: that is the desktop
+  application's (see "Starting up" above). A command-line surface for starting it in the background,
   stopping it and asking where it listens does not exist yet.
 - **A browser is not the application.** Closing a tab, or every tab, ends nothing: the daemon, every session and its
   agent process, and every shell terminal run on until the daemon is stopped, and a browser opened later finds them
@@ -328,6 +373,8 @@ server form is the server — with two exceptions, the window's state and the po
 | `~/.octoboard/output/<session id>` | The saved terminal preview shown for an interrupted session (see "Interrupted, archived and dormant sessions" in `docs/product/session-terminal.md` for its capture rules and limits). Written when the process ends, including when the daemon stops it on its way out, but not when the daemon itself goes down on an internal failure. Starting a new process discards it. Removed with the session's record; on daemon start, any left for a session that no longer exists is removed. |
 | `~/.octoboard/handoff/<session id>.md` | The handoff package a session read when it took over another session's place (see "The handoff package" in `docs/product/handing-off-sessions.md`), named for the receiving session. Removed with that session's record; on daemon start, any left for a session that no longer exists, and any half-written one, is removed. |
 | `~/.octoboard/daemon.lock` | Enforces one daemon per data directory. |
+| `~/.octoboard/logs/daemon.log` | The daemon's log, at the level of information and above, the panics of any of its threads included. Only the daemon that holds `daemon.lock` writes it, so a second daemon refused at start leaves it alone. An entry that would take the file past **5 MiB** first rotates it: `daemon.log` becomes `daemon.log.1`, the one before that `daemon.log.2`, then `daemon.log.3`, and the oldest beyond that is dropped. |
+| `~/.octoboard/logs/desktop.log` | The macOS application's own log: each attempt to start the daemon or start it again and how it went, and the failures the application meets itself, each line with a UTC timestamp. A file larger than **1 MiB** when the application first writes to it in a launch is moved to `desktop.log.1`, replacing the one there. |
 | `~/.octoboard/process-ledger.json` | The launch identities, attributed processes and user keeps used for background-process cleanup across daemon restarts (see "Automatic stopping and its boundaries" in `docs/product/background-processes.md`). It records the boot ID of the system it was written in (on Linux), and records from before the system last started are ignored. An unreadable file is moved aside as `process-ledger.json.unreadable`; processes identified only by their launch tag are kept rather than stopped without knowing the user's choices. A file whose boot ID cannot be compared with the running system's (it records none, written before boot IDs were recorded, on a system that has one, or the daemon cannot read the system's) is treated as unreadable but not moved aside. |
 
 The macOS application keeps the window's size, position and maximized state in
@@ -336,7 +383,8 @@ launches" in `docs/product/window-size-and-position.md`). It belongs to the appl
 daemon, so it is not under `~/.octoboard`. Deleting it makes the next launch open the window as a first launch does.
 
 The daemon writes the port it listens on to `octoboardd.port` in the temporary directory, for a developer attaching to
-a daemon started by hand (see "Starting up"), and removes it on its way out. On macOS that directory is the user's own
+a daemon started by hand (see "Starting up"), and removes it on its way out. The file holds the port alone, never the
+daemon's key. On macOS that directory is the user's own
 `$TMPDIR`; on Linux, where `TMPDIR` is usually unset, it is the shared `/tmp`, so two daemons on one server — each a
 different owner's, each single-user — would write the same file.
 

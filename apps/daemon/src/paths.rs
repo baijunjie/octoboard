@@ -75,6 +75,13 @@ pub fn data_dir() -> PathBuf {
     home_dir().join(".octoboard")
 }
 
+/// The log files, `daemon.log` (the daemon's, see `crate::log_file`) and `desktop.log` (the
+/// desktop application's own, written by `apps/desktop/src-tauri/src/diagnostics.rs`, which has to
+/// place it at this same path).
+pub fn logs_dir() -> PathBuf {
+    data_dir().join("logs")
+}
+
 pub fn db_path() -> PathBuf {
     data_dir().join("octoboard.db")
 }

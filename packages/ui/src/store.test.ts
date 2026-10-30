@@ -20,7 +20,7 @@ vi.mock("./daemon-client", () => ({
 }));
 
 it.each(["reply-first", "broadcast-first"] as const)("keeps the authoritative session title when opening a session: %s", (order) => {
-  const daemon = createDaemon("http://localhost:1234");
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   const original = sessionOf("s", "c", "p", "Created name", "idle");
   const current = { ...original, terminal_title: "Current task", status: "working" as const };
   const reply: Event = { type: "session_opened", id: "request", session: original };
@@ -33,7 +33,7 @@ it.each(["reply-first", "broadcast-first"] as const)("keeps the authoritative se
 });
 
 it("keeps the stored session, and does not notify, when an upsert repeats what it already holds", () => {
-  const daemon = createDaemon("http://localhost:1234");
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   const session = sessionOf("s", "c", "p", "Same", "working");
   client.onEvents!([{ type: "session_upserted", session }]);
   const before = daemon.store.getState();
@@ -46,7 +46,7 @@ it("keeps the stored session, and does not notify, when an upsert repeats what i
 });
 
 it("applies the events of one batch as a single update", () => {
-  const daemon = createDaemon("http://localhost:1234");
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   const notified = vi.fn();
   daemon.store.subscribe(notified);
   client.onEvents!([
@@ -59,7 +59,7 @@ it("applies the events of one batch as a single update", () => {
 });
 
 it("keeps one login per account from its updates and replaces them all with a snapshot's", () => {
-  const daemon = createDaemon("http://localhost:1234");
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   const login = { agent: "grok" as const, account: null, status: "waiting" as const, authorization_url: "https://x", device_code: "ABCD-1234", opened_by_agent: true, failure: null };
   client.onEvents!([{ type: "account_login_updated", login: { ...login, status: "starting", device_code: null } }]);
   client.onEvents!([{ type: "account_login_updated", login: { ...login, account: "a" } }]);
@@ -71,7 +71,7 @@ it("keeps one login per account from its updates and replaces them all with a sn
 });
 
 it("drops an ended login the user dismissed, and only that one, so it does not come back when the row mounts again", () => {
-  const daemon = createDaemon("http://localhost:1234");
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   const login = { agent: "claude" as const, account: "a", status: "failed" as const, authorization_url: null, device_code: null, opened_by_agent: false, failure: null };
   client.onEvents!([{ type: "account_login_updated", login }]);
   const held = daemon.store.getState().accountLogins[0]!;
@@ -84,7 +84,7 @@ it("drops an ended login the user dismissed, and only that one, so it does not c
 });
 
 it("remembers the logins this window started until they end, and forgets those a snapshot no longer lists", () => {
-  const daemon = createDaemon("http://localhost:1234");
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   const login = { agent: "grok" as const, account: null, status: "waiting" as const, authorization_url: "https://x", device_code: null, opened_by_agent: false, failure: null };
   trackAccountLogin(daemon.store, "grok", null, true);
   trackAccountLogin(daemon.store, "grok", "a", true);
@@ -106,7 +106,7 @@ it("remembers the logins this window started until they end, and forgets those a
 });
 
 it("replaces the account quotas with each update and keeps the entry of an account whose reading did not change", () => {
-  const daemon = createDaemon("http://localhost:1234");
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   const window = { kind: "session" as const, label: null, used_percent: 10, resets_at: null, window_minutes: 300 };
   const first = { agent: "claude" as const, account: null, fetched_at: 1, plan: "max", windows: [window], unavailable: null };
   const second = { ...first, agent: "codex" as const, plan: "plus" };
@@ -123,7 +123,7 @@ it("replaces the account quotas with each update and keeps the entry of an accou
 });
 
 it("keeps each account's sharing state from the snapshot and the account_sharing events, and drops a free account", () => {
-  const daemon = createDaemon("http://localhost:1234");
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   const running = { account: "a", progress: { share: true, phase: "changing" as const, done: 1, total: 4, item: "skills" } };
   const snapshot = {
     type: "snapshot", hosts: [], consoles: [], projects: [], sessions: [], trusted_directories: [], settings: {}, git_statuses: [],
@@ -147,7 +147,7 @@ it("keeps each account's sharing state from the snapshot and the account_sharing
 });
 
 it("keeps the shell terminals a snapshot lists and the broadcasts change, and drops those of a removed project", () => {
-  const daemon = createDaemon("http://localhost:1234");
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   const shell = (id: string, project: string): ShellTerminal => ({ id, project_id: project, worktree: null, cwd: `/${project}`, title: "zsh", renamed: false, state: "running", busy: false, created_at: 1 });
   const project = (id: string) => ({ id, console_id: "c", name: id }) as Project;
   const snapshot = {
@@ -172,7 +172,7 @@ it("keeps the shell terminals a snapshot lists and the broadcasts change, and dr
 // is on disk, so the queue holds every prompt it sends and drops one only when that session stops
 // waiting at the confirmation, which the daemon shows as `waiting_user`.
 it("queues every trust prompt the daemon sends, even for a path under a trusted directory", () => {
-  const daemon = createDaemon("http://localhost:1234");
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   client.onEvents!([
     { type: "trusted_directories_updated", trusted_directories: ["/work"] },
     { type: "trust_prompt", session: "s", agent: "claude", project: "p", path: "/work/link/app", trust_dir: null },
@@ -181,7 +181,7 @@ it("queues every trust prompt the daemon sends, even for a path under a trusted 
 });
 
 it("drops a trust prompt when its own session stops waiting, and only then", () => {
-  const daemon = createDaemon("http://localhost:1234");
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   const prompt = (session: string): Event => ({ type: "trust_prompt", session, agent: "claude", project: "p", path: "/work/app", trust_dir: null });
   const queued = () => daemon.store.getState().trustPrompts.map((p) => p.session);
   client.onEvents!([{ type: "session_upserted", session: sessionOf("a", "c", "p", "A", "working") }, prompt("a"), prompt("b")]);
@@ -197,7 +197,7 @@ it("drops a trust prompt when its own session stops waiting, and only then", () 
 });
 
 it("holds the prompt a snapshot's repeat brings back, until the session stops waiting", () => {
-  const daemon = createDaemon("http://localhost:1234");
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   const snapshot = {
     type: "snapshot", hosts: [], consoles: [], projects: [], sessions: [sessionOf("s", "c", "p", "S", "waiting_user")], trusted_directories: [], settings: {}, git_statuses: [],
     agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], home_dir: null, shell_terminals: [],
@@ -212,7 +212,7 @@ it("holds the prompt a snapshot's repeat brings back, until the session stops wa
 // A press that failed leaves the confirmation to the person in the terminal, so its prompt goes; a
 // notice of another kind, or about another session, leaves the queue be.
 it("drops a trust prompt when the daemon could not press its session's confirmation", () => {
-  const daemon = createDaemon("http://localhost:1234");
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   const prompt = (session: string): Event => ({ type: "trust_prompt", session, agent: "claude", project: "p", path: "/work/app", trust_dir: null });
   const notice = (session: string, code: string): Event => ({ type: "session_notice", session, code, params: {}, message: "" });
   const queued = () => daemon.store.getState().trustPrompts.map((p) => p.session);
@@ -224,7 +224,7 @@ it("drops a trust prompt when the daemon could not press its session's confirmat
 });
 
 it("keeps what a session request says it does, and drops it when it closes", () => {
-  const daemon = createDaemon("http://localhost:1234");
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   const base = { type: "session_request" as const, session: "s", role: "project" as const, console: "c", project: "p", agent: "claude" as const, branches: [], requested_at: 1 };
   const resume: Event = {
     ...base, request_id: "r-1", action: "reopen", target: "t", owner: "o", reopened_owners: ["o"], account: null, conversation: null,
@@ -240,7 +240,7 @@ it("keeps what a session request says it does, and drops it when it closes", () 
 });
 
 it("keeps what a switch and a handoff request carry", () => {
-  const daemon = createDaemon("http://localhost:1234");
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   const base = { type: "session_request" as const, session: "s", role: "project" as const, console: "c", project: "p", agent: "codex" as const, branches: [], requested_at: 1, owner: null, reopened_owners: [], conversation: null, target: "t", account: "a" };
   client.onEvents!([
     { ...base, request_id: "r-1", action: "switch" },
@@ -252,7 +252,7 @@ it("keeps what a switch and a handoff request carry", () => {
 });
 
 it("does not offer a session request that lacks what its action needs or has an action it does not know", () => {
-  const daemon = createDaemon("http://localhost:1234");
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   const base = { type: "session_request" as const, session: "s", role: "project" as const, console: "c", project: "p", agent: "claude" as const, branches: [], requested_at: 1, owner: null, reopened_owners: [], target: null, account: null, conversation: null };
   client.onEvents!([
     { ...base, request_id: "r-1", action: "reopen" },
@@ -266,7 +266,7 @@ it("does not offer a session request that lacks what its action needs or has an 
 });
 
 it("drops the pages a pages_deleted event names from that session's list only, keeping an emptied list as a known one", () => {
-  const daemon = createDaemon("http://localhost:1234");
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   client.onEvents!([
     { type: "page_created", page: pageOf("a-1", "session-a", "<p>1</p>", 3) },
     { type: "page_created", page: pageOf("a-2", "session-a", "<p>2</p>", 2) },
@@ -287,7 +287,7 @@ it("drops the pages a pages_deleted event names from that session's list only, k
 });
 
 it("does not bring back a deleted page when a list computed before the deletion is applied after it", () => {
-  const daemon = createDaemon("http://localhost:1234");
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   const stale: Event = {
     type: "page_list", id: "r", console_session_id: "session-a",
     pages: [pageOf("a-1", "session-a", "<p>1</p>", 2), pageOf("a-2", "session-a", "<p>2</p>", 1)],
@@ -313,7 +313,7 @@ it.each([
   { type: "console_deleted", console: "c" },
   { type: "project_deleted", project: "p" },
 ] as Event[])("drops what is held for the sessions a $type takes with it, and only theirs", (deletion) => {
-  const daemon = createDaemon("http://localhost:1234");
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   const request = { type: "session_request" as const, role: "project" as const, console: "c", project: "p", agent: "claude" as const, branches: [], requested_at: 1, action: "start" as const, target: null, owner: null, reopened_owners: [], account: null, conversation: null };
   client.onEvents!(["a", "b"].flatMap((id): Event[] => [
     { type: "session_upserted", session: sessionOf(id, id === "a" ? "c" : "d", id === "a" ? "p" : "q", id, "waiting_user", { switching_account: true }) },

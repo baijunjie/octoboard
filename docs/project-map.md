@@ -23,7 +23,7 @@ Per-package commands are in that package's doc.
   that owns every agent process and all of Octoboard's data, reached by every client only through the WebSocket/HTTP
   protocol in [`apps/daemon/PROTOCOL.md`](../apps/daemon/PROTOCOL.md).
 - [`apps/desktop/`](../apps/desktop/README.md) — `@octoboard/desktop`, the Tauri 2 shell of the macOS desktop
-  application: window, native menu, menu bar icon, `octoboardd` sidecar, exit flow, macOS privacy grants, in-app
+  application: window, native menu, menu bar icon, `octoboardd` sidecar and its restart when it dies, exit flow, macOS privacy grants, in-app
   updates, and the build, install, release and release-publishing scripts; it loads the UI from `packages/ui/` and has
   no UI of its own.
 - [`apps/web/`](../apps/web/README.md) — `@octoboard/web`, the public Nuxt website: localized product and privacy pages

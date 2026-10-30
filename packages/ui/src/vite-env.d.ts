@@ -2,6 +2,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_DAEMON_PORT?: string;
+  readonly VITE_DAEMON_KEY?: string;
 }
 
 /** Whether the dev server proxies `/ws` to a daemon (see `vite.config.ts`); false in a build. */

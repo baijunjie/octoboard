@@ -20,6 +20,8 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, PhysicalRect, WebviewWindow, WindowEvent};
 
+use crate::diagnostics::diagnostic;
+
 /// The window's size on a first launch, and when the saved frame has nowhere visible to be.
 pub const DEFAULT_SIZE: (f64, f64) = (1200.0, 760.0);
 
@@ -255,7 +257,7 @@ pub fn load(app: &AppHandle) -> Option<SavedState> {
     match state_path(app) {
         Ok(path) => read_state(&path),
         Err(err) => {
-            eprintln!("octoboard: cannot locate the saved window state: {err}");
+            diagnostic!("cannot locate the saved window state: {err}");
             None
         }
     }
@@ -266,14 +268,14 @@ fn read_state(path: &Path) -> Option<SavedState> {
         Ok(bytes) => bytes,
         Err(err) if err.kind() == ErrorKind::NotFound => return None,
         Err(err) => {
-            eprintln!("octoboard: cannot read {}: {err}", path.display());
+            diagnostic!("cannot read {}: {err}", path.display());
             return None;
         }
     };
     match serde_json::from_slice(&bytes) {
         Ok(state) => Some(state),
         Err(err) => {
-            eprintln!("octoboard: ignoring {}: {err}", path.display());
+            diagnostic!("ignoring {}: {err}", path.display());
             None
         }
     }
@@ -290,7 +292,7 @@ pub fn displays(app: &AppHandle) -> (Vec<Rect>, Option<Rect>) {
                 .collect()
         })
         .unwrap_or_else(|err| {
-            eprintln!("octoboard: cannot list the displays: {err}");
+            diagnostic!("cannot list the displays: {err}");
             Vec::new()
         });
     let main_display = app
@@ -324,7 +326,7 @@ pub fn track(window: &WebviewWindow, initial: &InitialWindow) {
         None => match frame_of(window) {
             Ok(frame) => frame,
             Err(err) => {
-                eprintln!("octoboard: not remembering the window's state: {err}");
+                diagnostic!("not remembering the window's state: {err}");
                 return;
             }
         },
@@ -338,7 +340,7 @@ pub fn track(window: &WebviewWindow, initial: &InitialWindow) {
     window.on_window_event(move |event| {
         if matches!(event, WindowEvent::Moved(_) | WindowEvent::Resized(_)) {
             if let Err(err) = observe(&observed) {
-                eprintln!("octoboard: cannot read the window's state: {err}");
+                diagnostic!("cannot read the window's state: {err}");
             }
         }
     });
@@ -363,7 +365,7 @@ pub fn save(app: &AppHandle) {
         .map_err(anyhow::Error::from)
         .and_then(|path| write_state(&path, &state));
     if let Err(err) = written {
-        eprintln!("octoboard: cannot save the window's state: {err}");
+        diagnostic!("cannot save the window's state: {err}");
     }
 }
 

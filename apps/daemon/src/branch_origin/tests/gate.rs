@@ -14,7 +14,7 @@ use std::os::unix::ffi::OsStrExt;
 use super::*;
 use crate::branch_origin::revert_gate_inputs::{inputs, GateRequest};
 use crate::git_workflow::{Development, GitWorkflowSettingsChanges};
-use crate::test_support::fixture_git;
+use crate::test_support::{fixture_git, TEST_KEY};
 
 // -- the daemon the gate-hook asks ----------------------------------------------
 
@@ -88,12 +88,13 @@ fn gate_hook_child() {
     let Some(crate::Command::GateHook {
         session,
         port,
+        key,
         hook,
     }) = cli.command
     else {
         panic!("not the gate-hook command");
     };
-    std::process::exit(crate::gate_hook_mode::run(&session, port, &hook));
+    std::process::exit(crate::gate_hook_mode::run(&session, port, &key, &hook));
 }
 
 // -- a repository with a remote ----------------------------------------------
@@ -486,8 +487,9 @@ fn the_hook_side_takes_only_an_answer_as_a_reason_to_run_the_gate() {
     let (fixture, _) = project_with_remote();
     let daemon = Daemon::start(&fixture.state);
     let repo = fixture.repo.to_path_buf();
-    let ask =
-        |port: u16, session: &str| crate::gate_hook_mode::inputs_for(port, session, &repo, None);
+    let ask = |port: u16, session: &str| {
+        crate::gate_hook_mode::inputs_for(port, TEST_KEY, session, &repo, None)
+    };
 
     let answer = ask(daemon.port, "a").expect("an answer");
     assert_eq!(answer.guard, ["main"]);
@@ -523,7 +525,7 @@ fn an_existing_branch_moving_is_put_to_the_gate_once_and_a_creation_is_not() {
     let (args, input) = calls[0].split_once('\t').unwrap();
     assert_eq!(
         args,
-        "gate-hook --session a --port 1 reference-transaction prepared"
+        format!("gate-hook --session a --port 1 --key {TEST_KEY} reference-transaction prepared")
     );
     assert!(input.ends_with(" refs/heads/main "), "{input}");
 
@@ -690,7 +692,10 @@ fn a_push_of_a_branch_is_put_to_the_gate_after_the_users_hook() {
     let calls = gate_calls(&fixture);
     assert_eq!(calls.len(), 1, "{calls:?}");
     let (args, input) = calls[0].split_once('\t').unwrap();
-    assert_eq!(args, "gate-hook --session a --port 1 pre-push");
+    assert_eq!(
+        args,
+        format!("gate-hook --session a --port 1 --key {TEST_KEY} pre-push")
+    );
     assert!(input.starts_with("refs/heads/main "), "{input}");
     assert!(input.contains(" refs/heads/main "), "{input}");
 

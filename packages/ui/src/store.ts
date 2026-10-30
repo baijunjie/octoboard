@@ -9,7 +9,7 @@ import type { ErrorRecovery } from "./errorRecovery";
 import { errorText } from "./errorText";
 import { DEFAULT_GIT_WORKFLOW } from "./gitWorkflow";
 import { currentLanguage } from "./i18n/language";
-import { daemonWsUrl, type DaemonOrigin } from "./daemon";
+import { daemonWsUrl, type DaemonAddress } from "./daemon";
 import { accountQuotaOf } from "./quota/accountQuotaOf";
 import { sameValue } from "./sameValue";
 import {
@@ -726,14 +726,14 @@ export interface Daemon {
   terminalReconnectDelay?: (attempt: number) => number;
 }
 
-export function createDaemon(origin: DaemonOrigin): Daemon {
+export function createDaemon(address: DaemonAddress): Daemon {
   const store = createStateStore();
   const dispatch = (action: Action) => store.setState((state) => reducer(state, action));
   // The events that arrived together are one update: a burst renders once, not once per event.
   const dispatchEvents = (events: Event[]) =>
     store.setState((state) => events.reduce((current, event) => reducer(current, { kind: "event", event }), state));
 
-  const client = new DaemonClient(daemonWsUrl(origin, "/ws/control"));
+  const client = new DaemonClient(daemonWsUrl(address, "/ws/control"));
   const toastListeners = new Set<(toast: ToastRequest) => void>();
   const pendingNotifications: ToastRequest[] = [];
   const emitToast = (toast: ToastRequest) => {
@@ -785,7 +785,7 @@ export function createDaemon(origin: DaemonOrigin): Daemon {
     },
     dismissTrustPrompt: (session) => dispatch({ kind: "dismiss_trust_prompt", session }),
     reconnect: () => client.reconnect(),
-    terminalUrl: (session) => daemonWsUrl(origin, `/ws/term/${session}`),
+    terminalUrl: (session) => daemonWsUrl(address, `/ws/term/${session}`),
   };
 }
 

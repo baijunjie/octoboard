@@ -149,6 +149,7 @@ it("describes a thrown error with its sanitized message and stack, and the envir
   const { title, body } = parse(issueReportUrl(BASE, facts([{ error }])));
   expect(title).toBe("Unexpected error: Cannot open <path>");
   expect(body).toContain("### What happened");
+  expect(body).toContain(`<!-- ${appConfig.name} keeps its logs in ~/.octoboard/logs/ (daemon.log, desktop.log);`);
   expect(body).toContain(`- ${appConfig.name}: 1.2.3\n- Platform: desktop app\n- OS: macOS 10.15.7\n- Language: en`);
   expect(body).toContain("- Kind: unexpected");
   expect(body).toContain("```\nError: Cannot open <path>\n    at run (tauri://localhost/assets/index-1a2b.js:3:4)\n```");
@@ -214,4 +215,9 @@ it("keeps the address within the cap by cutting each stack from its tail, the ti
 it("fences a diagnostic that itself holds a code fence with a longer one", () => {
   const error = Object.assign(new Error("x"), { stack: "Error: x\n```js\nboom\n```" });
   expect(parse(issueReportUrl(BASE, facts([{ error }]))).body).toContain("````\nError: x\n```js\nboom\n```\n````");
+});
+
+it("points to the log files only in the desktop application", () => {
+  const { body } = parse(issueReportUrl(BASE, facts([{ error: new Error("x") }], { environment: { ...environment, platform: "browser" } })));
+  expect(body).not.toContain("~/.octoboard/logs/");
 });

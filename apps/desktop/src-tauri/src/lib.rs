@@ -1,16 +1,18 @@
 //! The desktop application's Rust-side shell: launch `octoboardd` as a sidecar and hand the window
-//! the port it printed (`sidecar.rs`), the native menu bar (`menu.rs`), the window's remembered
-//! size and position (`window_state.rs`), the exit-confirmation flow (`exit.rs`), running in the
-//! background once the window is closed (`background.rs`) behind a menu bar icon (`tray.rs`), the
-//! macOS privacy permissions the agents in its terminals can need (`permissions.rs`), the system's
-//! save and open dialogs for the configuration document (`configuration_file.rs`), looking for,
-//! downloading and installing a new version (`updater.rs`), and the webview's content rule list
-//! that keeps report pages off the web (`page_isolation.rs`, macOS).
-//! Everything after the window loads talks to the daemon over WebSocket only, per the architectural
-//! rule in "Why the daemon is split out" in `docs/architecture.md` — no Tauri IPC command carries
-//! daemon traffic, so this process reads the sidecar's stdout itself and bakes the port into the
-//! window's URL as a `?port=` query parameter *before* creating the window, instead of exposing an
-//! `invoke`-able command for it.
+//! the port and key it printed (`sidecar.rs`), start it again when it dies (`recovery.rs`), the
+//! shell's own log file (`diagnostics.rs`), the native menu bar (`menu.rs`), the window's
+//! remembered size and position (`window_state.rs`), the exit-confirmation flow (`exit.rs`),
+//! running in the background once the window is closed (`background.rs`) behind a menu bar icon
+//! (`tray.rs`), the macOS privacy permissions the agents in its terminals can need
+//! (`permissions.rs`), the system's save and open dialogs for the configuration document
+//! (`configuration_file.rs`), looking for, downloading and installing a new version (`updater.rs`),
+//! and the webview's content rule list that keeps report pages off the web (`page_isolation.rs`,
+//! macOS). Everything after the window loads talks to the daemon over WebSocket only, per the
+//! architectural rule in "Why the daemon is split out" in `docs/architecture.md` — no Tauri IPC
+//! command carries daemon traffic, so this process reads the sidecar's stdout itself and bakes the
+//! port and key into the window's URL as `?port=` and `?key=` query parameters *before* creating
+//! the window (which opens once the daemon has started, from a background thread), instead of
+//! exposing an `invoke`-able command for it.
 //!
 //! The IPC commands this crate does expose carry no daemon traffic either:
 //! `frontend_exit_heartbeat` and `confirm_quit` (both in `exit.rs`), `bring_to_front` and
@@ -30,12 +32,14 @@
 
 mod background;
 mod configuration_file;
+mod diagnostics;
 mod exit;
 mod menu;
 mod notification_settings;
 #[cfg(target_os = "macos")]
 mod page_isolation;
 mod permissions;
+mod recovery;
 mod sidecar;
 mod tray;
 #[cfg(target_os = "macos")]
@@ -54,12 +58,14 @@ use tauri::{
 use tauri::{Emitter, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 use background::BackgroundState;
+use diagnostics::diagnostic;
+#[cfg(target_os = "macos")]
+use exit::install_application_should_terminate_override;
 use exit::{
-    confirm_quit, frontend_exit_heartbeat, install_application_should_terminate_override,
-    request_quit, should_let_quit_through, ExitState,
+    confirm_quit, frontend_exit_heartbeat, request_quit, should_let_quit_through, ExitState,
 };
 use menu::{build_menu, set_menu_labels, ui_event_for, Labels, DEFAULT_SETTINGS_ACCELERATOR};
-use sidecar::{mark_daemon_stopped, spawn_daemon_and_wait_for_port, DaemonState};
+use sidecar::{mark_daemon_stopping, start_daemon, window_params, DaemonState};
 
 /// The label of the one window the application opens.
 pub(crate) const MAIN_WINDOW_LABEL: &str = "main";
@@ -138,31 +144,27 @@ pub fn run() {
             // is up and running — `App::run` calls it on the runtime's `Ready` event — so the
             // delegate this installs onto already exists by now. See the function's own doc
             // comment for why the Dock icon's own Quit needs this at all.
-            install_application_should_terminate_override(app.handle());
-            // A daemon that fails to start (another instance already holds its lock, a corrupt
-            // database, ...) must not leave the user with no window and no explanation: the window
-            // opens either way, carrying whichever of `?port=`/`?error=` applies.
-            let startup =
-                spawn_daemon_and_wait_for_port(app.handle()).map_err(|err| err.to_string());
-            if startup.is_err() {
-                mark_daemon_stopped(app.handle());
-            }
-            // The window's webview gets its content rule list before the window exists, which
-            // `page_isolation` can only report back asynchronously, so the window is opened from
-            // its callback.
             #[cfg(target_os = "macos")]
-            {
-                let handle = app.handle().clone();
-                let mtm = objc2::MainThreadMarker::new().expect("`setup` runs on the main thread");
-                page_isolation::with_configuration(mtm, move |configuration| {
-                    if let Err(err) = open_main_window(&handle, startup, configuration) {
-                        eprintln!("octoboard: cannot open the main window: {err}");
-                        handle.exit(1);
-                    }
-                });
-            }
-            #[cfg(not(target_os = "macos"))]
-            open_main_window(app.handle(), startup)?;
+            install_application_should_terminate_override(app.handle());
+            // The daemon is started on a thread of its own, with retries that can take most of a
+            // minute in all, and the window opens once it has. A daemon that fails to start
+            // (another instance already holds its lock, a corrupt database, ...) must not leave the
+            // user with no window and no explanation: the window opens either way, carrying
+            // whichever of `?port=` with `?key=`, or `?error=`, applies to the daemon as it is when
+            // the window is built. Until it opens nothing here assumes it exists: a quit is let
+            // through (no webview has registered for the exit flow) and a reopen finds no window to
+            // show.
+            let handle = app.handle().clone();
+            thread::spawn(move || {
+                // The outcome is kept in the daemon's state, which the window is built from.
+                let _ = start_daemon(&handle);
+                let opening = handle.clone();
+                let queued = handle.run_on_main_thread(move || open_window_for(&opening));
+                if let Err(err) = queued {
+                    diagnostic!("cannot open the main window: {err}");
+                    handle.exit(1);
+                }
+            });
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -180,7 +182,11 @@ pub fn run() {
         // Every quit path ends here: Cmd+Q and the menu's Quit through `app.exit`, the Dock's Quit
         // and a logout through AppKit's `applicationWillTerminate:`, the window's close when it
         // quits instead of hiding, and the restart of `confirm_quit`.
-        RunEvent::Exit => window_state::save(app_handle),
+        RunEvent::Exit => {
+            // A recovery still running must not start a daemon the application would leave behind.
+            mark_daemon_stopping(app_handle);
+            window_state::save(app_handle);
+        }
         // Opening the app again while it runs in the background, from the Finder, Spotlight or the
         // Dock, brings the window back. Answered with a window still on screen too: one closed in
         // fullscreen stays visible while it leaves fullscreen, and this cancels its pending hide.
@@ -241,23 +247,42 @@ fn preferred_languages() -> Option<String> {
     None
 }
 
+/// Opens the main window for the daemon as it is when the window is built. On the main thread.
+fn open_window_for(app: &tauri::AppHandle) {
+    // The window's webview gets its content rule list before the window exists, which
+    // `page_isolation` can only report back asynchronously, so the window is opened from
+    // its callback.
+    #[cfg(target_os = "macos")]
+    {
+        let handle = app.clone();
+        let mtm = objc2::MainThreadMarker::new().expect("this runs on the main thread");
+        page_isolation::with_configuration(mtm, move |configuration| {
+            if let Err(err) = open_main_window(&handle, configuration) {
+                diagnostic!("cannot open the main window: {err}");
+                handle.exit(1);
+            }
+        });
+    }
+    #[cfg(not(target_os = "macos"))]
+    if let Err(err) = open_main_window(app) {
+        diagnostic!("cannot open the main window: {err}");
+        app.exit(1);
+    }
+}
+
 fn open_main_window(
     app: &tauri::AppHandle,
-    startup: Result<u16, String>,
     #[cfg(target_os = "macos")] configuration: objc2::rc::Retained<
         objc2_web_kit::WKWebViewConfiguration,
     >,
 ) -> tauri::Result<()> {
-    let query = match startup {
-        Ok(port) => format!("port={port}"),
-        Err(message) => format!("error={}", percent_encode_query_value(&message)),
-    };
+    let daemon_query = window_params(app);
     let query = match preferred_languages() {
         Some(languages) => format!(
-            "{query}&languages={}",
+            "{daemon_query}&languages={}",
             percent_encode_query_value(&languages)
         ),
-        None => query,
+        None => daemon_query.clone(),
     };
     let url = if cfg!(debug_assertions) {
         format!("http://localhost:5174/?{query}")
@@ -316,6 +341,13 @@ fn open_main_window(
         .effects(EffectsBuilder::new().effect(Effect::Sidebar).build());
 
     let window = builder.build()?;
+    // A recovery that finished while the window was being built found no window to point at the
+    // restarted daemon, so the window is pointed at it here instead.
+    if window_params(app) != daemon_query {
+        if let Some(address) = sidecar::current_address(app) {
+            recovery::point_window_at(app, &address);
+        }
+    }
     // Not the builder's `.maximized`. AppKit first puts a new window's frame on the main display,
     // and the builder's position is applied afterwards, queued on the main thread; tao queues a
     // builder-requested zoom while creating the window, ahead of that move, so the zoom would
@@ -323,7 +355,7 @@ fn open_main_window(
     // the zoom is queued behind the move and happens on the display the window belongs on.
     if initial.maximized {
         if let Err(err) = window.maximize() {
-            eprintln!("octoboard: cannot maximize the window: {err}");
+            diagnostic!("cannot maximize the window: {err}");
         }
     }
     window_state::track(&window, &initial);

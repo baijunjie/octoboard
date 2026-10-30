@@ -70,6 +70,11 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src data:; connect-src 'self' ipc: ws://127.0.0.1:* ws://localhost:*; frame-src 'none'; form-action 'none'; base-uri 'none'"
     />
+    <!--
+      The page's address carries the daemon's key (`?key=`, see `src/daemon.ts`), which must not leave
+      the page in a `Referer` header.
+    -->
+    <meta name="referrer" content="no-referrer" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>%APP_NAME%</title>
     <script>

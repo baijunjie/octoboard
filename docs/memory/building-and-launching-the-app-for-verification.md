@@ -6,8 +6,16 @@ A webview that throws while mounting is a blank window — no message anywhere, 
 the diff can see it; three review rounds here passed on code whose window never rendered once. So whenever a change
 touches startup, the daemon-sidecar handover or the terminal's mount, run the app and capture the window, then confirm
 the whole chain positively: the window paints, the sidecar starts, the webview connects, the menu fills, a selected
-session's terminal renders. Capturing the window needs no Accessibility permission of its own, so this check is
-always available and costs about a minute.
+session's terminal renders. It costs about a minute.
+
+Capturing the window needs no Accessibility permission, but `screencapture` does need Screen Recording, granted to the
+application macOS holds responsible for the process running it — the user's own Octoboard when the check runs from an
+agent in one of its sessions (whether it has it shows in its Settings → Permissions). Without that grant every capture
+fails. The chain up to the webview connecting can still be confirmed: the run's `~/.octoboard/logs/` (under its
+`HOME`) shows the sidecar starting, and an established connection that stays up from the app's WebKit Networking
+process to the daemon's port shows the page connected with the right port and key, since the daemon refuses a request
+without the key (`lsof -p` on that process, found from `launchctl print pid/<app pid>`). That the window paints and
+the terminal renders cannot be read that way: ask the user to look, and do not report them as confirmed.
 
 ## Build the daemon and confirm what the running sidecar executes before trusting any verification of it
 
@@ -21,17 +29,19 @@ process has open and compare it against the fresh build output. The sidecar dire
 not that executable — the process runs from a further copy under the Tauri crate's own target directory — so an
 up-to-date sidecar directory on its own proves nothing about what is running.
 
-## Read and stage what the shipped webview exchanges with the daemon through a wrapped sidecar in a packaged build
+## Read and stage what passes between the shell, the webview and the daemon through a wrapped sidecar in a packaged build
 
 A dev-mode window does not answer what the shipped app puts on the wire: it loads from the dev server (`devUrl` in
 `apps/desktop/src-tauri/tauri.conf.json`), so the `Origin` it sends differs from the packaged webview's. So anything
 that depends on those requests — a check the daemon applies to them, a header the webview is expected to send — is
 verified against a packaged build. A release build has no devtools, so observe the traffic between the webview and the
 daemon instead, without touching the source: in a copy of the built `.app`, rename `Contents/MacOS/octoboardd` to
-`octoboardd.real` and put an executable in its place that starts a logging TCP proxy in front of it. The proxy has to
-print the daemon's `octoboardd listening on 127.0.0.1:<port>` line again with its own port, because the shell connects
-to whatever port that line on the sidecar's stdout names. This relies on the build being unsigned, as the swap breaks
-a signed bundle's signature.
+`octoboardd.real` and put an executable in its place that starts a logging TCP proxy in front of it, passing its
+arguments through. The proxy has to print the daemon's `octoboardd listening on 127.0.0.1:<port> with key <key>` line
+again with its own port and the daemon's key unchanged, because the shell connects to whatever port that line on the
+sidecar's stdout names and hands the window that key, and any connection of the proxy's own to the daemon carries the
+same key as `?key=`. The swap invalidates the bundle's signature, so re-sign the scratch copy ad hoc
+(`codesign --force --deep --sign - <scratch-app>`) before launching it.
 
 The same proxy is how a real daemon error reply is put into the window's own request path, for an alert or a recovery
 action that answers one: have it hold one specific request of the window's (an `open_session` for an agent), change
@@ -40,20 +50,10 @@ the broadcasts that would show it the change first, then forward the original re
 receives the daemon's genuine refusal (`agent_not_added`). A refusal provoked on the control connection itself never
 reaches the window's alert, so it is no check of that alert, and neither is a race left to timing.
 
-## Nothing the daemon logs once the application is gone is readable, and putting its log on a file changes what it does
-
-Applies to verifying what the daemon does after the application exits, crashes or is killed. The daemon's log goes to
-its stderr, and that stderr is a pipe whose read end the application holds and forwards to its own stderr
-(`apps/desktop/src-tauri/src/sidecar.rs`), so on a packaged build the daemon's lines land wherever the application's
-own output does. Every line the daemon writes after the application is gone therefore goes into a dead pipe and is
-readable nowhere — and a `tracing` call added to diagnose such a path leaves no trace at all, as does a task that
-panics on one, since Tokio swallows a task's panic.
-
-Starting the daemon by hand with its stderr on a file does make those lines readable, but it also takes the broken
-pipe away, which is part of the condition being investigated: a daemon that misbehaves under the application can
-behave perfectly with its log on a file. So treat a stderr-on-a-file run as the control showing that the pipe is what
-matters, not as the observation, and get the evidence off the path another way — in a throwaway build, have the code
-under investigation write to a file of its own, around a `catch_unwind` where a panic is the suspicion.
+The same swap stages what the shell does when its sidecar misbehaves — the startup timeout, a daemon that dies early,
+the automatic restart — with no change to the source: make the replacement a script that counts its runs in a file and,
+on the run under test, `exec sleep 3600` (never prints the startup line) or starts the real daemon and kills it, and
+on every other run `exec`s `octoboardd.real "$@"`.
 
 ## Build the bundle a verification runs against with `pnpm build:app`, never a bare `cargo build`
 

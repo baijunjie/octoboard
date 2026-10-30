@@ -34,13 +34,18 @@ the scripts from this directory.
 
 ### Pointing it at a daemon
 
-Start `octoboardd` and read its port from the first line it prints on stdout (or `$TMPDIR/octoboardd.port`). Then either:
+Start `octoboardd` and read its port and key from the first line it prints on stdout,
+`octoboardd listening on 127.0.0.1:<port> with key <key>`. The daemon makes a new key every time it starts and refuses
+every connection that does not carry it, so the UI needs both. Either:
 
-- open `http://localhost:5174/?port=<port>`, or set `VITE_DAEMON_PORT`; or
-- run `OCTOBOARD_DAEMON_PORT=<port> pnpm dev` and open the plain URL, which reaches the daemon through a same-origin
-  `/ws` proxy (`vite.config.ts`).
+- open `http://localhost:5174/?port=<port>&key=<key>`, or set `VITE_DAEMON_PORT` and `VITE_DAEMON_KEY`; or
+- run `OCTOBOARD_DAEMON_PORT=<port> pnpm dev` and open `http://localhost:5174/?key=<key>` (or set `VITE_DAEMON_KEY`),
+  which reaches the daemon through a same-origin `/ws` proxy (`vite.config.ts`).
 
-Both variables can also be set in the repo-root `.env.local` (gitignored; template: `.env.local.example`).
+The key is only on that line: the daemon does not write it anywhere (`$TMPDIR/octoboardd.port` holds the port alone), so a
+`VITE_DAEMON_KEY` kept in the repo-root `.env.local` (gitignored; template: `.env.local.example`) goes stale at every
+daemon restart. The page never sends its address as a referrer (`index.html`), so the key in it stays between the page and
+the daemon.
 
 ### The UI state gallery
 
@@ -296,7 +301,7 @@ Imports run one way between the feature directories: `src/panels/` imports `src/
 | `src/main.tsx`, `src/App.tsx` | Startup (platform, daemon location, connection, theme, native window reveal, global error handlers) and the screen: window chrome, the content panel, session selection and resume, toasts, connection banner and the dialog layer |
 | `src/StartupScreen.tsx`, `src/ErrorBoundary.tsx`, `src/WelcomeScreen.tsx` | The screens for no daemon connection, a UI crash, and a daemon with no console |
 | `src/platform/` | `PlatformAdapter`, the interface to everything native, made of optional capabilities; implemented by `tauri.ts` (the only importer of `@tauri-apps/*`) and `browser.ts`, exposed by `react.tsx` |
-| `src/daemon.ts`, `src/daemon-client.ts`, `src/protocol.ts` | Locating the daemon, its WebSocket client for `GET /ws/control` (request correlation, reconnect, event dispatch), and the hand-written TypeScript mirror of the wire protocol |
+| `src/daemon.ts`, `src/daemon-client.ts`, `src/protocol.ts` | Locating the daemon (`resolveDaemonAddress`: its origin and the key it requires, from the page's address; `resolveRecovered`: whether the shell restarted it), its WebSocket client for `GET /ws/control` (request correlation, reconnect, event dispatch), and the hand-written TypeScript mirror of the wire protocol |
 | `src/store.ts` | The Zustand store of the connection and the state derived from daemon events: `createDaemon`, `useDaemon`, `useDaemonStore`, `useDaemonStoreEqual`, `useErrorRecords` and the `onToast` stream |
 | `src/sessions/`, `src/sameValue.ts`, `src/waiting.ts` | `indexSessions` and the hooks reading session groups, deep equality, and the sessions waiting for the user in sidebar order |
 | `src/accountSwitchBatch.tsx`, `src/accountSwitchFailureAlert.tsx` | `runAccountSwitchBatch`, the app-level runner of a batch of session account switches that outlives the dialog starting it, and the error alert for its failures |

@@ -18,7 +18,7 @@ use crate::protocol::{
 use crate::store::LOCAL_HOST_ID;
 use crate::test_support::{
     app_state, fixture_git, git, isolated_git_env, repo_with, ScratchDir, ScratchFile, PATIENCE,
-    SYSTEM_GIT,
+    SYSTEM_GIT, TEST_KEY,
 };
 
 /// The dispatchers every test here runs git with, written once per test binary under a fixed
@@ -258,6 +258,7 @@ impl Fixture {
                 hooks,
                 session,
                 self.port.load(Ordering::Relaxed),
+                TEST_KEY,
             ))
             .env("OCTOBOARD_TEST_REPORTS", &*self.reports)
             .env("OCTOBOARD_TEST_GATES", &*self.gates);
@@ -345,6 +346,11 @@ fn parse_report(line: &str) -> (String, RefReport) {
     let git_dir = fields.next().unwrap();
     let args: Vec<&str> = fields.next().unwrap().split(' ').collect();
     let session = args[args.iter().position(|a| *a == "--session").unwrap() + 1].to_string();
+    assert_eq!(
+        args[args.iter().position(|a| *a == "--key").unwrap() + 1],
+        TEST_KEY,
+        "the git-ref invocation carries the daemon's key"
+    );
     let head = args
         .iter()
         .position(|a| *a == "--head")
@@ -929,7 +935,7 @@ fn a_push_to_checkout_with_no_hook_of_the_users_updates_the_worktree() {
         .current_dir(&git_dir)
         .env_clear()
         .envs(isolated_git_env())
-        .envs(injected(0, dispatchers(), "a", 1))
+        .envs(injected(0, dispatchers(), "a", 1, TEST_KEY))
         .env("GIT_DIR", &git_dir)
         .env("GIT_WORK_TREE", &*theirs)
         .output()

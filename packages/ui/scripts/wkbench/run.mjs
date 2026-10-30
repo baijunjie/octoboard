@@ -50,7 +50,9 @@ and prints a table. Stops everything it started when it ends. A window opens and
   --port <n>            Use the daemon already listening on this port, which must hold the fixtures,
                         instead of starting and seeding one. The only way to measure a daemon this tool did
                         not start; it is not stopped, but its sessions are driven and, under idle, renamed
-                        and restored.
+                        and restored. Needs --key.
+  --key <key>           The key that daemon printed on its startup line, which it requires of every
+                        connection. Only with --port.
   --skip-build          Reuse the bundle and the host binary a previous run left in the scratch directory.
   --extra-projects <n>  Projects per console besides the driven one, with sessions that stop drawing a few
                         seconds after they start, to give the sidebar a realistic size (default: 5).
@@ -76,7 +78,7 @@ function parse() {
     parsed = parseArgs({
       options: {
         scenarios: { type: "string" }, reps: { type: "string" }, scratch: { type: "string" }, daemon: { type: "string" },
-        port: { type: "string" }, "skip-build": { type: "boolean" }, "extra-projects": { type: "string" },
+        port: { type: "string" }, key: { type: "string" }, "skip-build": { type: "boolean" }, "extra-projects": { type: "string" },
         "extra-sessions": { type: "string" }, engine: { type: "string" }, chromium: { type: "string" },
         throttle: { type: "string" }, probe: { type: "boolean" }, profile: { type: "string" }, json: { type: "string" },
         help: { type: "boolean", short: "h" },
@@ -105,13 +107,14 @@ function parse() {
   const engine = v.engine ?? "wkwebview";
   if (!["wkwebview", "webkit", "chromium"].includes(engine)) throw new UsageError(`--engine is wkwebview, webkit or chromium, not "${engine}"`);
   if (v.profile !== undefined && !["avatar", "attach"].includes(v.profile)) throw new UsageError(`--profile is avatar or attach, not "${v.profile}"`);
+  if ((v.port === undefined) !== (v.key === undefined)) throw new UsageError("--port and --key go together: the daemon refuses a connection without its key");
   const extraProjects = number("extra-projects", v["extra-projects"], 5, 0);
   if (scenarios.includes("idle") && extraProjects < 1) throw new UsageError("the idle scenario renames the extra projects' sessions: --extra-projects must be at least 1");
   return {
     scenarios, engine, extraProjects, profile: v.profile, probe: v.probe ?? false, skipBuild: v["skip-build"] ?? false,
     reps: number("reps", v.reps, 3, 1), extraSessions: number("extra-sessions", v["extra-sessions"], 3, 1),
     scratch: path.resolve(v.scratch ?? path.join(packageDir, ".bench")),
-    daemon: v.daemon && path.resolve(v.daemon), port: v.port === undefined ? undefined : number("port", v.port, undefined, 1),
+    daemon: v.daemon && path.resolve(v.daemon), port: v.port === undefined ? undefined : number("port", v.port, undefined, 1), key: v.key,
     chromium: v.chromium, throttle: v.throttle, json: v.json && path.resolve(v.json),
   };
 }
@@ -256,12 +259,12 @@ async function startDaemon(binary, dirs, scratch) {
   fs.closeSync(err);
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
-    const match = /listening on 127\.0\.0\.1:(\d+)/.exec(fs.readFileSync(stdoutPath, "utf8"));
-    if (match) return Number(match[1]);
+    const match = /listening on 127\.0\.0\.1:(\d+) with key ([0-9a-f]+)/.exec(fs.readFileSync(stdoutPath, "utf8"));
+    if (match) return { port: Number(match[1]), key: match[2] };
     if (child.exitCode !== null || child.signalCode !== null) throw new Error(`the daemon exited (${child.exitCode ?? child.signalCode}); see ${path.join(scratch, "daemon.stderr")}`);
     await Promise.race([new Promise((resolve) => setTimeout(resolve, 100)), child.failed]);
   }
-  throw new Error("the daemon did not report its port within 60 s");
+  throw new Error("the daemon did not report its port and key within 60 s");
 }
 
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2", ".woff": "font/woff", ".wasm": "application/wasm", ".map": "application/json" };
@@ -410,13 +413,13 @@ async function main() {
   const needsDebug = options.probe || options.profile;
   const debugBundle = needsDebug ? (options.skipBuild && fs.existsSync(path.join(options.scratch, "dist-debug")) ? path.join(options.scratch, "dist-debug") : await buildBundle(options.scratch, "dist-debug", ["--minify", "false", "--sourcemap"])) : undefined;
 
-  let port = options.port;
+  let { port, key } = options;
   if (port === undefined) {
     const daemon = options.daemon ?? (await buildDaemon(options.scratch));
-    port = await startDaemon(daemon, dirs, options.scratch);
+    ({ port, key } = await startDaemon(daemon, dirs, options.scratch));
     console.error(`throwaway daemon on port ${port}`);
     console.error("seeding the fixtures ...");
-    await seedFixtures({ port, home: dirs.home, extraProjects: options.extraProjects, extraSessions: options.extraSessions, log: (m) => console.error(m) });
+    await seedFixtures({ port, key, home: dirs.home, extraProjects: options.extraProjects, extraSessions: options.extraSessions, log: (m) => console.error(m) });
   } else {
     console.error(`using the daemon on port ${port} as given; it is not started, seeded or stopped`);
   }
@@ -428,11 +431,11 @@ async function main() {
     if (stopping) break;
     console.error(`running ${scenario} ...`);
     // The UI picks its language from `languages`, else the system's; the lookups need the English labels.
-    const query = new URLSearchParams({ port: String(port), scenario, reps: String(options.reps), languages: "en" });
+    const query = new URLSearchParams({ port: String(port), key, scenario, reps: String(options.reps), languages: "en" });
     if (options.probe) query.set("probe", "1");
     let pump;
     if (scenario === "idle") {
-      pump = start(process.execPath, [path.join(HERE, "event-pump.mjs"), String(port), "Console 2", "33", "30"], { stdio: ["ignore", "ignore", "inherit"] });
+      pump = start(process.execPath, [path.join(HERE, "event-pump.mjs"), String(port), key, "Console 2", "33", "30"], { stdio: ["ignore", "ignore", "inherit"] });
     }
     const results = await runScenario({ options, hostBinary, scenario, url: `http://127.0.0.1:${uiPort}/?${query}`, script: scenario === "restyle" ? "domcost.js" : "driver.js" });
     if (pump) {
@@ -449,7 +452,7 @@ async function main() {
   if (options.profile) {
     const profilePort = await serve(debugBundle);
     console.error(`profiling ${options.profile} steps in Chrome ...`);
-    await profileSteps({ url: `http://127.0.0.1:${profilePort}/?port=${port}&languages=en`, dist: debugBundle, step: options.profile, throttle: options.throttle, chromium: options.chromium });
+    await profileSteps({ url: `http://127.0.0.1:${profilePort}/?port=${port}&key=${key}&languages=en`, dist: debugBundle, step: options.profile, throttle: options.throttle, chromium: options.chromium });
   }
   if (options.json) fs.writeFileSync(options.json, `${all.map((r) => JSON.stringify(r)).join("\n")}\n`);
   return failed ? 1 : 0;

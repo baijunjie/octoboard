@@ -5,14 +5,20 @@ owner's browser on another machine (see "Two deployment forms" in `docs/architec
 channel and no shared state between them (see "Why the daemon is split out" there), so everything the UI can do is in
 here.
 
-The daemon binds to `127.0.0.1` on an ephemeral port and prints `octoboardd listening on 127.0.0.1:<port>` on stdout as
-its first line; it also writes the port to `$TMPDIR/octoboardd.port`. The application reads the stdout line.
+The daemon binds to `127.0.0.1` on an ephemeral port and generates a key for this launch (see "Who may connect"). It
+prints `octoboardd listening on 127.0.0.1:<port> with key <key>` on stdout as its first line, the key being 64
+lower-case hex characters, and writes the port alone to `$TMPDIR/octoboardd.port`; the key is not in that file. It lives
+in the daemon's memory and in the files of the sessions the daemon starts (see "Who may connect"). The application
+reads the stdout line.
 
 ## Who may connect
 
-The daemon has no authentication: it trusts local processes and does not trust web pages, which can reach a loopback
-port and, on a WebSocket handshake, are not subject to CORS. Every request on every route, the 404 fallback included, is
-checked before any handler or WebSocket upgrade runs, and a request that fails the check gets `403`.
+The daemon trusts local processes of its own user and does not trust web pages, which can reach a loopback port and, on
+a WebSocket handshake, are not subject to CORS. Every request on every route, the 404 fallback included, is checked
+before any handler or WebSocket upgrade runs, against two rules that both have to hold. A request that fails the first
+gets `403`; one that fails the second gets `401` with a short body.
+
+**The `Host` and `Origin` rules** keep a page on another site, and DNS rebinding, out:
 
 - **`Host`** must be a loopback name: `localhost`, `127.0.0.1` or `[::1]`, with any port, compared case-insensitively
   and exactly (`127.1` and the like are refused). A missing, repeated or malformed `Host` is refused. This is what stops
@@ -27,8 +33,39 @@ checked before any handler or WebSocket upgrade runs, and a request that fails t
 
   Anything else, including `null` and a malformed value, is refused.
 
-A new client therefore either sends no `Origin`, or is served from one of the origins above. A client reaching the daemon
-under any other host name is refused until the rule is widened (`host_allowed` in `apps/daemon/src/access.rs`).
+**The key** keeps out what those rules let through: any page served from `localhost` (an untrusted dev server, say) and
+every Tauri application, which all share `tauri://localhost`. Each launch of the daemon makes a new one from the
+operating system's random source, and every request, on every route, has to carry it as the `key` query parameter
+(`?key=<key>`, the first `key` parameter counting) with exactly the value the daemon made; it is compared in constant
+time, and a missing, wrong or empty one is refused. The `Host` and `Origin` rules are applied first, so a request that
+fails them is told `403` whatever it carries as a key.
+
+The key is handed on only to what the daemon, or the application that started it, starts:
+
+- The daemon prints it on its startup line (above). The desktop application reads it there and puts it in the window's
+  URL beside the port (`?port=<port>&key=<key>`), from which the UI adds it to the URL of every WebSocket it opens
+  (`/ws/control`, `/ws/term/:session`); when the application restarts a daemon that died, it rebuilds the window's query
+  with the new daemon's port and key. A page the daemon is not started by, such as the UI under a dev server, is given
+  the key by hand: it is read from the startup line and passed as `?key=` or `VITE_DAEMON_KEY`
+  (`packages/ui/README.md`).
+- Every helper the daemon starts for an agent is given it where it is given the port. The `hook`, `git-ref`,
+  `gate-hook`, `status-line` and `mcp` modes of `octoboardd` take a required `--key <key>` beside `--port`, and send it
+  as `?key=` on the route they call. The git hook dispatchers of a project session read it from `OCTOBOARD_DAEMON_KEY`,
+  set beside `OCTOBOARD_DAEMON_PORT`, and pass it on as `--key`. Claude Code's own HTTP hook posts to
+  `http://127.0.0.1:<port>/hook/<session>?key=<key>`.
+
+The key targets web pages, not local processes, in keeping with the trust model above: a process of the same user could
+already drive the daemon directly. The daemon's own arguments and environment do not hold the key; its children's do. It
+is in the command lines of the agent CLIs (Claude Code's `--settings` and `--mcp-config`, and Codex's `-c` options
+that register the hook and the MCP server), in the `--key` of the `octoboardd` helpers (`hook`, `mcp`, `status-line`,
+`git-ref`, `gate-hook`) and in `OCTOBOARD_DAEMON_KEY` of a project session's environment, so any local process can read
+it, and other local users can read the command lines through `ps`. It is also written to two files of a session, both
+created owner-only: the hook script (mode 0700) and, for Grok Build, the session's own `grok-home/config.toml` (mode
+0600, a copy of the user's configuration with the MCP server appended). They are in the session's scratch directory,
+`~/.octoboard/run/<session>/`, which is created with the daemon's default permissions, so it is the files' own modes
+that keep them private, and they are removed with that directory. A new client therefore sends the key, and either sends
+no `Origin` or is served from one of the origins above. A client reaching the daemon under any other host name is
+refused until the rule is widened (`host_allowed` in `apps/daemon/src/access.rs`).
 
 ## `GET /ws/control` — management and status
 
@@ -2544,21 +2581,22 @@ steers the agent (an empty `200` is Claude Code's "no decision"): the injected h
 and fast, because every agent surfaces a failing hook to the user. The event is then applied on a queue of the
 session's own, so a session's events take effect in the order they arrived; at most 256 wait per session, and past that the newest event takes the place of the one last in line (the event being applied is never touched).
 
-The caller is `octoboardd hook`, except for a Claude Code of version 2.1.63 or later, whose `--settings` carry a
-`"type": "http"` hook that posts to this route itself (`http://127.0.0.1:<port>/hook/<session>`), so a hook event costs
-no process. It sends the same JSON body, and carries no credential: the route has none, and what keeps a web page from
-reaching it is the `Host` and `Origin` check above. Claude Code's HTTP hook is synchronous, which is why the answer
-does not wait for the event to be applied; a daemon that is unreachable, or does not answer within the hook's 3 s
-timeout, shows a non-blocking error notice in Claude Code's transcript where the command form would have swallowed
-it. A Claude Code whose settings carry an `allowedHttpHookUrls` that leaves this URL out would skip the hook
-silently, so such a launch (the user's settings, the project's two, and the managed settings file are read) is given
-the command form instead; a policy delivered by MDM profile or the claude.ai console cannot be read, and is a known
-limitation.
+The caller is `octoboardd hook --session <id> --port <port> --key <key>`, except for a Claude Code of version 2.1.63 or
+later, whose `--settings` carry a `"type": "http"` hook that posts to this route itself
+(`http://127.0.0.1:<port>/hook/<session>?key=<key>`), so a hook event costs no process. It sends the same JSON body;
+what keeps a web page from reaching the route is the `Host` and `Origin` check and the key above, which the URL carries.
+Claude Code's HTTP hook is synchronous, which is why the answer does not wait for the event to be applied; a daemon that
+is unreachable, or does not answer within the hook's 3 s timeout, shows a non-blocking error notice in Claude Code's
+transcript where the command form would have swallowed it. A Claude Code whose settings carry an `allowedHttpHookUrls`
+that leaves this URL out would skip the hook silently, so such a launch (the user's settings, the project's two, and the
+managed settings file are read) is given the command form instead; a policy delivered by MDM profile or the claude.ai
+console cannot be read, and is a known limitation.
 
 ## `POST /git-ref/:session` — a session's git reporting branches it created
 
-Not part of the application's interface. This is how `octoboardd git-ref`, which a project session's
-`reference-transaction` hook dispatcher starts in the background, reports a committed transaction's created branches:
+Not part of the application's interface. This is how `octoboardd git-ref --session <id> --port <port> --key <key>`,
+which a project session's `reference-transaction` hook dispatcher starts in the background, reports a committed
+transaction's created branches:
 
 ```
 { cwd, git_dir?, head?, refs: [{ name, oid }], unix_time }
@@ -2576,9 +2614,9 @@ takes `head` whatever the start point was), and its fork point, the reported com
 
 ## `POST /revert-gate/:session` — a session's git asking whether the revert gate applies
 
-Not part of the application's interface. This is how `octoboardd gate-hook`, which a project session's
-`reference-transaction` and `pre-push` hook dispatchers start in the foreground when git moves an existing branch or
-pushes one, gets the inputs it runs the revert gate with, in its own process:
+Not part of the application's interface. This is how `octoboardd gate-hook --session <id> --port <port> --key <key>
+<hook>`, which a project session's `reference-transaction` and `pre-push` hook dispatchers start in the foreground when
+git moves an existing branch or pushes one, gets the inputs it runs the revert gate with, in its own process:
 
 ```
 { cwd, git_dir? }
@@ -2597,8 +2635,9 @@ that does not parse. The hook lets the git command through whenever it gets anyt
 
 ## `POST /context-window/:session` — a Claude Code session reporting its context window
 
-Not part of the application's interface. This is how `octoboardd status-line`, the status line command the Claude
-Code adapter injects through `--settings`, reports the context window Claude Code gave it on stdin:
+Not part of the application's interface. This is how `octoboardd status-line --session <id> --port <port> --key <key>
+…`, the status line command the Claude Code adapter injects through `--settings`, reports the context window Claude Code
+gave it on stdin:
 
 ```
 { window }
@@ -2613,13 +2652,13 @@ with none configured it prints nothing.
 
 ## `POST /mcp/:token` — Octoboard's MCP tools
 
-Not part of the application's interface. This is how a session's own MCP server — the
-`octoboardd mcp` child process each adapter registers — runs a tool call against the daemon; the
-desktop application never calls it.
+Not part of the application's interface. This is how a session's own MCP server — the `octoboardd mcp --session <id>
+--role <role> --port <port> --key <key> --token <token>` child process each adapter registers — runs a tool call against
+the daemon; the desktop application never calls it.
 
-The token in the path is what says which session is calling. It is issued per launch, dropped when
-that process goes away, and never sent by the caller as an argument, so a child that rewrote its
-arguments still cannot act on another session. An unrecognised token is refused without detail.
+The key, as on every route, is the `key` query parameter. The token in the path is what says which session is calling.
+It is issued per launch, dropped when that process goes away, and never sent by the caller as an argument, so a child
+that rewrote its arguments still cannot act on another session. An unrecognised token is refused without detail.
 
 Request body is `{"tool": "<name>", "arguments": {…}}`. The answer is always `200` with `{"ok": true, "result": {…}}` or
 `{"ok": false, "error": "<prose>"}`: a refused call is an outcome the model is meant to read and act on, not a transport

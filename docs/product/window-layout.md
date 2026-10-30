@@ -105,7 +105,7 @@ for the file viewer's header; a report page's own content lines up with it by de
 what it cannot do" in `docs/product/report-panel.md`).
 
 On the screens shown before there is anything to show — while connecting to the daemon, and the screens for a daemon
-that could not start, for no daemon address being known, or for a UI that failed — there is no rail: under the top
+that could not start, for no daemon address or key being known, or for a UI that failed — there is no rail: under the top
 bar, the content panel spans the window.
 
 The screens for a daemon that could not start and for a UI that failed are each an empty-state failure of the whole
@@ -120,7 +120,8 @@ colour. **Quit** is there only where the application can quit itself.
   them without repeating that line where the stack already begins with it. Its row holds **Try again**, the primary
   button, then **Quit**.
 - **A daemon that could not start**: headed that the daemon failed to start, with the line saying Octoboard cannot work
-  without it and that opening Octoboard again tries once more. Under it is the daemon's own message. Its row holds
+  without it and that opening Octoboard again tries once more. Under it is the reason it did not start (see "Starting
+  up" in `docs/product/application-lifecycle.md`). Its row holds
   **Quit** alone.
 
 The error alert shown first, over the screen for a UI that failed, is titled that an unexpected error occurred, and
@@ -128,7 +129,7 @@ its body says that Octoboard hit an error it could not recover from, with the sa
 under its **Error details**; the one over the screen for a daemon that could not start is described in "Starting up" in
 `docs/product/application-lifecycle.md`.
 
-On the screen for no daemon address being known, the heading and the button under it are centred, and the rest — its
+On the screen for no daemon address or key being known, the heading and the button under it are centred, and the rest — its
 alert, the explanation and the list in it — starts at the reading edge. Its alert is titled that the daemon could not
 be connected to, with the detail under the title.
 

@@ -38,7 +38,11 @@ const OUTBOX_CAPACITY: usize = 256;
 pub fn router(state: Arc<AppState>) -> Router {
     // The guard wraps the finished router, fallback included, so a route added to `routes` later
     // cannot end up outside it. A refused request never reaches a handler or a WebSocket upgrade.
-    routes(state).layer(axum::middleware::from_fn(crate::access::guard))
+    let key: Arc<str> = state.key.as_str().into();
+    routes(state).layer(axum::middleware::from_fn_with_state(
+        key,
+        crate::access::guard,
+    ))
 }
 
 fn routes(state: Arc<AppState>) -> Router {
@@ -1171,7 +1175,7 @@ mod tests {
     use super::*;
     use crate::outbox::Drain;
     use crate::state::WriteHold;
-    use crate::test_support::{app_state, PATIENCE};
+    use crate::test_support::{app_state, PATIENCE, TEST_KEY};
 
     #[test]
     fn deferred_user_input_retries_in_order_without_repeating_accepted_frames() {
@@ -1292,10 +1296,11 @@ mod tests {
         let port = listener.local_addr().unwrap().port();
         let served = state.clone();
         let server = tokio::spawn(async move { axum::serve(listener, router(served)).await });
-        let (mut socket, _) =
-            tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/ws/term/echo"))
-                .await
-                .unwrap();
+        let (mut socket, _) = tokio_tungstenite::connect_async(format!(
+            "ws://127.0.0.1:{port}/ws/term/echo?key={TEST_KEY}"
+        ))
+        .await
+        .unwrap();
         let mut ready = Vec::new();
         while !ready.windows(5).any(|text| text == b"READY") {
             if let Some(Ok(Frame::Binary(data))) =
@@ -1440,7 +1445,7 @@ mod tests {
         let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect");
         write!(
             stream,
-            "GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: Upgrade\r\n\
+            "GET {path}?key={TEST_KEY} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: Upgrade\r\n\
              Upgrade: websocket\r\nSec-WebSocket-Version: 13\r\n\
              Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n"
         )
@@ -1540,6 +1545,11 @@ mod tests {
         drop((live, dir));
     }
 
+    /// `request_line` with the daemon's key on its path.
+    fn keyed(request_line: &str) -> String {
+        format!("{request_line}?key={TEST_KEY}")
+    }
+
     /// Sends one request with exactly the headers given (plus a body length) and returns the
     /// response's status code, read from the status line alone so an upgraded connection does not
     /// have to close first.
@@ -1565,9 +1575,9 @@ mod tests {
 
     /// A refused request must not reach a handler, and an accepted one must: `/mcp/:token`
     /// answers 200 to a token it does not know, which no other layer would, while the upgrade
-    /// routes answer 400 to a handshake that is not one — still not the 403 of the guard.
+    /// routes answer 400 to a handshake that is not one — still not the 403 or 401 of the guard.
     #[tokio::test]
-    async fn every_route_is_behind_the_origin_guard() {
+    async fn every_route_is_behind_the_origin_and_key_guard() {
         let port = serve("guard").await;
         let host = format!("Host: 127.0.0.1:{port}");
         let tests = tokio::task::spawn_blocking(move || {
@@ -1581,7 +1591,8 @@ mod tests {
                 "POST /mcp/x",
             ];
             for route in routes {
-                let forbidden = |headers: &[&str]| status_of(port, route, headers) == 403;
+                let keyed = keyed(route);
+                let forbidden = |headers: &[&str]| status_of(port, &keyed, headers) == 403;
                 assert!(
                     forbidden(&[&host, "Origin: https://evil.example"]),
                     "{route}"
@@ -1599,8 +1610,43 @@ mod tests {
                     "{route}"
                 );
                 assert!(!forbidden(&[&host, "Origin: tauri://localhost"]), "{route}");
+
+                // Without the key a request is refused whatever else it states, and an origin
+                // that is refused anyway is still told 403 rather than which key to try.
+                let unauthorized = |request_line: &str, headers: &[&str]| {
+                    status_of(port, request_line, headers) == 401
+                };
+                let wrong = format!("{route}?key={}", "0".repeat(64));
+                let near = &TEST_KEY[..TEST_KEY.len() - 1];
+                for refused in [
+                    route.to_string(),
+                    format!("{route}?"),
+                    format!("{route}?key="),
+                    format!("{route}?other={TEST_KEY}"),
+                    format!("{route}?key={near}"),
+                    format!("{route}?key={TEST_KEY}0"),
+                    wrong,
+                ] {
+                    assert!(unauthorized(&refused, &[&host]), "{refused}");
+                    assert!(
+                        unauthorized(&refused, &[&host, "Origin: tauri://localhost"]),
+                        "{refused}"
+                    );
+                    assert!(
+                        unauthorized(&refused, &[&host, "Origin: http://localhost:5174"]),
+                        "{refused}"
+                    );
+                    assert_eq!(
+                        status_of(port, &refused, &[&host, "Origin: https://evil.example"]),
+                        403,
+                        "{refused}"
+                    );
+                }
+                // The key may follow other parameters.
+                let later = format!("{route}?x=1&key={TEST_KEY}");
+                assert!(!unauthorized(&later, &[&host]), "{later}");
             }
-            assert_eq!(status_of(port, "POST /mcp/x", &[&host]), 200);
+            assert_eq!(status_of(port, &keyed("POST /mcp/x"), &[&host]), 200);
         });
         tests.await.expect("the checks ran");
     }
@@ -1617,7 +1663,7 @@ mod tests {
                 let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect");
                 write!(
                     stream,
-                    "POST /hook/s HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n{}\
+                    "POST /hook/s?key={TEST_KEY} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n{}\
                      Content-Type: application/json\r\nContent-Length: {}\r\n\
                      Connection: close\r\n\r\n",
                     origin.map(|o| format!("Origin: {o}\r\n")).unwrap_or_default(),
@@ -1654,15 +1700,24 @@ mod tests {
         });
         tokio::task::spawn_blocking(move || {
             let post = |session: &str, body: &[u8]| {
-                crate::loopback::post(port, &format!("/context-window/{session}"), body, PATIENCE)
-                    .expect("answered")
+                crate::loopback::post(
+                    port,
+                    TEST_KEY,
+                    &format!("/context-window/{session}"),
+                    body,
+                    PATIENCE,
+                )
+                .expect("answered")
             };
             assert!(post("s", br#"{"window":200000}"#).is_empty());
             for body in [&b"{}"[..], br#"{"window":0}"#, b"200000"] {
                 post("t", body);
             }
             let host = format!("Host: 127.0.0.1:{port}");
-            assert_eq!(status_of(port, "POST /context-window/t", &[&host]), 400);
+            assert_eq!(
+                status_of(port, &keyed("POST /context-window/t"), &[&host]),
+                400
+            );
         })
         .await
         .expect("the checks ran");
@@ -1690,7 +1745,7 @@ mod tests {
                     "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
                 ];
                 headers.extend(origin);
-                status_of(port, "GET /ws/control", &headers)
+                status_of(port, &keyed("GET /ws/control"), &headers)
             };
             assert_eq!(handshake(Some("Origin: https://evil.example")), 403);
             assert_eq!(handshake(Some("Origin: tauri://localhost")), 101);
@@ -2393,15 +2448,18 @@ mod tests {
         assert!(state.background_tasks_of("s").is_empty());
     }
 
-    /// A path no route serves is still behind the guard: hostile callers learn nothing from it.
+    /// A path no route serves is still behind the guard: callers without the key learn nothing from
+    /// it.
     #[tokio::test]
-    async fn the_fallback_is_behind_the_origin_guard() {
+    async fn the_fallback_is_behind_the_guard() {
         let port = serve("fallback").await;
         let host = format!("Host: 127.0.0.1:{port}");
         tokio::task::spawn_blocking(move || {
-            let hostile = status_of(port, "GET /nope", &[&host, "Origin: https://evil.example"]);
+            let nope = keyed("GET /nope");
+            let hostile = status_of(port, &nope, &[&host, "Origin: https://evil.example"]);
             assert_eq!(hostile, 403);
-            assert_eq!(status_of(port, "GET /nope", &[&host]), 404);
+            assert_eq!(status_of(port, "GET /nope", &[&host]), 401);
+            assert_eq!(status_of(port, &nope, &[&host]), 404);
         })
         .await
         .expect("the checks ran");
@@ -2428,10 +2486,11 @@ mod tests {
         let served = state.clone();
         let server = tokio::spawn(async move { axum::serve(listener, router(served)).await });
 
-        let (control, _) =
-            tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/ws/control"))
-                .await
-                .unwrap();
+        let (control, _) = tokio_tungstenite::connect_async(format!(
+            "ws://127.0.0.1:{port}/ws/control?key={TEST_KEY}"
+        ))
+        .await
+        .unwrap();
         let (mut requests, mut events) = control.split();
         type Socket = tokio_tungstenite::WebSocketStream<
             tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
@@ -2462,7 +2521,7 @@ mod tests {
             }
         };
 
-        let term_url = format!("ws://127.0.0.1:{port}/ws/term/{terminal}");
+        let term_url = format!("ws://127.0.0.1:{port}/ws/term/{terminal}?key={TEST_KEY}");
         let (mut term, _) = tokio_tungstenite::connect_async(&term_url).await.unwrap();
         async fn read_until(term: &mut Socket, needle: &str) -> String {
             let mut seen = String::new();

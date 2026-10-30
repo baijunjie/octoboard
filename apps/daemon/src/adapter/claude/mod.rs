@@ -127,14 +127,19 @@ impl ClaudeAdapter {
     /// it. That is accepted: the daemon owns the session's terminal, so one that is gone has taken
     /// the session with it.
     fn settings_json(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> String {
-        let url = hook_url(spec.session_id, spec.daemon_port);
+        let url = hook_url(spec.session_id, spec.daemon_port, spec.daemon_key);
         let http = spec.agent_version.is_some_and(|v| v >= HTTP_HOOKS_SINCE) && {
             let project = canonical_project(spec.cwd);
             http_hooks_allowed(&url, &settings_files(spec, pinned, &project), &project)
         };
         let command = json!({
             "type": "command",
-            "command": hook_command(spec.self_exe, spec.session_id, spec.daemon_port),
+            "command": hook_command(
+                spec.self_exe,
+                spec.session_id,
+                spec.daemon_port,
+                spec.daemon_key,
+            ),
             "async": true,
             "timeout": HOOK_TIMEOUT_SECS,
         });
@@ -190,10 +195,11 @@ impl ClaudeAdapter {
         line.insert(
             "command".to_owned(),
             json!(format!(
-                "exec {} status-line --session {} --port {} --cwd {} --config-dir {}",
+                "exec {} status-line --session {} --port {} --key {} --cwd {} --config-dir {}",
                 shell_quote(spec.self_exe),
                 shell_quote(spec.session_id),
                 spec.daemon_port,
+                shell_quote(spec.daemon_key),
                 shell_quote(&spec.cwd.to_string_lossy()),
                 shell_quote(&user_dir.to_string_lossy()),
             )),
@@ -787,7 +793,7 @@ mod tests {
                 if http && *event != "SessionStart" {
                     assert_eq!(handler["type"], "http", "{version:?}");
                     assert_eq!(
-                        handler["url"], "http://127.0.0.1:4321/hook/session-1",
+                        handler["url"], "http://127.0.0.1:4321/hook/session-1?key=feedface",
                         "{version:?}"
                     );
                     assert!(handler.get("async").is_none(), "{version:?}");
@@ -800,7 +806,7 @@ mod tests {
                     assert_eq!(
                         handler["command"],
                         "exec '/opt/octoboard/octoboardd' hook --session 'session-1' --port 4321 \
-                         2>/dev/null",
+                         --key 'feedface' 2>/dev/null",
                         "{event} {version:?}"
                     );
                 }
@@ -857,7 +863,7 @@ mod tests {
             command(&fixture),
             format!(
                 "exec '/opt/octoboard/octoboardd' status-line --session 'session-1' --port 4321 \
-                 --cwd '{cwd}' --config-dir '{}'",
+                 --key 'feedface' --cwd '{cwd}' --config-dir '{}'",
                 home.join(".claude").display()
             )
         );

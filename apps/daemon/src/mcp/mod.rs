@@ -4,14 +4,14 @@
 //! with one scope, and the tools every session shares information and asks the user for a session
 //! with no owner through.
 //!
-//! **Transport is a stdio child process, not an HTTP endpoint the agent connects to.** Each
-//! adapter registers `octoboardd mcp --session … --role … --port … --token …` as a `command`-type
+//! **Transport is a stdio child process, not an HTTP endpoint the agent connects to.** Each adapter
+//! registers `octoboardd mcp --session … --role … --port … --key … --token …` as a `command`-type
 //! MCP server, and that child ([`stdio`]) speaks MCP on its stdin/stdout while forwarding every
 //! call to the daemon over loopback HTTP, where [`exec`] runs it against the real state. One
-//! mechanism covers all three agents, which is why it was chosen over pointing them at a
-//! Streamable HTTP endpoint in the daemon: Codex's verified injection takes a `command` and
-//! `args` ("Injecting Octoboard into each agent" in `docs/agent-cli-reference.md`), and Grok's SSRF
-//! protection rejects loopback HTTP outright, which is already why its hooks cannot be HTTP either.
+//! mechanism covers all three agents, which is why it was chosen over pointing them at a Streamable
+//! HTTP endpoint in the daemon: Codex's verified injection takes a `command` and `args` ("Injecting
+//! Octoboard into each agent" in `docs/agent-cli-reference.md`), and Grok's SSRF protection rejects
+//! loopback HTTP outright, which is already why its hooks cannot be HTTP either.
 //!
 //! The tool catalogue lives here, shared by both sides: the child announces it, the daemon
 //! dispatches against it, and the role descriptions name the tools, so all three cannot drift

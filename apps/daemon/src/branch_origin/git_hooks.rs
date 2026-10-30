@@ -59,6 +59,8 @@ const MIN_GIT: (u32, u32) = (2, 36);
 const SESSION_VARIABLE: &str = "OCTOBOARD_SESSION_ID";
 /// The variable naming the port the report goes to.
 const PORT_VARIABLE: &str = "OCTOBOARD_DAEMON_PORT";
+/// The variable carrying the daemon's key, which the report has to present.
+const KEY_VARIABLE: &str = "OCTOBOARD_DAEMON_KEY";
 
 /// The directory beside the dispatchers, under the same root, where a `reference-transaction`
 /// dispatcher leaves what it learned while a transaction was prepared for the same git's committed
@@ -132,6 +134,7 @@ pub fn session_env(
     self_exe: &str,
     session_id: &str,
     port: u16,
+    daemon_key: &str,
 ) -> Vec<(String, String)> {
     let root = paths::data_dir().join("githooks");
     let Some(user) = user_entries(shell_env, &root) else {
@@ -154,7 +157,7 @@ pub fn session_env(
             ]
         })
         .collect();
-    env.extend(injected(user.len(), &dir, session_id, port));
+    env.extend(injected(user.len(), &dir, session_id, port, daemon_key));
     env
 }
 
@@ -191,6 +194,7 @@ pub(super) fn injected(
     dir: &Path,
     session_id: &str,
     port: u16,
+    key: &str,
 ) -> Vec<(String, String)> {
     vec![
         ("GIT_CONFIG_COUNT".to_string(), (slot + 1).to_string()),
@@ -204,6 +208,7 @@ pub(super) fn injected(
         ),
         (SESSION_VARIABLE.to_string(), session_id.to_string()),
         (PORT_VARIABLE.to_string(), port.to_string()),
+        (KEY_VARIABLE.to_string(), key.to_string()),
     ]
 }
 
@@ -328,6 +333,7 @@ pub(super) fn render(values: &Rendering<'_>) -> String {
         .replace("@STATE@", &shell_quote(&values.state.to_string_lossy()))
         .replace("@SESSION_VARIABLE@", SESSION_VARIABLE)
         .replace("@PORT_VARIABLE@", PORT_VARIABLE)
+        .replace("@KEY_VARIABLE@", KEY_VARIABLE)
 }
 
 /// A `git` run to learn about the installed git, in the user's environment less anything that
@@ -684,10 +690,11 @@ mod tests {
             Some(vec![("user.name".to_string(), "u".to_string())])
         );
 
-        let vars = injected(1, Path::new("/hooks"), "s", 7);
+        let vars = injected(1, Path::new("/hooks"), "s", 7, "k");
         assert!(vars.contains(&("GIT_CONFIG_COUNT".to_string(), "2".to_string())));
         assert!(vars.contains(&("GIT_CONFIG_KEY_1".to_string(), "core.hooksPath".to_string())));
         assert!(vars.contains(&("GIT_CONFIG_VALUE_1".to_string(), "/hooks".to_string())));
+        assert!(vars.contains(&("OCTOBOARD_DAEMON_KEY".to_string(), "k".to_string())));
     }
 
     /// What a launch runs against the installed git: the version, the documented names and the

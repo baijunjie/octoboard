@@ -467,7 +467,7 @@ mod tests {
         std::fs::write(user.join("settings.json"), line.to_string()).expect("user settings");
         assert!(user_status_line(&user, &cwd).is_some());
 
-        let url = "http://127.0.0.1:4321/hook/session-1";
+        let url = "http://127.0.0.1:4321/hook/session-1?key=feedface";
         // Read, the allowlist lets the daemon in; above the bound it cannot be read here while
         // Claude Code may still read it, so the command form is kept.
         let allowlist = serde_json::json!({ "allowedHttpHookUrls": ["http://127.0.0.1:*"] });
@@ -513,7 +513,7 @@ mod tests {
         // The project's `.claude` is the user's: its files hold no allowlist, so HTTP hooks stand.
         let files = own_settings_files(&home.join(".claude"), &home);
         assert!(http_hooks_allowed(
-            "http://127.0.0.1:4321/hook/session-1",
+            "http://127.0.0.1:4321/hook/session-1?key=feedface",
             &files,
             &home
         ));
@@ -528,7 +528,7 @@ mod tests {
     /// file defines it.
     #[test]
     fn an_http_hook_allowlist_without_the_daemon_keeps_the_command_form() {
-        let url = "http://127.0.0.1:4321/hook/session-1";
+        let url = "http://127.0.0.1:4321/hook/session-1?key=feedface";
         let dir = crate::test_support::ScratchDir::new("hook-allowlist");
         let others = |paths: &[&PathBuf]| -> Vec<SettingsFile> {
             paths
@@ -566,6 +566,7 @@ mod tests {
         // The arrays merge, so one file naming the daemon is enough.
         assert!(allowed(&[&other, &none, &loopback]));
         assert!(wildcard_matches("http://*/hook/*", url));
+        assert!(wildcard_matches("http://127.0.0.1:*", url));
         assert!(!wildcard_matches("http://*/hook", url));
     }
 }

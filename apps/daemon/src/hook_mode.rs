@@ -17,11 +17,11 @@ use std::time::Duration;
 const TIMEOUT: Duration = Duration::from_millis(1500);
 
 /// Runs the hook and returns. Never fails: the caller exits 0 regardless.
-pub fn run(session: &str, port: u16) {
+pub fn run(session: &str, port: u16, key: &str) {
     let mut payload = Vec::new();
     if std::io::stdin().read_to_end(&mut payload).is_err() {
         return;
     }
     // The response is discarded: the daemon never steers the agent through it.
-    let _ = crate::loopback::post(port, &format!("/hook/{session}"), &payload, TIMEOUT);
+    let _ = crate::loopback::post(port, key, &format!("/hook/{session}"), &payload, TIMEOUT);
 }

@@ -3,7 +3,7 @@
 // (p<N>-s1, p<N>-s2), and optionally more projects with idle sessions to give the sidebar a realistic
 // size. The stand-in's behaviour per project comes from `<home>/code/<project>/.standin.json`.
 //
-//   node fixtures.mjs <port> <home> [extraProjects=5] [extraSessions=3]
+//   node fixtures.mjs <port> <key> <home> [extraProjects=5] [extraSessions=3]
 //
 // Only ever point it at a throwaway daemon: it creates consoles and sessions and trusts folders.
 import fs from "node:fs";
@@ -26,8 +26,9 @@ function makeProject(home, name, standin) {
   return dir;
 }
 
-export async function seedFixtures({ port, home, extraProjects = 5, extraSessions = 3, log = console.log }) {
-  const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/control`);
+export async function seedFixtures({ port, key, home, extraProjects = 5, extraSessions = 3, log = console.log }) {
+  if (!key) throw new Error("seedFixtures needs the daemon's key");
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/control?key=${key}`);
   const replies = new Map();
   const waiters = new Set();
   let nextId = 0;
@@ -95,10 +96,10 @@ export async function seedFixtures({ port, home, extraProjects = 5, extraSession
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const [port, home, extraProjects, extraSessions] = process.argv.slice(2);
-  if (!port || !home) {
-    console.error("usage: node fixtures.mjs <port> <home> [extraProjects=5] [extraSessions=3]");
+  const [port, key, home, extraProjects, extraSessions] = process.argv.slice(2);
+  if (!port || !key || !home) {
+    console.error("usage: node fixtures.mjs <port> <key> <home> [extraProjects=5] [extraSessions=3]");
     process.exit(2);
   }
-  await seedFixtures({ port, home, extraProjects: extraProjects === undefined ? 5 : Number(extraProjects), extraSessions: extraSessions === undefined ? 3 : Number(extraSessions) });
+  await seedFixtures({ port, key, home, extraProjects: extraProjects === undefined ? 5 : Number(extraProjects), extraSessions: extraSessions === undefined ? 3 : Number(extraSessions) });
 }

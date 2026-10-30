@@ -9,7 +9,7 @@ use crate::protocol::{
 use crate::store::LOCAL_HOST_ID;
 use crate::test_support::{
     app_state, branch_made_by, idle_stand_in, output_containing, repo_with, running, ScratchDir,
-    PATIENCE,
+    PATIENCE, TEST_KEY,
 };
 use serde_json::json;
 
@@ -472,10 +472,12 @@ async fn post_hook(state: &AppState, port: u16, session: &str, name: &str, mut p
     payload["session_id"] = json!("claude-session");
     let body = serde_json::to_vec(&payload).unwrap();
     let path = format!("/hook/{session}");
-    tokio::task::spawn_blocking(move || crate::loopback::post(port, &path, &body, PATIENCE))
-        .await
-        .unwrap()
-        .unwrap();
+    tokio::task::spawn_blocking(move || {
+        crate::loopback::post(port, TEST_KEY, &path, &body, PATIENCE)
+    })
+    .await
+    .unwrap()
+    .unwrap();
     let deadline = std::time::Instant::now() + PATIENCE;
     while state.hook_queues.is_busy() {
         assert!(
@@ -752,7 +754,7 @@ async fn a_dropped_call_is_withdrawn_and_waiting_requests_follow_the_snapshot() 
         .unwrap();
     call.write_all(
         format!(
-            "POST /mcp/{token} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\
+            "POST /mcp/{token}?key={TEST_KEY} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\
              Content-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
             body.len()
         )
@@ -776,9 +778,11 @@ async fn a_dropped_call_is_withdrawn_and_waiting_requests_follow_the_snapshot() 
     // Sent again after a snapshot, oldest first.
     let (_first, first_id) = ask_here(&state, "asker", ANSWER_TIME_LIMIT).await;
     let (_second, second_id) = ask_here(&state, "second", ANSWER_TIME_LIMIT).await;
-    let (socket, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/ws/control"))
-        .await
-        .unwrap();
+    let (socket, _) = tokio_tungstenite::connect_async(format!(
+        "ws://127.0.0.1:{port}/ws/control?key={TEST_KEY}"
+    ))
+    .await
+    .unwrap();
     let (_sink, mut stream) = socket.split();
     let mut types = Vec::new();
     let mut requests = Vec::new();

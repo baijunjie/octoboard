@@ -489,7 +489,7 @@ fn build_grok_home(spec: &LaunchSpec<'_>, source_home: &Path) -> Result<PathBuf>
     }
 
     let config = farm.join("config.toml");
-    copy_if_present(&source_home.join("config.toml"), &config)?;
+    copy_private_file(&source_home.join("config.toml"), &config)?;
     append_mcp_server(&config, spec)?;
 
     copy_if_present(&source_home.join(TRUST_STORE), &farm.join(TRUST_STORE))?;
@@ -513,15 +513,18 @@ fn default_grok_home(spec: &LaunchSpec<'_>) -> PathBuf {
 /// Appends Octoboard's MCP server to the farm's own `config.toml`. Appended rather than written
 /// fresh, because this copy carries the user's whole Grok configuration and replacing it would be
 /// the "do not override the user's configuration" failure in another form. Only the copy's last
-/// byte is read, so a file of any size is kept whole without being read into memory.
+/// byte is read, so a file of any size is kept whole without being read into memory. The server's
+/// command line carries the daemon's key, so a file created here is owner-only.
 fn append_mcp_server(config: &Path, spec: &LaunchSpec<'_>) -> Result<()> {
     use std::io::{Read, Seek, SeekFrom, Write};
+    use std::os::unix::fs::OpenOptionsExt;
 
     let (command, args) = super::mcp_server_command(spec);
     let mut file = std::fs::OpenOptions::new()
         .read(true)
         .append(true)
         .create(true)
+        .mode(0o600)
         .open(config)
         .with_context(|| format!("opening {}", config.display()))?;
     let mut content = String::new();
@@ -559,6 +562,28 @@ fn append_mcp_server(config: &Path, spec: &LaunchSpec<'_>) -> Result<()> {
     file.write_all(content.as_bytes())
         .with_context(|| format!("writing {}", config.display()))?;
     Ok(())
+}
+
+/// Copies the file `from` to `to` readable by its owner only, whatever the source's mode, and never
+/// with a wider one in between; an absent source is left absent. A linked source is followed.
+fn copy_private_file(from: &Path, to: &Path) -> Result<()> {
+    use std::os::unix::fs::OpenOptionsExt;
+
+    if !from.is_file() {
+        return Ok(());
+    }
+    let mut source =
+        std::fs::File::open(from).with_context(|| format!("opening {}", from.display()))?;
+    let mut copy = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(to)
+        .with_context(|| format!("creating {}", to.display()))?;
+    std::io::copy(&mut source, &mut copy)
+        .map(drop)
+        .with_context(|| format!("copying {}", from.display()))
 }
 
 /// Copies a file, or a directory with everything under it; an absent source is left absent. A
@@ -1268,6 +1293,32 @@ mod tests {
         assert_eq!(carried.user_store, home.join(TRUST_STORE));
         let canonical = std::fs::canonicalize(&fixture.cwd).expect("canonical path");
         assert_eq!(carried.folder, canonical.to_string_lossy());
+    }
+
+    #[test]
+    fn the_farms_config_is_readable_by_its_owner_only_even_when_the_users_is_not() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let mut fixture = spec_fixture();
+        let home = with_default_home(&mut fixture);
+        let users = home.join("config.toml");
+        std::fs::set_permissions(&users, std::fs::Permissions::from_mode(0o644)).expect("mode");
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
+        let farm = PathBuf::from(&plan.env[0].1);
+        let mode = |path: &Path| {
+            std::fs::metadata(path)
+                .expect("metadata")
+                .permissions()
+                .mode()
+                & 0o777
+        };
+        assert_eq!(mode(&farm.join("config.toml")), 0o600);
+
+        // With no config of the user's to copy, the file that carries the server is created alone.
+        std::fs::remove_file(&users).expect("remove");
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
+        let farm = PathBuf::from(&plan.env[0].1);
+        assert_eq!(mode(&farm.join("config.toml")), 0o600);
     }
 
     #[test]

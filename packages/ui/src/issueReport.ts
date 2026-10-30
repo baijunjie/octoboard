@@ -271,6 +271,11 @@ function titleOf({ failures, context }: IssueFacts): string {
   return summary ? `Unexpected error: ${summary}` : "Unexpected error";
 }
 
+/** Where the desktop application keeps its logs (`paths::logs_dir` in the daemon). Only where they are: a report
+ * attaches nothing on its own and never asks for raw diagnostics, which can hold what the user would not share. */
+const LOGS_HINT =
+  `<!-- ${appConfig.name} keeps its logs in ~/.octoboard/logs/ (daemon.log, desktop.log); a maintainer may ask about them if more detail is needed. -->`;
+
 function bodyOf(facts: IssueFacts, diagnostics: ReportedFailure[], diagnosticLimit: number): string {
   const { environment } = facts;
   const os = osFromUserAgent(environment.userAgent);
@@ -295,6 +300,9 @@ function bodyOf(facts: IssueFacts, diagnostics: ReportedFailure[], diagnosticLim
   return [
     "### What happened",
     "<!-- Describe what you were doing when this happened, and what you expected instead. -->",
+    // The desktop application's daemon and shell write their logs on this machine; a browser's daemon may run on
+    // another one, whose files the user may not reach.
+    ...(environment.platform === "tauri" ? [LOGS_HINT] : []),
     "The details below were filled in automatically, with personal information removed. Please check them before submitting.",
     "### Environment",
     environmentLines.length > 0 ? environmentLines.join("\n") : "Unknown",

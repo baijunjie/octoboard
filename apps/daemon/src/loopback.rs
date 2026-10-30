@@ -10,9 +10,16 @@ use std::time::Duration;
 
 /// Posts a body and returns the response body. Each step of the round trip is bounded by
 /// `timeout`, because every caller runs on a path where a wedged daemon would otherwise hold
-/// something up: the agent's turn, a git command, or the status line.
-pub fn post(port: u16, path: &str, body: &[u8], timeout: Duration) -> std::io::Result<Vec<u8>> {
-    exchange(connect(port, timeout)?, port, path, body)
+/// something up: the agent's turn, a git command, or the status line. `key` is the daemon's key
+/// (see `crate::access`), sent as the path's `key` query parameter.
+pub fn post(
+    port: u16,
+    key: &str,
+    path: &str,
+    body: &[u8],
+    timeout: Duration,
+) -> std::io::Result<Vec<u8>> {
+    exchange(connect(port, timeout)?, port, key, path, body)
 }
 
 /// Opens the connection an [`exchange`] goes over, with every read and write on it bounded by
@@ -28,15 +35,17 @@ pub fn connect(port: u16, timeout: Duration) -> std::io::Result<TcpStream> {
     Ok(stream)
 }
 
-/// Posts a body over a stream from [`connect`] and returns the response body.
+/// Posts a body over a stream from [`connect`] and returns the response body. `path` has no query
+/// of its own: the key is appended as one.
 pub fn exchange(
     mut stream: TcpStream,
     port: u16,
+    key: &str,
     path: &str,
     body: &[u8],
 ) -> std::io::Result<Vec<u8>> {
     let request = format!(
-        "POST {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Type: application/json\r\n\
+        "POST {path}?key={key} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Type: application/json\r\n\
          Content-Length: {}\r\nConnection: close\r\n\r\n",
         body.len()
     );

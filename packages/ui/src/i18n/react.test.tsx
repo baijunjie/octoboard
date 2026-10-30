@@ -45,8 +45,8 @@ it.each(["en", "zh-Hans", "ar"] as const)("keeps fixed product references rich a
       expect(container.textContent).toBe(format(language, id, { count }));
     }
   }
-  act(() => root.render(<Message id="startup.noAddress.shell" params={{ port: <InlineReference monospace wrap>?port=</InlineReference> }} />));
-  expect([...container.querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent)).toEqual(["Tauri", "?port="]);
+  act(() => root.render(<Message id="startup.noAddress.shell" params={{ port: <InlineReference monospace wrap>?port=</InlineReference>, key: <InlineReference monospace wrap>?key=</InlineReference> }} />));
+  expect([...container.querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent)).toEqual(["Tauri", "?port=", "?key="]);
   const name = "مراجعة/中文/Work";
   act(() => root.render(<Message id="dialog.session.ownerFixed" params={{ name: <InlineReference dir="auto" wrap>{name}</InlineReference> }} />));
   expect(container.querySelector("[data-inline-reference]")?.textContent).toBe(name);

@@ -389,8 +389,8 @@ Besides the terminal type, the variables set over the snapshot are:
 - for a Claude Code session whose account's directory shares the default configuration, `CLAUDE_CODE_REMOTE_MEMORY_DIR`
   (when exactly, an account whose last change of sharing is incomplete included, is in "Claude Code's auto memory" in
   `docs/product/sharing-the-default-configuration.md`).
-- for a project session, a `core.hooksPath` entry through `GIT_CONFIG_COUNT`, together with `OCTOBOARD_SESSION_ID` and
-  `OCTOBOARD_DAEMON_PORT`, which point every git in the agent's process tree at Octoboard's hook dispatchers; those
+- for a project session, a `core.hooksPath` entry through `GIT_CONFIG_COUNT`, together with `OCTOBOARD_SESSION_ID`,
+  `OCTOBOARD_DAEMON_PORT` and `OCTOBOARD_DAEMON_KEY`, which point every git in the agent's process tree at Octoboard's hook dispatchers; those
   still run the user's own git hooks, report the branches that git creates (see "The session's git hooks" and
   "What attribution needs" in `docs/product/branch-responsible-session.md`), and run the revert gate (see
   `docs/product/revert-gate.md`). A console session gets none of them.

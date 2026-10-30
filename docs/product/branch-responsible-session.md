@@ -238,8 +238,9 @@ tried again by a launch at least ten minutes later.
 
 The agent's environment gets `core.hooksPath` through git's own `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_<n>` and
 `GIT_CONFIG_VALUE_<n>` variables, in the next free slot after the entries the user's shell exports (which keep their
-order and their effect), together with `OCTOBOARD_SESSION_ID` and `OCTOBOARD_DAEMON_PORT`, which say where a report
-goes and whom the revert gate asks. Nothing is written to a configuration file or a repository, and nothing reaches a
+order and their effect), together with `OCTOBOARD_SESSION_ID`, `OCTOBOARD_DAEMON_PORT` and `OCTOBOARD_DAEMON_KEY`,
+which say where a report goes and whom the revert gate asks, and carry the key the daemon requires (see "Who can reach
+the daemon" in `docs/product/application-lifecycle.md`). Nothing is written to a configuration file or a repository, and nothing reaches a
 process outside the agent's tree.
 
 - **The dispatchers** live in `~/.octoboard/githooks/<content hash>/`, shared by every session, written once and left

@@ -132,6 +132,9 @@ pub struct LaunchSpec<'a> {
     pub self_exe: &'a str,
     /// Where the daemon is listening, for the MCP server this launch registers.
     pub daemon_port: u16,
+    /// The key the daemon requires of every connection, for every client this launch starts or
+    /// configures: the MCP server, the hooks and the status line.
+    pub daemon_key: &'a str,
     /// The token that session's MCP server authenticates to the daemon with.
     pub mcp_token: &'a str,
 }
@@ -186,6 +189,8 @@ pub fn mcp_server_command(spec: &LaunchSpec<'_>) -> (String, Vec<String>) {
         role.to_string(),
         "--port".to_string(),
         spec.daemon_port.to_string(),
+        "--key".to_string(),
+        spec.daemon_key.to_string(),
         "--token".to_string(),
         spec.mcp_token.to_string(),
     ];
@@ -334,8 +339,9 @@ pub struct LaunchPlan {
     /// Codex's private server and the client arguments for an explicit remote connection.
     pub codex_server: Option<codex::PrivateServerPlan>,
     /// Environment entries layered on top of the shell snapshot. The launch sets `TERM` after
-    /// these, and in a project session `GIT_CONFIG_*`, `OCTOBOARD_SESSION_ID` and
-    /// `OCTOBOARD_DAEMON_PORT` too, so an adapter can neither see nor override their final values.
+    /// these, and in a project session `GIT_CONFIG_*`, `OCTOBOARD_SESSION_ID`,
+    /// `OCTOBOARD_DAEMON_PORT` and `OCTOBOARD_DAEMON_KEY` too, so an adapter can neither see nor
+    /// override their final values.
     pub env: Vec<(String, String)>,
     /// Codex's user configuration or account override can resolve permissions automatically, so
     /// a permission hook alone does not establish a user interaction. Visible action prompts are
@@ -449,9 +455,9 @@ pub const HOOK_TIMEOUT_SECS: u32 = 3;
 pub type AgentVersion = (u32, u32, u32);
 
 /// Where an agent that posts its hooks itself sends them: the daemon's own hook route, which
-/// takes the same body the forwarder would have posted.
-pub fn hook_url(session_id: &str, daemon_port: u16) -> String {
-    format!("http://127.0.0.1:{daemon_port}/hook/{session_id}")
+/// takes the same body the forwarder would have posted. The daemon's key is the URL's query.
+pub fn hook_url(session_id: &str, daemon_port: u16, daemon_key: &str) -> String {
+    format!("http://127.0.0.1:{daemon_port}/hook/{session_id}?key={daemon_key}")
 }
 
 /// The shell command that forwards one hook payload to the daemon: the body of the hook script,
@@ -459,18 +465,24 @@ pub fn hook_url(session_id: &str, daemon_port: u16) -> String {
 /// own `/bin/sh` is not started on top of it. `exec` rather than a plain call so no shell lingers,
 /// and stderr is dropped at the command level as well as inside the binary: a single stderr line
 /// is enough to render an error cell in every one of the three agents.
-pub fn hook_command(self_exe: &str, session_id: &str, daemon_port: u16) -> String {
+pub fn hook_command(
+    self_exe: &str,
+    session_id: &str,
+    daemon_port: u16,
+    daemon_key: &str,
+) -> String {
     format!(
-        "exec {} hook --session {} --port {} 2>/dev/null",
+        "exec {} hook --session {} --port {} --key {} 2>/dev/null",
         shell_quote(self_exe),
         shell_quote(session_id),
-        daemon_port
+        daemon_port,
+        shell_quote(daemon_key)
     )
 }
 
 /// Writes the per-session hook script and returns its path. One script per session rather than a
-/// shared one, because it carries the session's identity and the daemon's port; it is removed with
-/// the session's scratch directory.
+/// shared one, because it carries the session's identity and the daemon's port and key; it is
+/// removed with the session's scratch directory.
 ///
 /// The script execs the daemon binary in `hook` mode, which reads the payload, derives the event
 /// from it, posts it to the daemon under a hard deadline, and exits 0 whatever happens.
@@ -479,18 +491,26 @@ pub fn write_hook_script(
     self_exe: &str,
     session_id: &str,
     daemon_port: u16,
+    daemon_key: &str,
 ) -> Result<PathBuf> {
     use std::io::Write;
-    use std::os::unix::fs::PermissionsExt;
+    use std::os::unix::fs::OpenOptionsExt;
 
     let path = hook_script_path(scratch);
-    let mut file = std::fs::File::create(&path)?;
+    // Owner-only from the first byte: the script carries the key.
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o700)
+        .open(&path)?;
     writeln!(file, "#!/bin/sh")?;
-    writeln!(file, "{}", hook_command(self_exe, session_id, daemon_port))?;
+    writeln!(
+        file,
+        "{}",
+        hook_command(self_exe, session_id, daemon_port, daemon_key)
+    )?;
     file.flush()?;
-    let mut perms = file.metadata()?.permissions();
-    perms.set_mode(0o700);
-    std::fs::set_permissions(&path, perms)?;
     Ok(path)
 }
 
@@ -626,6 +646,7 @@ pub mod tests {
                 agent_version: self.agent_version,
                 self_exe: &self.self_exe,
                 daemon_port: 4321,
+                daemon_key: "feedface",
                 mcp_token: &self.mcp_token,
             }
         }
@@ -663,6 +684,22 @@ pub mod tests {
         }
     }
 
+    #[test]
+    fn the_hook_script_is_executable_by_its_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let fixture = spec_fixture();
+        let scratch = fixture.scratch.join("hook-script");
+        std::fs::create_dir_all(&scratch).expect("scratch directory");
+        let path = super::write_hook_script(&scratch, "/bin/octoboardd", "s", 1, "feedface")
+            .expect("hook script");
+        let mode = std::fs::metadata(path)
+            .expect("metadata")
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o700);
+    }
+
     /// The child starts its catalogue from its own arguments, so a bound session has to say so
     /// there and an unbound one must not; after launch it follows the daemon's answers.
     #[test]
@@ -670,6 +707,9 @@ pub mod tests {
         let mut fixture = spec_fixture();
         let (_, bound) = super::mcp_server_command(&fixture.spec());
         assert!(bound.contains(&"--bound".to_string()));
+        // The child authenticates to the daemon with the key.
+        let key = bound.iter().position(|arg| arg == "--key").expect("--key");
+        assert_eq!(bound[key + 1], "feedface");
         fixture.owner = None;
         let (_, unbound) = super::mcp_server_command(&fixture.spec());
         assert!(!unbound.contains(&"--bound".to_string()));

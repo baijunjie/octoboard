@@ -22,7 +22,7 @@ const TIMEOUT: Duration = Duration::from_millis(1500);
 /// Posts the report and returns. `head` is the branch the transaction's git had checked out while
 /// it was prepared; `refs` alternates a reference name and the object id it was created at, as the
 /// dispatcher passes them.
-pub fn run(session: &str, port: u16, head: Option<&OsStr>, refs: &[OsString]) {
+pub fn run(session: &str, port: u16, key: &str, head: Option<&OsStr>, refs: &[OsString]) {
     // Out of the process group of the command whose git started this, which the tool that ran it
     // may kill as soon as that command returns.
     // SAFETY: no arguments, and it only changes this process's own session.
@@ -37,7 +37,7 @@ pub fn run(session: &str, port: u16, head: Option<&OsStr>, refs: &[OsString]) {
     let Ok(body) = serde_json::to_vec(&report) else {
         return;
     };
-    let _ = crate::loopback::post(port, &format!("/git-ref/{session}"), &body, TIMEOUT);
+    let _ = crate::loopback::post(port, key, &format!("/git-ref/{session}"), &body, TIMEOUT);
 }
 
 /// The report of `refs` made in `cwd` with `git_dir` set and `head` checked out, at `unix_time`.

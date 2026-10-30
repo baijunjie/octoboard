@@ -1025,6 +1025,7 @@ mod tests {
         let state = Arc::new(AppState::new(
             crate::store::Store::open(&directory.join("octoboard.db")).unwrap(),
             1234,
+            crate::test_support::TEST_KEY.to_string(),
             "/opt/octoboardd".to_string(),
             directory.join("output"),
             directory.join("consoles"),

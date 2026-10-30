@@ -22,11 +22,11 @@ use std::time::Duration;
 const TIMEOUT: Duration = Duration::from_millis(500);
 
 /// Runs the status line and returns the exit status to leave with.
-pub fn run(session: &str, port: u16, cwd: &Path, config_dir: &Path) -> i32 {
+pub fn run(session: &str, port: u16, key: &str, cwd: &Path, config_dir: &Path) -> i32 {
     let mut input = Vec::new();
     // Claude Code writes the whole input and closes the pipe; what could be read is passed on.
     let _ = std::io::stdin().read_to_end(&mut input);
-    let report = window_of(&input).map(|window| report(port, session, window));
+    let report = window_of(&input).map(|window| report(port, key, session, window));
     let status = match user_command(config_dir, cwd) {
         Some(command) => pass_through(&command, &input, Stdio::inherit()),
         None => 0,
@@ -38,11 +38,12 @@ pub fn run(session: &str, port: u16, cwd: &Path, config_dir: &Path) -> i32 {
 }
 
 /// Posts `window` for `session` on a thread of its own, whose answer is of no interest.
-fn report(port: u16, session: &str, window: u64) -> std::thread::JoinHandle<()> {
+fn report(port: u16, key: &str, session: &str, window: u64) -> std::thread::JoinHandle<()> {
+    let key = key.to_owned();
     let path = format!("/context-window/{session}");
     let body = serde_json::json!({ "window": window }).to_string();
     std::thread::spawn(move || {
-        let _ = crate::loopback::post(port, &path, body.as_bytes(), TIMEOUT);
+        let _ = crate::loopback::post(port, &key, &path, body.as_bytes(), TIMEOUT);
     })
 }
 
@@ -206,17 +207,17 @@ mod tests {
             stream.write_all(b"HTTP/1.1 200 OK\r\n\r\n").unwrap();
             String::from_utf8(request).unwrap()
         });
-        report(port, "session-1", 200_000).join().unwrap();
+        report(port, "k", "session-1", 200_000).join().unwrap();
         assert!(server
             .join()
             .unwrap()
-            .starts_with("POST /context-window/session-1 HTTP/1.1\r\n"));
+            .starts_with("POST /context-window/session-1?key=k HTTP/1.1\r\n"));
 
         let gone = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = gone.local_addr().unwrap().port();
         drop(gone);
         let started = std::time::Instant::now();
-        report(port, "session-1", 200_000).join().unwrap();
+        report(port, "k", "session-1", 200_000).join().unwrap();
         assert!(started.elapsed() < TIMEOUT);
     }
 }

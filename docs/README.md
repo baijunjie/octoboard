@@ -166,8 +166,8 @@ Development plan docs and bug tickets are temporary and are not listed here.
 
 ### Desktop app and website
 
-- [Application lifecycle](product/application-lifecycle.md) — requirements, startup, daemon connection, closing,
-  quitting, crashes and owned files.
+- [Application lifecycle](product/application-lifecycle.md) — requirements, startup, daemon connection and its key,
+  restarting a daemon that dies, closing, quitting, crashes, logs and owned files.
 - [In-app updates](product/in-app-updates.md) — update channels, checking, notice, download and restart.
 - [Menu bar icon](product/menu-bar-icon.md) — the macOS menu bar icon, its dot and menu.
 - [Website](product/website.md) — the official site: pages, languages, indexing, privacy disclosures.

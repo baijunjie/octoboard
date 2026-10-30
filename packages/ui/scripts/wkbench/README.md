@@ -50,9 +50,9 @@ whether it never loaded or loaded and then ran no frames (a window nobody sees g
 The page is always opened with `languages=en`: the app picks its language from the system's otherwise, and the lookups
 rely on its English labels.
 
-To measure a daemon of your own, start `octoboardd` on a scratch `HOME`, seed it with `node fixtures.mjs <port> <home>`
+To measure a daemon of your own, start `octoboardd` on a scratch `HOME`, seed it with `node fixtures.mjs <port> <key> <home>`
 (the `home` holds the stand-in projects and must have the stand-in on its login shell's `PATH` as `claude`, as the
-run's scratch `HOME` does), then run with `--port <port>`. That `HOME` must be outside `--scratch`: a run with `--port`
+run's scratch `HOME` does), then run with `--port <port> --key <key>` (the port and key are on the line the daemon prints on startup). That `HOME` must be outside `--scratch`: a run with `--port`
 leaves the scratch `home/` and `tmp/` alone, but any other run recreates them. The harness does not stop that daemon,
 but it drives its sessions and, under `idle`, renames and restores the titles of the extra projects' sessions: never
 use a daemon that holds real work.
@@ -146,7 +146,7 @@ code.
 ## Safety rules
 
 - The harness drives **its own throwaway daemon** only: a scratch `HOME` and `TMPDIR`, a clean environment, the stand-in
-  as the only agent. It never looks for, attaches to or reads a running daemon. The one exception is `--port <n>`,
+  as the only agent. It never looks for, attaches to or reads a running daemon. The one exception is `--port <n>` (with `--key`),
   which the operator passes explicitly; the harness then starts, seeds and stops nothing, but it drives that daemon's
   sessions and, under `idle`, renames and restores some of their titles.
   Never point `fixtures.mjs` at a daemon that is not throwaway: it creates consoles and sessions and trusts folders.
