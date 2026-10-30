@@ -2,8 +2,8 @@
 //! guarded branch. The session hook dispatchers do not start it: `octoboardd gate-hook` asks the
 //! daemon for the inputs and calls [`check`] in-process. The command runs the gate directly, with
 //! the inputs given as arguments and the hook's stdin, and its exit status is the hook's verdict.
-//! Its first step, before any `git` runs, is to see whether a guarded branch is involved
-//! at all, and it allows at once when none is.
+//! Its first step, before any `git` runs, is to see whether a ref update moves an existing branch
+//! at all, and it allows at once when none does.
 //!
 //! The typical cause is a squash that changed the base without merging the content (e.g.
 //! committing after `git reset --soft <target branch>`), so old code gets squashed in as if it
@@ -12,8 +12,26 @@
 //! resident guarded branches (`--guard`, usually the main branch) and the target branches the
 //! development branches have recorded (`--target`). Only those are consulted, not which branch
 //! the main working copy currently has checked out, so that rebasing or amending on your own
-//! feature branch is not blocked either; a target branch with no record is therefore not
-//! guarded. Rules:
+//! feature branch is not blocked either.
+//!
+//! A merge can target any branch, though, and a target branch with no record is not guarded. So
+//! a move of any other local branch `B` is checked as well when it merges another branch into
+//! `B`, and is checked exactly like a move of a guarded branch (the fork points are those of the
+//! merged branches):
+//!
+//! - a fast-forward to a commit that is the tip of another local or a remote-tracking branch; or
+//! - a merge commit whose first parent is the position before the move and one of whose other
+//!   parents is the tip of another local or a remote-tracking branch.
+//!
+//! Not merged in this sense is `B`'s recorded target branch and any guarded branch (under whatever
+//! remote too), and `B` itself: merging the target into a feature branch cannot overwrite the
+//! target, since the result is checked when it lands there. `B`'s own remote-tracking branch does
+//! count: a `git pull` that resolves to the local side drops what someone else pushed to it. Every
+//! other move of `B` (its own commits, a reset or amend, a rebase, a `branch -f` that is not a
+//! fast-forward to such a tip, a fast-forward to the target) is left alone: that is ordinary work
+//! on one's own branch. A move with no expected old value (`branch -f`, `update-ref` without
+//! one) is read from the branch's current value, as for a guarded branch.
+//! Rules:
 //!
 //! 1. A non-fast-forward can only be allowed when none of the dropped commits were ever
 //!    published (`pull --rebase`, `git rebase <branch>@{u}` replaying local unpushed commits on
@@ -37,13 +55,21 @@
 //! 2. Reject when any of the most recent non-merge commits on the branch before the move is
 //!    undone by this move; the criteria are in `content::find_reverts`. How far back: at least
 //!    the most recent `content::WINDOW` commits; when the move can be attributed to a feature
-//!    branch that recorded its fork point (`--fork-point`), extend to every commit after that fork
-//!    point.
+//!    branch with a known fork point, extend to every commit after that fork point. When no fork
+//!    point is known at all, the window is the wider `content::WINDOW_WITHOUT_FORK` instead.
 //!    The fork point cannot be found from git history alone — a squash that changed the base is
-//!    exactly one that rewrote the parent to the latest target branch, so it has to be recorded
-//!    when the branch is created. When the target branch was rebased while aligning with the
-//!    remote, the fork point is no longer its ancestor, so counting starts from the merge base of
-//!    the fork point and the target branch instead.
+//!    exactly one that rewrote the parent to the latest target branch, so it is the one recorded
+//!    when the branch is created (`--fork-point`). A branch with no record falls back to the
+//!    commit its reflog says it was created at (its oldest entry, when that is the creation), but
+//!    only when that commit is an ancestor of the position before the move, or of a remote-tracking
+//!    tip of the branch moved that the move contains (of the target's remote-tracking tip, for a
+//!    push): a branch created on someone else's unmerged work, or from a remote-tracking branch,
+//!    was not forked from the target, and its creation point would have the other work's files held
+//!    against it. The merge base is no use, since after the branch is rebased onto the target it is
+//!    only the old target tip. A branch whose reflog is missing or expired has no fork point. A
+//!    guarded branch is a target, not a source, and gets no such fallback. When the target
+//!    branch was rebased while aligning with the remote, the fork point is no longer its ancestor,
+//!    so counting starts from the merge base of the fork point and the target branch instead.
 //!    When a local move lands above some remote-tracking branch tip and that tip is not below the
 //!    position before the move (`git rebase <branch>@{u}`), commits on the tip (the published
 //!    ones) are checked against the tip instead, and the position before the move is used only
@@ -63,9 +89,9 @@
 //!    appended to). This shape is instead caught by the third criterion — the structural check
 //!    for a changed base: if this move changed some file that the branch itself never touched
 //!    since its fork point, that is exactly what a changed base drags in, whether the change was
-//!    an add, a delete, or a content edit. It requires a recorded fork point; branches with no
-//!    recorded fork point (`--fork-point`) are not protected against this kind of accidental
-//!    deletion.
+//!    an add, a delete, or a content edit. It requires a fork point; branches with none, neither
+//!    recorded (`--fork-point`) nor found in the reflog, are not protected against this kind of
+//!    accidental deletion.
 //! 3. When a commit message added by this move carries `Reverts: <sha>`, or git revert's default
 //!    `This reverts commit <sha>.`, the corresponding commit is allowed — a deliberate revert
 //!    must leave a record.
@@ -73,10 +99,11 @@
 //! A pull request is merged on the remote and its target branch never moves locally, so none of
 //! the above fires for it; the `pre-push` hook covers it instead:
 //!
-//! - A pushed branch that has a recorded target branch (`--target`) is checked by rules 2 and 3
-//!   against the content of that target branch's remote-tracking tip, extended back to its own
-//!   recorded fork point (`--fork-point`), which has to be recorded before squashing since it
-//!   cannot be computed once the rebase has happened. It only runs when the pushed tip is a
+//! - A pushed branch that has a recorded target branch (`--target`), or, with none recorded, is not
+//!   guarded itself and so has the first resident guarded branch (usually the main branch) as its
+//!   target, is checked by rules 2 and 3 against the content of that target branch's
+//!   remote-tracking tip, extended back to its own fork point (recorded, or from the reflog),
+//!   which cannot be computed once the rebase has happened. It only runs when the pushed tip is a
 //!   descendant of that tip, i.e. rebased onto the latest target branch: a branch not yet rebased
 //!   is pushed every day, and checking it regardless would be nothing but false positives. A
 //!   target branch whose remote state cannot be pinned down is not checked, with a line on stderr
@@ -87,8 +114,9 @@
 //!   has, and a forced push is not refused by the remote). A remote value missing
 //!   locally is rejected outright: the content cannot be judged, and letting the push through
 //!   could overwrite commits someone else just pushed.
-//! - A branch with no recorded target branch, and a push not yet rebased onto the latest target
-//!   branch, are left unchecked, and the target branch's remote state is as of the last fetch.
+//! - A push not yet rebased onto the latest target branch, and a branch with no recorded target
+//!   branch when no guarded branch is given, are left unchecked, and the target branch's remote
+//!   state is as of the last fetch.
 //!
 //! The exit status is 0 to allow and 3 to reject, with the reason on stderr; the caller treats
 //! only 3 as a rejection. When the gate itself fails (git failing, a deadline, bad input) the
@@ -109,8 +137,8 @@ use anyhow::Result;
 
 use content::{find_reverts, Finding};
 use git::{
-    branches_at, busy_branches, is_ancestor, is_null, is_oid, is_space, lossy, remote_tips,
-    rev_count, short, upstream_of, Git,
+    branches_at, busy_branches, creation_point, is_ancestor, is_null, is_oid, is_space, lossy,
+    parents_and_tips, remote_tips, rev_count, short, tips_at, upstream_of, Git, Tip,
 };
 
 /// The exit status of a rejection.
@@ -213,6 +241,8 @@ pub struct GateInputs {
 /// [`GateInputs`] looked up by branch.
 struct Inputs {
     guarded: HashSet<String>,
+    /// The target branch of a pushed branch that records none: the first resident guarded branch.
+    default_target: Option<String>,
     targets: HashMap<String, String>,
     fork_points: HashMap<String, String>,
 }
@@ -229,6 +259,11 @@ impl Inputs {
         // The last record given for a branch wins.
         Self {
             guarded,
+            default_target: inputs
+                .guard
+                .iter()
+                .find(|branch| !branch.is_empty())
+                .cloned(),
             targets: inputs.targets.iter().cloned().collect(),
             fork_points: inputs.fork_points.iter().cloned().collect(),
         }
@@ -251,7 +286,8 @@ pub fn run(args: &Args) -> i32 {
 }
 
 /// Runs the gate for `hook`, with the hook's stdin, and returns the exit status for the hook. The
-/// first step, before any `git` runs, is to see whether a guarded branch is involved at all.
+/// first step, before any `git` runs, is to see whether a ref update moves an existing branch (or
+/// a push has a guarded branch or a target branch to check against) at all.
 pub fn check(hook: &Hook, inputs: &GateInputs, mut stdin: impl Read) -> i32 {
     // Always drained: git writes the update lines to the hook's stdin.
     let mut input = Vec::new();
@@ -343,7 +379,10 @@ fn decide(git: &Git, inputs: &Inputs, state: &str, stdin: &[u8]) -> Result<Optio
         let Some(branch) = refname.strip_prefix("refs/heads/") else {
             continue;
         };
-        if !inputs.guarded.contains(branch) {
+        let guarded = inputs.guarded.contains(branch);
+        // A branch that is not guarded is only checked for a merge into it, which moves an
+        // existing branch to another commit; a creation resolves to no old value below.
+        if !guarded && (is_null(new) || old == new) {
             continue;
         }
         // An update with no expected old value arrives with all zeros as the old value; at this
@@ -356,29 +395,151 @@ fn decide(git: &Git, inputs: &Inputs, state: &str, stdin: &[u8]) -> Result<Optio
         if !is_oid(&old) || !is_oid(new) {
             continue; // a symref value (`ref:...`) is not a commit
         }
-        let forks = forks_of_others(git, inputs, new, branch)?;
-        if let Some(message) = check_move(git, Route::Local, branch, &old, new, &forks)? {
+        let mut own = Vec::new();
+        let forks = if guarded {
+            own = own_tips(git, inputs, branch)?;
+            let within = || target_side(git, &own, &old, new);
+            forks_of_others(git, inputs, new, branch, &within)?
+        } else {
+            match merged_forks(git, inputs, branch, &old, new)? {
+                Some(forks) => forks,
+                None => continue,
+            }
+        };
+        if !guarded {
+            own = own_tips(git, inputs, branch)?;
+        }
+        if let Some(message) = check_move(git, Route::Local, branch, &old, new, &forks, &own)? {
             return Ok(Some(message));
         }
     }
     Ok(None)
 }
 
-/// The commit ids of the fork points recorded by the branches at `commit` other than `moved`.
-fn forks_of_others(git: &Git, inputs: &Inputs, commit: &str, moved: &str) -> Result<Vec<String>> {
-    let branches: Vec<String> = branches_at(git, commit)?
+/// The names of the local branches at `commit` other than `moved`.
+fn other_branches_at(git: &Git, commit: &str, moved: &str) -> Result<Vec<String>> {
+    Ok(branches_at(git, commit)?
         .into_iter()
         .filter(|name| name != moved)
-        .collect();
-    recorded_forks(git, inputs, &branches)
+        .collect())
 }
 
-/// The commit ids that the fork points recorded by `branches` resolve to; branches with no
-/// record, or a record that will not resolve, are skipped.
-fn recorded_forks(git: &Git, inputs: &Inputs, branches: &[String]) -> Result<Vec<String>> {
+/// The tips of the remote-tracking branches `branch` is published on: the same-named ones, and its
+/// upstream, unless that is a guarded branch or its recorded target. A guarded `release` cut from
+/// `origin/main` is not published there, and a pull from it must not pass as its own.
+fn own_tips(git: &Git, inputs: &Inputs, branch: &str) -> Result<Vec<String>> {
+    let target = inputs.targets.get(branch);
+    remote_tips(git, branch, &|name| {
+        inputs.guarded.contains(name) || target.is_some_and(|target| target == name)
+    })
+}
+
+/// Where the target side of a local move from `old` to `new` is: `old`, and the branch's own
+/// remote-tracking tips (`own`) that `new` contains, which can be ahead of `old`; a tip it does
+/// not contain is not what this move takes in.
+fn target_side(git: &Git, own: &[String], old: &str, new: &str) -> Result<Vec<String>> {
+    let mut side = vec![old.to_string()];
+    for tip in own {
+        if is_ancestor(git, tip, new)? {
+            side.push(tip.clone());
+        }
+    }
+    Ok(side)
+}
+
+/// Where the target side of a move is, worked out only when a fork point needs it.
+type Side<'a> = &'a dyn Fn() -> Result<Vec<String>>;
+
+/// The commit ids of the fork points, see [`fork_points_of`], of the branches at `commit` other
+/// than `moved`; `within` is where the target side of the move is.
+fn forks_of_others(
+    git: &Git,
+    inputs: &Inputs,
+    commit: &str,
+    moved: &str,
+    within: Side,
+) -> Result<Vec<String>> {
+    fork_points_of(git, inputs, &other_branches_at(git, commit, moved)?, within)
+}
+
+/// The fork points, as for [`forks_of_others`], of the branches that the move of the unguarded
+/// `branch` from `old` to `new` merges into it, or `None` when the move merges nothing, which is
+/// an ordinary move of one's own branch and is not checked. It merges when it is a fast-forward to
+/// the tip of another local or a remote-tracking branch, or a merge commit with `old` as its first
+/// parent and the tip of one as another parent. Branches that cannot overwrite what `branch` is
+/// for are not counted (see the module header): its recorded target, any guarded branch, and
+/// `branch` itself, whether local or on a remote.
+fn merged_forks(
+    git: &Git,
+    inputs: &Inputs,
+    branch: &str,
+    old: &str,
+    new: &str,
+) -> Result<Option<Vec<String>>> {
+    let target = inputs.targets.get(branch);
+    let counts = |tip: &Tip| {
+        (tip.remote || tip.name != branch)
+            && !inputs.guarded.contains(&tip.name)
+            && Some(&tip.name) != target
+    };
+    let (parents, tips) = parents_and_tips(git, new)?;
+    let mut merged: Vec<String> = Vec::new();
+    if tips.iter().any(counts) && is_ancestor(git, old, new)? {
+        merged.extend(tips.into_iter().filter(counts).map(|tip| tip.name));
+    }
+    // The first parent is the branch's own side.
+    if let [first, merging @ ..] = &parents[..] {
+        if first == old {
+            for parent in merging {
+                merged.extend(
+                    tips_at(git, parent)?
+                        .into_iter()
+                        .filter(counts)
+                        .map(|tip| tip.name),
+                );
+            }
+        }
+    }
+    if merged.is_empty() {
+        return Ok(None);
+    }
+    merged.sort();
+    merged.dedup();
+    let within = || target_side(git, &own_tips(git, inputs, branch)?, old, new);
+    Ok(Some(fork_points_of(git, inputs, &merged, &within)?))
+}
+
+/// The commit ids of the fork points of `branches`: the one recorded for each, else the commit
+/// its reflog says it was created at, when that is an ancestor of one of `within` (the target
+/// side of the move): a branch created on someone else's unmerged work, or from a remote-tracking
+/// branch, has a creation point that is not where it left the target, and the files of that other
+/// work would be held against it. A branch with neither, or a record that will not resolve, is
+/// skipped. A guarded branch is a target branch, not a source: its creation says nothing about
+/// what it merged, so it gets no reflog fallback.
+fn fork_points_of(
+    git: &Git,
+    inputs: &Inputs,
+    branches: &[String],
+    within: Side,
+) -> Result<Vec<String>> {
     let mut forks = Vec::new();
+    let mut side: Option<Vec<String>> = None;
     for name in branches {
         let Some(fork) = inputs.fork_points.get(name).filter(|fork| !fork.is_empty()) else {
+            if inputs.guarded.contains(name) {
+                continue;
+            }
+            if let Some(oid) = creation_point(git, name)? {
+                if side.is_none() {
+                    side = Some(within()?);
+                }
+                for tip in side.iter().flatten() {
+                    if is_ancestor(git, &oid, tip)? {
+                        forks.push(oid);
+                        break;
+                    }
+                }
+            }
             continue;
         };
         let oid =
@@ -393,14 +554,14 @@ fn recorded_forks(git: &Git, inputs: &Inputs, branches: &[String]) -> Result<Vec
 /// Remote-tracking branch tips below `new` but not below `old`; see rule 2. A tip below `old`
 /// (the target branch is merely ahead of the remote, or a same-named branch on another remote is
 /// behind) means this move is not an alignment with the remote.
-fn tips_below(git: &Git, branch: &str, old: &str, new: &str) -> Result<Vec<String>> {
+fn tips_below(git: &Git, own: &[String], old: &str, new: &str) -> Result<Vec<String>> {
     let mut tips = Vec::new();
-    for tip in remote_tips(git, branch)? {
-        if tips.contains(&tip) || tip == old {
+    for tip in own {
+        if tips.contains(tip) || tip == old {
             continue;
         }
-        if !is_ancestor(git, &tip, old)? && is_ancestor(git, &tip, new)? {
-            tips.push(tip);
+        if !is_ancestor(git, tip, old)? && is_ancestor(git, tip, new)? {
+            tips.push(tip.clone());
         }
     }
     Ok(tips)
@@ -437,7 +598,8 @@ enum Route {
 }
 
 /// Checks one move of the guarded branch `branch` from `old` to `new`: `None` when it is allowed,
-/// else the message that rejects it.
+/// else the message that rejects it. `own` are the tips of the remote-tracking branches `branch` is
+/// published on (see [`own_tips`]); none for a push, which has the remote's own value.
 fn check_move(
     git: &Git,
     route: Route,
@@ -445,6 +607,7 @@ fn check_move(
     old: &str,
     new: &str,
     forks: &[String],
+    own: &[String],
 ) -> Result<Option<String>> {
     if is_null(old) || is_null(new) || old == new {
         return Ok(None);
@@ -465,10 +628,7 @@ fn check_move(
             &[old, &not_new, "--not", "--remotes", &exclude, "--branches"],
         )?;
     }
-    if route == Route::Local
-        && stranded == 0
-        && remote_tips(git, branch)?.iter().any(|tip| tip == new)
-    {
+    if route == Route::Local && stranded == 0 && own.iter().any(|tip| tip == new) {
         return Ok(None);
     }
     if !is_ancestor(git, old, new)? {
@@ -505,7 +665,7 @@ fn check_move(
     let mut findings = find_reverts(git, old, new, forks, forks)?;
     let mut remote_findings = Vec::new();
     let tips = if route == Route::Local {
-        tips_below(git, branch, old, new)?
+        tips_below(git, own, old, new)?
     } else {
         Vec::new()
     };

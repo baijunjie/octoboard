@@ -12,10 +12,14 @@ use super::git::{is_null, is_oid, is_space, lossy, Git};
 
 /// How many commits to look back. A revert usually comes from a branch developed in parallel in
 /// the same period, so its base is not far behind; too large a value reads many more blobs on
-/// every merge. When a fork point is recorded, every commit after it is checked as well, but no
+/// every merge. When a fork point is known, every commit after it is checked as well, but no
 /// more than [`MAX_DEPTH`], so that a branch left unmerged for a long time cannot slow the check
 /// down enough to stall the merge.
 const WINDOW: usize = 50;
+/// How many commits to look back when no fork point is known for the move at all (neither
+/// recorded nor found in the branch's reflog): nothing then says how far back the branch's base
+/// can be, so the window is wider.
+const WINDOW_WITHOUT_FORK: usize = 100;
 const MAX_DEPTH: usize = 1000;
 
 /// Line-level criteria: the file only counts as restored when the share of C's added lines that
@@ -208,11 +212,11 @@ fn rename_sources(git: &Git, a: &str, b: &str) -> Result<HashSet<Path>> {
     Ok(sources)
 }
 
-/// The commits to check: the most recent [`WINDOW`] on `old`, united with everything between
+/// The commits to check: the most recent `window` on `old`, united with everything between
 /// `old` and the merge base of `old` and each fork point (at most [`MAX_DEPTH`]), non-merge
 /// commits only.
-fn recent_commits(git: &Git, old: &str, forks: &[String]) -> Result<Vec<Commit>> {
-    let mut ranges = vec![vec![format!("--max-count={WINDOW}"), old.to_string()]];
+fn recent_commits(git: &Git, old: &str, forks: &[String], window: usize) -> Result<Vec<Commit>> {
+    let mut ranges = vec![vec![format!("--max-count={window}"), old.to_string()]];
     for fork in forks {
         let base = git.line_lenient(["merge-base", fork, old])?;
         if !base.is_empty() {
@@ -227,6 +231,7 @@ fn recent_commits(git: &Git, old: &str, forks: &[String]) -> Result<Vec<Commit>>
     for range in ranges {
         let mut args = vec![
             "log".to_string(),
+            "--no-show-signature".into(),
             "--no-merges".into(),
             "--format=%H %s".into(),
         ];
@@ -288,7 +293,8 @@ fn recent_commits(git: &Git, old: &str, forks: &[String]) -> Result<Vec<Commit>>
 /// regard to case, the sha 7 to 64 hex digits. Lower-cased.
 fn overridden(git: &Git, old: &str, new: &str) -> Result<Vec<String>> {
     let range = format!("{old}..{new}");
-    let messages = lossy(&git.read(["log", "--format=%B", range.as_str()])?);
+    let messages =
+        lossy(&git.read(["log", "--no-show-signature", "--format=%B", range.as_str()])?);
     Ok(declared_reverts(&messages))
 }
 
@@ -466,7 +472,8 @@ fn read_blobs(git: &Git, oids: &[String]) -> Result<HashMap<String, Vec<u8>>> {
 /// existed at the fork point, it shows up in the branch's own diff and is not caught here; only
 /// content that first appeared after the fork point being deleted counts — a deliberate deletion
 /// should still leave a `Reverts:`.
-/// Cannot check without a recorded fork point: a squash that changed the base is exactly one
+/// Cannot check without a fork point (recorded, or the commit the branch's reflog says it was
+/// created at): a squash that changed the base is exactly one
 /// that rewrote the parent to the target branch's tip, so merge-base is no longer the fork
 /// point. Rename sources do not count; that content just moved elsewhere.
 fn base_artifacts(
@@ -526,6 +533,7 @@ fn base_artifacts(
             OsString::from("--literal-pathspecs"),
             "log".into(),
             "-1".into(),
+            "--no-show-signature".into(),
             "--no-merges".into(),
             "--format=%H %s".into(),
             old.into(),
@@ -571,12 +579,14 @@ fn base_artifacts(
 ///   back in bulk — resolving every conflict to your own side during a rebase has exactly this
 ///   shape.
 /// - Changed base (see [`base_artifacts`]): this move changed some file that the branch itself
-///   never touched since its fork point. Checking this requires a recorded fork point; once it
-///   can be checked, add, delete, and edit to existing content are all treated the same.
+///   never touched since its fork point. Checking this requires a fork point, recorded or the
+///   commit the branch's reflog says it was created at; once it can be checked, add, delete, and
+///   edit to existing content are all treated the same.
 ///
 /// The line comparison only looks at the multiset of lines, not at positions, so it still works
 /// when the file was changed again by other commits after C. `forks` decides how far back the
-/// commits are looked at; `bases` is the branch's actual fork points.
+/// commits are looked at; `bases` is the branch's actual fork points, and with none of them the
+/// window is [`WINDOW_WITHOUT_FORK`] instead of [`WINDOW`].
 pub(super) fn find_reverts(
     git: &Git,
     old: &str,
@@ -589,7 +599,12 @@ pub(super) fn find_reverts(
         return Ok(Vec::new());
     }
     let allowed = overridden(git, old, new)?;
-    let candidates: Vec<Commit> = recent_commits(git, old, forks)?
+    let window = if bases.is_empty() {
+        WINDOW_WITHOUT_FORK
+    } else {
+        WINDOW
+    };
+    let candidates: Vec<Commit> = recent_commits(git, old, forks, window)?
         .into_iter()
         .filter(|commit| {
             commit

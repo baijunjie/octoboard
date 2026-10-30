@@ -28,6 +28,20 @@ fn rev(repo: &Path, spec: &str) -> String {
         .to_string()
 }
 
+/// Drops `branch`'s reflog, as an expired one: the branch then has no creation point to fall back
+/// on.
+fn forget_reflog(repo: &Path, branch: &str) {
+    git(
+        repo,
+        &[
+            "reflog",
+            "expire",
+            "--expire=all",
+            &format!("refs/heads/{branch}"),
+        ],
+    );
+}
+
 fn commit(repo: &Path, name: &str, content: &str, message: &str) -> String {
     std::fs::write(repo.join(name), content).unwrap();
     git(repo, &["add", "-A"]);
@@ -74,17 +88,28 @@ fn gate(
     old: &str,
     new: &str,
 ) -> Option<String> {
-    let git = git_in(repo);
-    let inputs = Inputs {
-        guarded: guard.iter().map(|name| name.to_string()).collect(),
-        targets: HashMap::new(),
+    let inputs = GateInputs {
+        guard: guard.iter().map(|name| name.to_string()).collect(),
+        targets: Vec::new(),
         fork_points: forks
             .iter()
             .map(|(name, fork)| (name.to_string(), fork.to_string()))
             .collect(),
     };
+    decide_with(repo, &inputs, state, branch, old, new)
+}
+
+/// [`gate`] for the given `inputs`.
+fn decide_with(
+    repo: &Path,
+    inputs: &GateInputs,
+    state: &str,
+    branch: &str,
+    old: &str,
+    new: &str,
+) -> Option<String> {
     let stdin = format!("{old} {new} refs/heads/{branch}\n");
-    decide(&git, &inputs, state, stdin.as_bytes()).expect("the gate runs")
+    decide(&git_in(repo), &Inputs::new(inputs), state, stdin.as_bytes()).expect("the gate runs")
 }
 
 fn main_move(repo: &Path, forks: &[(&str, &str)], old: &str, new: &str) -> Option<String> {
@@ -216,7 +241,7 @@ fn a_squash_with_a_changed_base_is_rejected_with_and_without_a_recorded_fork_poi
 }
 
 #[test]
-fn a_wiped_out_additive_commit_is_caught_only_through_the_fork_point() {
+fn the_reflog_gives_the_fork_point_of_a_branch_with_no_record() {
     let (repo, fork, old, new) = squash_with_changed_base(|repo| {
         commit(
             repo,
@@ -225,7 +250,43 @@ fn a_wiped_out_additive_commit_is_caught_only_through_the_fork_point() {
             "add added.txt",
         )
     });
-    // No line is deleted by the commit, so no content criterion sees it undone.
+    // The branch never touched `added.txt`, which the changed base drags out of `main`: found from
+    // the commit the branch was created at, without a record.
+    let found = main_move(&repo, &[], &old, &new).expect("changed base");
+    assert!(
+        found.contains("added.txt: this file was deleted wholesale"),
+        "{found}"
+    );
+    let creation = creation_point(&git_in(&repo), "feature").unwrap();
+    assert_eq!(creation, Some(fork));
+    // A branch whose oldest reflog entry is not its creation has none.
+    forget_reflog(&repo, "feature");
+    git(
+        &repo,
+        &[
+            "update-ref",
+            "-m",
+            "reset: moving to x",
+            "refs/heads/feature",
+            &new,
+        ],
+    );
+    assert_eq!(creation_point(&git_in(&repo), "feature").unwrap(), None);
+}
+
+#[test]
+fn a_wiped_out_additive_commit_is_caught_only_through_a_fork_point_recorded_or_from_the_reflog() {
+    let (repo, fork, old, new) = squash_with_changed_base(|repo| {
+        commit(
+            repo,
+            "added.txt",
+            &numbered("added", 1..=8),
+            "add added.txt",
+        )
+    });
+    // No line is deleted by the commit, so no content criterion sees it undone, and a branch
+    // whose reflog is gone has no fork point to find the changed base from.
+    forget_reflog(&repo, "feature");
     assert_eq!(main_move(&repo, &[], &old, &new), None);
     let found = main_move(&repo, &[("feature", &fork)], &old, &new).expect("changed base");
     assert!(
@@ -329,8 +390,647 @@ fn an_ordinary_fast_forward_merge_is_allowed() {
     assert_eq!(main_move(&repo, &[("feature", &fork)], &fork, &new), None);
 }
 
+/// A repository whose unguarded `topic` carries `rewrite the head of a.txt`, a commit of its own.
+/// Returns the repository and topic's tip.
+fn topic_with_a_change() -> (ScratchDir, String) {
+    let repo = base_repo();
+    git(&repo, &["switch", "-q", "-c", "topic"]);
+    let tip = commit(
+        &repo,
+        "a.txt",
+        &numbered("beta", 1..=5),
+        "rewrite the head of a.txt",
+    );
+    (repo, tip)
+}
+
+/// The verdict on the unguarded `branch` moving from `old` to `new`.
+fn unguarded_move(repo: &Path, branch: &str, old: &str, new: &str) -> Option<String> {
+    gate(repo, &[], &[], "prepared", branch, old, new)
+}
+
 #[test]
-fn only_a_prepared_update_of_a_guarded_branch_is_checked() {
+fn a_fast_forward_merge_into_an_unguarded_branch_is_checked_by_content() {
+    let (repo, old) = topic_with_a_change();
+    git(&repo, &["switch", "-q", "-c", "undoing"]);
+    let undoing = commit(&repo, "a.txt", &numbered("alpha", 1..=10), "undo it");
+    git(&repo, &["switch", "-q", "-c", "adding", &old]);
+    let adding = commit(
+        &repo,
+        "added.txt",
+        &numbered("added", 1..=8),
+        "add added.txt",
+    );
+
+    let found = unguarded_move(&repo, "topic", &old, &undoing).expect("topic's commit is undone");
+    assert!(found.contains("rewrite the head of a.txt"), "{found}");
+    assert_eq!(unguarded_move(&repo, "topic", &old, &adding), None);
+}
+
+#[test]
+fn a_merge_commit_into_an_unguarded_branch_is_checked_by_content() {
+    let (repo, old) = topic_with_a_change();
+    git(&repo, &["switch", "-q", "-c", "feature", "main"]);
+    let feature = commit(
+        &repo,
+        "other.txt",
+        &numbered("other", 1..=9),
+        "rewrite other.txt",
+    );
+    // A merge that keeps only the other side's content drops what topic's commit did.
+    let dropping = git(
+        &repo,
+        &[
+            "commit-tree",
+            &format!("{feature}^{{tree}}"),
+            "-p",
+            &old,
+            "-p",
+            &feature,
+            "-m",
+            "merge feature",
+        ],
+    );
+    let dropping = String::from_utf8(dropping).unwrap().trim().to_string();
+    git(&repo, &["switch", "-q", "topic"]);
+    let (_, merged) = prepared(&repo, &["merge", "-q", "--no-ff", "--no-edit", "feature"]);
+
+    let found = unguarded_move(&repo, "topic", &old, &dropping).expect("topic's commit is undone");
+    assert!(found.contains("rewrite the head of a.txt"), "{found}");
+    assert_eq!(unguarded_move(&repo, "topic", &old, &merged), None);
+
+    // The merged side can be a remote-tracking branch alone.
+    git(
+        &repo,
+        &["update-ref", "refs/remotes/origin/feature", &feature],
+    );
+    git(&repo, &["branch", "-q", "-D", "feature"]);
+    assert!(unguarded_move(&repo, "topic", &old, &dropping).is_some());
+    assert_eq!(unguarded_move(&repo, "topic", &old, &merged), None);
+
+    // With no branch at all at the second parent it is not a merge of a branch.
+    git(&repo, &["update-ref", "-d", "refs/remotes/origin/feature"]);
+    assert_eq!(unguarded_move(&repo, "topic", &old, &dropping), None);
+}
+
+#[test]
+fn ordinary_moves_of_an_unguarded_branch_that_undo_its_own_commit_are_allowed() {
+    let (repo, old) = topic_with_a_change();
+    let original = numbered("alpha", 1..=10);
+    std::fs::write(repo.join("a.txt"), &original).unwrap();
+    git(&repo, &["add", "-A"]);
+    let (_, committed) = prepared(&repo, &["commit", "-q", "-m", "undo it"]);
+    assert_eq!(unguarded_move(&repo, "topic", &old, &committed), None);
+
+    // Amending, resetting to where `main` is and rebasing the commit away all undo it as well.
+    std::fs::write(repo.join("a.txt"), &original).unwrap();
+    git(&repo, &["add", "-A"]);
+    git(
+        &repo,
+        &["commit", "-q", "--amend", "--allow-empty", "-m", "amended"],
+    );
+    let amended = rev(&repo, "HEAD");
+    git(&repo, &["reset", "-q", "--hard", &old]);
+    assert_eq!(unguarded_move(&repo, "topic", &old, &amended), None);
+
+    let (_, reset) = prepared(&repo, &["reset", "-q", "--hard", "main"]);
+    assert_eq!(unguarded_move(&repo, "topic", &old, &reset), None);
+    let (_, rebased) = prepared(&repo, &["rebase", "-q", "--onto", "main", "HEAD~1"]);
+    assert_eq!(unguarded_move(&repo, "topic", &old, &rebased), None);
+}
+
+#[test]
+fn a_deletion_or_no_op_update_of_an_unguarded_branch_runs_no_git() {
+    // A program that does not exist fails any `git` run: deleting and no-op updates of an
+    // unguarded branch are allowed before one starts.
+    let nowhere = ScratchDir::new("revert-gate-nowhere");
+    let git = Git::with("/nonexistent/git", nowhere.to_path_buf(), Vec::new());
+    let inputs = Inputs::new(&GateInputs::default());
+    let (some, other, none) = ("1".repeat(40), "2".repeat(40), "0".repeat(40));
+    let stdin = format!(
+        "{some} {none} refs/heads/b\n{some} {some} refs/heads/c\n\
+         {some} ref:refs/heads/x refs/heads/d\n{some} {other} refs/remotes/origin/e\n"
+    );
+    assert_eq!(
+        decide(&git, &inputs, "prepared", stdin.as_bytes()).unwrap(),
+        None
+    );
+    // The controls: a move of it does run one, and so does an update with no expected old value,
+    // which has to be read from the branch.
+    let stdin = format!("{some} {other} refs/heads/a\n");
+    assert!(decide(&git, &inputs, "prepared", stdin.as_bytes()).is_err());
+    let stdin = format!("{none} {other} refs/heads/a\n");
+    assert!(decide(&git, &inputs, "prepared", stdin.as_bytes()).is_err());
+}
+
+/// `commit-tree` of `tree` with `parents`.
+fn commit_tree(repo: &Path, tree: &str, parents: &[&str]) -> String {
+    let mut args = vec!["commit-tree".to_string(), tree.to_string()];
+    for parent in parents {
+        args.extend(["-p".to_string(), parent.to_string()]);
+    }
+    args.extend(["-m".to_string(), "merge".to_string()]);
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    String::from_utf8(git(repo, &args))
+        .unwrap()
+        .trim()
+        .to_string()
+}
+
+#[test]
+fn a_branch_stacked_on_unmerged_work_has_no_fork_point_from_its_creation() {
+    // `stacked` was created on the tip of `first`, which `topic` does not have: its creation point
+    // is not where it left `topic`, and `first`'s edit of a.txt is not its own.
+    let repo = base_repo();
+    git(&repo, &["switch", "-q", "-c", "first"]);
+    commit(&repo, "a.txt", &numbered("alpha", 1..=9), "edit a.txt");
+    git(&repo, &["switch", "-q", "-c", "stacked"]);
+    let stacked = commit(&repo, "g.txt", &numbered("stacked", 1..=4), "add g.txt");
+    git(&repo, &["switch", "-q", "-c", "topic", "main"]);
+    let old = rev(&repo, "HEAD");
+
+    assert_eq!(unguarded_move(&repo, "topic", &old, &stacked), None);
+    assert_eq!(
+        gate(&repo, &["main"], &[], "prepared", "main", &old, &stacked),
+        None
+    );
+}
+
+#[test]
+fn a_branch_created_from_a_remote_tracking_branch_is_pushed_after_a_faithful_rebase() {
+    let origin = base_repo();
+    git(&origin, &["switch", "-q", "-c", "colleague"]);
+    commit(
+        &origin,
+        "other.txt",
+        &numbered("other", 1..=5),
+        "colleague edits other.txt",
+    );
+    git(&origin, &["switch", "-q", "main"]);
+    commit(
+        &origin,
+        "a.txt",
+        &numbered("alpha", 1..=9),
+        "main edits a.txt",
+    );
+    let local = clone_of(&origin);
+    // `git switch colleague` creates it from `origin/colleague`: not from the target branch.
+    git(&local, &["switch", "-q", "colleague"]);
+    git(&local, &["rebase", "-q", "origin/main"]);
+    let new = rev(&local, "HEAD");
+
+    let verdict = push(
+        &local,
+        &["main"],
+        &[],
+        &[],
+        "colleague",
+        &new,
+        &"0".repeat(40),
+    );
+    assert!(
+        !verdict.rejected && verdict.text.is_empty(),
+        "{}",
+        verdict.text
+    );
+}
+
+#[test]
+fn a_clean_merge_of_a_branch_started_on_unmerged_work_is_allowed() {
+    let repo = base_repo();
+    git(&repo, &["switch", "-q", "-c", "feature_one"]);
+    commit(
+        &repo,
+        "other.txt",
+        &numbered("other", 1..=5),
+        "edit other.txt",
+    );
+    git(&repo, &["switch", "-q", "-c", "colleague"]);
+    commit(&repo, "c.txt", &numbered("colleague", 1..=4), "add c.txt");
+    git(&repo, &["switch", "-q", "-c", "topic", "main"]);
+    let old = commit(
+        &repo,
+        "a.txt",
+        &numbered("alpha", 1..=9),
+        "topic's own work",
+    );
+    let (_, merged) = prepared(&repo, &["merge", "-q", "--no-ff", "--no-edit", "colleague"]);
+    assert_eq!(unguarded_move(&repo, "topic", &old, &merged), None);
+}
+
+/// A repository where `main` rewrote a.txt, a feature branch was created, and `main` then backed
+/// it out without a `Reverts:` line. Returns the repository, the feature's tip, and the merge of
+/// `main` into it.
+fn feature_merging_a_main_that_backed_out_a_commit() -> (ScratchDir, String, String) {
+    let repo = base_repo();
+    commit(
+        &repo,
+        "a.txt",
+        &numbered("beta", 1..=5),
+        "rewrite the head of a.txt",
+    );
+    git(&repo, &["switch", "-q", "-c", "feature"]);
+    let old = commit(
+        &repo,
+        "f.txt",
+        &numbered("feature", 1..=4),
+        "add the feature",
+    );
+    git(&repo, &["switch", "-q", "main"]);
+    commit(&repo, "a.txt", &numbered("alpha", 1..=10), "back it out");
+    git(&repo, &["switch", "-q", "feature"]);
+    let (_, merged) = prepared(&repo, &["merge", "-q", "--no-ff", "--no-edit", "main"]);
+    (repo, old, merged)
+}
+
+#[test]
+fn merging_the_target_or_a_guarded_branch_into_a_feature_branch_is_not_checked() {
+    let (repo, old, merged) = feature_merging_a_main_that_backed_out_a_commit();
+    // Nothing says `main` is special: the merge undoes a commit the feature has.
+    assert!(unguarded_move(&repo, "feature", &old, &merged).is_some());
+
+    let guarded = |repo: &Path| gate(repo, &["main"], &[], "prepared", "feature", &old, &merged);
+    assert_eq!(guarded(&repo), None);
+    let targeting = GateInputs {
+        targets: vec![("feature".to_string(), "main".to_string())],
+        ..GateInputs::default()
+    };
+    // The target is guarded as the target of this branch, when the daemon says so.
+    assert_eq!(
+        decide_with(&repo, &targeting, "prepared", "feature", &old, &merged),
+        None
+    );
+    // As a remote-tracking branch alone.
+    let main = rev(&repo, "main");
+    git(&repo, &["update-ref", "refs/remotes/origin/main", &main]);
+    git(&repo, &["branch", "-q", "-D", "main"]);
+    assert_eq!(guarded(&repo), None);
+    assert_eq!(
+        decide_with(&repo, &targeting, "prepared", "feature", &old, &merged),
+        None
+    );
+}
+
+#[test]
+fn a_fast_forward_to_the_target_is_not_checked_and_one_to_the_own_remote_branch_drops_nothing() {
+    let (repo, old) = topic_with_a_change();
+    git(&repo, &["switch", "-q", "-c", "scratch"]);
+    let undoing = commit(&repo, "a.txt", &numbered("alpha", 1..=10), "undo it");
+    git(&repo, &["switch", "-q", "topic"]);
+    // `git rebase main` on a topic that has not moved fast-forwards it to `main`'s tip; what
+    // lands on `main` is checked when it does.
+    git(&repo, &["branch", "-q", "-f", "main", &undoing]);
+    git(&repo, &["branch", "-q", "-D", "scratch"]);
+    assert!(unguarded_move(&repo, "topic", &old, &undoing).is_some());
+    assert_eq!(
+        gate(&repo, &["main"], &[], "prepared", "topic", &old, &undoing),
+        None
+    );
+    let targeting = GateInputs {
+        targets: vec![("topic".to_string(), "main".to_string())],
+        ..GateInputs::default()
+    };
+    assert_eq!(
+        decide_with(&repo, &targeting, "prepared", "topic", &old, &undoing),
+        None
+    );
+
+    // A fast-forward `git pull`: the tip is the topic's own remote-tracking branch's, which
+    // holds everything topic does.
+    git(
+        &repo,
+        &["update-ref", "refs/remotes/origin/topic", &undoing],
+    );
+    git(&repo, &["branch", "-q", "-D", "main"]);
+    assert_eq!(unguarded_move(&repo, "topic", &old, &undoing), None);
+}
+
+#[test]
+fn a_pull_merge_that_drops_what_was_pushed_to_the_own_remote_branch_is_checked() {
+    let (repo, old) = topic_with_a_change();
+    git(&repo, &["switch", "-q", "-c", "theirs", "main"]);
+    let theirs = commit(
+        &repo,
+        "other.txt",
+        &numbered("other", 1..=9),
+        "pushed by someone",
+    );
+    git(&repo, &["update-ref", "refs/remotes/origin/topic", &theirs]);
+    git(&repo, &["switch", "-q", "topic"]);
+    git(&repo, &["branch", "-q", "-D", "theirs"]);
+    // A conflict resolution that keeps only the local side.
+    let dropping = commit_tree(&repo, &format!("{old}^{{tree}}"), &[&old, &theirs]);
+    let found = unguarded_move(&repo, "topic", &old, &dropping).expect("theirs is dropped");
+    assert!(found.contains("pushed by someone"), "{found}");
+    let (_, pulled) = prepared(&repo, &["merge", "-q", "--no-ff", "--no-edit", &theirs]);
+    assert_eq!(unguarded_move(&repo, "topic", &old, &pulled), None);
+}
+
+#[test]
+fn an_update_with_no_expected_old_value_is_read_from_the_branch() {
+    let (repo, _) = topic_with_a_change();
+    git(&repo, &["switch", "-q", "-c", "colleague"]);
+    let undoing = commit(&repo, "a.txt", &numbered("alpha", 1..=10), "undo it");
+    git(&repo, &["switch", "-q", "topic"]);
+    // `git branch -f topic colleague` arrives with all zeros as the old value.
+    let stdin = format!("{} {undoing} refs/heads/topic\n", "0".repeat(40));
+    let inputs = Inputs::new(&GateInputs::default());
+    let found = decide(&git_in(&repo), &inputs, "prepared", stdin.as_bytes())
+        .unwrap()
+        .expect("topic's commit is undone");
+    assert!(found.contains("rewrite the head of a.txt"), "{found}");
+    // A creation resolves to nothing, and is not checked.
+    let stdin = format!("{} {undoing} refs/heads/fresh\n", "0".repeat(40));
+    let allowed = decide(&git_in(&repo), &inputs, "prepared", stdin.as_bytes()).unwrap();
+    assert_eq!(allowed, None);
+}
+
+#[test]
+fn a_creation_point_ahead_of_the_local_branch_but_on_its_remote_is_a_fork_point() {
+    let origin = base_repo();
+    let local = clone_of(&origin);
+    commit(&origin, "a.txt", &numbered("alpha", 1..=9), "main moves on");
+    git(&local, &["fetch", "-q"]);
+    // `main` is behind `origin/main`, and `feat` is created from the latter.
+    git(&local, &["switch", "-q", "-c", "feat", "origin/main"]);
+    let new = commit(&local, "g.txt", &numbered("g", 1..=4), "add g.txt");
+    let creation = rev(&local, "origin/main");
+    let main = rev(&local, "main");
+    let inputs = Inputs::new(&GateInputs::default());
+    let git = git_in(&local);
+    let feat = ["feat".to_string()];
+    assert!(
+        fork_points_of(&git, &inputs, &feat, &|| Ok(vec![main.clone()]))
+            .unwrap()
+            .is_empty()
+    );
+    let within = target_side(&git, std::slice::from_ref(&creation), &main, &new).unwrap();
+    assert_eq!(
+        fork_points_of(&git, &inputs, &feat, &|| Ok(within.clone())).unwrap(),
+        [creation]
+    );
+    assert_eq!(
+        gate(&local, &["main"], &[], "prepared", "main", &main, &new),
+        None
+    );
+}
+
+#[test]
+fn a_fast_forward_to_a_remote_tracking_branch_of_someone_else_is_checked() {
+    let (repo, old) = topic_with_a_change();
+    git(&repo, &["switch", "-q", "-c", "scratch"]);
+    let undoing = commit(&repo, "a.txt", &numbered("alpha", 1..=10), "undo it");
+    git(&repo, &["switch", "-q", "topic"]);
+    git(
+        &repo,
+        &["update-ref", "refs/remotes/origin/colleague", &undoing],
+    );
+    git(&repo, &["branch", "-q", "-D", "scratch"]);
+    let found = unguarded_move(&repo, "topic", &old, &undoing).expect("topic's commit is undone");
+    assert!(found.contains("rewrite the head of a.txt"), "{found}");
+}
+
+#[test]
+fn an_octopus_merge_is_checked_by_each_of_its_merged_branches() {
+    let (repo, old) = topic_with_a_change();
+    for (name, file) in [("one", "one.txt"), ("two", "two.txt")] {
+        git(&repo, &["switch", "-q", "-c", name, "main"]);
+        commit(&repo, file, &numbered(name, 1..=4), "add a file");
+    }
+    git(&repo, &["switch", "-q", "topic"]);
+    // The merge keeps only the second branch's tree, which has none of topic's work.
+    let dropping = commit_tree(&repo, "two^{tree}", &[&old, "one", "two"]);
+    let found = unguarded_move(&repo, "topic", &old, &dropping).expect("topic's commit is undone");
+    assert!(found.contains("rewrite the head of a.txt"), "{found}");
+    let (_, merged) = prepared(&repo, &["merge", "-q", "one", "two"]);
+    assert_eq!(unguarded_move(&repo, "topic", &old, &merged), None);
+}
+
+#[test]
+fn a_guarded_branch_cut_from_another_branchs_remote_is_not_published_there() {
+    // `release` was cut from `origin/main`, which is its upstream; `origin/main` then took the
+    // hotfix and backed it out by hand. Pulling that into `release` is not aligning with its own.
+    let repo = base_repo();
+    git(&repo, &["switch", "-q", "-c", "release"]);
+    let old = commit(&repo, "a.txt", &numbered("beta", 1..=5), "hotfix");
+    git(&repo, &["switch", "-q", "-c", "scratch"]);
+    let backed_out = commit(
+        &repo,
+        "a.txt",
+        &numbered("alpha", 1..=10),
+        "back out by hand",
+    );
+    git(
+        &repo,
+        &["update-ref", "refs/remotes/origin/main", &backed_out],
+    );
+    git(&repo, &["switch", "-q", "release"]);
+    git(&repo, &["branch", "-q", "-D", "scratch"]);
+    for (key, value) in [
+        ("remote.origin.url", "."),
+        ("remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"),
+        ("branch.release.remote", "origin"),
+        ("branch.release.merge", "refs/heads/main"),
+    ] {
+        git(&repo, &["config", key, value]);
+    }
+    let found = gate(
+        &repo,
+        &["main", "release"],
+        &[],
+        "prepared",
+        "release",
+        &old,
+        &backed_out,
+    )
+    .expect("the hotfix is backed out");
+    assert!(found.contains("hotfix"), "{found}");
+}
+
+#[test]
+fn a_signed_merge_is_read_whatever_log_shows_of_signatures() {
+    let (repo, old) = topic_with_a_change();
+    let keys = ScratchDir::new("revert-gate-keys");
+    let key = keys.join("key");
+    let made = std::process::Command::new("ssh-keygen")
+        .args(["-q", "-t", "ed25519", "-N", ""])
+        .arg("-f")
+        .arg(&key)
+        .output();
+    if !made.is_ok_and(|made| made.status.success()) {
+        eprintln!("skipped: no ssh-keygen to sign with");
+        return;
+    }
+    git(&repo, &["config", "gpg.format", "ssh"]);
+    git(
+        &repo,
+        &[
+            "config",
+            "user.signingkey",
+            key.with_extension("pub").to_str().unwrap(),
+        ],
+    );
+    // With this `git log` prints a line about each signed commit before its format.
+    git(&repo, &["config", "log.showSignature", "true"]);
+    git(&repo, &["switch", "-q", "-c", "feature", "main"]);
+    let feature = commit(
+        &repo,
+        "other.txt",
+        &numbered("other", 1..=9),
+        "rewrite other.txt",
+    );
+    git(&repo, &["switch", "-q", "topic"]);
+    let signed = git(
+        &repo,
+        &[
+            "commit-tree",
+            "-S",
+            &format!("{feature}^{{tree}}"),
+            "-p",
+            &old,
+            "-p",
+            &feature,
+            "-m",
+            "merge",
+        ],
+    );
+    let signed = String::from_utf8(signed).unwrap().trim().to_string();
+    let found = unguarded_move(&repo, "topic", &old, &signed).expect("topic's commit is dropped");
+    assert!(found.contains("rewrite the head of a.txt"), "{found}");
+}
+
+#[test]
+fn a_remote_tracking_tip_the_move_does_not_contain_is_not_the_target_side() {
+    // `origin/topic` already merged `colleague`, which was created from `origin/colleague`; the
+    // local `topic` is behind it and merges `colleague` on its own.
+    let (repo, old) = topic_with_a_change();
+    git(&repo, &["switch", "-q", "-c", "source", "main"]);
+    let colleague = commit(
+        &repo,
+        "other.txt",
+        &numbered("other", 1..=9),
+        "colleague edits other",
+    );
+    git(
+        &repo,
+        &["update-ref", "refs/remotes/origin/colleague", &colleague],
+    );
+    git(&repo, &["switch", "-q", "topic"]);
+    git(&repo, &["branch", "-q", "-D", "source"]);
+    git(
+        &repo,
+        &["branch", "-q", "colleague", "refs/remotes/origin/colleague"],
+    );
+    let (_, merged) = prepared(&repo, &["merge", "-q", "--no-ff", "--no-edit", "colleague"]);
+    let published = commit_tree(&repo, &format!("{merged}^{{tree}}"), &[&old, &colleague]);
+    git(
+        &repo,
+        &["update-ref", "refs/remotes/origin/topic", &published],
+    );
+
+    assert_eq!(unguarded_move(&repo, "topic", &old, &merged), None);
+}
+
+#[test]
+fn a_pull_into_a_branch_with_an_upstream_of_another_name_drops_nothing_published() {
+    let repo = base_repo();
+    git(&repo, &["switch", "-q", "-c", "mytopic"]);
+    let mut worked = numbered("other", 3..=6);
+    worked += &numbered("new", 1..=3);
+    let published = commit(&repo, "other.txt", &worked, "X: rework other.txt");
+    git(&repo, &["switch", "-q", "-c", "scratch"]);
+    let backed_out = commit(
+        &repo,
+        "other.txt",
+        &numbered("other", 1..=6),
+        "back out X by hand",
+    );
+    git(
+        &repo,
+        &["update-ref", "refs/remotes/origin/topic", &backed_out],
+    );
+    git(&repo, &["switch", "-q", "mytopic"]);
+    git(&repo, &["branch", "-q", "-D", "scratch"]);
+    for (key, value) in [
+        ("remote.origin.url", "."),
+        ("remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"),
+        ("branch.mytopic.remote", "origin"),
+        ("branch.mytopic.merge", "refs/heads/topic"),
+    ] {
+        git(&repo, &["config", key, value]);
+    }
+    // A fast-forward pull, and a merge pull over local work.
+    assert_eq!(
+        unguarded_move(&repo, "mytopic", &published, &backed_out),
+        None
+    );
+    let old = commit(&repo, "a.txt", &numbered("alpha", 1..=9), "local work");
+    let (_, pulled) = prepared(&repo, &["merge", "-q", "--no-ff", "--no-edit", &backed_out]);
+    assert_eq!(unguarded_move(&repo, "mytopic", &old, &pulled), None);
+}
+
+#[test]
+fn a_merge_commit_whose_first_parent_is_not_the_old_value_is_not_a_merge_into_the_branch() {
+    let (repo, old) = topic_with_a_change();
+    git(&repo, &["switch", "-q", "-c", "feature", "main"]);
+    let feature = commit(
+        &repo,
+        "other.txt",
+        &numbered("other", 1..=9),
+        "rewrite other.txt",
+    );
+    // What `git rebase --rebase-merges` leaves: a merge rebuilt on another base.
+    let rebuilt = commit_tree(&repo, &format!("{feature}^{{tree}}"), &["main", &feature]);
+    git(&repo, &["switch", "-q", "topic"]);
+    assert_eq!(unguarded_move(&repo, "topic", &old, &rebuilt), None);
+}
+
+/// A repository whose `a.txt` was rewritten by a commit with `fillers` empty commits on top of it,
+/// and the move from that tip to a commit that restores `a.txt`, which no branch points at.
+fn revert_buried_under(fillers: usize) -> (ScratchDir, String, String) {
+    let repo = base_repo();
+    let original = rev(&repo, "HEAD^{tree}");
+    commit(
+        &repo,
+        "a.txt",
+        &numbered("beta", 1..=5),
+        "rewrite the head of a.txt",
+    );
+    for _ in 0..fillers {
+        git(&repo, &["commit", "-q", "--allow-empty", "-m", "filler"]);
+    }
+    let old = rev(&repo, "HEAD");
+    let new = git(
+        &repo,
+        &["commit-tree", &original, "-p", &old, "-m", "undo it"],
+    );
+    let new = String::from_utf8(new).unwrap().trim().to_string();
+    (repo, old, new)
+}
+
+#[test]
+fn only_the_most_recent_commits_are_checked_and_twice_as_many_without_a_fork_point() {
+    // The rewrite is the 100th commit back: the last one the wider window reaches.
+    let (repo, old, new) = revert_buried_under(99);
+    assert!(main_move(&repo, &[], &old, &new).is_some());
+    // The rewrite is the 71st: past the window of 50 that a fork point leaves in place, since the
+    // fork point at `old` adds no commit to it.
+    let (repo, old, new) = revert_buried_under(70);
+    git(&repo, &["branch", "-q", "feature", &new]);
+    forget_reflog(&repo, "feature");
+    assert!(main_move(&repo, &[], &old, &new).is_some());
+    assert_eq!(main_move(&repo, &[("feature", &old)], &old, &new), None);
+    // The 50th is still inside it.
+    let (repo, old, new) = revert_buried_under(49);
+    git(&repo, &["branch", "-q", "feature", &new]);
+    assert!(main_move(&repo, &[("feature", &old)], &old, &new).is_some());
+    // The 101st is beyond both.
+    let (repo, old, new) = revert_buried_under(100);
+    assert_eq!(main_move(&repo, &[], &old, &new), None);
+}
+
+#[test]
+fn an_update_is_checked_only_when_prepared_and_for_a_guarded_branch_or_a_merge() {
     let (repo, _, old, new) = squash_with_changed_base(|repo| {
         commit(
             repo,
@@ -348,6 +1048,8 @@ fn only_a_prepared_update_of_a_guarded_branch_is_checked() {
         gate(&repo, &["main"], &[], "aborted", "main", &old, &new),
         None
     );
+    // Not guarded, and `feature` no longer at `new`: an ordinary move of one's own branch.
+    git(&repo, &["branch", "-q", "-D", "feature"]);
     assert_eq!(
         gate(&repo, &["trunk"], &[], "prepared", "main", &old, &new),
         None
@@ -360,6 +1062,7 @@ fn a_failure_of_the_gate_allows_the_update_and_says_so() {
     let git = git_in(&nowhere);
     let inputs = Inputs {
         guarded: HashSet::from(["main".to_string()]),
+        default_target: None,
         targets: HashMap::new(),
         fork_points: HashMap::new(),
     };
@@ -670,26 +1373,37 @@ fn a_guarded_branch_is_checked_against_its_remote_value_when_pushed() {
 }
 
 #[test]
-fn a_push_involving_no_guarded_branch_or_recorded_target_runs_no_git() {
+fn a_push_involving_no_guarded_branch_or_target_runs_no_git() {
     // A program that does not exist fails any `git` run, and the verdict is still a plain allow.
     let nowhere = ScratchDir::new("revert-gate-nowhere");
     let git = Git::with("/nonexistent/git", nowhere.to_path_buf(), Vec::new());
-    let inputs = Inputs::new(&GateInputs {
-        guard: vec!["main".to_string()],
-        targets: vec![("feature".to_string(), "develop".to_string())],
-        fork_points: Vec::new(),
-    });
+    let inputs = |guard: &[&str]| {
+        Inputs::new(&GateInputs {
+            guard: guard.iter().map(|name| name.to_string()).collect(),
+            targets: vec![("feature".to_string(), "develop".to_string())],
+            fork_points: Vec::new(),
+        })
+    };
     let (local, remote) = ("1".repeat(40), "2".repeat(40));
+    // With no guarded branch a branch that records no target branch has none to be checked
+    // against; a deleted branch has nothing to check at all.
     let stdin = format!(
         "refs/heads/topic {local} refs/heads/topic {remote}\nrefs/heads/main {} refs/heads/main {remote}\n",
         "0".repeat(40)
     );
-    let verdict = decide_push(&git, &inputs, stdin.as_bytes()).expect("nothing to check");
+    let verdict = decide_push(&git, &inputs(&[]), stdin.as_bytes()).expect("nothing to check");
     assert!(!verdict.rejected && verdict.text.is_empty());
+    let verdict = decide_push(&git, &inputs(&["main"]), stdin.as_bytes());
+    assert!(
+        verdict.is_err(),
+        "the first guarded branch stands in for topic's target"
+    );
 
-    // The control: a guarded branch being pushed does start one.
+    // The controls: a recorded target branch, and a guarded branch being pushed, start one too.
+    let stdin = format!("refs/heads/feature {local} refs/heads/feature {remote}\n");
+    assert!(decide_push(&git, &inputs(&[]), stdin.as_bytes()).is_err());
     let stdin = format!("refs/heads/main {local} refs/heads/main {remote}\n");
-    assert!(decide_push(&git, &inputs, stdin.as_bytes()).is_err());
+    assert!(decide_push(&git, &inputs(&["main"]), stdin.as_bytes()).is_err());
 }
 
 #[test]
@@ -734,11 +1448,16 @@ fn additive_squash() -> (ScratchDir, String, String) {
 }
 
 #[test]
-fn a_pushed_additive_commit_wiped_out_is_caught_only_through_the_fork_point() {
+fn a_pushed_additive_commit_wiped_out_is_caught_only_through_a_fork_point_recorded_or_from_the_reflog(
+) {
     let (repo, fork, squashed) = additive_squash();
     let targets = [("feature", "main")];
     let nothing = "0".repeat(40);
 
+    let verdict = push(&repo, &[], &targets, &[], "feature", &squashed, &nothing);
+    assert!(verdict.rejected, "{}", verdict.text);
+
+    forget_reflog(&repo, "feature");
     let verdict = push(&repo, &[], &targets, &[], "feature", &squashed, &nothing);
     assert!(!verdict.rejected, "{}", verdict.text);
 
@@ -853,6 +1572,7 @@ fn a_guarded_fast_forward_push_that_undoes_content_is_rejected_with_the_push_adv
     // found, and the push is a fast-forward of `main` on the remote.
     let stdin = format!("refs/heads/feature {squashed} refs/heads/main {remote}\n");
 
+    forget_reflog(&repo, "feature");
     let verdict = push_lines(&repo, &["main"], &[], &[], &stdin);
     assert!(!verdict.rejected, "{}", verdict.text);
 
@@ -890,12 +1610,69 @@ fn every_ref_of_a_push_is_checked_and_the_rejections_are_all_given() {
     );
 
     assert!(verdict.rejected);
-    for refused in ["push feature", "push second", "push main"] {
+    // `topic` records no target branch, and the first guarded branch stands in for it.
+    for refused in ["push feature", "push second", "push topic", "push main"] {
         assert!(
             verdict.text.contains(&format!("Refusing to {refused}")),
             "{refused}: {}",
             verdict.text
         );
     }
-    assert!(!verdict.text.contains("push topic"));
+}
+
+#[test]
+fn a_pushed_branch_with_no_recorded_target_is_checked_against_the_first_guarded_branch() {
+    let (repo, _, _) = feature_clone(rewrite_head_of_a);
+    let squashed = squash_onto_origin_main(&repo);
+    let nothing = "0".repeat(40);
+
+    let verdict = push(&repo, &["main"], &[], &[], "feature", &squashed, &nothing);
+    assert!(verdict.rejected, "{}", verdict.text);
+    assert!(
+        verdict.text.contains("Refusing to push feature")
+            && verdict.text.contains("relative to origin/main")
+            && verdict.text.contains("rewrite the head of a.txt"),
+        "{}",
+        verdict.text
+    );
+    // With no guarded branch there is no target branch to stand in.
+    let verdict = push(&repo, &[], &[], &[], "feature", &squashed, &nothing);
+    assert!(
+        !verdict.rejected && verdict.text.is_empty(),
+        "{}",
+        verdict.text
+    );
+    // Rebased the ordinary way, it keeps the change.
+    git(&repo, &["reset", "-q", "--hard", "ORIG_HEAD"]);
+    let rebased = rebase_onto_origin_main(&repo);
+    let verdict = push(&repo, &["main"], &[], &[], "feature", &rebased, &nothing);
+    assert!(
+        !verdict.rejected && verdict.text.is_empty(),
+        "{}",
+        verdict.text
+    );
+}
+
+#[test]
+fn the_guarded_branch_pushed_is_not_checked_against_itself_as_a_fallback_target() {
+    let origin = base_repo();
+    let local = clone_of(&origin);
+    let remote = rev(&local, "HEAD");
+    let new = commit(&local, "a.txt", &numbered("alpha", 1..=9), "trim a.txt");
+    let verdict = push(&local, &["main"], &[], &[], "main", &new, &remote);
+    assert!(
+        !verdict.rejected && verdict.text.is_empty(),
+        "{}",
+        verdict.text
+    );
+    // Not even under another name on the remote: no `git` runs, as for a push of nothing.
+    let nowhere = ScratchDir::new("revert-gate-nowhere");
+    let git = Git::with("/nonexistent/git", nowhere.to_path_buf(), Vec::new());
+    let inputs = Inputs::new(&GateInputs {
+        guard: vec!["main".to_string()],
+        ..GateInputs::default()
+    });
+    let stdin = format!("refs/heads/main {new} refs/heads/other {remote}\n");
+    let verdict = decide_push(&git, &inputs, stdin.as_bytes()).expect("nothing to check");
+    assert!(!verdict.rejected && verdict.text.is_empty());
 }

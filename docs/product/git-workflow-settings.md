@@ -26,7 +26,7 @@ gate does not depend on where sessions develop: it runs whenever the project's e
 | Where sessions develop | `development` | `in_place`, `branch`, `worktree` | `worktree` | Where a project session works: directly on the current branch, given no rule (**On the current branch**); on a new branch of its own checked out in the project directory itself (**On a branch of its own**), which suits one session at a time; or on a new branch of its own in a worktree of its own (**In a worktree of its own**). |
 | Rebase before merging | `rebase_before_merge` | `true` / `false` | on | Whether a branch is rebased onto its target branch before it is merged. |
 | Delivery | `delivery` | `ask`, `merge`, `pull_request` | `ask` | How finished work leaves its branch: the user is asked each time, the branch is merged into its target branch locally, or it is pushed and a pull request opened. |
-| Revert gate | `revert_gate` | `true` / `false` | off | Whether git run inside a project session is refused a branch update or a push that quietly undoes changes already on a guarded branch (see `docs/product/revert-gate.md`). |
+| Revert gate | `revert_gate` | `true` / `false` | off | Whether git run inside a project session is refused a branch update or a push that quietly undoes changes already on a branch other work is merged into (see `docs/product/revert-gate.md`). |
 
 The defaults hold for a fresh installation. Any other `development` or
 `delivery` value is refused.
