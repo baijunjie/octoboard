@@ -37,6 +37,8 @@ error messages, and page metadata: Arabic, German, English, Spanish, French, Hin
 Japanese, Korean, Brazilian Portuguese, Russian, Thai, Turkish, Vietnamese, Simplified Chinese, and Traditional
 Chinese. This coverage is specific to the website; the application's translation coverage is described in
 `docs/product/language.md`, "What is translated so far".
+The application fragments in the feature wall use the application's translations: their controls and labels are
+currently available in English and Simplified Chinese, with English fallback in the other website languages.
 
 English is the default. On a normal site page that opens in English, the site checks the remembered language after
 the app mounts. If there is no remembered language, it matches the browser's preferred languages to the supported
@@ -82,9 +84,26 @@ The first numbered section presents 16 feature cards in three groups, in this or
   entering a delegated project's session to guide its executing agent directly, without relaying every detail
   through the coordinator; monitoring session statuses and requests for decisions; and reviewing files and Git diffs.
 
-Every card has a title and description. Cards form three columns on wide screens, two at widths of 1050 pixels or
-less, and one at 600 pixels or less. Each group has a numbered heading and decorative icon. The feature wall, the
-homepage Markdown and the homepage structured-data list present the same features in the same order.
+Every card has a title, description and a focused visual, identified as illustrative sample data.
+Five visuals show application interface fragments: accounts, usage readings, session statuses, existing workflow
+files, and a Git diff. The status example puts a session waiting for the user first, a session awaiting instructions
+second, and a working session last, following the application's ordering. The other eleven visuals illustrate the
+capability with account choices, conversation and handoff records, context usage, task continuity or coordination
+relationships. The quota-recovery example shows waiting, confirmation that quota is available, and continuing work;
+it does not treat a reset time alone as proof of recovery or imply that the task is finished.
+
+These visuals are static presentations: they accept no pointer or keyboard interaction and are hidden from
+assistive technology, which reads each card's title and description instead. Their accounts, tasks, files and
+readings are fictional; they do not connect to a daemon, run commands or agents, read real files, or change stored
+preferences. The application fragments load when approaching the viewport, with a loading placeholder until ready
+and a localized error if startup fails or takes more than 20 seconds. They require JavaScript; the card titles,
+descriptions and other illustrations remain readable without it. The separately embedded product preview retains
+the interactions described in `docs/product/website-product-preview.md`, "Product preview".
+
+Cards form three columns on wide screens, two at widths of 1050 pixels or less, and one at 600 pixels or less. The
+last card, reviewing files and Git diffs, spans the full row with its visual beside its text, stacking them on
+phones. Each group has a numbered heading and decorative icon. The feature wall, the homepage Markdown and the
+homepage structured-data list present the same features in the same order.
 
 The coordination introduction identifies the restaurant promotion as a cross-project example. The HTML page also
 invites visitors to select a project in the illustration to inspect its assigned task and example report; the
