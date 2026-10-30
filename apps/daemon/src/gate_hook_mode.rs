@@ -31,7 +31,7 @@ use crate::revert_gate::{self, GateInputs, Hook};
 const TIMEOUT: Duration = Duration::from_millis(1500);
 
 /// Runs the gate for the hook, with stdin, and returns the exit status for the dispatcher.
-pub fn run(session: &str, port: u16, hook: &Hook) -> i32 {
+pub fn run(session: &str, port: u16, key: &str, hook: &Hook) -> i32 {
     // Read before anything else: whoever feeds the hook's stdin is not left writing into a pipe
     // nobody reads when the update is let through unasked.
     let mut stdin = Vec::new();
@@ -44,7 +44,7 @@ pub fn run(session: &str, port: u16, hook: &Hook) -> i32 {
         return 0;
     };
     let git_dir = std::env::var_os("GIT_DIR");
-    let Some(inputs) = inputs_for(port, session, &cwd, git_dir.as_deref()) else {
+    let Some(inputs) = inputs_for(port, key, session, &cwd, git_dir.as_deref()) else {
         return 0;
     };
     revert_gate::check(hook, &inputs, Cursor::new(stdin))
@@ -54,6 +54,7 @@ pub fn run(session: &str, port: u16, hook: &Hook) -> i32 {
 /// `None` for anything that is not such an answer.
 pub(crate) fn inputs_for(
     port: u16,
+    key: &str,
     session: &str,
     cwd: &Path,
     git_dir: Option<&OsStr>,
@@ -63,7 +64,13 @@ pub(crate) fn inputs_for(
         git_dir: git_dir.map(|dir| wire_path::encode(dir.as_bytes())),
     };
     let body = serde_json::to_vec(&request).ok()?;
-    let reply =
-        crate::loopback::post(port, &format!("/revert-gate/{session}"), &body, TIMEOUT).ok()?;
+    let reply = crate::loopback::post(
+        port,
+        key,
+        &format!("/revert-gate/{session}"),
+        &body,
+        TIMEOUT,
+    )
+    .ok()?;
     serde_json::from_slice::<Option<GateInputs>>(&reply).ok()?
 }

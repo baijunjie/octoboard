@@ -38,9 +38,9 @@ export const startupScenarios: Scenario[] = [
     id: "startup-no-address",
     group: GROUP,
     category: "exceptional",
-    title: "No daemon address",
+    title: "No daemon address or key",
     description:
-      "One main landmark contains the page heading, centred, and a danger alert titled \"Could not connect to the daemon\" with one line under it; the alert and the text below it start at the edge. The shell's port handoff and three development-server connection instructions follow outside the alert, with selectable code tokens. Use Narrow and Short to check wrapping and scrolling; Arabic shows the code inside right-to-left copy. The native-capable browser stub exposes Quit without closing the preview.",
+      "One main landmark contains the page heading, centred, and a danger alert titled \"Could not connect to the daemon\" with one line under it; the alert and the text below it start at the edge. Outside the alert, a line on the shell's handoff of the port and the key follows, then the three development-server connection methods, each naming the key beside the port, with selectable code tokens. The lines are long: use Narrow and Short to check that they wrap, and that the code tokens wrap or scroll without being clipped; Arabic shows the code inside right-to-left copy. The native-capable browser stub exposes Quit without closing the preview.",
     quitRequested: true,
     startup: { kind: "noAddress" },
   },

@@ -83,20 +83,20 @@ the call's result.
 ## Drive the real app without touching the user's work
 
 Where a check needs a real client against a real daemon but not the native window, the built UI is one: serve
-`packages/ui/dist` on a local port and load it with `?port=<daemon port>` (the "Pointing it at a daemon" section of
-`packages/ui/README.md`) in a headless browser driven over the DevTools protocol, with real mouse and key events. The
-daemon treats it as any other client, so every daemon-side outcome and everything the agent in a session sees is
-exercised, and no screen-recording or accessibility grant is needed for it; what it leaves out is the Tauri shell's own
-event path, which carries no daemon traffic anyway (`apps/desktop/README.md`, the opening under its title "Octoboard
-desktop application").
-That is enough to confirm what a dialog does. It is not the app's WebKit, so it settles behaviour and never rendering.
+`packages/ui/dist` on a local port and load it with `?port=<daemon port>&key=<daemon key>` (the "Pointing it at a
+daemon" section of `packages/ui/README.md`) in a headless browser driven over the DevTools protocol, with real mouse and
+key events. The daemon treats it as any other client, so every daemon-side outcome and everything the agent in a session
+sees is exercised, and no screen-recording or accessibility grant is needed for it; what it leaves out is the Tauri
+shell's own event path, which carries no daemon traffic anyway (`apps/desktop/README.md`, the opening under its title
+"Octoboard desktop application"). That is enough to confirm what a dialog does. It is not the app's WebKit, so it
+settles behaviour and never rendering.
 
 So where a check has to run in the real app, keep the GUI out of the setup: create the consoles, projects and sessions a
 verification needs by sending the daemon's own protocol requests, and drive only the behaviour under test through the
 window. A session's status can be set up the same way, without an agent prompt or a model turn: POST
-`{"hook_event_name":"PermissionRequest"}` to the daemon's `/hook/<session>` to raise its hand, and a later
-`UserPromptSubmit` lowers it again. Trusted folders are the exception: the protocol adds one only as the answer to a
-live agent's trust confirmation, so seed them by inserting rows into the `trusted_directories` table of
+`{"hook_event_name":"PermissionRequest"}` to the daemon's `/hook/<session>?key=<daemon key>` to raise its hand, and a
+later `UserPromptSubmit` lowers it again. Trusted folders are the exception: the protocol adds one only as the answer to
+a live agent's trust confirmation, so seed them by inserting rows into the `trusted_directories` table of
 `$HOME/.octoboard/octoboard.db` while the app is stopped.
 
 While the user is working on the machine, send the GUI steps to the instance under test alone: post key and pointer

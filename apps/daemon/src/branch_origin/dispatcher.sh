@@ -148,7 +148,7 @@ octo_nl='
 '
 # Whether this git belongs to a project session, which is what the variables say.
 octo_session=
-if [ -n "${@SESSION_VARIABLE@-}" ] && [ -n "${@PORT_VARIABLE@-}" ]; then
+if [ -n "${@SESSION_VARIABLE@-}" ] && [ -n "${@PORT_VARIABLE@-}" ] && [ -n "${@KEY_VARIABLE@-}" ]; then
 	octo_session=1
 fi
 octo_watch=
@@ -198,10 +198,11 @@ octo_run_hook() {
 octo_run_gate() {
 	[ -x @EXE@ ] || return 0
 	if [ -n "$octo_spool" ]; then
-		@EXE@ gate-hook --session "$@SESSION_VARIABLE@" --port "$@PORT_VARIABLE@" "$@" <"$octo_spool"
+		@EXE@ gate-hook --session "$@SESSION_VARIABLE@" --port "$@PORT_VARIABLE@" \
+			--key "$@KEY_VARIABLE@" "$@" <"$octo_spool"
 	else
 		printf '%s' "$octo_input" | @EXE@ gate-hook --session "$@SESSION_VARIABLE@" \
-			--port "$@PORT_VARIABLE@" "$@"
+			--port "$@PORT_VARIABLE@" --key "$@KEY_VARIABLE@" "$@"
 	fi
 	[ $? -ne 3 ] || octo_status=1
 }
@@ -355,7 +356,7 @@ if [ -n "$octo_watch" ]; then
 			if [ -n "$octo_complete" ] && [ -n "$octo_created" ]; then
 				# In the background with every descriptor let go, so git never waits for it.
 				@EXE@ git-ref --session "$@SESSION_VARIABLE@" --port "$@PORT_VARIABLE@" \
-					${octo_head:+--head "$octo_head"} -- $octo_created </dev/null >/dev/null 2>&1 &
+					--key "$@KEY_VARIABLE@" ${octo_head:+--head "$octo_head"} -- $octo_created </dev/null >/dev/null 2>&1 &
 			fi
 		fi
 	fi

@@ -83,6 +83,8 @@ pub struct LaunchRequest {
     /// conversation there and must launch against the same value.
     pub preresolved_shell_env: Option<HashMap<String, String>>,
     pub daemon_port: u16,
+    /// See `LaunchSpec::daemon_key`.
+    pub daemon_key: String,
     pub self_exe: String,
     pub mcp_token: String,
     /// What every process of this launch carries, whatever the agent and the session's role; see
@@ -115,6 +117,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         terminal_appearance,
         preresolved_shell_env,
         daemon_port,
+        daemon_key,
         self_exe,
         mcp_token,
         process_tag,
@@ -150,7 +153,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
 
     let adapter = adapter::adapter_for(agent);
     let hook_script = if adapter.uses_hook_script() {
-        adapter::write_hook_script(&scratch, &self_exe, session_id, daemon_port)
+        adapter::write_hook_script(&scratch, &self_exe, session_id, daemon_port, &daemon_key)
             .context("writing the session's hook script")?
     } else {
         adapter::hook_script_path(&scratch)
@@ -189,6 +192,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
             .and_then(|binary| adapter.installed_version(binary)),
         self_exe: &self_exe,
         daemon_port,
+        daemon_key: &daemon_key,
         mcp_token: &mcp_token,
     };
     let plan = adapter.plan(&spec)?;
@@ -204,6 +208,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
             &self_exe,
             session_id,
             daemon_port,
+            &daemon_key,
         ));
     }
     environment.insert(

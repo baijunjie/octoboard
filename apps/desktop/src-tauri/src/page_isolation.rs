@@ -20,6 +20,8 @@ use objc2::MainThreadMarker;
 use objc2_foundation::{NSError, NSString};
 use objc2_web_kit::{WKContentRuleList, WKContentRuleListStore, WKWebViewConfiguration};
 
+use crate::diagnostics::diagnostic;
+
 const RULE_LIST_IDENTIFIER: &str = "octoboard-no-web";
 
 /// Every `http(s)` URL is blocked. A dev build loads its UI from the Vite dev server over plain
@@ -51,7 +53,7 @@ pub fn with_configuration(
     // SAFETY: plain allocation on the main thread `mtm` proves.
     let configuration = unsafe { WKWebViewConfiguration::new(mtm) };
     let Some(store) = (unsafe { WKContentRuleListStore::defaultStore(mtm) }) else {
-        eprintln!("octoboard: no WebKit content rule list store; report pages are not isolated.");
+        diagnostic!("no WebKit content rule list store; report pages are not isolated.");
         return then(configuration);
     };
     // The block is called once, but the type it must have is `Fn`.
@@ -68,8 +70,8 @@ pub fn with_configuration(
                 let reason = unsafe { error.as_ref() }
                     .map(|error| error.localizedDescription().to_string())
                     .unwrap_or_default();
-                eprintln!(
-                    "octoboard: cannot compile the content rule list ({reason}); report pages \
+                diagnostic!(
+                    "cannot compile the content rule list ({reason}); report pages \
                      rely on the sanitizer alone."
                 );
             }

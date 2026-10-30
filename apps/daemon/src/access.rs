@@ -3,27 +3,78 @@
 //!
 //! Browsers apply no CORS check to a WebSocket handshake, and send a cross-origin "simple" POST
 //! without a preflight, so any page the user opens can reach a loopback port and drive the daemon
-//! through it. What gives such a page away is that a browser always states the page's `Origin` on
-//! both, while a non-browser client (a script, a native app, the agents' hook callbacks, the MCP
-//! child) normally sends none. So a request with no `Origin` is let through, and one that states
-//! it has to come from a place where the daemon's own user is already running something. The
-//! `Host` has to be one the daemon is meant to be reached by too, otherwise DNS rebinding
-//! (`evil.example` resolving to 127.0.0.1) would make a hostile page's `Origin` and `Host` agree.
+//! through it. Two things keep such a page out, and a request needs both.
+//!
+//! The first is the `Origin` and `Host` rules. A browser always states the page's `Origin` on both
+//! kinds of request, so one that states it has to come from a place where the daemon's own user
+//! is already running something, and a request with none is left to the key. The `Host` has to be
+//! one the daemon is meant to be reached by too, otherwise DNS rebinding (`evil.example` resolving
+//! to 127.0.0.1) would make a hostile page's `Origin` and `Host` agree. Those rules alone still
+//! admit any page served from `localhost` (a dev server running untrusted code) and every Tauri
+//! application, which share `tauri://localhost`.
+//!
+//! The second is the key: a secret generated for each daemon launch ([`generate_key`]) that every
+//! request carries as its `key` query parameter. The daemon hands it only to what it starts or
+//! to the application that started it (see `apps/daemon/PROTOCOL.md`, "Who may connect"), so a
+//! page that merely knows the port cannot supply it. The daemon's own arguments and environment
+//! do not hold it, but its children's do (the agent CLIs' command lines, the `--key` of the
+//! `octoboardd` helpers, `OCTOBOARD_DAEMON_KEY`), and so do the owner-only files of a session's
+//! scratch directory. It targets web pages, not local processes: any process of the same user
+//! can read it, and could drive the daemon directly anyway.
 
-use axum::extract::Request;
+use std::io::Read;
+use std::sync::Arc;
+
+use axum::extract::{Request, State};
 use axum::http::{header, HeaderMap, HeaderName, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 
+/// How many random bytes a key is made of.
+const KEY_BYTES: usize = 32;
+
+/// A fresh key: [`KEY_BYTES`] bytes from the operating system's random source, as lower-case hex.
+/// The daemon is unix-only, so the source is `/dev/urandom`.
+pub fn generate_key() -> std::io::Result<String> {
+    let mut bytes = [0u8; KEY_BYTES];
+    std::fs::File::open("/dev/urandom")?.read_exact(&mut bytes)?;
+    Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
+}
+
 /// Answers 403 — before any handler or WebSocket upgrade runs — to a request that
-/// [`request_allowed`] turns away.
-pub async fn guard(request: Request, next: Next) -> Response {
+/// [`request_allowed`] turns away, and 401 to one that does not carry `key` (see [`key_matches`]).
+pub async fn guard(State(key): State<Arc<str>>, request: Request, next: Next) -> Response {
     let origin = single_header(request.headers(), &header::ORIGIN);
     let host = single_header(request.headers(), &header::HOST);
     match (origin, host) {
-        (Ok(origin), Ok(host)) if request_allowed(origin, host) => next.run(request).await,
-        _ => (StatusCode::FORBIDDEN, "forbidden origin or host").into_response(),
+        (Ok(origin), Ok(host)) if request_allowed(origin, host) => {}
+        _ => return (StatusCode::FORBIDDEN, "forbidden origin or host").into_response(),
     }
+    if !key_matches(request.uri().query(), &key) {
+        return (StatusCode::UNAUTHORIZED, "missing or wrong key").into_response();
+    }
+    next.run(request).await
+}
+
+/// Whether the query string carries `key` as its first `key` parameter. The key is lower-case hex,
+/// which needs no percent-decoding, and the comparison takes as long for a near miss as for a
+/// miss, so the time it takes tells a caller nothing about the key.
+fn key_matches(query: Option<&str>, key: &str) -> bool {
+    let supplied = query
+        .into_iter()
+        .flat_map(|query| query.split('&'))
+        .find_map(|pair| pair.strip_prefix("key="));
+    let Some(supplied) = supplied else {
+        return false;
+    };
+    let (supplied, key) = (supplied.as_bytes(), key.as_bytes());
+    // The length is not secret: every key the daemon makes has the same one.
+    supplied.len() == key.len()
+        && supplied
+            .iter()
+            .zip(key)
+            .fold(0u8, |difference, (a, b)| difference | (a ^ b))
+            == 0
 }
 
 /// A header that is present twice, or is not text, which is as good as hostile.
@@ -42,7 +93,8 @@ fn single_header<'a>(
     }
 }
 
-/// The decision, from the `Origin` and `Host` header values (`None` for an absent header).
+/// The `Origin` and `Host` decision, from the header values (`None` for an absent header). The key
+/// is checked separately, by [`key_matches`].
 ///
 /// - No `Origin`: allowed, provided the `Host` is allowed.
 /// - An `Origin`: allowed only if it is an application origin (see [`is_application_origin`]), a
@@ -77,8 +129,8 @@ fn is_loopback(host: &str) -> bool {
     matches!(host, "localhost" | "127.0.0.1" | "[::1]")
 }
 
-/// A page served over HTTP(S) from this machine. It comes from a local process, which could reach
-/// the daemon directly anyway, so accepting it widens nothing; this is what a dev server is.
+/// A page served over HTTP(S) from this machine. Such an origin is accepted so that the UI served
+/// by a dev server works; it is the key that keeps an untrusted page on that origin out.
 fn is_loopback_origin(origin: &Origin) -> bool {
     matches!(origin.scheme.as_str(), "http" | "https") && is_loopback(&origin.authority.host)
 }
@@ -317,6 +369,34 @@ mod tests {
         );
         assert_eq!(Authority::parse("[::1]x"), None);
         assert!(allowed(Some("http://[::1]"), "[::1]:80"));
+    }
+
+    #[test]
+    fn a_generated_key_is_64_lower_case_hex_characters_and_differs_each_time() {
+        let key = generate_key().unwrap();
+        assert_eq!(key.len(), 64);
+        assert!(key
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)));
+        assert_ne!(key, generate_key().unwrap());
+    }
+
+    #[test]
+    fn only_the_daemons_key_in_the_query_is_accepted() {
+        let key = "0123abcd";
+        assert!(key_matches(Some("key=0123abcd"), key));
+        assert!(key_matches(Some("a=1&key=0123abcd&b=2"), key));
+        assert!(key_matches(Some("key=0123abcd&key=other"), key));
+        assert!(!key_matches(None, key));
+        assert!(!key_matches(Some(""), key));
+        assert!(!key_matches(Some("key="), key));
+        assert!(!key_matches(Some("key=0123abce"), key));
+        assert!(!key_matches(Some("key=0123abc"), key));
+        assert!(!key_matches(Some("key=0123abcd0"), key));
+        assert!(!key_matches(Some("key=other&key=0123abcd"), key));
+        assert!(!key_matches(Some("xkey=0123abcd"), key));
+        assert!(!key_matches(Some("KEY=0123abcd"), key));
+        assert!(!key_matches(Some("key"), key));
     }
 
     #[test]

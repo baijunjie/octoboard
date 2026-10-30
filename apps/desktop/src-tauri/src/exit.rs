@@ -22,12 +22,16 @@
 //! those call sites share it instead of each carrying their own slowly diverging copy.
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::Mutex;
+#[cfg(target_os = "macos")]
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::sidecar::{daemon_stopped, stop_daemon};
+#[cfg(target_os = "macos")]
+use crate::diagnostics::diagnostic;
+use crate::sidecar::{daemon_stopped, mark_daemon_stopping, stop_daemon};
 
 /// How soon a second prevented exit must follow the first for it to be let through unconditionally
 /// — the escape hatch in `should_let_quit_through` below for a frontend that registered for the
@@ -98,6 +102,8 @@ pub fn frontend_exit_heartbeat(state: tauri::State<ExitState>) {
 #[tauri::command]
 pub fn confirm_quit(app: AppHandle, state: tauri::State<ExitState>, restart: Option<bool>) {
     state.confirmed.store(true, Ordering::SeqCst);
+    // Whatever the daemon's own end looks like from here, it is not to be started again.
+    mark_daemon_stopping(&app);
     if restart == Some(true) {
         tauri::async_runtime::spawn_blocking(move || {
             stop_daemon(&app);
@@ -185,6 +191,7 @@ fn decide(app: &AppHandle, debounce: bool) -> bool {
 /// Holds the `AppHandle` for `application_should_terminate` below to reach — an ObjC method
 /// carries no user data of its own, so this `OnceLock`, set once from `install_..._override`
 /// during `setup`, is the only way that callback can get at `ExitState` and emit into the window.
+#[cfg(target_os = "macos")]
 static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
 
 /// Installs an `applicationShouldTerminate:` override on the `NSApplication` delegate tao already
@@ -203,6 +210,7 @@ static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
 /// source: it registers `applicationDidFinishLaunching:`, `applicationWillTerminate:`, and a
 /// handful of others, not this one), so the `class_addMethod` call below adds a method rather than
 /// overriding one — there is no existing implementation for it to disagree with.
+#[cfg(target_os = "macos")]
 pub fn install_application_should_terminate_override(app: &AppHandle) {
     APP_HANDLE
         .set(app.clone())
@@ -254,8 +262,8 @@ pub fn install_application_should_terminate_override(app: &AppHandle) {
             // Quit and a system-initiated logout/restart/shutdown simply bypass the confirmation
             // and behave as they did before this override existed (Cmd+Q and the app menu are
             // unaffected either way, since they go through `on_menu_event` instead).
-            eprintln!(
-                "octoboard: applicationShouldTerminate: is already implemented on tao's delegate \
+            diagnostic!(
+                "applicationShouldTerminate: is already implemented on tao's delegate \
                  — Dock Quit and a system-initiated logout/restart/shutdown will bypass the exit \
                  confirmation."
             );
@@ -273,6 +281,7 @@ pub fn install_application_should_terminate_override(app: &AppHandle) {
 /// behaviour beyond this function's own `extern "C-unwind"` boundary, which only guarantees a
 /// well-defined unwind up to here. `TerminateNow` is the safe fallback if that ever happens: the
 /// one answer that cannot trap the user.
+#[cfg(target_os = "macos")]
 unsafe extern "C-unwind" fn application_should_terminate(
     _this: &objc2::runtime::AnyObject,
     _sel: objc2::runtime::Sel,

@@ -237,7 +237,8 @@ static MAIN_THREAD: OnceLock<ThreadId> = OnceLock::new();
 /// cannot unwind (one raised by a destructor while another is unwinding, or in a function that
 /// cannot unwind) aborts the process from whatever thread raised it, and the hook cannot tell it
 /// apart on stable Rust. Every abort, that one included, raises `SIGABRT`, whose handler kills
-/// every registered process on the way out.
+/// every registered process on the way out. A panic on any thread is logged through tracing first,
+/// so it reaches the log file.
 pub fn install() {
     MAIN_THREAD.get_or_init(|| std::thread::current().id());
     let default_hook = std::panic::take_hook();
@@ -245,6 +246,10 @@ pub fn install() {
         if MAIN_THREAD.get() == Some(&std::thread::current().id()) {
             kill_all();
             tracing::error!(%info, "the main thread panicked; every agent and shell process was killed");
+        } else {
+            // The default hook's report goes to stderr only, which nothing reads once the
+            // application is gone; this puts it in the log file too.
+            tracing::error!(%info, "a thread panicked");
         }
         default_hook(info);
     }));

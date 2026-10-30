@@ -134,11 +134,11 @@ is enough: find that session's own `octoboardd mcp` child and the injection land
 `ps -axo pid,command | grep <session id>`, because macOS `pgrep -af` prints pids with no command line — a grep of its
 output for a session id never matches, and working injection reads as broken injection.
 
-The tools need no agent in the loop either. The MCP child carries the daemon's port and the session's token in its argv,
-and the daemon accepts a tool call as plain JSON on `POST /mcp/:token`, so `curl` exercises every tool, the refusal of
-one the session's role does not have, and report delivery, against a live daemon and without a single model turn. What
-that leaves untested is the stdio child itself — the schemas it announces and the tool name the model ends up
-seeing — so keep one real session for those.
+The tools need no agent in the loop either. The MCP child carries the daemon's port and key and the session's token in
+its argv, and the daemon accepts a tool call as plain JSON on `POST /mcp/:token?key=<key>`, so `curl` exercises every
+tool, the refusal of one the session's role does not have, and report delivery, against a live daemon and without a
+single model turn. What that leaves untested is the stdio child itself — the schemas it announces and the tool name the
+model ends up seeing — so keep one real session for those.
 
 ## Do not look for a mouse-aware TUI through Grok's bash mode
 

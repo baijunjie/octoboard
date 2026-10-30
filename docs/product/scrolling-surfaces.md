@@ -112,7 +112,7 @@ covers. These are:
 - **the welcome screen's content area** (see "Keyboard focus" in `docs/product/welcome-screen.md`).
 - **the column of content of a screen shown before there is anything to show**, named as the screen's message. Its
   buttons sit at the end of that content and the window itself never scrolls, so a long message — the instructions
-  of the screen with no daemon address, say — would otherwise leave nothing between those buttons and the top of the
+  of the screen with no daemon address or key, say — would otherwise leave nothing between those buttons and the top of the
   screen to take focus. In Tab order it comes before the buttons it holds.
 - **a block of raw text held to a height**: one on an empty-state failure's details surface — the stack trace on the
   screen for a UI that failed and the daemon's message on the screen for a daemon that could not start among them —

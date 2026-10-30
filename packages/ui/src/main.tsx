@@ -3,7 +3,7 @@ import ReactDOM from "react-dom/client";
 
 import { App } from "./App";
 import { suppressNativeContextMenu } from "./contextMenuGuard";
-import { resolveDaemonOrigin, resolveStartupError } from "./daemon";
+import { resolveDaemonAddress, resolveRecovered, resolveStartupError } from "./daemon";
 import { runtimeError } from "./runtimeError";
 import { reportError } from "./reportError";
 import { ErrorAlerts } from "./dialogs/ErrorAlerts";
@@ -62,10 +62,10 @@ const initialNativeThemePush = platform.nativeWindow
   .catch(() => {});
 
 const startupError = resolveStartupError();
-const daemonOrigin = resolveDaemonOrigin(platform);
+const daemonAddress = resolveDaemonAddress(platform);
 // Created here rather than by a component: the connection lives as long as the window, and a
 // component that owned it would drop it, for good, on its first unmount (StrictMode's included).
-const daemon = !startupError && daemonOrigin ? createDaemon(daemonOrigin) : undefined;
+const daemon = !startupError && daemonAddress ? createDaemon(daemonAddress) : undefined;
 
 function screen(): React.ReactElement {
   if (startupError) {
@@ -75,9 +75,9 @@ function screen(): React.ReactElement {
     return <DaemonFailedScreen error={startupError} />;
   }
   if (!daemon) {
-    // No shell handed us a `?port=`, no `VITE_DAEMON_PORT` was set, and the page's own origin is
-    // not one that can be the daemon — there is nothing to connect to, so say so instead of
-    // guessing a port.
+    // Neither a `?key=` nor `VITE_DAEMON_KEY` gave a key; or there is no `?port=` or
+    // `VITE_DAEMON_PORT` and the page's own origin is not one that can be the daemon — there is
+    // nothing to connect to, so say so instead of guessing.
     return <StartupScreen message={<NoAddressMessage />} />;
   }
   return (
@@ -156,6 +156,12 @@ root.render(
 // real: the page does paint while hidden (only the callbacks are suspended), so what is revealed
 // here has already rendered.
 //
+// Not on a reload after the shell restarted a daemon that died (`?recovered=1`): that window may
+// have been closed into the background since it was revealed, and stays there. A window still
+// visible stays visible either way, and one never revealed is shown by the shell's safety net.
+//
 // `initialNativeThemePush` is still waited on. Revealing before that IPC round trip settles would
 // only move the flash from "before this page painted" to "before the window's appearance matched it".
-void Promise.resolve(initialNativeThemePush).then(() => platform.nativeWindow?.reveal().catch(() => {}));
+void Promise.resolve(initialNativeThemePush).then(() => {
+  if (!resolveRecovered()) return platform.nativeWindow?.reveal().catch(() => {});
+});

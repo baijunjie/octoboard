@@ -63,18 +63,21 @@ export default defineConfig(({ command }) => {
   // A daemon started by hand binds an OS-assigned port, so `OCTOBOARD_DAEMON_PORT` names it for the
   // dev server's proxy: the page then reaches `/ws/...` on its own origin, which is what the UI does
   // when the daemon itself serves it (src/daemon.ts). Without the variable there is no proxy, and the
-  // UI is pointed at the daemon with `?port=` or `VITE_DAEMON_PORT` instead.
+  // UI is pointed at the daemon with `?port=` or `VITE_DAEMON_PORT` instead. The proxy only forwards:
+  // the daemon's key (`?key=` or `VITE_DAEMON_KEY`) is still the page's to supply, since the daemon
+  // refuses every connection without it.
   //
-  // Both come from the root `.env.local`, read here because vite never writes a non-`VITE_` value
-  // into `process.env` and loads this config before any `.env` of its own; `VITE_DAEMON_PORT`
-  // reaches `import.meta.env` through `process.env`. A `vite build` never loads them, so a build cannot
+  // They come from the root `.env.local`, read here because vite never writes a non-`VITE_` value
+  // into `process.env` and loads this config before any `.env` of its own; `VITE_DAEMON_PORT` and
+  // `VITE_DAEMON_KEY` reach `import.meta.env` through `process.env`. A `vite build` never loads them, so a build cannot
   // bake a dev port into the bundle — but `vitest` resolves this config with `command: "serve"` too, so
   // a test run does load them, and anything a test derives from the port varies with the developer's
   // own `.env.local` (a separate process from the `vite build` the same script runs afterwards).
   //
   // The variables stay out of `packages/ui/.env`: that directory is vite's own `envDir`, which a
-  // `vite build` reads too, so a `VITE_DAEMON_PORT` there would go into a release bundle. Vite also
-  // expands `$VAR` in the files it loads itself, where the root file is read literally here.
+  // `vite build` reads too, so a `VITE_DAEMON_PORT` or `VITE_DAEMON_KEY` there would go into a
+  // release bundle. Vite also expands `$VAR` in the files it loads itself, where the root file is
+  // read literally here.
   if (command === "serve") loadEnv(".env.local");
   const daemonPort = process.env.OCTOBOARD_DAEMON_PORT;
 

@@ -17,7 +17,7 @@ use crate::protocol::{
     ProjectAccount, ProjectSource,
 };
 use crate::state::AppState;
-use crate::test_support::{app_state, git, git_bytes, repo_with, ScratchDir};
+use crate::test_support::{app_state, git, git_bytes, repo_with, ScratchDir, TEST_KEY};
 
 #[test]
 fn search_request_resolves_the_stored_project_and_echoes_the_query() {
@@ -1009,9 +1009,11 @@ async fn a_burst_of_reads_neither_starves_the_control_socket_nor_outgrows_its_bo
     let port = listener.local_addr().unwrap().port();
     let router = crate::server::router(fixture.state.clone());
     tokio::spawn(async move { axum::serve(listener, router).await });
-    let (socket, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/ws/control"))
-        .await
-        .unwrap();
+    let (socket, _) = tokio_tungstenite::connect_async(format!(
+        "ws://127.0.0.1:{port}/ws/control?key={TEST_KEY}"
+    ))
+    .await
+    .unwrap();
     let (mut sink, mut stream) = socket.split();
 
     let reads = budget::MAX_PENDING_REQUESTS + 8;

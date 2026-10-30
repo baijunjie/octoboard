@@ -112,6 +112,10 @@ impl AsRef<Path> for ScratchFile {
     }
 }
 
+/// The key [`app_state`]'s daemon requires of every connection.
+pub(crate) const TEST_KEY: &str =
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
 /// An `AppState` over a fresh store in a scratch directory labelled `label`, with no console in
 /// it. The caller keeps the directory alive for as long as the state is used. A console added to
 /// the state needs a workdir of its own rather than this directory, because deleting a console
@@ -122,6 +126,7 @@ pub(crate) fn app_state(label: &str) -> (Arc<AppState>, ScratchDir) {
     let state = Arc::new(AppState::new(
         store,
         1234,
+        TEST_KEY.to_string(),
         "/opt/octoboardd".to_string(),
         dir.join("output"),
         dir.join("consoles"),

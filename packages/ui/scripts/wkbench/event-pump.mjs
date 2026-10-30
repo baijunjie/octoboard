@@ -2,14 +2,14 @@
 // console in turn (each a `session_upserted`) every <intervalMs> for <seconds>, then restores the titles.
 // SIGTERM or SIGINT ends the renaming early; the titles are restored all the same.
 //
-//   node event-pump.mjs <port> <consoleName> <intervalMs> <seconds>
-const [port, consoleName, intervalArg, secondsArg] = process.argv.slice(2);
-if (!port || !consoleName || !intervalArg || !secondsArg) {
-  console.error("usage: node event-pump.mjs <port> <consoleName> <intervalMs> <seconds>");
+//   node event-pump.mjs <port> <key> <consoleName> <intervalMs> <seconds>
+const [port, key, consoleName, intervalArg, secondsArg] = process.argv.slice(2);
+if (!port || !key || !consoleName || !intervalArg || !secondsArg) {
+  console.error("usage: node event-pump.mjs <port> <key> <consoleName> <intervalMs> <seconds>");
   process.exit(2);
 }
 const replies = new Map();
-const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/control`);
+const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/control?key=${key}`);
 let snapshot;
 ws.onmessage = (ev) => {
   const m = JSON.parse(ev.data);

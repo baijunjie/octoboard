@@ -12,8 +12,9 @@
 //! `{{session_id}}` templating does not work — argv is the one route all three agree on, and the
 //! daemon is the one assigning the id anyway.
 //!
-//! The token authenticates the child to the daemon, so the MCP surface is not reachable by any
-//! local process that happens to guess the port.
+//! The token says which session a call is for, and is issued only to the child the daemon
+//! launched, so the MCP surface is not reachable by any local process that happens to guess the
+//! port; the key is what every connection to the daemon has to carry.
 //!
 //! **Stdout belongs to the MCP protocol alone.** Nothing else may be written to it, which is why
 //! this mode installs no tracing subscriber and reports its own failures on stderr.
@@ -46,6 +47,7 @@ pub fn run(
     role: Role,
     bound: bool,
     port: u16,
+    key: String,
     token: String,
 ) -> anyhow::Result<()> {
     let runtime = tokio::runtime::Builder::new_current_thread()
@@ -57,6 +59,7 @@ pub fn run(
             role,
             bound: Arc::new(AtomicBool::new(bound)),
             port,
+            key: Arc::new(key),
             token: Arc::new(token),
         };
         let running = server.serve(rmcp::transport::stdio()).await?;
@@ -77,6 +80,9 @@ struct OctoboardMcp {
     /// said.
     bound: Arc<AtomicBool>,
     port: u16,
+    /// The daemon's key, which every connection to it has to carry; the token only says which
+    /// session a call is for.
+    key: Arc<String>,
     token: Arc<String>,
 }
 
@@ -159,7 +165,8 @@ impl ServerHandler for OctoboardMcp {
                 std::future::pending::<()>().await;
             }
         };
-        let response = match forward_until(self.port, path, body, cancelled).await {
+        let response = match forward_until(self.port, self.key.clone(), path, body, cancelled).await
+        {
             Forwarded::Answered(response) => response,
             Forwarded::Cancelled => {
                 return Ok(CallToolResult::error(vec![ContentBlock::text(
@@ -235,6 +242,7 @@ const WITHDRAWN_ON_CANCEL: &[&str] = &[
 /// learns the call is gone.
 async fn forward_until(
     port: u16,
+    key: Arc<String>,
     path: String,
     body: Vec<u8>,
     cancelled: impl std::future::Future<Output = ()>,
@@ -255,8 +263,9 @@ async fn forward_until(
         // Nothing has reached the daemon yet; a connection made after this is dropped unused.
         () = &mut cancelled => return Forwarded::Cancelled,
     };
-    let exchange =
-        tokio::task::spawn_blocking(move || crate::loopback::exchange(stream, port, &path, &body));
+    let exchange = tokio::task::spawn_blocking(move || {
+        crate::loopback::exchange(stream, port, &key, &path, &body)
+    });
     tokio::select! {
         answered = exchange => Forwarded::Answered(answered.unwrap_or_else(|err| {
             Err(std::io::Error::other(err.to_string()))
@@ -341,6 +350,7 @@ mod tests {
         let (cancel, cancelled) = tokio::sync::oneshot::channel::<()>();
         let call = tokio::spawn(forward_until(
             port,
+            Arc::new("k".to_string()),
             "/mcp/token".to_string(),
             b"{}".to_vec(),
             async {
@@ -351,6 +361,7 @@ mod tests {
         let mut request = vec![0u8; 1024];
         let read = daemon_side.read(&mut request).await.unwrap();
         assert!(read > 0, "the call was sent");
+        assert!(request.starts_with(b"POST /mcp/token?key=k HTTP/1.1\r\n"));
 
         cancel.send(()).unwrap();
         assert!(matches!(call.await.unwrap(), Forwarded::Cancelled));
@@ -385,6 +396,7 @@ mod tests {
             role,
             bound: Arc::new(AtomicBool::new(bound)),
             port: 0,
+            key: Arc::new("k".to_string()),
             token: Arc::new("t".to_string()),
         }
     }

@@ -4356,6 +4356,7 @@ async fn start_process(
         terminal_appearance,
         preresolved_shell_env: None,
         daemon_port: state.port,
+        daemon_key: state.key.clone(),
         self_exe: state.self_exe.clone(),
         // Issued per launch: the previous process is gone, and a token outliving it would let a
         // stale child act on this session.

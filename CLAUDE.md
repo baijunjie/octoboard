@@ -200,6 +200,7 @@ the earlier steps do not run them separately (the related tests a step runs to c
 - Release verification is unconditional in CI: `quality.yml` runs `pnpm verify --release --fresh` before
   `release.yml` builds the app. It covers application lint, production UI type checks, application UI and desktop
   script tests, Rust formatting and tests of both Rust crates. Website and gallery-only checks are excluded;
-  application tests may still consume their shared fixtures.
+  application tests may still consume their shared fixtures. A second job compiles both Rust crates on Linux
+  (`cargo check`), which no local check covers.
 
 <!-- setup-agent:workflow:end -->

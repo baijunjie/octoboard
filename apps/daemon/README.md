@@ -26,12 +26,13 @@ once; `pnpm test:rust` from the root runs both crates' tests without it.
 ## External interfaces
 
 - WebSocket/HTTP server, bound to `127.0.0.1` on an OS-assigned port — the only way a client talks to the daemon.
-  Specified in [`PROTOCOL.md`](PROTOCOL.md), which is authoritative.
-- `octoboardd hook --session <id> --port <port>` — CLI mode run by the per-session hook script for agents whose hooks
+  Every route requires the per-launch key the daemon prints with its port on its first stdout line, which each CLI mode
+  below takes as `--key`. Specified in [`PROTOCOL.md`](PROTOCOL.md), which is authoritative.
+- `octoboardd hook --session <id> --port <port> --key <key>` — CLI mode run by the per-session hook script for agents whose hooks
   use the command form; posts the payload from stdin to the running daemon's `POST /hook/:session`.
-- `octoboardd git-ref --session <id> --port <port> [--head <ref>] -- <ref> <oid>...` — CLI mode started by a project
+- `octoboardd git-ref --session <id> --port <port> --key <key> [--head <ref>] -- <ref> <oid>...` — CLI mode started by a project
   session's `reference-transaction` git hook when branches were created; posts them to `POST /git-ref/:session`.
-- `octoboardd gate-hook --session <id> --port <port> reference-transaction <state>|pre-push` — CLI mode run in the
+- `octoboardd gate-hook --session <id> --port <port> --key <key> reference-transaction <state>|pre-push` — CLI mode run in the
   foreground by a project session's `reference-transaction` and `pre-push` git hook dispatchers when an existing branch
   moves or branches are pushed; asks `POST /revert-gate/:session` whether the revert gate applies and with what, runs
   it in-process over the hook's stdin and exits with its status (3 rejects); anything but an answer lets git through.
@@ -41,10 +42,10 @@ once; `pnpm test:rust` from the root runs both crates' tests without it.
   `gate-hook` instead); read the hook's ref updates, or the refs of a push, from stdin and exit 3 to reject one that
   undoes changes already merged into a guarded branch (reason on stderr), 0 otherwise, including when the check itself
   fails.
-- `octoboardd status-line --session <id> --port <port> --cwd <dir> --config-dir <dir>` — CLI mode that is the status
+- `octoboardd status-line --session <id> --port <port> --key <key> --cwd <dir> --config-dir <dir>` — CLI mode that is the status
   line the Claude Code adapter injects; posts the context window from stdin to `POST /context-window/:session` and
   runs the user's own status line with the same input, passing its output and exit status on.
-- `octoboardd mcp --session <id> --role <role> [--bound] --port <port> --token <token>` — CLI mode that is the MCP
+- `octoboardd mcp --session <id> --role <role> [--bound] --port <port> --key <key> --token <token>` — CLI mode that is the MCP
   server each adapter registers for a session; speaks MCP on stdin/stdout and forwards tool calls to
   `POST /mcp/:token`.
 
@@ -59,8 +60,8 @@ screens, terminal titles and session records the tests replay.
 | Path | Role |
 |---|---|
 | `build.rs` | Exposes the app name from the repo-root `config/app.json` as `OCTOBOARD_APP_NAME` |
-| `src/main.rs` | CLI entry point: parses the seven modes, opens the store, binds the port, prints the handshake line the application waits for, runs the server |
-| `src/server.rs`, `src/access.rs` | The HTTP/WebSocket router described in `PROTOCOL.md` (the control, terminal, MCP, hook, git-ref, revert-gate and context-window routes), terminal input dispatch through one background writer per connection with bounded deferred input and priority for query replies, and the middleware refusing with `403` a request whose `Host` or `Origin` is not a local client's or the application's own UI's |
+| `src/main.rs` | CLI entry point: parses the seven modes, generates the launch key, opens the store, binds the port, prints the handshake line (port and key) the application waits for, runs the server |
+| `src/server.rs`, `src/access.rs` | The HTTP/WebSocket router described in `PROTOCOL.md` (the control, terminal, MCP, hook, git-ref, revert-gate and context-window routes), terminal input dispatch through one background writer per connection with bounded deferred input and priority for query replies, and the middleware refusing with `403` a request whose `Host` or `Origin` is not a local client's or the application's own UI's and with `401` one without the launch key (`generate_key`) |
 | `src/protocol.rs` | Rust types for the wire protocol (kept in sync by hand with `PROTOCOL.md` and `packages/ui/src/protocol.ts`), the console session colours, `Session::orchestration_role` and `Session::is_worker` (derived coordinator or worker capability), and the one mapping from a failure to an `error` reply |
 | `src/git_ref_mode.rs`, `src/gate_hook_mode.rs`, `src/status_line_mode.rs`, `src/hook_mode.rs`, `src/loopback.rs` | The `git-ref`, `gate-hook`, `status-line` and `hook` CLI modes, and the minimal HTTP client for the daemon's own loopback address they share (`mcp` is `src/mcp/stdio.rs`, `revert-gate` is `src/revert_gate/`) |
 
@@ -91,6 +92,7 @@ screens, terminal titles and session records the tests replay.
 | `src/config_export.rs`, `src/config_import/`, `src/config_upgrade.rs` | Building the configuration document `export_configuration` answers with, reading one back (`inspect` and `apply`; `mod.rs` for the document, projects and settings, `accounts.rs` for its accounts), and upgrading an older document before an import reads it |
 | `src/launch_settings.rs`, `src/agent_models.rs` | Normalising and checking a model and reasoning effort, and listing the models an agent offers for an account (`ModelCache`) |
 | `src/paths.rs`, `src/instance_lock.rs` | Where Octoboard keeps its files under `~/.octoboard`, and one daemon per data directory |
+| `src/log_file.rs` | The size-rotated `daemon.log` under `paths::logs_dir()` that the daemon's logging writes to besides stderr, enabled only once the instance lock is held |
 | `src/availability.rs` | Working out, once per daemon start, which agents are available and each one's default account |
 
 ### Agent accounts

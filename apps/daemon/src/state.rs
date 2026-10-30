@@ -155,6 +155,11 @@ impl BackgroundWork {
 pub struct AppState {
     pub store: Store,
     pub port: u16,
+    /// The secret every connection to the daemon has to carry (see `access`). Generated at start
+    /// and kept in memory; handed to the clients the daemon starts the way it hands them the port,
+    /// so it is also in their arguments and environment and in the owner-only files of a session's
+    /// scratch directory (the hook script, Grok's `config.toml`), which go with that directory.
+    pub key: String,
     pub self_exe: String,
     /// The running sessions, plus the ids currently being launched. One lock over both, because
     /// "is this session already running" has to be answered and acted on without a gap: a second
@@ -695,9 +700,11 @@ impl PromptSignal for HookPrompts<'_> {
 }
 
 impl AppState {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         store: Store,
         port: u16,
+        key: String,
         self_exe: String,
         saved_output_dir: std::path::PathBuf,
         consoles_dir: std::path::PathBuf,
@@ -708,6 +715,7 @@ impl AppState {
         Self {
             store,
             port,
+            key,
             self_exe,
             live: RwLock::new(LiveSessions::default()),
             mcp_tokens: RwLock::new(HashMap::new()),

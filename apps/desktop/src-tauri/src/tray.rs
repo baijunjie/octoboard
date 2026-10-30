@@ -29,6 +29,10 @@
 //! sections and the lines of each submenu their rows (`tray_lines.rs`), as a line that cannot be
 //! chosen is drawn in a grey that nothing but a view of its own can darken.
 
+// The quota bars, the submenus' rows and the menu tracking are drawn and driven by macOS-only code;
+// elsewhere the menu the UI sends is still parsed whole, so those parts are read by nothing.
+#![cfg_attr(not(target_os = "macos"), allow(dead_code))]
+
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -508,9 +512,11 @@ fn apply(app: &AppHandle, menu: &TrayMenu) -> Result<(), String> {
         main: remaining.min(100),
         thin: menu.quota_weekly_remaining.map(|weekly| weekly.min(100)),
     });
-    let label = quota.and(menu.quota_label.as_deref()).unwrap_or(APP_NAME);
     #[cfg(target_os = "macos")]
-    set_icon_label(&tray, label);
+    set_icon_label(
+        &tray,
+        quota.and(menu.quota_label.as_deref()).unwrap_or(APP_NAME),
+    );
     show_icon(app, &tray, menu.attention, quota)
 }
 

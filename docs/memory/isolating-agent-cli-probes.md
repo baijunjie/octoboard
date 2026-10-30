@@ -92,13 +92,14 @@ connection — runs the daemon, or a copy of the app, with a throwaway `HOME` an
 and it runs alongside their own Octoboard. For a session that draws real output there without a model turn, open a
 Codex session: with no login under that `HOME` it stops at its sign-in screen.
 
-**Drive it from a client of its own on the control WebSocket, and build no application for it.** The daemon on its
-own, plus a small client on the control WebSocket (the "`GET /ws/control` — management and status" section of
-`apps/daemon/PROTOCOL.md`) to create the consoles, projects and sessions, read the events and send the answers, is the
-whole instrument whenever what differs between agents is on the agent's side: the window's rendering of a dialog, and
-answering it, are agent-independent, so once they have been exercised for one agent, confirming the behaviour for the
-next needs no window, no packaged build and none of the screen-recording or accessibility permissions that driving a
-window needs. Build the application only for behaviour the Tauri shell itself carries.
+**Drive it from a client of its own on the control WebSocket, and build no application for it.** The daemon on its own,
+plus a small client on the control WebSocket (the "`GET /ws/control` — management and status" section of
+`apps/daemon/PROTOCOL.md`), connecting with the key from the daemon's stdout startup line since the port file holds no
+key, to create the consoles, projects and sessions, read the events and send the answers, is the whole instrument
+whenever what differs between agents is on the agent's side: the window's rendering of a dialog, and answering it, are
+agent-independent, so once they have been exercised for one agent, confirming the behaviour for the next needs no
+window, no packaged build and none of the screen-recording or accessibility permissions that driving a window needs.
+Build the application only for behaviour the Tauri shell itself carries.
 
 Launch it from an emptied environment, `env -i HOME=<dir> TMPDIR=<dir> … /usr/bin/open -n <app>`, never with
 `open --env` overrides alone: `open` hands the app the calling shell's whole environment besides the variables it

@@ -10,8 +10,10 @@ The UI talks to `octoboardd` (see [`../daemon/`](../daemon/README.md)) only over
 asks the daemon anything. IPC carries only bare signals, display values or opaque ids the UI derives from what it
 already shows, the macOS privacy grants, an update's channel, version and notes (and the download progress
 `install_update` streams), and the text of a file the user saves or opens through the system's own dialog. The shell
-starts `octoboardd` as a sidecar and bakes the port it printed (`?port=`) and the system's preferred languages
-(`&languages=`) into the window's URL.
+starts `octoboardd` as a sidecar and bakes the port and the per-launch key the daemon printed on its startup line
+(`?port=`, `&key=`) and the system's preferred languages (`&languages=`) into the window's URL. A daemon that ends
+unexpectedly is started again and the window is pointed at it (`&recovered=1`); the shell writes its own diagnostics to
+a log file under `~/.octoboard/logs/`, beside the daemon's.
 
 ## Development
 
@@ -194,7 +196,7 @@ Events the shell emits to the webview: `settings-requested` (the menu's Settings
 About item, which the UI answers by opening Settings on its About section; there is no native About panel),
 `tray-session-chosen` (a session line of the menu bar icon's menu, carrying the session id), `tray-menu-opened` (that
 menu begins to open), `exit-requested` (a quit gesture needing the UI's exit flow) and `daemon-exited` (the sidecar
-ended). `packages/ui/src/platform/tauri.ts` maps commands and events onto the platform adapter's capabilities.
+ended and is not being restarted). `packages/ui/src/platform/tauri.ts` maps commands and events onto the platform adapter's capabilities.
 `capabilities/default.json` also allowlists the notification, clipboard read and write text, shell open, Dock badge,
 window theme, window show and window drag/zoom commands the UI uses.
 
@@ -210,7 +212,9 @@ window theme, window show and window drag/zoom commands the UI uses.
 | `src-tauri/src/tray_icon.rs` | Composes the menu bar icon's template image and attention-dot layer with an optional two-layer quota capsule (a main bar and, when given, a thinner weekly bar) |
 | `src-tauri/src/tray_lines.rs` | The menu bar icon's custom menu rows (session headings, account headers, notes, quota windows and the two-layer 5-hour/weekly `meter` row), plus `dress_quota_openers`, which attaches quota bars to native submenu titles while preserving AppKit's submenu handling |
 | `src-tauri/src/menu.rs` | The native macOS menu bar built from the UI's labels, including the About item (a plain item that emits `about-requested`, not the native panel) and the Settings… item, whose accelerator the UI sets at runtime |
-| `src-tauri/src/sidecar.rs` | Spawns `octoboardd`, parses its startup port line, reports how it terminated, keeps `DaemonState` and the sidecar's child, and `stop_daemon`, which a restart waits on |
+| `src-tauri/src/sidecar.rs` | Starts `octoboardd` (off the main thread, with retries and a timeout per attempt), parses its startup line into a `DaemonAddress` (port and key), keeps `DaemonState` (the daemon's status, which the window's URL is built from, and the sidecar's child) and a bounded tail of its stderr, reports how it ended, and `stop_daemon`, which a restart waits on |
+| `src-tauri/src/recovery.rs` | Restarting a daemon that ended unexpectedly: classifying the exit, the restart budget and backoff, rebuilding the window's query and pointing the window at the new daemon, and telling the window (`daemon-exited`) when the budget is spent |
+| `src-tauri/src/diagnostics.rs` | The `diagnostic!` lines the shell writes to stderr and to `desktop.log` under `~/.octoboard/logs/`, rotated when it is opened |
 | `src-tauri/src/permissions.rs` | The macOS privacy permission commands and `capture_launch_state()` |
 | `src-tauri/src/notification_settings.rs` | The command that opens the app's own pane in System Settings > Notifications, choosing the address by macOS version |
 | `src-tauri/src/configuration_file.rs` | The two configuration-file commands |
@@ -219,8 +223,7 @@ window theme, window show and window drag/zoom commands the UI uses.
 | `src-tauri/src/page_isolation.rs` | macOS only: the webview configuration that blocks every `http(s)` request the page would make |
 | `src-tauri/capabilities/default.json`, `src-tauri/permissions/` | The IPC allowlist and the app-defined permission files it names |
 | `src-tauri/tauri.conf.json` | Where the window's UI comes from, the `octoboardd` `externalBin`, the bundle targets, the DMG's Finder background and icon layout, and the update archive and the public key that verifies it |
-| `src-tauri/images/dmg-background-pixel.png` | The pixel-art mechanical-octopus background used by the DMG's Finder window |
-| `src-tauri/images/dmg-background.png` | The photorealistic mechanical-octopus background retained as an alternative DMG artwork |
+| `src-tauri/images/dmg-background-pixel.png` | The pixel-art mechanical-octopus background used by the DMG's Finder window: 1612×976 px, the @2x of the 806×488 pt `windowSize` in `tauri.conf.json`, which Finder shows at the window's size only because the PNG's `pHYs` chunk says 144 dpi (a tool that strips metadata makes it show at double size) |
 | `src-tauri/Info.plist` | Merged into the bundle's `Info.plist`; declares the UI languages as `CFBundleLocalizations` |
 | `src-tauri/icons/AppIcon.icon/` | The macOS 26 layered app icon (an Icon Composer package: `icon.json` and `Assets/octopus.png`), listed in `bundle.icon` of `tauri.conf.json`; the bundler compiles it with Xcode 26's `actool` into the `.app`'s `Assets.car`. `Assets/octopus.png` is derived by hand from `assets/branding/logo.png` (trimmed to its alpha bounds, centered on a 1024 px canvas); no script regenerates it. `icons/icon.icns` stays as the fallback for earlier macOS |
 | `src-tauri/icons/tray-template.png` | The menu bar icon's monochrome template image, derived by hand from the app icon; no script regenerates it |

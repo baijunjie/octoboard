@@ -46,6 +46,7 @@ mod interface_language;
 mod interrupt;
 mod launch_settings;
 mod line_file;
+mod log_file;
 mod loopback;
 mod mcp;
 mod open_directory;
@@ -131,6 +132,9 @@ enum Command {
         session: String,
         #[arg(long)]
         port: u16,
+        /// The key the daemon requires of every connection.
+        #[arg(long)]
+        key: String,
     },
     /// Report the branches a session's git has just created. This is what the session's
     /// `reference-transaction` hook dispatcher starts; it is not meant to be run by hand.
@@ -139,6 +143,9 @@ enum Command {
         session: String,
         #[arg(long)]
         port: u16,
+        /// The key the daemon requires of every connection.
+        #[arg(long)]
+        key: String,
         /// The branch (`refs/heads/...`) the git that made them had checked out.
         #[arg(long)]
         head: Option<std::ffi::OsString>,
@@ -155,6 +162,9 @@ enum Command {
         session: String,
         #[arg(long)]
         port: u16,
+        /// The key the daemon requires of every connection.
+        #[arg(long)]
+        key: String,
         #[command(subcommand)]
         hook: revert_gate::Hook,
     },
@@ -171,6 +181,9 @@ enum Command {
         session: String,
         #[arg(long)]
         port: u16,
+        /// The key the daemon requires of every connection.
+        #[arg(long)]
+        key: String,
         /// The session's working directory, whose project settings name the user's status line.
         #[arg(long)]
         cwd: std::path::PathBuf,
@@ -190,6 +203,9 @@ enum Command {
         bound: bool,
         #[arg(long)]
         port: u16,
+        /// The key the daemon requires of every connection.
+        #[arg(long)]
+        key: String,
         #[arg(long)]
         token: String,
     },
@@ -217,18 +233,19 @@ fn main() -> Result<()> {
 
     // The hook path must stay silent and must not pay for a runtime: it is on the agent's turn
     // critical path, several times per turn.
-    if let Some(Command::Hook { session, port }) = &cli.command {
-        hook_mode::run(session, *port);
+    if let Some(Command::Hook { session, port, key }) = &cli.command {
+        hook_mode::run(session, *port, key);
         return Ok(());
     }
     if let Some(Command::GitRef {
         session,
         port,
+        key,
         head,
         refs,
     }) = &cli.command
     {
-        git_ref_mode::run(session, *port, head.as_deref(), refs);
+        git_ref_mode::run(session, *port, key, head.as_deref(), refs);
         return Ok(());
     }
 
@@ -236,10 +253,11 @@ fn main() -> Result<()> {
     if let Some(Command::GateHook {
         session,
         port,
+        key,
         hook,
     }) = &cli.command
     {
-        std::process::exit(gate_hook_mode::run(session, *port, hook));
+        std::process::exit(gate_hook_mode::run(session, *port, key, hook));
     }
     if let Some(Command::RevertGate(args)) = &cli.command {
         std::process::exit(revert_gate::run(args));
@@ -249,11 +267,12 @@ fn main() -> Result<()> {
     if let Some(Command::StatusLine {
         session,
         port,
+        key,
         cwd,
         config_dir,
     }) = &cli.command
     {
-        std::process::exit(status_line_mode::run(session, *port, cwd, config_dir));
+        std::process::exit(status_line_mode::run(session, *port, key, cwd, config_dir));
     }
 
     // The MCP child owns its stdout for the protocol, so it installs no log subscriber either.
@@ -262,46 +281,70 @@ fn main() -> Result<()> {
         role,
         bound,
         port,
+        key,
         token,
     }) = cli.command
     {
-        return mcp::stdio::run(session, role.into(), bound, port, token);
+        return mcp::stdio::run(session, role.into(), bound, port, key, token);
     }
 
     // While this is still the only thread.
     process_ledger::forget_inherited_tag();
-    init_logging();
+    let log_file = init_logging();
     crash_cleanup::install();
 
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?
-        .block_on(run_daemon(cli.parent_pid))
+        .block_on(run_daemon(cli.parent_pid, log_file))
 }
 
-/// Sends the daemon's log to stderr, at `INFO` and above. Never to stdout: that carries the port
-/// handshake line the application reads.
+/// Sends the daemon's log, at `INFO` and above, to stderr and to `daemon.log` (`log_file`). Never
+/// to stdout: that carries the handshake line (port and key) the application reads. The file is
+/// written only once the returned handle is enabled, which the daemon does when it holds the
+/// instance lock.
 ///
 /// The application owns the read end of that stderr, so from the moment it is gone every write to
 /// the log fails. Reporting those failures is therefore turned off: the report is an `eprintln!`
 /// of its own, which panics on the same dead stderr, and that panic would take out whichever task
 /// logged — the parent watch among them, leaving the daemon running with no application (see
-/// `spawn_parent_watch`). A log that cannot be written is dropped instead.
-fn init_logging() {
-    tracing_subscriber::fmt()
-        .with_writer(std::io::stderr)
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive(tracing::Level::INFO.into()),
+/// `spawn_parent_watch`). A log that cannot be written is dropped instead. The file is what
+/// remains of the log then, and the only one a packaged application ever has: launched from the
+/// Finder, it has no stderr to read at all.
+fn init_logging() -> log_file::LogFile {
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+    use tracing_subscriber::{fmt, EnvFilter};
+
+    let log_file = log_file::LogFile::open();
+    tracing_subscriber::registry()
+        .with(
+            fmt::layer()
+                .with_writer(std::io::stderr)
+                .log_internal_errors(false),
         )
-        .log_internal_errors(false)
+        .with(
+            fmt::layer()
+                .with_writer(log_file.clone())
+                .with_ansi(false)
+                .log_internal_errors(false),
+        )
+        .with(EnvFilter::from_default_env().add_directive(tracing::Level::INFO.into()))
         .init();
+    log_file
 }
 
-async fn run_daemon(parent_pid: Option<u32>) -> Result<()> {
+async fn run_daemon(parent_pid: Option<u32>, log_file: log_file::LogFile) -> Result<()> {
     // Held for the whole run: see `instance_lock` for what a second daemon would do to the first
     // one's sessions.
     let _lock = instance_lock::acquire()?;
+    // Only the daemon that holds the lock writes `daemon.log`; a second one has only stderr.
+    log_file.enable();
+    tracing::info!(
+        version = env!("CARGO_PKG_VERSION"),
+        pid = std::process::id(),
+        "octoboardd starting"
+    );
 
     let store = Store::open(&paths::db_path())?;
     // Nothing the previous daemon ran survived it, whatever the stored status said.
@@ -331,10 +374,12 @@ async fn run_daemon(parent_pid: Option<u32>) -> Result<()> {
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
     let port = listener.local_addr()?.port();
+    let key = access::generate_key().context("generating the daemon's key")?;
     let self_exe = std::env::current_exe()?.to_string_lossy().into_owned();
     let state = Arc::new(AppState::new(
         store,
         port,
+        key.clone(),
         self_exe,
         paths::saved_output_dir(),
         paths::consoles_dir(),
@@ -353,8 +398,10 @@ async fn run_daemon(parent_pid: Option<u32>) -> Result<()> {
     }
 
     // Printed before anything else can block: the application waits for this line to know where to
-    // connect.
-    println!("octoboardd listening on 127.0.0.1:{port}");
+    // connect and what to present. Besides this line the key is in memory and in what the daemon
+    // starts (their arguments and environment, and the owner-only files of a session's scratch
+    // directory): the port file below stays port-only.
+    println!("octoboardd listening on 127.0.0.1:{port} with key {key}");
     use std::io::Write;
     std::io::stdout().flush().ok();
     write_port_file(port)?;
@@ -453,8 +500,9 @@ fn clear_run_dir() {
     }
 }
 
-/// The port is on stdout for the application, and in this file for a developer attaching to a
-/// daemon started by hand.
+/// The port and key are on stdout for the application. The port alone is in this file, for a
+/// developer attaching to a daemon started by hand, who reads the key from the startup line: the
+/// key is not in this file.
 fn write_port_file(port: u16) -> Result<()> {
     std::fs::write(port_file_path(), port.to_string())
         .with_context(|| format!("writing {}", port_file_path().display()))?;

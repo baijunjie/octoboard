@@ -35,9 +35,12 @@ ending in an ellipsis when cut. With no summary the title is `Unexpected error` 
 
 The body is Markdown in three sections:
 
-- **What happened**: a hidden comment asking what the user was doing and what they expected instead, then a line
-  saying the details below were filled in automatically with personal information removed, and asking the user to
-  check them before submitting.
+- **What happened**: a hidden comment asking what the user was doing and what they expected instead; in the desktop
+  application only, a second hidden comment saying that the application keeps its logs in `~/.octoboard/logs/`
+  (`daemon.log`, `desktop.log`, see "Files Octoboard owns" in `docs/product/application-lifecycle.md`) and that a
+  maintainer may ask about them if more detail is needed — the logs themselves are never attached; then a line saying
+  the details below were filled in automatically with personal information removed, and asking the user to check them
+  before submitting.
 - **Environment**: one line each, where it is known — the application's name and, in the desktop application, the
   version running; the platform, `desktop app` or `browser`; the operating system's family and version as the user
   agent names them (such as `macOS 10.15.7`), nothing else of the device; and the UI's current language as its code
