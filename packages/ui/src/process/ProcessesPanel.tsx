@@ -4,7 +4,7 @@ import { flushSync } from "react-dom";
 
 import { afterCollectionFocus } from "../components/afterCollectionFocus";
 import { Button } from "../components/Button";
-import { EmptyPanel } from "../components/EmptyPanel";
+import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { errorDetails } from "../components/errorParts";
 import { FadeOverflow } from "../components/FadeOverflow";
@@ -118,10 +118,7 @@ function ProcessesContent({ data }: { data: NonNullable<ReturnType<typeof usePro
           {failed ? (
             <PaneFailure title={t("processes.listFailedTitle")} summary={t("processes.listFailed")} details={errorDetails(error)} onRetry={retryList} announce announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} landing />
           ) : (
-            <>
-              <p className={NOTE_CLASS}>{t("processes.panelMessage")}</p>
-              <ProcessList grouped={data.projectId !== undefined && data.sessionId === undefined} keepable={data.projectId !== undefined} trees={trees} error={error} acting={selected !== undefined} onStop={(tree) => ask("stop", tree)} onKeep={(tree) => ask("keep", tree)} />
-            </>
+            <ProcessList grouped={data.projectId !== undefined && data.sessionId === undefined} keepable={data.projectId !== undefined} trees={trees} error={error} acting={selected !== undefined} onStop={(tree) => ask("stop", tree)} onKeep={(tree) => ask("keep", tree)} />
           )}
         </FadedScroller>
       </div>
@@ -204,9 +201,10 @@ function ProcessList({ grouped, keepable, trees, error, acting, onStop, onKeep }
   });
   const loading = trees === undefined && error === undefined;
   return (
-    <div ref={rootRef} className="flex min-w-0 flex-col gap-4" {...handoff}>
+    <div ref={rootRef} className="flex min-w-0 flex-1 flex-col gap-4" {...handoff}>
       {/* Allow the panel's focus announcement to finish before speaking its loading state. */}
       <StatusAnnouncer text={loading ? t("processes.loading") : undefined} firstWriteDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} />
+      {trees !== undefined && trees.length > 0 && <p className={NOTE_CLASS}>{t("processes.panelMessage")}</p>}
       {loading && <p aria-hidden="true" className="text-sm text-app-muted">{t("processes.loading")}</p>}
       {trees !== undefined && error !== undefined && (
         <ErrorAlert status="warning" title={t("processes.refreshFailedTitle")} details={errorDetails(error)} announce>
@@ -214,7 +212,7 @@ function ProcessList({ grouped, keepable, trees, error, acting, onStop, onKeep }
         </ErrorAlert>
       )}
       {trees?.length === 0 && (
-        <EmptyPanel icon={SquareActivity} message={t("processes.empty")} description={t(grouped ? "processes.empty.allSessions" : "processes.empty.session")} />
+        <CenteredEmptyPanel icon={SquareActivity} message={t("processes.empty")} description={t(grouped ? "processes.empty.allSessions" : "processes.empty.session")} />
       )}
       {trees !== undefined && trees.length > 0 && (!grouped
         ? <TreeList trees={trees} acting={acting} keepable={keepable} onStop={onStop} onKeep={onKeep} />

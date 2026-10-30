@@ -16,7 +16,8 @@ panel; for assistive technology the panel is a region named "Processes".
 
 ## What it lists
 
-A note leads the list, saying that processes started by a session stop automatically when the session ends.
+Only while there are trees to list, a note leads the list, saying that processes started by a session stop
+automatically when the session ends. It is absent while loading and in the empty state.
 
 **In a project's panel with no session filtered on** (see "The session filter" below), the trees are grouped:
 
@@ -34,9 +35,9 @@ Within a group, trees are oldest first. A heading too long for its line fades ou
 long for their space" in `docs/product/labels-and-tooltips.md`).
 
 **With nothing to list**, the panel shows the empty state "No processes" (see "The full panel" in
-`docs/product/empty-states.md`), with a line saying, for all of a project's sessions, that none of them started
-anything still running and there are no project processes, and otherwise that nothing the session started is still
-running.
+`docs/product/empty-states.md`), centred in the remaining body below any session filter and refresh warning. A line
+under the heading says, with all of a project's sessions shown, that no session or project processes are running;
+with a session filtered on or in a console session's panel, that nothing the session started is still running.
 
 ## The session filter
 
