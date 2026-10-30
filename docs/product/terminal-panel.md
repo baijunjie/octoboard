@@ -26,9 +26,9 @@ terminals.
 
 Nothing else starts one. While the project has no terminal and none is being started, the panel shows the empty state
 "No terminals", with a line saying a terminal runs the user's own shell for the project and a **New terminal** button.
-That is what a Terminal card floating in shows, what an open Terminal panel shows after a reload or after the right
-pane passes to a project with no terminal, and what is left when the project's last tab is closed: the panel stays
-open, and stays maximized if it was (see "Maximizing the Terminal panel" in `docs/product/right-pane-panels.md`).
+That is what a Terminal card floating in shows, what an open Terminal panel shows after a reload or after the right pane
+passes to a project with no terminal, and what is left when the project's last tab is closed: the panel stays open, and
+stays maximized if it was (see "Maximizing a panel" in `docs/product/right-pane-panels.md`).
 
 **While the first terminal of the project is being started**, the panel shows a spinner with "Starting terminal…" in
 place of the empty state, and assistive technology is told so. Opening the panel or pressing New terminal meanwhile

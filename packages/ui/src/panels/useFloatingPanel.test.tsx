@@ -45,19 +45,19 @@ it("floats nothing while the window docks the pane, and the stack's top panel on
   const test = mount({ floats: false });
   expect(test.panel().kind).toBeUndefined();
   test.render({ floats: true });
-  expect(test.panel().kind).toBe("files");
+  expect(test.panel().kind).toBe("terminal");
 });
 
 it("floats the panel opened last in the docked pane when the window narrows, if it is still open", () => {
   const test = mount({ floats: false });
-  act(() => test.panel().noteOpened("project", "terminal"));
+  act(() => test.panel().noteOpened("project", "files"));
   test.render({ floats: true });
-  expect(test.panel().kind).toBe("terminal");
+  expect(test.panel().kind).toBe("files");
 });
 
 it("closes the panels of every owner kind when the drawer opens, and floats none while it is open", () => {
   const test = mount({ floats: true });
-  expect(test.panel().kind).toBe("files");
+  expect(test.panel().kind).toBe("terminal");
   test.render({ floats: true, drawerOpen: true });
   expect(test.panel().kind).toBeUndefined();
   test.render({ floats: true, drawerOpen: true, owner: "report" });
@@ -73,7 +73,7 @@ it("remembers the panel that was on screen when the drawer opens, one seeded as 
   expect(test.panel().lastOpened("project")).toBeUndefined();
   test.render({ floats: true, drawerOpen: true });
   expect(test.panel().kind).toBeUndefined();
-  expect(test.panel().lastOpened("project")).toBe("files");
+  expect(test.panel().lastOpened("project")).toBe("terminal");
 });
 
 it("sends focus into the panel on every open, the same kind floating already included, and nowhere on a later change", () => {

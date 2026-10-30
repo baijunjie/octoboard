@@ -38,8 +38,8 @@ the **100** most recent places; older ones are dropped.
 
 ## Moving back and forward
 
-- **Back** goes to the place visited before the one on screen, **Forward** to the one after it. Neither records a
-  visit of its own.
+- **Back** goes to the place visited before the one on screen, **Forward** to the one after it. Neither records a visit
+  of its own.
 - A **visit after going back** drops every place that was ahead, as a browser does: Forward then has nowhere to go.
 - **A place that cannot be shown any more is passed over**: one whose console, session, project or console session has
   since been deleted, whose focus mode no longer exists (a console session archived, a project removed), or whose focus
@@ -48,16 +48,15 @@ the **100** most recent places; older ones are dropped.
 - **Moving shows the place as it was, without acting on it**: going back to an interrupted session shows it without
   resuming it, and going back to a place with the archive view open opens it again. Selecting a session, by contrast,
   resumes an interrupted one (see "Selecting a session" in `docs/product/sidebar.md`). Arriving at an archive view does
-  restore a maximized Terminal panel that would cover it (see "Maximizing the Terminal panel" in
-  `docs/product/right-pane-panels.md`).
-- **An archive view comes back as it was left**: moving to a place with the archive view open shows as many rows as
-  were loaded when that scope's view was last left, scrolled to the same offset — or as far as the list now goes, if it
-  has since become shorter. This is kept per scope (a project, a console session or a console), in memory alone, for as
-  long as the history is. Opening the archive view anew with any **View all** starts it at the top with its first
-  rows, while asking for the scope that is already open leaves it where it is.
+  restore a maximized panel that would cover it (see "Maximizing a panel" in `docs/product/right-pane-panels.md`).
+- **An archive view comes back as it was left**: moving to a place with the archive view open shows as many rows as were
+  loaded when that scope's view was last left, scrolled to the same offset — or as far as the list now goes, if it has
+  since become shorter. This is kept per scope (a project, a console session or a console), in memory alone, for as long
+  as the history is. Opening the archive view anew with any **View all** starts it at the top with its first rows, while
+  asking for the scope that is already open leaves it where it is.
 - **When the place on screen stops existing** — its selected session deleted, its console deleted, its focus mode gone —
-  the window falls back by itself, as described where each of those is, and the place it falls back to takes the
-  place of the one that has gone rather than counting as a visit.
+  the window falls back by itself, as described where each of those is, and the place it falls back to takes the place
+  of the one that has gone rather than counting as a visit.
 - When a move leaves keyboard focus on nothing, or on a control the move has just disabled, such as Back or Forward,
   focus goes to the terminal. Where the terminal takes none — no session selected and no creation action in its place
   (see "With no session selected" in `docs/product/session-terminal.md`), or after a tap (see "Focus after a tap" in

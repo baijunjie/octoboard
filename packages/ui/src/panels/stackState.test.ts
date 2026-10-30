@@ -121,7 +121,7 @@ it("makes the toggles close a panel beside a maximized one, and the maximized on
 it("lists a maximized panel's F6 region first, where it lies, and each open panel as shown", () => {
   const project = toggleMaximized(openPanel(openPanel(empty, "files"), "terminal"), "terminal");
   expect(Object.entries(shownPanelRegions(project, "project"))).toEqual([["panel-terminal", true], ["panel-report", false], ["panel-files", true], ["panel-processes", false]]);
-  expect(Object.entries(shownPanelRegions(restoreStack(project), "project"))).toEqual([["panel-report", false], ["panel-files", true], ["panel-processes", false], ["panel-terminal", true]]);
+  expect(Object.entries(shownPanelRegions(restoreStack(project), "project"))).toEqual([["panel-report", false], ["panel-terminal", true], ["panel-files", true], ["panel-processes", false]]);
 });
 
 it("keeps the open kinds and shares of each owner across a reload but not the maximized panel", () => {
@@ -137,7 +137,7 @@ it("falls back to the owner's default kinds open, leaving the Terminal panel clo
     project: { open: ["files"], shares: {} },
     report: { open: [], shares: {} },
   });
-  expect(parseStacks(JSON.stringify({ project: { open: ["terminal", "files"] }, report: { open: ["report"] } })).project.open).toEqual(["files", "terminal"]);
+  expect(parseStacks(JSON.stringify({ project: { open: ["terminal", "files"] }, report: { open: ["report"] } })).project.open).toEqual(["terminal", "files"]);
 });
 
 it("evens out shares that are missing or not positive", () => {

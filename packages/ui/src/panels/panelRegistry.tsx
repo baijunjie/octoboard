@@ -90,6 +90,7 @@ export const PANEL_ENTRIES: Record<PanelKind, PanelEntry> = {
     ...PANEL_META.report,
     toggle: { show: "titleBar.report.show", hide: "titleBar.report.hide" },
     label: (t) => t("panel.report.name"),
+    maximizable: true,
     Content: ReportContent,
   },
   files: {

@@ -96,11 +96,11 @@ export const terminalPanelScenarios: Scenario[] = [
     id: "shell-panel-stacked",
     group: GROUP,
     category: "normal",
-    title: "Terminal stacked under Files",
+    title: "Two panels adapt to the pane width",
     description:
-      "Files above and Terminal below in one pane, each its own card with its own header, the gap between them holding the grip separator. Drag the separator, or focus it and use the arrow keys, to share the height; double-click resets an even split. Only the Terminal header offers Maximize panel; Files has none. The top bar lists the Files toggle before the Terminal toggle, both pressed, in the order the cards stack.",
+      "Terminal and Files each have their own card and header. The sidebar starts hidden and the pane widened so Terminal and Files stand side by side. Drag the pane width handle: at 530px of content width or more, Terminal fills the first column and Files the second; below 530px they stack, Terminal above Files. In the stacked layout, drag the height separator, or focus it and use the arrow keys, to share the height; double-click resets an even split. Only Terminal offers Maximize panel. The top bar lists Terminal before Files, both pressed. Choose Narrow (800px) to see them stack; choose Phone (420px) to see a single floating card.",
     state: stateOf(severalShells),
-    preferences: { panelStacks: { project: { open: ["files", "terminal"], shares: {} } } },
+    preferences: { sidebarVisible: false, asideWidth: 720, panelStacks: { project: { open: ["terminal", "files"], shares: {} } } },
     steps: openWebsiteWithFiles,
   },
   {
@@ -111,7 +111,7 @@ export const terminalPanelScenarios: Scenario[] = [
     // A floating card has no Maximize panel: it exists only where the right pane docks (from 782px).
     minWidth: 782,
     description:
-      "Files and Terminal are both open and the Terminal is maximized: its card leaves the right pane's column and covers only the agent terminal's area, which is inert beneath it, while the sidebar stays as it was. Files stays docked in the column at its full height, with no separator above it, and both toggles in the top bar stay pressed. The Terminal header offers Restore panel size in place of Maximize; restoring returns the card to the stack under Files unchanged.",
+      "Files and Terminal are both open and the Terminal is maximized: its card leaves the right pane's column and covers only the agent terminal's area, which is inert beneath it, while the sidebar stays as it was. Files stays docked in the column at its full height, with no separator above it, and both toggles in the top bar stay pressed. The Terminal header offers Restore panel size in place of Maximize; restoring returns the card ahead of Files, side by side when the pane is wide enough and stacked above Files otherwise.",
     state: stateOf(severalShells),
     preferences: { panelStacks: { project: { open: ["files", "terminal"], shares: {} } } },
     steps: [...openWebsiteWithFiles, (ui) => ui.pressInPanel("terminal", ui.t("panel.maximize"))],

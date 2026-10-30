@@ -119,3 +119,35 @@ it("mounts no other card once the last docked panel closes, and shows the hovere
   stack.undock(false);
   expect(stack.container.querySelector("[data-kind=files]")).not.toBeNull();
 });
+
+it("changes between paired and full-height columns on pane resize without replacing cards or focus", () => {
+  let width = 530;
+  const observers: (() => void)[] = [];
+  vi.stubGlobal("ResizeObserver", class {
+    constructor(callback: () => void) { observers.push(callback); }
+    observe() {}
+    disconnect() {}
+  });
+  const bounds = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(() => DOMRect.fromRect({ width, height: 600 }));
+  onTestFinished(() => { bounds.mockRestore(); vi.unstubAllGlobals(); });
+  const stack = mount();
+  stack.setOpen(["files", "fake"]);
+  const first = stack.container.querySelector("#panel-files")!;
+  const second = stack.container.querySelector("#panel-fake")!;
+  const control = second.querySelector<HTMLButtonElement>("button[data-kind]")!;
+  act(() => control.focus());
+  const grid = stack.container.querySelector<HTMLDivElement>(".grid")!;
+  grid.style.columnGap = "10px";
+  act(() => observers.forEach((measure) => measure()));
+  const columns = () => grid.style.gridTemplateColumns;
+  expect(columns()).toBe("repeat(2, minmax(0, 1fr))");
+  width = 529;
+  act(() => observers.forEach((measure) => measure()));
+  expect(columns()).toBe("repeat(1, minmax(0, 1fr))");
+  width = 530;
+  act(() => observers.forEach((measure) => measure()));
+  expect(columns()).toBe("repeat(2, minmax(0, 1fr))");
+  expect(stack.container.querySelector("#panel-files")).toBe(first);
+  expect(stack.container.querySelector("#panel-fake")).toBe(second);
+  expect(document.activeElement).toBe(control);
+});

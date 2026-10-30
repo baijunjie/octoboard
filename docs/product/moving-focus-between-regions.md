@@ -17,8 +17,8 @@ order:
 4. the sidebar;
 5. the archive view, only while it is open (see "The archive view" in `docs/product/archive-view.md`);
 6. the terminal;
-7. the right pane's panels, each a region of its own, in stacking order, except that a maximized Terminal panel
-   comes first among them (see "Panels and keyboard focus" in `docs/product/right-pane-panels.md`);
+7. the right pane's panels, each a region of its own, in stacking order, except that a maximized panel comes first among
+   them (see "Panels and keyboard focus" in `docs/product/right-pane-panels.md`);
 8. the update notice, only while it is shown (see "The update notice" in `docs/product/in-app-updates.md`);
 9. the connection banner, only while it is shown;
 10. the toasts, only while at least one toast is shown.
@@ -34,18 +34,18 @@ has floated it in. A panel opened by a tap or the keyboard is modal, as a menu i
 
 **A region not on screen is skipped**: a docked sidebar the user has hidden, the sidebar's drawer while it is closed,
 the rail below 782 px while that drawer is closed, the rail then coming in only with it (see "Below 782 px: the rail
-comes in with the drawer" in `docs/product/sidebar-drawer.md`), a pane that is only floating in, the right pane's
-panels when nothing owns the pane or none of its panels is open, a panel with nothing to take focus (a Files panel
-while it is still loading, see "Loading the project pane" in `docs/product/project-pane.md`), the terminal and the archive view while a maximized Terminal panel covers them (see
-"Maximizing the Terminal panel" in `docs/product/right-pane-panels.md`) or a panel floats over them below 782 px (see
-"Below 782 px: one panel floats over the terminal" in `docs/product/right-pane-panels.md`), and the terminal when no
-session is selected — unless its area is then offering a creation action, which makes it a stop (see "A console with
-nothing in it" in `docs/product/session-terminal.md`) — or while the archive view covers it. With no console the
-sidebar, the archive view, the terminal and the right pane are all skipped together, none of them being on screen, and
-the welcome screen is the only stop between the rail and the update notice or the connection banner; with a console the
-welcome screen is the one skipped. The sidebar counts as shown when it is docked in the row at 1168 px and wider, or its
-drawer is open below that. A docked sidebar column that is still easing closed already counts as hidden, and one that is
-still easing open already counts as shown (see "The sidebar toggle and the panel toggles" in
+comes in with the drawer" in `docs/product/sidebar-drawer.md`), a pane that is only floating in, the right pane's panels
+when nothing owns the pane or none of its panels is open, a panel with nothing to take focus (a Files panel while it is
+still loading, see "Loading the project pane" in `docs/product/project-pane.md`), the terminal and the archive view
+while a maximized panel covers them (see "Maximizing a panel" in `docs/product/right-pane-panels.md`) or a panel floats
+over them below 782 px (see "Below 782 px: one panel floats over the terminal" in `docs/product/right-pane-panels.md`),
+and the terminal when no session is selected — unless its area is then offering a creation action, which makes it a stop
+(see "A console with nothing in it" in `docs/product/session-terminal.md`) — or while the archive view covers it. With
+no console the sidebar, the archive view, the terminal and the right pane are all skipped together, none of them being
+on screen, and the welcome screen is the only stop between the rail and the update notice or the connection banner; with
+a console the welcome screen is the one skipped. The sidebar counts as shown when it is docked in the row at 1168 px and
+wider, or its drawer is open below that. A docked sidebar column that is still easing closed already counts as hidden,
+and one that is still easing open already counts as shown (see "The sidebar toggle and the panel toggles" in
 `docs/product/window-layout.md`). A right pane panel counts as shown while it is open, docked in the pane's column or
 maximized, or, below 782 px, while it floats over the terminal.
 
@@ -59,7 +59,7 @@ Where focus lands in each region:
 | Sidebar | the selected session's row, or the sidebar's first control when that row is not on screen |
 | Archive view | its first control |
 | Terminal | the terminal, so typing reaches the agent; instead the button its area offers in the terminal's place while there is one — its cover's Reconnect, or its empty state's Add project, New session or New console session (see "Reconnecting" and "A console with nothing in it" in `docs/product/session-terminal.md`); for an archived session, its history in the terminal's place (see "Keyboard focus" in `docs/product/session-history.md`) |
-| Report panel | the pager's first enabled button in its header, else its Close panel; Tab goes on to the report page |
+| Report panel | the pager's first enabled button in its header, else Maximize panel or Restore panel size while docked, else Close panel; Tab goes through the remaining header controls to the report page |
 | Files panel | its header's selected tab, Files or Changes, preserving the current mode; the arrow keys move between Files and Changes, and Tab goes through the tab's controls (the filter toggle, in Files Collapse all folders while it is enabled, and in Changes Group by folder and Group by commit), then Refresh, the panel's own buttons (see "A panel's header" in `docs/product/right-pane-panels.md`) and the content below; Try again while the panel failed to load (see "Loading the project pane" in `docs/product/project-pane.md`) |
 | Processes panel | Try again while the first reading of its list failed (see "Loading, refreshing and failures" in `docs/product/processes-panel.md`); otherwise, in a project's panel, its session filter, and in a console session's, the first tree's Stop, else its Close panel |
 | Terminal panel | the shown tab's shell terminal, so typing reaches the shell; instead its cover's Reconnect while that is offered, and New terminal in its header while the project has no terminal (see "Keyboard focus" in `docs/product/terminal-panel.md`) |
@@ -96,13 +96,12 @@ included — keeps the rules described everywhere else, on any device. Before an
 treats a device whose primary input cannot hover, such as a phone, as if the last interaction were a tap.
 
 - **A session picked by a tap is shown without focusing its terminal**; a tap on the terminal focuses it.
-- **Focus handed to the terminal when what held it goes away or is hidden** — a panel closing, a pane going — is not
-  put in the terminal. While a maximized Terminal panel or a panel floating over the terminal covers it (see
-  "Maximizing the Terminal panel" and "Below 782 px: one panel floats over the terminal" in
-  `docs/product/right-pane-panels.md`), focus goes to that panel's first control that takes no text; otherwise to the
-  top bar's first enabled control.
-- **A panel that floats over the terminal opened by a tap** takes focus on its first control that takes no text: in
-  the Terminal panel a control of its header, not the shell; in the report panel the report page.
+- **Focus handed to the terminal when what held it goes away or is hidden** — a panel closing, a pane going — is not put
+  in the terminal. While a maximized panel or a panel floating over the terminal covers it (see "Maximizing a panel" and
+  "Below 782 px: one panel floats over the terminal" in `docs/product/right-pane-panels.md`), focus goes to that panel's
+  first control that takes no text; otherwise to the top bar's first enabled control.
+- **A panel that floats over the terminal opened by a tap** takes focus on its first control that takes no text: in the
+  Terminal panel a control of its header, not the shell; in the report panel the report page.
 - **Focus moved on the window's own initiative** — handed on as the part holding it goes away, returned after a press
   elsewhere — shows no focus ring.
 

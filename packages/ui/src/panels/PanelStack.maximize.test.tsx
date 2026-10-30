@@ -122,7 +122,7 @@ it("lays the maximized card over the agent terminal's area, on a backdrop, the o
   expect(card.style.top).toContain("--peek-gap");
   const files = container.querySelector<HTMLElement>("#panel-files")!;
   expect(files.getAttribute("data-region")).toBe("panel-files");
-  expect(files.style.flex).toBe("1 1 0px");
+  expect(files.style.height).toBe("100%");
   expect(container.querySelector("[aria-hidden=true].absolute")).not.toBeNull();
   // The column has no pair left to resize.
   expect(container.querySelector("[role=separator]")).toBeNull();

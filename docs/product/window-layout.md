@@ -294,7 +294,7 @@ focus moves to the terminal, or to the top bar's first enabled control when the 
 ## What the right pane shows
 
 The right pane has one **owner** at a time: a console session, whose report panel and Processes panel it holds, or a
-project, whose Files, Processes and Terminal panels it holds, together with the selected project session's report panel
+project, whose Terminal, Files and Processes panels it holds, together with the selected project session's report panel
 while that session has pages (see `docs/product/right-pane-panels.md`). With no owner there is no right pane at all, no
 panel toggle in the top bar, and its width goes to the terminal. With an owner, the right pane is on screen while one of
 its owner's panels is open. The owner is set only by what the user does, never worked out from whatever else is on
@@ -302,7 +302,7 @@ screen, so a project's Files panel can be shown with no session selected, or bes
 project.
 
 Each session has a **pane of its own**: a console session its report panel and Processes panel, a project session its
-project's Files, Processes and Terminal panels and, while it has pages, its own report panel (see "A project session's
+project's Terminal, Files and Processes panels and, while it has pages, its own report panel (see "A project session's
 Report panel" in `docs/product/right-pane-panels.md`).
 
 - **Selecting a session** gives the right pane to the session's own owner, whatever the session is selected from (see
@@ -397,12 +397,12 @@ Both work the same way:
   the handle. Pressing the handle with the mouse does not take keyboard focus off the terminal, and while it is dragged
   the pointer shows the resize cursor wherever it is.
 
-The sidebar's handle is there only while the sidebar is shown in the row: not while it is hidden or floating in, and
-not below 1168 px, where the sidebar is a drawer; it is also absent while its column is easing open or closed. The
-right pane's handle is there whenever the right pane is docked, which is at 782 px and wider, and not while a panel
-only floats in, nor while a panel floats over the terminal below 782 px, nor while the pane's column is folded away
-under a maximized Terminal panel (see "Maximizing the Terminal panel" in
-`docs/product/right-pane-panels.md`). Its pointer target is 24 px wide, centred on the 8 px gap.
+The sidebar's handle is there only while the sidebar is shown in the row: not while it is hidden or floating in, and not
+below 1168 px, where the sidebar is a drawer; it is also absent while its column is easing open or closed. The right
+pane's handle is there whenever the right pane is docked, which is at 782 px and wider, and not while a panel only
+floats in, nor while a panel floats over the terminal below 782 px, nor while the pane's column is folded away under a
+maximized panel (see "Maximizing a panel" in `docs/product/right-pane-panels.md`). Its pointer target is 24 px wide,
+centred on the 8 px gap.
 
 **Each pane's chosen width is remembered per client**, in that client's own browser storage, as the appearance choice
 is (see "Where the choice is stored" in `docs/product/appearance.md`); without that storage a choice lasts until the
@@ -442,43 +442,41 @@ and size" in `docs/product/session-terminal.md`).
 
 A pane that is not on screen can be brought up for a moment without showing it for good: a hidden sidebar at 1168 px and
 wider, and the right pane, at 782 px and wider, while it has an owner and none of its panels is open, or only a
-maximized Terminal panel (see "Floating a panel in" in `docs/product/right-pane-panels.md`). This is a **floating
-pane**. The sidebar floats in as a card inset from the window chrome and the window's edges, with rounded corners, a
-hairline edge and the light card shadow (see "The window chrome and the content panel" above); the right pane floats in
-as its panel's own card, which looks the same (see "The panel cards" in `docs/product/right-pane-panels.md`). The
-hairline is 0.5 px on a display of 2× pixel density or more and 1 px below that, and it takes no space, so the card is
-exactly its box. Below 1168 px the sidebar's drawer shares this card appearance (see "Below 1168 px: the sidebar becomes
-a drawer" in `docs/product/sidebar-drawer.md`). The docked sidebar opens and closes as a full-height column (see
-"Hiding the sidebar" above).
+maximized panel (see "Floating a panel in" in `docs/product/right-pane-panels.md`). This is a **floating pane**. The
+sidebar floats in as a card inset from the window chrome and the window's edges, with rounded corners, a hairline edge
+and the light card shadow (see "The window chrome and the content panel" above); the right pane floats in as its panel's
+own card, which looks the same (see "The panel cards" in `docs/product/right-pane-panels.md`). The hairline is 0.5 px on
+a display of 2× pixel density or more and 1 px below that, and it takes no space, so the card is exactly its box. Below
+1168 px the sidebar's drawer shares this card appearance (see "Below 1168 px: the sidebar becomes a drawer" in
+`docs/product/sidebar-drawer.md`). The docked sidebar opens and closes as a full-height column (see "Hiding the sidebar"
+above).
 
 - **What brings up the sidebar**: the mouse reaching the sidebar's toggle, at once, or resting for **130 ms** on a
   console's avatar on the rail, the current console's or another's. The wait is the avatars' alone, so that a pointer
-  crossing the rail on its way elsewhere does not make the card flash; the toggle is aimed at, so it has none.
-  - **From the toggle the sidebar shows the current console**, whatever console a card was previewing just before.
-  - **From an avatar it shows that console**, which need not be the current one; what that preview is and how a press
-    inside it makes the console current is in "Previewing a console from the rail" in
-    `docs/product/console-switcher.md`.
-  - While the sidebar is out, moving onto another avatar shows that console at once, with no wait, and moving onto the
-    toggle goes back to the current console. A pointer that only crosses the avatars brings nothing up, and the
-    content panel's edge does not bring the sidebar up at all.
+  crossing the rail on its way elsewhere does not make the card flash; the toggle is aimed at, so it has none. - **From
+  the toggle the sidebar shows the current console**, whatever console a card was previewing just before. - **From an
+  avatar it shows that console**, which need not be the current one; what that preview is and how a press inside it
+  makes the console current is in "Previewing a console from the rail" in `docs/product/console-switcher.md`. - While
+  the sidebar is out, moving onto another avatar shows that console at once, with no wait, and moving onto the toggle
+  goes back to the current console. A pointer that only crosses the avatars brings nothing up, and the content panel's
+  edge does not bring the sidebar up at all.
 - **What brings up the right pane**: the mouse reaching a panel toggle in the top bar, at once, which floats that
-  toggle's panel in (see "Floating a panel in" in `docs/product/right-pane-panels.md`). Nothing along the window's
-  edge brings it up.
-- Touch and pen bring up neither, and on a device whose primary input cannot hover — a phone, or a tablet's touch
-  screen — neither floats in at all, whatever pointer is used: the sidebar is shown with its toggle and a panel
-  opened by pressing its toggle.
+  toggle's panel in (see "Floating a panel in" in `docs/product/right-pane-panels.md`). Nothing along the window's edge
+  brings it up.
+- Touch and pen bring up neither, and on a device whose primary input cannot hover — a phone, or a tablet's touch screen
+  — neither floats in at all, whatever pointer is used: the sidebar is shown with its toggle and a panel opened by
+  pressing its toggle.
 - **How it shows**: both cards fade from transparent to opaque while rising into place by **4% of the card's own
   height**, over **240 ms**, with the same `cubic-bezier(0.2, 0, 0, 1)` easing as switching consoles. The whole card
-  fades and rises together — its edge, fill, shadow and content. Neither slides horizontally.
-  Where the system asks for reduced motion, they appear at once. Each uses the pane's chosen width — the right pane
-  at most 92% of the window's width — with a shadow and no dimming behind it. It overlays the terminal, so
-  **the terminal is not resized** and the agent is sent no size change.
-  - The **sidebar's card** keeps an 8 px gap from the rail, from the top bar and from the window's bottom (or the
-    connection banner), never drawn over the rail.
-  - The **right pane's card** keeps the gaps it keeps docked: 8 px from the top bar, from the window's end edge and
-    from the window's bottom (or the connection banner), and 8 px on the terminal's side.
-  - A card's own headers are 8 px shorter than the docked sidebar's — the 8 px gap, the card's edge taking no space —
-    so the line under a header stays level across the panel (see "The window chrome and the content panel" above).
+  fades and rises together — its edge, fill, shadow and content. Neither slides horizontally. Where the system asks for
+  reduced motion, they appear at once. Each uses the pane's chosen width — the right pane at most 92% of the window's
+  width — with a shadow and no dimming behind it. It overlays the terminal, so **the terminal is not resized** and the
+  agent is sent no size change. - The **sidebar's card** keeps an 8 px gap from the rail, from the top bar and from the
+  window's bottom (or the connection banner), never drawn over the rail. - The **right pane's card** keeps the gaps it
+  keeps docked: 8 px from the top bar, from the window's end edge and from the window's bottom (or the connection
+  banner), and 8 px on the terminal's side. - A card's own headers are 8 px shorter than the docked sidebar's — the 8 px
+  gap, the card's edge taking no space — so the line under a header stays level across the panel (see "The window chrome
+  and the content panel" above).
 - **How it goes away**: 200 ms after the pointer has left it, the card fades out while sinking back by 4% of its height
   over 240 ms, with the same easing as its entrance, or disappears at once where the system asks for reduced motion.
   Having left means the pointer is on none of the card, the gap around it, or what brought it up in the top bar — the
@@ -493,15 +491,14 @@ a drawer" in `docs/product/sidebar-drawer.md`). The docked sidebar opens and clo
   Terminal panel `Escape` goes to the shell and never sends the pane away (see "The shell terminal" in
   `docs/product/terminal-panel.md`). A floating pane that holds keyboard focus as it goes away hands focus to the
   terminal, except a floating right pane that goes because the pane's column takes its place — a panel docked, a
-  maximized Terminal panel restored (see "Maximizing the Terminal panel" in `docs/product/right-pane-panels.md`): focus
-  is then not moved. A floating sidebar previewing a console that is deleted goes away as if the pointer had left that
-  console's avatar.
+  maximized panel restored (see "Maximizing a panel" in `docs/product/right-pane-panels.md`): focus is then not moved. A
+  floating sidebar previewing a console that is deleted goes away as if the pointer had left that console's avatar.
 - **What keeps it up**, whatever the pointer does: keyboard focus inside it, one of its menus being open, or a dialog
-  being open, for as long as it is — such as one opened from the pane, the file viewer the Files panel opens among
-  them (see `docs/product/file-viewer.md`). So closing a viewer opened from a floating Files
-  panel, by the pointer or the keyboard, finds the pane still there to hand focus back to. For the right pane, focus
-  keeps it up only when the keyboard put it there: focus a press put inside it, on a tab or a button, does not, and
-  the card goes once the pointer leaves, as it would have before the press.
+  being open, for as long as it is — such as one opened from the pane, the file viewer the Files panel opens among them
+  (see `docs/product/file-viewer.md`). So closing a viewer opened from a floating Files panel, by the pointer or the
+  keyboard, finds the pane still there to hand focus back to. For the right pane, focus keeps it up only when the
+  keyboard put it there: focus a press put inside it, on a tab or a button, does not, and the card goes once the pointer
+  leaves, as it would have before the press.
 - **Only one at a time**: bringing one up sends the other away. Floating the right pane in also closes the sidebar's
   drawer, and opening the sidebar's drawer sends a floating right pane away.
 - **Pressing the toggle** while the pane is floating shows it for good, and keyboard focus stays where it was. For the
@@ -511,8 +508,8 @@ a drawer" in `docs/product/sidebar-drawer.md`). The docked sidebar opens and clo
   docks the pane at once, with no animation, or below 782 px floats it over the terminal instead (see "Floating a panel
   in" in `docs/product/right-pane-panels.md`).
 - There is no floating sidebar below 1168 px, and narrowing the window below it sends one away. There is no floating
-  right pane below 782 px, where a pressed panel toggle floats its panel over the terminal instead (see "Below 782
-  px: one panel floats over the terminal" in `docs/product/right-pane-panels.md`).
+  right pane below 782 px, where a pressed panel toggle floats its panel over the terminal instead (see "Below 782 px:
+  one panel floats over the terminal" in `docs/product/right-pane-panels.md`).
 
 ## Pane widths below 1168 px
 
