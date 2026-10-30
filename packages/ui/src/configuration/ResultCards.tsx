@@ -1,6 +1,7 @@
 import { CircleAlert, CircleCheck, CircleDot, CircleMinus, CircleSlash, TriangleAlert, type LucideIcon } from "lucide-react";
 import React, { useId } from "react";
 
+import { AlertStatusContext } from "../components/AlertButton";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useT } from "../i18n/react";
 import type { AccountFallback, AccountOutcome, ImportFailure, ImportStatus } from "../protocol";
@@ -113,7 +114,10 @@ export function ResultRow({
           <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning-soft-foreground" />
           <div className="flex min-w-0 flex-col gap-1.5">
             <p dir="auto">{warning.text}</p>
-            <FailureReason failure={warning.failure} withoutSummary />
+            {/* Outside an Alert, Details defaults to danger; under a warning it takes the warning's colour. */}
+            <AlertStatusContext.Provider value="warning">
+              <FailureReason failure={warning.failure} withoutSummary />
+            </AlertStatusContext.Provider>
           </div>
         </div>
       )}

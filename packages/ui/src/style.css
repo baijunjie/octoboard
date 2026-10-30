@@ -1448,8 +1448,9 @@ html.pane-resizing * {
   overflow-wrap: inherit;
 }
 
-/* A warning Alert's buttons: HeroUI has `danger` and `danger-soft` button variants and no warning
-   ones, so the same two treatments are made here from the warning tokens (see `AlertButton`).
+/* A warning Alert's buttons (and a warning line's Details outside one): HeroUI has `danger` and
+   `danger-soft` button variants and no warning ones, so the same two treatments are made here from the
+   warning tokens (see `AlertButton`).
    Unlayered, so they win over `.button--secondary`'s tokens in `@layer components`. */
 .alert-button--warning {
   --button-bg: var(--warning);
@@ -1462,7 +1463,9 @@ html.pane-resizing * {
    `--warning-soft` fill over the surfaces an Alert sits on (background, surface, overlay, panel, sidebar and
    control fill) leaves the soft foreground at 3.94:1 on the control fill, 4.37:1 on the sidebar and 4.43:1 on
    the background in light (hover down to 3.84:1), where the tint text is 4.77:1 at the lowest (4.65:1 on hover);
-   in dark both are at least 4.55:1 (the tint text equals the soft foreground there). */
+   in dark both are at least 4.55:1 (the tint text equals the soft foreground there). Outside an Alert, on an
+   import result card's `--surface-secondary`, the tint text is 5.53:1 (5.35:1 on hover) in light and 7.88:1 at the
+   lowest in dark. */
 .alert-button--warning-soft {
   --button-bg: var(--warning-soft);
   --button-bg-hover: var(--warning-soft-hover);
