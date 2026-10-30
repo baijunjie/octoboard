@@ -159,9 +159,10 @@ it("groups a project's trees under the sessions' titles and puts those no sessio
   }));
   expect(sent(daemon, "list_processes")).toEqual([{ type: "list_processes", project_id: project.id }]);
   const headings = [...panel().querySelectorAll("h3")].map((heading) => heading.textContent);
-  expect(headings).toEqual(["Fix search", "Add filters", "Project processes"]);
+  expect(headings).toEqual(["Session processes", "Project processes"]);
+  expect([...panel().querySelectorAll("h4")].map((heading) => heading.textContent)).toEqual(["Fix search", "Add filters"]);
   expect(panel().textContent).toContain("These processes belong to no session. They are never stopped automatically; only you can stop them.");
-  const group = [...panel().querySelectorAll("section")][2];
+  const group = [...panel().querySelectorAll("section")].find((section) => section.querySelector(":scope > h3")?.textContent === "Project processes")!;
   expect([...group.querySelectorAll("li")].map((row) => row.textContent)).toEqual([expect.stringContaining("node kept.js"), expect.stringMatching(/node old\.js.*Directory deleted/)]);
 });
 

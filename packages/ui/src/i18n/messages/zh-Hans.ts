@@ -2454,6 +2454,7 @@ export const zhHans: Translation<"other"> = {
   "processes.empty": "没有进程",
   "processes.empty.session": "该会话启动的进程已全部结束。",
   "processes.empty.allSessions": "当前没有运行中的会话进程或项目进程。",
+  "processes.sessions": "会话进程",
   "processes.project": "项目进程",
   "processes.project.note": "这些进程不属于任何会话，不会被自动停止，只能由你来停止。",
   "processes.sessionUnknown": "未知会话",

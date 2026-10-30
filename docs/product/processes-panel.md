@@ -16,21 +16,25 @@ panel; for assistive technology the panel is a region named "Processes".
 
 ## What it lists
 
-Only while the displayed list includes a session's trees, a note leads the list, saying that processes started by a
-session stop automatically when the session ends. It is absent when only project processes are listed, while loading,
-and in the empty state.
+**In a project's panel with no session filtered on** (see "The session filter" below), the trees have two categories,
+each shown only while it has trees:
 
-**In a project's panel with no session filtered on** (see "The session filter" below), the trees are grouped:
+- **Session processes**, under a note saying that processes started by a session stop automatically when the session
+  ends. Within it there is **one group per session**, headed by the session's displayed name (see "Displayed names"
+  in `docs/product/session-titles.md`), or "Unknown session" for a session the window does not know; the groups come
+  in the order of their oldest tree.
+- Then **Project processes**, the trees no session owns, those the user kept and those left behind alike, under a
+  note saying that they belong to no session, are never stopped automatically, and only the user can stop them.
+  Kept trees and trees left behind are listed alike.
 
-- **one group per session** that has trees, headed by the session's displayed name (see "Displayed names" in
-  `docs/product/session-titles.md`), or "Unknown session" for a session the window does not know; the groups come in
-  the order of their oldest tree;
-- then **Project processes**, the trees no session owns, those the user kept and those left behind alike, under a note
-  saying that they belong to no session, are never stopped automatically, and only the user can stop them. Kept trees
-  and trees left behind are listed alike.
+The category headings stay at the top of the scrolling list, below the session filter, while their category passes
+through it; the next category's heading replaces the previous one. The explanatory notes and session group headings
+scroll with their contents.
 
-**With a session filtered on**, only that session's trees are listed, with no heading, and no project processes. **A
-console session's panel** lists its own trees the same way; a console session with no process lists none.
+**With a session filtered on**, only that session's trees are listed, with no heading, and no project processes. A
+note leads the nonempty list, saying that its processes stop automatically when the session ends. **A console
+session's panel** lists its own trees the same way; a console session with no process lists none. The note is absent
+while loading and in the empty state.
 
 Within a group, trees are oldest first. A heading too long for its line fades out where it is cut (see "Names too
 long for their space" in `docs/product/labels-and-tooltips.md`).
