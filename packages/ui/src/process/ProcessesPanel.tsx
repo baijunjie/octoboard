@@ -204,7 +204,7 @@ function ProcessList({ grouped, keepable, trees, error, acting, onStop, onKeep }
     <div ref={rootRef} className="flex min-w-0 flex-1 flex-col gap-4" {...handoff}>
       {/* Allow the panel's focus announcement to finish before speaking its loading state. */}
       <StatusAnnouncer text={loading ? t("processes.loading") : undefined} firstWriteDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} />
-      {trees !== undefined && trees.length > 0 && <p className={NOTE_CLASS}>{t("processes.panelMessage")}</p>}
+      {trees?.some((tree) => tree.session_id !== undefined) && <p className={NOTE_CLASS}>{t("processes.panelMessage")}</p>}
       {loading && <p aria-hidden="true" className="text-sm text-app-muted">{t("processes.loading")}</p>}
       {trees !== undefined && error !== undefined && (
         <ErrorAlert status="warning" title={t("processes.refreshFailedTitle")} details={errorDetails(error)} announce>
