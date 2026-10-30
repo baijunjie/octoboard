@@ -13,7 +13,12 @@ export const developerSections = ["Shift", "Context", "Quality"] as const;
 
 export const homeQuestions = [
   "Setup",
-  "Data",
+  "Providers",
+  "Subagents",
+  "Brands",
+  "Participation",
+  "Requirements",
+  "Remote",
   "Parallel",
   "Portability",
 ] as const;

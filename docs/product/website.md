@@ -111,7 +111,7 @@ is that language's homepage URL plus `#website`: the homepage URL, the applicati
 SEO description, and that page's language, published by the person.
 
 A homepage also includes an FAQ page and a software application. The FAQ page is that page's canonical
-URL plus `#webpage`. It contains the four questions and, as part of that page, an item list of the three
+URL plus `#webpage`. It contains the nine questions and, as part of that page, an item list of the three
 localized account switching, agent handoff and usage benefit titles. The software application is the origin plus
 `#app` on every language. Its category is `DeveloperApplication`, its operating system is `macOS`, and its URL is the
 deployment root, the English homepage, not the localized homepage. It names the repository and the MIT
@@ -130,7 +130,7 @@ Agent-readable files are published at the deployment root and are crawlable:
   English privacy page is `privacy.md`. Another language's homepage is `<route code>.md`, so Simplified
   Chinese is `zh.md`, not `zh-Hans.md`. Another language's privacy page is `<route code>/privacy.md`.
 - `llms.txt`, in English. Its notes state that Octoboard is free and open source under the MIT License, and cover
-  local data handling, account switching, agent handoff, usage and resets, the four questions and answers, the
+  local data handling, account switching, agent handoff, usage and resets, the nine questions and answers, the
   support email, and the repository.
   It then lists every language, each linking to that language's homepage Markdown and stating that the language has
   two pages. The English
@@ -221,6 +221,7 @@ Three subsections develop that position:
 - Moving beyond the code editor: manual review and rewriting cannot keep pace with AI's output; the developer sees
   implementation becoming a black box as irreversible, considers AI's logic more complete than most programmers',
   and regards code conventions designed for human readers as less central when AI writes and maintains the code.
+  The Simplified Chinese statement describes those conventions as gradually losing their meaning.
 - Requirements and context: the developer sees unclear requirements, missing context and unstated assumptions as
   the main source of misunderstanding, making problem definition and shared context central to coordinating agents.
 - Quality through testing: the developer regards thorough testing against real needs, including workflows, edge
@@ -236,19 +237,33 @@ Its data-handling summary describes local application storage, no upload of code
 own servers, and configured agents and tools connecting to their providers. The open-source panel states that
 Octoboard is free and open source under the MIT License.
 
-The four questions in section 06 cover using existing projects and CLI configuration, data handling, concurrent edits,
-and returning to the original CLI. The section's introductory label is
-separate from its questions heading. Each question can be expanded or collapsed independently, with the first
-expanded initially; several answers can remain open at once. The plus marker rotates into a cross when an answer
-opens and rotates back when it closes. Only collapsed question summaries receive a hover background; an expanded
-question and its answer share a uniform background.
+The nine questions in section 06 cover setup, data handling, independent project sessions and subagents, agent brands,
+direct participation, requirements and cost, remote hosts, concurrent edits, and returning to the original CLI, in
+that order. The section's introductory label is separate from its questions heading. Each question can be expanded
+or collapsed independently, with the first expanded initially; several answers can remain open at once. The plus
+marker rotates into a cross when an answer opens and rotates back when it closes. Only collapsed question summaries
+receive a hover background; an expanded question and its answer share a uniform background.
 
 - Setup: existing project folders can be added in place. The default account uses the existing CLI configuration,
   and the agent continues loading project instructions, Skills, hooks and MCP servers. Additional accounts use
   separate configurations and can optionally share supported parts of the default configuration.
 - Data: application data stays local, and code and conversations are not uploaded to Octoboard's own servers.
-  Credentials and native conversation records are managed by the agents. Configured agents and tools may send
-  prompts, code and related context to their providers.
+  Visitors use their own accounts and subscriptions or configured services for Claude Code, Codex and Grok Build.
+  Those tools manage credentials and native conversation records and send prompts, code and related context to the
+  configured providers under those providers' policies. These connections belong to the services visitors use,
+  independently of Octoboard.
+- Independent sessions: each project runs a native session in its own directory, loading local configuration through
+  its agent's own mechanisms while the coordinator organizes the work. A single conversation can mix project context;
+  changing directories or using subagents alone does not guarantee loading the target project's full configuration,
+  and loading behavior depends on the tool.
+- Agent brands: the coordinator and each project can use Claude Code, Codex or Grok Build independently, retaining
+  their own instructions and toolchains. Tasks, relevant context and reports pass between sessions. The answer
+  presents different brands' strengths as a reason to coordinate them.
+- Participation: visitors can enter a project session to add context, adjust requirements or review code. Sessions
+  started by the coordinator continue reporting results, open items and decisions needed back to it.
+- Requirements and cost: visitors install and configure the agent CLIs themselves, including agents configured for
+  self-hosted models. Octoboard is free and open source under the MIT License.
+- Remote hosts: running project agents on a remote host is planned and unavailable.
 - Parallel work: sessions share the project directory by default, so simultaneous edits to the same files can
   conflict. Users can ask agents to work in separate Git worktrees and review their changes before merging.
 - Portability: project files remain in their original folders. Available native conversation records can be resumed
@@ -292,7 +307,8 @@ horizontal overflow. The header navigation, menu dialog
 and menu navigation have accessible names identifying main navigation. The background cannot be interacted with or
 scrolled while the menu is open. Tab and Shift+Tab stay within the dialog. Closing it with the button or Escape
 returns focus to the header's menu button. Choosing an internal destination or another language closes the dialog
-as well.
+as well. Menu links turn red on hover with a 160-millisecond color transition and no delay. Their staggered
+entrance and exit motion does not delay the hover response.
 
 ## Product preview
 
