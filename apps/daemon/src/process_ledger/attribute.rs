@@ -32,12 +32,22 @@
 //! what reaches an Apple platform binary (`/bin/sleep`, `/usr/bin/tail`), whose environment
 //! cannot be read, after the shell that started it exited and it was reparented.
 //!
+//! That a session still has members proves it is the one recorded only while the table is read
+//! often enough that it cannot empty and have its id handed on between two reads. A session read
+//! back from a previous run's ledger file has no such proof: once all its members exited, an
+//! unrelated process could have been given its id, started a session and left members in it with
+//! no leader. So it is kept only when the first read proves it ([`prove_read_back`]): its leader
+//! is running with the recorded start time, or a process the file named is running in it. Such a
+//! process never left the session, since a process joins another only by starting one of its own,
+//! with its own pid as the id, and a pid that names a session is not handed to a new process.
+//!
 //! Kept processes and their descendants are never attributed: a process whose chain reaches a
 //! kept one is kept itself, and so is a process found in a kept process's session with no other
 //! claim on it, which is how a kept process's child is still found once its chain is broken. The
 //! session of a kept process is recorded as kept by the same rule as a launch's, so it still
 //! keeps what is in it once the kept process itself has exited.
 
+use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 
 use super::table::{Identity, Proc, Protected, Table};
@@ -108,11 +118,27 @@ pub(crate) struct Book {
     /// can carry a tag of this run's launches, so no earlier environment is read. `None` until
     /// the first agent starts.
     pub horizon: Option<u64>,
+    /// The terminal sessions read back from a previous run's ledger file, not yet proven to be
+    /// the ones it recorded (see [`Self::read_back_sessions`]).
+    pub read_back: ReadBack,
     /// Something a restart would need changed since the ledger file was last written: a launch
-    /// started or ended, a process kept, one held for an ended launch, or a session recorded.
-    /// A process attributed in a session already recorded is not such a change; it is written
-    /// with the next one.
+    /// started or ended, a process attributed or kept, or a session recorded. Every process
+    /// attributed is one, since a restart takes a session back only when a process the file
+    /// names is still in it. A process going is not.
     pub dirty: bool,
+}
+
+/// The terminal sessions a reconcile read back from a previous run's ledger file, recorded again
+/// in the book, and the processes that file named, which prove them (see
+/// [`Book::read_back_sessions`]).
+#[derive(Debug, Default)]
+pub(crate) struct ReadBack {
+    /// Those recorded for [`ENDED`].
+    pub ended: HashSet<i32>,
+    /// Those recorded as kept.
+    pub kept: HashSet<i32>,
+    /// The processes the file named, attributed or kept.
+    pub named: HashSet<Identity>,
 }
 
 impl Default for Book {
@@ -127,6 +153,7 @@ impl Default for Book {
             aliases: HashMap::new(),
             awaited: HashMap::new(),
             horizon: None,
+            read_back: ReadBack::default(),
             dirty: false,
         }
     }
@@ -298,6 +325,34 @@ impl Book {
         self.dirty = true;
     }
 
+    /// Records the terminal sessions a previous run's ledger file recorded for its launches, for
+    /// [`ENDED`], and as kept, each with its leader's start time as the file has it, where the
+    /// book has none of that id yet; `named` are the processes the file names, attributed or kept.
+    /// The next read of the table drops each of them unless it proves it is still the session
+    /// recorded: its leader running with that start time, or one of `named` running in it.
+    pub fn read_back_sessions(
+        &mut self,
+        ended: impl IntoIterator<Item = (i32, Option<u64>)>,
+        kept: impl IntoIterator<Item = (i32, Option<u64>)>,
+        named: impl IntoIterator<Item = Identity>,
+    ) {
+        if let Some(launch) = self.launches.get_mut(ENDED) {
+            for (sid, leader_start) in ended {
+                if let Entry::Vacant(entry) = launch.sessions.entry(sid) {
+                    entry.insert(leader_start);
+                    self.read_back.ended.insert(sid);
+                }
+            }
+        }
+        for (sid, leader_start) in kept {
+            if let Entry::Vacant(entry) = self.kept_sessions.entry(sid) {
+                entry.insert(leader_start);
+                self.read_back.kept.insert(sid);
+            }
+        }
+        self.read_back.named.extend(named);
+    }
+
     /// Hands what is attributed to `launch_id`, with the sessions recorded for it, to [`ENDED`],
     /// to be stopped, and stops following the launch.
     pub fn hand_to_ended(&mut self, launch_id: &str) {
@@ -386,16 +441,18 @@ pub(crate) fn tag_candidates<'a>(
 }
 
 /// Brings `book` up to date with `table`: forgets the processes that are gone, keeps what descends
-/// from kept processes, drops sessions that are no longer the ones recorded, and attributes every
-/// process the rules give a launch. `own` is the daemon's pid. `tag_of` answers the launch id in
-/// a process's tag when the tag is this instance's, and `None` otherwise or when the environment
-/// cannot be read; it is asked only of a process rules 1 to 4 leave undecided.
+/// from kept processes, drops sessions that are not, or are not shown to be, the ones recorded,
+/// and attributes every process the rules give a launch. `own` is the daemon's pid. `tag_of`
+/// answers the launch id in a process's tag when the tag is this instance's, and `None` otherwise
+/// or when the environment cannot be read; it is asked only of a process rules 1 to 4 leave
+/// undecided.
 pub(crate) fn attribute(
     book: &mut Book,
     table: &Table,
     own: i32,
     tag_of: &mut dyn FnMut(&Proc) -> Option<String>,
 ) {
+    prove_read_back(book, table);
     forget_gone(book, table);
     let order = table.by_start();
     for proc in &order {
@@ -460,8 +517,8 @@ pub(crate) fn attribute(
                             sid: proc.sid,
                         },
                     );
-                    let recorded = record_session(book, table, &launch, proc);
-                    book.dirty |= recorded || launch == ENDED;
+                    record_session(book, table, &launch, proc);
+                    book.dirty = true;
                 }
                 Some(Verdict::Kept) => {
                     let project = kept_session_project(book, table, proc.sid);
@@ -483,6 +540,33 @@ fn forget_gone(book: &mut Book, table: &Table) {
     book.attributed.retain(|id, _| table.has(id));
     book.kept.retain(|id| table.has(id));
     book.kept_projects.retain(|id, _| table.has(id));
+}
+
+/// Drops each session read back from a previous run's file (see [`Book::read_back_sessions`])
+/// that `table` does not prove is still the one recorded: neither is its leader running with the
+/// recorded start time, nor does a process the file named sit in it. Done at the first read after
+/// the reconcile only — by [`attribute`], and by a scan before it asks which environments to
+/// read — since the reads after it follow the session.
+pub(crate) fn prove_read_back(book: &mut Book, table: &Table) {
+    let read_back = std::mem::take(&mut book.read_back);
+    let named_in: HashSet<i32> = table
+        .procs()
+        .filter(|proc| read_back.named.contains(&proc.id))
+        .map(|proc| proc.sid)
+        .collect();
+    let proven = |sid: i32, leader_start: Option<u64>| {
+        named_in.contains(&sid)
+            || table
+                .get(sid)
+                .is_some_and(|leader| leader.sid == sid && leader_start == Some(leader.id.start))
+    };
+    if let Some(ended) = book.launches.get_mut(ENDED) {
+        ended.sessions.retain(|sid, leader_start| {
+            !read_back.ended.contains(sid) || proven(*sid, *leader_start)
+        });
+    }
+    book.kept_sessions
+        .retain(|sid, leader_start| !read_back.kept.contains(sid) || proven(*sid, *leader_start));
 }
 
 /// Drops each recorded session that no process sits in any more, or whose id a process now leads
@@ -551,22 +635,18 @@ fn session_to_record(
 }
 
 /// Records `proc`'s terminal session for `launch_id`, which `proc` was just attributed to, unless
-/// its leader is running and is not `launch_id`'s. Answers whether the session is new to it.
-fn record_session(book: &mut Book, table: &Table, launch_id: &str, proc: &Proc) -> bool {
+/// its leader is running and is not `launch_id`'s.
+fn record_session(book: &mut Book, table: &Table, launch_id: &str, proc: &Proc) {
     let attributed = &book.attributed;
     let Some((sid, leader_start)) = session_to_record(table, proc, |leader| {
         attributed
             .get(leader)
             .is_some_and(|attributed| attributed.launch == launch_id)
     }) else {
-        return false;
+        return;
     };
-    match book.launches.get_mut(launch_id) {
-        Some(launch) if !launch.sessions.contains_key(&sid) => {
-            launch.sessions.insert(sid, leader_start);
-            true
-        }
-        _ => false,
+    if let Some(launch) = book.launches.get_mut(launch_id) {
+        launch.sessions.entry(sid).or_insert(leader_start);
     }
 }
 
@@ -932,9 +1012,9 @@ mod tests {
         assert_eq!(book.followed_as(LAUNCH), None);
     }
 
-    /// What a restart needs is a change to write down: a session recorded, a process held for an
-    /// ended launch. Another process attributed in a session already recorded is not, and
-    /// neither is a process going.
+    /// What a restart needs is a change to write down: a session recorded, a process attributed,
+    /// even in a session already recorded, since a restart takes a session back only when a
+    /// process the file names is in it. A process going is not.
     #[test]
     fn only_a_change_a_restart_needs_is_marked_to_be_written() {
         let mut book = book();
@@ -943,22 +1023,52 @@ mod tests {
         assert!(book.dirty, "a session recorded");
 
         book.dirty = false;
-        let table = Table::from_procs([
-            agent(),
-            proc(200, 1002, 100, 200),
-            proc(201, 1003, 200, 200),
-        ]);
+        let table = Table::from_procs([agent(), proc(201, 1003, 1, 200)]);
         attribute(&mut book, &table, OWN, &mut untagged);
         assert_eq!(launch_of(&book, 201), Some(LAUNCH));
-        let table = Table::from_procs([agent(), proc(200, 1002, 100, 200)]);
-        attribute(&mut book, &table, OWN, &mut untagged);
-        assert!(!book.dirty);
+        assert!(book.dirty, "attributed in a session already recorded");
 
-        let table = Table::from_procs([agent(), proc(200, 1002, 100, 200), proc(400, 1010, 1, 1)]);
-        attribute(&mut book, &table, OWN, &mut |proc: &Proc| {
-            (proc.id.pid == 400).then(|| "gone-launch".to_string())
-        });
-        assert_eq!(launch_of(&book, 400), Some(ENDED));
-        assert!(book.dirty, "held for an ended launch");
+        book.dirty = false;
+        let table = Table::from_procs([agent()]);
+        attribute(&mut book, &table, OWN, &mut untagged);
+        assert!(!book.dirty, "a process going");
+    }
+
+    /// A session read back from a previous run's file is taken back only when a process the
+    /// file named is still in it: one whose members exited may have had its id handed to an
+    /// unrelated process that started a session and left members in it with no leader, and
+    /// those are neither stopped as an ended launch's nor kept.
+    #[test]
+    fn a_session_read_back_is_taken_back_only_with_a_process_the_file_named_in_it() {
+        let mut book = book();
+        let named = [
+            Identity {
+                pid: 301,
+                start: 900,
+            },
+            Identity {
+                pid: 501,
+                start: 901,
+            },
+        ];
+        book.read_back_sessions([(300, None), (500, None)], [(400, Some(800))], named);
+        let table = Table::from_procs([
+            agent(),
+            // Session 300's named member is gone; 301 is another process with its pid.
+            proc(301, 5000, 1, 300),
+            proc(302, 5001, 1, 300),
+            proc(402, 5002, 1, 400),
+            proc(501, 901, 1, 500),
+            proc(502, 5003, 1, 500),
+        ]);
+        attribute(&mut book, &table, OWN, &mut untagged);
+        for pid in [301, 302, 402] {
+            assert_eq!(launch_of(&book, pid), None, "{pid}");
+            assert!(!book.kept.iter().any(|id| id.pid == pid), "{pid}");
+        }
+        assert!(!book.launches[ENDED].sessions.contains_key(&300));
+        assert!(!book.kept_sessions.contains_key(&400));
+        assert_eq!(launch_of(&book, 502), Some(ENDED), "proven by 501");
+        assert!(book.launches[ENDED].sessions.contains_key(&500));
     }
 }

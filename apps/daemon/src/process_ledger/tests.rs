@@ -10,7 +10,10 @@ use std::time::{Duration, Instant};
 
 use super::attribute::{Attributed, Book, ENDED};
 use super::table::{self, Identity, Proc, Table};
-use super::{follow_ups, persist, stop, ProcessLedger, SETTLED_OVERRIDE, TAG_VARIABLE};
+use super::{
+    boot_id, follow_ups, persist, stop, ProcessLedger, BOOT_ID_OVERRIDE, SETTLED_OVERRIDE,
+    TAG_VARIABLE,
+};
 use crate::protocol::{Agent, Session, SessionStatus};
 use crate::state::AppState;
 use crate::test_support::{
@@ -32,6 +35,22 @@ const GO_VAR: &str = "OCTOBOARDD_TEST_LEDGER_GO";
 /// and then writes its pid to the file the variable names.
 const IGNORE_TERM_VAR: &str = "OCTOBOARDD_TEST_LEDGER_IGNORE_TERM";
 
+/// When set, [`sleeper`] writes its pid to `gen-<n>` in the directory the variable names, `n`
+/// being [`RESPAWN_GEN_VAR`] (0 when unset), and on `SIGTERM`, while `n` is below
+/// [`RESPAWN_LAST`], first starts itself again in a terminal session of its own as generation
+/// `n + 1`, then exits: a process that each round of a stop finds anew, somewhere new.
+const RESPAWN_VAR: &str = "OCTOBOARDD_TEST_LEDGER_RESPAWN";
+const RESPAWN_GEN_VAR: &str = "OCTOBOARDD_TEST_LEDGER_RESPAWN_GEN";
+/// The last generation [`RESPAWN_VAR`] starts: one per round of a stop, `STOP_PASSES` in all.
+const RESPAWN_LAST: usize = super::STOP_PASSES - 1;
+
+/// Set by [`sleeper`]'s `SIGTERM` handler under [`RESPAWN_VAR`].
+static TERMINATED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+extern "C" fn note_terminated(_: libc::c_int) {
+    TERMINATED.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
 /// Keeps the scanner thread from starting, so that the table is read only when a test says so and
 /// what each read finds is the test's to decide.
 fn quiet(ledger: &ProcessLedger) {
@@ -42,6 +61,14 @@ fn identity(pid: i32) -> Identity {
     Identity {
         pid,
         start: table::start_of(pid).expect("the process is running"),
+    }
+}
+
+/// A ledger file's content written in this boot of the system, naming nothing.
+fn this_boot() -> persist::Persisted {
+    persist::Persisted {
+        boot: boot_id(),
+        ..persist::Persisted::default()
     }
 }
 
@@ -144,9 +171,55 @@ fn sleeper() {
             .exec();
         panic!("running itself again failed: {err}");
     }
+    if let Some(dir) = std::env::var_os(RESPAWN_VAR) {
+        respawning(Path::new(&dir));
+    }
     if let Some(seconds) = std::env::var(SLEEP_VAR).ok().and_then(|s| s.parse().ok()) {
         std::thread::sleep(Duration::from_secs(seconds));
     }
+}
+
+/// [`sleeper`] under [`RESPAWN_VAR`]: never returns.
+fn respawning(dir: &Path) -> ! {
+    use std::os::unix::process::CommandExt;
+    let generation: usize = std::env::var(RESPAWN_GEN_VAR)
+        .ok()
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(0);
+    // SAFETY: the handler only stores to an atomic.
+    unsafe {
+        libc::signal(
+            libc::SIGTERM,
+            note_terminated as extern "C" fn(libc::c_int) as libc::sighandler_t,
+        )
+    };
+    let file = dir.join(format!("gen-{generation}"));
+    let partial = file.with_extension("tmp");
+    std::fs::write(&partial, std::process::id().to_string()).unwrap();
+    std::fs::rename(&partial, &file).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while !TERMINATED.load(std::sync::atomic::Ordering::SeqCst) && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    if generation < RESPAWN_LAST && TERMINATED.load(std::sync::atomic::Ordering::SeqCst) {
+        let mut next = Command::new(std::env::current_exe().expect("the test binary"));
+        next.args(SLEEPER)
+            .env(RESPAWN_GEN_VAR, (generation + 1).to_string())
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        // SAFETY: `setsid` is async-signal-safe.
+        unsafe {
+            next.pre_exec(|| {
+                libc::setsid();
+                Ok(())
+            });
+        }
+        // Never waited for: this process exits at once, and the next is reparented.
+        #[allow(clippy::zombie_processes)]
+        next.spawn().expect("starting the next generation");
+    }
+    std::process::exit(0);
 }
 
 /// Waits for the child to be reaped, which a stopped child of this test process needs before it
@@ -374,7 +447,7 @@ fn reconcile_stops_what_the_previous_run_left_and_nothing_else() {
             kept: vec![identity(kept)],
             kept_sessions: Vec::new(),
             sessions: Vec::new(),
-            ..persist::Persisted::default()
+            ..this_boot()
         },
     )
     .unwrap();
@@ -384,6 +457,84 @@ fn reconcile_stops_what_the_previous_run_left_and_nothing_else() {
     assert_stops_running(tagged);
     for pid in [reused, kept, theirs] {
         assert!(is_running(pid), "{pid} was stopped");
+    }
+}
+
+/// Makes this test's system one whose boot id is `id`.
+fn in_boot(id: Option<&str>) {
+    BOOT_ID_OVERRIDE.set(Some(id.map(str::to_string)));
+}
+
+/// A ledger file written in another boot of the system names nothing that is running, though a
+/// process now has the pid and the start time it names: on Linux, start times count from boot.
+#[test]
+fn reconcile_takes_nothing_from_a_file_written_in_another_boot() {
+    in_boot(Some("this-boot"));
+    let dir = ScratchDir::new("ledger-other-boot");
+    let ledger = ProcessLedger::new(&dir);
+    quiet(&ledger);
+    let left = detached("/bin/sleep", &["60"], &[]);
+    let _guard = KillOnDrop(vec![left]);
+    let id = identity(left);
+    persist::save(
+        &dir.join(persist::LEDGER_FILE),
+        &persist::Persisted {
+            boot: Some("another-boot".to_string()),
+            attributed: vec![persist::PersistedProcess {
+                pid: id.pid,
+                start: id.start,
+                launch: uuid::Uuid::new_v4().to_string(),
+                sid: left,
+            }],
+            ..this_boot()
+        },
+    )
+    .unwrap();
+
+    ledger.reconcile();
+    assert!(is_running(left), "stopped on a file of another boot");
+    let persist::Loaded::Read(written) = persist::load(&dir.join(persist::LEDGER_FILE)) else {
+        panic!("the ledger file was not written");
+    };
+    assert_eq!(written.boot.as_deref(), Some("this-boot"));
+}
+
+/// A ledger file whose boot cannot be compared with this run's — it records none on a system
+/// that has boot ids, written before the file recorded one, or this run cannot read the boot id
+/// it records — may count start times from another point: what it kept cannot be recognized, so
+/// what only a tag reaches is kept, as for a file that cannot be read.
+#[test]
+fn a_file_whose_boot_cannot_be_compared_keeps_what_a_tag_reaches() {
+    for (written_in, this_run) in [(None, Some("this-boot")), (Some("a-boot"), None)] {
+        in_boot(this_run);
+        let dir = ScratchDir::new("ledger-unknown-boot");
+        let ledger = ProcessLedger::new(&dir);
+        quiet(&ledger);
+        let tagged = tagged_sleeper(&format!("{}:{}", ledger.instance, uuid::Uuid::new_v4()));
+        let _guard = KillOnDrop(vec![tagged]);
+        let id = identity(tagged);
+        let file = dir.join(persist::LEDGER_FILE);
+        persist::save(
+            &file,
+            &persist::Persisted {
+                boot: written_in.map(str::to_string),
+                kept: vec![Identity { start: 1, ..id }],
+                ..this_boot()
+            },
+        )
+        .unwrap();
+
+        ledger.reconcile();
+        assert!(
+            is_running(tagged),
+            "{written_in:?}: stopped on its tag alone"
+        );
+        assert!(ledger.book().kept.contains(&id), "{written_in:?}");
+        let persist::Loaded::Read(written) = persist::load(&file) else {
+            panic!("{written_in:?}: the ledger file was not written");
+        };
+        assert_eq!(written.boot.as_deref(), this_run);
+        assert!(written.kept.contains(&id), "{written_in:?}");
     }
 }
 
@@ -422,17 +573,20 @@ fn an_unreadable_ledger_file_is_moved_aside_and_what_a_tag_reaches_is_kept() {
 }
 
 /// A process the previous run's launch tagged stays running when it is in the terminal session
-/// of a process the user kept, the kept process having exited since.
+/// of a process the user kept, the kept process having exited since and the file not naming the
+/// tagged one: another kept process the file names still in the session shows it is the one kept.
 #[test]
 fn reconcile_leaves_a_tagged_process_in_a_kept_session_whose_leader_exited() {
     let dir = ScratchDir::new("ledger-kept-session");
     let ledger = ProcessLedger::new(&dir);
     quiet(&ledger);
-    let (child_file, go) = (dir.join("child"), dir.join("go"));
+    let (named_file, later_file, go) = (dir.join("named"), dir.join("later"), dir.join("go"));
+    let fork_sleeper = "my $c = fork(); if ($c == 0) { exec @ARGV }";
     let leader_script = format!(
-        "my $c = fork(); if ($c == 0) {{ exec @ARGV }} {} {} exit 0;",
-        perl_write(&child_file, "$c"),
-        perl_wait_for(&go)
+        "{{ {fork_sleeper} {} }} {} {{ {fork_sleeper} {} }} exit 0;",
+        perl_write(&named_file, "$c"),
+        perl_wait_for(&go),
+        perl_write(&later_file, "$c"),
     );
     let mut args = vec!["-e", leader_script.as_str(), "--"];
     let binary = test_binary();
@@ -444,33 +598,35 @@ fn reconcile_leaves_a_tagged_process_in_a_kept_session_whose_leader_exited() {
         &args,
         &[(SLEEP_VAR, Some("60")), (TAG_VARIABLE, Some(&tag))],
     );
-    let child = wait_for_pid(&child_file);
-    let _guard = KillOnDrop(vec![leader, child]);
+    let named = wait_for_pid(&named_file);
+    let _guard = KillOnDrop(vec![leader, named]);
     let leader_id = identity(leader);
     persist::save(
         &dir.join(persist::LEDGER_FILE),
         &persist::Persisted {
-            attributed: Vec::new(),
-            kept: vec![leader_id],
+            kept: vec![leader_id, identity(named)],
             kept_sessions: vec![persist::PersistedSession {
                 sid: leader,
                 leader_start: Some(leader_id.start),
             }],
-            sessions: Vec::new(),
-            ..persist::Persisted::default()
+            ..this_boot()
         },
     )
     .unwrap();
     std::fs::write(&go, "").unwrap();
+    let later = wait_for_pid(&later_file);
+    let _later_guard = KillOnDrop(vec![later]);
     let deadline = Instant::now() + PATIENCE;
     while leader_id.is_running() {
         assert!(Instant::now() < deadline, "the leader never exited");
         std::thread::sleep(Duration::from_millis(20));
     }
-    wait_for_tag(child);
+    wait_for_tag(later);
 
     ledger.reconcile();
-    assert!(is_running(child), "a process in a kept session was stopped");
+    ledger.tick();
+    assert!(is_running(later), "a process in a kept session was stopped");
+    assert!(ledger.book().kept.contains(&identity(later)));
 }
 
 /// A reconcile asked for once the scanner thread runs, started by a launch, still runs.
@@ -489,7 +645,7 @@ fn a_reconcile_asked_for_after_the_scanner_started_runs() {
                 launch: uuid::Uuid::new_v4().to_string(),
                 sid: 0,
             }],
-            ..persist::Persisted::default()
+            ..this_boot()
         },
     )
     .unwrap();
@@ -1162,7 +1318,7 @@ fn a_reconcile_that_cannot_read_the_table_still_takes_in_what_was_kept() {
         &dir.join(persist::LEDGER_FILE),
         &persist::Persisted {
             kept: vec![id],
-            ..persist::Persisted::default()
+            ..this_boot()
         },
     )
     .unwrap();
@@ -1175,38 +1331,50 @@ fn a_reconcile_that_cannot_read_the_table_still_takes_in_what_was_kept() {
 }
 
 /// A reconcile stops what sits in a terminal session the previous run recorded for a launch,
-/// whose leader is gone, though the file names no process of it and no tag can be read.
+/// whose leader is gone, though the file does not name it and no tag can be read: a process the
+/// file names still in the session shows it is the one recorded.
 #[test]
 fn reconcile_stops_what_sits_in_a_session_the_previous_run_recorded() {
     let dir = ScratchDir::new("ledger-reconcile-session");
     let ledger = ProcessLedger::new(&dir);
     quiet(&ledger);
-    let (child_file, go) = (dir.join("child"), dir.join("go"));
+    let (named_file, later_file, go) = (dir.join("named"), dir.join("later"), dir.join("go"));
+    let fork_sleep = "my $c = fork(); if ($c == 0) { exec \"/bin/sleep\", \"60\" }";
     let leader_script = format!(
-        "my $c = fork(); if ($c == 0) {{ exec \"/bin/sleep\", \"60\" }} {} {} exit 0;",
-        perl_write(&child_file, "$c"),
-        perl_wait_for(&go)
+        "{{ {fork_sleep} {} }} {} {{ {fork_sleep} {} }} exit 0;",
+        perl_write(&named_file, "$c"),
+        perl_wait_for(&go),
+        perl_write(&later_file, "$c"),
     );
     let leader = detached(
         "/usr/bin/perl",
         &["-e", &leader_script],
         &[(TAG_VARIABLE, None)],
     );
-    let child = wait_for_pid(&child_file);
-    let _guard = KillOnDrop(vec![leader, child]);
+    let named = wait_for_pid(&named_file);
+    let _guard = KillOnDrop(vec![leader, named]);
     let leader_id = identity(leader);
+    let named_id = identity(named);
     persist::save(
         &dir.join(persist::LEDGER_FILE),
         &persist::Persisted {
+            attributed: vec![persist::PersistedProcess {
+                pid: named,
+                start: named_id.start,
+                launch: uuid::Uuid::new_v4().to_string(),
+                sid: leader,
+            }],
             sessions: vec![persist::PersistedSession {
                 sid: leader,
                 leader_start: Some(leader_id.start),
             }],
-            ..persist::Persisted::default()
+            ..this_boot()
         },
     )
     .unwrap();
     std::fs::write(&go, "").unwrap();
+    let later = wait_for_pid(&later_file);
+    let _later_guard = KillOnDrop(vec![later]);
     let deadline = Instant::now() + PATIENCE;
     while leader_id.is_running() {
         assert!(Instant::now() < deadline, "the leader never exited");
@@ -1214,7 +1382,72 @@ fn reconcile_stops_what_sits_in_a_session_the_previous_run_recorded() {
     }
 
     ledger.reconcile();
-    assert_stops_running(child);
+    assert_stops_running(named);
+    assert_stops_running(later);
+}
+
+/// A terminal session the previous run recorded, for a launch or as kept, whose members have all
+/// exited may have had its id handed to an unrelated process since, which started a session and
+/// left a member in it with no leader. A reconcile neither stops nor keeps what sits in it.
+#[test]
+fn reconcile_takes_no_session_whose_id_has_passed_to_unrelated_processes() {
+    let dir = ScratchDir::new("ledger-reconcile-reused-session");
+    let ledger = ProcessLedger::new(&dir);
+    quiet(&ledger);
+    let leaderless = |name: &str| {
+        let child_file = dir.join(name);
+        let script = format!(
+            "my $c = fork(); if ($c == 0) {{ exec \"/bin/sleep\", \"60\" }} {} exit 0;",
+            perl_write(&child_file, "$c")
+        );
+        let leader = detached("/usr/bin/perl", &["-e", &script], &[(TAG_VARIABLE, None)]);
+        (leader, wait_for_pid(&child_file))
+    };
+    let (ended_sid, in_ended) = leaderless("ended");
+    let (kept_sid, in_kept) = leaderless("kept");
+    let _guard = KillOnDrop(vec![in_ended, in_kept]);
+    // What the file named of those sessions are processes that had their ids before.
+    let before = |pid: i32| Identity { pid, start: 1 };
+    persist::save(
+        &dir.join(persist::LEDGER_FILE),
+        &persist::Persisted {
+            attributed: vec![persist::PersistedProcess {
+                pid: ended_sid,
+                start: 1,
+                launch: uuid::Uuid::new_v4().to_string(),
+                sid: ended_sid,
+            }],
+            kept: vec![before(kept_sid)],
+            sessions: vec![persist::PersistedSession {
+                sid: ended_sid,
+                leader_start: Some(1),
+            }],
+            kept_sessions: vec![persist::PersistedSession {
+                sid: kept_sid,
+                leader_start: None,
+            }],
+            ..this_boot()
+        },
+    )
+    .unwrap();
+    for sid in [ended_sid, kept_sid] {
+        let deadline = Instant::now() + PATIENCE;
+        while table::start_of(sid).is_some() {
+            assert!(Instant::now() < deadline, "the leader {sid} never exited");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    ledger.reconcile();
+    ledger.tick();
+    for pid in [in_ended, in_kept] {
+        assert!(is_running(pid), "{pid} was stopped");
+        assert!(launch_of(&ledger, pid).is_none(), "{pid} was attributed");
+    }
+    let book = ledger.book();
+    assert!(!book.kept.contains(&identity(in_kept)), "kept");
+    assert!(!book.kept_sessions.contains_key(&kept_sid));
+    assert!(!book.launches[ENDED].sessions.contains_key(&ended_sid));
 }
 
 /// What the ledger file holds: the sessions recorded for the launches, and those of kept
@@ -1796,4 +2029,47 @@ fn what_a_hold_gives_up_as_kept_is_listed_under_the_project() {
         .map(|tree| (tree.id, tree.session_id, tree.kept))
         .collect();
     assert_eq!(listed, vec![(identity(child).key(), None, true)]);
+}
+
+/// What a launch's end writes down names no terminal session its stop emptied, though every
+/// round of the stop found a process anew, the last in a session no read showed empty yet: the
+/// next run would otherwise take whatever comes to hold that id for the launch's.
+#[test]
+fn the_file_written_at_a_launch_end_names_no_session_its_stop_emptied() {
+    let (state, dir) = app_state("ledger-end-sessions");
+    let ledger = &state.process_ledger;
+    let _first = following(&state);
+    let pending = ledger.begin_launch("s1");
+    let script = format!(
+        "{RESPAWN_VAR}='{}' /usr/bin/perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' -- '{}' {} \
+         >/dev/null 2>&1 &\nexec sleep 300",
+        dir.display(),
+        test_binary(),
+        SLEEPER.join(" "),
+    );
+    let live = tagged_live_session("s1", Agent::Claude, &script, pending.tag());
+    state.register_live(live.clone());
+    let first = wait_for_pid(&dir.join("gen-0"));
+    let _guard = KillOnDrop(vec![first]);
+    wait_for_tag(first);
+    ledger.scan(false);
+    assert_eq!(
+        launch_of(ledger, first).as_deref(),
+        Some(live.launch_id.as_str())
+    );
+
+    ledger.end_launch(&live.launch_id);
+    let generations: Vec<i32> = (1..=RESPAWN_LAST)
+        .map(|generation| wait_for_pid(&dir.join(format!("gen-{generation}"))))
+        .collect();
+    let _later_guard = KillOnDrop(generations.clone());
+    let last = generations[RESPAWN_LAST - 1];
+    assert_stops_running(last);
+    let persist::Loaded::Read(written) = persist::load(&dir.join(persist::LEDGER_FILE)) else {
+        panic!("the ledger file was not written");
+    };
+    assert!(
+        written.sessions.iter().all(|session| session.sid != last),
+        "{written:?}"
+    );
 }

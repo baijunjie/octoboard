@@ -98,7 +98,9 @@ is confirmed closes the confirmation. What the two actions do is in "Process inf
 - **Keyboard focus**: where the confirmation was opened from the keyboard, so the card's button held focus, and the
   tree has left the list, focus goes, with its focus ring, to the first button of the card that followed it, or, with
   none, to where `F6` lands in the panel. A card that goes away while it or one of its buttons holds focus hands focus
-  to where `F6` lands in the panel as well.
+  to where `F6` lands in the panel as well. A confirmation that closes because a refresh took its tree out of the list,
+  where it was opened from the keyboard, hands focus on the same way: to the first button of the card that followed the
+  tree, or, with none, to where `F6` lands in the panel.
 
 ## Loading, refreshing and failures
 
@@ -116,7 +118,9 @@ A reading that falls due while the window is hidden waits until it is shown agai
 **When the first reading fails**, the panel's body shows an empty-state failure (see "Failures shown on the screen" in
 `docs/product/error-alerts.md`) saying the processes could not be listed because the list did not come from
 Octoboard's background service, with **Try again**; the list is not read again until Try again is pressed. The session
-filter stays above it.
+filter stays above it. Pressing Try again gives the failure's place to the loading line while the answer is awaited,
+and where focus was on Try again it goes first to where `F6` lands in the panel; a retry that fails again shows the
+failure, and announces it, afresh.
 
 **When a later reading fails**, the last list stays, under an amber warning that the list could not be refreshed and
 the processes shown may be out of date; readings go on, and the warning goes with the next one that succeeds.

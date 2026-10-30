@@ -39,6 +39,10 @@ pub(super) fn instance_id(dir: &Path) -> String {
 /// The ledger file's content.
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub(super) struct Persisted {
+    /// The boot of the system the file was written in (`table::boot_id`): written in another,
+    /// nothing it names is running, and its start times do not compare with this boot's.
+    #[serde(default)]
+    pub boot: Option<String>,
     #[serde(default)]
     pub attributed: Vec<PersistedProcess>,
     #[serde(default)]

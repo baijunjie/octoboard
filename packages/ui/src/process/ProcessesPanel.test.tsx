@@ -3,6 +3,7 @@ import { act, useState } from "react";
 import { getInteractionModality, setInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import { mountForTooltip } from "../components/tooltipTestSupport";
 import { DaemonRequestError } from "../daemon-client";
 import { errorAlerts } from "../errorAlerts";
@@ -489,4 +490,74 @@ it("keeps the confirmation, the toast and the focus hand-over when a refresh tak
   expect(daemon.toastNotice).toHaveBeenCalledWith("Stopped the process.");
   expect(confirmation()).toBeNull();
   expect(document.activeElement).toBe(panel().querySelector('button[aria-haspopup="listbox"]'));
+});
+
+const tryAgain = () => [...panel().querySelectorAll("button")].find((candidate) => candidate.textContent === "Try again")!;
+
+it("gives the failed first list's place to the loading line when Try again starts, with focus going to the panel's landing first, and lands there once the list arrives", async () => {
+  let failing = true;
+  let answer!: (event: Event) => void;
+  await mount({ project }, async () => {
+    if (failing) throw new Error("socket closed");
+    return new Promise<Event>((resolve) => { answer = resolve; });
+  });
+  await act(async () => tryAgain().focus());
+  failing = false;
+  await act(async () => tryAgain().click());
+  expect(panel().textContent).toContain("Loading processes");
+  expect(panel().textContent).not.toContain("Could not list the processes");
+  expect(document.activeElement).toBe(panel().querySelector('button[aria-haspopup="listbox"]'));
+  await act(async () => answer({ type: "processes_listed", trees: [tree("1:1")] }));
+  await settleFocus();
+  expect(rows()).toHaveLength(1);
+  expect(document.activeElement).toBe(panel().querySelector('button[aria-haspopup="listbox"]'));
+});
+
+it("announces a retry that fails again as a new failure, once the focus move it came with has been spoken", async () => {
+  await mount({ session: running }, async () => { throw new Error("socket closed"); });
+  await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
+  const first = panel().querySelector("[role=alert]");
+  expect(first).not.toBeNull();
+  await act(async () => tryAgain().click());
+  expect(panel().querySelector("[role=alert]")).toBeNull();
+  await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
+  const again = panel().querySelector("[role=alert]");
+  expect(again).not.toBeNull();
+  expect(again).not.toBe(first);
+});
+
+const threeTrees = (without?: string) => [tree("1:1"), tree("2:2", { command: "tail -f log" }), tree("3:3", { command: "node third.js" })].filter((candidate) => candidate.id !== without);
+
+it("hands focus to the card that followed the tree when a refresh took it out while its stop was in flight", async () => {
+  let gone = false;
+  let answer!: (event: Event) => void;
+  await mount({ session: running }, async (body) => {
+    if (body.type === "stop_processes") return new Promise<Event>((resolve) => { answer = resolve; });
+    return { type: "processes_listed", trees: threeTrees(gone ? "2:2" : undefined) };
+  });
+  await act(async () => button("Stop", rows()[1]).focus());
+  await act(async () => button("Stop", rows()[1]).click());
+  await confirmStop();
+  gone = true;
+  await act(async () => void vi.advanceTimersByTime(3000));
+  expect(rows()).toHaveLength(2);
+  await act(async () => answer({ type: "processes_stopped", ids: ["2:2"] }));
+  await settleFocus();
+  expect(confirmation()).toBeNull();
+  expect(document.activeElement).toBe(button("Stop", rows()[1]));
+  expect(rows()[1].textContent).toContain("node third.js");
+});
+
+it("hands focus to the next row's first action when a refresh takes the tree out from under its open confirmation", async () => {
+  let gone = false;
+  await mount({ session: running }, async () => ({ type: "processes_listed", trees: threeTrees(gone ? "2:2" : undefined) }));
+  await act(async () => button("Stop", rows()[1]).focus());
+  await act(async () => button("Stop", rows()[1]).click());
+  gone = true;
+  await act(async () => void vi.advanceTimersByTime(3000));
+  await settleFocus();
+  expect(confirmation()).toBeNull();
+  expect(rows()).toHaveLength(2);
+  expect(document.activeElement).toBe(button("Stop", rows()[1]));
+  expect(rows()[1].textContent).toContain("node third.js");
 });

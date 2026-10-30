@@ -15,7 +15,7 @@ use serde::Serialize;
 
 use super::attribute::{keep, Attributed, Launch, ENDED};
 use super::table::{self, Identity, Table};
-use super::{now_micros, ProcessLedger};
+use super::ProcessLedger;
 
 /// The longest command a tree reports, in bytes.
 const COMMAND_LIMIT: usize = 1024;
@@ -394,7 +394,7 @@ impl ProcessLedger {
                 .iter()
                 .map(|(_, top, members)| (*top, members.as_slice())),
         );
-        let oldest = now_micros().saturating_sub(min_age.as_micros() as u64);
+        let oldest = table::now().saturating_sub(min_age.as_micros() as u64);
         found.retain(|(_, top, _)| top.start <= oldest);
         found.sort_by_key(|(_, top, _)| (top.start, top.pid));
         found

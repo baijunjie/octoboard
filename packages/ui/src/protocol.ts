@@ -59,13 +59,13 @@ export function isProjectFolderUnknown(item: { state: SessionBranchState; cause?
 }
 
 /** A group of one launch's processes: a top process and its attributed descendants, or, with no
- * `session_id`, a project process: one the user kept, one a failed account switch left, or one left behind
- * in a removed directory of a project. `id` is what `stop_processes` and `keep_processes` name it by. */
+ * `session_id`, a project process: one the user kept, one a failed account switch, model change or sharing
+ * change left, or one left behind in a removed directory of a project. `id` is what `stop_processes` and `keep_processes` name it by. */
 export interface ProcessTree {
   id: string;
   /** The session whose launch the tree belongs to; absent for a project process. */
   session_id?: string;
-  /** The user kept the tree, or a failed account switch left it: no session stops it. */
+  /** The user kept the tree, or a failed account switch, model change or sharing change left it: no session stops it. */
   kept: boolean;
   /** The top process's arguments joined; empty when they could not be read. */
   command: string;
@@ -1633,12 +1633,13 @@ export type RequestBody =
   | { type: "inspect_session_branches"; sessions: string[]; processes?: boolean }
   /** With `session_id`, the trees of the session's current launch (refused with
    * `session_not_running` when it has no process); with `project_id`, those of every running
-   * session of the project, then the project's leftovers. */
+   * session of the project, then the project's processes: its leftovers and the trees kept under it. */
   | { type: "list_processes"; session_id: string }
   | { type: "list_processes"; project_id: string }
-  /** Stops the trees that are still a followed launch's, or a project's leftovers. */
+  /** Stops the trees that are still a followed launch's, a project's leftovers or kept trees. */
   | { type: "stop_processes"; ids: string[] }
-  /** Makes the trees the user's: never listed or stopped by the daemon again. */
+  /** Makes the trees the user's: no session stops them, and the daemon stops them only when a
+   * `stop_processes` names them or their project is removed. */
   | { type: "keep_processes"; ids: string[] }
   /** What `delete_project` with `trash_directory` would also remove: the linked worktrees outside
    * its folder (every one when the folder holds the repository, those bound to its sessions

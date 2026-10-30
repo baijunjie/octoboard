@@ -231,9 +231,9 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            running until the receiving session's process ends instead of the giving one's. \
            `from` and `to` are each you or a session of yours, and each must have a process \
            running; name the trees by the ids `get_session` lists in `processes`. A session that \
-           is working or waiting for the user cannot give processes up. A handoff, an account \
-           switch, a model change and a change of account sharing carry a session's processes \
-           over by themselves.\n\
+           is working, starting or waiting for the user cannot give processes up. A handoff, an \
+           account switch, a model change and a change of account sharing carry a session's \
+           processes over by themselves.\n\
          - `switch_session_account` moves a session of yours to another account of its own agent. \
            The user approves it first and may change the account, model and effort; the call \
            waits for their answer, unless they have chosen to approve account \

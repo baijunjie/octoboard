@@ -23,7 +23,10 @@ use macos as platform;
 )]
 pub struct Identity {
     pub pid: i32,
-    /// When the process started, in microseconds since the Unix epoch.
+    /// When the process started, in microseconds on the clock [`now`] reads: since the Unix
+    /// epoch on macOS, where the system records it so, and since boot on Linux, where only that
+    /// stays the same across a step of the wall clock. So a start compares only with another
+    /// read in the same boot of the system ([`boot_id`]).
     pub start: u64,
 }
 
@@ -44,7 +47,7 @@ impl Identity {
 
     /// When the process started, in milliseconds since the Unix epoch.
     pub fn started_at_ms(&self) -> i64 {
-        (self.start / 1000) as i64
+        (platform::epoch_micros(self.start) / 1000) as i64
     }
 
     /// Whether this process is still running: its pid is in use, by a process that started when
@@ -177,6 +180,17 @@ pub fn start_of(pid: i32) -> Option<u64> {
     platform::start_of(pid)
 }
 
+/// Now, on the clock of [`Identity::start`].
+pub fn now() -> u64 {
+    platform::now()
+}
+
+/// What tells this boot of the system from any other, where start times need it to be told
+/// apart (Linux); `None` where they do not, or it cannot be read.
+pub fn boot_id() -> Option<String> {
+    platform::boot_id()
+}
+
 /// The environment variable that tags every process an agent launch started; its value is
 /// `<instance id>:<launch id>`.
 pub const TAG_VARIABLE: &str = "OCTOBOARD_PROCESS_TAG";
@@ -299,6 +313,14 @@ mod tests {
         let table = Table::read().expect("the table");
         let me = table.get(pid).expect("this process is in the table");
         assert_eq!(start_of(pid), Some(me.id.start));
+        // On the clock `now` reads, and shown on the wall clock.
+        assert!(me.id.start <= now());
+        let wall_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
+        let age_ms = (now() - me.id.start) as i64 / 1000;
+        assert!((me.id.started_at_ms() - (wall_ms - age_ms)).abs() < 1000);
         // SAFETY: `getsid(0)` only reads this process's session.
         assert_eq!(me.sid, unsafe { libc::getsid(0) });
         assert!(argv(me.id).is_some_and(|argv| !argv.is_empty()));

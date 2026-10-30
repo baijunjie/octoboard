@@ -45,3 +45,12 @@ disk, `stop.rs` stopping by identity, and `table.rs` with `table/macos.rs` and `
   its removal.
 - `carry.rs`: `HeldForLaunch::keep_what_is_held` — keep what a failed restart (an account switch, a model change, a
   change of an account's sharing) still holds for the session, under its project.
+
+## Known limits
+
+- A process whose environment cannot be read (an Apple platform binary on macOS, such as `/bin/sleep`) that a shell
+  left running in the background is never attributed when that shell exits within one scan interval: its chain no
+  longer reaches the launch, the shell's terminal session was never recorded, and it has no readable tag. It is neither
+  listed nor stopped with the launch.
+- A helper of a kept process that both double-forks and starts a terminal session of its own between two scans escapes
+  the kept tree, and is stopped with the launch whose tag it carries.

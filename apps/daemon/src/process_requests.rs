@@ -55,8 +55,8 @@ fn list_floor() -> Duration {
 }
 
 /// The trees `target` names. A session that has no process is refused; a project with none
-/// running lists only its leftovers. A list of the same target computed less than
-/// [`LIST_FLOOR`] ago answers again.
+/// running lists only its processes, the trees no session owns: its leftovers and the trees kept
+/// under it. A list of the same target computed less than [`LIST_FLOOR`] ago answers again.
 pub async fn list(state: &Arc<AppState>, target: ProcessTarget) -> Result<Vec<ProcessTree>> {
     let floor = list_floor();
     match target {

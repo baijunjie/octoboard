@@ -27,9 +27,9 @@ async function listOnce(request: Daemon["request"], target: ProcessTarget): Prom
 /** The process trees of `target`, asked for now and then at the `polling` pace while the caller is
  * mounted, and not while the document is hidden; `undefined` until the first answer. A failure is
  * `error` for the caller to show. Before a first list succeeds, a failure stops polling until `retry`
- * explicitly asks again. Later failures retain the trees and keep polling. `settle` takes
- * the trees `ids` out of the list at once and asks again, for the trees an action has just stopped or
- * kept: an answer that was already on its way is dropped, so it cannot bring them back. */
+ * explicitly asks again, and clears `error` while that answer is awaited. Later failures retain the trees and
+ * keep polling. `settle` takes the trees `ids` out of the list at once and asks again, for the trees an action
+ * has just stopped or kept: an answer that was already on its way is dropped, so it cannot bring them back. */
 export function useProcessTrees(target: ProcessTarget | undefined, polling: ProcessPolling = "live"): {
   trees: ProcessTree[] | undefined;
   error: ErrorPresentation | undefined;
@@ -59,7 +59,7 @@ export function useProcessTrees(target: ProcessTarget | undefined, polling: Proc
         hasList.current.value = true;
         setState({ key, trees: answer.trees });
       } else {
-        setState((current) => ({ ...current, key, error: errorPresentation(answer.error) }));
+        setState((current) => ({ key, trees: current.trees, error: errorPresentation(answer.error) }));
       }
       if (hasList.current.value) timer = setTimeout(due, POLL_MS[polling]);
     };
