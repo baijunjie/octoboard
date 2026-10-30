@@ -25,7 +25,7 @@ use crate::protocol::{
 use crate::pty::{Answering, Attached, PtyCore};
 use crate::reporting;
 use crate::rollout;
-use crate::session::LiveSession;
+use crate::session::{is_terminal_protocol, LiveSession};
 use crate::shell_terminal::ShellProcess;
 use crate::state::{AppState, TurnClose};
 use crate::transcript;
@@ -412,6 +412,9 @@ struct DeferredInput {
     frames: VecDeque<Vec<u8>>,
     bytes: usize,
     replies: VecDeque<Vec<u8>>,
+    /// A user frame that was not only the terminal's own reports failed to be written, or a write
+    /// task failed with its frame unknown.
+    typing_lost: bool,
 }
 
 #[derive(Debug)]
@@ -480,7 +483,10 @@ impl DeferredInput {
                 self.frames.push_front(data);
                 Ok(false)
             }
-            (InputFrame::User(_), Err(error)) => Err(error),
+            (InputFrame::User(data), Err(error)) => {
+                self.typing_lost |= !is_terminal_protocol(&data);
+                Err(error)
+            }
             (frame, result) => {
                 self.bytes -= frame.len();
                 if let Err(error) = result {
@@ -489,6 +495,22 @@ impl DeferredInput {
                 Ok(true)
             }
         }
+    }
+
+    /// A write task that failed took its frame with it, so whatever it held counts as lost.
+    fn write_task_failed(&mut self, error: tokio::task::JoinError) -> crate::ptyio::PartialWrite {
+        self.typing_lost = true;
+        crate::ptyio::PartialWrite {
+            written: 0,
+            error: std::io::Error::other(format!("the terminal input task failed: {error}")),
+        }
+    }
+
+    /// Whether input someone may have typed was not written. Frames made up only of the
+    /// terminal's own reports (focus, mouse movement, wheel and release, query replies) hold no
+    /// draft, so losing them loses nothing.
+    fn lost_typing(&self) -> bool {
+        self.typing_lost || self.frames.iter().any(|frame| !is_terminal_protocol(frame))
     }
 }
 
@@ -613,10 +635,7 @@ async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, id: String) {
                 writing = None;
                 let result = match completed {
                     Ok((frame, result)) => deferred.complete(frame, result),
-                    Err(error) => Err(crate::ptyio::PartialWrite {
-                        written: 0,
-                        error: std::io::Error::other(format!("the terminal input task failed: {error}")),
-                    }),
+                    Err(error) => Err(deferred.write_task_failed(error)),
                 };
                 match result {
                     Ok(ready) => {
@@ -652,10 +671,10 @@ async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, id: String) {
                     failure = Some(error.to_string());
                 }
             }
-            Err(error) => failure = Some(error.to_string()),
+            Err(error) => failure = Some(deferred.write_task_failed(error).to_string()),
         }
     }
-    if failure.is_some() || !deferred.frames.is_empty() {
+    if deferred.lost_typing() {
         let detail = failure
             .map(|error| format!(": {error}"))
             .unwrap_or_default();
@@ -1209,6 +1228,34 @@ mod tests {
             b"second",
             "the partially accepted first frame is never put back"
         );
+    }
+
+    #[test]
+    fn deferred_terminal_reports_are_not_lost_typing() {
+        let refused = || {
+            Err(crate::ptyio::PartialWrite {
+                written: 0,
+                error: std::io::Error::from(std::io::ErrorKind::BrokenPipe),
+            })
+        };
+        let mut pending = DeferredInput::default();
+        pending.push(b"\x1b[O".to_vec());
+        let focus = pending.next(true).unwrap();
+        pending.complete(focus, refused()).unwrap_err();
+        pending.push(b"\x1b[<35;10;4M".to_vec());
+        assert!(
+            !pending.lost_typing(),
+            "a refused focus report and a queued mouse movement hold no draft"
+        );
+
+        pending.push(b"x".to_vec());
+        assert!(pending.lost_typing(), "a queued key is typing");
+
+        let mut pending = DeferredInput::default();
+        pending.push(b"x".to_vec());
+        let key = pending.next(true).unwrap();
+        pending.complete(key, refused()).unwrap_err();
+        assert!(pending.lost_typing(), "a refused key is typing");
     }
 
     #[tokio::test]
