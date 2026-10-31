@@ -135,6 +135,12 @@ impl CodexTransport {
             server = spawn(&server_args)?;
             rpc = wait_for_server(&socket_directory.socket(), &server)?;
         }
+        if let (Some(thread), Some(reviewer)) = (&plan.resume_thread, plan.resume_reviewer) {
+            // Codex restores a saved reviewer ahead of the server's CLI default. An explicit
+            // resume checkpoints the current choice before the TUI attaches and restores it.
+            rpc.resume_with_reviewer(thread, cwd, reviewer)
+                .context("applying the Codex approval reviewer before remote resume")?;
+        }
         drop(rpc);
         Ok(Self {
             server: Mutex::new(Some(server)),
@@ -335,6 +341,19 @@ struct Rpc {
 }
 
 impl Rpc {
+    fn resume_with_reviewer(
+        &mut self,
+        thread: &str,
+        cwd: &Path,
+        reviewer: crate::protocol::ApprovalReviewer,
+    ) -> Result<(), RpcFailure> {
+        self.request(
+            "thread/resume",
+            json!({"threadId":thread,"cwd":cwd,"approvalsReviewer":reviewer}),
+        )?;
+        Ok(())
+    }
+
     fn connect(path: &Path) -> Result<Self, RpcFailure> {
         let deadline = Instant::now() + RPC_TIMEOUT;
         let stream =
@@ -487,6 +506,50 @@ mod tests {
         reply(&mut socket, &initialize, json!({}));
         assert_eq!(receive(&mut socket)["method"], "initialized");
         socket
+    }
+
+    #[test]
+    fn reviewer_resume_uses_the_explicit_choice_and_reports_rejections() {
+        use crate::protocol::ApprovalReviewer;
+        let (transport, listener) = fixture();
+        let server = std::thread::spawn(move || {
+            let mut socket = initialized(listener);
+            for reviewer in ["user", "auto_review"] {
+                let request = receive(&mut socket);
+                assert_eq!(request["method"], "thread/resume");
+                assert_eq!(
+                    request["params"],
+                    json!({
+                        "threadId":"saved-thread", "cwd":"/workspace", "approvalsReviewer":reviewer
+                    })
+                );
+                if reviewer == "user" {
+                    reply(&mut socket, &request, json!({}));
+                } else {
+                    socket.send(Message::Text(json!({
+                        "id":request["id"], "error":{"code":-32600,"message":"reviewer refused"}
+                    }).to_string())).unwrap();
+                }
+            }
+        });
+        let mut rpc = Rpc::connect(&transport.socket_directory.socket()).unwrap();
+        rpc.resume_with_reviewer(
+            "saved-thread",
+            Path::new("/workspace"),
+            ApprovalReviewer::User,
+        )
+        .unwrap();
+        let error = rpc
+            .resume_with_reviewer(
+                "saved-thread",
+                Path::new("/workspace"),
+                ApprovalReviewer::AutoReview,
+            )
+            .unwrap_err();
+        assert!(
+            matches!(error, RpcFailure::Rejected { message, .. } if message == "reviewer refused")
+        );
+        server.join().unwrap();
     }
 
     #[test]

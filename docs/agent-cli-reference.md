@@ -2168,6 +2168,12 @@ through `-c` was split incorrectly at the native key's `.toml`; the complete tab
 existing-thread resume using this method confirmed no extra review for the injected hooks, independent message
 delivery, and draft and cursor preservation. No user's trust file was changed.
 
+Codex 0.163.0 rejects explicit permission overrides, including `approvals_reviewer`, in a remote TUI resume. The
+private server can receive that configuration, but a saved thread reviewer takes precedence over its CLI default.
+Source inspection of that release confirms that an explicit `thread/resume` with `approvalsReviewer` checkpoints and
+flushes the effective settings before replying, even without a turn. Apply an explicit reviewer through that request
+before connecting the TUI without its reviewer override; a subsequent TUI reload restores the checkpointed choice.
+
 `thread/queue/add` accepts `threadId`, text `input`, and a stable `clientUserMessageId`. Its response includes
 `queuedSubmission.id`, passed with `threadId` to `thread/queue/start`. In idle sessions the add can start the item
 before start arrives; a subsequent “queued submission not found” is not grounds to enqueue again. During a turn,

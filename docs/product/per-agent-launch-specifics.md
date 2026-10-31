@@ -20,7 +20,7 @@ agent.
 | The agent's time limit on a call to Octoboard's tools | None is set | `-c mcp_servers.octoboard.tool_timeout_sec=660` | `tool_timeout_sec = 660` in that table |
 | The role description | `--append-system-prompt`, added to Claude Code's own system prompt | `-c developer_instructions=…`, a developer message added beside Codex's own prompt, which stays as it is | `--rules`, appended to Grok's system prompt |
 | The model and reasoning effort | `--model`, `--effort` | `-c model=…`, `-c model_reasoning_effort=…` | `--model`, `--reasoning-effort` |
-| An explicit approval choice (see "Approval modes" in `docs/product/per-agent-settings.md`) | `--permission-mode`: `auto` for **Automatic**, `default` for **Ask me**, `bypassPermissions` for **Approve everything** | `-c approvals_reviewer=…`: `auto_review` for **Automatic review**, `user` for **Ask me** | Not applicable |
+| An explicit approval choice (see "Approval modes" in `docs/product/per-agent-settings.md`) | `--permission-mode`: `auto` for **Automatic**, `default` for **Ask me**, `bypassPermissions` for **Approve everything** | `-c approvals_reviewer=…`: `auto_review` for **Automatic review**, `user` for **Ask me**; a private-server resume applies it through the server before the terminal attaches (see "Codex" below) | Not applicable |
 | Claude compatibility while on (see "Claude compatibility" in `docs/product/per-agent-settings.md`) | Not applicable | A section appended to the `developer_instructions` text, and Claude Code's MCP servers as `-c mcp_servers.<name>.…` overrides (see "Claude compatibility for Codex" below) | `GROK_CLAUDE_*_ENABLED=true` in the environment (see "Claude compatibility for Grok Build" below) |
 | Anything else | The status line, and under **Approve everything** the acceptance of Claude Code's warning, in the `--settings` JSON | The overrides listed under "Codex" below | Nothing else |
 
@@ -115,10 +115,13 @@ The launch conditions that are visible:
   Octoboard's tools alone; no other tool's limit changes.
 
 **Codex 0.163.0 runs with a private app server for the session.** Its terminal connects explicitly to that server;
-both processes receive the launch's configuration overrides, and use the same environment and working directory.
-The terminal retains its title, resume-directory and startup-notice settings. The server belongs to that running
-session and ends with it. This launch path is enabled only for the verified version 0.163.0, not for an unknown or
-different version. Other versions use the ordinary terminal launch.
+both processes receive the launch's configuration overrides, except that a resumed terminal receives no explicit
+approval reviewer: Codex rejects permission overrides when resuming a remote task. The selected reviewer is applied
+through the server before the terminal attaches, taking precedence over the conversation's saved reviewer. Both
+processes use the same environment and working directory. The terminal retains its title, resume-directory and
+startup-notice settings. The server belongs to that running session and ends with it. This launch path is enabled
+only for the verified version 0.163.0, not for an unknown or different version. Other versions use the ordinary
+terminal launch.
 
 Automatic messages on the supported launch use Codex's independent queue, without typing into the composer, including
 in a fresh session before any user submission and after cancellation. During an active turn the message is queued
