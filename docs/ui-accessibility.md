@@ -1749,14 +1749,15 @@ place a selected state's border takes. That edge is decorative and is not held t
 takes the accent icon colour (`--accent-soft-foreground`, see "One definition per semantic colour"), which reaches 3:1.
 
 A card that sits on a dialog's own surface has no other surface to stand off from, and the panel shadow alone is
-invisible on white (and on the dark dialog, whose shadow is black on near-black). So the import dialog's cards, in its
-review and its result alike (`CARD_CLASS` in `packages/ui/src/configuration/importParts.tsx`), take HeroUI's
-`--surface-secondary` fill, one step off the dialog in both appearances, with the `panel-edge` hairline and the panel
-shadow. A card's header row (`CARD_HEADER_CLASS`, the same file) is one step further, the card's fill mixed with 6% of
-the foreground colour, so the heading reads apart from the rows under it; HeroUI's `--surface-tertiary` is too close to
-the card's fill to show in either appearance. That fill is decorative and not held to 3:1; the header's text and glyphs
-are held to their usual ratios against it. These fills stay in the import dialog: the dialog's surface and HeroUI's
-controls are not restyled for them.
+invisible on white (and on the dark dialog, whose shadow is black on near-black). The import dialog's cards, in its
+review and its result alike (`CARD_CLASS` in `packages/ui/src/configuration/importParts.tsx`), are framed as a table
+instead: the `panel-edge` hairline round the card and a groove between rows, with no shadow, and the rows on the
+dialog's own background. A card's header row (`CARD_HEADER_CLASS`, the same file) takes the fill of the fields in the
+rows (`--control-fill`, the dialog's floating fill), so the heading reads apart from the rows under it in both
+appearances; no field sits in a header, so the shared fill hides nothing. That fill and the hairline are decorative and
+not held to 3:1 (about 1.25:1 off the dialog in both appearances); the header's text and glyphs are held to their usual
+ratios against it, the muted project count being the closest at about 4.6:1. These fills stay in the import dialog: the
+dialog's surface and HeroUI's controls are not restyled for them.
 
 An unarchived locked session communicates its state through a persistent warning-coloured lock button with an Unlock
 accessible name and tooltip. Hovering or keyboard-focusing the button changes the glyph to an open lock; unlocking

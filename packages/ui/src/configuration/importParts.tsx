@@ -19,10 +19,14 @@ import type { AccountFallback, Agent, DocumentSettings, ImportFailure } from "..
 import { useFailureNode } from "./failureText";
 import { isUsableDirectory, type DirectoryProblem } from "./importPlan";
 
-/** The look of one card of the import dialog: a console's projects, an agent's accounts, the applied or applicable settings. */
-export const CARD_CLASS = "flex flex-col rounded-xl bg-surface-secondary panel-edge shadow-(--panel-shadow)";
-/** A card's header row: one step darker than the card, so the header reads apart from the rows under it. */
-export const CARD_HEADER_CLASS = "rounded-t-xl bg-[color-mix(in_oklab,var(--surface-secondary),var(--foreground)_6%)] groove-b px-4 py-3 last:rounded-b-xl last:border-b-0";
+/**
+ * The look of one card of the import dialog: a console's projects, an agent's accounts, the applied or applicable
+ * settings. Its edge and the grooves between rows already frame it as a table, so the rows take the dialog's own
+ * background and only the header is filled.
+ */
+export const CARD_CLASS = "flex flex-col rounded-xl panel-edge";
+/** A card's header row, filled like the fields in the rows so it reads apart from the rows under it. */
+export const CARD_HEADER_CLASS = "rounded-t-xl bg-(--control-fill) groove-b px-4 py-3 last:rounded-b-xl last:border-b-0";
 
 /** `useSubmitValidation`'s `shown`: holds a field's message back until the user has tried to import. */
 export type Shown = ReturnType<typeof useSubmitValidation>["shown"];
