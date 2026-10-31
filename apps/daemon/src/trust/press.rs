@@ -113,7 +113,7 @@ pub(super) fn press_enter(live: &LiveSession, screen: &Screen) -> Result<()> {
     if !screen.is_shown_in(&output) {
         return Err(screen_gone(agent));
     }
-    // An Enter on "2. Quit" ends the session.
+    // An Enter on the decline option quits or returns to the command center.
     if screen.cursor_on(&output) != Some(Cursor::Accept) {
         return Err(cursor_not_at_start(agent));
     }
