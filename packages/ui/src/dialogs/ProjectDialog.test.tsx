@@ -75,7 +75,7 @@ it("keeps the form locked while the answer for the path as it stands is out", as
 
 it("keeps the git form locked until the probe succeeds", async () => {
   const pending = render();
-  await chooseSource("git repository URL");
+  await chooseSource("Git repository URL");
   const clone = () => input("Clone into (parent directory)");
   expect(clone().disabled).toBe(true);
   type(input("Repository URL"), "https://example.com/o/r.git");
@@ -244,7 +244,7 @@ it("updates the optional name hint with the normalized directory without changin
 it("uses the repository's clone name as a live hint, preserving an entered name and empty clone submission", async () => {
   const pending = render();
   type(input("Name"), "My name");
-  await chooseSource("git repository URL");
+  await chooseSource("Git repository URL");
   type(input("Repository URL"), "git@example.com:owner/site.git");
   expect(input("Name").placeholder).toBe("site");
   expect(input("Name").value).toBe("My name");

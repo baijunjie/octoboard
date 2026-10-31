@@ -163,7 +163,8 @@ export const en = {
   "error.recovery.branch": "Select an existing local branch in the project’s branch menu. For an unavailable worktree, choose another branch or restore that worktree first.",
   "error.recovery.projectBranches": "Open a {terminal} in the repository and run {worktreeList} and {branchList} to see what was left, then remove what you no longer need with {git}, or leave it in place.",
   "error.recovery.sessionBranches": "Open a {terminal} in the repository, from the project’s action menu if the project is still there. Deal with what is reported for each one, then remove it with {git} or move it to the Trash yourself, or leave it in place.",
-  "error.recovery.refresh": "Refresh the affected view or select the current project or session again, then retry. Check the session terminal before resending any lost message.",
+  "error.recovery.refresh": "Refresh the affected view or select the current project or session again, then retry.",
+  "error.recovery.refreshMessages": "Check the session terminal before resending any lost message.",
   "error.recovery.scope": "Choose a supported file or a project folder within the permitted scope. Keep protected or shared folders; inspect the content in the project terminal if needed.",
   "error.recovery.limit": "Reduce the selection or open a smaller file, then retry. Large content can be inspected in the project’s terminal.",
   "error.recovery.openExternal": "Check that the required browser, terminal, file manager or default application is installed. You can open the displayed address or path manually in that application.",
@@ -523,7 +524,7 @@ export const en = {
     "{session} did not stop in time, so it was not switched. It may still be running.",
   "daemon.sharing_session_did_not_stop": "{session} did not stop in time, so sharing for account {name} was not changed.",
   "daemon.switch_did_not_come_up":
-    "{session} ended as soon as it was relaunched under the new account, so it stays on the account it had.",
+    "{session} ended as soon as it was relaunched. It stays on its current account.",
   "daemon.model_change_did_not_stop":
     "The session did not stop in time. It may still be running.",
   "daemon.model_change_did_not_come_up":
@@ -1409,7 +1410,7 @@ export const en = {
   "dialog.project.source": "Source",
   "dialog.project.source.local": "A single directory",
   "dialog.project.source.parent": "A parent directory (find git repositories inside it)",
-  "dialog.project.source.git": "A git repository URL (clone it)",
+  "dialog.project.source.git": "A {git} repository URL (clone it)",
   "dialog.project.repositoryUrl": "Repository URL",
   "dialog.project.urlExample": "Ex. https://github.com/owner/website",
   "dialog.project.directory": "Directory",
@@ -1587,6 +1588,8 @@ export const en = {
     other: "{count} sessions could not move to {account}",
   },
   "dialog.switchAccount.failedTitle": "Could not switch account",
+  "dialog.switchAccount.relaunchReason": "The session ended as soon as it was relaunched.",
+  "dialog.switchAccount.stopReason": "The session did not stop in time. It may still be running.",
   "dialog.switchAccount.unexpectedReason": "Failed unexpectedly.",
   "dialog.switchAccount.failedIntro": {
     one: "It stays on its current account.",
