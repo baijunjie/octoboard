@@ -270,9 +270,11 @@ export function OptionSelect<T extends string>({
           <ButtonContext.Provider value={{}}>
             <Select.ClearButton<"button">
               onClick={() => trigger.current?.focus()}
+              // The native button props target the same button rendered by FieldClearButton; react-aria
+              // types its click target more broadly and its unused value prop more narrowly.
               render={(props) => (
                 <FieldClearButton
-                  {...props}
+                  {...(props as React.ComponentProps<typeof FieldClearButton>)}
                   aria-hidden={undefined}
                   isDisabled={isDisabled}
                   className="absolute end-7 top-1/2 -translate-y-1/2 data-[empty=true]:invisible"
