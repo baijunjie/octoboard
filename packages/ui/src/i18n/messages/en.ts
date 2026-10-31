@@ -1194,6 +1194,8 @@ export const en = {
   "git.filter.noMatch": "No matching changes",
   "git.group.committed": "Committed",
   "git.view.changes": "Changes",
+  "git.commits.collapseAll": "Collapse all commits",
+  "git.commits.expandAll": "Expand all commits",
   "git.layout.byCommit": "Group by commit",
   "git.layout.allCommits": "Show commits together",
   "git.changes.branch": "Branch",

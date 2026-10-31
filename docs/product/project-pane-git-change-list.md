@@ -9,7 +9,8 @@ what is remembered — is in that doc; a change opened from the list is shown as
 ## What is listed
 
 The change list shows the branch's changes in sections, in this order, each headed with its name and how many changes
-it holds; a section with none is left out. First what the branch has not committed, from the worktree that has it
+it holds; a section with none is left out, except for Committed while its grouping control is available (see
+"Grouped by commit" below). First what the branch has not committed, from the worktree that has it
 checked out (see "Uncommitted changes" below):
 
 - **Conflicted** — paths in conflict. It is first, being what has to be dealt with before a commit can be made.
@@ -160,13 +161,19 @@ A line above the list says what the committed part is:
 
 ## Grouped by commit
 
-**Group by commit**, the third of the Git toggles in the pane's header, lists the Committed section's changes **under
+**Group by commit**, at the trailing end of the Committed section's heading, lists the section's changes **under
 the commits** the branch has made since the fork. It is off to begin with. It is a single icon button whose icon shows
 which form the committed changes are in and whose name says what pressing it will do, alternating between "Group by
 commit" and "Show commits together" (see "Two-state icon toggles" in `docs/product/labels-and-tooltips.md`). Each
 project keeps its own choice across reloads and restarts (see "What is remembered" in
 `docs/product/project-pane-git-mode.md`).
 
+- **The grouping control is available once a comparison shows commits beyond the fork.** The Committed heading
+  stays even when those commits leave no net file changes, so their individual changes can still be listed by
+  turning grouping on. It also stays while the commits are being read or could not be read, with a count of zero
+  until changes are listed; a failure is marked on the heading. The bulk fold button is disabled until commit rows
+  are listed. A filter with no matches still shows the no-matching-changes state (see "Filtering by file name"
+  below).
 - **The Committed section stays one section**, with one heading band whose count is of all the committed changes it
   shows. Inside it is **one commit row per commit**, newest first, in the order `git log` gives them, and each commit's
   changes are one level in, under its row; grouped by folder, the folders are inside each commit (see "Flat or grouped
@@ -185,6 +192,12 @@ project keeps its own choice across reloads and restarts (see "What is remembere
   whatever else the branch commits meanwhile, is apart from the Committed section's own fold, and is kept as the other
   folds are (see "What is remembered" in `docs/product/project-pane-git-mode.md`). Folding the Committed section
   hides its commit rows too, which keep the state they were in.
+- **A bulk fold button appears immediately before Group by commit while grouping is on.** If any commit in the
+  filtered list is unfolded, it folds all those commits; otherwise it unfolds them all. Its icon, tooltip and
+  accessible name say whether it will collapse or expand all commits. A filter limits this action to the commits it
+  leaves in the list; the other commits keep their folds. Section and folder folds are kept, so using it while the
+  Committed section is folded does not unfold the section. With no commit rows listed, the button is disabled. Both
+  controls stay with the section heading while it is pinned above the scrolling rows.
 - **Each commit's changes are against its first parent**: a merge commit's are what it took in, and a commit with no
   parent — the first commit of a branch listed with its whole history, or one where the branch merged in an unrelated
   history — is compared with the empty tree. A file several
@@ -299,7 +312,7 @@ their own; a committed change's are at the commits the comparison, or the commit
 
 ## Folding a section
 
-**Every section heading is a control**: pressing anywhere on its band folds the section away, and pressing it again
+**Every section heading is a control**: pressing its heading band folds the section away, and pressing it again
 unfolds it. That holds for every section — Conflicted, Staged, Unstaged, Untracked and Committed — and in both forms
 of the list, flat or grouped by folder. A commit row inside Committed folds as a row, not as a section (see "Grouped
 by commit" above).
@@ -321,6 +334,9 @@ keyboard focus or as the viewer's selected change stays clear of both (see "The 
   not a control of its own, the whole band being one. Assistive technology is told whether the section is unfolded.
   The band **carries no tooltip** of its own, saying in text what it holds, and answers a hover with nothing: the
   chevron is what marks it as a control.
+- **The Committed heading's trailing controls act independently of its fold.** From the heading band, **Right**
+  moves through the enabled bulk fold button, Group by commit and any warning or failure mark; **Left** moves back
+  (the other way round under a right-to-left language). These controls add no tab stops to the list.
 - **The band is no tab stop of its own.** The change list is one tab stop, as "Rows and the keyboard" above says: a
   heading is reached by arrowing onto it with Up or Down, and **Enter** or **Space** on it folds and unfolds the
   section. Home and End pass the headings by.
@@ -409,10 +425,12 @@ leaves (see "Moving between changes" in `docs/product/project-pane-git-change-vi
 ## What the list says instead
 
 - **Loading** while the worktrees are read, and while nothing is listed yet and some part of the list is still being
-  read, announced to assistive technology. Once something is listed, the part still being read — the comparison, or,
-  grouped by commit, the commits — is said in a line above the list and announced instead.
-- **No changes**, when the branch has nothing uncommitted and nothing committed to list; the lines above the list still
-  say what it is made of.
+  read, announced to assistive technology. An available grouping control keeps the Committed heading and its
+  controls in place while commits are read (see "Grouped by commit" above). Once something is listed, the part still
+  being read — the comparison, or, grouped by commit, the commits — is said in a line above the list and announced
+  instead.
+- **No changes**, when the branch has nothing uncommitted and nothing committed to list, and no grouping control
+  available (see "Grouped by commit" above); the lines above the list still say what it is made of.
 - **A part cut short** is an amber warning, and nothing about it is written under the list. At most 10,000
   changes, or 2 MiB of paths, are listed in each of the uncommitted changes, the committed changes, and the commits'
   changes together — those Git reported first, not a chosen subset.
@@ -453,9 +471,10 @@ leaves (see "Moving between changes" in `docs/product/project-pane-git-change-vi
   Neither announces itself: one that appears after the view was drawn is said to assistive technology once, by its
   title or name, through the view's status region; one there as the view opens is not.
 
-  When nothing is listed and exactly one part failed, that failure takes the list's place instead, as an empty-state
-  failure with **Try again**. When nothing is listed and more than one part failed, they take the list's place
-  together as one empty-state failure, saying that the changes could not be listed because neither the uncommitted
+  When nothing is listed, no grouping control is available (see "Grouped by commit" above), and exactly one part
+  failed, that failure takes the list's place instead, as an empty-state failure with **Try again**. When nothing is
+  listed, no grouping control is available, and more than one part failed, they take the list's place together as
+  one empty-state failure, saying that the changes could not be listed because neither the uncommitted
   nor the committed part could be read, with each part's reason, then any further explanation and raw text of its own,
   in its details, and **Try again** unless reading again could help neither. None of them opens an error alert.
   Changes that kept moving while they were listed, after two more tries, say so; Refresh tries again. Try again on

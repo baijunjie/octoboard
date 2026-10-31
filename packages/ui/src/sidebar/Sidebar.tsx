@@ -55,6 +55,7 @@ import { NESTED_RAIL_CLASS, NESTED_ROW_CLASS, NestedBranch, LockButton, PinButto
 import { focusTargetId } from "./focus";
 import type { FocusTarget, SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
+import { useListMotion } from "../components/useListMotion";
 import { INACTIVE_VEIL_CLASS } from "../components/inactiveVeil";
 import { useArchivedOwnerSessions, useConsoleSessions, useHasBoundSessions, useOwnerSessions, useProjectSessions, useSession, useSessionProjectId } from "../sessions/useSessions";
 
@@ -765,6 +766,7 @@ const ProjectNode = memo(function ProjectNode({
   const t = useT();
   const language = useCurrentLanguage();
   const listRef = useFlip<HTMLDivElement>();
+  const bodiesRef = useListMotion<HTMLDivElement>({ foldPresence: true, fitHeight: true });
   // Read directly rather than taking it as a prop passed down from `App.tsx`: a status change
   // then only re-renders the one row it is about, instead of the whole tree (the selector returns
   // the same `GitStatus` reference until this project's own entry changes, so no `useShallow` is
@@ -823,38 +825,40 @@ const ProjectNode = memo(function ProjectNode({
           <ActionMenu label={t("sidebar.project.actions", { name: isolate(project.name) })} items={projectMenu(t, handlers, project, archived, { gitRepository: gitStatus?.repository, pushing: gitStatus?.activity === "pushing" })} contextTargetRef={rowRef} />
         </RowControls>
       </TreeRow>
-      {!isCollapsed && (
-        // Marked so collapsing every project at once can tell whether keyboard focus is standing in
-        // a part about to go away (see `foldAll`).
-        <div data-sessions className={`${NESTED_RAIL_CLASS} mt-0.5`}>
-          {rows.length === 0 ? (
-            <EmptyPanel
-              compact
-              icon={MessageSquarePlus}
-              message={t("sidebar.noSessions")}
-              action={noAgentToStart ? undefined : { label: t("sidebar.project.openSession"), onPress: () => handlers.onOpenDialog(newSession()) }}
-            />
-          ) : (
-            <div ref={listRef} className="relative flex flex-col gap-0.5">
-              {rows.map(({ session, under }, index) => (
-                // One flat list, a session bound to a project session only inset
-                // (`NESTED_ROW_CLASS`), rather than a list nested inside the owner's row: the
-                // reorder animation reads the list's direct children (`useFlip`), so a third level
-                // of its own would leave a team unanimated while its statuses change.
-                <div key={session.id} data-flip={session.id} className={under ? NESTED_ROW_CLASS : "relative"}>
-                  <NestedBranch last={index >= lastRootIndex} ancestor={!!under} />
-                  <SessionRow
-                    handlers={handlers}
-                    session={session}
-                    under={under}
-                    selected={session.id === selectedSessionId}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      <div ref={bodiesRef} className="relative flow-root">
+        {!isCollapsed && (
+          // Marked so collapsing every project at once can tell whether keyboard focus is standing in
+          // a part about to go away (see `foldAll`).
+          <div data-sessions data-list-motion="sessions" className={`${NESTED_RAIL_CLASS} mt-0.5`}>
+            {rows.length === 0 ? (
+              <EmptyPanel
+                compact
+                icon={MessageSquarePlus}
+                message={t("sidebar.noSessions")}
+                action={noAgentToStart ? undefined : { label: t("sidebar.project.openSession"), onPress: () => handlers.onOpenDialog(newSession()) }}
+              />
+            ) : (
+              <div ref={listRef} className="relative flex flex-col gap-0.5">
+                {rows.map(({ session, under }, index) => (
+                  // One flat list, a session bound to a project session only inset
+                  // (`NESTED_ROW_CLASS`), rather than a list nested inside the owner's row: the
+                  // reorder animation reads the list's direct children (`useFlip`), so a third level
+                  // of its own would leave a team unanimated while its statuses change.
+                  <div key={session.id} data-flip={session.id} className={under ? NESTED_ROW_CLASS : "relative"}>
+                    <NestedBranch last={index >= lastRootIndex} ancestor={!!under} />
+                    <SessionRow
+                      handlers={handlers}
+                      session={session}
+                      under={under}
+                      selected={session.id === selectedSessionId}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 });

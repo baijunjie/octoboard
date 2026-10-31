@@ -230,10 +230,10 @@ function PartFailureMark({ label, line, message, inHeader = false, onRetry }: { 
  * sections they span, the committed part's as a mark on the Committed heading. A branch list
  * that failed to refresh stays and says why in a mark by the selector; one that never came says so
  * in the list's place. */
-function failureParts({ branches, branch, uncommitted, committed, items }: Pick<ChangesViewProps, "branches" | "branch" | "uncommitted" | "committed" | "items">) {
+function failureParts({ branches, branch, uncommitted, committed, items }: Pick<ChangesViewProps, "branches" | "branch" | "uncommitted" | "committed" | "items">, keepList = false) {
   const { failures } = changesStatus({ branches, uncommitted, committed });
   const loading = partsLoading({ uncommitted, committed });
-  const panelFailures = items.length === 0 && !loading.uncommitted && !loading.committed ? failures : [];
+  const panelFailures = !keepList && items.length === 0 && !loading.uncommitted && !loading.committed ? failures : [];
   const branchesError = branches.state === "error" ? branches.message : branches.state === "loaded" ? branches.error : undefined;
   return {
     panelFailures,
@@ -271,7 +271,7 @@ function BothFailed({ failures, announce, onRetry }: { failures: ChangesFailure[
 function useSpokenFailures(props: ChangesViewProps, enabled: boolean): string | undefined {
   const t = useT();
   const language = useCurrentLanguage();
-  const { lineFailures, branchesMark } = failureParts(props);
+  const { lineFailures, branchesMark } = failureParts(props, props.changeView.byCommit !== undefined);
   const { goneBranches } = changesStatus(props);
   const all = [
     ...lineFailures.map((failure) => ({ key: failure.key, text: t(failure.title) })),
@@ -318,8 +318,8 @@ function ChangesView({
   const painted = useHasPainted();
   const { notices, goneBranches, partial, committedPartial, commitsCut } = changesStatus({ branches, uncommitted, committed });
   const loading = partsLoading({ uncommitted, committed });
-  const nothingYet = items.length === 0;
-  const { panelFailures, lineFailures, branchesError, branchesMark } = failureParts({ branches, branch, uncommitted, committed, items });
+  const nothingYet = items.length === 0 && !changeView.byCommit;
+  const { panelFailures, lineFailures, branchesError, branchesMark } = failureParts({ branches, branch, uncommitted, committed, items }, changeView.byCommit !== undefined);
   const retryAll = useStableHandler(() => onRetry(null));
   // `headingMarks` keeps its identity while what it is made of does, since the list rebuilds its sections whenever it
   // changes. `lineFailures` is rebuilt on every render, so what the marks are made of is taken from it: at most

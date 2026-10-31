@@ -541,6 +541,65 @@ it("shows existing rows immediately when switching consoles and animates additio
 });
 
 
+it("animates project contents when folded, making departing controls inert and clearing rapid reversals", () => {
+  const preference = new EventTarget() as MediaQueryList;
+  Object.defineProperty(preference, "matches", { value: false, writable: true });
+  vi.stubGlobal("matchMedia", () => preference);
+  const originalHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight")!;
+  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+    configurable: true,
+    get(this: HTMLElement) { return this.classList.contains("flow-root") && this.firstElementChild?.hasAttribute("data-sessions") ? 100 : 0; },
+  });
+  const originalAnimate = HTMLElement.prototype.animate;
+  const animate = vi.fn((_frames: Keyframe[], _options: KeyframeAnimationOptions) => ({ cancel: vi.fn(), onfinish: null as (() => void) | null }));
+  HTMLElement.prototype.animate = animate as unknown as typeof HTMLElement.prototype.animate;
+  onTestFinished(() => {
+    if (originalAnimate) HTMLElement.prototype.animate = originalAnimate;
+    else Reflect.deleteProperty(HTMLElement.prototype, "animate");
+    Object.defineProperty(HTMLElement.prototype, "offsetHeight", originalHeight);
+    vi.unstubAllGlobals();
+  });
+  const { container } = mountSidebar({ sessions });
+  const group = container.querySelector<HTMLElement>(`[data-flip="${web.id}"]`)!;
+  expect(group.querySelector("[data-sessions]")).not.toBeNull();
+  expect(animate).not.toHaveBeenCalled();
+  const bodyList = group.querySelector<HTMLElement>("[data-sessions]")!.parentElement!;
+  const presenceCalls = () => animate.mock.calls.filter(([frames]) => frames[0].opacity !== undefined);
+  toggleProject(container, web.id);
+  expect(bodyList.style.overflowY).toBe("clip");
+  expect(animate.mock.calls.some(([frames]) => frames[0].height === "100px" && frames[1].height === "0px")).toBe(true);
+  expect(group.querySelector('[data-flip="web-bound"]')).toBeNull();
+  const ghost = group.querySelector<HTMLElement>("[data-list-motion-ghost]")!;
+  expect(ghost).not.toBeNull();
+  expect(ghost.hasAttribute("inert")).toBe(true);
+  expect(ghost.getAttribute("aria-hidden")).toBe("true");
+  expect(ghost.textContent).toContain("Fix the layout");
+  expect(presenceCalls()[0]).toEqual([
+    [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-8px)" }],
+    { duration: 300, easing: "cubic-bezier(0.4, 0, 0.2, 1)" },
+  ]);
+  toggleProject(container, web.id);
+  expect(group.querySelector("[data-list-motion-ghost]")).toBeNull();
+  expect(group.querySelector('[data-flip="web-bound"]')).not.toBeNull();
+  expect(presenceCalls()[1][0]).toEqual([{ opacity: 0, transform: "translateY(-8px)" }, { opacity: 1, transform: "none" }]);
+  toggleProject(container, web.id);
+  act(() => animate.mock.results.filter((_, index) => animate.mock.calls[index][0][0].opacity === 1).at(-1)?.value.onfinish?.());
+  expect(group.querySelector("[data-list-motion-ghost]")).toBeNull();
+  toggleProject(container, web.id);
+  toggleProject(container, web.id);
+  expect(group.querySelector("[data-list-motion-ghost]")).not.toBeNull();
+  act(() => {
+    Object.defineProperty(preference, "matches", { value: true });
+    preference.dispatchEvent(new Event("change"));
+  });
+  expect(group.querySelector("[data-list-motion-ghost]")).toBeNull();
+  const count = animate.mock.calls.length;
+  toggleProject(container, web.id);
+  toggleProject(container, web.id);
+  expect(animate).toHaveBeenCalledTimes(count);
+});
+
+
 it("keeps a manual fold across session updates that leave the project's activity unchanged, and across console switches", () => {
   const other = consoleOf("c-2", "Other");
   const added = projectOf("p-added", other.id, "Added");

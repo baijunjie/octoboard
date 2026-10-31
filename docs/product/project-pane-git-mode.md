@@ -44,10 +44,11 @@ from this read-only mode.
 
 The project pane's single header row holds two peer tabs, **Files** and **Changes** (see "Files and Git" in
 `docs/product/project-pane.md`); choosing Changes shows the Git mode. The tabs stay available while the repository is
-being read, cannot be read, or is not a repository. Three icon buttons stay before Refresh, at the header's trailing
-side, in every state of the Git mode, in this order: the one that shows and hides the file-name filter field, **Group
-by folder**, and **Group by commit** (see "Filtering by file name", "Flat or grouped by folder" and "Grouped by
-commit" in `docs/product/project-pane-git-change-list.md`).
+being read, cannot be read, or is not a repository. Two icon buttons stay before Refresh, at the header's trailing
+side, in every state of the Git mode, in this order: the one that shows and hides the file-name filter field, then
+**Group by folder** (see "Filtering by file name" and "Flat or grouped by folder" in
+`docs/product/project-pane-git-change-list.md`). **Group by commit** is on the Committed section's heading (see
+"Grouped by commit" in that doc).
 
 At the top of the view, the **branch selector** (see "The branch selector" below), the **Worktree line** when shown,
 then the lines saying what the list is made of and what could not be read share one area, with no divider between them.

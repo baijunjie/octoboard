@@ -50,6 +50,7 @@ export function ChangeTree({
   collapsed,
   onCollapsedChange,
   headingMarks,
+  byCommit,
 }: {
   items: ChangeItem[];
   /** The key of the change the viewer showed last. */
@@ -64,9 +65,10 @@ export function ChangeTree({
   /** The mark of a section's failure to be listed, or of its list being cut short, which that section's
    * heading carries; a section with none of its rows keeps its heading for it. */
   headingMarks?: ReadonlyMap<ChangeSection, React.ReactNode>;
+  byCommit?: { value: boolean; onChange: (byCommit: boolean) => void };
 }): React.ReactElement {
   const language = useCurrentLanguage();
-  const groups = useMemo(() => changeGroups(items, layout, headingMarks?.keys()).map((group, index, all) => ({ id: group.section, previousSection: all[index - 1]?.section, ...group })), [items, layout, headingMarks]);
+  const groups = useMemo(() => changeGroups(items, layout, [...(headingMarks?.keys() ?? []), ...(byCommit ? ["committed" as const] : [])]).map((group, index, all) => ({ id: group.section, previousSection: all[index - 1]?.section, ...group })), [items, layout, headingMarks, byCommit]);
   // Only the commits and directories of the sections on screen: a folded section renders none of
   // its rows, so whether a row inside one is folded is not this list's to decide. react-aria hands
   // an expanded key it knows nothing of back unchanged, so those keys would survive either way;
@@ -164,7 +166,7 @@ export function ChangeTree({
             onAction={onAction}
             // `collapsed` among the dependencies, or the collection keeps the rows of a section that
             // has just been folded: nothing else about it changed.
-            dependencies={[language, selected, collapsed, layout, headingMarks]}
+            dependencies={[language, selected, collapsed, layout, headingMarks, byCommit]}
           >
             {(group) => (
               <TreeSection className="h-full" id={group.section}>
@@ -173,6 +175,8 @@ export function ChangeTree({
                     section={group.section}
                     count={group.items.length}
                     mark={headingMarks?.get(group.section)}
+                    byCommit={group.section === "committed" ? byCommit : undefined}
+                    commitKeys={group.nodes.filter((node) => node.type === "commit").map((node) => node.key)}
                     collapsed={collapsed}
                     onCollapsedChange={onCollapsedChange}
                     topDivider={group.previousSection !== undefined && !collapsed.has(sectionKey(group.previousSection))}

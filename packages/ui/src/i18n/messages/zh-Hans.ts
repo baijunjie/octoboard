@@ -1092,6 +1092,8 @@ export const zhHans: Translation<"other"> = {
   "git.filter.noMatch": "没有匹配的更改",
   "git.group.committed": "已提交",
   "git.view.changes": "更改",
+  "git.commits.collapseAll": "收起全部提交",
+  "git.commits.expandAll": "展开全部提交",
   "git.layout.byCommit": "按提交分组",
   "git.layout.allCommits": "不按提交分组",
   "git.changes.branch": "分支",

@@ -294,7 +294,6 @@ export function ProjectBrowser({
                   filter={activeFilter}
                   collapseAll={mode === "files" ? { disabled: !hasOpenFolder(tree.nodes, expandedKeys), onPress: collapseAll } : undefined}
                   layout={mode === "git" ? { value: browser.layout, onChange: browser.setLayout } : undefined}
-                  byCommit={mode === "git" ? { value: browser.byCommit, onChange: browser.setByCommit } : undefined}
                 />
                 <TitledControl title={t("browser.refresh")}>
                   <Button ref={refreshRef} isIconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={t("browser.refresh")} preventFocusOnPress onPress={pressRefresh}>

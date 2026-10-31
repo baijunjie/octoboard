@@ -15,6 +15,7 @@ export function IconToggle({
   isSelected,
   onChange,
   expanded,
+  inHeader,
   ref,
   children,
 }: {
@@ -24,6 +25,8 @@ export function IconToggle({
   /** For a toggle that shows or hides a region rather than only restyling one: whether the region
    * is on screen, as `aria-expanded`. */
   expanded?: boolean;
+  /** Joins the section heading's arrow-key walk instead of the tab order. */
+  inHeader?: boolean;
   /** The button itself, for a region that has to hand keyboard focus back to it as it goes. */
   ref?: React.Ref<HTMLButtonElement>;
   /** The icon of the current state. */
@@ -33,6 +36,8 @@ export function IconToggle({
     <TitledControl title={label}>
       <ToggleButton
         ref={ref}
+        excludeFromTabOrder={inHeader}
+        data-section-heading-control={inHeader ? "" : undefined}
         isIconOnly
         size="sm"
         variant="ghost"

@@ -81,6 +81,7 @@ export function ChangeList({
           collapsed={changeView.collapsed}
           onCollapsedChange={changeView.onCollapsedChange}
           headingMarks={headingMarks}
+          byCommit={changeView.byCommit}
         />
       )}
     </>

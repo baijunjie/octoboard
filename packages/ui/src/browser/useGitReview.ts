@@ -307,6 +307,7 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
 
   const changeView = {
     layout,
+    byCommit: forked ? { value: byCommit, onChange: browser.setByCommit } : undefined,
     collapsed,
     onCollapsedChange: browser.setCollapsedChangeRows,
     ...filterState,

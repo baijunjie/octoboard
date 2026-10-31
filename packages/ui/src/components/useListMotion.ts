@@ -17,6 +17,8 @@ interface ListMotionOptions {
   keys?: ReadonlySet<string>;
   /** How those identities nest, so that rows a parent folds in or out appear and vanish with it. */
   folds?: ListFolds;
+  /** The items are disclosure bodies: enter and leave toward their heading above. */
+  foldPresence?: boolean;
   /** A row of items as wide as its content and aligned to its reading start, such as a tab strip: it grows and
    * shrinks at its reading end with its items, so a change of its width that comes with a change of items, or with
    * one of its items growing or shrinking on its own (not all at once), is that change, not a resize, and positions
@@ -37,14 +39,14 @@ interface ListMotionOptions {
 
 /** A tree's rows by their parent row, and the parents whose rows are shown. A row added or removed
  * under a parent listed on both sides but not shown on both folds with it, as do the rows under a
- * parent that folds; the others, top-level rows among them, enter or leave. */
+ * parent that folds. Folded rows enter and leave toward their heading; other changes use lateral motion. */
 export interface ListFolds {
   parents: ReadonlyMap<string, string>;
   open: ReadonlySet<string>;
 }
 
 interface Point { x: number; y: number }
-interface Position extends Point { element: HTMLElement; parent: HTMLElement | null; width: number; height: number; columns?: string }
+interface Position extends Point { folded?: boolean; element: HTMLElement; parent: HTMLElement | null; width: number; height: number; columns?: string }
 interface Slide extends Point { animation: Animation }
 interface ListWatch { list: HTMLElement; prepare: (keys: ReadonlySet<string>, folds?: ListFolds) => void; release: () => void; rendered: () => void; stop: () => void }
 
@@ -62,9 +64,9 @@ function origin(element: HTMLElement): Point {
 
 // Presence uses transform while layout movement uses translate; neither replaces the other.
 // An exit fades from the opacity the row was shown at, which a row already marked as going may have lowered.
-function presenceFrames(transform: string, entering: boolean, opacity = "1"): Keyframe[] {
+function presenceFrames(transform: string, entering: boolean, opacity = "1", folding = false): Keyframe[] {
   const base = transform && transform !== "none" ? transform : "";
-  const shifted = `translateX(${entering ? -25 : 25}%)${base ? ` ${base}` : ""}`;
+  const shifted = `${folding ? "translateY(-8px)" : `translateX(${entering ? -25 : 25}%)`}${base ? ` ${base}` : ""}`;
   return entering
     ? [{ opacity: 0, transform: shifted }, { opacity: 1, transform: base || "none" }]
     : [{ opacity: Number(opacity || 1), transform: base || "none" }, { opacity: 0, transform: shifted }];
@@ -89,6 +91,9 @@ function transformOffset(element: HTMLElement): Point {
 
 /** The motion watching each list, for `releaseListMotion` to find from one of its rows. */
 const watching = new WeakMap<HTMLElement, ListWatch>();
+// A fitted descendant already moves the surrounding layout on every frame. Its ancestors
+// keep recording positions, without chasing that movement with an additional slide.
+const fittingLists = new Set<HTMLElement>();
 
 /** For rows a caller has been moving by hand with an inline `transform` (a drag), called as it lets go, before it
  * clears those transforms and commits the new order: the rows' movement to their new places starts from where they
@@ -105,15 +110,16 @@ export function releaseListMotion(row: Element): void {
   }
 }
 
-function watchList(list: HTMLElement, { descendants = false, virtualized = false, keys, folds, contentWidth = false, fitHeight = false }: ListMotionOptions): ListWatch {
+function watchList(list: HTMLElement, { descendants = false, virtualized = false, keys, folds, contentWidth = false, fitHeight = false, foldPresence = false }: ListMotionOptions): ListWatch {
   let logical = keys;
   let logicalFolds = folds;
-  const added = new Set<string>();
+  const added = new Map<string, boolean>();
   const departing = new Map<string, Position>();
   let additionTimer: ReturnType<typeof setTimeout> | undefined;
   let positions = new Map<string, Position>();
   let initialized = false;
   let order = "";
+  let followedNestedFit = false;
   let width = list.clientWidth;
   let outerWidth = list.offsetWidth;
   let height = list.clientHeight;
@@ -225,7 +231,7 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
     ghost.style.left = "0px";
     ghost.style.top = "0px";
     const shown = getComputedStyle(ghost);
-    const animation = ghost.animate?.(presenceFrames(shown.transform, false, shown.opacity), { duration: DURATION, easing: PRESENCE_EASING });
+    const animation = ghost.animate?.(presenceFrames(shown.transform, false, shown.opacity, before.folded ?? foldPresence), { duration: DURATION, easing: PRESENCE_EASING });
     if (!animation) { visual.remove(); return; }
     exits.set(key, { element: visual, animation });
     animation.onfinish = () => { if (exits.get(key)?.animation === animation) clearExit(key); };
@@ -239,6 +245,7 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
     if (!fitting) return;
     const { animation, overflowY } = fitting;
     fitting = undefined;
+    fittingLists.delete(list);
     animation.cancel();
     list.style.overflowY = overflowY;
   };
@@ -246,6 +253,7 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
     const animation = list.animate?.([{ height: `${from}px` }, { height: `${to}px` }], { duration: DURATION, easing: EASING });
     if (!animation) return;
     fitting = { animation, overflowY: list.style.overflowY };
+    fittingLists.add(list);
     list.style.overflowY = "clip";
     animation.onfinish = () => { if (fitting?.animation === animation) endFit(); };
   };
@@ -313,6 +321,11 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
     const itemResized = sized > 0 && sized < moves.length;
     const resized = width !== newWidth && !(contentWidth && (newOrder !== order || itemResized));
     const moving = initialized && animate && !prefersReducedMotion() && !resized && (!virtualized || (height === newHeight && !scrolled));
+    const followingNestedFit = [...fittingLists].some((nested) => nested !== list && list.contains(nested));
+    // A real reorder still slides while a body folds. Size-only frames, including the final
+    // frame after its fit is released, follow layout without restarting or cancelling that slide.
+    const movingLayout = moving && ((!followingNestedFit && !followedNestedFit) || newOrder !== order);
+    followedNestedFit = followingNestedFit;
     // A pure reorder at the same width (a drag let go) brings nothing in or out, so it has no travel to hold in.
     const reordered = next.size === positions.size && newOuterWidth === outerWidth && [...next.keys()].every((key) => positions.has(key));
     // Measuring again with nothing changed (the owner rendering anew) leaves a running change alone: laying the list out
@@ -351,7 +364,7 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
         cancel(element);
         clearEntrance(element);
         if ((!virtualized && !before) || (virtualized && added.has(element.dataset.listMotion ?? element.dataset.flip!))) {
-          const animation = element.animate?.(presenceFrames(transform, true), { duration: DURATION, easing: PRESENCE_EASING });
+          const animation = element.animate?.(presenceFrames(transform, true, "1", added.get(element.dataset.listMotion ?? element.dataset.flip!) ?? foldPresence), { duration: DURATION, easing: PRESENCE_EASING });
           if (animation) {
             added.delete(element.dataset.listMotion ?? element.dataset.flip!);
             entrances.set(element, animation);
@@ -360,7 +373,7 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
         }
         continue;
       }
-      if (before.x === position.x && before.y === position.y) continue;
+      if (!movingLayout || (before.x === position.x && before.y === position.y)) continue;
       const x = before.x - position.x + residual.x;
       const y = before.y - position.y + residual.y;
       cancel(element);
@@ -437,21 +450,22 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
       if (!virtualized || !logical) return;
       const previousFolds = logicalFolds;
       for (const key of nextKeys) {
-        if (!logical.has(key) && !(previousFolds && nextFolds && folded(key, nextFolds, previousFolds, logical))) added.add(key);
+        if (!logical.has(key)) added.set(key, !!(previousFolds && nextFolds && folded(key, nextFolds, previousFolds, logical)));
         departing.delete(key);
       }
-      for (const key of added) if (!nextKeys.has(key)) added.delete(key);
+      for (const key of added.keys()) if (!nextKeys.has(key)) added.delete(key);
       if (!prefersReducedMotion()) {
         const base = list.getBoundingClientRect();
         for (const element of children()) {
           const key = element.dataset.listMotion ?? element.dataset.flip!;
-          if (!logical.has(key) || nextKeys.has(key) || (previousFolds && nextFolds && folded(key, previousFolds, nextFolds, nextKeys))) continue;
-          // Capture only real removals, before React can recycle their elements or wrappers.
+          if (!logical.has(key) || nextKeys.has(key)) continue;
+          // Capture logical removals and folds before React can recycle their elements or wrappers.
           // The viewport rectangle already includes every virtual wrapper's transform.
           const rect = element.getBoundingClientRect();
           const copy = element.cloneNode(true) as HTMLElement;
           copy.style.transform = "none";
-          departing.set(key, { element: copy, parent: list, width: rect.width, height: rect.height, x: rect.x - base.x + list.scrollLeft, y: rect.y - base.y + list.scrollTop });
+          copy.style.opacity = getComputedStyle(element).opacity;
+          departing.set(key, { folded: !!(previousFolds && nextFolds && folded(key, previousFolds, nextFolds, nextKeys)), element: copy, parent: list, width: rect.width, height: rect.height, x: rect.x - base.x + list.scrollLeft, y: rect.y - base.y + list.scrollTop });
         }
       }
       logical = nextKeys;
@@ -549,8 +563,8 @@ function followList<T extends HTMLElement>(initial: ListMotionOptions): ListFoll
 /** Keyed rows enter, leave and slide to their new positions in either axis. Removed controls
  * leave only inert visual copies; actions and focus handoffs take effect immediately. Virtual
  * collections distinguish logical changes from newly rendered or recycled identities when supplied keys. */
-export function useListMotion<T extends HTMLElement>({ descendants = false, virtualized = false, keys, folds, contentWidth = false, fitHeight = false }: ListMotionOptions = {}): ListMotionRef<T> {
-  const [motion] = useState(() => followList<T>({ descendants, virtualized, keys, folds, contentWidth, fitHeight }));
+export function useListMotion<T extends HTMLElement>({ descendants = false, virtualized = false, keys, folds, contentWidth = false, fitHeight = false, foldPresence = false }: ListMotionOptions = {}): ListMotionRef<T> {
+  const [motion] = useState(() => followList<T>({ descendants, virtualized, keys, folds, contentWidth, fitHeight, foldPresence }));
   const focused = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
     const onFocus = (event: FocusEvent) => {
@@ -578,7 +592,7 @@ export function useListMotion<T extends HTMLElement>({ descendants = false, virt
     };
   }, [motion, virtualized]);
   useLayoutEffect(() => {
-    motion.rendered({ descendants, virtualized, keys, folds, contentWidth, fitHeight });
+    motion.rendered({ descendants, virtualized, keys, folds, contentWidth, fitHeight, foldPresence });
     const list = motion.ref.current;
     const lost = focused.current;
     if (!virtualized && lost?.isConnected && list?.contains(lost) && document.activeElement === document.body) lost.focus({ preventScroll: true });

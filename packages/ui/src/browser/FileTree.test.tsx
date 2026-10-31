@@ -251,8 +251,8 @@ it.each(["file", "directory"] as const)("opens a %s row's context menu without a
 });
 
 
-it("folds a directory's rows in and out without presence, and animates rows a listing adds or removes", async () => {
-  const animate = vi.fn(() => ({ cancel: vi.fn(), effect: { getComputedTiming: () => ({ progress: 1 }) }, onfinish: null, oncancel: null }));
+it("animates directory folds vertically and listing additions and removals horizontally", async () => {
+  const animate = vi.fn((_frames: Keyframe[], _options: KeyframeAnimationOptions) => ({ cancel: vi.fn(), effect: { getComputedTiming: () => ({ progress: 1 }) }, onfinish: null, oncancel: null }));
   const previous = HTMLElement.prototype.animate;
   HTMLElement.prototype.animate = animate as unknown as typeof HTMLElement.prototype.animate;
   onTestFinished(() => { HTMLElement.prototype.animate = previous; });
@@ -273,26 +273,34 @@ it("folds a directory's rows in and out without presence, and animates rows a li
   }
   const container = mountRows(<Folder />);
   await act(async () => {});
-  const presences = () => animate.mock.calls.filter((call) => (call as unknown as [Keyframe[]])[0][0].opacity !== undefined);
+  const presences = () => animate.mock.calls.filter(([frames]) => frames[0].opacity !== undefined).map(([frames]) => frames);
   const toggle = () => act(() => container.querySelector<HTMLElement>("[slot=chevron]")!.click());
   toggle();
   await act(async () => {});
   expect(container.querySelector(`[data-list-motion="${rowKey("src/child.ts")}"]`)).not.toBeNull();
-  expect(presences()).toHaveLength(0);
+  expect(presences()).toEqual([[{ opacity: 0, transform: "translateY(-8px)" }, { opacity: 1, transform: "none" }]]);
+  animate.mockClear();
   list([fileNode("src/child.ts", false), fileNode("src/added.ts", false)]);
   await act(async () => {});
-  expect(presences().map((call) => (call as unknown as [Keyframe[]])[0][0].opacity)).toEqual([0]);
+  expect(presences()).toEqual([[{ opacity: 0, transform: "translateX(-25%)" }, { opacity: 1, transform: "none" }]]);
+  animate.mockClear();
   list([fileNode("src/added.ts", false)]);
   await act(async () => {});
+  expect(presences()).toEqual([[{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateX(25%)" }]]);
   const ghost = container.querySelector<HTMLElement>("[data-list-motion-ghost]")!;
   expect(ghost.textContent).toContain("child.ts");
   expect(ghost.hasAttribute("inert")).toBe(true);
+  expect(ghost.getAttribute("aria-hidden")).toBe("true");
   animate.mockClear();
   toggle();
   await act(async () => {});
   expect(container.querySelector(`[data-list-motion="${rowKey("src/added.ts")}"]`)).toBeNull();
-  expect(presences()).toHaveLength(0);
-  expect(container.querySelector("[data-list-motion-ghost]")?.textContent ?? "").not.toContain("added.ts");
+  expect(presences()).toEqual([[{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-8px)" }]]);
+  const folded = [...container.querySelectorAll<HTMLElement>("[data-list-motion-ghost]")].find((element) => element.textContent?.includes("added.ts"))!;
+  expect(folded).toBeDefined();
+  expect(folded.hasAttribute("inert")).toBe(true);
+  expect(folded.getAttribute("aria-hidden")).toBe("true");
+  expect(animate.mock.calls.filter(([frames]) => frames[0].opacity !== undefined).map(([, options]) => options)).toEqual([{ duration: 300, easing: "cubic-bezier(0.4, 0, 0.2, 1)" }]);
 });
 
 const failedFolder = (failure?: ErrorPresentation, children: TreeNode[] = []): TreeNode => ({

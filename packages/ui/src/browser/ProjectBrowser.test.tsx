@@ -236,16 +236,10 @@ it("keeps the Changes tab's filter field open or closed apart from the Files tab
   expect(fields()).toHaveLength(0);
 });
 
-it("offers grouping by commit on the Changes tab alone, its name saying what pressing does", async () => {
+it("keeps grouping by commit out of the pane header", async () => {
   await mount("git-by-commit", "git");
   await answer("get_project_source", source("git-by-commit"));
-  const toggle = (label: string) => document.querySelector<HTMLElement>(`button[aria-label='${label}']`);
-  expect(toggle("Group by commit")?.getAttribute("aria-pressed")).toBe("false");
-  await act(async () => toggle("Group by commit")!.click());
-  expect(toggle("Show commits together")?.getAttribute("aria-pressed")).toBe("true");
-  await act(async () => document.querySelector<HTMLElement>('[role="tab"][data-key="files"]')!.click());
-  expect(toggle("Show commits together")).toBeNull();
-  expect(toggle("Group by commit")).toBeNull();
+  expect(document.querySelector("button[aria-label='Group by commit']")).toBeNull();
 });
 
 // A live region inserted already holding its text is not announced (WebKit, VoiceOver), so each

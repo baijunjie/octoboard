@@ -8,7 +8,7 @@ import { ChangeList, changeRowOffset } from "./ChangeList";
 import { change, changeViewFixture, committedChange, mountRows } from "./browserTestSupport";
 import type { ChangeLayout } from "./changeLayout";
 import type { ChangeViewState } from "./changeView";
-import { changeItems, commitItems, commitKey, sectionKey } from "./changes";
+import { changeItems, commitItems, commitKey, commitScope, directoryKey, sectionKey } from "./changes";
 import { ChangeListLayout, HEADING_HEIGHT } from "./changeSectionHeading";
 import { ROW_HEIGHT } from "./treeRow";
 
@@ -223,4 +223,48 @@ it("places a row below the commit rows before it, a folded commit contributing i
   expect(changeRowOffset(byCommit, lex.key, "flat", new Set())).toBe(above + 4 * ROW_HEIGHT);
   expect(changeRowOffset(byCommit, lex.key, "flat", new Set([commitKey("3333333333")]))).toBe(above + 3 * ROW_HEIGHT);
   expect(changeRowOffset(byCommit, lex.key, "flat", new Set([commitKey("2222222222")]))).toBeUndefined();
+});
+
+it("groups from the Committed heading and folds its commits together without changing folder or section folds", async () => {
+  const commits = commitItems([
+    { commit: "3333333333", parent: "2222222222", subject: "Parser", changes: [committedChange("src/parse.ts")] },
+    { commit: "2222222222", parent: "1111111111", subject: "Lexer", changes: [committedChange("src/lex.ts")] },
+  ]);
+  const untouched = directoryKey(commitScope("3333333333"), "src");
+  const view = changeViewFixture();
+  function Host() {
+    const [grouped, setGrouped] = useState(false);
+    const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set([untouched]));
+    return <ChangeList items={grouped ? commits : changeItems([committedChange("src/parse.ts")])} selected={undefined} label="Changes" onOpen={() => {}} listRef={() => {}} changeView={{ ...view, layout: "tree", collapsed, onCollapsedChange: setCollapsed, byCommit: { value: grouped, onChange: setGrouped } }} />;
+  }
+  const container = mountRows(<Host />);
+  const button = (label: string) => container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
+  expect(button("Group by commit").closest("[role=row]")).toBe(heading(container, "Committed").closest("[role=row]"));
+  expect(button("Collapse all commits")).toBeNull();
+  act(() => button("Group by commit").click());
+  await settle();
+  const band = heading(container, "Committed");
+  const firstCommit = container.querySelector<HTMLElement>(`[data-key="${CSS.escape(commitKey("3333333333"))}"]`)!;
+  act(() => firstCommit.focus());
+  press(firstCommit, "ArrowUp");
+  expect(document.activeElement).toBe(band);
+  pressOn("ArrowRight");
+  expect(document.activeElement).toBe(button("Collapse all commits"));
+  pressOn("ArrowRight");
+  expect(document.activeElement).toBe(button("Show commits together"));
+  pressOn("ArrowLeft");
+  expect(document.activeElement).toBe(button("Collapse all commits"));
+  pressOn("Enter");
+  await settle();
+  expect(document.activeElement).toBe(button("Expand all commits"));
+  for (const hash of ["3333333333", "2222222222"]) expect(container.querySelector(`[data-key="${CSS.escape(commitKey(hash))}"]`)?.getAttribute("aria-expanded")).toBe("false");
+
+  act(() => button("Expand all commits").click());
+  expect(container.textContent).not.toContain("parse.ts");
+  expect(container.textContent).toContain("lex.ts");
+  expect(container.querySelector(`[data-key="${CSS.escape(untouched)}"]`)?.getAttribute("aria-expanded")).toBe("false");
+  expect(band.getAttribute("aria-expanded")).toBe("true");
+  act(() => button("Show commits together").click());
+  expect(button("Expand all commits")).toBeNull();
+  expect(button("Collapse all commits")).toBeNull();
 });

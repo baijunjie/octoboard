@@ -542,6 +542,30 @@ export const UNPUSHED_GIT: FixtureGit = {
   commits: { ...SAMPLE_GIT.commits, "origin/main..main": { commits: UNPUSHED_COMMITS } },
 };
 
+const RESTORED_GIT: FixtureGit = {
+  ...UNPUSHED_GIT,
+  changes: { ...UNPUSHED_GIT.changes, "wt-main": [] },
+  comparisons: { ...UNPUSHED_GIT.comparisons, "origin/main..main": [] },
+  commits: {
+    ...UNPUSHED_GIT.commits,
+    "origin/main..main": {
+      commits: [
+        {
+          commit: MAIN_TIP,
+          parent: UNPUSHED_FIRST,
+          subject: "Restore 10 results to a page",
+          changes: [textChange("committed", "src/search.ts", at(UNPUSHED_FIRST)("d2e3f4a"), onMain("c1d2e3f"), {
+            old: PAGE_SIZE.new,
+            new: PAGE_SIZE.old,
+            patch: PAGE_SIZE.patch.replace("c1d2e3f..d2e3f4a", "d2e3f4a..c1d2e3f").replace("-export const PAGE_SIZE = 10;\n+export const PAGE_SIZE = 25;", "-export const PAGE_SIZE = 25;\n+export const PAGE_SIZE = 10;"),
+          })],
+        },
+        ...UNPUSHED_COMMITS.slice(1),
+      ],
+    },
+  },
+};
+
 /** `main` has never been pushed: no upstream, and no branch of its name on a remote, and the repository
  * has no remote default branch either, so its Committed section is its whole history, compared with
  * the empty tree. */
@@ -757,10 +781,22 @@ const reviewScenarios: Scenario[] = [
     category: "normal",
     title: "The project folder's branch with unpushed commits",
     description:
-      "main is two commits ahead of origin/main: the line above the list says it forked from origin/main at the commit that remote-tracking branch is at, and Committed lists what main changed since, which is what has not been pushed. Uncommitted changes are listed above it.",
+      "main is two commits ahead of origin/main: the line above the list says it forked from origin/main at the commit that remote-tracking branch is at, and Committed lists what main changed since, which is what has not been pushed. Uncommitted changes are listed above it. Group by commit sits at the right of the Committed heading; with grouping off, there is no bulk expansion button.",
     state,
     preferences,
     git: UNPUSHED_GIT,
+    steps: openGit,
+  },
+  {
+    id: "git-changes-commits-cancel-out",
+    group: GROUP,
+    category: "normal",
+    title: "Commits whose changes cancel out",
+    description:
+      "main has two unpushed commits: one changes the page size from 10 to 25, and the next restores 10. There are no uncommitted changes and the combined diff is empty. The Committed heading still shows a zero count and Group by commit; turn it on to see both commits and their opposite changes.",
+    state,
+    preferences,
+    git: RESTORED_GIT,
     steps: openGit,
   },
   {
@@ -819,10 +855,21 @@ const reviewScenarios: Scenario[] = [
     category: "normal",
     title: "A branch's commits listed one by one",
     description:
-      "Group by commit is on (the header toggle reads Show commits together): the Committed band holds one row per commit, newest first, each with its chevron, short hash (muted monospace text, no chip), subject and change count, and its changes one level in, their content starting a chevron's width past the hash. The whole history is listed, so nothing is said under the list. Open a change to see it against its commit's parent.",
+      "Group by commit is on: Show commits together sits at the right of the Committed heading, with Collapse all commits immediately to its left. Both stay beside the heading when it pins above the scrolling list. The Committed band holds one row per commit, newest first, each with its chevron, short hash (muted monospace text, no chip), subject and change count, and its changes one level in, their content starting a chevron's width past the hash. The whole history is listed, so nothing is said under the list. Open a change to see it against its commit's parent.",
     state,
     preferences: gitMode({ byCommit: true }),
     steps: selecting(rankingSession),
+  },
+  {
+    id: "git-changes-by-commit-collapsed",
+    group: GROUP,
+    category: "normal",
+    title: "All commit rows collapsed",
+    description:
+      "Every commit is folded to its hash, subject and change count. The Committed section stays open, with Expand all commits immediately to the left of Show commits together; use it to restore the changes under every displayed commit.",
+    state,
+    preferences: gitMode({ byCommit: true }),
+    steps: [...selecting(rankingSession), (ui) => ui.press(ui.t("git.commits.collapseAll")), (ui) => ui.wait(300)],
   },
   {
     id: "git-changes-by-commit-tree",
@@ -830,7 +877,7 @@ const reviewScenarios: Scenario[] = [
     category: "normal",
     title: "Commits grouped by folder",
     description:
-      "Group by commit and Group by folder are both on: each commit holds its own folders, which start open. Cache query results is folded to its row, which still counts its two changes. Expand or collapse a commit or folder to watch its children slide and fade in or out with the same timing as the session menu.",
+      "Group by commit and Group by folder are both on: each commit holds its own folders, which start open. Cache query results is folded to its row, which still counts its two changes. The Committed heading offers Collapse all commits beside Show commits together. Its bulk control folds only commits; folder folds are kept when the commits reopen. Expand or collapse a commit or folder to watch its children fade in and settle down from just above their rows, or fade out toward the heading, while the following rows slide into place. Collapse all commits and Expand all commits use the same motion for every displayed commit.",
     state,
     preferences: gitMode({ byCommit: true, layout: "tree" }),
     steps: [...selecting(rankingSession), (ui) => ui.press(commitRow("Cache query results")), (ui) => ui.wait(300)],
@@ -841,7 +888,7 @@ const reviewScenarios: Scenario[] = [
     category: "normal",
     title: "Commits narrowed by the filter",
     description:
-      "The filter keeps the changes whose file name contains ranking. A commit with none left has no row, and the Committed count and each commit's count follow what is shown.",
+      "The filter keeps the changes whose file name contains ranking. A commit with none left has no row, and the Committed count and each commit's count follow what is shown. Collapse all commits in the Committed heading controls only the commits left by this filter.",
     state,
     preferences: gitMode({ byCommit: true }),
     steps: [...selecting(rankingSession), (ui) => ui.press(ui.t("git.filter.show")), (ui) => ui.type("ranking")],
@@ -996,7 +1043,7 @@ const reviewScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Listing a branch's commits",
-    description: "With Group by commit on, the commits are still being listed: a line above the list says so beneath the line naming the fork, while the uncommitted change is already listed.",
+    description: "With Group by commit on, the commits are still being listed: a line above the list says so beneath the line naming the fork, while the uncommitted change is already listed. The Committed heading stays visible with a zero count and Show commits together; Expand all commits is disabled until commit rows are available.",
     state,
     preferences: gitMode({ byCommit: true }),
     git: { ...SAMPLE_GIT, commits: { ...SAMPLE_GIT.commits, "main..feature/ranking-experiments": { pending: true } } },
@@ -1334,7 +1381,7 @@ const reviewScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "The commits could not be listed",
-    description: "With Group by commit on, the commit listing fails: a danger glyph on the Committed section's heading opens a popover with the reason, then Git's diagnostic, then Try again at its trailing edge, and the uncommitted change is still listed.",
+    description: "With Group by commit on, the commit listing fails: the Committed heading stays visible with a zero count, Show commits together and a disabled Expand all commits button. Its danger glyph opens a popover with the reason, then Git's diagnostic, then Try again at its trailing edge, and the uncommitted change is still listed.",
     state,
     preferences: gitMode({ byCommit: true }),
     git: { ...SAMPLE_GIT, commits: { ...SAMPLE_GIT.commits, "main..feature/ranking-experiments": { error: failedRead } } },

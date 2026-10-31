@@ -7,6 +7,8 @@ import type { FileFilterState } from "./FileFilterField";
  * (`filterOpen`) and the file name text it narrows the rows by (`filter`, empty for none). */
 export interface ChangeViewState extends FileFilterState {
   layout: ChangeLayout;
+  /** Present while the comparison has commits to review, including when their net diff is empty. */
+  byCommit?: { value: boolean; onChange: (byCommit: boolean) => void };
   collapsed: ReadonlySet<string>;
   onCollapsedChange: (collapsed: ReadonlySet<string>) => void;
 }

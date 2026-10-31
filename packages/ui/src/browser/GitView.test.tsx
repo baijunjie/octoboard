@@ -545,3 +545,30 @@ it("says changes cut short and an unreadable folder in one mark on the worktree'
   expect(document.querySelectorAll('[role="dialog"] p')).toHaveLength(4);
   expect(document.querySelector('[role="dialog"]')!.textContent).toContain("Octoboard is not allowed to read the project's folder in this worktree.");
 });
+
+it.each(["together", "loading", "failed"] as const)("keeps the commit grouping control with no change rows while %s", (state) => {
+  const onChange = vi.fn();
+  const { container } = mountPartFailure({
+    uncommitted: { state: "notCheckedOut", branch: "feature" },
+    items: [],
+    committed: {
+      state: "compare", branch: "feature", base: "main", baseKind: "local",
+      comparison: { state: "loaded", left: { branch: "main", commit: "c1" }, right: { branch: "feature", commit: "c2" }, base: "c1", items: [], complete: true, receivedAt: 0 },
+      commits: state === "together" ? undefined : state === "loading" ? { state: "loading" } : { state: "error", message: "Unable to read commits" },
+    },
+    changeView: changeViewFixture({ byCommit: { value: state !== "together", onChange } }),
+  });
+  expect(committedHeading(container)?.textContent).toBe("Committed0");
+  const toggle = container.querySelector<HTMLButtonElement>(`button[aria-label="${state === "together" ? "Group by commit" : "Show commits together"}"]`)!;
+  expect(toggle).not.toBeNull();
+  if (state !== "together") expect(container.querySelector<HTMLButtonElement>('button[aria-label="Expand all commits"]')?.disabled).toBe(true);
+  const tree = container.querySelector<HTMLElement>("[role=treegrid]")!;
+  act(() => tree.focus());
+  act(() => tree.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true })));
+  expect(document.activeElement).toBe(committedHeading(container));
+  act(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true })));
+  expect(document.activeElement).toBe(toggle);
+  act(() => toggle.click());
+  expect(onChange).toHaveBeenCalledWith(state === "together");
+  if (state === "failed") expect(committedHeading(container).closest("[role=row]")?.querySelector("[data-status-mark]")).not.toBeNull();
+});

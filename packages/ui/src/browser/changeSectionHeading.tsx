@@ -1,10 +1,14 @@
 // What the Git mode's change list puts above a section's changes: the band itself, the control that
 // folds the section away and unfolds it, and the key handling that reaches that control, which the
 // collection the list is built on does not reach itself.
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, GitCommitVertical, Layers } from "lucide-react";
 import React, { useRef } from "react";
 import { Button, ListLayout, Rect } from "react-aria-components";
 
+import { Button as IconButton } from "../components/Button";
+import { IconToggle } from "../components/IconToggle";
+import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../components/RowControls";
+import { TitledControl } from "../components/TitledControl";
 import { handFocusOff } from "../components/handFocusOff";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { SECTION_LABELS, sectionKey, type ChangeSection } from "./changes";
@@ -15,8 +19,7 @@ export const HEADING_HEIGHT = 30;
 /** A section's heading uses the pane's control fill so it stays a step off the
  * panel: 1.15:1 from it in light and 1.23:1 in dark, with muted text above 4.5:1 on both fills.
  * `h-[30px]` is `HEADING_HEIGHT`.
- * What the band holds is one control filling it (`ChangeSectionHeading`), so the line's own layout and
- * padding sit there rather than here. */
+ * `ChangeSectionHeading` lays out the band's folding button and any trailing view controls or mark. */
 export const HEADING_CLASS = "flex h-[30px] groove-b bg-default text-xs font-medium text-app-muted";
 
 /** The virtualizer's sticky wrapper must stay within its own section, whose overflow is visible.
@@ -94,12 +97,12 @@ function keepHeadingFocus(band: HTMLButtonElement | null): void {
 }
 
 /**
- * What a section's heading holds: one button filling the band, which folds the
+ * What a section's heading holds: a button filling the space before its controls, which folds the
  * section's rows away and unfolds them again (its key in `collapsed` is `sectionKey`), showing a
  * chevron, the section's name and its count.
  *
- * The button is the whole band rather than a chevron inside it, which settles three things at once:
- * a press anywhere on the heading folds the section, the pointer target is the band itself rather
+ * The button covers the label and its free space rather than only the chevron, which settles three things at once:
+ * a press anywhere before the trailing controls folds the section, the pointer target is the band itself rather
  * than a 14-pixel glyph (the "Pointer target size" section of `docs/ui-accessibility.md`), and the
  * name assistive technology announces is the band's own text, so no label of its own has to repeat
  * the count beside the section's name (the same document's "Accessible names"). It is a react-aria
@@ -125,6 +128,8 @@ export function ChangeSectionHeading({
   onCollapsedChange,
   topDivider,
   mark,
+  byCommit,
+  commitKeys = [],
 }: {
   section: ChangeSection;
   count: number;
@@ -136,7 +141,10 @@ export function ChangeSectionHeading({
   /** The mark of this section's failure to be listed or of its list being cut short, at the band's
    * trailing end, outside the button that folds the section: a control cannot sit inside one. */
   mark?: React.ReactNode;
+  byCommit?: { value: boolean; onChange: (byCommit: boolean) => void };
+  commitKeys?: readonly string[];
 }): React.ReactElement {
+  const t = useT();
   const button = useRef<HTMLButtonElement>(null);
   const key = sectionKey(section);
   const isCollapsed = collapsed.has(key);
@@ -163,7 +171,7 @@ export function ChangeSectionHeading({
       excludeFromTabOrder
       preventFocusOnPress
       onPress={toggle}
-      className={`flex h-full w-full min-w-0 items-center gap-2 border-t border-transparent ${topDivider ? "groove-t" : ""} px-(--pane-inset) text-start outline-none ${mark ? "pe-10" : ""} data-[focus-visible]:ring-2 data-[focus-visible]:ring-focus data-[focus-visible]:ring-inset`}
+      className={`flex h-full w-full min-w-0 items-center gap-2 border-t border-transparent ${topDivider ? "groove-t" : ""} px-(--pane-inset) text-start outline-none ${mark || byCommit ? "pe-2" : ""} data-[focus-visible]:ring-2 data-[focus-visible]:ring-focus data-[focus-visible]:ring-inset`}
     >
       {/* The chevron mirrors under right-to-left while it points along the text. */}
       {isCollapsed ? (
@@ -174,17 +182,45 @@ export function ChangeSectionHeading({
       <SectionHeadingText section={section} count={count} />
     </Button>
   );
-  if (!mark) return band;
+  if (!mark && !byCommit) return band;
+  const hasOpenCommit = commitKeys.some((key) => !collapsed.has(key));
+  const foldLabel = t(hasOpenCommit ? "git.commits.collapseAll" : "git.commits.expandAll");
   return (
-    <div className="relative h-full w-full min-w-0">
+    <div className="flex h-full w-full min-w-0 items-center pe-(--pane-inset)">
       {band}
-      <div className="absolute inset-y-0 end-(--pane-inset) flex items-center">{mark}</div>
+      <RowIconGroup>
+        {byCommit?.value && (
+          <TitledControl title={foldLabel}>
+            <IconButton
+              isIconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS}
+              aria-label={foldLabel} excludeFromTabOrder data-section-heading-control=""
+              isDisabled={commitKeys.length === 0} preventFocusOnPress
+              onPress={() => {
+                const next = new Set(collapsed);
+                for (const key of commitKeys) {
+                  if (hasOpenCommit) next.add(key);
+                  else next.delete(key);
+                }
+                onCollapsedChange(next);
+              }}
+            >
+              {hasOpenCommit ? <ChevronsDownUp aria-hidden="true" className="size-4" /> : <ChevronsUpDown aria-hidden="true" className="size-4" />}
+            </IconButton>
+          </TitledControl>
+        )}
+        {byCommit && (
+          <IconToggle inHeader label={t(byCommit.value ? "git.layout.allCommits" : "git.layout.byCommit")} isSelected={byCommit.value} onChange={byCommit.onChange}>
+            {byCommit.value ? <GitCommitVertical aria-hidden="true" className="size-4" /> : <Layers aria-hidden="true" className="size-4" />}
+          </IconToggle>
+        )}
+        {mark}
+      </RowIconGroup>
     </div>
   );
 }
 
 /**
- * Up and Down across a section heading, and Right and Left between its band and its mark
+ * Up and Down across a section heading, and Right and Left between its band and its controls
  * (`moveAlongHeading`), for the capture phase of an element around a change list.
  *
  * A react-aria collection manages focus itself: the list is one tab stop, Up and Down walk its
@@ -217,7 +253,16 @@ function moveAcrossSectionHeadings(event: React.KeyboardEvent<HTMLElement>): voi
   if (event.key === "ArrowLeft" || event.key === "ArrowRight") return moveAlongHeading(event, target);
   if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
   const stop = target.closest<HTMLElement>("[role=row]");
-  if (!stop) return;
+  if (!stop) {
+    // An empty net diff may still have commits to inspect; the collection has no item to focus.
+    if (target.getAttribute("role") !== "treegrid") return;
+    const heading = target.querySelector<HTMLElement>("[data-section-heading]");
+    if (!heading) return;
+    event.preventDefault();
+    event.stopPropagation();
+    heading.focus();
+    return;
+  }
   // Virtualizer recycles wrappers in DOM order; their original inline layout offsets still give
   // the collection order, including a sticky heading whose painted position follows scrolling.
   const layoutTop = (row: HTMLElement) => {
@@ -242,21 +287,21 @@ function moveAcrossSectionHeadings(event: React.KeyboardEvent<HTMLElement>): voi
 }
 
 /**
- * Right from a heading's band to the mark at its end, and Left back, the key that runs along
- * the heading as a control inside a row of the collection is reached along the row; under a
- * right-to-left reading direction the mark stands at the other side, so the keys swap. Any other
- * target, or a heading with no mark, is left to the collection, which a row answers with its own
+ * Right through a heading's controls and Left back, as a control inside a collection's row is
+ * reached along the row. Under a right-to-left reading direction the controls stand at the other
+ * side, so the keys swap. Any other target, or a heading with no controls, is left to the collection,
+ * which a row answers with its own
  * (a folder row's expansion, the walk to a control in the row).
  */
 function moveAlongHeading(event: React.KeyboardEvent<HTMLElement>, target: HTMLElement): void {
   const row = target.closest<HTMLElement>("[role=row]");
   if (!row) return;
   const rtl = getComputedStyle(event.currentTarget).direction === "rtl";
-  const toMark = event.key === (rtl ? "ArrowLeft" : "ArrowRight");
-  const from = toMark ? "[data-section-heading]" : "[data-section-heading-control]";
-  const to = toMark ? "[data-section-heading-control]" : "[data-section-heading]";
-  if (target.closest(from) === null) return;
-  const destination = row.querySelector<HTMLElement>(to);
+  const forward = event.key === (rtl ? "ArrowLeft" : "ArrowRight");
+  const controls = [...row.querySelectorAll<HTMLElement>("[data-section-heading], [data-section-heading-control]:not([disabled])")];
+  const index = controls.findIndex((control) => control === target || control.contains(target));
+  if (index === -1) return;
+  const destination = controls[index + (forward ? 1 : -1)];
   if (!destination) return;
   event.preventDefault();
   event.stopPropagation();

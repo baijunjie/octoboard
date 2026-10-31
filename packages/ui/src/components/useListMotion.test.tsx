@@ -410,7 +410,7 @@ it("captures logical virtual exits before recycled DOM changes and ignores viewp
   expect(animate).toHaveBeenCalledTimes(2);
 });
 
-it("folds virtual rows in and out with their parent, nested rows included, and enters rows added under an open parent", () => {
+it("animates folded virtual children vertically and ordinary additions horizontally, including nested rows", () => {
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
     const [x, y] = points[this.dataset.listMotion ?? ""] ?? [0, 0];
     return { x, y, top: y, left: x, right: x + 180, bottom: y + 28, width: 180, height: 28, toJSON: () => ({}) };
@@ -431,15 +431,30 @@ it("folds virtual rows in and out with their parent, nested rows included, and e
   const presences = () => animate.mock.calls.filter(([frames]) => frames[0].opacity !== undefined).map(([frames]) => frames[0].opacity);
   render(["a"], []);
   render(["a", "a/b", "a/b/c"], ["a", "a/b"]);
-  expect(presences()).toEqual([]);
+  expect(presences()).toEqual([0, 0]);
+  expect(animate.mock.calls.map(([frames]) => frames[0].transform)).toEqual(["translateY(-8px)", "translateY(-8px)"]);
+  animate.mockClear();
   render(["a", "a/b", "a/b/c", "a/d", "a/d/e"], ["a", "a/b", "a/d"]);
   expect(presences()).toEqual([0, 0]);
+  expect(animate.mock.calls.map(([frames]) => frames[0].transform)).toEqual(["translateX(-25%)", "translateX(-25%)"]);
   animate.mockClear();
   render(["a"], []);
-  expect(presences()).toEqual([]);
+  expect(presences()).toEqual([1, 1, 1, 1]);
+  expect(animate.mock.calls.map(([frames]) => frames[1].transform)).toEqual(Array(4).fill("translateY(-8px)"));
+  const ghosts = host.querySelectorAll("[data-list-motion-ghost]");
+  expect(ghosts).toHaveLength(4);
+  for (const ghost of ghosts) {
+    expect(ghost.getAttribute("aria-hidden")).toBe("true");
+    expect(ghost.hasAttribute("inert")).toBe(true);
+  }
+  render(["a", "a/b", "a/b/c"], ["a", "a/b"]);
+  expect(host.querySelectorAll("[data-list-motion-ghost]")).toHaveLength(2);
+  const list = host.querySelector<HTMLElement>("[data-root]")!;
+  act(() => list.dispatchEvent(new Event("scroll")));
   expect(host.querySelector("[data-list-motion-ghost]")).toBeNull();
+  animate.mockClear();
   render(["a", "f"], []);
-  expect(presences()).toEqual([0]);
+  expect(presences()).toEqual([1, 1, 0]);
 });
 
 function Strip({ keys, rtl }: { keys: string[]; rtl?: boolean }) {
@@ -1010,4 +1025,86 @@ it("stops following its ancestors' scrolling once it is gone", () => {
   const follow = add.mock.calls.find(([type, , options]) => type === "scroll" && typeof options === "object" && options.capture)![1];
   strip.unmount();
   expect(remove).toHaveBeenCalledWith("scroll", follow, true);
+});
+
+
+it("animates a mounted disclosure body's contents and clears them immediately under reduced motion", () => {
+  function Disclosure({ open }: { open: boolean }) {
+    const ref = useListMotion<HTMLDivElement>({ foldPresence: true });
+    return <div ref={ref}>{open && <div data-list-motion="body"><button id="body-action">Action</button></div>}</div>;
+  }
+  const host = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(host);
+  onTestFinished(() => { act(() => root.unmount()); host.remove(); });
+  const render = (open: boolean) => act(() => root.render(<Disclosure open={open} />));
+  render(true);
+  expect(animate).not.toHaveBeenCalled();
+  render(false);
+  expect(host.querySelector("#body-action")).toBeNull();
+  expect(host.querySelector("[data-list-motion-ghost]")?.getAttribute("aria-hidden")).toBe("true");
+  expect(animate.mock.calls[0][0]).toEqual([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-8px)" }]);
+  render(true);
+  expect(host.querySelector("[data-list-motion-ghost]")).toBeNull();
+  expect(animate.mock.calls[1][0]).toEqual([{ opacity: 0, transform: "translateY(-8px)" }, { opacity: 1, transform: "none" }]);
+  render(false);
+  reduced = true;
+  act(() => preferenceChanged());
+  expect(host.querySelector("[data-list-motion-ghost]")).toBeNull();
+  const count = animate.mock.calls.length;
+  render(true);
+  render(false);
+  expect(animate).toHaveBeenCalledTimes(count);
+  expect(host.querySelector("[data-list-motion-ghost]")).toBeNull();
+});
+
+
+it("lets a nested fitted collection move its surrounding rows without an ancestor chasing each frame", () => {
+  let bodyHeight = 100;
+  const originalHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight")!;
+  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+    configurable: true,
+    get(this: HTMLElement) { return this.dataset.root === "body" ? bodyHeight : 0; },
+  });
+  onTestFinished(() => { Object.defineProperty(HTMLElement.prototype, "offsetHeight", originalHeight); });
+  function Body({ open }: { open: boolean }) {
+    const ref = useListMotion<HTMLDivElement>({ fitHeight: true, foldPresence: true });
+    return <div ref={ref} data-root="body">{open && <div data-list-motion="contents">Contents</div>}</div>;
+  }
+  function Outer({ open, reversed = false }: { open: boolean; reversed?: boolean }) {
+    const ref = useListMotion<HTMLDivElement>();
+    const first = <div key="a" data-list-motion="a"><Body open={open} /></div>;
+    const second = <div key="b" data-list-motion="b">Next group</div>;
+    return <div ref={ref} data-root="outer">{reversed ? [second, first] : [first, second]}</div>;
+  }
+  const host = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(host);
+  onTestFinished(() => { act(() => root.unmount()); host.remove(); });
+  const render = (open: boolean, reversed = false) => act(() => root.render(<Outer open={open} reversed={reversed} />));
+  points = { a: [0, 0], b: [0, 100] };
+  render(true);
+  bodyHeight = 0;
+  render(false);
+  expect(heightFrames()).toEqual([[{ height: "100px" }, { height: "0px" }]]);
+  const body = host.querySelector<HTMLElement>('[data-root="body"]')!;
+  expect(body.style.overflowY).toBe("clip");
+  points.b = [0, 70];
+  act(() => resize());
+  expect(animate.mock.calls.some(([frames]) => frames[0].translate !== undefined)).toBe(false);
+  points = { a: [0, 32], b: [0, 0] };
+  render(false, true);
+  expect(animate.mock.calls.some(([frames]) => frames[0].translate === "0px -32px")).toBe(true);
+  const afterReorder = animate.mock.calls.length;
+  const cancellations = cancel.mock.calls.length;
+  points.a = [0, 20];
+  act(() => resize());
+  expect(animate).toHaveBeenCalledTimes(afterReorder);
+  expect(cancel).toHaveBeenCalledTimes(cancellations);
+  act(() => heightRuns()[0].onfinish());
+  expect(body.style.overflowY).toBe("");
+  points.a = [0, 16];
+  act(() => resize());
+  expect(animate).toHaveBeenCalledTimes(afterReorder);
+  points = { a: [0, 0], b: [0, 32] };
+  render(false);
+  expect(animate.mock.calls.length).toBeGreaterThan(afterReorder);
 });

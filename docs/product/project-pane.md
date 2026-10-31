@@ -49,7 +49,7 @@ buttons. The tabs are compact, with a pill behind the selected tab and muted lab
 behind them. The tabs and Close panel have priority over the project title and other icon buttons; their behavior in a
 narrow header is in "A panel's header" in `docs/product/right-pane-panels.md`. Files offers the file-name filter toggle
 (see "Filtering by file name" below) and then **Collapse all folders** (see "Collapse all folders" below); Changes
-offers its filter toggle, Group by folder and Group by commit (see "The Changes view" in
+offers its filter toggle and Group by folder (see "The Changes view" in
 `docs/product/project-pane-git-mode.md`). The buttons keep that place in loading, empty and error states too. Pressing
 Refresh or Collapse all folders with the mouse leaves keyboard focus where it was.
 

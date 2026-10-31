@@ -282,11 +282,11 @@ A control inside a collection's **section header** is reached by neither of thos
 the collection's items alone, so the arrow keys never land on a header, Tab inside the collection jumps to the last
 tabbable element and leaves, and focus arriving anywhere in the collection that is not a row is moved to its first row.
 The change list's section heading — the band that folds the section away
-(`packages/ui/src/browser/changeSectionHeading.tsx`) — and the mark a heading can carry are such controls, and they are
-reached by this application extending the collection's own walk: Up and Down step through the rows **and the headings
-between them**, Right from a heading moves to its mark and Left back to the band (mirrored in a right-to-left reading
-direction, where the mark sits on the left), while Home and End still move between rows alone. Such a control takes no
-tab stop of its own and must not take focus on a press (`preventFocusOnPress`), or a mouse press on it sends focus to
+(`packages/ui/src/browser/changeSectionHeading.tsx`) — its view controls and the mark it can carry are such controls,
+and they are reached by this application extending the collection's own walk: Up and Down step through the rows **and
+the headings between them**, Right moves from the band through its controls in their displayed order and Left moves back
+(mirrored in a right-to-left reading direction), while Home and End still move between rows alone. Such a control takes
+no tab stop of its own and must not take focus on a press (`preventFocusOnPress`), or a mouse press on it sends focus to
 the list's first row; a popover opened from it hands focus back to its heading when it closes.
 
 The band is react-aria's `rowheader` inside a `role="row"`, not an `<h1>`-`<h6>`, so the rule under "A visual heading
@@ -2145,8 +2145,11 @@ closed through a confirmation its context menu asked for, once the confirmation 
 Initial rendering, scrolling, viewport recycling and container resizing do not trigger item movement animations, and
 neither does every item of a row changing width at once (the text zoomed). Virtualized collections keep virtualization
 and animate only surviving rendered identities whose layout changes. In a tree, rows that appear or vanish because their
-parent expands or folds move with the fold and play no entry or exit; only rows added to or removed from a parent that
-stays expanded do. Pass the tree's parents and expanded rows to the list motion so it can tell the two apart. Static
+parent expands or folds fade in from 8 px above or fade out toward that position over the same 300 ms. Ordinary row
+additions and removals retain the horizontal presence effect. Pass the tree's parents and expanded rows to the list
+motion so it can tell the two apart. The sidebar's project session body uses the same vertical fold effect as one
+block, with its motion container kept mounted so closing it can animate an inert visual copy; session changes inside
+an open body retain their ordinary collection movement. Static
 choices, a replacement page or directory listing, and fixed result snapshots do not require collection motion.
 Collections whose component already provides the same behavior, such as the toast stack, keep that behavior. With
 reduced motion requested, update positions immediately, cancel any entry or movement already running and remove exit
@@ -2167,7 +2170,9 @@ uses `[&:not(:has(~:not([data-list-motion-exit])))]:border-b-0` instead, which s
 content below a collection would visibly jump, or be drawn over by departing copies, as items come and go, the
 collection passes `fitHeight` to `useListMotion` (a virtualized or content-width collection cannot): its height then
 follows the change with the position-change easing, clipped at its top and bottom edges, so the content below glides
-with it. Such a collection is a positioned (`relative`) container, so that its clip reaches the absolutely placed exit
+with it. Enclosing collections follow height-only changes through natural layout instead of adding another
+position-change animation, while real item reorders keep their own movement. Such a collection is a positioned
+(`relative`) container, so that its clip reaches the absolutely placed exit
 copies, and sizes by its border box (`box-sizing: border-box`, as Tailwind's base styles give). For a lazily mounted
 choice popup, use `MotionListBox` inside the popup so the observer mounts with the list and captures its initial
 positions before the first live choice update. Apply the same motion rule to choices that refresh while the popup
