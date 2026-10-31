@@ -36,7 +36,7 @@ it.each(["inherit", "pick", "clear"] as const)("opens with session launch settin
     await act(async () => pickerNamed("Reasoning effort").click());
     await act(async () => optionElements().find((option) => option.textContent === "low")!.click());
   } else if (mode === "clear") {
-    await act(async () => pickerNamed("Model").querySelector<HTMLElement>('[data-slot="select-clear-button"]')!.click());
+    await act(async () => pickerNamed("Model").parentElement!.querySelector<HTMLElement>('[data-slot="select-clear-button"]')!.click());
   }
   await act(async () => buttons().find((button) => button.textContent === "Open")!.click());
   const sent = vi.mocked(daemon.request).mock.calls.find(([body]) => body.type === "open_session")![0];
@@ -146,8 +146,8 @@ it.each(["inherit", "pick", "clear"] as const)("opens console sessions with cons
     await act(async () => pickerNamed("Reasoning effort").click());
     await act(async () => optionElements().find((option) => option.textContent === "low")!.click());
   } else if (mode === "clear") {
-    await act(async () => pickerNamed("Model").querySelector<HTMLElement>('[data-slot="select-clear-button"]')!.click());
-    await act(async () => pickerNamed("Reasoning effort").querySelector<HTMLElement>('[data-slot="select-clear-button"]')!.click());
+    await act(async () => pickerNamed("Model").parentElement!.querySelector<HTMLElement>('[data-slot="select-clear-button"]')!.click());
+    await act(async () => pickerNamed("Reasoning effort").parentElement!.querySelector<HTMLElement>('[data-slot="select-clear-button"]')!.click());
   }
   expect(vi.mocked(daemon.request).mock.calls.some(([body]) => body.type === "open_session")).toBe(false);
   await act(async () => buttons().find((button) => button.textContent === "Open")!.click());

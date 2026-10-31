@@ -13,7 +13,7 @@ const PLACEHOLDER = "Same as console, The agent's own setting";
 const choose = (option: string) =>
   click(Array.from(document.body.querySelectorAll('[role="option"]')).find((o) => o.textContent === option) as HTMLElement);
 
-const clearButton = (name: string) => pickerNamed(name).querySelector<HTMLElement>('[data-slot="select-clear-button"]');
+const clearButton = (name: string) => pickerNamed(name).parentElement!.querySelector<HTMLElement>('[data-slot="select-clear-button"]');
 
 const optionTexts = () => Array.from(document.body.querySelectorAll('[role="option"]')).map((o) => o.textContent);
 const modelRequests = (pending: Pending[]) => pending.filter((p) => p.body.type === "list_agent_models");

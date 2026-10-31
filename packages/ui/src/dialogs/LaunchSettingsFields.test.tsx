@@ -97,7 +97,8 @@ it("shows why there is no list as a warning mark after the Model field's label, 
   expect(label.compareDocumentPosition(mark) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(mark.compareDocumentPosition(trigger) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(label.textContent).toBe("Model");
-  expect(trigger.querySelector(":scope > span[aria-hidden='true'].w-6")).toBeNull();
+  // The trigger keeps only the clear button's room, none for a mark.
+  expect(trigger.querySelectorAll(":scope > span[aria-hidden='true'].w-6")).toHaveLength(1);
   // Nothing describes the field by an element that is not there.
   const described = (field.querySelector("button[aria-describedby]") ?? trigger).getAttribute("aria-describedby");
   for (const id of (described ?? "").split(" ").filter(Boolean)) expect(document.getElementById(id)).not.toBeNull();

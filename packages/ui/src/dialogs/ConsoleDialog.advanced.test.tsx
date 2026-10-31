@@ -63,7 +63,7 @@ it("creates with the project session pair that was set", async () => {
 it("sends an explicit null when a project session value is cleared", async () => {
   const request = render(consoleOf("c-1", "Main", { project_session_launch: { claude: { model: "alpha" } } }));
   await openAdvanced();
-  await click(groupPicker("Project sessions", "Model").querySelector<HTMLElement>('[data-slot="select-clear-button"]'));
+  await click(groupPicker("Project sessions", "Model").parentElement!.querySelector<HTMLElement>('[data-slot="select-clear-button"]'));
   await clickButton("Save");
   expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", name: "Main", default_agent: "claude", project_session_launch: { claude: { model: null } } }]);
 });
@@ -73,7 +73,7 @@ it("leaves a missing agent without a tab unless the console stores a value for i
   await openAdvanced();
   expect(tabNames()).toEqual(["Claude Code", "Codex, Not installed"]);
   await clickTab("Codex, Not installed");
-  await click(groupPicker("Project sessions", "Model").querySelector<HTMLElement>('[data-slot="select-clear-button"]'));
+  await click(groupPicker("Project sessions", "Model").parentElement!.querySelector<HTMLElement>('[data-slot="select-clear-button"]'));
   expect(tabNames()).toEqual(["Claude Code"]);
   expect(selectedTab()).toBe("Claude Code");
 });
@@ -97,7 +97,7 @@ it("does not take the view back to an agent picked earlier that comes back", asy
   render(consoleOf("c-1", "Main", { project_session_launch: { codex: { model: "kept" } } }), [], undefined, { codex: "unavailable" });
   await openAdvanced();
   await clickTab("Codex, Not installed");
-  await click(groupPicker("Project sessions", "Model").querySelector<HTMLElement>('[data-slot="select-clear-button"]'));
+  await click(groupPicker("Project sessions", "Model").parentElement!.querySelector<HTMLElement>('[data-slot="select-clear-button"]'));
   expect(selectedTab()).toBe("Claude Code");
   await act(async () => lastStore.setState({ agentAvailability: new Map([["claude", { agent: "claude", availability: "available", default_account_dir: null }], ["codex", { agent: "codex", availability: "available", default_account_dir: null }], ["grok", { agent: "grok", availability: "available", default_account_dir: null }]]) }));
   expect(tabNames()).toEqual(["Claude Code", "Codex", "Grok Build"]);
