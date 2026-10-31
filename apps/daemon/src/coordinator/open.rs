@@ -13,9 +13,9 @@ use crate::protocol::{
     error_parts, notice_code, now_millis, Agent, CodedError, Console, Notice, OrchestrationRole,
     Origin, Project, Role, Session, SessionStatus, TerminalAppearance,
 };
+use crate::session::term;
 use crate::state::AppState;
 use crate::store::LOCAL_HOST_ID;
-use crate::term;
 
 use super::account_choice::{
     automatic_open_choice, refuse_if_account_not_signed_in, refuse_if_account_quota_exhausted,
@@ -296,7 +296,7 @@ pub(super) fn resolve_open_with(
         )?;
     }
     // Asked again by the launch under its claim; asked here so that nothing is recorded.
-    crate::shared_config::refuse_if_changing(state, account_id.as_deref())?;
+    crate::accounts::shared_config::refuse_if_changing(state, account_id.as_deref())?;
     Ok(ResolvedOpen {
         role,
         cwd,

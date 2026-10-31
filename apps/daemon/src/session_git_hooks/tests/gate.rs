@@ -95,8 +95,8 @@ fn gate_hook_child() {
     use clap::Parser;
     let args = std::env::var("OCTOBOARD_TEST_GATE_ARGS").unwrap();
     let cli =
-        crate::Cli::try_parse_from(["octoboardd"].into_iter().chain(args.split(' '))).unwrap();
-    let Some(crate::Command::GateHook {
+        crate::cli::Cli::try_parse_from(["octoboardd"].into_iter().chain(args.split(' '))).unwrap();
+    let Some(crate::cli::Command::GateHook {
         session,
         port,
         key,

@@ -8,8 +8,8 @@ use std::process::Command;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
+use crate::processes::subprocess::{run_bounded, Bounds, Reach};
 use crate::protocol::{error_code, CodedError};
-use crate::subprocess::{run_bounded, Bounds, Reach};
 
 const OPEN_BOUNDS: Bounds = Bounds {
     timeout: Duration::from_secs(15),

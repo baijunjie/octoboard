@@ -5,8 +5,8 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 
+use crate::agents::launch_settings::trimmed_or_none;
 use crate::hostfs;
-use crate::launch_settings::trimmed_or_none;
 use crate::protocol::{error_code, CodedError};
 
 /// A request that lacks a field its kind needs. `field` is the wire name, passed as is.

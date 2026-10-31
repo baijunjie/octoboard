@@ -65,7 +65,7 @@ created owner-only: the hook script (mode 0700) and, for Grok Build, the session
 `~/.octoboard/run/<session>/`, which is created with the daemon's default permissions, so it is the files' own modes
 that keep them private, and they are removed with that directory. A new client therefore sends the key, and either sends
 no `Origin` or is served from one of the origins above. A client reaching the daemon under any other host name is
-refused until the rule is widened (`host_allowed` in `apps/daemon/src/access.rs`).
+refused until the rule is widened (`host_allowed` in `apps/daemon/src/server/access.rs`).
 
 ## `GET /ws/control` — management and status
 
@@ -709,10 +709,10 @@ chooses for an agent, Grok Build is on (Grok's own default) and Codex is on whil
 and off otherwise, evaluated live, so adding or removing Claude Code moves an unset Codex's value. Once
 `update_settings` has set an agent, that choice holds whatever agents are added. The value in effect is read at every
 launch, resume and account switch, so a running process keeps what it started with. With it on, a Codex launch appends a
-"Claude Code compatibility" section (`src/adapter/claude_compatibility.md`) to the `developer_instructions` it already
-passes, telling Codex to read the user-level Claude Code configuration, in the directory Claude Code's default account
-resolves to (`CLAUDE_CONFIG_DIR` of the launch's shell snapshot, else `~/.claude`), and the project's `.claude/` before
-working.
+"Claude Code compatibility" section (`src/adapter/codex/claude_compatibility.md`) to the `developer_instructions` it
+already passes, telling Codex to read the user-level Claude Code configuration, in the directory Claude Code's default
+account resolves to (`CLAUDE_CONFIG_DIR` of the launch's shell snapshot, else `~/.claude`), and the project's `.claude/`
+before working.
 
 It also passes the MCP servers Claude Code would load for the session's working directory (user, local and approved
 project scope, stdio and streamable HTTP; `src/adapter/claude_mcp.rs`) as `-c mcp_servers.<name>.…` overrides, and never
@@ -744,9 +744,9 @@ first), survive a daemon restart and stay local like the overrides above.
 
 **Sharing the default configuration.**
 
-- **What is shared.** A fixed list of items per agent (the daemon's `shared_items.rs`), between the account's directory
-  and the default directory, the one the agent's default account resolves to (`AgentAvailability.default_account_dir`).
-  Each item is linked to the default entry's fully resolved target.
+- **What is shared.** A fixed list of items per agent (the daemon's `accounts/shared_config/items.rs`), between the
+  account's directory and the default directory, the one the agent's default account resolves to
+  (`AgentAvailability.default_account_dir`). Each item is linked to the default entry's fully resolved target.
 - **Turning it on.**
   - A configuration item the account holds is renamed to `<name>.bak-<stamp>`, then linked.
   - Conversation history is moved into the default directory, then linked. Where both hold a record of the same
@@ -1689,8 +1689,8 @@ again just before it moves them to the Trash; a protected one there is not liste
 
 Agent CLIs run each shell command in a terminal session of their own, so what a command leaves running (a dev server, a
 preview, a watcher) is outside the agent's own session. The daemon follows these processes itself, from the process
-table, for every agent launch (`apps/daemon/src/process_ledger/`), and stops everything attributed to a launch when its
-agent process ends, before the session reads as having no process (so before an archive removes a worktree). These
+table, for every agent launch (`apps/daemon/src/processes/ledger/`), and stops everything attributed to a launch when
+its agent process ends, before the session reads as having no process (so before an archive removes a worktree). These
 requests put the ledger's view on the wire.
 
 A project's **processes** are its trees no session owns: those left behind in it and those kept under it, listed by

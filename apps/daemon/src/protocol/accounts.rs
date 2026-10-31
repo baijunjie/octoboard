@@ -180,9 +180,9 @@ pub struct SharingFailure {
     pub share: bool,
     /// Why, as a whole: the cause the entries share (`other` when they differ), or why the
     /// change could not start when there are none.
-    pub cause: crate::shared_config::FailureCause,
+    pub cause: crate::accounts::shared_config::FailureCause,
     /// Each entry not brought in line, as the error's `items`.
-    pub items: Vec<crate::shared_config::FailedItem>,
+    pub items: Vec<crate::accounts::shared_config::FailedItem>,
     pub detail: String,
 }
 
@@ -358,7 +358,7 @@ mod tests {
             }),
             failure: Some(SharingFailure {
                 share: false,
-                cause: crate::shared_config::FailureCause::PermissionDenied,
+                cause: crate::accounts::shared_config::FailureCause::PermissionDenied,
                 items: Vec::new(),
                 detail: "denied".to_string(),
             }),

@@ -5,23 +5,14 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
-use crate::account_quotas;
+use crate::accounts::quotas;
 use crate::git_workflow::GitWorkflowSettingsChanges;
 use crate::project_git;
 use crate::protocol::{Agent, ApprovalReviewer, ClaudeApprovalMode, Event, Session};
-use crate::state::AppState;
+use crate::state::{broadcast_settings, AppState};
 use crate::store::Store;
 
 use super::validate::absolute_path;
-
-/// Broadcasts the current settings record — the pattern every settings-shaped mutation (the
-/// trusted directories, `auto_pull_repositories`, and now the accounts) follows.
-pub(crate) fn broadcast_settings(state: &AppState) -> Result<()> {
-    state.broadcast(Event::SettingsUpdated {
-        settings: state.store.get_settings()?,
-    });
-    Ok(())
-}
 
 /// Where one agent's launch override is kept: one setting for the agent, applied to a session of
 /// any of its accounts. Codex's approval reviewer and Claude Code's approval mode are handled
@@ -202,7 +193,7 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
     // Likewise the readings already held are looked over now, so an account whose window has not
     // started is not left waiting for its next reading.
     if quota_windows_turned_on {
-        account_quotas::kick_held(state);
+        quotas::kick_held(state);
     }
     Ok(())
 }

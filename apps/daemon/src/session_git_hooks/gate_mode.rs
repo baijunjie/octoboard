@@ -64,7 +64,7 @@ pub(crate) fn inputs_for(
         git_dir: git_dir.map(|dir| wire_path::encode(dir.as_bytes())),
     };
     let body = serde_json::to_vec(&request).ok()?;
-    let reply = crate::loopback::post(
+    let reply = crate::cli::loopback::post(
         port,
         key,
         &format!("/revert-gate/{session}"),

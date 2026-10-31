@@ -26,7 +26,7 @@ use anyhow::Result;
 
 use crate::env_shell;
 use crate::git::env as git_env;
-use crate::subprocess::{self, BoundedFailure, Bounds, Reach};
+use crate::processes::subprocess::{self, BoundedFailure, Bounds, Reach};
 
 /// The user's `git` binary and the shell environment it runs with.
 #[derive(Debug, Clone)]

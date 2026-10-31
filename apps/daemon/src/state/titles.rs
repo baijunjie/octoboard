@@ -52,7 +52,7 @@ impl AppState {
         session: &Session,
         names: &std::cell::OnceCell<Vec<String>>,
     ) -> Option<String> {
-        crate::session_title::resolve(
+        crate::titles::resolve(
             session.agent,
             session.terminal_title.as_deref(),
             &session.record_titles,
@@ -73,10 +73,8 @@ impl AppState {
                                 .flatten()
                                 .map(|console| console.workdir),
                         };
-                        path.map(|path| {
-                            crate::session_title::project_names(std::path::Path::new(&path))
-                        })
-                        .unwrap_or_default()
+                        path.map(|path| crate::titles::project_names(std::path::Path::new(&path)))
+                            .unwrap_or_default()
                     })
                     .clone()
             },

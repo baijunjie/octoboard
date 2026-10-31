@@ -31,8 +31,8 @@ export type Account = {
   config_dir: string,
   /**
    * Whether the account shares what its directory can share with the agent's default account's
-   * directory, by linking each item of `crate::shared_items` into it. The user's choice, set by
-   * `set_account_sharing`; kept local.
+   * directory, by linking each item of `crate::accounts::shared_config::items` into it. The
+   * user's choice, set by `set_account_sharing`; kept local.
    */
   share_default_config: boolean,
   /**
@@ -242,11 +242,10 @@ export type Agent = "claude" | "codex" | "grok";
 /**
  * One agent's availability and what its default account currently resolves to, derived once per
  * daemon start from one login-shell snapshot and held as its own derived state on `AppState`
- * (`crate::availability`) — never as a field of the stored `Settings`, which is written only by
- * the user's own updates. Travels to a client inside
- * `Event::Snapshot` and `Event::AgentAvailabilityUpdated`, one entry per agent, always three of
- * them: the not-yet-determined state is carried by `availability` itself rather than by the
- * entry's absence.
+ * (`crate::agents::availability`) — never as a field of the stored `Settings`, which is written
+ * only by the user's own updates. Travels to a client inside `Event::Snapshot` and
+ * `Event::AgentAvailabilityUpdated`, one entry per agent, always three of them: the
+ * not-yet-determined state is carried by `availability` itself rather than by the entry's absence.
  */
 export type AgentAvailability = {
   agent: Agent,
@@ -293,7 +292,7 @@ export type ApprovalReviewer = "user" | "auto_review";
 /**
  * Whether an agent's binary resolves on the user's login shell `PATH`, the only test an agent is
  * held to: whether its config directory holds a login is not Octoboard's business (see
- * `crate::availability`'s module doc). Three states, not two:
+ * `crate::agents::availability`'s module doc). Three states, not two:
  * [`NotDetermined`](Availability::NotDetermined) is where every run of the daemon starts, and
  * only a completed login-shell snapshot ever moves an agent out of it — a snapshot that times out
  * or fails leaves it there, rather than being read as [`Unavailable`](Availability::Unavailable).
@@ -1044,7 +1043,7 @@ export type Event = {
   /**
    * One entry per supported agent, always three, each starting `not_determined` and
    * replaced once the daemon's one-time login-shell snapshot lands; see
-   * `crate::availability`.
+   * `crate::agents::availability`.
    */
   agent_availability: Array<AgentAvailability>,
   /**
@@ -2047,11 +2046,11 @@ export type Project = {
   /**
    * The user has agreed that Octoboard may press an agent's own trust confirmation for this
    * project's directory without asking, by sending the keystrokes that accept it (see
-   * `crate::trust`). The project form of the one auto-trust permission every agent shares, a
-   * trusted directory being the other: recorded once "Trust and continue" in the dialog the
-   * daemon asks with has pressed a confirmation successfully, whichever agent showed it, and it
-   * covers every later session of any agent in the project. It is not the agent's own trust
-   * record, which each agent writes when its confirmation is pressed.
+   * `crate::session::trust`). The project form of the one auto-trust permission every agent
+   * shares, a trusted directory being the other: recorded once "Trust and continue" in the
+   * dialog the daemon asks with has pressed a confirmation successfully, whichever agent showed
+   * it, and it covers every later session of any agent in the project. It is not the agent's own
+   * trust record, which each agent writes when its confirmation is pressed.
    */
   trust_consent: boolean,
   /**
@@ -2595,7 +2594,7 @@ export type Request = {
   sessions: Array<string>,
   /**
    * Also answer with the process trees of these sessions that an archive would stop and
-   * that have run long enough to ask about (`crate::process_requests::ASK_AFTER`).
+   * that have run long enough to ask about (`crate::processes::requests::ASK_AFTER`).
    */
   processes?: boolean,
 }
@@ -3273,7 +3272,7 @@ export type RequestBody = {
   sessions: Array<string>,
   /**
    * Also answer with the process trees of these sessions that an archive would stop and
-   * that have run long enough to ask about (`crate::process_requests::ASK_AFTER`).
+   * that have run long enough to ask about (`crate::processes::requests::ASK_AFTER`).
    */
   processes?: boolean,
 }
@@ -3667,8 +3666,8 @@ export type Session = {
   /**
    * The reasoning effort the agent runs `observed_model` at by itself, where the records name
    * that model but no effort and the agent's catalogue gives it a default
-   * (`crate::default_effort`). Never stored: it is filled in on the record a client receives
-   * (`AppState::wire_session`), and absent otherwise.
+   * (`crate::records::default_effort`). Never stored: it is filled in on the record a client
+   * receives (`AppState::wire_session`), and absent otherwise.
    */
   default_effort?: string | null,
   status: SessionStatus,
@@ -3865,7 +3864,7 @@ export type Settings = {
   auto_pull_repositories: boolean,
   /**
    * Whether the daemon's scan deletes the archived sessions whose conversation is proven gone
-   * (see `archive_cleanup.rs`). On unless the user turned it off.
+   * (see `coordinator/archive_cleanup.rs`). On unless the user turned it off.
    */
   auto_delete_unresumable_archives: boolean,
   /**
@@ -3917,9 +3916,9 @@ export type Settings = {
   auto_select_account: boolean,
   /**
    * Whether Octoboard itself moves a session to another account when its turn stopped on the
-   * account's usage limit (see `crate::auto_switch`). Off unless the user turned it on. Only
-   * that: it does not choose a new session's account (`auto_select_account`) or answer an
-   * agent's request for a switch (`auto_approve_account_switches`).
+   * account's usage limit (see `crate::accounts::auto_switch`). Off unless the user turned it
+   * on. Only that: it does not choose a new session's account (`auto_select_account`) or answer
+   * an agent's request for a switch (`auto_approve_account_switches`).
    */
   auto_switch_on_usage_limit: boolean,
   /**

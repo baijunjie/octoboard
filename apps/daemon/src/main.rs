@@ -3,104 +3,55 @@
 //! projects and sessions). The desktop application is purely a client of it, over the protocol in
 //! `apps/daemon/PROTOCOL.md`.
 
-mod access;
-mod account_dirs;
-mod account_login;
-mod account_quotas;
-mod account_trash;
+mod accounts;
 mod adapter;
-mod agent_dialogs;
-mod agent_models;
-mod agent_records;
-mod archive_cleanup;
-mod auto_switch;
-mod availability;
+mod agents;
 mod blocking_pass;
 mod branch_cleanup;
 mod branch_origin;
 mod browse;
-mod codex_transport;
-mod config_export;
-mod config_import;
+mod cli;
+mod config_document;
 mod coordinator;
-mod crash_cleanup;
-mod default_effort;
-mod delivery;
 mod env_shell;
 mod git;
 mod git_workflow;
 mod handoff;
-mod hook_mode;
 mod hooks;
 mod host_open;
 mod host_tools;
 mod hostfs;
 mod instance_lock;
 mod interface_language;
-mod interrupt;
-mod launch_settings;
-mod line_file;
 mod log_file;
-mod loopback;
 mod mcp;
-mod outbox;
-mod owner_notices;
-mod pages;
+mod messaging;
 mod path_links;
 mod paths;
-mod process_ledger;
-mod process_requests;
-mod process_session;
+mod processes;
 mod project_git;
 mod project_trash;
 mod protocol;
-mod pty;
-mod ptyio;
-mod record_collector;
-mod record_context;
-mod record_observed;
-mod record_titles;
-mod record_watch;
-mod relocate;
-mod reply_route;
-mod reporting;
+mod records;
 mod revert_gate;
 mod rfc3339;
-mod ringbuf;
-mod rollout;
-mod saved_output;
 mod server;
 mod session;
 mod session_git_hooks;
-mod session_history;
 mod session_request;
-mod session_texts;
-mod session_title;
-mod shared_config;
-mod shared_items;
-mod sharing;
-mod shell_terminal;
 mod state;
-mod status_line_mode;
 mod store;
-mod subprocess;
-mod switch_continue;
-mod term;
-mod terminal_snapshot;
-mod terminal_title;
+mod terminal;
 #[cfg(test)]
 mod test_support;
-mod title_activity;
-mod title_interrupt;
-mod transcript;
+mod titles;
 mod trash_safety;
-mod trust;
 mod wire_path;
 
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
+use clap::Parser;
 
 use state::AppState;
 use store::Store;
@@ -109,187 +60,16 @@ use store::Store;
 /// puts in front of the user.
 pub(crate) const APP_NAME: &str = env!("OCTOBOARD_APP_NAME");
 
-#[derive(Parser)]
-#[command(name = "octoboardd")]
-struct Cli {
-    #[command(subcommand)]
-    command: Option<Command>,
-
-    /// Exit once this process is gone. The application passes its own pid, so closing or crashing
-    /// it never leaves the daemon and its agent processes behind.
-    #[arg(long)]
-    parent_pid: Option<u32>,
-}
-
-#[derive(Subcommand)]
-enum Command {
-    /// Forward one agent hook payload to the daemon. This is what the per-session hook script
-    /// execs; it is not meant to be run by hand.
-    Hook {
-        #[arg(long)]
-        session: String,
-        #[arg(long)]
-        port: u16,
-        /// The key the daemon requires of every connection.
-        #[arg(long)]
-        key: String,
-    },
-    /// Report the branches a session's git has just created. This is what the session's
-    /// `reference-transaction` hook dispatcher starts; it is not meant to be run by hand.
-    GitRef {
-        #[arg(long)]
-        session: String,
-        #[arg(long)]
-        port: u16,
-        /// The key the daemon requires of every connection.
-        #[arg(long)]
-        key: String,
-        /// The branch (`refs/heads/...`) the git that made them had checked out.
-        #[arg(long)]
-        head: Option<std::ffi::OsString>,
-        /// Each created reference's name followed by the object id it was created at.
-        #[arg(last = true)]
-        refs: Vec<std::ffi::OsString>,
-    },
-    /// Ask the daemon whether the revert gate applies to the hook git is running and, when it
-    /// does, run the revert gate in this process with what the daemon gives it; exits 3 to
-    /// reject. This is what the session's `reference-transaction` and `pre-push` hook dispatchers
-    /// start in the foreground; it is not meant to be run by hand.
-    GateHook {
-        #[arg(long)]
-        session: String,
-        #[arg(long)]
-        port: u16,
-        /// The key the daemon requires of every connection.
-        #[arg(long)]
-        key: String,
-        #[command(subcommand)]
-        hook: revert_gate::Hook,
-    },
-    /// Decide whether a `reference-transaction` hook's ref updates, or with `pre-push` the refs
-    /// of a push, undo changes already merged into a guarded branch; exits 3 to reject. Runs the
-    /// gate directly with the guarded branches, target branches and fork points given as
-    /// arguments; the session's hook dispatchers go through `gate-hook` instead, which asks the
-    /// daemon for them.
-    RevertGate(revert_gate::Args),
-    /// Report a Claude Code session's context window and run the user's own status line. This is
-    /// the status line the Claude Code adapter injects; it is not meant to be run by hand.
-    StatusLine {
-        #[arg(long)]
-        session: String,
-        #[arg(long)]
-        port: u16,
-        /// The key the daemon requires of every connection.
-        #[arg(long)]
-        key: String,
-        /// The session's working directory, whose project settings name the user's status line.
-        #[arg(long)]
-        cwd: std::path::PathBuf,
-        /// The Claude Code configuration directory whose user settings name it.
-        #[arg(long)]
-        config_dir: std::path::PathBuf,
-    },
-    /// Serve the Octoboard MCP tools for one session over stdio. This is what the adapters
-    /// register as the session's MCP server; it is not meant to be run by hand.
-    Mcp {
-        #[arg(long)]
-        session: String,
-        #[arg(long)]
-        role: McpRole,
-        /// The session is a worker, which narrows what it is offered.
-        #[arg(long)]
-        worker: bool,
-        #[arg(long)]
-        port: u16,
-        /// The key the daemon requires of every connection.
-        #[arg(long)]
-        key: String,
-        #[arg(long)]
-        token: String,
-    },
-}
-
-/// The `--role` values the MCP mode accepts. A separate type from `protocol::Role` because clap
-/// has to derive a value parser for it, and the protocol types are the wire's, not the CLI's.
-#[derive(Clone, Copy, clap::ValueEnum)]
-enum McpRole {
-    Console,
-    Project,
-}
-
-impl From<McpRole> for protocol::Role {
-    fn from(role: McpRole) -> Self {
-        match role {
-            McpRole::Console => protocol::Role::Console,
-            McpRole::Project => protocol::Role::Project,
-        }
-    }
-}
-
 fn main() -> Result<()> {
-    let cli = Cli::parse();
-
-    // The hook path must stay silent and must not pay for a runtime: it is on the agent's turn
-    // critical path, several times per turn.
-    if let Some(Command::Hook { session, port, key }) = &cli.command {
-        hook_mode::run(session, *port, key);
-        return Ok(());
-    }
-    if let Some(Command::GitRef {
-        session,
-        port,
-        key,
-        head,
-        refs,
-    }) = &cli.command
-    {
-        session_git_hooks::ref_mode::run(session, *port, key, head.as_deref(), refs);
-        return Ok(());
-    }
-
-    // Both run synchronously inside the user's git, which waits for their exit status.
-    if let Some(Command::GateHook {
-        session,
-        port,
-        key,
-        hook,
-    }) = &cli.command
-    {
-        std::process::exit(session_git_hooks::gate_mode::run(session, *port, key, hook));
-    }
-    if let Some(Command::RevertGate(args)) = &cli.command {
-        std::process::exit(revert_gate::run(args));
-    }
-
-    // On the path of every status line update, and its stdout is the user's status line's.
-    if let Some(Command::StatusLine {
-        session,
-        port,
-        key,
-        cwd,
-        config_dir,
-    }) = &cli.command
-    {
-        std::process::exit(status_line_mode::run(session, *port, key, cwd, config_dir));
-    }
-
-    // The MCP child owns its stdout for the protocol, so it installs no log subscriber either.
-    if let Some(Command::Mcp {
-        session,
-        role,
-        worker,
-        port,
-        key,
-        token,
-    }) = cli.command
-    {
-        return mcp::stdio::run(session, role.into(), worker, port, key, token);
+    let cli = cli::Cli::parse();
+    if let Some(command) = cli.command {
+        return cli::run(command);
     }
 
     // While this is still the only thread.
-    process_ledger::forget_inherited_tag();
+    processes::ledger::forget_inherited_tag();
     let log_file = init_logging();
-    crash_cleanup::install();
+    processes::crash_cleanup::install();
 
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -368,11 +148,11 @@ async fn run_daemon(parent_pid: Option<u32>, log_file: log_file::LogFile) -> Res
                 .filter_map(|session| session.config_dir),
         )
         .collect();
-    relocate::sweep_staging(known_dirs.iter().map(std::path::Path::new));
+    accounts::relocate::sweep_staging(known_dirs.iter().map(std::path::Path::new));
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
     let port = listener.local_addr()?.port();
-    let key = access::generate_key().context("generating the daemon's key")?;
+    let key = server::access::generate_key().context("generating the daemon's key")?;
     let self_exe = std::env::current_exe()?.to_string_lossy().into_owned();
     let state = Arc::new(AppState::new(
         store,
@@ -382,7 +162,7 @@ async fn run_daemon(parent_pid: Option<u32>, log_file: log_file::LogFile) -> Res
         paths::saved_output_dir(),
         paths::consoles_dir(),
         paths::handoff_dir(),
-        process_ledger::ProcessLedger::new(&paths::data_dir()),
+        processes::ledger::ProcessLedger::new(&paths::data_dir()),
     ));
     // Saved output whose session is gone (a daemon that died between deleting the record and the
     // file) or whose write was cut short has nothing else to remove it.
@@ -391,7 +171,7 @@ async fn run_daemon(parent_pid: Option<u32>, log_file: log_file::LogFile) -> Res
     handoff::sweep(&state)?;
     // Pages a session pushed before it took the bound role, which no tool of its can list or
     // delete, and which a failed withdrawal or a push racing a binding may have left.
-    if let Err(err) = pages::withdraw_stray_pages(&state) {
+    if let Err(err) = coordinator::pages::withdraw_stray_pages(&state) {
         tracing::warn!(%err, "withdrawing the pages of bound sessions failed");
     }
 
@@ -410,11 +190,11 @@ async fn run_daemon(parent_pid: Option<u32>, log_file: log_file::LogFile) -> Res
 
     // Off the runtime rather than ahead of the line above: a ten-second shell snapshot must not
     // put that cost on every application launch, and clients are served before it lands either way
-    // (see `apps/daemon/src/availability.rs`).
-    availability::spawn_determine(state.clone());
-    record_collector::spawn(&state);
-    account_quotas::spawn(&state);
-    archive_cleanup::spawn(&state);
+    // (see `apps/daemon/src/agents/availability.rs`).
+    agents::availability::spawn_determine(state.clone());
+    records::collector::spawn(&state);
+    accounts::quotas::spawn(&state);
+    coordinator::archive_cleanup::spawn(&state);
     // Likewise off the runtime: it runs `git` in every project's directory, a few at a time.
     project_git::remote::reconcile_remote_urls(&state);
     project_git::watch::start(&state);
@@ -451,7 +231,7 @@ async fn run_daemon(parent_pid: Option<u32>, log_file: log_file::LogFile) -> Res
 async fn stop_all_processes(state: &Arc<AppState>) {
     state.account_quotas.stop_cli_runs();
     state.account_logins.stop_all().await;
-    tokio::join!(state.stop_all_sessions(), shell_terminal::close_all(state));
+    tokio::join!(state.stop_all_sessions(), terminal::shell::close_all(state));
 }
 
 /// Polls the application's pid and ends the daemon once it is gone. The daemon lives and dies with

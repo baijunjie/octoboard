@@ -90,7 +90,7 @@ impl AppState {
         }
         if locked {
             if !self.store.set_session_locked_unless_archived(id)? {
-                return Err(crate::coordinator::lifecycle::session_archived(id));
+                return Err(session_archived(id));
             }
         } else {
             self.store.set_session_locked(id, false)?;
@@ -120,7 +120,9 @@ impl AppState {
         if !live.sharing_locks.is_empty() {
             if let Some(session) = self.store.get_session(id)? {
                 if let Some(entry) = locked_over(&live, &session) {
-                    return Err(crate::shared_config::sharing_in_progress(&entry.account));
+                    return Err(crate::accounts::shared_config::sharing_in_progress(
+                        &entry.account,
+                    ));
                 }
             }
         }
@@ -132,7 +134,7 @@ impl AppState {
             ));
         }
         drop(live);
-        crate::shared_config::publish(self);
+        crate::accounts::shared_config::publish(self);
         Ok(LaunchClaim {
             state: self.clone(),
             id: id.to_string(),
@@ -159,7 +161,7 @@ impl AppState {
         }
         live.switching.insert(id.to_string());
         drop(live);
-        crate::shared_config::publish(self);
+        crate::accounts::shared_config::publish(self);
         Ok(LaunchClaim {
             state: self.clone(),
             id: id.to_string(),
@@ -209,16 +211,6 @@ impl AppState {
         }
     }
 
-    /// How long a change of a session's model waits for the process it ended to be recorded down:
-    /// [`crate::coordinator::launch::SWITCH_STOP_TIMEOUT`], shortened by a test.
-    pub(crate) fn model_change_stop_timeout(&self) -> std::time::Duration {
-        #[cfg(test)]
-        if let Some(shorter) = *self.model_change_stop_timeout.lock().unwrap() {
-            return shorter;
-        }
-        crate::coordinator::launch::SWITCH_STOP_TIMEOUT
-    }
-
     /// Whether a change of its model is restarting the session (see [`Self::mark_model_change`]).
     pub fn is_changing_model(&self, id: &str) -> bool {
         let live = self.live.read().expect("live sessions lock poisoned");
@@ -235,7 +227,7 @@ impl AppState {
         if was_switching_account || was_changing_model {
             self.publish_session_by_id(id);
         }
-        crate::shared_config::publish(self);
+        crate::accounts::shared_config::publish(self);
     }
 
     /// Claims the session for one interrupt, or `None` while another holds it. The claim ends when
@@ -310,4 +302,12 @@ impl AppState {
             live.release_watch();
         }
     }
+}
+
+pub(crate) fn session_archived(id: &str) -> anyhow::Error {
+    CodedError::raised(
+        error_code::SESSION_ARCHIVED,
+        "an archived session cannot be locked, switched or handed off; reopen it first",
+        &[("session", id)],
+    )
 }

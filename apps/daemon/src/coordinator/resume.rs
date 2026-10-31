@@ -8,16 +8,16 @@ use std::time::SystemTime;
 use anyhow::{Context, Result};
 use uuid::Uuid;
 
+use crate::accounts::relocate;
 use crate::adapter;
-use crate::agent_records;
 use crate::env_shell;
 use crate::protocol::{
     error_code, Account, Agent, CodedError, ConversationLocation, Role, Session, SessionStatus,
     TerminalAppearance,
 };
-use crate::relocate;
+use crate::records;
+use crate::session::term;
 use crate::state::AppState;
-use crate::term;
 
 use super::account_choice::{account_dir, agent_is_available};
 use super::launch::{checked_launch_overrides, relaunch_session_with, LaunchEdit};
@@ -385,7 +385,7 @@ async fn resume_session_with_launch(
         checked_owners.push(check_resumable(state, owner, &shell).await?);
     }
     let target = check_resumable(state, id, &shell).await?;
-    if target.judgement.resumability == agent_records::Resumability::Unresumable {
+    if target.judgement.resumability == records::Resumability::Unresumable {
         return Err(conversation_unresumable(&target.session));
     }
     // Refused for a value the agent does not offer before anything is launched or recorded.
@@ -418,7 +418,7 @@ async fn resume_session_with_launch(
         } else {
             checked
         };
-        if checked.judgement.resumability == agent_records::Resumability::Unresumable {
+        if checked.judgement.resumability == records::Resumability::Unresumable {
             forget_gone_conversation(state, &checked.session, &shell).await?;
         } else {
             unarchive_rollout(&checked, &shell).await?;
@@ -479,7 +479,7 @@ pub(crate) async fn check_can_resume_with(
     let shell = tokio::task::spawn_blocking(shell_snapshot).await??;
     let owners = archived_owners(state, id)?;
     let target = check_resumable(state, id, &shell).await?;
-    if target.judgement.resumability == agent_records::Resumability::Unresumable {
+    if target.judgement.resumability == records::Resumability::Unresumable {
         return Err(conversation_unresumable(&target.session));
     }
     Ok(owners)
@@ -488,12 +488,12 @@ pub(crate) async fn check_can_resume_with(
 /// A session and what [`check_resumable`] found of its conversation.
 struct Checked {
     session: Session,
-    judgement: agent_records::Judgement,
+    judgement: records::Judgement,
 }
 
 /// Looks for the conversation record of a dormant session in its own account, resolving a default
 /// account through `shell`, the snapshot the launch will use. Only a proven absence is
-/// [`agent_records::Resumability::Unresumable`]; anything unknown launches as it always has, and a
+/// [`records::Resumability::Unresumable`]; anything unknown launches as it always has, and a
 /// session that is not dormant is not looked at.
 async fn check_resumable(
     state: &Arc<AppState>,
@@ -504,15 +504,15 @@ async fn check_resumable(
     if !session.status.is_dormant() {
         return Ok(Checked {
             session,
-            judgement: agent_records::Judgement {
-                resumability: agent_records::Resumability::Resumable,
+            judgement: records::Judgement {
+                resumability: records::Resumability::Resumable,
                 needs_unarchive: false,
             },
         });
     }
     let shell = shell.clone();
     tokio::task::spawn_blocking(move || {
-        let judgement = agent_records::judge(&agent_records::Locator::with_shell(shell), &session);
+        let judgement = records::judge(&records::Locator::with_shell(shell), &session);
         Checked { session, judgement }
     })
     .await
@@ -530,7 +530,7 @@ async fn forget_gone_conversation(
     trash_agent_records_with(
         state,
         vec![session.clone()],
-        agent_records::Locator::with_shell(shell.clone()),
+        records::Locator::with_shell(shell.clone()),
         state.host_tools.get().trash,
     )
     .await;

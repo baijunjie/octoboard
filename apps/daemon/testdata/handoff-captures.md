@@ -1,7 +1,7 @@
 # Handoff record fixtures
 
-Conversation records for the readers that turn a record into a handoff package (`src/handoff/record.rs`), replayed
-through the real readers. No model call was made to produce them.
+Conversation records for the readers that turn a record into the common conversation sequence a handoff package is
+built from (`src/records/conversation.rs`), replayed through the real readers. No model call was made to produce them.
 
 Each line is a real line from a record on the development machine, taken for its shape and scrubbed: every key not
 needed to tell the line apart is dropped, ids, paths and timestamps are gone, and its text is replaced with neutral text
@@ -29,7 +29,7 @@ Synthesized, because no record on the machine holds a sample, from the tools' pu
 ## Session history fixtures
 
 `history_claude.jsonl`, `history_codex_rollout.jsonl` and `history_grok_chat_history.jsonl` are replayed through the
-session history reader (`src/session_history.rs`). Unlike the captures above they are written by hand, in the shape of
+session history reader (`src/records/history.rs`). Unlike the captures above they are written by hand, in the shape of
 real captured lines, so that each case is pinned exactly (an Octoboard-written message, a Codex `commentary` message,
 a slash command with arguments) rather than found by luck in a capture:
 

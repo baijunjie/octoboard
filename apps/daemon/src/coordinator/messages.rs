@@ -4,9 +4,9 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
-use crate::delivery;
+use crate::messaging::delivery;
+use crate::messaging::texts;
 use crate::protocol::{error_code, CodedError};
-use crate::session_texts;
 use crate::state::AppState;
 
 /// The user's own write into a session. Refused rather than queued while the session is waiting for
@@ -59,7 +59,7 @@ pub(super) async fn submit_page(
     }
     let session_id = page.session_id;
 
-    let message = session_texts::render_page_submission(&page.id, &data);
+    let message = texts::render_page_submission(&page.id, &data);
     let owned_state = state.clone();
     // The write blocks on the PTY. Queued rather than refused: the user is the one submitting, so
     // there is nobody to tell to answer a prompt first, and the submission must not be dropped.

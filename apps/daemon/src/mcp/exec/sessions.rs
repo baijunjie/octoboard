@@ -15,11 +15,11 @@ use crate::mcp::args::{
 };
 use crate::mcp::handover::{branch_names, held_by};
 use crate::mcp::settings::resolve_account;
+use crate::messaging::texts::{self, branches_opening_prompt, request_opening_prompt};
 use crate::protocol::{Agent, Console, Origin, Project, Role, Session};
+use crate::session::term::{Launch, LaunchRequest};
 use crate::session_request;
-use crate::session_texts::{self, branches_opening_prompt, request_opening_prompt};
 use crate::state::AppState;
-use crate::term::{Launch, LaunchRequest};
 
 use super::resolve::{branch_names_of, describe_session, owned_count_of, resolve_owned_session};
 
@@ -29,7 +29,9 @@ pub(super) async fn new_session(
     state: &Arc<AppState>,
     caller: &Session,
     arguments: &Map<String, Value>,
-    launch: impl FnOnce(crate::term::LaunchRequest) -> Result<crate::term::Launch> + Send + 'static,
+    launch: impl FnOnce(crate::session::term::LaunchRequest) -> Result<crate::session::term::Launch>
+        + Send
+        + 'static,
 ) -> Result<Value> {
     let (project, open) = session_to_start(state, caller, arguments)?;
     if caller.role == Role::Console
@@ -127,7 +129,7 @@ fn session_in(
         .map(str::trim)
         .filter(|goal| !goal.is_empty())
         .ok_or_else(|| anyhow!("`brief.goal` is required"))?;
-    let task = session_texts::render_brief(
+    let task = texts::render_brief(
         goal,
         brief.get("context").and_then(Value::as_str),
         brief.get("acceptance").and_then(Value::as_str),
@@ -193,8 +195,7 @@ fn session_in(
         // dispatched into one project would otherwise all carry the project's name and be
         // indistinguishable in the menu.
         title: Some(
-            optional_string(arguments, "title")
-                .unwrap_or_else(|| session_texts::title_from_goal(goal)),
+            optional_string(arguments, "title").unwrap_or_else(|| texts::title_from_goal(goal)),
         ),
         origin: Origin::Console,
         bound_to: None,
@@ -264,11 +265,11 @@ pub(super) async fn interrupt_session(
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
     let target = resolve_owned_session(state, caller, required_str(arguments, "session")?)?;
-    let crate::interrupt::Interrupted {
+    let crate::session::interrupt::Interrupted {
         interrupted,
         status,
         note,
-    } = crate::interrupt::interrupt_session(state, &target.id).await?;
+    } = crate::session::interrupt::interrupt_session(state, &target.id).await?;
     Ok(json!({ "interrupted": interrupted, "status": status, "note": note }))
 }
 

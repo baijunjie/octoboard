@@ -212,7 +212,7 @@ mod tests {
         });
         tokio::task::spawn_blocking(move || {
             let post = |session: &str, body: &[u8]| {
-                crate::loopback::post(
+                crate::cli::loopback::post(
                     port,
                     TEST_KEY,
                     &format!("/context-window/{session}"),

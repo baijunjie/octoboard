@@ -112,7 +112,7 @@ wall-clock time only (refresh intervals, relative times, expiry).
 
 Agent CLIs animate a glyph at the start of their terminal title while they work (Claude Code cycles ◐◓◑◒ and shows ✳
 when idle; Codex and other terminal tools use braille spinners). The daemon strips those leading glyphs before it
-stores or publishes the title (`apps/daemon/src/terminal_title.rs`), so a working session does not send a
+stores or publishes the title (`apps/daemon/src/terminal/title.rs`), so a working session does not send a
 `terminal_title` update per frame and no UI code needs to strip them again: the title in the store is the steady text,
 and deduplicating by it, rebuilding a native menu from it or notifying on it does not churn at the spinner's rate.
 Do not add a glyph pattern to the UI; if one slips through, fix the daemon's list.

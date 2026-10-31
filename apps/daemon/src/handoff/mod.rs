@@ -13,10 +13,11 @@
 //! Reading only: nothing is written to an agent's directories or to the user's repository, and a
 //! record that is missing or unreadable yields a package without the conversation, not a failure.
 //! A package lives in Octoboard's own data directory, in a file named for the key it is written
-//! under; [`remove`] is the end of that file's life.
+//! under; where that file is and its removal are `package_file.rs`'s, and [`remove`] is the end
+//! of that file's life.
 
 pub mod operation;
-pub mod record;
+pub(crate) mod package_file;
 #[cfg(test)]
 mod tests;
 
@@ -27,11 +28,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::{bail, Result};
 
-use crate::agent_records::{conversation_branch, Branch, Locator};
 use crate::branch_origin::session_branches::{self, BranchState, Worktree};
 use crate::protocol::{Agent, Role, Session};
+use crate::records::conversation::{self, Conversation, Speaker, Todo};
+use crate::records::{conversation_branch, Branch, Locator};
 use crate::state::AppState;
-use record::{Conversation, Speaker, Todo};
+use package_file::{package_path_in, remove_in};
 
 /// The original session as the receiving session is told of it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -131,7 +133,7 @@ fn build_with(
         Some(Branch {
             stretches: Some(stretches),
             ..
-        }) => record::read_stretches(session.agent, stretches)
+        }) => conversation::read_stretches(session.agent, stretches)
             .map_err(|err| format!("the record could not be read: {err}")),
         Some(_) => Err(
             "the record of the conversation lacks a history segment it continues from".to_owned(),
@@ -444,17 +446,6 @@ fn render_todo(out: &mut String, todo: &Todo) {
 
 // -- the file ------------------------------------------------------------------
 
-/// Where the package written under `key` is in `dir`: a known path per key, so whoever needs it
-/// later finds it without asking. `None` for a key that is not a plain id, which no package is ever
-/// written under.
-fn package_path_in(dir: &Path, key: &str) -> Option<PathBuf> {
-    let plain = !key.is_empty()
-        && key
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_');
-    plain.then(|| dir.join(format!("{key}.md")))
-}
-
 /// Builds the package of `session` and writes it under `key`, returning its path. The file is
 /// written whole and renamed into place, and is the owner's alone since a conversation can hold
 /// secrets.
@@ -525,11 +516,4 @@ pub fn sweep(state: &AppState) -> Result<()> {
 /// Removes the package written under `key`; one that is already gone is no failure.
 pub fn remove(state: &AppState, key: &str) -> std::io::Result<()> {
     remove_in(state.handoff_dir(), key)
-}
-
-fn remove_in(dir: &Path, key: &str) -> std::io::Result<()> {
-    match package_path_in(dir, key).map(std::fs::remove_file) {
-        Some(Err(err)) if err.kind() != std::io::ErrorKind::NotFound => Err(err),
-        _ => Ok(()),
-    }
 }

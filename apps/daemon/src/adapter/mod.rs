@@ -1,6 +1,11 @@
 //! Agent adapters: one per agent CLI, each assembling the launch of that CLI so Octoboard's
 //! capabilities are injected *additionally*, without modifying project files or the user's own
-//! configuration. Everything else in the daemon is agent-agnostic.
+//! configuration. The adapter trait covers launching, capability injection, status and resume;
+//! where each agent keeps its files is [`crate::agents::layout`], and the per-agent knowledge of
+//! how the agents otherwise behave lives with the modules that need it, among them their screens
+//! and dialogs, hook payloads, records, sign-in and quota protocols, tool naming and role text
+//! (`crate::mcp`), launch and account switch (`crate::coordinator`), model catalogues
+//! (`crate::agents::models`) and the detection of a project's agent (`crate::hostfs::listing`).
 //!
 //! Three things are injected into every agent: the status hooks, the Octoboard MCP server, and a role
 //! description, plus a status line for Claude Code ("What is injected on every launch" in
@@ -44,6 +49,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 
+use crate::agents::layout::layout;
 use crate::git_workflow::GitWorkflowSettings;
 use crate::mcp::Owner;
 use crate::protocol::{
@@ -110,9 +116,9 @@ pub struct LaunchSpec<'a> {
     /// is given Claude Code's MCP servers (`claude_mcp`); Grok Build is given its own switches.
     pub claude_compatibility: bool,
     /// The default account's directory, fully resolved, when the session's account shares the
-    /// default configuration (`crate::shared_config`); `None` for every other launch. An adapter
-    /// whose agent keeps per-project memory in its conversation directory points that memory
-    /// here, so it lands where the default account keeps it.
+    /// default configuration (`crate::accounts::shared_config`); `None` for every other launch. An
+    /// adapter whose agent keeps per-project memory in its conversation directory points that
+    /// memory here, so it lands where the default account keeps it.
     pub shared_default_dir: Option<&'a Path>,
     /// The model to launch with, in the agent's own spelling; `None` leaves it to the agent. Read
     /// from the setting for this agent of the session's console (a console session) or of its
@@ -241,38 +247,22 @@ pub fn refuse_unlaunchable_account(agent: Agent, pinned: Option<&Path>) -> Resul
     }
 }
 
-/// The environment variable this agent reads its configuration directory from — the one an
-/// adapter exports for a pinned account and a snapshot may already carry for the default one.
-pub fn config_dir_var(agent: Agent) -> &'static str {
-    match agent {
-        Agent::Claude => "CLAUDE_CONFIG_DIR",
-        Agent::Codex => "CODEX_HOME",
-        Agent::Grok => "GROK_HOME",
-    }
-}
-
-/// The agent's own usual configuration directory under the home directory.
-fn default_dir_name(agent: Agent) -> &'static str {
-    match agent {
-        Agent::Claude => ".claude",
-        Agent::Codex => ".codex",
-        Agent::Grok => ".grok",
-    }
-}
-
 /// The directory this agent's default account resolves to — what "pinning nothing" means at
 /// launch: the directory its own variable is exported to in `shell_env`, else the agent's own
 /// usual default under the home directory the snapshot carries, else the daemon's own. For
 /// Grok Build this is the *source* home a session's per-session home is built from
-/// (`grok::build_grok_home`), never the per-session home itself, which is Octoboard's own and
+/// (`grok::home::build_grok_home`), never the per-session home itself, which is Octoboard's own and
 /// exists only for the duration of a process.
 ///
-/// Shared by `crate::availability`, which shows it as the default account's directory before any
-/// session has opened, and by `grok::default_grok_home`, which a launch with no pinned account
-/// builds the farm from.
+/// Shared by `crate::agents::availability`, which shows it as the default account's directory
+/// before any session has opened, and by `grok::home::default_grok_home`, which a launch with no
+/// pinned account builds the farm from.
 pub fn default_account_dir(agent: Agent, shell_env: &HashMap<String, String>) -> PathBuf {
-    let (var, default_name) = (config_dir_var(agent), default_dir_name(agent));
-    if let Some(dir) = shell_env.get(var).filter(|dir| !dir.is_empty()) {
+    let layout = layout(agent);
+    if let Some(dir) = shell_env
+        .get(layout.config_dir_var)
+        .filter(|dir| !dir.is_empty())
+    {
         return PathBuf::from(dir);
     }
     let home = shell_env
@@ -280,7 +270,7 @@ pub fn default_account_dir(agent: Agent, shell_env: &HashMap<String, String>) ->
         .filter(|home| !home.is_empty())
         .map(PathBuf::from)
         .unwrap_or_else(crate::paths::home_dir);
-    home.join(default_name)
+    home.join(layout.default_dir)
 }
 
 /// A command running `agent`'s binary with `args` the way a session of the account would run it,
@@ -292,8 +282,9 @@ pub fn default_account_dir(agent: Agent, shell_env: &HashMap<String, String>) ->
 /// binary's name when it does not resolve.
 ///
 /// A caller running it outside a session or its launch claim holds
-/// [`crate::shared_config::admitted_reading`] for the whole run: otherwise a change to the account's
-/// sharing can move what the CLI opens, such as Codex's state database and history, from under it.
+/// [`crate::accounts::shared_config::admitted_reading`] for the whole run: otherwise a change to
+/// the account's sharing can move what the CLI opens, such as Codex's state database and history,
+/// from under it.
 pub fn account_command(
     agent: Agent,
     shell_env: &HashMap<String, String>,
@@ -327,7 +318,7 @@ pub fn account_command_of(
     let mut command = std::process::Command::new(binary);
     command.args(args).env_clear().envs(shell_env);
     if let Some(dir) = config_dir {
-        command.env(config_dir_var(agent), dir);
+        command.env(layout(agent).config_dir_var, dir);
     }
     command.current_dir(crate::paths::home_dir());
     command
@@ -354,7 +345,7 @@ pub struct LaunchPlan {
     /// user's own configuration by itself, and so has to be carried there once the confirmation is
     /// accepted, by Octoboard's press or in the terminal. Only Grok, whose trust store lives in the
     /// per-session home.
-    pub carried_trust: Option<crate::trust::CarriedTrust>,
+    pub carried_trust: Option<crate::session::trust::CarriedTrust>,
     /// Grok's: keys to copy from the session's `config.toml` onto the shared file once the process
     /// has exited. Only when that source file is a symlink.
     pub shared_config_writeback: Option<grok::SharedConfigWriteback>,
@@ -552,13 +543,13 @@ pub mod tests {
                 .env(CASE, case)
                 .env(DONE, &done)
                 .env("TMPDIR", &*root);
-            let bounds = crate::subprocess::Bounds {
+            let bounds = crate::processes::subprocess::Bounds {
                 timeout: crate::test_support::PATIENCE,
                 stdout_limit: 64 * 1024,
                 stderr_limit: 64 * 1024,
-                reach: crate::subprocess::Reach::ProcessGroup,
+                reach: crate::processes::subprocess::Reach::ProcessGroup,
             };
-            match crate::subprocess::run_bounded(
+            match crate::processes::subprocess::run_bounded(
                 &mut command,
                 &bounds,
                 &std::sync::atomic::AtomicBool::new(false),
@@ -713,5 +704,36 @@ pub mod tests {
         fixture.owner = None;
         let (_, independent) = super::mcp_server_command(&fixture.spec());
         assert!(!independent.contains(&"--worker".to_string()));
+    }
+
+    /// Each agent's configuration directory: the variable it reads it from, set in the shell
+    /// snapshot, else its own directory under the snapshot's home; an empty variable counts as
+    /// unset.
+    #[test]
+    fn each_agents_default_account_is_its_variable_or_its_directory_under_home() {
+        use crate::protocol::Agent;
+        for (agent, var, dir) in [
+            (Agent::Claude, "CLAUDE_CONFIG_DIR", ".claude"),
+            (Agent::Codex, "CODEX_HOME", ".codex"),
+            (Agent::Grok, "GROK_HOME", ".grok"),
+        ] {
+            assert_eq!(crate::agents::layout::layout(agent).config_dir_var, var);
+            let home = HashMap::from([("HOME".to_string(), "/home/user".to_string())]);
+            assert_eq!(
+                super::default_account_dir(agent, &home),
+                PathBuf::from("/home/user").join(dir)
+            );
+            let mut exported = home.clone();
+            exported.insert(var.to_string(), String::new());
+            assert_eq!(
+                super::default_account_dir(agent, &exported),
+                PathBuf::from("/home/user").join(dir)
+            );
+            exported.insert(var.to_string(), "/elsewhere".to_string());
+            assert_eq!(
+                super::default_account_dir(agent, &exported),
+                PathBuf::from("/elsewhere")
+            );
+        }
     }
 }

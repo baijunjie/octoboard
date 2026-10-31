@@ -6,11 +6,11 @@ use std::sync::Arc;
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
 
-use crate::delivery::{self, Delivery, WhenBlocked};
 use crate::mcp::args::{required_str, string_list};
+use crate::messaging::delivery::{self, Delivery, WhenBlocked};
+use crate::messaging::reporting::{self, ReportStatus};
+use crate::messaging::sharing::{self, OwnerCopy};
 use crate::protocol::{error_code, CodedError, Session, SessionStatus};
-use crate::reporting::{self, ReportStatus};
-use crate::sharing::{self, OwnerCopy};
 use crate::state::AppState;
 
 use super::resolve::{resolve_owned_session, resolve_session};

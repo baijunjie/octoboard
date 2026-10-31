@@ -24,8 +24,8 @@ use crate::browse::tree_diff;
 use crate::browse::{blob, budget, git_error, git_failed, Located};
 use crate::git::isolated::IsolatedGit;
 use crate::git::run::GitError;
+use crate::processes::subprocess::BoundedFailure;
 use crate::protocol::{CommitChanges, ComparedChangeRef};
-use crate::subprocess::BoundedFailure;
 
 /// The commits between a merge base and a tip, newest first, each with its changes.
 #[derive(Debug)]

@@ -36,7 +36,7 @@ pub enum ClaudeApprovalMode {
 pub struct Settings {
     pub auto_pull_repositories: bool,
     /// Whether the daemon's scan deletes the archived sessions whose conversation is proven gone
-    /// (see `archive_cleanup.rs`). On unless the user turned it off.
+    /// (see `coordinator/archive_cleanup.rs`). On unless the user turned it off.
     pub auto_delete_unresumable_archives: bool,
     /// Whether a session's `request_session` call is approved without asking the user (see
     /// `session_request`). Off unless the user turned it on; only the user's own client changes it.
@@ -72,9 +72,9 @@ pub struct Settings {
     /// keeps its target agent.
     pub auto_select_account: bool,
     /// Whether Octoboard itself moves a session to another account when its turn stopped on the
-    /// account's usage limit (see `crate::auto_switch`). Off unless the user turned it on. Only
-    /// that: it does not choose a new session's account (`auto_select_account`) or answer an
-    /// agent's request for a switch (`auto_approve_account_switches`).
+    /// account's usage limit (see `crate::accounts::auto_switch`). Off unless the user turned it
+    /// on. Only that: it does not choose a new session's account (`auto_select_account`) or answer
+    /// an agent's request for a switch (`auto_approve_account_switches`).
     pub auto_switch_on_usage_limit: bool,
     /// Whether the client's sidebar orders sessions and projects by status. On unless the user
     /// turned it off; the daemon only stores it, the ordering is the client's.

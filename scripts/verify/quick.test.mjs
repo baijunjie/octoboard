@@ -15,13 +15,13 @@ const walk = (directory) => readdirSync(path.join(root, directory), { withFileTy
 });
 
 const quick = (files) => quickSteps(planScope(files), files);
-const WIDE = ["protocol::", "session_history::"];
+const WIDE = ["protocol::", "records::history::"];
 const labels = (files) => quick(files).steps.map((step) => step.label);
 
 test("a crate source file maps to its top-level module as a libtest filter", () => {
   assert.equal(moduleFilter("src/coordinator.rs"), "coordinator::");
-  assert.equal(moduleFilter("src/process_ledger/attribute.rs"), "process_ledger::");
-  assert.equal(moduleFilter("src/process_ledger/tests.rs"), "process_ledger::");
+  assert.equal(moduleFilter("src/processes/ledger/attribute.rs"), "processes::");
+  assert.equal(moduleFilter("src/processes/ledger/tests.rs"), "processes::");
   assert.equal(moduleFilter("src/foo/mod.rs"), "foo::");
   assert.equal(moduleFilter("src/foo/bar/baz.rs"), "foo::");
 });
@@ -33,8 +33,8 @@ test("crate roots, separate targets and files outside the sources are not bound 
 });
 
 test("Rust changes become filters per crate, or the crate's full tests", () => {
-  assert.deepEqual(rustChanges(["apps/daemon/src/coordinator.rs", "apps/daemon/src/process_ledger/tests.rs", "apps/desktop/src-tauri/src/menu.rs"]), {
-    daemon: ["coordinator::", "process_ledger::"], native: ["menu::"],
+  assert.deepEqual(rustChanges(["apps/daemon/src/coordinator.rs", "apps/daemon/src/processes/ledger/tests.rs", "apps/desktop/src-tauri/src/menu.rs"]), {
+    daemon: ["coordinator::", "processes::"], native: ["menu::"],
   });
   assert.deepEqual(rustChanges(["apps/daemon/src/main.rs", "apps/daemon/src/hooks.rs"]), { daemon: "full", native: null });
   assert.deepEqual(rustChanges(["apps/daemon/testdata/a.bin"]), { daemon: "full", native: null });
@@ -94,7 +94,7 @@ test("narrowed test steps are heavy, last and never stamped; a fallback keeps th
   const related = narrowed.filter((step) => /related/.test(step.label));
   assert.ok(related.every((step) => step.heavy && step.stamp === false));
   assert.deepEqual(related[0].cmd, ["pnpm", "--filter", "@octoboard/ui", "exec", "vitest", "related", "--run", "src/a/X.tsx", ...UI_DISK_TESTS]);
-  assert.deepEqual(related[1].cmd, ["node", "scripts/test-rust.mjs", "--", "coordinator::", "protocol::", "session_history::"]);
+  assert.deepEqual(related[1].cmd, ["node", "scripts/test-rust.mjs", "--", "coordinator::", "protocol::", "records::history::"]);
   assert.ok(narrowed.filter((step) => !/related/.test(step.label)).every((step) => step.stamp !== false));
   const fallback = quick(["packages/ui/vite.config.ts"]);
   const ui = fallback.steps.find((step) => step.label === "ui tests");

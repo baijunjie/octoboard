@@ -2,7 +2,7 @@
 //! is unbound or a lead session, pushes pages to its report panel, `show_page`, reads back the ones
 //! it pushed, `list_pages`, and withdraws them, `delete_pages`. A session reads and deletes only
 //! its own pages. A session that becomes a worker has them all withdrawn
-//! ([`crate::pages::withdraw_pages`]).
+//! ([`crate::coordinator::pages::withdraw_pages`]).
 
 use std::sync::Arc;
 
@@ -10,7 +10,7 @@ use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
 use uuid::Uuid;
 
-use crate::pages::announce_deleted;
+use crate::coordinator::pages::announce_deleted;
 use crate::protocol::{now_millis, Event, Page, Session};
 use crate::state::AppState;
 
@@ -253,7 +253,7 @@ mod tests {
         let mut events = state.subscribe();
         super::BEFORE_PAGE_CREATED.with(|hook| {
             *hook.borrow_mut() = Some(Box::new(|state, session| {
-                crate::pages::withdraw_pages(state, session).unwrap();
+                crate::coordinator::pages::withdraw_pages(state, session).unwrap();
             }));
         });
         let refused = call(
@@ -473,7 +473,7 @@ mod tests {
         }
         let mut events = state.subscribe();
 
-        crate::pages::withdraw_stray_pages(&state).unwrap();
+        crate::coordinator::pages::withdraw_stray_pages(&state).unwrap();
 
         assert!(state.store.list_pages("mine").unwrap().is_empty());
         assert_eq!(state.store.list_pages("starter").unwrap().len(), 1);
@@ -486,7 +486,7 @@ mod tests {
         assert!(events.try_recv().is_err());
 
         // Nothing left to withdraw: nothing said.
-        crate::pages::withdraw_stray_pages(&state).unwrap();
+        crate::coordinator::pages::withdraw_stray_pages(&state).unwrap();
         assert!(events.try_recv().is_err());
     }
 }

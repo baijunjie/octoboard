@@ -9,11 +9,11 @@ use std::time::Duration;
 use anyhow::Result;
 use uuid::Uuid;
 
+use crate::agents::launch_settings::{self, normalized_launches, trimmed_or_none, LaunchCheck};
 use crate::blocking_pass::each_blocking;
 use crate::branch_cleanup;
 use crate::git_workflow::{GitWorkflowOverride, GitWorkflowOverrideChanges};
 use crate::hostfs;
-use crate::launch_settings::{self, normalized_launches, trimmed_or_none, LaunchCheck};
 use crate::project_git;
 use crate::project_trash;
 use crate::protocol::{
@@ -483,12 +483,12 @@ pub(super) async fn delete_project(
     // Ended before the folder is moved, if it is, so no shell is left running in it (a
     // tool still writing there by absolute path could recreate the moved folder); one
     // started during the move is ended with the record below.
-    crate::shell_terminal::close_project(state, &id).await;
+    crate::terminal::shell::close_project(state, &id).await;
     // The project's processes, which no session owns, go with it, as the confirmation
     // said (`inspect_project_removal`'s `processes`), the folder moved or not: stopped
     // here, before the move, and not after it, since removing the project stops them
     // whether or not its folder goes to the Trash.
-    crate::process_requests::stop_project_processes(state, std::slice::from_ref(&deleted)).await;
+    crate::processes::requests::stop_project_processes(state, std::slice::from_ref(&deleted)).await;
     // The directory goes first, once nothing runs in it, so a failure leaves the project
     // in place for a retry. Without `trash_directory` only the association goes away: the
     // directory is the user's. The repository is found first, as it cannot be once the
@@ -514,7 +514,7 @@ pub(super) async fn delete_project(
     state.store.delete_project(&id)?;
     state.forget_deleted_projects(&[id.as_str()]);
     state.forget_cascaded_sessions(&session_ids);
-    crate::shell_terminal::close_project(state, &id).await;
+    crate::terminal::shell::close_project(state, &id).await;
     crate::branch_origin::project_deleted_in(state, repository);
     state.broadcast(Event::ProjectDeleted {
         project: id.clone(),
@@ -578,7 +578,7 @@ pub(super) async fn inspect_project_removal(
         )
     })
     .await??;
-    let processes = crate::process_requests::project_processes(state, &deleted_project).await?;
+    let processes = crate::processes::requests::project_processes(state, &deleted_project).await?;
     // The worktrees it held back, not listed as going, are kept for the removal confirmed
     // after it to hold back too.
     let inspection = if held_back.is_empty() {

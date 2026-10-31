@@ -1,7 +1,7 @@
 //! The tool with which an owner moves process trees between sessions, `handover_processes`: from
 //! itself to a session of its own, from one to itself, or from one of its sessions to another, as
 //! `handover_branches` moves branches. The trees keep running; only the session whose end stops
-//! them changes (`crate::process_ledger`).
+//! them changes (`crate::processes::ledger`).
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -9,11 +9,11 @@ use std::time::Duration;
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
 
-use crate::delivery::{self, WhenBlocked};
-use crate::process_ledger::{MoveRefused, ProcessTree};
+use crate::messaging::delivery::{self, WhenBlocked};
+use crate::messaging::sharing::named_session;
+use crate::messaging::texts::NOTICE_PREFIX;
+use crate::processes::ledger::{MoveRefused, ProcessTree};
 use crate::protocol::{error_code, CodedError, Session, SessionStatus};
-use crate::session_texts::NOTICE_PREFIX;
-use crate::sharing::named_session;
 use crate::state::AppState;
 
 use super::args::optional_string_list;

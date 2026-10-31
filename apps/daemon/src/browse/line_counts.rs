@@ -29,8 +29,8 @@ use anyhow::Result;
 use crate::browse::{budget, changes, git_error, line_count, live, Cancelled, Located};
 use crate::git::isolated::IsolatedGit;
 use crate::git::run::GitError;
+use crate::processes::subprocess::BoundedFailure;
 use crate::protocol::{ChangeEntry, ChangeSide, LineStats, SideKind};
-use crate::subprocess::BoundedFailure;
 use crate::wire_path::RelPath;
 
 /// What `git diff --numstat` counted for one text file: its repository path's wire form is the key

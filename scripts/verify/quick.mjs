@@ -72,16 +72,18 @@ export function uiTests(files, exists = () => true) {
 // Tests of one crate that check the whole crate, so a change to any module can fail them: they run
 // with every set of module filters for that crate. `quick.test.mjs` fails when a crate has files of
 // the kinds they check (`covers`) that are not named here.
+// A `filter` is its test's module path and has to follow the test when its module moves: a filter that
+// matches no test runs nothing and fails nothing.
 export const CRATE_WIDE_TESTS = {
   daemon: [
     { filter: "protocol::", why: "the wire-type contract (`protocol/bindings.rs`) covers every type deriving `TS`", covers: [
       "src/protocol/accounts.rs", "src/protocol/agents.rs", "src/protocol/browse.rs", "src/protocol/events.rs", "src/protocol/history.rs",
       "src/protocol/models.rs", "src/protocol/path_links.rs", "src/protocol/quotas.rs", "src/protocol/records.rs", "src/protocol/requests.rs",
-      "src/protocol/session_branches.rs", "src/protocol/settings.rs", "src/protocol/terminal.rs", "src/config_export.rs",
-      "src/config_import/accounts.rs", "src/config_import/mod.rs", "src/git_workflow.rs", "src/process_ledger/trees.rs",
-      "src/shared_config/link.rs",
+      "src/protocol/session_branches.rs", "src/protocol/settings.rs", "src/protocol/terminal.rs", "src/config_document/export.rs",
+      "src/config_document/import/accounts.rs", "src/config_document/import/mod.rs", "src/git_workflow.rs", "src/processes/ledger/trees.rs",
+      "src/accounts/shared_config/link.rs",
     ] },
-    { filter: "session_history::", why: "scans every source file for `*_OPENING` constants", covers: ["src/session_history.rs"] },
+    { filter: "records::history::", why: "scans every source file for `*_OPENING` constants", covers: ["src/records/history.rs"] },
   ],
   native: [],
 };

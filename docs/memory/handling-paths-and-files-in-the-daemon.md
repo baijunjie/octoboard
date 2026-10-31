@@ -15,7 +15,7 @@ never be cut out of a reported path; the path is built from a records directory 
 id, a reported path counting only when it lies inside that directory; only an entry at the agent's exact layout depth
 is taken, since a name one level higher can be a whole directory's (a Claude project directory is named like
 `-Users-me-work`); and no directory between the records directory and the entry may be a link. `record_paths` in
-`apps/daemon/src/agent_records.rs` does all four; extend it rather than write a second one.
+`apps/daemon/src/records/mod.rs` does all four; extend it rather than write a second one.
 
 ## Opening a path taken from text an agent could have written can run code
 
@@ -29,7 +29,7 @@ So the daemon resolves such a path itself at the moment it opens it, never trust
 lie inside a root the daemon chose once symbolic links are resolved; nothing launchable may sit anywhere along it; and
 inside a root other users can write to (a system temp directory such as `/tmp`), the file and every directory down to
 it must belong to the daemon's user and be closed to writes by group and others, or another user can swap it between
-the check and the open. `resolve` in `apps/daemon/src/path_links.rs` does all of this; extend it rather than write a
+the check and the open. `resolve` in `apps/daemon/src/path_links/mod.rs` does all of this; extend it rather than write a
 second one.
 
 ## Act destructively on "it is gone" only when `NotFound` said so
@@ -40,7 +40,7 @@ denied, an I/O error, a volume not mounted), so their false proves nothing: judg
 `symlink_metadata` failing with `ErrorKind::NotFound`, and take any other error as unknown. A place that reads as
 empty is not proof either — an unmounted volume's mount point is an empty directory, and an agent account directory
 holding none of the agent's record directories has never shown a record to be missing. So such a judgement has three
-answers, and unknown never destroys anything; `agent_records::Resumability` is the shape for a session's
+answers, and unknown never destroys anything; `records::Resumability` is the shape for a session's
 conversation.
 
 ## Read a project's files only through `browse::live`, its git directory and the agent's configuration without blocking
@@ -84,13 +84,13 @@ side.
 Applies to daemon code that asks whether two agent configuration directories are the same one — an account's
 `config_dir`, a session's, the default account's — to find a session's account, catch a collision, tell a repoint
 from a respelling, or key state per directory. The stored text stays as the user typed it
-(`account_dirs::normalize_account_dir` only normalises it lexically), and macOS's default file system is
+(`accounts::dirs::normalize_account_dir` only normalises it lexically), and macOS's default file system is
 case-insensitive, so `~/.Claude` and `~/.claude` are one directory there under two spellings. Compare
-`account_dirs::account_dir_key` of both sides in Rust, and key a map or registry by it. A `WHERE config_dir = ?` in SQL
-or a `==` on the strings compares bytes, and one such comparison among folded ones makes a case-only respelling read as
-another directory in one place and the same one everywhere else, so state kept for the directory is dropped or
-applied to the wrong one. An exact-text match is right only for asking whether a stored row changed since it was read
-(a guard of the form `WHERE id = ?1 AND config_dir = ?2` with the text just read).
+`accounts::dirs::account_dir_key` of both sides in Rust, and key a map or registry by it. A `WHERE config_dir = ?` in
+SQL or a `==` on the strings compares bytes, and one such comparison among folded ones makes a case-only respelling read
+as another directory in one place and the same one everywhere else, so state kept for the directory is dropped or
+applied to the wrong one. An exact-text match is right only for asking whether a stored row changed since it was read (a
+guard of the form `WHERE id = ?1 AND config_dir = ?2` with the text just read).
 
 ## Decide whether two directories are one, or one lies under another, by device and inode, never by their text
 

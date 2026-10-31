@@ -6,14 +6,14 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
-use crate::agent_records;
 use crate::branch_cleanup;
 use crate::hostfs::trash::TrashFailure;
 use crate::protocol::{
     error_code, CodedError, ConsoleSessionColour, Event, Role, Session, SessionBranchItem,
     SessionBranchTarget, SessionStatus,
 };
-use crate::state::{AppState, Deletion};
+use crate::records;
+use crate::state::{session_archived, AppState, Deletion};
 
 use super::bindings::{bound_sessions, team};
 use super::launch::stop_process;
@@ -57,7 +57,7 @@ pub(super) async fn archive_requested(
     // the record is known so an unknown session keeps nothing.
     if !keep_process_ids.is_empty() {
         state.session_record(&session)?;
-        let kept = crate::process_requests::keep(state, keep_process_ids.clone()).await?;
+        let kept = crate::processes::requests::keep(state, keep_process_ids.clone()).await?;
         let missed: Vec<&String> = keep_process_ids
             .iter()
             .filter(|id| !kept.contains(id))
@@ -206,8 +206,12 @@ pub(super) async fn inspect_session_branches(
     .await??;
     let processes = match ids {
         Some(ids) => {
-            crate::process_requests::long_running(state, ids, crate::process_requests::ask_after())
-                .await?
+            crate::processes::requests::long_running(
+                state,
+                ids,
+                crate::processes::requests::ask_after(),
+            )
+            .await?
         }
         None => Vec::new(),
     };
@@ -276,14 +280,6 @@ pub(crate) fn refuse_if_archived(session: &Session) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn session_archived(id: &str) -> anyhow::Error {
-    CodedError::raised(
-        error_code::SESSION_ARCHIVED,
-        "an archived session cannot be locked, switched or handed off; reopen it first",
-        &[("session", id)],
-    )
-}
-
 /// The ids of the stored sessions that match, for a deletion that drops them by cascade.
 pub(super) fn session_ids_where(
     state: &Arc<AppState>,
@@ -348,7 +344,7 @@ pub(super) fn delete_session(state: &Arc<AppState>, id: &str) -> Result<Vec<Sess
 pub(super) fn inspect_session_records(
     state: &AppState,
     ids: &[String],
-    mut locator: agent_records::Locator,
+    mut locator: records::Locator,
 ) -> Result<crate::protocol::SessionRecordPresence> {
     use crate::protocol::SessionRecordPresence::{Absent, Present, Unknown};
     let accounts = state.store.list_accounts()?;
@@ -358,7 +354,7 @@ pub(super) fn inspect_session_records(
             presence = Unknown;
             continue;
         };
-        match agent_records::presence(&state.record_hints, &mut locator, &accounts, &session) {
+        match records::presence(&state.record_hints, &mut locator, &accounts, &session) {
             Present => return Ok(Present),
             Unknown => presence = Unknown,
             Absent => {}
@@ -389,7 +385,7 @@ async fn trash_agent_records_after_delete(state: &Arc<AppState>, deleted: Vec<Se
     trash_agent_records_with(
         state,
         deleted,
-        agent_records::Locator::default(),
+        records::Locator::default(),
         state.host_tools.get().trash,
     )
     .await;
@@ -401,7 +397,7 @@ async fn trash_agent_records_after_delete(state: &Arc<AppState>, deleted: Vec<Se
 pub(crate) async fn trash_agent_records_with(
     state: &Arc<AppState>,
     deleted: Vec<Session>,
-    locator: agent_records::Locator,
+    locator: records::Locator,
     trash: impl Fn(&Path) -> Result<(), TrashFailure> + Send + 'static,
 ) {
     if deleted.is_empty() {
@@ -418,7 +414,7 @@ pub(crate) async fn trash_agent_records_with(
 }
 
 /// Moves the agent's own records of each of `deleted` that deleting it may remove (see
-/// `agent_records::removable_record_paths`) through `trash`. The sessions are gone from the store,
+/// `records::removable_record_paths`) through `trash`. The sessions are gone from the store,
 /// or are about to give up their conversation and still on record: either way they no longer count
 /// as holding the conversation with another session. A session is left alone when another
 /// remaining session refers to the same agent session id (a resumed copy, say), and a path that is
@@ -431,7 +427,7 @@ pub(crate) async fn trash_agent_records_with(
 fn trash_agent_records_of(
     state: &AppState,
     deleted: &[Session],
-    mut locator: agent_records::Locator,
+    mut locator: records::Locator,
     trash: impl Fn(&Path) -> Result<(), TrashFailure>,
 ) {
     let (remaining, accounts) = match (state.store.list_sessions(), state.store.list_accounts()) {
@@ -454,12 +450,9 @@ fn trash_agent_records_of(
         if shared {
             continue;
         }
-        for path in agent_records::removable_record_paths(
-            &state.record_hints,
-            &mut locator,
-            &accounts,
-            session,
-        ) {
+        for path in
+            records::removable_record_paths(&state.record_hints, &mut locator, &accounts, session)
+        {
             if !paths.contains(&path) {
                 paths.push(path);
             }

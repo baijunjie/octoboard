@@ -8,8 +8,8 @@ use anyhow::{Context, Result};
 
 use crate::git::run::{self, Access, Limits, Policy, UserGit, WorkDir};
 use crate::hostfs::listing::detect_agent_from_names;
+use crate::processes::subprocess::BoundedFailure;
 use crate::protocol::{error_code, Agent, CodedError};
-use crate::subprocess::BoundedFailure;
 
 /// How long a clone may run before it is given up on. Generous — a large repository over a slow
 /// connection legitimately takes minutes — but bounded, so a stalled transfer cannot hold a

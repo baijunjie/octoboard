@@ -94,7 +94,7 @@ export const RULES = [
   { match: UI_READS_NATIVE, consumers: ["verify", "ui", "native"], why: "a UI test reads it" },
   { match: UI_READS_ELSEWHERE, consumers: ["verify", "ui"], why: "a UI test reads it" },
   { match: VERIFY_READS_UI, consumers: ["verify", "ui"], why: "a verify test reads it" },
-  { match: ["apps/daemon/src/adapter/claude_compatibility.md"], consumers: ["daemon"], why: "compiled into the daemon with `include_str!`" },
+  { match: ["apps/daemon/src/adapter/codex/claude_compatibility.md"], consumers: ["daemon"], why: "compiled into the daemon with `include_str!`" },
 
   // The UI build runs only for changes to what it reads besides `src/`. The gallery and benchmark
   // scripts and pages are not among them, and the website's preview build has no step of its own.

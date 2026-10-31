@@ -39,7 +39,9 @@ pub(super) async fn switch_session_account(
     caller: &Session,
     arguments: &Map<String, Value>,
     snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
-    launch: impl FnOnce(crate::term::LaunchRequest) -> Result<crate::term::Launch> + Send + 'static,
+    launch: impl FnOnce(crate::session::term::LaunchRequest) -> Result<crate::session::term::Launch>
+        + Send
+        + 'static,
 ) -> Result<Value> {
     let target = resolve_owned_session(state, caller, required_str(arguments, "session")?)?;
     let account = resolve_account(state, target.agent, required_str(arguments, "account")?)?;
@@ -105,7 +107,9 @@ async fn perform(
     asked: Option<String>,
     edits: Edits,
     snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
-    launch: impl FnOnce(crate::term::LaunchRequest) -> Result<crate::term::Launch> + Send + 'static,
+    launch: impl FnOnce(crate::session::term::LaunchRequest) -> Result<crate::session::term::Launch>
+        + Send
+        + 'static,
 ) -> Result<Performed> {
     // As it stands now, which is not as it stood when the user was asked.
     let target = state.session_record(target_id)?;
@@ -259,8 +263,9 @@ mod tests {
         started: &Started,
         launches: &Launches,
         resumed: &Resumed,
-    ) -> impl FnOnce(crate::term::LaunchRequest) -> Result<crate::term::Launch> + Send + 'static
-    {
+    ) -> impl FnOnce(crate::session::term::LaunchRequest) -> Result<crate::session::term::Launch>
+           + Send
+           + 'static {
         let (inner, resumed) = (stand_in_launch(started, launches, || {}), resumed.clone());
         move |request| {
             resumed.lock().unwrap().push((
@@ -274,7 +279,7 @@ mod tests {
     /// A stand-in for the session's process whose end the daemon notices, as a switch needs.
     fn live_and_watched(state: &Arc<AppState>, id: &str) -> StandIn {
         let live = running(state, id);
-        state.watch_exit(live.clone());
+        crate::coordinator::exit_watch::watch_exit(state, live.clone());
         live
     }
 
@@ -398,7 +403,7 @@ mod tests {
 
         assert_eq!(
             launches.lock().unwrap()[0].2.as_deref(),
-            Some(crate::switch_continue::CONTINUE_PROMPT)
+            Some(crate::accounts::switch_continue::CONTINUE_PROMPT)
         );
         let note = result["note"].as_str().unwrap();
         assert!(note.contains("do not send it one yourself"), "{note}");
@@ -536,7 +541,9 @@ mod tests {
         caller: &str,
         input: Value,
         snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
-        launch: impl FnOnce(crate::term::LaunchRequest) -> Result<crate::term::Launch> + Send + 'static,
+        launch: impl FnOnce(crate::session::term::LaunchRequest) -> Result<crate::session::term::Launch>
+            + Send
+            + 'static,
     ) -> tokio::task::JoinHandle<Result<Value>> {
         let (state, caller) = (state.clone(), state.session_record(caller).unwrap());
         tokio::spawn(async move {

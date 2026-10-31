@@ -16,7 +16,7 @@ or starts the work anyway where nothing refuses it.
   (`callers_account` and `automatic_choice` in `apps/daemon/src/mcp/exec/sessions.rs`), and the descriptions of that
   fallback in the MCP tool descriptions and schemas (`apps/daemon/src/mcp/mod.rs`) and in `apps/daemon/PROTOCOL.md`.
 - Daemon work that spends an account: starting usage windows automatically (`AccountQuotas::kick_allowed` in
-  `apps/daemon/src/account_quotas/mod.rs`, which both the kick itself and the due mark an on-demand refresh leaves for
+  `apps/daemon/src/accounts/quotas/poll.rs`, which both the kick itself and the due mark an on-demand refresh leaves for
   the poller consult).
 - UI rules in `packages/ui/src/accountChoices.ts`: the choice groups, `avoidUnavailableAccount`, `settledInitialChoice`
   and the switch-menu entries.

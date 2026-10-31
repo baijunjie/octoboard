@@ -7,29 +7,23 @@ use std::sync::Arc;
 use anyhow::Result;
 use uuid::Uuid;
 
-use crate::account_dirs::{account_dir_key, normalize_account_dir};
-use crate::account_login;
-use crate::account_quotas;
+use crate::accounts::dirs::{account_dir_key, normalize_account_dir};
+use crate::accounts::login;
+use crate::accounts::quotas;
+use crate::accounts::{account_name_key, clears_default_account_name};
 use crate::adapter;
-use crate::availability;
+use crate::agents::availability;
 use crate::hostfs;
 use crate::protocol::{
     error_code, Account, Agent, Availability, CodedError, Console, Event, Project,
 };
-use crate::state::AppState;
+use crate::state::{broadcast_settings, AppState};
 use crate::store::ReorderOutcome;
 
 use super::account_choice::{
     account_of_agent, checked_account_reference, refuse_if_agent_unavailable,
 };
-use super::settings::broadcast_settings;
 use super::validate::field_required;
-
-/// The comparison key for an account name collision: trimmed and lower-cased, so "Work" and
-/// " work " read as the same name.
-pub(crate) fn account_name_key(name: &str) -> String {
-    name.trim().to_lowercase()
-}
 
 /// The name of the account whose name collides with `name` within `agent`, if any — the default
 /// account's name takes part, compared against [`crate::protocol::DEFAULT_ACCOUNT_NAME`] since the
@@ -114,13 +108,6 @@ pub(crate) fn name_unnamed_default_account(
     Ok(true)
 }
 
-/// Whether `name`, given to a default account, clears its name instead: it is blank, or the word
-/// shown for an unnamed default account.
-pub(crate) fn clears_default_account_name(name: &str) -> bool {
-    let key = account_name_key(name);
-    key.is_empty() || key == account_name_key(crate::protocol::DEFAULT_ACCOUNT_NAME)
-}
-
 /// Writes the trimmed `name` of `agent`'s default account; the caller holds the account writes
 /// lock.
 fn write_default_account_name(state: &Arc<AppState>, agent: Agent, name: &str) -> Result<()> {
@@ -141,7 +128,7 @@ fn write_default_account_name(state: &Arc<AppState>, agent: Agent, name: &str) -
 /// Turns an account off for new work, or back on, and broadcasts the settings when the flag
 /// changed. `None` is `agent`'s default account. A running session is not looked at: it keeps its
 /// account. Turning an account back on starts the usage window its held reading shows unstarted,
-/// when the setting that does that is on ([`account_quotas::kick_held`]).
+/// when the setting that does that is on ([`quotas::kick_held`]).
 pub(super) fn set_account_disabled(
     state: &Arc<AppState>,
     agent: Agent,
@@ -163,7 +150,7 @@ pub(super) fn set_account_disabled(
         // The held readings are looked over again, as when the setting that starts quota windows
         // is turned on, so a window the re-enabled account shows unstarted is not left waiting.
         if !disabled {
-            account_quotas::kick_held(state);
+            quotas::kick_held(state);
         }
     }
     Ok(())
@@ -291,7 +278,7 @@ pub(super) fn create_account(
 /// Creates an account through the checks of the Add account form (the name rules, the directory
 /// rules, a name and a directory no other account of the agent has), stores it with the given
 /// `disabled` flag, broadcasts the settings and returns it. Sharing is not set: it is a change of
-/// its own (`shared_config::set`).
+/// its own (`account_sharing::set`).
 pub(crate) fn insert_new_account(
     state: &Arc<AppState>,
     agent: Agent,
@@ -366,7 +353,7 @@ fn update_account(
         state.account_quotas.forget_account(state, id);
         let _ = state.account_logins.cancel(agent, Some(id.to_string()));
         // What runs under the account's directory is now what runs under the new one.
-        crate::shared_config::publish(state);
+        crate::accounts::shared_config::publish(state);
     }
     broadcast_settings(state)?;
     Ok(())
@@ -394,7 +381,7 @@ pub(super) async fn update_account_requested(
                 let name = normalize_account_name(name)?;
                 check_account_name_unique(state, agent, &name, Some(&account))?;
             }
-            crate::shared_config::before_repoint(state, &account, &dir).await?
+            super::account_sharing::before_repoint(state, &account, &dir).await?
         }
         None => None,
     };
@@ -423,7 +410,7 @@ fn delete_account(state: &Arc<AppState>, id: &str) -> Result<()> {
         .collect();
     state.store.delete_account(id)?;
     state.account_quotas.forget_account(state, id);
-    crate::shared_config::publish(state);
+    crate::accounts::shared_config::publish(state);
     let _ = state
         .account_logins
         .cancel(account.agent, Some(id.to_string()));
@@ -453,7 +440,7 @@ pub(super) async fn delete_account_requested(
     // Once the pre-check has passed, and until the removal ends however it does, no sign-in
     // starts for the account: it would write into the directory after its sign-in was ended.
     let _removing = if trash_directory {
-        crate::account_trash::directory_to_trash(state, &account).await?;
+        crate::accounts::trash::directory_to_trash(state, &account).await?;
         state
             .store
             .get_account(&account)?
@@ -463,12 +450,12 @@ pub(super) async fn delete_account_requested(
     };
     // A sharing account's directory is brought back to its own before it is let go, so it
     // is never a directory of links into the default one that goes to the Trash.
-    let _sharing = crate::shared_config::before_delete(state, &account).await?;
+    let _sharing = super::account_sharing::before_delete(state, &account).await?;
     if trash_directory {
         // The account is locked now, so it cannot be repointed and no session of it starts
         // from here on: what was judged before the lock is judged again.
         // The directory goes first, so a failure keeps the account for a retry.
-        crate::account_trash::move_directory(state, &account).await?;
+        crate::accounts::trash::move_directory(state, &account).await?;
     }
     delete_account(state, &account)?;
     Ok(())
@@ -486,7 +473,7 @@ pub(super) fn refresh_account_quotas(
     let scope = match (agent, account) {
         (Some(agent), account) => {
             checked_account_reference(state, agent, account.clone())?;
-            account_quotas::Scope {
+            quotas::Scope {
                 agent: Some(agent),
                 account,
                 ..Default::default()
@@ -497,17 +484,17 @@ pub(super) fn refresh_account_quotas(
                 .store
                 .get_account(&account)?
                 .ok_or_else(|| CodedError::unknown_account(&account))?;
-            account_quotas::Scope {
+            quotas::Scope {
                 agent: Some(stored.agent),
                 account: Some(account),
                 ..Default::default()
             }
         }
-        (None, None) => account_quotas::Scope::default(),
+        (None, None) => quotas::Scope::default(),
     };
     // The readings take seconds; each is announced as it lands.
     let state = state.clone();
-    tokio::spawn(async move { account_quotas::refresh_requested(&state, &scope).await });
+    tokio::spawn(async move { quotas::refresh_requested(&state, &scope).await });
     Ok(())
 }
 
@@ -533,9 +520,9 @@ pub(super) async fn start_account_login(
     let resolved_dir = config_dir
         .clone()
         .or_else(|| state.agent_availability_of(agent).default_account_dir);
-    account_login::AccountLogins::start(
+    login::AccountLogins::start(
         state,
-        account_login::Start {
+        login::Start {
             agent,
             account: account.clone(),
             config_dir: config_dir.clone(),

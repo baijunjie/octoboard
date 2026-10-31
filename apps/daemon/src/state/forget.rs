@@ -39,7 +39,7 @@ impl AppState {
     fn forget_held_for_session(&self, id: &str) {
         self.forget_saved_output(id);
         self.forget_left_for_limit(id);
-        crate::shared_config::forget_session(self, id);
+        crate::accounts::shared_config::forget_session(self, id);
         self.forget_handoff_package(id);
         self.forget_request_hand(id);
     }
@@ -67,7 +67,7 @@ impl AppState {
     /// wherever a record is deleted; a session that was never a receiving one has none. A failure
     /// is logged: the record is gone either way.
     pub fn forget_handoff_package(&self, id: &str) {
-        if let Err(err) = crate::handoff::remove(self, id) {
+        if let Err(err) = crate::handoff::package_file::remove_in(self.handoff_dir(), id) {
             tracing::warn!(session = %id, %err, "removing a handoff package failed");
         }
     }

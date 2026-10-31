@@ -664,14 +664,14 @@ async fn messages_for_the_original_during_a_handoff_are_forwarded_to_the_receivi
         .queue_message("original", "queued before the handoff");
     let state = fixture.state.clone();
     let during = fixture.launch_after(move || {
-        let delivery = crate::delivery::write_message(
+        let delivery = crate::messaging::delivery::write_message(
             &state,
             "original",
             "sent during the handoff",
             WhenBlocked::Queue,
         )
         .unwrap();
-        assert_eq!(delivery, crate::delivery::Delivery::Queued);
+        assert_eq!(delivery, crate::messaging::delivery::Delivery::Queued);
     });
 
     let receiving = fixture
@@ -779,14 +779,14 @@ async fn messages_for_the_original_during_a_failed_handoff_reach_the_original() 
             terminal_appearance: None,
         },
         move |_| {
-            let delivery = crate::delivery::write_message(
+            let delivery = crate::messaging::delivery::write_message(
                 &state,
                 "original",
                 "sent during the handoff",
                 WhenBlocked::Queue,
             )
             .unwrap();
-            assert_eq!(delivery, crate::delivery::Delivery::Queued);
+            assert_eq!(delivery, crate::messaging::delivery::Delivery::Queued);
             Err(anyhow!("the agent would not start"))
         },
     )
@@ -810,7 +810,7 @@ async fn messages_held_for_the_original_go_to_the_receiving_session_when_the_han
     let during = fixture.launch_after(move || {
         // The user locks the original while the receiving session starts, so archiving it fails.
         state.store.set_session_locked("original", true).unwrap();
-        crate::delivery::write_message(
+        crate::messaging::delivery::write_message(
             &state,
             "original",
             "sent during the handoff",
@@ -889,7 +889,7 @@ fn run_leaving_one(fixture: &Fixture, id: &str) -> (StandIn, i32) {
         ),
     );
     fixture.state.register_live(live.clone());
-    fixture.state.watch_exit(live.clone());
+    crate::coordinator::exit_watch::watch_exit(&fixture.state, live.clone());
     let child = crate::test_support::wait_for_pid(&pid_file);
     (live, child)
 }

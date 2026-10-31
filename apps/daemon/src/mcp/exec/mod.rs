@@ -105,7 +105,9 @@ async fn dispatch(
         "update_console" => settings::update_console(state, &session, arguments).await,
         "get_settings" => settings::get_settings(state),
         "update_settings" => settings::update_settings(state, arguments),
-        "new_session" => new_session(state, &session, arguments, crate::term::launch).await,
+        "new_session" => {
+            new_session(state, &session, arguments, crate::session::term::launch).await
+        }
         "instruct_session" => instruct_session(state, &session, arguments).await,
         "interrupt_session" => interrupt_session(state, &session, arguments).await,
         "get_session" => reads::get_session(state, &session, arguments).await,
@@ -120,7 +122,7 @@ async fn dispatch(
                 &session,
                 arguments,
                 crate::env_shell::launch_snapshot,
-                crate::term::launch,
+                crate::session::term::launch,
             )
             .await
         }
@@ -129,7 +131,7 @@ async fn dispatch(
             process_handover::handover_processes(state, &session, arguments).await
         }
         "handoff_session" => {
-            handoff::handoff_session(state, &session, arguments, crate::term::launch).await
+            handoff::handoff_session(state, &session, arguments, crate::session::term::launch).await
         }
         "switch_session_account" => {
             account_switch::switch_session_account(
@@ -137,7 +139,7 @@ async fn dispatch(
                 &session,
                 arguments,
                 crate::env_shell::launch_snapshot,
-                crate::term::launch,
+                crate::session::term::launch,
             )
             .await
         }
@@ -147,7 +149,7 @@ async fn dispatch(
                 &session,
                 arguments,
                 crate::env_shell::launch_snapshot,
-                crate::term::launch,
+                crate::session::term::launch,
             )
             .await
         }

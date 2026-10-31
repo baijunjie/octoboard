@@ -4,6 +4,8 @@ use crate::coordinator::test_support::{
     binding_fixture, bound_session, code_of, console, dormant_with_conversation, lead_session,
     relaunch_stand_in,
 };
+use crate::mcp;
+use crate::messaging::owner_notices;
 use crate::protocol::{
     error_code, Agent, CodedError, OrchestrationRole, Project, ProjectSource, RequestBody, Role,
     Session, SessionStatus,
@@ -12,7 +14,6 @@ use crate::store::LOCAL_HOST_ID;
 use crate::test_support::{
     bare_session, console_session, console_with_project_and_accounts, project_session,
 };
-use crate::{mcp, owner_notices};
 use std::path::Path;
 
 /// Owned sessions are counted as the walks of a team count them: in any status, and none for a

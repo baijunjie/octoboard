@@ -1,10 +1,10 @@
-//! The tools that change who a session reports to: `transfer_session`, with which an owner hands
-//! a session of its own to another, `release_session`, with which it lets one go, and
+//! The tools that change who a session reports to: `transfer_session`, with which an owner hands a
+//! session of its own to another, `release_session`, with which it lets one go, and
 //! `bind_to_session`, with which an unbound project session binds itself to an owner. What may own
 //! what is `coordinator::bindings::owner_refusal`'s, and the notices that tell a session its owner
-//! changed are [`crate::owner_notices`]'s; what is here is reading each tool's arguments, the
-//! notices of a handover to the session and its new owner, and telling the caller what became of
-//! each session concerned.
+//! changed are [`crate::messaging::owner_notices`]'s; what is here is reading each tool's
+//! arguments, the notices of a handover to the session and its new owner, and telling the caller
+//! what became of each session concerned.
 
 use std::sync::Arc;
 
@@ -12,12 +12,14 @@ use anyhow::Result;
 use serde_json::{json, Map, Value};
 
 use crate::coordinator::{self, bindings::Released};
-use crate::delivery::{self, Delivery};
-use crate::owner_notices::{lost_tools, owner_from_now_on, tell_now_or_leave, tell_released};
+use crate::messaging::delivery::{self, Delivery};
+use crate::messaging::owner_notices::{
+    lost_tools, owner_from_now_on, tell_now_or_leave, tell_released,
+};
+use crate::messaging::reporting::{self, ReportStatus};
+use crate::messaging::sharing;
+use crate::messaging::texts::NOTICE_PREFIX;
 use crate::protocol::{OrchestrationRole, Session};
-use crate::reporting::{self, ReportStatus};
-use crate::session_texts::NOTICE_PREFIX;
-use crate::sharing;
 use crate::state::AppState;
 
 use super::args::{optional_string, required_str};

@@ -10,7 +10,7 @@ use anyhow::{bail, Result};
 use serde_json::{json, Map, Value};
 
 use crate::protocol::{HistoryMessage, Session};
-use crate::session_history;
+use crate::records::history;
 use crate::state::AppState;
 
 use super::args::optional_count;
@@ -39,7 +39,7 @@ pub(super) async fn read_session_history(
     let before = optional_count(arguments, "before", 0, usize::MAX)?;
     // Left out, the caller itself, as for `get_session`.
     let session = session_or_caller(state, caller, arguments)?;
-    let messages = session_history::of_session_blocking(state, session.clone()).await?;
+    let messages = history::of_session_blocking(state, session.clone()).await?;
     let Some(messages) = messages else {
         return Ok(json!({
             "session": session.id,

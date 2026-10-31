@@ -2,7 +2,7 @@
 //! `get_account_quotas`. It returns the readings the daemon already holds (`AccountQuotas`), so
 //! what it says is as old as each reading's `fetched_at`; only a call that asks to `refresh` waits
 //! for new ones, and then only for the accounts not read within the last minute, whichever way
-//! the last reading came (`account_quotas::refresh_on_demand`). A refresh never starts a quota
+//! the last reading came (`quotas::refresh_on_demand`). A refresh never starts a quota
 //! window.
 
 use std::sync::Arc;
@@ -10,7 +10,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use serde_json::{json, Map, Value};
 
-use crate::account_quotas::{self, ShellSource};
+use crate::accounts::quotas::{self, ShellSource};
 use crate::coordinator;
 use crate::protocol::{now_millis, Agent, QuotaWindow};
 use crate::state::AppState;
@@ -69,12 +69,12 @@ async fn get_account_quotas_with(
 ) -> Result<Value> {
     let only = optional_agent(arguments, "agent")?;
     if optional_bool(arguments, "refresh")?.unwrap_or(false) {
-        let scope = account_quotas::Scope {
+        let scope = quotas::Scope {
             agent: only,
             account: None,
             enabled_only: true,
         };
-        account_quotas::refresh_on_demand(state, &scope, shell).await;
+        quotas::refresh_on_demand(state, &scope, shell).await;
     }
     let accounts = state.store.list_accounts()?;
     let now = now_millis();

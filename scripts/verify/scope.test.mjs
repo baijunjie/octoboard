@@ -66,7 +66,7 @@ const CASES = [
   ["LICENSE", ["verify", "ui"]],
   ["apps/web/site.config.ts", ["verify", "ui", "web"]],
   ["packages/ui/src/test/failedFilesReporter.ts", ["verify", "ui"]],
-  ["apps/daemon/src/adapter/claude_compatibility.md", ["daemon"]],
+  ["apps/daemon/src/adapter/codex/claude_compatibility.md", ["daemon"]],
   ["packages/ui/vite.config.ts", ["ui"], ["ui"]],
   ["packages/ui/index.html", ["ui"], ["ui"]],
   ["packages/ui/scripts/generate-licenses.mjs", ["ui"], ["ui"]],

@@ -4,15 +4,15 @@
 //! Tool names are rendered per agent rather than written out, because the prefix an agent shows
 //! its model differs (see [`super::qualified_tool_name`]).
 //!
-//! **What a session is told here holds for its whole life.** Claude Code records an appended
-//! system prompt on the conversation's first request and replays it verbatim on every resume, so
-//! text changed later is silently ignored, and Grok does the same with `--rules`. A session's
-//! reporting relationship can change while it lives: an independent session can set a parent, and
-//! a parent can transfer a child session to another. So the text names its parent at launch,
-//! and says that a later change is told to it by Octoboard and replaces what it says here; the
-//! change itself is told in prose where it happens (`crate::owner_notices`, and `mcp::bindings`
-//! for the tools' own handover texts). A coordinator that set a console parent after its first
-//! launch still receives its original independent-session text.
+//! **What a session is told here holds for its whole life.** Claude Code records an appended system
+//! prompt on the conversation's first request and replays it verbatim on every resume, so text
+//! changed later is silently ignored, and Grok does the same with `--rules`. A session's reporting
+//! relationship can change while it lives: an independent session can set a parent, and a parent
+//! can transfer a child session to another. So the text names its parent at launch, and says that a
+//! later change is told to it by Octoboard and replaces what it says here; the change itself is
+//! told in prose where it happens (`crate::messaging::owner_notices`, and `mcp::bindings` for the
+//! tools' own handover texts). A coordinator that set a console parent after its first launch still
+//! receives its original independent-session text.
 //!
 //! Every console session's role description is only a short pointer to its instruction file.
 //!

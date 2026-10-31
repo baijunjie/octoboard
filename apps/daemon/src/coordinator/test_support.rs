@@ -9,9 +9,9 @@ use crate::protocol::{
     error_code, Account, Agent, Availability, CodedError, Console, OrchestrationRole, Origin,
     Project, ProjectAccount, ProjectSource, RequestBody, Session, SessionStatus,
 };
+use crate::session::term;
 use crate::state::AppState;
 use crate::store::LOCAL_HOST_ID;
-use crate::term;
 use crate::test_support::{
     console_session, console_with_project_and_accounts, idle_stand_in, project_session, ScratchDir,
 };

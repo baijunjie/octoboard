@@ -11,6 +11,7 @@ use crate::adapter::files::{
     SMALL_FILE_LIMIT,
 };
 use crate::adapter::LaunchSpec;
+use crate::agents::layout;
 use crate::protocol::{notice_code, Notice};
 
 /// The configuration directory in effect for this launch's Claude Code, when there is one: the
@@ -21,7 +22,7 @@ fn explicit_config_dir(
 ) -> Option<PathBuf> {
     pinned.map(PathBuf::from).or_else(|| {
         shell_env
-            .get("CLAUDE_CONFIG_DIR")
+            .get(layout::CLAUDE.config_dir_var)
             .filter(|dir| !dir.is_empty())
             .map(PathBuf::from)
     })
@@ -40,7 +41,7 @@ fn home_dir(shell_env: &HashMap<String, String>) -> PathBuf {
 /// effect, else `~/.claude`.
 pub(super) fn user_config_dir(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> PathBuf {
     explicit_config_dir(spec.shell_env, pinned)
-        .unwrap_or_else(|| home_dir(spec.shell_env).join(".claude"))
+        .unwrap_or_else(|| home_dir(spec.shell_env).join(layout::CLAUDE.default_dir))
 }
 
 /// A settings file Claude Code reads: one the project keeps, read through `browse::live`, or one
@@ -79,7 +80,7 @@ fn own_settings_files(user_dir: &Path, project: &Path) -> [SettingsFile; 3] {
         SettingsFile::Project
     };
     [
-        SettingsFile::Other(user_dir.join("settings.json")),
+        SettingsFile::Other(user_dir.join(layout::CLAUDE_SETTINGS_FILE)),
         project_file(dir.join("settings.json")),
         project_file(dir.join("settings.local.json")),
     ]

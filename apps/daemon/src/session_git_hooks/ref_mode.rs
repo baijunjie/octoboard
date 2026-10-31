@@ -37,7 +37,7 @@ pub fn run(session: &str, port: u16, key: &str, head: Option<&OsStr>, refs: &[Os
     let Ok(body) = serde_json::to_vec(&report) else {
         return;
     };
-    let _ = crate::loopback::post(port, key, &format!("/git-ref/{session}"), &body, TIMEOUT);
+    let _ = crate::cli::loopback::post(port, key, &format!("/git-ref/{session}"), &body, TIMEOUT);
 }
 
 /// The report of `refs` made in `cwd` with `git_dir` set and `head` checked out, at `unix_time`.

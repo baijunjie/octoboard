@@ -6,9 +6,9 @@ use crate::coordinator::test_support::{
     code_of, open_request, state_for_opening, stub_shell, wait_until,
 };
 use crate::protocol::{error_code, notice_code, CodedError, Event, Role, Session, SessionStatus};
+use crate::session::term;
 use crate::session::LiveSession;
 use crate::state::AppState;
-use crate::term;
 use crate::test_support::console_with_project_and_accounts;
 use anyhow::Result;
 use std::sync::Arc;

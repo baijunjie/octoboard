@@ -278,7 +278,7 @@ pub enum RequestBody {
         console: Option<String>,
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
-        consoles: Option<crate::config_export::ExportedConsoles>,
+        consoles: Option<crate::config_document::export::ExportedConsoles>,
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
         include_settings: Option<bool>,
@@ -318,7 +318,7 @@ pub enum RequestBody {
         document: serde_json::Value,
         #[serde(default)]
         #[cfg_attr(test, ts(optional = nullable))]
-        resolutions: Vec<crate::config_import::ProjectResolution>,
+        resolutions: Vec<crate::config_document::import::ProjectResolution>,
         /// Whether to apply the document's application settings to this machine; absent means
         /// false. Asking for them of a document that carries none is refused with
         /// `import_settings_missing`.
@@ -336,7 +336,7 @@ pub enum RequestBody {
         /// `import_resolution_invalid`.
         #[serde(default)]
         #[cfg_attr(test, ts(optional = nullable))]
-        account_resolutions: Vec<crate::config_import::AccountResolution>,
+        account_resolutions: Vec<crate::config_document::import::AccountResolution>,
         /// Whether to create the document's consoles and projects; absent means true. Without
         /// them no console or project is created and `resolutions` are not read.
         #[serde(default = "default_true")]
@@ -499,28 +499,28 @@ pub enum RequestBody {
     InspectSessionBranches {
         sessions: Vec<String>,
         /// Also answer with the process trees of these sessions that an archive would stop and
-        /// that have run long enough to ask about (`crate::process_requests::ASK_AFTER`).
+        /// that have run long enough to ask about (`crate::processes::requests::ASK_AFTER`).
         #[serde(default)]
         #[cfg_attr(test, ts(optional = nullable))]
         processes: bool,
     },
     /// The process trees a session's launch started, or those of every running session of a
     /// project followed by the project's processes, the trees no session owns: its leftovers and
-    /// the trees kept under it (`kept: true`). See `crate::process_requests`.
+    /// the trees kept under it (`kept: true`). See `crate::processes::requests`.
     ListProcesses {
         #[serde(flatten)]
         target: ProcessTarget,
     },
     /// Stops the process trees `ids` name that still qualify: a tree of a launch being followed,
     /// a leftover of a local project, or a kept tree, which is the user's no more once stopped.
-    /// See `crate::process_requests`.
+    /// See `crate::processes::requests`.
     StopProcesses {
         ids: Vec<String>,
     },
     /// Makes the process trees `ids` name the user's, with what descends from them: no session
     /// owns them, and the daemon stops them only when `stop_processes` names them or their
     /// project is removed. They are listed among their project's processes with `kept: true`.
-    /// See `crate::process_requests`.
+    /// See `crate::processes::requests`.
     KeepProcesses {
         ids: Vec<String>,
     },
@@ -589,7 +589,7 @@ pub enum RequestBody {
         text: String,
     },
     /// Stops the turn the session's agent is running, keeping its process and conversation; see
-    /// `crate::interrupt`.
+    /// `crate::session::interrupt`.
     InterruptSession {
         session: String,
     },
@@ -754,7 +754,8 @@ pub enum RequestBody {
     /// What `delete_account` with `trash_directory` would do with the account's config directory
     /// now, judged as it judges it before changing anything, and answered as
     /// `account_trash_inspected` data rather than a refusal. Running sessions are not counted: a
-    /// client lists them itself, and `delete_account` still refuses them. See `account_trash`.
+    /// client lists them itself, and `delete_account` still refuses them. See
+    /// `crate::accounts::trash`.
     InspectAccountTrash {
         account: String,
     },

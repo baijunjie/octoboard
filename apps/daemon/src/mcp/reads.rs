@@ -11,8 +11,8 @@ use std::sync::Arc;
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
 
-use crate::agent_records::{self, Locator, Resumability};
 use crate::protocol::{Console, Project, Role, Session, SessionStatus};
+use crate::records::{self, Locator, Resumability};
 use crate::state::AppState;
 
 use super::args::{
@@ -173,14 +173,17 @@ pub(super) async fn get_session(
 /// as `handover_processes` names them; none for a session with no process. Listed as a client's
 /// request for them is, so a recent listing answers again. A failed read is none, rather than an
 /// error that would take the rest of the answer down with it.
-async fn processes_of(state: &Arc<AppState>, id: &str) -> Vec<crate::process_ledger::ProcessTree> {
+async fn processes_of(
+    state: &Arc<AppState>,
+    id: &str,
+) -> Vec<crate::processes::ledger::ProcessTree> {
     if !state.has_process(id) {
         return Vec::new();
     }
     let target = crate::protocol::ProcessTarget::Session {
         session_id: id.to_string(),
     };
-    crate::process_requests::list(state, target)
+    crate::processes::requests::list(state, target)
         .await
         .unwrap_or_default()
 }
@@ -221,7 +224,7 @@ async fn resumable_of(sessions: Vec<Session>) -> Result<HashMap<String, Option<b
         sessions
             .into_iter()
             .map(|session| {
-                let resumable = match agent_records::resumability(&locator, &session) {
+                let resumable = match records::resumability(&locator, &session) {
                     Resumability::Resumable => Some(true),
                     Resumability::Unresumable => Some(false),
                     Resumability::Unknown => None,

@@ -34,7 +34,9 @@ pub(super) async fn set_session_model(
     caller: &Session,
     arguments: &Map<String, Value>,
     snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
-    launch: impl FnOnce(crate::term::LaunchRequest) -> Result<crate::term::Launch> + Send + 'static,
+    launch: impl FnOnce(crate::session::term::LaunchRequest) -> Result<crate::session::term::Launch>
+        + Send
+        + 'static,
 ) -> Result<Value> {
     let target = resolve_owned_session(state, caller, required_str(arguments, "session")?)?;
     let edit = LaunchEdit {
@@ -122,7 +124,7 @@ mod tests {
     use super::*;
     use crate::mcp::test_support::{arguments, peer_state, shared_console_state};
     use crate::protocol::{Agent, OrchestrationRole};
-    use crate::term::{Launch, LaunchRequest};
+    use crate::session::term::{Launch, LaunchRequest};
     use crate::test_support::{
         output_containing, running, stand_in_launch, within, Launched, ScratchDir, StandIn,
         PATIENCE,
@@ -183,7 +185,7 @@ mod tests {
     /// A stand-in for the session's process whose end the daemon notices, as a restart needs.
     fn live_and_watched(state: &Arc<AppState>, id: &str) -> StandIn {
         let live = running(state, id);
-        state.watch_exit(live.clone());
+        crate::coordinator::exit_watch::watch_exit(state, live.clone());
         live
     }
 
@@ -258,7 +260,7 @@ mod tests {
 
         assert_eq!(
             launches.lock().unwrap()[0].2.as_deref(),
-            Some(crate::switch_continue::CONTINUE_PROMPT)
+            Some(crate::accounts::switch_continue::CONTINUE_PROMPT)
         );
         let note = result["note"].as_str().unwrap();
         assert!(note.contains("do not send it one yourself"), "{note}");
@@ -328,7 +330,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             launches.lock().unwrap()[0].2.as_deref(),
-            Some(crate::switch_continue::CONTINUE_PROMPT)
+            Some(crate::accounts::switch_continue::CONTINUE_PROMPT)
         );
         let note = result["note"].as_str().unwrap();
         assert!(note.contains("do not send it one yourself"), "{note}");
@@ -724,7 +726,7 @@ mod tests {
                             return false;
                         }
                         archive();
-                        state.watch_exit(live);
+                        crate::coordinator::exit_watch::watch_exit(&state, live);
                         true
                     }
                 };
@@ -735,7 +737,7 @@ mod tests {
                 assert!(ended, "the process was ended before the archive");
                 result
             } else {
-                state.watch_exit((*original).clone());
+                crate::coordinator::exit_watch::watch_exit(&state, (*original).clone());
                 let snapshot = move || {
                     archive();
                     snapshot()
@@ -831,7 +833,7 @@ mod tests {
         let home = dir.join("grok-default").to_string_lossy().into_owned();
         let live = crate::test_support::fake_live_session("mine", Agent::Grok, 80, 24, "sleep 30");
         state.register_live(live.clone());
-        state.watch_exit((*live).clone());
+        crate::coordinator::exit_watch::watch_exit(&state, (*live).clone());
         live.on_output(GROK_MODAL.as_bytes());
         assert!(live
             .look_for_dialog()

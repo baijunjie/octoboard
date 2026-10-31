@@ -58,8 +58,8 @@ impl Store {
             )
             .optional()?;
         let same_dir = current.is_some_and(|current| {
-            crate::account_dirs::account_dir_key(&current)
-                == crate::account_dirs::account_dir_key(&account.config_dir)
+            crate::accounts::dirs::account_dir_key(&current)
+                == crate::accounts::dirs::account_dir_key(&account.config_dir)
         });
         conn.execute(
             "UPDATE accounts SET name = ?2, config_dir = ?3,
@@ -423,8 +423,8 @@ mod tests {
         let mut respelled = store.get_account("acct-1").unwrap().unwrap();
         respelled.config_dir = "/home/u/.Codex-Work".to_string();
         store.update_account(&respelled).unwrap();
-        let same = crate::account_dirs::account_dir_key("/home/u/.codex-work")
-            == crate::account_dirs::account_dir_key("/home/u/.Codex-Work");
+        let same = crate::accounts::dirs::account_dir_key("/home/u/.codex-work")
+            == crate::accounts::dirs::account_dir_key("/home/u/.Codex-Work");
         assert_eq!(
             store.account_sharing_start("acct-1").unwrap().is_some(),
             same

@@ -10,31 +10,40 @@
 //! - [`bindings`]: which session reports to which, and the walks of a team.
 //! - [`lifecycle`]: archiving and deleting sessions with what goes with them, and their title, pin,
 //!   lock and colour.
-//! - [`account_switch`], [`model_change`]: moving a session to another account, or to another
-//!   model or effort.
-//! - [`restart`]: what those two and a change of an account's sharing share when they restart a
-//!   session's process.
+//! - [`account_switch`], [`model_change`], [`account_sharing`]: moving a session to another
+//!   account, or to another model or effort, and a change of an account's sharing, which ends and
+//!   resumes its idle sessions.
+//! - [`restart`]: what those three share when they restart a session's process.
 //! - [`account_choice`]: which agent and account a session opens with, and the refusals of one that
 //!   cannot open it.
 //! - [`accounts`], [`settings`]: the accounts and the agent list, and the settings.
 //! - [`messages`]: the user's own writes into a session.
 //! - [`validate`]: the checks of the text fields requests carry.
+//! - [`pages`], [`archive_cleanup`], [`exit_watch`]: not request handlers. `pages` withdraws a
+//!   worker's pages from the report panel, and sweeps at daemon start the pages left on workers;
+//!   `archive_cleanup` is the daemon task that deletes archived sessions whose conversation can no
+//!   longer be resumed; `exit_watch` is the exit watcher every launch starts.
 //!
-//! Writing into a running session is `crate::delivery`'s, the notices an owner is sent are
-//! `crate::owner_notices`', and the console session's reports, synthesis and automatic archiving
-//! are `crate::reporting`'s, because the console session's tools and the hooks
-//! (`crate::hooks::apply`) reach them without going through a control-socket request at all.
+//! Writing into a running session is `crate::messaging::delivery`'s, the notices an owner is sent
+//! are `crate::messaging::owner_notices`', and the console session's reports, synthesis and
+//! automatic archiving are `crate::messaging::reporting`'s, because the console session's tools and
+//! the hooks (`crate::hooks::apply`) reach them without going through a control-socket request at
+//! all.
 
 pub mod account_choice;
+pub mod account_sharing;
 pub mod account_switch;
 pub mod accounts;
+pub mod archive_cleanup;
 pub mod bindings;
 pub mod consoles;
+pub mod exit_watch;
 pub mod launch;
 pub mod lifecycle;
 mod messages;
 pub mod model_change;
 pub mod open;
+pub mod pages;
 pub mod projects;
 pub mod restart;
 pub mod resume;
@@ -48,19 +57,19 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 
-use crate::account_quotas;
-use crate::agent_records;
-use crate::config_export;
-use crate::config_import;
+use crate::accounts::quotas;
+use crate::agents::launch_settings;
+use crate::config_document::export;
+use crate::config_document::import;
 use crate::env_shell;
 use crate::host_open;
 use crate::hostfs;
-use crate::launch_settings;
 use crate::project_git;
 use crate::protocol::{Agent, CodedError, Event, ModelChangeOutcome, Origin, RequestBody};
-use crate::session_history;
-use crate::state::AppState;
-use crate::trust;
+use crate::records;
+use crate::records::history;
+use crate::session::trust;
+use crate::state::{broadcast_settings, AppState};
 
 use account_choice::{agent_is_available, checked_account_reference, refuse_if_agent_unavailable};
 use account_switch::switch_session_account;
@@ -87,7 +96,7 @@ use projects::{
     update_project, AddProjectRequest, NewProjectSettings, ProjectChanges,
 };
 use resume::{locate_conversation, resume_session};
-use settings::{broadcast_settings, update_settings, SettingsChanges, CLAUDE_MODE, CODEX_REVIEWER};
+use settings::{update_settings, SettingsChanges, CLAUDE_MODE, CODEX_REVIEWER};
 use validate::{absolute_path, required_text};
 
 /// Handles one request. The returned event, when there is one, is the answer to that request and
@@ -105,8 +114,9 @@ pub async fn handle(
         .map(|(reply, _followup)| reply)
 }
 
-/// [`handle`], for a caller that sends the reply itself: what a request still has to do after its
-/// reply has been queued comes back as a [`Followup`], to drop once the reply is on its way.
+/// As `handle` (the tests' entry point) does, but for a caller that sends the reply itself: what a
+/// request still has to do after its reply has been queued comes back as a [`Followup`], to drop
+/// once the reply is on its way.
 pub async fn handle_deferred(
     state: &Arc<AppState>,
     request_id: Option<String>,
@@ -359,11 +369,11 @@ async fn handle_inner(
         RequestBody::UseCodexResetCredit { account } => {
             refuse_if_agent_unavailable(state, Agent::Codex)?;
             let account = checked_account_reference(state, Agent::Codex, account)?;
-            let outcome = account_quotas::use_reset_credit(
+            let outcome = quotas::use_reset_credit(
                 state,
                 account,
                 reset_credit_shell(),
-                account_quotas::RESET_CREDIT_TIMEOUT,
+                quotas::RESET_CREDIT_TIMEOUT,
             )
             .await?;
             Ok(Some(Event::ResetCreditUsed {
@@ -384,7 +394,7 @@ async fn handle_inner(
             include_accounts,
             include_paths,
         } => {
-            let selection = config_export::Selection::from_request(
+            let selection = export::Selection::from_request(
                 console,
                 consoles,
                 include_settings,
@@ -393,12 +403,12 @@ async fn handle_inner(
             )?;
             Ok(Some(Event::ConfigurationExported {
                 id: request_id,
-                document: config_export::build(&state.store, &selection)?,
+                document: export::build(&state.store, &selection)?,
             }))
         }
 
         RequestBody::InspectConfiguration { document } => {
-            let inspection = config_import::inspect(state, &document).await?;
+            let inspection = import::inspect(state, &document).await?;
             Ok(Some(Event::ConfigurationInspected {
                 id: request_id,
                 settings: inspection.settings,
@@ -415,7 +425,7 @@ async fn handle_inner(
             account_resolutions,
             apply_consoles,
         } => {
-            let imported = config_import::apply(
+            let imported = import::apply(
                 state,
                 &document,
                 resolutions,
@@ -561,7 +571,7 @@ async fn handle_inner(
         RequestBody::InspectSessionRecords { sessions } => {
             let state = Arc::clone(state);
             let presence = tokio::task::spawn_blocking(move || {
-                inspect_session_records(&state, &sessions, agent_records::Locator::default())
+                inspect_session_records(&state, &sessions, records::Locator::default())
             })
             .await??;
             Ok(Some(Event::SessionRecordsInspected {
@@ -572,7 +582,7 @@ async fn handle_inner(
 
         RequestBody::ReadSessionHistory { session } => {
             let record = state.session_record(&session)?;
-            let messages = session_history::of_session_blocking(state, record).await?;
+            let messages = history::of_session_blocking(state, record).await?;
             Ok(Some(Event::SessionHistory {
                 id: request_id,
                 session,
@@ -587,7 +597,7 @@ async fn handle_inner(
         } => inspect_session_branches(state, request_id, sessions, processes).await,
 
         RequestBody::ListProcesses { target } => {
-            let trees = crate::process_requests::list(state, target).await?;
+            let trees = crate::processes::requests::list(state, target).await?;
             Ok(Some(Event::ProcessesListed {
                 id: request_id,
                 trees,
@@ -595,7 +605,7 @@ async fn handle_inner(
         }
 
         RequestBody::StopProcesses { ids } => {
-            let ids = crate::process_requests::stop(state, ids).await?;
+            let ids = crate::processes::requests::stop(state, ids).await?;
             Ok(Some(Event::ProcessesStopped {
                 id: request_id,
                 ids,
@@ -603,7 +613,7 @@ async fn handle_inner(
         }
 
         RequestBody::KeepProcesses { ids } => {
-            let ids = crate::process_requests::keep(state, ids).await?;
+            let ids = crate::processes::requests::keep(state, ids).await?;
             Ok(Some(Event::ProcessesKept {
                 id: request_id,
                 ids,
@@ -680,11 +690,11 @@ async fn handle_inner(
         }
 
         RequestBody::InterruptSession { session } => {
-            let crate::interrupt::Interrupted {
+            let crate::session::interrupt::Interrupted {
                 interrupted,
                 status,
                 note,
-            } = crate::interrupt::interrupt_session(state, &session).await?;
+            } = crate::session::interrupt::interrupt_session(state, &session).await?;
             Ok(Some(Event::SessionInterrupted {
                 id: request_id,
                 session,
@@ -818,7 +828,7 @@ async fn handle_inner(
             worktree,
             path,
         } => {
-            let shell_terminal = crate::shell_terminal::create(
+            let shell_terminal = crate::terminal::shell::create(
                 state,
                 project,
                 worktree,
@@ -836,12 +846,16 @@ async fn handle_inner(
             shell_terminal,
             title,
         } => {
-            crate::shell_terminal::rename(state, &shell_terminal, required_text("title", &title)?)?;
+            crate::terminal::shell::rename(
+                state,
+                &shell_terminal,
+                required_text("title", &title)?,
+            )?;
             Ok(None)
         }
 
         RequestBody::CloseShellTerminal { shell_terminal } => {
-            crate::shell_terminal::close(state, &shell_terminal).await?;
+            crate::terminal::shell::close(state, &shell_terminal).await?;
             Ok(None)
         }
 
@@ -992,7 +1006,7 @@ async fn handle_inner(
         }
 
         RequestBody::SetAccountSharing { account, share } => {
-            crate::shared_config::set(state, account, share).await?;
+            account_sharing::set(state, account, share).await?;
             Ok(None)
         }
 
@@ -1011,7 +1025,7 @@ async fn handle_inner(
 
         RequestBody::InspectAccountTrash { account } => Ok(Some(Event::AccountTrashInspected {
             id: request_id,
-            outcome: crate::account_trash::inspect(state, &account).await?,
+            outcome: crate::accounts::trash::inspect(state, &account).await?,
         })),
 
         RequestBody::AddAgent { agent } => {
@@ -1046,12 +1060,12 @@ async fn handle_inner(
 /// The shell environment a use of a reset credit runs Codex in. A test has none: a request that
 /// got through to it would spend a credit of the machine's own Codex account.
 #[cfg(not(test))]
-fn reset_credit_shell() -> account_quotas::ShellSource {
+fn reset_credit_shell() -> quotas::ShellSource {
     Arc::new(env_shell::launch_snapshot)
 }
 
 #[cfg(test)]
-fn reset_credit_shell() -> account_quotas::ShellSource {
+fn reset_credit_shell() -> quotas::ShellSource {
     Arc::new(|| anyhow::bail!("no shell environment under test"))
 }
 

@@ -15,7 +15,7 @@
 //! read out of Claude Code's global config file instead of matched in terminal text. Read, never
 //! written: Octoboard does not edit that file. The trust screen itself, which a fresh directory
 //! raises, is recognised from terminal text and answered with keystrokes once the user has agreed
-//! to that — see `crate::trust`.
+//! to that — see `crate::session::trust`.
 //!
 //! An approval mode chosen for the account is passed as `--permission-mode` on every launch and
 //! resume, and none is passed for an account that follows its own configuration. Approve everything
@@ -32,7 +32,7 @@
 //! Claude Code's transcript records no context window; only the input of its status line carries
 //! one. So the `--settings` JSON also sets `statusLine`, to a command that hands the window to the
 //! daemon and then runs the user's own status line, resolved afresh on every run, with the same
-//! input, its output and exit status passed on unchanged (`crate::status_line_mode`). A
+//! input, its output and exit status passed on unchanged (`crate::cli::status_line`). A
 //! `statusLine` from the flags outranks the user's and the project's, so carrying theirs out is
 //! this command's job, and their layout fields (`padding`, `refreshInterval`,
 //! `hideVimModeIndicator`) are carried into the injected one when well-typed. What cannot be carried over is the status line's absence: with any status
@@ -52,6 +52,7 @@ use super::{
     hook_command, hook_url, shell_quote, AgentAdapter, AgentVersion, LaunchPlan, LaunchSpec,
     NamedTitle, HOOK_TIMEOUT_SECS,
 };
+use crate::agents::layout;
 use crate::mcp;
 use crate::protocol::{Agent, ClaudeApprovalMode};
 use settings::{
@@ -88,8 +89,9 @@ const HTTP_HOOKS_SINCE: AgentVersion = (2, 1, 63);
 /// The registered events Claude Code skips an HTTP handler for (it runs only commands on
 /// `SessionStart` and `Setup`; measured on 2.1.307), so they keep the command handler whatever the
 /// rest use. `SessionStart` is the only hook a launch or resume with no prompt sends, and the
-/// daemon holds every write into the session until a first hook arrives (see `crate::trust`), so
-/// without it such a session would hold its messages until the user typed a prompt.
+/// daemon holds every write into the session until a first hook arrives (see
+/// `crate::session::trust`), so without it such a session would hold its messages until the user
+/// typed a prompt.
 const COMMAND_ONLY_EVENTS: &[&str] = &["SessionStart"];
 
 /// The status line is injected only for a Claude Code known to be at least this version, well
@@ -416,7 +418,7 @@ impl AgentAdapter for ClaudeAdapter {
         let mut env = Vec::new();
         if let Some(dir) = pinned {
             env.push((
-                "CLAUDE_CONFIG_DIR".to_string(),
+                layout::CLAUDE.config_dir_var.to_string(),
                 dir.to_string_lossy().into_owned(),
             ));
         }

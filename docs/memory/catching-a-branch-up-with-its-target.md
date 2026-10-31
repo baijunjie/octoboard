@@ -26,5 +26,6 @@ branch that is not guarded onto its target before it merges back is unaffected.
 
 Keep delivery-time squashing separate from catching up with the target: follow "The development rule" in
 `docs/product/git-workflow-settings.md` for the squash and its tree comparison first, then apply the catch-up rule
-above if alignment is required. A branch being unpushed does not by itself make reset-based squashing safe; before
-choosing a procedure, check "Guarded branches" and "A local update of a guarded branch" in `docs/product/revert-gate.md`.
+above if alignment is required. A branch being unpushed does not by itself make a reset-based squash or split of a
+commit safe: a branch that a session created another branch from is guarded, pushed or not. Before choosing a
+procedure, check "Guarded branches" and "A local update of a guarded branch" in `docs/product/revert-gate.md`.

@@ -9,7 +9,7 @@ use super::Store;
 use crate::protocol::{
     Agent, ConsoleSessionColour, OrchestrationRole, Origin, Role, Session, SessionStatus,
 };
-use crate::session_title::RecordTitles;
+use crate::titles::RecordTitles;
 
 /// What the agent's records gave a session, to be stored if it differs from what is.
 pub struct RecordUpdate {
@@ -24,7 +24,7 @@ pub struct RecordUpdate {
     pub observed_model: Option<String>,
     pub observed_effort: Option<Option<String>>,
     /// The observation boundary the records were read against (see
-    /// `record_collector::ObservedBoundary`): the model and effort are not written once a restart
+    /// `records::collector::ObservedBoundary`): the model and effort are not written once a restart
     /// has stored another.
     pub observed_boundary: Option<String>,
 }
@@ -518,8 +518,8 @@ impl Store {
             .map(drop)
     }
 
-    /// Records a session's model choice only while the user has not archived it. With `boundary`,
-    /// a model change's observation boundary (`record_collector::ObservedBoundary`), it also stores
+    /// Records a session's model choice only while the user has not archived it. With `boundary`, a
+    /// model change's observation boundary (`records::collector::ObservedBoundary`), it also stores
     /// that and clears the observed model and effort, in the same write.
     pub(crate) fn set_session_launch_overrides_unless_archived(
         &self,
@@ -559,7 +559,7 @@ impl Store {
 
     /// Every session's observation boundary that is set, by session id: the collector's private
     /// record of what the agent's records held when a model change last restarted the session
-    /// (`record_collector::ObservedBoundary`), retained with this conversation across daemon
+    /// (`records::collector::ObservedBoundary`), retained with this conversation across daemon
     /// restarts and archives. It is never part of a session's public record or a configuration.
     /// One query for a whole collector pass.
     pub(crate) fn observed_boundaries(&self) -> Result<std::collections::HashMap<String, String>> {

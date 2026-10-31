@@ -30,11 +30,11 @@ use crate::browse::tree_diff;
 use crate::browse::{blob, budget, git_error, git_failed, json_escaped_len, Located};
 use crate::git::isolated::IsolatedGit;
 use crate::git::run::GitError;
+use crate::processes::subprocess::BoundedFailure;
 use crate::protocol::{
     error_code, BranchInfo, ChangeEntry, CodedError, ComparedChangeRef, ComparisonEndpoint,
     UpstreamInfo,
 };
-use crate::subprocess::BoundedFailure;
 use crate::wire_path;
 
 /// A repository's local branches, in byte order of their names.

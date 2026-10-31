@@ -76,7 +76,7 @@ daemon suite takes about 5 s; a run hit by a stall takes 10-30 s and fails whate
 in single seconds.
 
 - A wait for anything a spawned process does — output, a file, an event it causes, its exit —
-  polls up to `PATIENCE` from `apps/daemon/src/test_support.rs`; a poll returns early, so a
+  polls up to `PATIENCE` from `apps/daemon/src/test_support/mod.rs`; a poll returns early, so a
   passing test pays nothing. Do not assert an elapsed time tighter than a stall: show "fails
   fast" by which error came back, and keep wall-clock checks only for ruling out a wait of
   minutes.
@@ -105,15 +105,15 @@ every message so none overtakes one sent before it, waits for the marker to arri
 output for the absence to be asserted in.
 
 The marker orders only against writes already made when it is sent. Some daemon paths write into a session from a
-task they spawn after recording the state a test can wait on — `AppState::watch_exit` saves the session's `ended_at`
-and only then spawns the task that tells the owner — so a marker sent once that state is seen can reach the stand-in
-first. A test asserting such a message is present therefore waits for the message's own text with
-`test_support::output_containing` and asserts it in what that returns, keeping the marker only for what must be
-absent or counted afterwards; reading behind the marker and asserting presence fails intermittently under the full
-suite's load. A test asserting the owner was not told of an end first waits with `test_support::exit_settled` for
-every process whose end could have told it — including one production code started and watched on its own, such as
-the process a relaunch started, which the test reaches through its stand-in launch's list of started processes — and
-only then reads behind the marker.
+task they spawn after recording the state a test can wait on — `coordinator::exit_watch::watch_exit` saves the session's
+`ended_at` and only then spawns the task that tells the owner — so a marker sent once that state is seen can reach the
+stand-in first. A test asserting such a message is present therefore waits for the message's own text with
+`test_support::output_containing` and asserts it in what that returns, keeping the marker only for what must be absent
+or counted afterwards; reading behind the marker and asserting presence fails intermittently under the full suite's
+load. A test asserting the owner was not told of an end first waits with `test_support::exit_settled` for every process
+whose end could have told it — including one production code started and watched on its own, such as the process a
+relaunch started, which the test reaches through its stand-in launch's list of started processes — and only then reads
+behind the marker.
 
 ## Seed the agent's model list before a daemon test gives anything a model or an effort
 
@@ -139,7 +139,7 @@ the CLI.
 
 So such a handler never calls an `env_shell` snapshot directly: it takes its shell environment from a
 `#[cfg(not(test))]` / `#[cfg(test)]` pair of functions whose test variant bails (`reset_credit_shell` in
-`apps/daemon/src/coordinator/mod.rs`, `held_shell` in `apps/daemon/src/account_quotas/mod.rs`), which keeps every test
+`apps/daemon/src/coordinator/mod.rs`, `held_shell` in `apps/daemon/src/accounts/quotas/poll.rs`), which keeps every test
 off the real CLI by construction instead of by each test's care. The action itself is tested one level down, handed the
 environment `test_support::fake_agent` returns, whose `PATH` finds only the fake.
 

@@ -6,9 +6,9 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
+use crate::coordinator::pages;
 use crate::mcp;
-use crate::owner_notices;
-use crate::pages;
+use crate::messaging::owner_notices;
 use crate::protocol::{error_code, CodedError, OrchestrationRole, Role, Session, SessionStatus};
 use crate::state::AppState;
 
@@ -71,7 +71,7 @@ pub(crate) fn owner_refusal(
         format!(
             "`{}` (\"{}\")",
             session.id,
-            crate::sharing::one_line(&session.title)
+            crate::messaging::sharing::one_line(&session.title)
         )
     };
     if owner.id == session.id {
@@ -531,7 +531,7 @@ pub(crate) fn refuse_unless_still_askers(session: &Session, asked_by: Option<&st
         Some(asker) if session.bound_to.as_deref() != Some(asker) => anyhow::bail!(
             "`{}` (\"{}\") is no longer yours: it was handed to another owner meanwhile",
             session.id,
-            crate::sharing::one_line(&session.title)
+            crate::messaging::sharing::one_line(&session.title)
         ),
         _ => Ok(()),
     }

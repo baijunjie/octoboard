@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use super::*;
-use crate::outbox::Drain;
+use crate::messaging::outbox::Drain;
 use crate::protocol::{Event, OrchestrationRole};
 use crate::state::WriteHold;
 use crate::test_support::{app_state, PATIENCE};
@@ -347,14 +347,14 @@ async fn a_message_left_unsent_holds_what_follows_until_a_prompt_is_sent() {
     let (state, _dir, live, path) = checked_claude_session("server-unsent");
     let mut events = state.subscribe();
 
-    let first = crate::delivery::write_message(
+    let first = crate::messaging::delivery::write_message(
         &state,
         "s",
         "first message",
-        crate::delivery::WhenBlocked::Queue,
+        crate::messaging::delivery::WhenBlocked::Queue,
     )
     .unwrap();
-    assert_eq!(first, crate::delivery::Delivery::Unsent);
+    assert_eq!(first, crate::messaging::delivery::Delivery::Unsent);
     let mut announced = false;
     while let Ok(event) = events.try_recv() {
         announced |= matches!(event, Event::SessionNotice { ref session, ref code, .. }
@@ -362,14 +362,14 @@ async fn a_message_left_unsent_holds_what_follows_until_a_prompt_is_sent() {
     }
     assert!(announced);
 
-    let second = crate::delivery::write_message(
+    let second = crate::messaging::delivery::write_message(
         &state,
         "s",
         "second message",
-        crate::delivery::WhenBlocked::Queue,
+        crate::messaging::delivery::WhenBlocked::Queue,
     )
     .unwrap();
-    assert_eq!(second, crate::delivery::Delivery::Queued);
+    assert_eq!(second, crate::messaging::delivery::Delivery::Queued);
     assert_eq!(
         live.input_writes(),
         1,
@@ -386,14 +386,14 @@ async fn a_message_left_unsent_holds_what_follows_until_a_prompt_is_sent() {
 #[tokio::test]
 async fn a_task_notification_does_not_lift_the_hold() {
     let (state, _dir, live, path) = checked_claude_session("server-unsent-notification");
-    let first = crate::delivery::write_message(
+    let first = crate::messaging::delivery::write_message(
         &state,
         "s",
         "first message",
-        crate::delivery::WhenBlocked::Queue,
+        crate::messaging::delivery::WhenBlocked::Queue,
     )
     .unwrap();
-    assert_eq!(first, crate::delivery::Delivery::Unsent);
+    assert_eq!(first, crate::messaging::delivery::Delivery::Unsent);
 
     let notification = serde_json::json!({
         "hook_event_name": "UserPromptSubmit",
@@ -401,14 +401,14 @@ async fn a_task_notification_does_not_lift_the_hold() {
         "transcript_path": path,
     });
     apply_hook(&state, "s", notification.to_string().as_bytes());
-    let second = crate::delivery::write_message(
+    let second = crate::messaging::delivery::write_message(
         &state,
         "s",
         "second message",
-        crate::delivery::WhenBlocked::Queue,
+        crate::messaging::delivery::WhenBlocked::Queue,
     )
     .unwrap();
-    assert_eq!(second, crate::delivery::Delivery::Queued);
+    assert_eq!(second, crate::messaging::delivery::Delivery::Queued);
     assert_eq!(live.input_writes(), 1);
 }
 
@@ -424,15 +424,15 @@ async fn a_message_the_agent_sends_is_delivered() {
         apply_hook(&hook_state, "s", &claude_hook("UserPromptSubmit", &path));
         live
     });
-    let delivery = crate::delivery::write_message(
+    let delivery = crate::messaging::delivery::write_message(
         &state,
         "s",
         "a message",
-        crate::delivery::WhenBlocked::Queue,
+        crate::messaging::delivery::WhenBlocked::Queue,
     )
     .unwrap();
     let _live = sender.join().unwrap();
-    assert_eq!(delivery, crate::delivery::Delivery::Written);
+    assert_eq!(delivery, crate::messaging::delivery::Delivery::Written);
 }
 
 /// A write that lands mid-turn is queued by the agent and sent only when its turn ends, so it
@@ -443,14 +443,14 @@ async fn a_message_written_mid_turn_is_not_waited_on() {
     state
         .apply_hook_status("s", SessionStatus::Working)
         .unwrap();
-    let delivery = crate::delivery::write_message(
+    let delivery = crate::messaging::delivery::write_message(
         &state,
         "s",
         "a message",
-        crate::delivery::WhenBlocked::Queue,
+        crate::messaging::delivery::WhenBlocked::Queue,
     )
     .unwrap();
-    assert_eq!(delivery, crate::delivery::Delivery::Written);
+    assert_eq!(delivery, crate::messaging::delivery::Delivery::Written);
 }
 
 /// A session bound to an owner that raises the agent's hand at a permission prompt tells the
@@ -543,7 +543,12 @@ async fn only_the_next_turns_own_interrupt_ends_it() {
     apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path));
 
     assert!(
-        !reaches_within(&state, SessionStatus::Idle, crate::transcript::TEST_TIMEOUT).await,
+        !reaches_within(
+            &state,
+            SessionStatus::Idle,
+            crate::records::transcript::TEST_TIMEOUT
+        )
+        .await,
         "the next turn must keep working"
     );
 

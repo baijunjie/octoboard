@@ -7,6 +7,7 @@
 //! - [`terminal`]: the terminal socket, `/ws/term/:session`.
 //! - [`callbacks`]: the HTTP routes the agents' hooks and the daemon's own helpers post to.
 
+pub(crate) mod access;
 mod callbacks;
 mod control;
 mod terminal;
@@ -26,7 +27,7 @@ pub fn router(state: Arc<AppState>) -> Router {
     let key: Arc<str> = state.key.as_str().into();
     routes(state).layer(axum::middleware::from_fn_with_state(
         key,
-        crate::access::guard,
+        crate::server::access::guard,
     ))
 }
 

@@ -7,7 +7,7 @@ impl AppState {
     /// Starts a new record watch for this session and returns the generation it owns.
     /// Recording it here retires whatever watch was running for the session before: its generation
     /// is no longer the one found under this id, so it stops at its next poll instead of racing the
-    /// new one. See `crate::record_watch::spawn`.
+    /// new one. See `crate::records::watch::spawn`.
     pub fn begin_record_watch(&self, id: &str) -> u64 {
         let generation = self
             .next_record_watch_generation

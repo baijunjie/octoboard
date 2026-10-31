@@ -105,16 +105,16 @@ it off the path the user waits on, cache what it returns, and bound how many run
 Applies to daemon code that runs an agent CLI and has to end whatever it left running — when it exits, when it is
 stopped, when the daemon goes down. Agent CLIs move some helpers (a REPL or code-execution host, a background shell
 task) into process groups of their own, so the process-group stop other subprocesses get leaves them running; they
-keep the CLI's session. Do not write a sweep of your own: run the CLI through `apps/daemon/src/subprocess.rs` with
-`Reach::Session` (`run_agent_with_timeout`, or `Bounds { reach: Reach::Session, .. }` for `run_bounded` and
+keep the CLI's session. Do not write a sweep of your own: run the CLI through `apps/daemon/src/processes/subprocess.rs`
+with `Reach::Session` (`run_agent_with_timeout`, or `Bounds { reach: Reach::Session, .. }` for `run_bounded` and
 `run_exchange`), and where it cannot go through there (it runs on a PTY, or a flow reads it while it runs), build on
-`apps/daemon/src/process_session.rs`. Anything that is not an agent CLI, such as `git`, keeps `Reach::ProcessGroup`
+`apps/daemon/src/processes/leader.rs`. Anything that is not an agent CLI, such as `git`, keeps `Reach::ProcessGroup`
 (`run_with_timeout`): a session sweep lists every process on the system.
 
 `Reach::Session` sweeps the session when the CLI ends by itself too. Where the CLI can start something the user goes
 on using — a login that opens a browser, which `xdg-open` on a Linux desktop starts straight into the CLI's session —
 sweep only when the daemon ends the CLI (cancel, timeout, daemon exit) and just reap one that exits by itself, as the
-account login flows in `apps/daemon/src/account_login/flows.rs` do.
+account login flows in `apps/daemon/src/accounts/login/flows.rs` do.
 
 ## A request handler or daemon task is never alone with the state: re-check after a step, or hold a claim
 
@@ -181,10 +181,10 @@ daemon code below, since a clean run on macOS says nothing about it:
   entirely, and `--target x86_64-unknown-linux-gnu` from macOS fails in rusqlite's `bundled` build script without a
   Linux C cross-compiler.
 - How a terminal's PTY comes to an end — the reader thread, closing the master, hanging the terminal up
-  (`apps/daemon/src/pty.rs`). On macOS a session leader's exit revokes its controlling terminal, so the reader ends
-  with the shell or agent even while a background job it left behind still holds the PTY's other side; Linux revokes
-  nothing, and the reader, the master and the buffers live on until that job goes. A test of a terminal outliving its
-  process therefore cannot fail on macOS.
+  (`apps/daemon/src/terminal/pty.rs`). On macOS a session leader's exit revokes its controlling terminal, so the reader
+  ends with the shell or agent even while a background job it left behind still holds the PTY's other side; Linux
+  revokes nothing, and the reader, the master and the buffers live on until that job goes. A test of a terminal
+  outliving its process therefore cannot fail on macOS.
 
 So run `cargo test -p octoboardd`, and `cargo clippy --all-targets` for the Linux-only code, inside a Linux container
 (Docker). Start the container with `docker run --init`: without an init that reaps, orphans reparented to PID 1 (here

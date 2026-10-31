@@ -324,13 +324,13 @@ pub(super) fn resolve_account(
     if wanted.eq_ignore_ascii_case("default") {
         return Ok(None);
     }
-    let key = coordinator::accounts::account_name_key(wanted);
+    let key = crate::accounts::account_name_key(wanted);
     let accounts = state.store.list_accounts()?;
     let of_agent = || accounts.iter().filter(|account| account.agent == agent);
     of_agent()
         .find(|account| account.id == wanted)
         .or_else(|| {
-            of_agent().find(|account| coordinator::accounts::account_name_key(&account.name) == key)
+            of_agent().find(|account| crate::accounts::account_name_key(&account.name) == key)
         })
         .map(|account| Some(account.id.clone()))
         .ok_or_else(|| CodedError::unknown_account(wanted))

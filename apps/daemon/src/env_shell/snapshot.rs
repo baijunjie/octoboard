@@ -23,9 +23,9 @@ use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
 
-use crate::process_session::{self, Unreaped};
+use crate::processes::leader::{self, Unreaped};
+use crate::processes::subprocess::{PIPE_CHUNK_SIZE, REAP_GRACE};
 use crate::protocol::{error_code, CodedError};
-use crate::subprocess::{PIPE_CHUNK_SIZE, REAP_GRACE};
 
 /// Upper bound on how long the login-shell snapshot may run. An rc file waiting on a version
 /// manager or a network call is routinely a second or two; this leaves a wide margin above that
@@ -365,7 +365,7 @@ fn wait_unreaped(
     let succeeded = loop {
         drain_available(&stdout_rx, &mut stdout, "stdout", "the snapshot shell")?;
         drain_stderr_best_effort(&stderr_rx, &mut stderr, "the snapshot shell");
-        match process_session::unreaped_state(pid) {
+        match leader::unreaped_state(pid) {
             Some(Unreaped::Exited { success }) => break success,
             Some(Unreaped::Running) => {}
             None => bail!("could not tell whether `{shell} -l -i -c '{command}'` has exited"),
@@ -438,15 +438,13 @@ fn wait_unreaped(
 /// report. A zombie left behind on that rare timeout is far cheaper than a second wedged launch.
 fn kill_group_and_reap(child: &mut Child) -> Result<ExitStatus> {
     let pid = child.id() as libc::pid_t;
-    if process_session::unreaped_state(pid).is_some() {
-        process_session::signal_group(pid, libc::SIGHUP);
+    if leader::unreaped_state(pid).is_some() {
+        leader::signal_group(pid, libc::SIGHUP);
         let hangup_deadline = Instant::now() + HANGUP_GRACE;
-        while process_session::group_has_members(pid) == Some(true)
-            && Instant::now() < hangup_deadline
-        {
+        while leader::group_has_members(pid) == Some(true) && Instant::now() < hangup_deadline {
             thread::sleep(Duration::from_millis(20));
         }
-        process_session::kill_group(pid);
+        leader::kill_group(pid);
     }
     let reap_deadline = Instant::now() + REAP_GRACE;
     loop {

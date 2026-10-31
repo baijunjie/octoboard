@@ -323,8 +323,9 @@ async fn information_kept_for_an_interrupted_session_is_deleted_only_once_it_is_
         &["hub"],
     );
     let share = |target: &str, text: &str| {
-        let (delivery, _) = crate::sharing::deliver_info(&state, "hub", target, text).unwrap();
-        assert_eq!(delivery, crate::delivery::Delivery::Kept);
+        let (delivery, _) =
+            crate::messaging::sharing::deliver_info(&state, "hub", target, text).unwrap();
+        assert_eq!(delivery, crate::messaging::delivery::Delivery::Kept);
     };
     share("codex", "first news");
     share("codex", "second news");
@@ -418,8 +419,11 @@ fn interrupted_owner(id: &str) -> Session {
     }
 }
 
-fn report(summary: &str, status: crate::reporting::ReportStatus) -> crate::reporting::Report<'_> {
-    crate::reporting::Report {
+fn report(
+    summary: &str,
+    status: crate::messaging::reporting::ReportStatus,
+) -> crate::messaging::reporting::Report<'_> {
+    crate::messaging::reporting::Report {
         summary,
         status,
         open_items: &[],
@@ -432,7 +436,7 @@ fn report(summary: &str, status: crate::reporting::ReportStatus) -> crate::repor
 /// came among the information kept for it.
 #[tokio::test]
 async fn a_report_to_an_interrupted_owner_is_kept_for_its_resume_in_order() {
-    use crate::reporting::{deliver_report, ReportStatus};
+    use crate::messaging::reporting::{deliver_report, ReportStatus};
     let (state, _dir, _live) = binding_fixture(
         "kept-report",
         vec![
@@ -444,7 +448,7 @@ async fn a_report_to_an_interrupted_owner_is_kept_for_its_resume_in_order() {
         &["hub"],
     );
     let share = |text: &str| {
-        crate::sharing::deliver_info(&state, "hub", "starter", text).unwrap();
+        crate::messaging::sharing::deliver_info(&state, "hub", "starter", text).unwrap();
     };
 
     share("first news");
@@ -493,7 +497,7 @@ async fn a_report_to_an_interrupted_owner_is_kept_for_its_resume_in_order() {
 /// archived with its owner is told that too.
 #[test]
 fn a_report_to_an_archived_owner_is_refused_naming_the_owner() {
-    use crate::reporting::{deliver_report, ReportStatus};
+    use crate::messaging::reporting::{deliver_report, ReportStatus};
     let (state, _dir, _live) = binding_fixture(
         "report-archived-owner",
         vec![
@@ -540,7 +544,7 @@ fn a_report_to_an_archived_owner_is_refused_naming_the_owner() {
 /// its resume is dropped.
 #[tokio::test]
 async fn a_notice_to_an_interrupted_owner_is_kept_and_an_out_of_date_wait_dropped() {
-    use crate::owner_notices::{tell_owner_it_ended, tell_owner_it_waits};
+    use crate::messaging::owner_notices::{tell_owner_it_ended, tell_owner_it_waits};
     let (state, _dir, _live) = binding_fixture(
         "kept-notice",
         vec![
@@ -592,7 +596,7 @@ async fn a_notice_to_an_interrupted_owner_is_kept_and_an_out_of_date_wait_droppe
 /// written into the owner at its resume once the session no longer waits.
 #[tokio::test]
 async fn a_kept_wait_that_is_over_is_not_delivered_at_the_resume() {
-    use crate::owner_notices::tell_owner_it_waits;
+    use crate::messaging::owner_notices::tell_owner_it_waits;
     let (state, _dir, _live) = binding_fixture(
         "kept-wait-over",
         vec![

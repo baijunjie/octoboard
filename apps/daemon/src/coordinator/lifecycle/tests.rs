@@ -1,5 +1,4 @@
 use super::*;
-use crate::agent_records;
 use crate::coordinator::handle;
 use crate::coordinator::test_support::{
     bound_session, code_of, console, console_workdir, lead_session, status_of, wait_until,
@@ -9,6 +8,7 @@ use crate::protocol::{
     error_code, Agent, CodedError, Event, OrchestrationRole, Origin, Project, ProjectSource,
     RequestBody, Role, Session, SessionStatus,
 };
+use crate::records;
 use crate::state::Deletion;
 use crate::store::LOCAL_HOST_ID;
 use crate::test_support::{
@@ -372,8 +372,8 @@ async fn archiving_a_project_session_follows_the_rule_for_the_sessions_bound_to_
     assert_eq!(status_of(&state, "dormant"), Some(Archived));
 }
 
-/// Archiving a project session reaches no other session: the automatic archive of a `done`
-/// report (see `reporting.rs`) and a `delete_project` that stops sessions both end here, and
+/// Archiving a project session reaches no other session: the automatic archive of a `done` report
+/// (see `messaging/reporting.rs`) and a `delete_project` that stops sessions both end here, and
 /// neither takes the console session the session is bound to.
 #[tokio::test]
 async fn archiving_a_bound_project_session_leaves_its_console_session_alone() {
@@ -613,7 +613,7 @@ fn the_agent_records_of_deleted_sessions_are_trashed_unless_shared() {
         Err(TrashFailure::new(path, "the Trash refused it"))
     };
     let locator = || {
-        agent_records::Locator::with_shell(HashMap::from([(
+        records::Locator::with_shell(HashMap::from([(
             "HOME".to_string(),
             dir.join("home").to_string_lossy().into_owned(),
         )]))
@@ -662,7 +662,7 @@ fn a_reverted_codex_threads_whole_chain_is_trashed() {
     trash_agent_records_of(
         &state,
         &deleted,
-        agent_records::Locator::with_shell(HashMap::from([(
+        records::Locator::with_shell(HashMap::from([(
             "HOME".to_owned(),
             dir.join("home").to_string_lossy().into_owned(),
         )])),
@@ -732,7 +732,7 @@ async fn guarded_deletion_accepts_and_trashes_unused_grok_native_records() {
     trash_agent_records_of(
         &state,
         &deleted,
-        agent_records::Locator::with_shell(HashMap::from([(
+        records::Locator::with_shell(HashMap::from([(
             "HOME".to_owned(),
             dir.join("home").to_string_lossy().into_owned(),
         )])),
@@ -777,7 +777,7 @@ async fn unused_deletion_returns_the_native_identity_at_the_atomic_delete() {
     trash_agent_records_of(
         &state,
         &[*session],
-        agent_records::Locator::with_shell(HashMap::from([(
+        records::Locator::with_shell(HashMap::from([(
             "HOME".to_owned(),
             dir.join("home").to_string_lossy().into_owned(),
         )])),

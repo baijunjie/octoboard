@@ -8,10 +8,11 @@
 //! - [`live`], [`claims`], [`sharing_lock`], [`process_exit`]: the live sessions, the claims that
 //!   keep two launches of one session, an archive or deletion and a lock change, or two of the
 //!   operations that must have a session to themselves from racing, the locks of an account's
-//!   change of sharing, and the exit watcher that records how each process ended.
+//!   change of sharing, and the stop of every session at shutdown with the output saved as each
+//!   process ends.
 //! - [`mcp_tokens`], [`turns`], [`left_for_limit`]: the per-session MCP tokens, the turn
 //!   bookkeeping a synthesised report rests on, and the accounts a session left for a usage limit.
-//! - [`write_queue`]: a facade over the write queue in `crate::outbox`.
+//! - [`write_queue`]: a facade over the write queue in `crate::messaging::outbox`.
 //! - [`requests`]: the hands a waiting session request (`crate::session_request`) raises and the
 //!   status each such session's agent is at meanwhile.
 //! - [`background`], [`record_watch`]: each session's background tasks, default effort and record
@@ -44,13 +45,14 @@ mod sharing_lock;
 mod stalled;
 mod status;
 #[cfg(test)]
-mod test_support;
+pub(crate) mod test_support;
 mod titles;
 mod turns;
 mod write_queue;
 
 #[cfg(test)]
 pub(crate) use background::EMPTY_TASKS_DELAY;
+pub(crate) use claims::session_archived;
 pub use claims::{ClaimKind, LaunchClaim};
 pub use git_status::GitCheckClaim;
 pub use live::Running;
@@ -68,12 +70,12 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use tokio::sync::broadcast;
 
-use crate::outbox::Outbox;
+use crate::messaging::outbox::Outbox;
 use crate::protocol::{
     error_code, Agent, AgentAvailability, Availability, CodedError, Event, SessionStatus,
 };
-use crate::saved_output::SavedOutput;
 use crate::store::Store;
+use crate::terminal::saved_output::SavedOutput;
 
 use self::background::BackgroundWork;
 use self::git_status::{GitCheck, GitStatuses};
@@ -85,10 +87,11 @@ use self::write_queue::SEND_WAIT;
 pub struct AppState {
     pub store: Store,
     pub port: u16,
-    /// The secret every connection to the daemon has to carry (see `access`). Generated at start
-    /// and kept in memory; handed to the clients the daemon starts the way it hands them the port,
-    /// so it is also in their arguments and environment and in the owner-only files of a session's
-    /// scratch directory (the hook script, Grok's `config.toml`), which go with that directory.
+    /// The secret every connection to the daemon has to carry (see `crate::server::access`).
+    /// Generated at start and kept in memory; handed to the clients the daemon starts the way it
+    /// hands them the port, so it is also in their arguments and environment and in the owner-only
+    /// files of a session's scratch directory (the hook script, Grok's `config.toml`), which go
+    /// with that directory.
     pub key: String,
     pub self_exe: String,
     /// The running sessions, plus the ids currently being launched. One lock over both, because
@@ -105,15 +108,16 @@ pub struct AppState {
     /// process goes away.
     turns: Mutex<HashMap<String, TurnState>>,
     /// The accounts Octoboard moved each session off because a turn stopped on their usage limit,
-    /// and when (`crate::auto_switch`), so that it does not move the session straight back to one.
+    /// and when (`crate::accounts::auto_switch`), so that it does not move the session straight
+    /// back to one.
     left_for_limit: Mutex<HashMap<String, Vec<AccountLeft>>>,
-    pub(crate) quota_recovery: crate::auto_switch::RecoveryState,
+    pub(crate) quota_recovery: crate::accounts::auto_switch::RecoveryState,
     /// How long a change of a session's model waits for the process it ended to be recorded down,
-    /// in place of the switch's generous wait (`coordinator::launch::SWITCH_STOP_TIMEOUT`).
+    /// in place of the switch's generous wait (`crate::coordinator::launch::SWITCH_STOP_TIMEOUT`).
     #[cfg(test)]
     pub(crate) model_change_stop_timeout: Mutex<Option<std::time::Duration>>,
-    /// The generation each session's record watch (`crate::record_watch`, run for Claude Code by
-    /// `crate::transcript` and for Codex by `crate::rollout`) is currently on.
+    /// The generation each session's record watch (`crate::records::watch`, run for Claude Code by
+    /// `crate::records::transcript` and for Codex by `crate::records::rollout`) is currently on.
     /// Starting a watch records a fresh value here; the watch keeps polling only while its own
     /// value is still the one recorded, which is what lets a newer watch for the same session
     /// retire an older one rather than race it. The counter it is drawn from is global, not
@@ -121,12 +125,12 @@ pub struct AppState {
     record_watch_generations: Mutex<HashMap<String, u64>>,
     next_record_watch_generation: std::sync::atomic::AtomicU64,
     /// How far into its record file each session's carried-offset watches have read
-    /// (`crate::record_watch::Start::Carried`), with the file's path. A new turn's watch resumes
+    /// (`crate::records::watch::Start::Carried`), with the file's path. A new turn's watch resumes
     /// from there rather than rescanning the whole file, which on a long session runs to
     /// megabytes; what an earlier watch read it has already judged.
     record_offsets: Mutex<HashMap<String, (std::path::PathBuf, u64)>>,
     /// The per-session write queues. Every message Octoboard sends into a running agent goes
-    /// through them; see `crate::outbox`.
+    /// through them; see `crate::messaging::outbox`.
     outbox: Outbox,
     /// The hook events received and not yet applied, per session (`crate::hooks::queue`).
     pub hook_queues: crate::hooks::queue::HookQueues,
@@ -162,16 +166,16 @@ pub struct AppState {
     /// `None` for no check at all; see `HookPrompts`. A seam for tests, whose stand-in sessions
     /// run no hooks and so never report sending anything.
     pub send_wait: Mutex<Option<Duration>>,
-    pub record_hints: crate::agent_records::Hints,
+    pub record_hints: crate::records::Hints,
     /// The context window each Claude Code session's status line last reported.
-    pub context_windows: crate::record_context::ReportedWindows,
+    pub context_windows: crate::records::context::ReportedWindows,
     /// The repositories' refs under watch, so a commit made outside the daemon is re-read
     /// (`crate::project_git::watch`).
     pub git_watch: crate::project_git::watch::Watch,
     /// Each agent's availability and what its default account currently resolves to, derived once
-    /// per daemon start (`crate::availability`) and broadcast by its own event on change; never a
-    /// field of `Store`'s settings row, which only the user's own updates write. Always holds all
-    /// three agents, each starting `NotDetermined` — the state every run begins in.
+    /// per daemon start (`crate::agents::availability`) and broadcast by its own event on change;
+    /// never a field of `Store`'s settings row, which only the user's own updates write. Always
+    /// holds all three agents, each starting `NotDetermined` — the state every run begins in.
     agent_availability: RwLock<HashMap<Agent, AgentAvailability>>,
     /// Each ended session's last terminal output, written as its process ends and removed with its
     /// record.
@@ -187,23 +191,23 @@ pub struct AppState {
     /// `crate::session_request`.
     /// Held in memory only: no caller outlives the daemon.
     pub session_requests: crate::session_request::SessionRequests,
-    /// The model lists read lately, per agent and account directory (`crate::agent_models`).
-    pub agent_models: crate::agent_models::ModelCache,
-    /// The plan quota last read for each account (`crate::account_quotas`). Held in memory only.
-    pub account_quotas: crate::account_quotas::AccountQuotas,
-    /// The logins running now, one per account (`crate::account_login`). Held in memory only.
-    pub account_logins: crate::account_login::AccountLogins,
+    /// The model lists read lately, per agent and account directory (`crate::agents::models`).
+    pub agent_models: crate::agents::models::ModelCache,
+    /// The plan quota last read for each account (`crate::accounts::quotas`). Held in memory only.
+    pub account_quotas: crate::accounts::quotas::AccountQuotas,
+    /// The logins running now, one per account (`crate::accounts::login`). Held in memory only.
+    pub account_logins: crate::accounts::login::AccountLogins,
     /// The accounts a `delete_account` that moves the directory to the Trash is running for, each
     /// with the number of such removals; see [`AppState::begin_account_removal`]. Held in memory
     /// only. A plain mutex, never held across an `.await`.
     accounts_being_removed: Mutex<HashMap<String, (crate::protocol::Account, usize)>>,
     /// What the accounts' changes of sharing of the default configuration hold: one lock per
     /// agent over the default directory, and each account's progress and last failure
-    /// (`crate::shared_config`). Held in memory only.
-    pub account_sharing: crate::shared_config::Sharing,
-    /// The shell terminals running, or exited and not yet closed (`crate::shell_terminal`). Held in
-    /// memory only: each is a process of this daemon's.
-    pub shell_terminals: crate::shell_terminal::ShellTerminals,
+    /// (`crate::accounts::shared_config`). Held in memory only.
+    pub account_sharing: crate::accounts::shared_config::Sharing,
+    /// The shell terminals running, or exited and not yet closed (`crate::terminal::shell`). Held
+    /// in memory only: each is a process of this daemon's.
+    pub shell_terminals: crate::terminal::shell::ShellTerminals,
     /// The paths looked at on the file system whose look outran its deadline and is still running,
     /// stuck once it has run long enough (`crate::hostfs::place::looked_within`). Held in memory
     /// only.
@@ -247,8 +251,8 @@ pub struct AppState {
     /// registered from then on, so a launch that was under way cannot start an agent after the
     /// stop.
     shutting_down: AtomicBool,
-    /// The sessions an `interrupt_session` is sending keys into now (`crate::interrupt`), so two
-    /// at once cannot send a second interrupt key. Held in memory only.
+    /// The sessions an `interrupt_session` is sending keys into now (`crate::session::interrupt`),
+    /// so two at once cannot send a second interrupt key. Held in memory only.
     interrupts: Mutex<HashSet<String>>,
     /// Per console, the look at its projects' directories that outran its deadline and whose
     /// blocking thread is still stuck (`crate::coordinator::projects`). Held in memory only.
@@ -257,8 +261,8 @@ pub struct AppState {
     /// (`crate::project_trash`). Held in memory only. Dropped with their project.
     pub unresolved_removals: crate::project_trash::UnresolvedRemovals,
     /// The processes each agent launch started outside its terminal session, stopped when the
-    /// launch ends (`crate::process_ledger`).
-    pub process_ledger: Arc<crate::process_ledger::ProcessLedger>,
+    /// launch ends (`crate::processes::ledger`).
+    pub process_ledger: Arc<crate::processes::ledger::ProcessLedger>,
 }
 
 impl AppState {
@@ -271,7 +275,7 @@ impl AppState {
         saved_output_dir: std::path::PathBuf,
         consoles_dir: std::path::PathBuf,
         handoff_dir: std::path::PathBuf,
-        process_ledger: Arc<crate::process_ledger::ProcessLedger>,
+        process_ledger: Arc<crate::processes::ledger::ProcessLedger>,
     ) -> Self {
         let (events, _) = broadcast::channel(1024);
         Self {
@@ -408,4 +412,13 @@ impl AppState {
         }
         Ok(())
     }
+}
+
+/// Broadcasts the current settings record — the pattern every settings-shaped mutation (the
+/// trusted directories, `auto_pull_repositories` and the accounts) follows.
+pub(crate) fn broadcast_settings(state: &AppState) -> Result<()> {
+    state.broadcast(Event::SettingsUpdated {
+        settings: state.store.get_settings()?,
+    });
+    Ok(())
 }

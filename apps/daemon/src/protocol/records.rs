@@ -216,8 +216,8 @@ pub struct Account {
     /// directory that does not exist yet.
     pub config_dir: String,
     /// Whether the account shares what its directory can share with the agent's default account's
-    /// directory, by linking each item of `crate::shared_items` into it. The user's choice, set by
-    /// `set_account_sharing`; kept local.
+    /// directory, by linking each item of `crate::accounts::shared_config::items` into it. The
+    /// user's choice, set by `set_account_sharing`; kept local.
     #[serde(default)]
     pub share_default_config: bool,
     /// The last change toward `share_default_config` did not finish: it failed part-way, or the
@@ -236,7 +236,7 @@ pub struct Account {
 
 /// Whether an agent's binary resolves on the user's login shell `PATH`, the only test an agent is
 /// held to: whether its config directory holds a login is not Octoboard's business (see
-/// `crate::availability`'s module doc). Three states, not two:
+/// `crate::agents::availability`'s module doc). Three states, not two:
 /// [`NotDetermined`](Availability::NotDetermined) is where every run of the daemon starts, and
 /// only a completed login-shell snapshot ever moves an agent out of it — a snapshot that times out
 /// or fails leaves it there, rather than being read as [`Unavailable`](Availability::Unavailable).
@@ -251,11 +251,10 @@ pub enum Availability {
 
 /// One agent's availability and what its default account currently resolves to, derived once per
 /// daemon start from one login-shell snapshot and held as its own derived state on `AppState`
-/// (`crate::availability`) — never as a field of the stored `Settings`, which is written only by
-/// the user's own updates. Travels to a client inside
-/// `Event::Snapshot` and `Event::AgentAvailabilityUpdated`, one entry per agent, always three of
-/// them: the not-yet-determined state is carried by `availability` itself rather than by the
-/// entry's absence.
+/// (`crate::agents::availability`) — never as a field of the stored `Settings`, which is written
+/// only by the user's own updates. Travels to a client inside `Event::Snapshot` and
+/// `Event::AgentAvailabilityUpdated`, one entry per agent, always three of them: the
+/// not-yet-determined state is carried by `availability` itself rather than by the entry's absence.
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct AgentAvailability {
@@ -339,11 +338,11 @@ pub struct Project {
     pub launch: PerAgent<Launch>,
     /// The user has agreed that Octoboard may press an agent's own trust confirmation for this
     /// project's directory without asking, by sending the keystrokes that accept it (see
-    /// `crate::trust`). The project form of the one auto-trust permission every agent shares, a
-    /// trusted directory being the other: recorded once "Trust and continue" in the dialog the
-    /// daemon asks with has pressed a confirmation successfully, whichever agent showed it, and it
-    /// covers every later session of any agent in the project. It is not the agent's own trust
-    /// record, which each agent writes when its confirmation is pressed.
+    /// `crate::session::trust`). The project form of the one auto-trust permission every agent
+    /// shares, a trusted directory being the other: recorded once "Trust and continue" in the
+    /// dialog the daemon asks with has pressed a confirmation successfully, whichever agent showed
+    /// it, and it covers every later session of any agent in the project. It is not the agent's own
+    /// trust record, which each agent writes when its confirmation is pressed.
     pub trust_consent: bool,
     /// The user pinned this project to the top of its console's project list. Only the user's
     /// `update_project` changes it.
@@ -426,7 +425,7 @@ pub struct Session {
     pub terminal_title: Option<String>,
     /// The titles the agent's own records give the session. Stored, never sent.
     #[serde(skip)]
-    pub record_titles: crate::session_title::RecordTitles,
+    pub record_titles: crate::titles::RecordTitles,
     /// The session's last known context size, retained after archiving. Absent until reported,
     /// and again after a compaction until the next request.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -440,8 +439,8 @@ pub struct Session {
     pub observed_effort: Option<String>,
     /// The reasoning effort the agent runs `observed_model` at by itself, where the records name
     /// that model but no effort and the agent's catalogue gives it a default
-    /// (`crate::default_effort`). Never stored: it is filled in on the record a client receives
-    /// (`AppState::wire_session`), and absent otherwise.
+    /// (`crate::records::default_effort`). Never stored: it is filled in on the record a client
+    /// receives (`AppState::wire_session`), and absent otherwise.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_effort: Option<String>,
     pub status: SessionStatus,

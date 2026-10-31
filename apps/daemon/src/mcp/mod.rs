@@ -77,9 +77,9 @@ pub const SERVER_KEY: &str = "octoboard";
 
 /// Who a worker reports to at launch, as far as what the session is told depends on it. A binding
 /// can change while the session runs, and the session is told of that change in a message
-/// (`crate::owner_notices`, and `mcp::bindings` for the tools' own handover texts), or, when it
-/// binds itself, in the call's result; its role text, recorded once by some agents, is written so
-/// that it still holds afterwards.
+/// (`crate::messaging::owner_notices`, and `mcp::bindings` for the tools' own handover texts), or,
+/// when it binds itself, in the call's result; its role text, recorded once by some agents, is
+/// written so that it still holds afterwards.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Owner {
     Console,
@@ -2444,7 +2444,7 @@ fn launch_schema(whose: &str) -> Value {
              as it is, and `null` or blank is the agent's own default. They must be ones the \
              agent offers: `list_agent_models` lists them, with the efforts of each. Claude Code's \
              models are always {}.",
-            crate::agent_models::claude_model_ids()
+            crate::agents::models::claude_model_ids()
                 .iter()
                 .map(|id| format!("`{id}`"))
                 .collect::<Vec<_>>()

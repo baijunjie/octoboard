@@ -10,16 +10,16 @@ use std::process::{Command, Output};
 pub mod paths;
 pub mod terminal;
 
-/// Starts `command`. A detached one is handed to [`crate::subprocess::spawn_detached`]; any other
-/// is run by `run`, which returns its output or the detail of why it did not finish, and is then
-/// judged by its exit status.
+/// Starts `command`. A detached one is handed to [`crate::processes::subprocess::spawn_detached`];
+/// any other is run by `run`, which returns its output or the detail of why it did not finish, and
+/// is then judged by its exit status.
 fn start(
     detached: bool,
     mut command: Command,
     run: impl FnOnce(&mut Command) -> Result<Output, String>,
 ) -> Result<(), String> {
     if detached {
-        return crate::subprocess::spawn_detached(command);
+        return crate::processes::subprocess::spawn_detached(command);
     }
     let output = run(&mut command)?;
     if output.status.success() {

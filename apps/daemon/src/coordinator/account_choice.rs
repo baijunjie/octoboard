@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
-use crate::account_quotas;
+use crate::accounts::quotas;
 use crate::adapter;
 use crate::protocol::{
     error_code, now_millis, Account, Agent, Availability, CodedError, Console, Project,
@@ -58,7 +58,7 @@ pub(super) fn refuse_if_agent_unavailable(state: &Arc<AppState>, agent: Agent) -
 }
 
 /// Refuses to put a session on an account whose plan quota is used up, going by the reading held
-/// at this moment (see [`account_quotas::AccountQuotas::exhausted`]): an account not read yet, or
+/// at this moment (see [`quotas::AccountQuotas::exhausted`]): an account not read yet, or
 /// of an agent that is not probed, is not refused, and nothing waits for a fresh reading. Applies
 /// to every origin, the user's own request included. `config_dir` is the account's directory as
 /// [`Store::account_dir`] resolves it, so a reading taken under another directory is ignored.
@@ -109,7 +109,7 @@ pub(super) fn refuse_if_account_quota_exhausted(
 }
 
 /// Refuses an account the held quota reading found not signed in (see
-/// [`account_quotas::AccountQuotas::signed_out`]); a reading that failed for another reason, or
+/// [`quotas::AccountQuotas::signed_out`]); a reading that failed for another reason, or
 /// none yet, never refuses. `config_dir` is the account's directory as [`Store::account_dir`]
 /// resolves it, so a reading taken under another directory is ignored.
 ///
@@ -148,7 +148,7 @@ fn used_up_quota(
     account_id: Option<&str>,
     config_dir: Option<&str>,
     now: i64,
-) -> Option<account_quotas::Exhausted> {
+) -> Option<quotas::Exhausted> {
     state
         .account_quotas
         .exhausted(agent, account_id, config_dir, now)
@@ -360,7 +360,7 @@ pub(crate) fn soonest_available_account(
 /// weekly reset wins, except that weekly resets less than one session window apart from the
 /// soonest count as tied. Among the tied, an account whose 5-hour session window is running goes
 /// first, then the sooner session reset, the sooner weekly reset and the larger remainder, in
-/// that order (see [`account_quotas::preferred_signal`]); the earlier candidate in
+/// that order (see [`quotas::preferred_signal`]); the earlier candidate in
 /// [`account_candidates`] wins one that is still tied. Rank
 /// from the reading held for the account's current directory. The list of readings carries no
 /// directory, so one still stored under another directory would be chosen.
@@ -403,13 +403,13 @@ pub(crate) fn preferred_weekly_account_except(
         if readable_only && quota.unavailable.is_some() {
             continue;
         }
-        let Some(signal) = account_quotas::AccountSignal::of(&quota.windows, now) else {
+        let Some(signal) = quotas::AccountSignal::of(&quota.windows, now) else {
             continue;
         };
         signals.push(signal);
         accounts.push(account_id);
     }
-    Ok(account_quotas::preferred_signal(&signals).map(|index| accounts.swap_remove(index)))
+    Ok(quotas::preferred_signal(&signals).map(|index| accounts.swap_remove(index)))
 }
 
 /// A span of milliseconds in the rough terms of a message to read: `3d 4h`, `5h 20m` or `7m`.

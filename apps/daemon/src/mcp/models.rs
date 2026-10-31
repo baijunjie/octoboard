@@ -8,7 +8,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use serde_json::{json, Map, Value};
 
-use crate::launch_settings;
+use crate::agents::launch_settings;
 use crate::state::AppState;
 
 use super::args::{optional_string, parse_agent, required_str};
@@ -40,7 +40,7 @@ pub(super) async fn list_agent_models(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent_models::Listing;
+    use crate::agents::models::Listing;
     use crate::mcp::exec::call;
     use crate::mcp::test_support::{arguments, peer_state};
     use crate::protocol::{Account, Agent, AgentModel, ModelsUnavailable};

@@ -57,6 +57,7 @@ use super::files::{
     canonical_project, is_agent_config_dir, read_bounded_text, read_regular_text, LARGE_FILE_LIMIT,
     SMALL_FILE_LIMIT,
 };
+use crate::agents::layout::CLAUDE_SETTINGS_FILE;
 use crate::protocol::Agent;
 
 /// Prefix of the variables set on the Codex process to carry header values.
@@ -486,7 +487,11 @@ impl Approval {
         let dir = project.join(".claude");
         let owner = (!is_agent_config_dir(&dir, config_dir)).then_some(project);
         let files = [
-            read_json(&config_dir.join("settings.json"), None, SMALL_FILE_LIMIT),
+            read_json(
+                &config_dir.join(CLAUDE_SETTINGS_FILE),
+                None,
+                SMALL_FILE_LIMIT,
+            ),
             read_json(&dir.join("settings.local.json"), owner, SMALL_FILE_LIMIT),
             entry.cloned(),
         ];

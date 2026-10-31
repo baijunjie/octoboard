@@ -6,21 +6,21 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
+use crate::accounts::relocate;
+use crate::accounts::switch_continue;
+use crate::agents::launch_settings::normalize_session_launch_setting;
 use crate::env_shell;
-use crate::launch_settings::normalize_session_launch_setting;
 use crate::protocol::{error_code, CodedError, Session, SessionStatus, TerminalAppearance};
-use crate::relocate;
-use crate::state::AppState;
-use crate::switch_continue;
-use crate::term;
+use crate::session::term;
+use crate::state::{session_archived, AppState};
 
 use super::account_choice::account_dir;
 use super::bindings::refuse_unless_still_askers;
 use super::launch::{
     check_launch_settings, relaunch_session_with, session_scope, wait_until_down,
-    wait_until_down_within, LaunchEdit, SettingsChecked,
+    wait_until_down_within, LaunchEdit, SettingsChecked, SWITCH_STOP_TIMEOUT,
 };
-use super::lifecycle::{refuse_if_archived, session_archived};
+use super::lifecycle::refuse_if_archived;
 use super::restart::{
     came_up_under_claim, give_up_what_a_restart_held, record_needs_shell_env,
     stop_carrying_processes,
@@ -162,7 +162,7 @@ pub(crate) async fn set_session_model_with(
     if !before.status.is_dormant() {
         state.mark_model_change(id);
     }
-    crate::shared_config::refuse_if_changing(state, before.account_id.as_deref())?;
+    crate::accounts::shared_config::refuse_if_changing(state, before.account_id.as_deref())?;
     let (project, console) = session_scope(state, &before)?;
     check_launch_settings(
         state,
@@ -211,7 +211,7 @@ pub(crate) async fn set_session_model_with(
     state.quota_recovery.cancel(id);
     state.mark_model_change(id);
     let (held_for_relaunch, ended_a_process) = stop_carrying_processes(state, id).await?;
-    if let Err(err) = wait_until_down_within(state, id, state.model_change_stop_timeout()).await {
+    if let Err(err) = wait_until_down_within(state, id, stop_timeout(state)).await {
         let stopped = err
             .downcast_ref::<CodedError>()
             .is_some_and(|coded| coded.code == error_code::SESSION_DID_NOT_STOP);
@@ -236,8 +236,11 @@ pub(crate) async fn set_session_model_with(
         let reading_state = state.clone();
         let shell = shell_env.clone();
         let (carry_on, boundary) = tokio::task::spawn_blocking(move || {
-            let boundary =
-                crate::record_collector::observed_boundary(&reading_state, &stopped, shell.clone());
+            let boundary = crate::records::collector::observed_boundary(
+                &reading_state,
+                &stopped,
+                shell.clone(),
+            );
             let carry_on = ended_a_process
                 && resumable_agent_session_id(&stopped).is_some_and(|agent_session_id| {
                     let dir =
@@ -314,6 +317,17 @@ pub(crate) async fn set_session_model_with(
     Ok(ModelChange::Restarted {
         continued: carry_on,
     })
+}
+
+/// How long a change of a session's model waits for the process it ended to be recorded down:
+/// [`SWITCH_STOP_TIMEOUT`], shortened by a test.
+#[cfg_attr(not(test), allow(unused_variables))]
+fn stop_timeout(state: &AppState) -> std::time::Duration {
+    #[cfg(test)]
+    if let Some(shorter) = *state.model_change_stop_timeout.lock().unwrap() {
+        return shorter;
+    }
+    SWITCH_STOP_TIMEOUT
 }
 
 /// Refuses a change of the model of `session` an owner asked for while the session waits for the

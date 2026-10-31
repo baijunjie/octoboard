@@ -55,7 +55,7 @@ impl AppState {
             }
         }
         if let Ok(Some(session)) = self.store.get_session(id) {
-            crate::shared_config::note_session(self, &session);
+            crate::accounts::shared_config::note_session(self, &session);
         }
     }
 
@@ -141,7 +141,7 @@ impl AppState {
         self.quota_recovery.cancel(id);
         if let Some(session) = self.store.set_session_account(id, account_id, config_dir)? {
             self.publish_session(&session);
-            crate::shared_config::publish(self);
+            crate::accounts::shared_config::publish(self);
         }
         Ok(())
     }

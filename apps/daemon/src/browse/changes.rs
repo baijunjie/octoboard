@@ -51,11 +51,11 @@ use crate::browse::{
 };
 use crate::git::isolated::{paths_nest, IsolatedGit};
 use crate::git::run::GitError;
+use crate::processes::subprocess::BoundedFailure;
 use crate::protocol::{
     error_code, ChangeEntry, ChangeGroup, ChangeRef, ChangeSide, CodedError, ConflictKind,
     ContentSource, SideKind, SideRead, SideRef, SideVersion,
 };
-use crate::subprocess::BoundedFailure;
 use crate::wire_path::{self, RelPath};
 
 /// A worktree's changes that touch the project, in `git status`'s order.

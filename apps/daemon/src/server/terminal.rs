@@ -10,10 +10,10 @@ use axum::extract::{Path, State};
 use axum::response::IntoResponse;
 
 use crate::protocol::{error_code, CodedError, Event, TermControl, TermEvent};
-use crate::pty::{Answering, Attached, PtyCore};
 use crate::session::{is_terminal_protocol, LiveSession};
-use crate::shell_terminal::ShellProcess;
 use crate::state::AppState;
+use crate::terminal::pty::{Answering, Attached, PtyCore};
+use crate::terminal::shell::ShellProcess;
 
 pub(super) async fn term_ws(
     ws: WebSocketUpgrade,
@@ -38,13 +38,13 @@ impl Terminal {
         }
     }
 
-    fn write_input(&self, data: &[u8]) -> Result<(), crate::ptyio::PartialWrite> {
+    fn write_input(&self, data: &[u8]) -> Result<(), crate::terminal::ptyio::PartialWrite> {
         match self {
             Terminal::Session(session) => session.write_terminal_input(data),
             Terminal::Shell(shell) => shell.write(data),
         }
     }
-    fn write_reply(&self, data: &[u8]) -> Result<(), crate::ptyio::PartialWrite> {
+    fn write_reply(&self, data: &[u8]) -> Result<(), crate::terminal::ptyio::PartialWrite> {
         match self {
             Terminal::Session(session) => session.write_terminal_reply(data),
             Terminal::Shell(shell) => shell.write(data),
@@ -122,8 +122,8 @@ impl DeferredInput {
     fn complete(
         &mut self,
         frame: InputFrame,
-        result: Result<(), crate::ptyio::PartialWrite>,
-    ) -> Result<bool, crate::ptyio::PartialWrite> {
+        result: Result<(), crate::terminal::ptyio::PartialWrite>,
+    ) -> Result<bool, crate::terminal::ptyio::PartialWrite> {
         match (frame, result) {
             (InputFrame::User(data), Err(error))
                 if error.written == 0 && error.error.kind() == std::io::ErrorKind::WouldBlock =>
@@ -146,9 +146,12 @@ impl DeferredInput {
     }
 
     /// A write task that failed took its frame with it, so whatever it held counts as lost.
-    fn write_task_failed(&mut self, error: tokio::task::JoinError) -> crate::ptyio::PartialWrite {
+    fn write_task_failed(
+        &mut self,
+        error: tokio::task::JoinError,
+    ) -> crate::terminal::ptyio::PartialWrite {
         self.typing_lost = true;
-        crate::ptyio::PartialWrite {
+        crate::terminal::ptyio::PartialWrite {
             written: 0,
             error: std::io::Error::other(format!("the terminal input task failed: {error}")),
         }
@@ -162,7 +165,7 @@ impl DeferredInput {
     }
 }
 
-type InputWrite = (InputFrame, Result<(), crate::ptyio::PartialWrite>);
+type InputWrite = (InputFrame, Result<(), crate::terminal::ptyio::PartialWrite>);
 
 fn start_input_write(terminal: Terminal, frame: InputFrame) -> tokio::task::JoinHandle<InputWrite> {
     tokio::task::spawn_blocking(move || {
@@ -370,7 +373,7 @@ mod tests {
         pending
             .complete(
                 second,
-                Err(crate::ptyio::PartialWrite {
+                Err(crate::terminal::ptyio::PartialWrite {
                     written: 0,
                     error: std::io::Error::from(std::io::ErrorKind::WouldBlock),
                 }),
@@ -416,7 +419,7 @@ mod tests {
         let error = pending
             .complete(
                 first,
-                Err(crate::ptyio::PartialWrite {
+                Err(crate::terminal::ptyio::PartialWrite {
                     written: 2,
                     error: std::io::Error::from(std::io::ErrorKind::BrokenPipe),
                 }),
@@ -434,7 +437,7 @@ mod tests {
     #[test]
     fn deferred_terminal_reports_are_not_lost_typing() {
         let refused = || {
-            Err(crate::ptyio::PartialWrite {
+            Err(crate::terminal::ptyio::PartialWrite {
                 written: 0,
                 error: std::io::Error::from(std::io::ErrorKind::BrokenPipe),
             })

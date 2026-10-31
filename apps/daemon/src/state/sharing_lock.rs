@@ -48,7 +48,7 @@ pub(super) fn locked_over<'a>(
 ) -> Option<&'a SharingLockEntry> {
     live.sharing_locks
         .values()
-        .find(|entry| crate::shared_config::runs_under(&entry.account, session))
+        .find(|entry| crate::accounts::shared_config::runs_under(&entry.account, session))
 }
 
 /// An account locked for a change of its sharing (see [`AppState::lock_account_sharing`]), until
@@ -225,7 +225,7 @@ impl AppState {
     }
 
     /// Marks `account` as being removed with its directory moved to the Trash, until the answer is
-    /// dropped: [`crate::account_login::AccountLogins`] refuses to start a sign-in for it
+    /// dropped: [`crate::accounts::login::AccountLogins`] refuses to start a sign-in for it
     /// meanwhile, which would write into the directory once its sign-in has ended.
     pub fn begin_account_removal(
         self: &Arc<Self>,

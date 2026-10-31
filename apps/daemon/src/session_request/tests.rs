@@ -454,7 +454,7 @@ async fn post_hook(state: &AppState, port: u16, session: &str, name: &str, mut p
     let body = serde_json::to_vec(&payload).unwrap();
     let path = format!("/hook/{session}");
     tokio::task::spawn_blocking(move || {
-        crate::loopback::post(port, TEST_KEY, &path, &body, PATIENCE)
+        crate::cli::loopback::post(port, TEST_KEY, &path, &body, PATIENCE)
     })
     .await
     .unwrap()
@@ -616,7 +616,7 @@ async fn the_callers_process_ending_withdraws_its_request() {
     let (state, _dir) = fixture("process-ends");
     let asker = idle_stand_in("asker");
     state.register_live(asker.clone());
-    state.watch_exit(asker.clone());
+    crate::coordinator::exit_watch::watch_exit(&state, asker.clone());
     let launcher = Launcher::new(&state);
     let (call, request_id) = ask_here(&state, "asker", ANSWER_TIME_LIMIT).await;
 
@@ -953,7 +953,7 @@ async fn a_request_that_is_not_approved_moves_nothing() {
         let (state, _dir) = fixture(&format!("handover-{}", ending.replace(' ', "-")));
         let asker = idle_stand_in("asker");
         state.register_live(asker.clone());
-        state.watch_exit(asker.clone());
+        crate::coordinator::exit_watch::watch_exit(&state, asker.clone());
         let launcher = Launcher::new(&state);
         let (handover, _repo) = handover_of(&state, &["topic"]);
         let limit = match ending {

@@ -16,11 +16,11 @@ use crate::branch_origin::handover::{
     branch_name, branch_noun_and_pronoun, move_branches, named_branches, Handed, Handover,
 };
 use crate::branch_origin::session_branches::{self, Worktree};
-use crate::delivery::{self, WhenBlocked};
 use crate::git::repo_files::repository_of;
+use crate::messaging::delivery::{self, WhenBlocked};
+use crate::messaging::sharing::named_session;
+use crate::messaging::texts::NOTICE_PREFIX;
 use crate::protocol::{error_code, CodedError, Project, Role, Session, SessionStatus};
-use crate::session_texts::NOTICE_PREFIX;
-use crate::sharing::named_session;
 use crate::state::AppState;
 use crate::wire_path;
 

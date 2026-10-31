@@ -47,12 +47,12 @@ use base64::Engine as _;
 
 use crate::git::isolated::IsolatedGit;
 use crate::git::run::GitError;
+use crate::processes::subprocess::BoundedFailure;
 use crate::protocol::{
     error_code, BrowseBody, CodedError, ContentKind, ContentSource, Event, FileContent,
     GitSourceInfo, Project, ProjectSourceInfo, ReadFrom, WorktreeInfo,
 };
 use crate::state::AppState;
-use crate::subprocess::BoundedFailure;
 use crate::wire_path::{self, RelPath};
 use source::{Discovery, ProjectRoot, Repository};
 

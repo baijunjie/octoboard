@@ -154,7 +154,7 @@ impl AppState {
 
     /// Drops a session from the live map — but only if it is still *this* session. Comparing by id
     /// would let a finished session's exit watcher evict the live successor that reused its id.
-    pub(super) fn unregister_live(self: &Arc<Self>, session: &Arc<LiveSession>) {
+    pub(crate) fn unregister_live(self: &Arc<Self>, session: &Arc<LiveSession>) {
         let mut live = self.live.write().expect("live sessions lock poisoned");
         let is_current = live
             .sessions
@@ -178,7 +178,7 @@ impl AppState {
         if is_current {
             // Its call has nobody left to return to.
             crate::session_request::withdraw_for_session(self, &session.id);
-            crate::shared_config::publish(self);
+            crate::accounts::shared_config::publish(self);
         }
         self.forget_session_bookkeeping(&session.id);
     }

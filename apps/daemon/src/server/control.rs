@@ -291,7 +291,7 @@ async fn forward_broadcasts(
 /// What the daemon is waiting on the user for, to put to a client again after a `snapshot`: the
 /// trust prompts, then the session requests, oldest first.
 async fn pending_questions(state: &AppState) -> Vec<Event> {
-    let mut questions = crate::trust::pending_prompts(state).await;
+    let mut questions = crate::session::trust::pending_prompts(state).await;
     questions.extend(crate::session_request::pending_events(state));
     questions
 }
@@ -328,7 +328,7 @@ fn snapshot(state: &Arc<AppState>) -> anyhow::Result<Event> {
         agent_availability: state.agent_availability(),
         account_quotas: state.account_quotas.list(),
         account_logins: state.account_logins.running(),
-        account_sharing: crate::shared_config::states(state)?,
+        account_sharing: crate::accounts::shared_config::states(state)?,
         home_dir: crate::paths::known_home_dir().map(|home| home.to_string_lossy().into_owned()),
         shell_terminals: state.shell_terminals.list(),
     })

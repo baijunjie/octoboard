@@ -1,9 +1,9 @@
 //! The host role's filesystem work that has no better home: expanding what the user typed into a
 //! path, telling "nothing is there" from other errors, normalising a path's text, reading a regular
-//! file without blocking, and refusing a path that is not a directory. The rest lives beside it:
-//! `identity` and `place` tell directories apart whatever their paths look like, `listing` browses
-//! directories, finds the git repositories under a parent and detects which agent a directory is
-//! set up for, and `trash` moves a file or directory to the Trash.
+//! file without blocking (as bytes or as text), and refusing a path that is not a directory. The
+//! rest lives beside it: `identity` and `place` tell directories apart whatever their paths look
+//! like, `listing` browses directories, finds the git repositories under a parent and detects which
+//! agent a directory is set up for, and `trash` moves a file or directory to the Trash.
 
 use std::path::{Path, PathBuf};
 
@@ -86,6 +86,21 @@ pub fn read_regular(path: &Path, limit: usize) -> std::io::Result<Vec<u8>> {
         return Err(too_large());
     }
     Ok(bytes)
+}
+
+/// The text of a file the project does not own (an agent's configuration, cache or install,
+/// the home directory, a system-wide directory), read within `limit` bytes. Links are followed, as
+/// the agent follows them, even where the file lies under the project's directory, as a home
+/// directory opened as a project holds the agent's own; the target must be a regular file, opened
+/// without blocking so that a FIFO cannot hold the caller.
+pub(crate) fn read_regular_text(path: &Path, limit: usize) -> std::io::Result<String> {
+    utf8_text(read_regular(path, limit)?)
+}
+
+/// `bytes` as text, refused as `InvalidData` when they are not UTF-8.
+pub(crate) fn utf8_text(bytes: Vec<u8>) -> std::io::Result<String> {
+    String::from_utf8(bytes)
+        .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))
 }
 
 pub fn not_a_directory(path: &Path) -> anyhow::Error {

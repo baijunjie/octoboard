@@ -1,10 +1,13 @@
-//! Bounded reads of project configuration and agent-owned configuration, caches and manifests.
+//! Bounded reads of the files an adapter reads: configuration in the project's tree, through
+//! `browse::live`, and the agent's own configuration, caches and manifests
+//! (`crate::hostfs::read_regular_text`, re-exported here).
 
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
 use crate::browse::live;
+pub(super) use crate::hostfs::read_regular_text;
 use crate::wire_path::RelPath;
 
 /// The most bytes read from a small configuration file (a JSON settings file, a TOML config).
@@ -36,7 +39,7 @@ pub(super) fn is_agent_config_dir(dir: &Path, config_dir: &Path) -> bool {
             .join(name),
         _ => config_dir,
     };
-    let key = |dir: &Path| crate::account_dirs::account_dir_key(&dir.to_string_lossy());
+    let key = |dir: &Path| crate::accounts::dirs::account_dir_key(&dir.to_string_lossy());
     key(&crate::hostfs::lexically_normalise(dir)) == key(&resolved)
 }
 
@@ -62,21 +65,7 @@ pub(super) fn read_bounded_text(
     let bytes = live::read_file(project, &rel, limit, &AtomicBool::new(false))
         .map_err(|err| Error::other(err.to_string()))?
         .bytes;
-    utf8(bytes)
-}
-
-/// The text of a file the project does not own (an agent's configuration, cache or install,
-/// the home directory, a system-wide directory), read within `limit` bytes. Links are followed, as
-/// the agent follows them, even where the file lies under the project's directory, as a home
-/// directory opened as a project holds the agent's own; the target must be a regular file, opened
-/// without blocking so that a FIFO cannot hold the caller.
-pub(crate) fn read_regular_text(path: &Path, limit: usize) -> std::io::Result<String> {
-    utf8(crate::hostfs::read_regular(path, limit)?)
-}
-
-fn utf8(bytes: Vec<u8>) -> std::io::Result<String> {
-    String::from_utf8(bytes)
-        .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))
+    crate::hostfs::utf8_text(bytes)
 }
 
 #[cfg(test)]

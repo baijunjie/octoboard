@@ -32,8 +32,8 @@ use anyhow::Result;
 use crate::browse::{budget, BrowseGit, Cancelled};
 use crate::git::isolated::IsolatedGit;
 use crate::git::run::GitError;
+use crate::processes::subprocess::BoundedFailure;
 use crate::protocol::BrowseEntry;
-use crate::subprocess::BoundedFailure;
 use crate::wire_path;
 
 /// The most name bytes one `git check-ignore` run is given on its command line, so a listing of

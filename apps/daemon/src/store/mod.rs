@@ -20,7 +20,7 @@
 //!
 //! `Report` is not among these tables: it is an in-flight struct passed between the project
 //! session's `report` tool and the console session, never stored of its own accord (see
-//! `reporting.rs`).
+//! `messaging/reporting.rs`).
 
 mod accounts;
 mod agents;

@@ -8,12 +8,12 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 
+use crate::accounts::relocate;
+use crate::accounts::switch_continue;
 use crate::adapter;
 use crate::protocol::{error_code, Agent, CodedError, Session, SessionStatus, TerminalAppearance};
-use crate::relocate;
-use crate::state::AppState;
-use crate::switch_continue;
-use crate::term;
+use crate::session::term;
+use crate::state::{session_archived, AppState};
 
 use super::account_choice::{
     account_dir, checked_account_reference, refuse_if_account_not_signed_in,
@@ -22,7 +22,7 @@ use super::account_choice::{
 use super::accounts::refuse_if_account_disabled;
 use super::bindings::refuse_unless_still_askers;
 use super::launch::{checked_launch_overrides, relaunch_session_with, wait_until_down, LaunchEdit};
-use super::lifecycle::{refuse_if_archived, session_archived};
+use super::lifecycle::refuse_if_archived;
 use super::restart::{came_up_under_claim, give_up_what_a_restart_held, stop_carrying_processes};
 use super::resume::resumable_agent_session_id;
 use super::validate::field_required;
@@ -79,9 +79,10 @@ fn prepare_switch(
 /// Moves a session to another account of its own agent: ends its process the way archiving does,
 /// copies its conversation into the target account's directory, records the account and the
 /// directory on the session, and relaunches it as a resume does — with a prompt to carry on where
-/// the switch cut a turn off or a usage limit had stopped one (see `crate::switch_continue`). The
-/// user or an owner asks for it, and so does Octoboard itself for a session whose turn stopped on
-/// its account's usage limit, while `auto_switch_on_usage_limit` is on (see `crate::auto_switch`).
+/// the switch cut a turn off or a usage limit had stopped one (see
+/// `crate::accounts::switch_continue`). The user or an owner asks for it, and so does Octoboard
+/// itself for a session whose turn stopped on its account's usage limit, while
+/// `auto_switch_on_usage_limit` is on (see `crate::accounts::auto_switch`).
 ///
 /// `account` is the target by id, `None` for the default account. Refused, with nothing recorded
 /// and (where it can be told beforehand) the process left running: a launch, resume or switch of
@@ -136,7 +137,7 @@ pub async fn switch_session_account(
 /// the relaunch that reads it, and put back with the account when the switch fails. `launch` is
 /// `term::launch` outside the tests, which cannot start an agent. Answers whether the relaunched
 /// session was sent [`switch_continue::CONTINUE_PROMPT`] to carry on with the turn the switch cut
-/// off or a usage limit stopped (see `crate::switch_continue`).
+/// off or a usage limit stopped (see `crate::accounts::switch_continue`).
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn switch_session_account_with(
     state: &Arc<AppState>,
@@ -168,7 +169,7 @@ pub(crate) async fn switch_session_account_with(
 #[derive(Clone, Copy, Default)]
 pub(crate) struct SwitchOnlyIf<'a> {
     /// The failed turn and process whose verified quota recovery authorizes this restart.
-    pub recovery: Option<&'a crate::auto_switch::PendingRecovery>,
+    pub recovery: Option<&'a crate::accounts::auto_switch::PendingRecovery>,
     /// The account the session must still be on (`Some(None)` the default account).
     pub on_account: Option<Option<&'a str>>,
     /// The session must not be shown as waiting for the user, by whatever route: moving it would
@@ -283,7 +284,7 @@ pub(crate) async fn switch_session_account_if(
     let same_account = before.account_id == target_account;
     if !only_if
         .recovery
-        .is_some_and(crate::auto_switch::PendingRecovery::permits_current_account)
+        .is_some_and(crate::accounts::auto_switch::PendingRecovery::permits_current_account)
     {
         refuse_if_on_account(&before, &target_account)?;
     }
@@ -302,8 +303,8 @@ pub(crate) async fn switch_session_account_if(
         target_dir.as_deref(),
     )?;
     // Asked under the claim, which a change of the source's sharing counts as a session starting.
-    crate::shared_config::refuse_if_changing(state, before.account_id.as_deref())?;
-    crate::shared_config::refuse_if_changing(state, target_account.as_deref())?;
+    crate::accounts::shared_config::refuse_if_changing(state, before.account_id.as_deref())?;
+    crate::accounts::shared_config::refuse_if_changing(state, target_account.as_deref())?;
     let overrides =
         checked_launch_overrides(state, &before, target_account.clone(), launch_edit).await?;
 
@@ -388,7 +389,7 @@ pub(crate) async fn switch_session_account_if(
         // Held from before the copy until the session is recorded on the target, and given up
         // before the relaunch, which takes it itself: no change of sharing moves what the copy
         // writes.
-        let copying = crate::shared_config::before_switch_copy(
+        let copying = crate::accounts::shared_config::before_switch_copy(
             state,
             before.agent,
             target_account.as_deref(),
@@ -513,13 +514,13 @@ pub(crate) async fn wait_for_usage_limit(
 
 /// Brings a session a failed account switch left interrupted back up on the account it had
 /// (`before` is its record from before the switch), as a resume does and without a prompt: it was
-/// at its prompt before the switch, and its turn is not carried on, since the account's usage
-/// limit would stop it again. Octoboard's own switch makes this, so that its failure leaves the
-/// session as it was (see `crate::auto_switch`). Refused, with nothing launched, when the session
-/// is running or being started by then (somebody brought it back meanwhile) or archived; fails
-/// when the process cannot be started or does not stay up. `target` is the account the failed
-/// switch was to move it to (`None` the default account): a session found on neither that nor
-/// `before`'s account was moved by somebody else meanwhile, and is left as they left it.
+/// at its prompt before the switch, and its turn is not carried on, since the account's usage limit
+/// would stop it again. Octoboard's own switch makes this, so that its failure leaves the session
+/// as it was (see `crate::accounts::auto_switch`). Refused, with nothing launched, when the session
+/// is running or being started by then (somebody brought it back meanwhile) or archived; fails when
+/// the process cannot be started or does not stay up. `target` is the account the failed switch was
+/// to move it to (`None` the default account): a session found on neither that nor `before`'s
+/// account was moved by somebody else meanwhile, and is left as they left it.
 pub(crate) async fn restore_after_failed_switch(
     state: &Arc<AppState>,
     before: &Session,

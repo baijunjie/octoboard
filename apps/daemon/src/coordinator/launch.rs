@@ -9,23 +9,22 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 
-use crate::agent_dialogs;
-use crate::delivery;
+use crate::agents::launch_settings::{normalize_session_launch_setting, LaunchCheck};
 use crate::git_workflow::GitWorkflowSettings;
-use crate::launch_settings::{normalize_session_launch_setting, LaunchCheck};
 use crate::mcp;
-use crate::owner_notices;
+use crate::messaging::delivery;
+use crate::messaging::owner_notices;
 use crate::protocol::{
     error_code, Agent, CodedError, Console, Launch, Project, Role, Session, SessionStatus,
     TerminalAppearance,
 };
+use crate::session::dialogs;
+use crate::session::term;
+use crate::session::trust;
 use crate::session::LiveSession;
-use crate::state::AppState;
-use crate::term;
-use crate::trust;
+use crate::state::{session_archived, AppState};
 
 use super::bindings::owner_of;
-use super::lifecycle::session_archived;
 use super::resume::resumable_agent_session_id;
 use super::settings::{CLAUDE_MODE, CODEX_REVIEWER};
 
@@ -418,7 +417,7 @@ pub(super) async fn start_process(
     let (model, effort) = launch_settings(state, session)?;
     // A sharing account's links are repaired before its agent starts, and the agent is told
     // where the shared directory is.
-    let sharing = crate::shared_config::before_launch(state, session).await?;
+    let sharing = crate::accounts::shared_config::before_launch(state, session).await?;
     for notice in sharing.notices {
         state.broadcast(notice.about(&session.id));
     }
@@ -473,9 +472,9 @@ pub(super) async fn start_process(
     // saves too, but only after `terminate` has returned, which waits on the process, long past
     // this point.
     state.forget_saved_output(&session.id);
-    state.watch_exit(launch.session.clone());
+    super::exit_watch::watch_exit(state, launch.session.clone());
     trust::supervise(state, &launch.session);
-    agent_dialogs::watch(state, &launch.session);
+    dialogs::watch(state, &launch.session);
     if let Some(agent_session_id) = launch.agent_session_id {
         if let Err(err) = state.set_agent_session_id(&session.id, &agent_session_id) {
             // Registered already, and the caller will not watch it come up.
@@ -510,10 +509,14 @@ pub(crate) fn stop_process(
     })
 }
 
-/// How long a switch waits for the process it ended to be seen gone and recorded as interrupted,
-/// which the exit watcher does on its own schedule. Far above that schedule plus the graceful
-/// period: reaching it means the process would not die, which is not a state to carry on from
-/// (see [`error_code::SESSION_DID_NOT_STOP`]).
+/// How long an operation that restarts a session waits for a process to be seen gone and recorded
+/// down, which the exit watcher does on its own schedule: an account switch, a model change and a
+/// change of an account's sharing wait this long for a process they ended, and the switch and the
+/// model change also for a relaunched one that did not come up. Far above that schedule plus the
+/// graceful period: reaching it means the process would not die, and an operation that ended it
+/// does not go on: it answers `session_did_not_stop`, or its own code (the model change's
+/// `model_change_did_not_stop`, the sharing change's `sharing_session_did_not_stop`). For a
+/// relaunched process the operation is failing already, so reaching it is only logged.
 pub(crate) const SWITCH_STOP_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Waits for the exit watcher to have seen the session's process gone and recorded the session as

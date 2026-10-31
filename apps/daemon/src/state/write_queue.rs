@@ -1,6 +1,6 @@
-//! The facade over the per-session write queues in `crate::outbox`: queuing a message, flushing the
-//! queue into the running agent, the holds on a queue, and the reasons nothing is written into a
-//! session for now.
+//! The facade over the per-session write queues in `crate::messaging::outbox`: queuing a message,
+//! flushing the queue into the running agent, the holds on a queue, and the reasons nothing is
+//! written into a session for now.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -8,9 +8,9 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 
 use super::AppState;
-use crate::agent_dialogs::Sighting;
-use crate::outbox::{Drain, PromptSignal, Ticket};
+use crate::messaging::outbox::{Drain, PromptSignal, Ticket};
 use crate::protocol::{notice_code, Agent, Notice, SessionStatus};
+use crate::session::dialogs::Sighting;
 use crate::session::LiveSession;
 
 /// A session's queue paused by [`AppState::pause_outbox`].
@@ -39,8 +39,8 @@ pub enum WriteHold {
     /// The agent's folder-trust confirmation is up and has not been answered.
     TrustConfirmation,
     /// The agent is showing a dialog only the user can answer, which a message's paste and Enter
-    /// would answer destructively; see [`crate::agent_dialogs`].
-    AgentDialog(crate::agent_dialogs::Dialog),
+    /// would answer destructively; see [`crate::session::dialogs`].
+    AgentDialog(crate::session::dialogs::Dialog),
     /// Codex's terminal title says it is waiting on the user.
     AgentAction,
     /// The agent stopped on an error and may be showing a prompt only the user can answer; held for
@@ -271,12 +271,12 @@ impl AppState {
     /// Keeps `text` in the store for the session `id`, to be queued at its next resume, and returns
     /// the row it is kept in, unless it has a process or is being launched, in which case it
     /// returns `None` and keeps nothing. Shared information is kept this way, and so are the
-    /// reports and notices for an owner (`crate::delivery`'s `write_to_owner`). The check and the
-    /// insert are one step under the `live` lock, which [`Self::begin_launch`] takes for writing
-    /// before it reads the store, so a launch that begins either sees the row or is seen by this
-    /// check, and a message is never kept for a session that has already read what was kept. (An
-    /// archive can still land between this check and the insert; its rows are then cleared by the
-    /// next archive or delete of the session, and are harmless until a reopen.)
+    /// reports and notices for an owner (`crate::messaging::delivery`'s `write_to_owner`). The
+    /// check and the insert are one step under the `live` lock, which [`Self::begin_launch`] takes
+    /// for writing before it reads the store, so a launch that begins either sees the row or is
+    /// seen by this check, and a message is never kept for a session that has already read what was
+    /// kept. (An archive can still land between this check and the insert; its rows are then
+    /// cleared by the next archive or delete of the session, and are harmless until a reopen.)
     pub fn keep_message_if_not_running(&self, id: &str, text: &str) -> Result<Option<i64>> {
         let live = self.live.read().expect("live sessions lock poisoned");
         if live.sessions.contains_key(id) || live.launching.contains(id) {
@@ -308,7 +308,7 @@ impl AppState {
     /// whether the session is working.
     fn note_activity(&self, id: &str) {
         if let Ok(Some(session)) = self.store.get_session(id) {
-            crate::shared_config::note_session(self, &session);
+            crate::accounts::shared_config::note_session(self, &session);
         }
     }
 
@@ -349,10 +349,10 @@ impl AppState {
             return Drain::Pending;
         };
         // Nor while the agent may be showing its trust screen, which the paste's trailing Enter
-        // would accept (Codex, Grok Build) or decline (Claude Code); see `crate::trust`. The press
-        // that answers it, its first hook (for Claude Code, with bracketed paste on by then or
-        // coming on after it), the end of the watch or, for an agent whose hook may never come,
-        // its fallback releases the queue.
+        // would accept (Codex, Grok Build) or decline (Claude Code); see `crate::session::trust`.
+        // The press that answers it, its first hook (for Claude Code, with bracketed paste on by
+        // then or coming on after it), the end of the watch or, for an agent whose hook may never
+        // come, its fallback releases the queue.
         if live.trust.holds_writes() || live.needs_user_action() {
             return Drain::Pending;
         }
@@ -483,7 +483,7 @@ impl AppState {
                     format!(
                         "{} dropped what it had queued for this session: {}",
                         crate::APP_NAME,
-                        crate::term::FRAGMENT_HAZARD
+                        crate::session::term::FRAGMENT_HAZARD
                     ),
                     &[],
                 )
@@ -534,7 +534,7 @@ impl AppState {
     /// Pauses the session's queue for as long as the guard lives: messages are accepted and queued,
     /// none is written, and the drain it lets go of is started when the guard drops. Unlike
     /// [`Self::hold_outbox`] it is no hold a client or a caller is told of: it lasts the few seconds
-    /// an interrupt types into the session (`crate::interrupt`).
+    /// an interrupt types into the session (`crate::session::interrupt`).
     pub fn pause_outbox(self: &Arc<Self>, id: &str) -> OutboxPause {
         self.outbox.pause(id);
         OutboxPause {
@@ -656,7 +656,7 @@ impl AppState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::outbox::Drain;
+    use crate::messaging::outbox::Drain;
     use crate::protocol::{Agent, Event, SessionStatus};
     use crate::state::test_support::{insert_record, session_record};
     use crate::test_support::{app_state, fake_live_session, PATIENCE};
@@ -731,7 +731,7 @@ mod tests {
             state.flush_outbox("s", SessionStatus::Working),
             Drain::Pending
         );
-        crate::agent_dialogs::watch(&state, &live);
+        crate::session::dialogs::watch(&state, &live);
         live.on_output(b"\x1b[2J\x1b[H");
         live.on_output(include_bytes!(
             "../../testdata/claude_input_placeholder.bin"
@@ -787,7 +787,7 @@ mod tests {
         insert_record(&state, &dir, "s", SessionStatus::Idle);
         let live = fake_live_session("s", Agent::Claude, 80, 24, "sleep 30");
         state.register_live(live.clone());
-        crate::agent_dialogs::watch(&state, &live);
+        crate::session::dialogs::watch(&state, &live);
         let mut events = state.subscribe();
 
         live.on_output(LAUNCH_DIALOG.as_bytes());
@@ -936,8 +936,9 @@ mod tests {
     }
 
     /// A flush has nothing to write to while no process is registered, and must not take the queue
-    /// apart on the way to finding that out. The queue's own properties are `crate::outbox`'s to
-    /// test; what matters here is that the status gate and the live-session check come first.
+    /// apart on the way to finding that out. The queue's own properties are
+    /// `crate::messaging::outbox`'s to test; what matters here is that the status gate and the
+    /// live-session check come first.
     #[test]
     fn a_flush_with_nowhere_to_write_leaves_the_queue_alone() {
         let (state, _dir) = app_state("state-outbox");

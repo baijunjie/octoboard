@@ -5,11 +5,11 @@
 use std::sync::Arc;
 
 use crate::hooks::{self, BackgroundTasksChange};
+use crate::messaging::reporting;
 use crate::protocol::{Agent, SessionStatus};
-use crate::reporting;
-use crate::rollout;
+use crate::records::rollout;
+use crate::records::transcript;
 use crate::state::{AppState, TurnClose};
-use crate::transcript;
 
 /// Applies a session's queued hook events one after another until none is left. Applying one is
 /// ordinary blocking work on the store.
@@ -92,7 +92,7 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
     // past it. A Grok screen the person answered in the terminal has its trust entry carried over
     // from here (`trust::on_hook`).
     if let Some(live) = state.live_session(session_id) {
-        crate::trust::on_hook(state, &live);
+        crate::session::trust::on_hook(state, &live);
     }
 
     // A subagent's events are the agent's internal business and carry the subagent's own ids; the
@@ -114,7 +114,7 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
         }
     }
 
-    crate::agent_records::on_hook(state, session_id, &payload);
+    crate::records::on_hook(state, session_id, &payload);
 
     match hooks::event_name(&payload) {
         Some(event) => {
@@ -162,7 +162,9 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
                             Ok(true) if status == SessionStatus::WaitingUser => {
                                 let (state, id) = (state.clone(), session_id.to_string());
                                 tokio::task::spawn_blocking(move || {
-                                    crate::owner_notices::tell_owner_it_waits(&state, &id)
+                                    crate::messaging::owner_notices::tell_owner_it_waits(
+                                        &state, &id,
+                                    )
                                 });
                             }
                             Ok(_) => {}
@@ -202,15 +204,14 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
 }
 
 /// Starts watching the agent's own session record for what its hooks will not report after this
-/// event, which reported `status` and found the agent at `previous` (read for Claude Code and
-/// Grok Build alone).
-/// Claude Code reports neither a declined prompt nor an interrupted turn, so its transcript is
-/// watched (`crate::transcript` says when); a Codex turn that ends in an error fires nothing after
-/// its `UserPromptSubmit`, so its rollout is; a Grok turn cancelled before its first token fires
-/// nothing at all, so its terminal title is watched from its `UserPromptSubmit`, and again from
-/// each event that brings it back from waiting on the user (`crate::title_interrupt`). Each watch
-/// is spawned, not awaited: it is expected to far outlive this response, which the adapters'
-/// few-second hook timeout would not allow.
+/// event, which reported `status` and found the agent at `previous` (read for Claude Code and Grok
+/// Build alone). Claude Code reports neither a declined prompt nor an interrupted turn, so its
+/// transcript is watched (`crate::records::transcript` says when); a Codex turn that ends in an
+/// error fires nothing after its `UserPromptSubmit`, so its rollout is; a Grok turn cancelled
+/// before its first token fires nothing at all, so its terminal title is watched from its
+/// `UserPromptSubmit`, and again from each event that brings it back from waiting on the user
+/// (`crate::titles::interrupt`). Each watch is spawned, not awaited: it is expected to far outlive
+/// this response, which the adapters' few-second hook timeout would not allow.
 fn arm_record_watches(
     state: &Arc<AppState>,
     session_id: &str,
@@ -246,7 +247,7 @@ fn arm_record_watches(
                     || previous == Some(SessionStatus::WaitingUser)) =>
         {
             let generation = state.begin_record_watch(session_id);
-            crate::title_interrupt::watch(state, session_id, generation);
+            crate::titles::interrupt::watch(state, session_id, generation);
         }
         _ => {}
     }

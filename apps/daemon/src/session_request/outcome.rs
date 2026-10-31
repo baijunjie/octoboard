@@ -9,8 +9,8 @@ use serde_json::{json, Value};
 use crate::branch_origin::handover::{branch_noun_and_pronoun, named_branches, Handed};
 use crate::coordinator;
 use crate::mcp::{qualified_tool_name, tool_by_name};
+use crate::messaging::sharing::{one_line, place_of, reports_to, ReportsTo};
 use crate::protocol::Session;
-use crate::sharing::{one_line, place_of, reports_to, ReportsTo};
 use crate::state::AppState;
 
 use super::Action;

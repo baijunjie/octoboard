@@ -1224,13 +1224,13 @@ fn the_pre_push_subcommand_takes_the_remote_the_url_and_the_same_options() {
 
 fn parse(args: &[&str]) -> Args {
     use clap::Parser;
-    let cli = crate::Cli::try_parse_from(
+    let cli = crate::cli::Cli::try_parse_from(
         ["octoboardd", "revert-gate"]
             .into_iter()
             .chain(args.iter().copied()),
     )
     .unwrap();
-    let Some(crate::Command::RevertGate(args)) = cli.command else {
+    let Some(crate::cli::Command::RevertGate(args)) = cli.command else {
         panic!("not the revert-gate command");
     };
     args

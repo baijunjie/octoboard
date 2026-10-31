@@ -7,7 +7,7 @@ use crate::coordinator::test_support::{code_of, shell_env, status_of};
 use crate::protocol::{
     error_code, Agent, Event, ModelChangeOutcome, RequestBody, Session, SessionStatus,
 };
-use crate::term;
+use crate::session::term;
 use crate::test_support::{
     console_session, console_with_project_and_accounts, fake_live_session, idle_stand_in,
     project_session,
@@ -255,7 +255,7 @@ async fn a_model_change_whose_relaunch_does_not_come_up_keeps_the_model_it_had()
         .unwrap();
     let live = idle_stand_in("s");
     state.register_live(live.clone());
-    state.watch_exit(live.clone());
+    crate::coordinator::exit_watch::watch_exit(&state, live.clone());
     let launch = |request: term::LaunchRequest| {
         let gone = fake_live_session(&request.session_id, request.agent, 80, 24, "exit 1");
         Ok(term::Launch {

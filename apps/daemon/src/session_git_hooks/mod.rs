@@ -61,7 +61,7 @@ use crate::adapter::shell_quote;
 use crate::env_shell;
 use crate::git::run::{self, Access, Limits, Policy, UserGit, WorkDir};
 use crate::paths;
-use crate::subprocess::{self, BoundedFailure};
+use crate::processes::subprocess::{self, BoundedFailure};
 
 /// The oldest git the variables are given to: `GIT_CONFIG_COUNT` needs 2.31 and the
 /// `reference-transaction` hook 2.28, and 2.36 is the floor the rest of the daemon holds git to.

@@ -58,8 +58,17 @@ server form is the reverse: one host, and what is remote is the clients.
 | Worker | A project session that reports to a parent session and cannot manage child sessions. |
 | Agent adapter | The layer that plugs an agent CLI in: how to launch it, inject capabilities, report status and resume it. |
 
-The daemon defines a single adapter interface and the rest of Octoboard does not know which agent it is driving. An
-agent without hook support would degrade to an ordinary terminal session with no status and no automatic reporting.
+The daemon defines a single adapter interface, which covers launching an agent, injecting Octoboard's capabilities,
+reporting its status and resuming it; clients know the agents by name for their per-agent settings, labels and model
+names, while only the daemon launches and drives them. Where each agent keeps its files on disk — its configuration
+directory and the variable naming it, where a session's records lie in it, the files kept beside them — is one
+descriptor per agent (`agents/layout.rs`). The rest of the daemon still holds per-agent knowledge wherever the agents
+behave differently, among them: recognising their screens and dialogs (`session/`, `titles/`), reading their hook
+payloads (`hooks/`), reading their records (`records/`), their sign-in, quota and account-switching protocols
+(`accounts/`), the Octoboard tool naming, instruction file and role text injected into them (`mcp/`), launching one and
+switching its account (`coordinator/`), their model catalogues (`agents/models.rs`) and detecting a project's agent
+(`hostfs/listing.rs`). An agent without hook support would degrade to an ordinary terminal session
+with no status and no automatic reporting.
 
 ## Layers
 
@@ -227,12 +236,12 @@ Each has an established solution unless noted; any outstanding manual verificati
 - **PATH and environment.** A macOS application launched from Finder does not inherit the shell's `PATH`, so `claude`
   and `codex` (under `~/.local/bin` or a node-version manager's shims) cannot be found and API keys are missing. A login
   shell is not enough: on zsh it is `~/.zshrc` that sets those up and a login-only non-interactive shell never reads it.
-  The daemon therefore snapshots the environment from a **login + interactive** shell. A launch reuses the last
-  snapshot while it is valid (under ten minutes old, every `PATH` directory it found still present, since a version
-  manager's `PATH` entry can point at a per-shell-instance directory) and retakes one in the background for the next
-  launch, because the login shell's serial chain of execs can take seconds; with none valid it waits for a fresh one.
-  The snapshot taken once per daemon start to work out which agents are available (`src/availability.rs`) is the first
-  one a launch can reuse. The daemon spawns the agent directly rather than inside a shell.
+  The daemon therefore snapshots the environment from a **login + interactive** shell. A launch reuses the last snapshot
+  while it is valid (under ten minutes old, every `PATH` directory it found still present, since a version manager's
+  `PATH` entry can point at a per-shell-instance directory) and retakes one in the background for the next launch,
+  because the login shell's serial chain of execs can take seconds; with none valid it waits for a fresh one. The
+  snapshot taken once per daemon start to work out which agents are available (`src/agents/availability.rs`) is the
+  first one a launch can reuse. The daemon spawns the agent directly rather than inside a shell.
 - **The snapshot must be filtered, not only taken.** The shell passes the daemon's own environment through, so a daemon
   started from inside an agent session would hand that session's identity to every agent it launches. On Claude Code
   that silently turns transcript saving off and makes `--permission-mode` not apply. Stripping the markers does not

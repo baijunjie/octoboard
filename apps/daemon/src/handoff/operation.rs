@@ -27,16 +27,16 @@ use anyhow::{anyhow, Context, Result};
 use uuid::Uuid;
 
 use crate::coordinator::{self, open::OpenRequest};
-use crate::delivery::{self, WhenBlocked};
 use crate::mcp::qualified_tool_name;
+use crate::messaging::delivery::{self, WhenBlocked};
+use crate::messaging::sharing::{named_session, one_line, place_of, quote};
+use crate::messaging::texts::NOTICE_PREFIX;
 use crate::protocol::{
     error_code, notice_code, Agent, CodedError, Notice, OrchestrationRole, Session, SessionStatus,
     TerminalAppearance,
 };
-use crate::session_texts::NOTICE_PREFIX;
-use crate::sharing::{named_session, one_line, place_of, quote};
+use crate::session::term;
 use crate::state::{AppState, OutboxHold};
-use crate::term;
 
 /// What a handoff is asked for. The receiving session is another agent's; `account`, `model` and
 /// `effort` are as in [`OpenRequest`].
@@ -82,7 +82,7 @@ pub(crate) async fn hand_off_with(
     coordinator::bindings::refuse_unless_still_askers(&original, request.asked_by.as_deref())?;
     refuse_unless_it_can_be_handed_off(&original, request.agent)?;
     // Its conversation is read from its account's directory, which a change of sharing moves.
-    crate::shared_config::refuse_if_changing(state, original.account_id.as_deref())?;
+    crate::accounts::shared_config::refuse_if_changing(state, original.account_id.as_deref())?;
 
     let key = Uuid::new_v4().to_string();
     let open = receiving_request(state, &original, &request, Some(key.clone()));
@@ -378,13 +378,19 @@ pub(super) async fn tell(
              were started. `{from_id}` no longer drives you; it is archived.",
             from = named_session(original),
             to = named_session(receiving),
-            owner_now = crate::owner_notices::owner_from_now_on(session.agent, "It"),
+            owner_now = crate::messaging::owner_notices::owner_from_now_on(session.agent, "It"),
             from_id = original.id,
         );
-        let told = match crate::owner_notices::running_or_leave(state, &session) {
+        let told = match crate::messaging::owner_notices::running_or_leave(state, &session) {
             Ok(running) => {
-                crate::owner_notices::tell_now_or_leave(state, &session.id, text, running, None)
-                    .await
+                crate::messaging::owner_notices::tell_now_or_leave(
+                    state,
+                    &session.id,
+                    text,
+                    running,
+                    None,
+                )
+                .await
             }
             Err(err) => Err(err),
         };

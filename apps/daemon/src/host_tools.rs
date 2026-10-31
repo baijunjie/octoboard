@@ -18,7 +18,7 @@ pub struct Tools {
     pub git: fn() -> Result<BranchGit>,
     pub trash: fn(&Path) -> Result<(), TrashFailure>,
     /// The shell a shell terminal runs.
-    pub shell: fn() -> crate::shell_terminal::ShellCommand,
+    pub shell: fn() -> crate::terminal::shell::ShellCommand,
     /// The environment a shell terminal is started in, as an agent launch takes it.
     pub shell_env: fn() -> Result<HashMap<String, String>>,
 }
@@ -34,7 +34,7 @@ impl Default for HostTools {
             tools: Mutex::new(Tools {
                 git: BranchGit::of_user_shell,
                 trash: move_to_trash,
-                shell: crate::shell_terminal::login_shell,
+                shell: crate::terminal::shell::login_shell,
                 shell_env: crate::env_shell::launch_snapshot,
             }),
         }

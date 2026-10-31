@@ -121,7 +121,7 @@ impl LiveSession {
     }
 
     fn composer(&self) -> Option<String> {
-        crate::interrupt::input_box::input_box(self.agent, &self.screen_text_undimmed())
+        super::input_box::input_box(self.agent, &self.screen_text_undimmed())
     }
 
     pub(super) fn stash_shown(&self) -> bool {
@@ -502,7 +502,7 @@ mod tests {
                 &include_bytes!("../../testdata/grok_native_stashed.bin")[..],
             ),
         ] {
-            let mut terminal = crate::terminal_snapshot::TerminalSnapshot::new(40, 120);
+            let mut terminal = crate::terminal::snapshot::TerminalSnapshot::new(40, 120);
             terminal.process(bytes);
             assert!(
                 stash_marker(agent, &terminal.visible_text()),
@@ -510,8 +510,7 @@ mod tests {
                 terminal.visible_text()
             );
             assert_eq!(
-                crate::interrupt::input_box::input_box(agent, &terminal.visible_text_undimmed())
-                    .as_deref(),
+                super::input_box::input_box(agent, &terminal.visible_text_undimmed()).as_deref(),
                 Some("")
             );
         }
@@ -538,7 +537,8 @@ mod tests {
             live.on_output(&draw("draft", false, agent));
             live.write_terminal_input(b"draft").unwrap();
             let writer = live.clone();
-            let send = std::thread::spawn(move || crate::term::send_message(&writer, "peer"));
+            let send =
+                std::thread::spawn(move || crate::session::term::send_message(&writer, "peer"));
             wait_until(|| live.input_swap_active());
             live.write_terminal_input(b"X\r").unwrap();
             assert_eq!(live.swap.lock().unwrap().bytes, 2);
@@ -578,7 +578,7 @@ mod tests {
             live.on_output(&draw(text, true, Agent::Grok));
             let before = live.input_writes();
             assert_eq!(
-                crate::term::send_message(&live, "peer")
+                crate::session::term::send_message(&live, "peer")
                     .unwrap_err()
                     .written,
                 0
@@ -601,7 +601,7 @@ mod tests {
         live.on_output(&draw("draft", false, Agent::Claude));
         let started = Instant::now();
         let writer = live.clone();
-        let send = std::thread::spawn(move || crate::term::send_message(&writer, "peer"));
+        let send = std::thread::spawn(move || crate::session::term::send_message(&writer, "peer"));
         wait_until(|| live.input_swap_active());
         // Saving and restoring share one protection window; a slow save cannot buy another one.
         std::thread::sleep(SETTLE * 2 / 3);
@@ -640,7 +640,7 @@ mod tests {
         live.on_output(&draw("draft", false, Agent::Claude));
         live.write_terminal_input(b"draft").unwrap();
         let writer = live.clone();
-        let send = std::thread::spawn(move || crate::term::send_message(&writer, "peer"));
+        let send = std::thread::spawn(move || crate::session::term::send_message(&writer, "peer"));
         wait_until(|| live.input_swap_active());
         live.write_terminal_input(b"X\r").unwrap();
         assert!(send.join().unwrap().is_ok());
@@ -694,7 +694,7 @@ mod tests {
             live.enable_native_stash(native);
             live.on_output(&screen);
             live.write_terminal_input(input).unwrap();
-            let framed = crate::term::frame_message(Agent::Claude, "peer");
+            let framed = crate::session::term::frame_message(Agent::Claude, "peer");
             if blocked_first {
                 assert_eq!(
                     live.write_message_input(&framed, "peer", false)
@@ -737,7 +737,7 @@ mod tests {
         live.enable_native_stash(true);
         live.on_output(&draw("draft", false, Agent::Claude));
         let writer = live.clone();
-        let send = std::thread::spawn(move || crate::term::send_message(&writer, "peer"));
+        let send = std::thread::spawn(move || crate::session::term::send_message(&writer, "peer"));
         wait_until(|| live.input_swap_active());
         live.on_output(&draw("", true, Agent::Claude));
         wait_until(|| live.swap.lock().unwrap().phase == Some(RecoveryPhase::Submitted));

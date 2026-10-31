@@ -2279,15 +2279,15 @@ each failing silently or destructively if ignored:
   direction mark in a line holding right-to-left letters, U+034F after a combining mark, and a few more. Private-use and
   unassigned code points, and format characters outside the list such as U+0600, pass untouched. The UI's bidirectional
   isolates (U+2068, U+2069), which an agent copies into what it writes, are the usual trigger. Octoboard's own handling
-  of these characters is in `apps/daemon/src/term/invisible.rs` and in "Messages held until a session can take them" in
-  `docs/product/message-delivery.md`. Because a held prompt fires no `UserPromptSubmit`, that hook is also how Octoboard
-  notices a write to an idle Claude Code session that was not sent, whatever held it; a write mid-turn cannot be checked
-  that way, since the agent sends nothing until its turn ends (the behaviour is in "A message written but not sent" in
-  `docs/product/message-delivery.md`). Codex and Grok Build were not measured: neither executable carries any wording
-  about such a hold, but neither was run against one.
-- Claude Code reads a pasted piece that ends in an image extension as an image and loses the `CR` that follows (measured
-  on 2.1.310, 2026-10-25, a real `claude` in a PTY against a stub endpoint). Its paste handler splits the text on
-  newlines and on a space right before `/` or a Windows drive path; a piece whose trimmed, quote-stripped and
+  of these characters is in `apps/daemon/src/session/term/invisible.rs` and in "Messages held until a session can take
+  them" in `docs/product/message-delivery.md`. Because a held prompt fires no `UserPromptSubmit`, that hook is also how
+  Octoboard notices a write to an idle Claude Code session that was not sent, whatever held it; a write mid-turn cannot
+  be checked that way, since the agent sends nothing until its turn ends (the behaviour is in "A message written but not
+  sent" in `docs/product/message-delivery.md`). Codex and Grok Build were not measured: neither executable carries any
+  wording about such a hold, but neither was run against one.
+- Claude Code reads a pasted piece that ends in an image extension as an image and loses the `CR` that follows
+  (measured on 2.1.310, 2026-10-25, a real `claude` in a PTY against a stub endpoint). Its paste handler splits the text
+  on newlines and on a space right before `/` or a Windows drive path; a piece whose trimmed, quote-stripped and
   backslash-unescaped text ends in `.png`, `.jpg`, `.jpeg`, `.gif` or `.webp` (any case) takes an asynchronous
   image-read path, whether or not the file exists and whether it is absolute or relative. An `Enter` that arrives while
   the paste is processed is held and replayed on the text path, but the image path clears it when it completes: the
@@ -2296,6 +2296,6 @@ each failing silently or destructively if ignored:
   in the input box. A plain multi-line paste was sent in about 0.4 s, any paste with such a piece was not, and a `CR`
   written separately 0.3 s or more later sent it. A report listing produced screenshots one per line is the usual
   trigger. A trailing space or invisible character does not avoid it (the piece is trimmed first; invisible characters
-  hold the prompt anyway). Octoboard's shaping against it is in `apps/daemon/src/term/image_path.rs` and in "Messages
-  held until a session can take them" in `docs/product/message-delivery.md`; Codex and Grok Build were not measured.
-  Measured with the shaped message: sent both idle and mid-turn.
+  hold the prompt anyway). Octoboard's shaping against it is in `apps/daemon/src/session/term/image_path.rs` and in
+  "Messages held until a session can take them" in `docs/product/message-delivery.md`; Codex and Grok Build were not
+  measured. Measured with the shaped message: sent both idle and mid-turn.

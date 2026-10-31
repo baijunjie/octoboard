@@ -24,14 +24,14 @@ no reason to leave it out of the export: the settings hidden from agents because
 spend quota (approving requests automatically, starting usage windows automatically) travel all the same. So a new
 application setting that is not machine-local is added, in the same change, to:
 
-- `DocumentSettings` in `apps/daemon/src/config_export.rs`, filled in `build` beside the others, which are written only
-  when `Selection.settings` asks for the settings region. Until the first release it is a required field (no `Option`,
-  no `#[serde(default)]`), since every export writes it and there is no older document to read. From the first release
-  on, a setting added without raising `VERSION` is an `Option` with `#[serde(default)]`, applied by an import only when
-  present, because an export from a released build lacks it and a required field would make that export unreadable;
-  otherwise raise `VERSION` and add the step that upgrades the previous version (its doc comment there);
-- the import inspection in `apps/daemon/src/config_import/mod.rs` (`InspectedSettings`), with the document's value and
-  the current one, and the `coordinator::settings::update_settings` call that applies the document's settings;
+- `DocumentSettings` in `apps/daemon/src/config_document/export.rs`, filled in `build` beside the others, which are
+  written only when `Selection.settings` asks for the settings region. Until the first release it is a required field
+  (no `Option`, no `#[serde(default)]`), since every export writes it and there is no older document to read. From the
+  first release on, a setting added without raising `VERSION` is an `Option` with `#[serde(default)]`, applied by an
+  import only when present, because an export from a released build lacks it and a required field would make that export
+  unreadable; otherwise raise `VERSION` and add the step that upgrades the previous version (its doc comment there);
+- the import inspection in `apps/daemon/src/config_document/import/mod.rs` (`InspectedSettings`), with the document's
+  value and the current one, and the `coordinator::settings::update_settings` call that applies the document's settings;
 - the window: for a setting that is a switch, one entry in `BOOLEAN_SETTINGS` in
   `packages/ui/src/configuration/importParts.tsx` (its settings-page label, its document field, and a
   `configuration.import.settings.consequence.<name>` message saying what turning it on then does, added to

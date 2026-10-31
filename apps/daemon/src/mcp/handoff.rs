@@ -35,7 +35,9 @@ pub(super) async fn handoff_session(
     state: &Arc<AppState>,
     caller: &Session,
     arguments: &Map<String, Value>,
-    launch: impl FnOnce(crate::term::LaunchRequest) -> Result<crate::term::Launch> + Send + 'static,
+    launch: impl FnOnce(crate::session::term::LaunchRequest) -> Result<crate::session::term::Launch>
+        + Send
+        + 'static,
 ) -> Result<Value> {
     let target = resolve_owned_session(state, caller, required_str(arguments, "session")?)?;
     let agent = parse_agent(required_str(arguments, "agent")?)?;
@@ -176,7 +178,9 @@ async fn perform(
     target: &Session,
     asked: &Asked,
     edits: Edits,
-    launch: impl FnOnce(crate::term::LaunchRequest) -> Result<crate::term::Launch> + Send + 'static,
+    launch: impl FnOnce(crate::session::term::LaunchRequest) -> Result<crate::session::term::Launch>
+        + Send
+        + 'static,
 ) -> Result<Performed> {
     let (edited_model, edited_effort) = (edits.model.is_some(), edits.effort.is_some());
     let agent = edits.agent.unwrap_or(asked.agent);

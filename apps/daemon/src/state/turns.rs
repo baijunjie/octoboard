@@ -132,9 +132,9 @@ impl AppState {
     }
 
     /// The turn ended as cancelled by what the terminal title showed, with no hook to say so
-    /// (`crate::title_interrupt`). Closed as [`Self::abandon_turn`] closes a cancelled one, except
-    /// that what the session reported is kept and a turn end of the agent's own that still comes
-    /// closes it as its real end ([`Self::close_turn`]): the title only infers the cancel.
+    /// (`crate::titles::interrupt`). Closed as [`Self::abandon_turn`] closes a cancelled one,
+    /// except that what the session reported is kept and a turn end of the agent's own that still
+    /// comes closes it as its real end ([`Self::close_turn`]): the title only infers the cancel.
     pub fn end_turn_off_title(&self, id: &str) {
         if let Some(turn) = self.turns.lock().expect("turn lock poisoned").get_mut(id) {
             if !turn.open {
@@ -149,7 +149,7 @@ impl AppState {
     }
 
     /// A watch saw the session back at its prompt with no hook, its turn left open
-    /// (`crate::transcript::back_at_prompt`).
+    /// (`crate::records::transcript::back_at_prompt`).
     pub fn note_turn_end(&self, id: &str) {
         self.turns
             .lock()
@@ -303,7 +303,7 @@ impl AppState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::outbox::Drain;
+    use crate::messaging::outbox::Drain;
     use crate::protocol::{Agent, SessionStatus};
     use crate::state::test_support::insert_record;
     use crate::test_support::{app_state, fake_live_session};

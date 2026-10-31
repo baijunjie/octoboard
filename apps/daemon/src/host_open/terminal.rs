@@ -185,7 +185,8 @@ fn start(launch: &Launch) -> Result<(), String> {
         command.current_dir(directory);
     }
     super::start(!launch.wait, command, |command| {
-        crate::subprocess::run_with_timeout(command, OPEN_TIMEOUT).map_err(|err| format!("{err:#}"))
+        crate::processes::subprocess::run_with_timeout(command, OPEN_TIMEOUT)
+            .map_err(|err| format!("{err:#}"))
     })
 }
 

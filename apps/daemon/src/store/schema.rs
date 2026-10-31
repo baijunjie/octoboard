@@ -43,7 +43,7 @@ CREATE TABLE accounts (
 -- Backstop for the rule that an account's name is required and unique within its
 -- agent: `coordinator` checks this before every write that can affect a name, but
 -- the invariant belongs on the table it protects, not only on the callers that happen
--- to remember to check it. `LOWER` matches `coordinator::account_name_key`'s
+-- to remember to check it. `LOWER` matches `accounts::account_name_key`'s
 -- case-insensitive comparison; it is ASCII-only in SQLite, which is a narrower fold
 -- than `str::to_lowercase`, so this index is a backstop and not a full substitute for
 -- that check. A write that trips it surfaces through `Store::account_write_error` as

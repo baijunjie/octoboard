@@ -10,7 +10,7 @@ use std::time::Duration;
 use anyhow::{bail, Result};
 
 use crate::git::env as git_env;
-use crate::subprocess;
+use crate::processes::subprocess;
 
 /// The deadline of each `git` call. The gate runs synchronously inside the user's `git`, so a
 /// call that hangs holds that command up; this is long enough for a read of a large repository

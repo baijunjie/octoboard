@@ -9,7 +9,7 @@ use crate::coordinator::test_support::{
 use crate::protocol::{
     error_code, Account, Agent, Event, OrchestrationRole, Role, Session, SessionStatus,
 };
-use crate::term;
+use crate::session::term;
 use crate::test_support::{
     bare_session, console_session, console_with_project_and_accounts, fake_live_session,
     idle_stand_in, project_session,
@@ -156,7 +156,7 @@ async fn a_session_handed_to_another_owner_meanwhile_is_not_switched() {
     state.store.insert_session(&worker).unwrap();
     let live = idle_stand_in("worker");
     state.register_live(live.clone());
-    state.watch_exit(live.clone());
+    crate::coordinator::exit_watch::watch_exit(&state, live.clone());
 
     let err = switch_session_account_with(
         &state,
@@ -297,7 +297,7 @@ async fn a_switch_whose_relaunch_fails_is_back_on_its_account_and_archives_nothi
     state.store.insert_session(&bound).unwrap();
     let live = idle_stand_in("hub");
     state.register_live(live.clone());
-    state.watch_exit(live.clone());
+    crate::coordinator::exit_watch::watch_exit(&state, live.clone());
 
     let err = switch_session_account(
         &state,
@@ -371,7 +371,7 @@ async fn a_codex_switch_carries_the_chain_and_repoints_the_targets_stale_row() {
     state.store.insert_session(&codex).unwrap();
     let live = idle_stand_in("codex");
     state.register_live(live.clone());
-    state.watch_exit(live.clone());
+    crate::coordinator::exit_watch::watch_exit(&state, live.clone());
     let switch = |account: &str| {
         switch_session_account(
             &state,
@@ -436,7 +436,7 @@ async fn a_switch_is_not_refused_for_a_running_bound_session() {
     let hub = idle_stand_in("hub");
     let worker = idle_stand_in("worker");
     state.register_live(hub.clone());
-    state.watch_exit(hub.clone());
+    crate::coordinator::exit_watch::watch_exit(&state, hub.clone());
     state.register_live(worker.clone());
 
     let err = switch_session_account(
@@ -476,7 +476,7 @@ async fn a_switch_that_did_not_come_up_is_restored_before_it_returns() {
     let mut events = state.subscribe();
     let live = fake_live_session("s", Agent::Claude, 80, 24, "exit 1");
     state.register_live(live.clone());
-    state.watch_exit(live.clone());
+    crate::coordinator::exit_watch::watch_exit(&state, live.clone());
 
     put_back_once_down(&state, &before).await;
 
@@ -501,7 +501,7 @@ async fn a_switch_claim_is_held_after_the_relaunched_process_is_live_and_after_i
     let claim = state.begin_switch("s").unwrap();
     let live = fake_live_session("s", Agent::Claude, 80, 24, "exit 1");
     state.register_live(live.clone());
-    state.watch_exit(live.clone());
+    crate::coordinator::exit_watch::watch_exit(&state, live.clone());
     let deadline = Instant::now() + Duration::from_secs(5);
     while state.live_session("s").is_some() {
         assert!(Instant::now() < deadline, "the exit was never seen");
@@ -718,7 +718,7 @@ async fn a_switch_that_fails_stops_what_a_process_that_had_exited_by_itself_star
     let watching = state.clone();
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_millis(300)).await;
-        watching.watch_exit(watched);
+        crate::coordinator::exit_watch::watch_exit(&watching, watched);
     });
 
     switch_session_account_with(

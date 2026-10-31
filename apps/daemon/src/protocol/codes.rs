@@ -84,14 +84,15 @@ pub mod error_code {
 
     /// Octoboard could not press a trust confirmation it had accepted a go-ahead for, or meant to
     /// press without asking. `params` names the `agent`, and the `reason_code` param says why, one
-    /// of [`trust_reason`].
+    /// of [`trust_reason`](crate::protocol::codes::trust_reason).
     pub const TRUST_ANSWER_FAILED: Code = Code("trust_answer_failed");
     /// Grok Build's confirmation was accepted — pressed by Octoboard, or answered by the person in
     /// the terminal — but no trust entry for the folder reached the user's own store: Grok wrote
     /// none into the session's copy in time, or the user's store could not be updated. Nothing was
     /// written to the user's store and no permission was recorded. `params` names the `agent`, the
-    /// user's store as `path`, the English `reason`, its `reason_code` (one of [`trust_reason`]'s
-    /// carry codes) and, for some, a `detail`.
+    /// user's store as `path`, the English `reason`, its `reason_code` (one of
+    /// [`trust_reason`](crate::protocol::codes::trust_reason)'s carry codes) and, for some, a
+    /// `detail`.
     pub const TRUST_NOT_CARRIED_OVER: Code = Code("trust_not_carried_over");
     /// A go-ahead for a console session's trust confirmation, which Octoboard presses without
     /// asking.
@@ -330,8 +331,8 @@ pub mod error_code {
     /// `items`: a JSON array of `{item, left, cause, detail, sessions?}`, each item of the
     /// account's directory that was not brought in line, what it was left as (`unchanged`,
     /// `backed_up`, `partly_moved`, `linked`, `absent`) and why, as a
-    /// `crate::shared_config::FailureCause` and in the system's own words; and `cause`, the
-    /// cause the items share (`other` when they differ), or why the change could not start when
+    /// `crate::accounts::shared_config::FailureCause` and in the system's own words; and `cause`,
+    /// the cause the items share (`other` when they differ), or why the change could not start when
     /// there are none. A `cause` of `default_moved` means the agent's default directory is no
     /// longer the one the links lead into or sharing was started into: turning sharing off, then on
     /// again, shares the new one. An entry about a conversation turning sharing off could not take
@@ -426,7 +427,7 @@ pub mod error_code {
     /// A requested account config directory, once normalised, equals that of another account of
     /// the same agent — the default account's resolved directory takes part. `params` names
     /// `agent` and the `name` of the account using it (the default account by its name, which is
-    /// [`DEFAULT_ACCOUNT_NAME`] unless the user named it).
+    /// [`DEFAULT_ACCOUNT_NAME`](crate::protocol::DEFAULT_ACCOUNT_NAME) unless the user named it).
     pub const CONFIG_DIR_TAKEN: Code = Code("config_dir_taken");
     /// An approval of a `session_request` whose session is no longer waiting for it — the request
     /// was withdrawn or timed out — so its request was not carried out. `params` names the

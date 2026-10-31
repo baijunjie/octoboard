@@ -65,13 +65,13 @@ use uuid::Uuid;
 
 use crate::branch_origin::handover::{move_branches, Handover};
 use crate::coordinator::{self, open::OpenRequest};
-use crate::delivery::{self, WhenBlocked};
 use crate::mcp::qualified_tool_name;
+use crate::messaging::delivery::{self, WhenBlocked};
+use crate::messaging::texts;
 use crate::protocol::{
     error_code, now_millis, Agent, CodedError, Event, Role, Session, SessionRequestAction,
     SessionRequestEnding, SessionStatus,
 };
-use crate::session_texts;
 use crate::state::AppState;
 
 pub(crate) use change::{
@@ -748,7 +748,7 @@ async fn wait_for_answer(
     if let Err(err) = state.raise_request_hand(&caller.id) {
         tracing::debug!(session = %caller.id, %err, "raising the session request's hand failed");
     } else {
-        crate::owner_notices::spawn_tell_owner_it_waits(state, &caller.id);
+        crate::messaging::owner_notices::spawn_tell_owner_it_waits(state, &caller.id);
     }
     // The request was answerable from `hold` on, so it may have ended before the hand went up, and
     // then nothing else would lower it. Costs nothing while the request still waits.
@@ -1075,7 +1075,7 @@ fn refused_as_running(state: &Arc<AppState>, err: &anyhow::Error, target: &str) 
 
 /// How an approval's outcome written into the caller's session opens, which is what tells the turn
 /// it starts from any other.
-const OUTCOME_OPENING: &str = concat!(session_texts::notice_prefix!(), " about your");
+const OUTCOME_OPENING: &str = concat!(texts::notice_prefix!(), " about your");
 
 /// The message that tells a caller's session what became of its call of `tool`, the note being the
 /// call's own, for a caller whose agent gave up on the call without any signal reaching Octoboard.

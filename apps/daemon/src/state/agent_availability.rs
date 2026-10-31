@@ -5,7 +5,8 @@ use crate::protocol::{Agent, AgentAvailability, Event};
 
 impl AppState {
     /// Every agent's current availability, for `Event::Snapshot` — always three entries, each
-    /// `NotDetermined` until `crate::availability`'s one-time determination for this run lands.
+    /// `NotDetermined` until `crate::agents::availability`'s one-time determination for this run
+    /// lands.
     pub fn agent_availability(&self) -> Vec<AgentAvailability> {
         let map = self
             .agent_availability
@@ -28,9 +29,9 @@ impl AppState {
             .expect("every agent has an entry from AppState::new")
     }
 
-    /// Merges the given entries into every agent's availability and broadcasts the whole,
-    /// ordered, three-entry result — never the argument itself, which may name only some agents.
-    /// Called once per daemon start, by `crate::availability::spawn_determine` once its one-time
+    /// Merges the given entries into every agent's availability and broadcasts the whole, ordered,
+    /// three-entry result — never the argument itself, which may name only some agents. Called once
+    /// per daemon start, by `crate::agents::availability::spawn_determine` once its one-time
     /// snapshot lands — never again afterwards, since nothing here re-determines it during a run.
     pub fn set_agent_availability(&self, agent_availability: Vec<AgentAvailability>) {
         {

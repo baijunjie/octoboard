@@ -43,7 +43,7 @@ pub(super) fn session_record(id: &str, status: SessionStatus) -> Session {
 }
 
 /// Stores a session record, with the console it belongs to.
-pub(super) fn insert_record(
+pub(crate) fn insert_record(
     state: &AppState,
     dir: &std::path::Path,
     id: &str,

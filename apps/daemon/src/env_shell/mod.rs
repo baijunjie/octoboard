@@ -1,6 +1,6 @@
 //! Capturing the user's real shell environment, which every agent is then launched with, and
 //! resolving a binary on its `PATH`. Running a subprocess the daemon spawns directly, within a
-//! deadline and output bounds, is `crate::subprocess`'s.
+//! deadline and output bounds, is `crate::processes::subprocess`'s.
 //!
 //! - `snapshot.rs` takes one: runs the user's login shell and parses the environment it dumps.
 //!   Slow, so nothing here takes one per call that can avoid it.

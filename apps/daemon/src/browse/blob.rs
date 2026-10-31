@@ -17,8 +17,8 @@ use crate::browse::live::{too_large, unsupported};
 use crate::browse::{budget, git_error, git_failed};
 use crate::git::isolated::IsolatedGit;
 use crate::git::run::GitError;
+use crate::processes::subprocess::BoundedFailure;
 use crate::protocol::{error_code, CodedError};
-use crate::subprocess::BoundedFailure;
 use crate::wire_path::{self, RelPath};
 
 /// A blob's object id and its bytes.
