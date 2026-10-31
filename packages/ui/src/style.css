@@ -571,8 +571,9 @@ html {
      and the other lighter than the surface it crosses. All three are translucent black or white,
      so one value serves the panel, the sidebar, the settings and a tooltip alike. On a surface
      that is already white or nearly so (a light dialog or `--panel`) the light line cannot be
-     lighter and the groove reads as a single 0.5px dark line there. Decorative, so not held to
-     3:1. */
+     lighter and the groove reads as a single 0.5px dark line there. In dark the light line is the
+     stronger of the two: a strong dark line on a near-black surface reads as a black gap rather
+     than a seam. Decorative, so not held to 3:1. */
   --panel-hairline: oklch(0 0 0 / 0.12);
   /* A resize grip (`ResizeSeparator`) is light grey while the pointer or focus is on its handle, and
      strong while it is pressed or dragged. The light one is a hover cue for a handle whose cursor
@@ -606,8 +607,8 @@ html {
   --panel-card-shadow: 0 1px 2px oklch(0 0 0 / 0.3), 0 2px 8px -2px oklch(0 0 0 / 0.35);
   --panel-hairline: oklch(1 0 0 / 0.12);
   --grip-hover: oklch(0.45 0.006 286);
-  --groove-dark: oklch(0 0 0 / 0.45);
-  --groove-light: oklch(1 0 0 / 0.08);
+  --groove-dark: oklch(0 0 0 / 0.2);
+  --groove-light: oklch(1 0 0 / 0.14);
   --sidebar-fill: oklch(1 0 0 / 0.07);
   --sidebar-fill-hover: oklch(1 0 0 / 0.11);
   --control-fill: oklch(0.33 0.006 286);
