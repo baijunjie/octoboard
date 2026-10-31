@@ -3,6 +3,7 @@ import { FileSearch, FileX } from "lucide-react";
 import React, { useEffect, useId, useRef, useState } from "react";
 import { ButtonContext } from "react-aria-components";
 
+import { FieldClearButton } from "../components/FieldClearButton";
 import { HandOffOnUnmount } from "../components/HandOffOnUnmount";
 import { IconToggle } from "../components/IconToggle";
 import { PaneToolbar } from "../components/PaneToolbar";
@@ -103,10 +104,7 @@ export function FileFilterField({ state, label, placeholder, contextKey, ignored
                   </ButtonContext.Provider>
                 </>
               )}
-              {/* HeroUI's close button hardcodes an English `aria-label` ahead of its spread
-                  props, which also shadows the name react-aria supplies through the `clear` slot,
-                  so the button is named from the catalog here. */}
-              <SearchField.ClearButton aria-label={t("common.clear")} />
+              <FieldClearButton slot="clear" data-slot="search-field-clear-button" className="me-2 shrink-0" />
             </SearchField.Group>
           </SearchField>
           {ignoredToggle && (

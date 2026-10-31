@@ -2,6 +2,7 @@ import { SearchField, Surface } from "@heroui/react";
 import { ChevronDown, ChevronRight, ScrollText, SearchX } from "lucide-react";
 import React, { useDeferredValue, useEffect, useId, useState } from "react";
 
+import { FieldClearButton } from "../components/FieldClearButton";
 import { CodeBlock } from "../components/CodeBlock";
 import { DiagnosticBlock } from "../components/DiagnosticBlock";
 import { EmptyPanel } from "../components/EmptyPanel";
@@ -62,7 +63,7 @@ export function ThirdPartyLicensesList({ licenses }: { licenses: ThirdPartyLicen
         <SearchField.Group>
           <SearchField.SearchIcon />
           <SearchField.Input placeholder={t("settings.about.thirdParty.placeholder")} />
-          <SearchField.ClearButton aria-label={t("common.clear")} />
+          <FieldClearButton slot="clear" data-slot="search-field-clear-button" className="me-2 shrink-0" />
         </SearchField.Group>
       </SearchField>
       <p className="text-sm text-app-muted">{t("settings.about.thirdParty.count", { count: shown.length })}</p>

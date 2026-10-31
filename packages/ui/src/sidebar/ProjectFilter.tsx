@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Button } from "../components/Button";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
+import { FieldClearButton } from "../components/FieldClearButton";
 import { openingFocus } from "../components/regionFocus";
 import { Tag } from "../components/Tag";
 import { TitledControl } from "../components/TitledControl";
@@ -150,10 +151,7 @@ export function ProjectFilterButton({
                     {...openingFocus(true)}
                     placeholder={t("sidebar.filter.placeholder")}
                   />
-                  {/* HeroUI's close button hardcodes an English `aria-label` ahead of its spread
-                      props, which also shadows the name react-aria supplies through the `clear`
-                      slot, so the button is named from the catalog here. */}
-                  <SearchField.ClearButton aria-label={t("common.clear")} />
+                  <FieldClearButton slot="clear" data-slot="search-field-clear-button" className="me-2 shrink-0" />
                 </SearchField.Group>
               </SearchField>
               <TagPicker

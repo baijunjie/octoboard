@@ -1711,12 +1711,12 @@ confirmation and the patterns known not to work.
 Keep HeroUI's default appearance, including its text and placeholder colours, hover opacity and the default fill,
 foreground and shadow of the variant or status chosen for a dialog or popover; the Alert's status background fill and
 the other departures recorded under "Confirmed visual choices" (the dimming of a disabled menu item or select option,
-and the hover and press feedback cancelled on a disabled menu item, among them), the clear buttons' round fill ("Clear
-buttons" below) and a modal body's foreground text colour (see "One definition per semantic colour"), are approved
-exceptions. A contrast measurement alone does not justify changing its colours, theme tokens, borders, frames or
-outlines, so add no colour or opacity override to make a default component pass the custom-style thresholds. Use the
-component's own supported variants and slots; layout and sizing adaptations do not authorize replacing its visual
-treatment. Application-authored text on a custom surface is checked against its actual background in both appearances.
+and the hover and press feedback cancelled on a disabled menu item, among them) and a modal body's foreground text
+colour (see "One definition per semantic colour"), are approved exceptions. A contrast measurement alone does not
+justify changing its colours, theme tokens, borders, frames or outlines, so add no colour or opacity override to make a
+default component pass the custom-style thresholds. Use the component's own supported variants and slots; layout and
+sizing adaptations do not authorize replacing its visual treatment. Application-authored text on a custom surface is
+checked against its actual background in both appearances.
 
 The Terminal panel's tabs are an approved departure by the user's decision: compact rectangular tabs with modest
 corner rounding, consistent spacing and always-visible close marks. The selected tab uses an accent-soft fill and
@@ -1732,13 +1732,14 @@ the surface in both appearances.
 
 ### Clear buttons
 
-The clear button inside a search field and a select (`.search-field__clear-button`, `.select__clear-button` in
-`packages/ui/src/style.css`) keeps HeroUI's look at rest. While the pointer is over the field or the field holds focus,
-its round fill is set a little darker than the field (`--default-hover` mixed 12% towards `--default-foreground`, 20%
-under the pointer or a press): HeroUI's own fill is the field's colour or one step off it, so the circle all but
-vanished against the hovered or focused field. The × keeps HeroUI's colour. One rule covers every such button, so
-none is restyled where it is used. This is an approved departure from HeroUI's default look, by the user's decision
-(see "Do not change how a HeroUI component looks").
+The clear action inside a search field or an optional select uses the shared `FieldClearButton`: the application's
+`Button` with `isIconOnly`, `size="xs"` and `variant="ghost"`, and a localized Clear tooltip and accessible name. It
+stays transparent at rest. Since a filled field uses the standard ghost button's hover colour itself, the clear button
+overrides only the button's hover and press fill tokens: the local foreground blended at 16% and 24% over the actual
+field, respectively. This gives visible feedback on grey fields in both themes, including dialogs and popovers; the
+glyph, shape and focus feedback stay standard. A select's clear button sits beside its trigger, never inside that
+button. It keeps the text's trailing gap, returns focus to the trigger after clearing, and retains Backspace/Delete on
+the trigger. Search fields keep their native clear action and return focus to the input.
 
 ### Hand-built rows and cards
 
@@ -1924,11 +1925,10 @@ The right pane's resize handles (the width handle and the separator between stac
 pointer target centred on their gap, reaching into the cards' edges where the gap is narrower; the sidebar's width
 handle stays narrower, as a wider one would take the sidebar's scrollbar and its rows' trailing buttons.
 
-Where the drawn size has to stay under 24, extend the target rather than the drawing, as HeroUI does for its own
-select clear button (`.select__clear-button:after{inset:-2px}`): an absolutely positioned `::after` with a negative
-inset enlarges what the pointer hits and changes nothing visible. The pressable part of a checkbox whose label is
-one line of `text-sm` (`TrustDirCheckbox` in `packages/ui/src/dialogs/TrustPromptDialog.tsx`) extends its target
-this way because HeroUI lays it out at the line's own height.
+Where the drawn size has to stay under 24, extend the target rather than the drawing: an absolutely positioned `::after`
+with a negative inset enlarges what the pointer hits and changes nothing visible. The pressable part of a checkbox whose
+label is one line of `text-sm` (`TrustDirCheckbox` in `packages/ui/src/dialogs/TrustPromptDialog.tsx`) extends its
+target this way because HeroUI lays it out at the line's own height.
 
 A control whose height is set in units of something else inherits that thing's constraint. The separators of
 collapsed lines are sized in multiples of the diff's own code line height rather than in pixels, so that they keep

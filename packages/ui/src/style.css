@@ -235,6 +235,19 @@ html {
 .app-button--xs.button--full-width {
   width: 100%;
 }
+
+/* A field's fill is the ghost button's default hover colour. Blend over that actual fill so the
+   clear action stays visible in either theme, including locally themed dialogs and popovers. */
+[data-field-clear] {
+  --button-bg-hover: color-mix(in oklab, var(--foreground) 16%, transparent);
+  --button-bg-pressed: color-mix(in oklab, var(--foreground) 24%, transparent);
+
+  &:active,
+  &[data-pressed="true"] {
+    --button-bg-hover: var(--button-bg-pressed);
+  }
+}
+
 .app-button--xs svg:not([data-slot="spinner"] svg, [data-slot="link-icon"] svg) {
   width: 14px;
   height: 14px;
@@ -712,23 +725,6 @@ html {
 .dark,
 [data-theme="dark"] {
   --app-muted: var(--muted);
-}
-
-/* The clear button inside a search field and a select. HeroUI gives it a round fill that is the field's own at rest
-   and one step off it on hover (`--default` / `--default-hover`); once the pointer is over the field or the field
-   holds focus, the field itself turns to that hover colour or keeps its own, and the circle all but vanishes against
-   it. While the field is hovered or focused the circle is therefore set a little darker than the field, and a little
-   more under the pointer or a press; at rest it keeps HeroUI's look, × colour included (docs/ui-accessibility.md's
-   "Clear buttons"). */
-:is(.search-field__group, .select__trigger):is(:hover, [data-hovered="true"], :focus-within, [data-focus-within="true"], [data-focus-visible="true"], [data-open="true"])
-  :is(.search-field__clear-button, .select__clear-button) {
-  background-color: color-mix(in oklab, var(--default-hover) 88%, var(--default-foreground));
-
-  &:hover,
-  &[data-hovered="true"],
-  &[data-pressed="true"] {
-    background-color: color-mix(in oklab, var(--default-hover) 80%, var(--default-foreground));
-  }
 }
 
 /* An Alert draws two things itself (`ErrorAlert`, which `FailureAlert` is built on). Its background is HeroUI's soft
