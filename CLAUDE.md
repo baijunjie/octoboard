@@ -59,11 +59,6 @@ repeated trial — should go to a subagent wherever you can; you take only the c
 
 - Do not add `--no-verify`, set skip environment variables (such as `REVERT_GATE_SKIP`), or change the hook
   configuration to get around the repository's checks or Octoboard's revert gate.
-- In addition to the development rule Octoboard gives its sessions, before a branch is merged back into its target
-  branch, squash it into commits that each explain and revert on their own (one commit for a branch that did one
-  thing), with messages that describe the final state; carry every `Reverts:` line of the original commits into the
-  squashed ones. Squash on the branch's own merge base (`git reset --soft $(git merge-base HEAD <target branch>)`),
-  never onto the target branch's tip, then rebase onto the target branch.
 
 <!-- setup-agent:workflow:begin -->
 
