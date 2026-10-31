@@ -1,18 +1,23 @@
 # Running git from the daemon
 
-## Build every `git` the daemon spawns from `git_env.rs`, and give it a deadline
+## Build and run every `git` the daemon spawns through `git::run`, and give it a deadline
 
-`apps/daemon/src/git_env.rs` assembles every `git` command the daemon runs: `non_interactive` is the base, and a
-command that only reads a repository adds `read_only` on top of it, before the subcommand is pushed, since it
-contributes a `-c` argument. Start from there rather than from `Command::new`, and set none of those variables at a
-call site; the module header carries the reason for each one, and a call site that assembles its own takes some of
-them and misses the rest.
+`apps/daemon/src/git/run.rs` builds and runs every `git` the daemon starts: take a `UserGit` (`UserGit::cached_shell`
+on a path that repeats), get the command from `UserGit::command` with its call-site family's `Policy` and an `Access`
+(`Access::Read` for anything that only reads the repository, a status-only `git diff --quiet` included, which adds the
+index guard), then add the subcommand and arguments to the `Command` it hands back. Start from there rather than from
+`Command::new` or from `git::env::non_interactive`, and set none of the variables `apps/daemon/src/git/env.rs` sets at a
+call site; that module's header carries the reason for each one, and a call site that assembles its own takes some of
+them and misses the rest. Global options or variables fixed for a whole family of call sites go in a `Policy` defined
+beside its users (`UNMONITORED` in `apps/daemon/src/git/branch_git.rs` is the shape), not repeated per call. The one
+exception is a `git` that runs inside the user's own git hook with the hook's inherited environment
+(`apps/daemon/src/revert_gate/git.rs`).
 
-The environment is part of that, for a command that writes as much as for one that reads: `non_interactive` takes it
-whole, so a snapshot of the user's login shell is passed through `git_env::user_configuration_only` on the way in. That
-filter keeps what says which of the user's own material to use and how to reach a remote, and drops anything that can
-change which repository a command looks at, set an arbitrary configuration item, or weaken verification — and both
-sides of that line fail where the user can see it. Too wide, and a `GIT_DIR` out of the user's rc file points the
+The environment is part of that, for a command that writes as much as for one that reads: `UserGit::command` passes
+the user's login-shell snapshot through `git::env::user_configuration_only` on the way in. That filter keeps what says
+which of the user's own material to use and how to reach a remote, and drops anything that can change which repository
+a command looks at, set an arbitrary configuration item, or weaken verification — and both sides of that line fail
+where the user can see it. Too wide, and a `GIT_DIR` out of the user's rc file points the
 command at another repository: what a read returns lands as persistent wrong data wherever it is stored and broadcast
 rather than shown for a moment, and a fast-forward merge writes files into a worktree that is not the project's. Too
 narrow, and a command that works from the user's own shell fails here for good — a fetch missing a certificate or
@@ -27,10 +32,10 @@ read-only — `git status` and `git diff` rewrite `.git/index` for a tracked fil
 content did not, and the `index.lock` they hold is what fails the `git add` an agent is running in that same
 repository.
 
-The deadline stays the call site's own: run the command through `subprocess::run_with_timeout`, or
-`subprocess::run_bounded` when its output also needs a ceiling or it must be cancellable, rather than
-`Command::output`. It kills the whole process group rather than the direct child, which is what also reaps the
-`ssh` that `git` forked.
+The deadline stays the call site's own: run the command through `git::run::run` or `run_checked` with the call site's
+`Limits` (`Limits::deadline` when the output is small by nature, output ceilings where it is not) and its cancel flag
+where it has one, rather than `Command::output`. That kills the whole process group rather than the direct child,
+which is what also reaps the `ssh` that `git` forked.
 
 ## A `git` that only adds to a browse reply gets a short deadline and a budget of its own, and failing leaves it out
 
@@ -92,7 +97,7 @@ A tracked file whose modification time moved while its content did not is the on
 refresh the index. Against a freshly built repository the read writes nothing whatever its environment says, so a test
 over that fixture passes with the guard removed as well, and proves nothing about the guard. The fixture has to produce
 the stale state, and the test needs a positive control beside it — the same read with the guard off, asserted to write.
-`apps/daemon/src/git_status.rs`'s `reading_the_branch_header_leaves_the_repository_untouched`, with the control that
+`apps/daemon/src/project_git/header.rs`'s `reading_the_branch_header_leaves_the_repository_untouched`, with the control that
 follows it, is the worked pair. Build both halves from `apps/daemon/src/test_support.rs` — `move_modification_time_back`
 for the stale stat and `git_dir_state` for the before-and-after comparison — rather than a copy of your own.
 

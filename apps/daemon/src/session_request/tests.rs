@@ -2,7 +2,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
 use super::*;
-use crate::branch_origin::{self, repo_key, repository_of};
+use crate::branch_origin::{self, repo_key};
+use crate::git::repo_files::repository_of;
 use crate::protocol::{
     Console, OrchestrationRole, Origin, Project, ProjectSource, SessionRequestAction, SessionStatus,
 };

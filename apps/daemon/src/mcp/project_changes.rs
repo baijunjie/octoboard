@@ -15,13 +15,13 @@ use serde_json::{json, Map, Value};
 
 use crate::branch_origin;
 use crate::browse::budget;
-use crate::browse::git::GitEnv;
-use crate::browse::wire_path::{self, RelPath};
+use crate::git::isolated::IsolatedGit;
 use crate::protocol::{
     BrowseBody, ChangeEntry, ChangeGroup, ChangeRef, ChangeSide, ComparedChangeRef, ContentKind,
     Event, FileContent, GitSourceInfo, Project, Session, SideKind, SideRead, SideRef, WorktreeInfo,
 };
 use crate::state::AppState;
+use crate::wire_path::{self, RelPath};
 
 use super::args::{optional_bool, optional_count, optional_string};
 use super::project_browse::{browse, git_source, plain, readable_project, MakeGit};
@@ -43,7 +43,7 @@ pub(super) async fn list_project_changes(
     caller: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    list_with(state, caller, arguments, GitEnv::from_shell).await
+    list_with(state, caller, arguments, IsolatedGit::from_shell).await
 }
 
 pub(super) async fn read_project_diff(
@@ -51,7 +51,7 @@ pub(super) async fn read_project_diff(
     caller: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    read_with(state, caller, arguments, GitEnv::from_shell).await
+    read_with(state, caller, arguments, IsolatedGit::from_shell).await
 }
 
 /// The worktree `wanted` names: its path or the branch checked out in it, spelled plain or as the

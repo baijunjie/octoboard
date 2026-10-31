@@ -523,7 +523,7 @@ fn a_default_branch_lookup_past_a_budget_says_so() {
     // A caller that does not want the default branch is not bound by it.
     let repo = repo_with("default-not-asked", &[(b"a.txt", b"a\n")]);
     setup(&repo, &rev_parse(&repo, "main"));
-    let env = GitEnv::new(SYSTEM_GIT.to_string(), isolated_git_env());
+    let env = IsolatedGit::new(SYSTEM_GIT.to_string(), isolated_git_env());
     let list = compare::branches_in(&env, &repo, &repo, false, &AtomicBool::new(false)).unwrap();
     assert!(list.upstreams_complete && list.default_branch.is_none());
 }
@@ -600,7 +600,7 @@ fn a_head_git_cannot_read_leaves_the_upstream_unknown_and_says_so() {
     // A common directory `git` finds no repository in fails with something other than the status
     // of a detached `HEAD`.
     let elsewhere = ScratchDir::new("upstream-bad-head-dir");
-    let env = GitEnv::new(SYSTEM_GIT.to_string(), isolated_git_env());
+    let env = IsolatedGit::new(SYSTEM_GIT.to_string(), isolated_git_env());
     let list =
         compare::branches_in(&env, &repo, &elsewhere, true, &AtomicBool::new(false)).unwrap();
     assert!(!list.upstreams_complete);

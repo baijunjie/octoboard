@@ -1018,7 +1018,7 @@ export type Event = {
   processes: Array<ProcessTree>,
   /**
    * The token the worktrees it held back are kept under, for `delete_project` to send back
-   * (`crate::branch_origin::cleanup::project`); absent when it held none back.
+   * (`crate::branch_cleanup::project`); absent when it held none back.
    */
   inspection?: string,
 }
@@ -2308,10 +2308,9 @@ export type Request = {
     effort?: string
   }>>,
   /**
-   * Whether an absent `default_agent` is filled in from the directory's marker files (see
-   * `hostfs::detect_agent`). Absent is true; a client that has already shown the user the
-   * detection, and so sends what it showed, sends false to have "inherit from console"
-   * kept as chosen.
+   * Whether an absent `default_agent` is filled in from the directory's marker files. Absent
+   * is true; a client that has already shown the user the detection, and so sends what it
+   * showed, sends false to have "inherit from console" kept as chosen.
    */
   detect_default_agent?: boolean,
   /**
@@ -2983,10 +2982,9 @@ export type RequestBody = {
     effort?: string
   }>>,
   /**
-   * Whether an absent `default_agent` is filled in from the directory's marker files (see
-   * `hostfs::detect_agent`). Absent is true; a client that has already shown the user the
-   * detection, and so sends what it showed, sends false to have "inherit from console"
-   * kept as chosen.
+   * Whether an absent `default_agent` is filled in from the directory's marker files. Absent
+   * is true; a client that has already shown the user the detection, and so sends what it
+   * showed, sends false to have "inherit from console" kept as chosen.
    */
   detect_default_agent?: boolean,
   /**

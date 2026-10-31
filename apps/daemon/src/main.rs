@@ -15,6 +15,8 @@ mod agent_records;
 mod archive_cleanup;
 mod auto_switch;
 mod availability;
+mod blocking_pass;
+mod branch_cleanup;
 mod branch_origin;
 mod browse;
 mod codex_transport;
@@ -24,20 +26,13 @@ mod coordinator;
 mod crash_cleanup;
 mod default_effort;
 mod env_shell;
-mod gate_hook_mode;
-mod git_env;
-mod git_push;
-mod git_ref_mode;
-mod git_remote;
-mod git_restore;
-mod git_status;
-mod git_switch;
-mod git_watch;
+mod git;
 mod git_workflow;
 mod handoff;
 mod hook_mode;
 mod hook_queue;
 mod hooks;
+mod host_open;
 mod host_tools;
 mod hostfs;
 mod instance_lock;
@@ -48,14 +43,13 @@ mod line_file;
 mod log_file;
 mod loopback;
 mod mcp;
-mod open_directory;
-mod open_terminal;
 mod outbox;
 mod path_links;
 mod paths;
 mod process_ledger;
 mod process_requests;
 mod process_session;
+mod project_git;
 mod project_trash;
 mod protocol;
 mod pty;
@@ -75,6 +69,7 @@ mod rollout;
 mod saved_output;
 mod server;
 mod session;
+mod session_git_hooks;
 mod session_history;
 mod session_request;
 mod session_title;
@@ -97,6 +92,7 @@ mod title_interrupt;
 mod transcript;
 mod trash_safety;
 mod trust;
+mod wire_path;
 
 use std::sync::Arc;
 
@@ -244,7 +240,7 @@ fn main() -> Result<()> {
         refs,
     }) = &cli.command
     {
-        git_ref_mode::run(session, *port, key, head.as_deref(), refs);
+        session_git_hooks::ref_mode::run(session, *port, key, head.as_deref(), refs);
         return Ok(());
     }
 
@@ -256,7 +252,7 @@ fn main() -> Result<()> {
         hook,
     }) = &cli.command
     {
-        std::process::exit(gate_hook_mode::run(session, *port, key, hook));
+        std::process::exit(session_git_hooks::gate_mode::run(session, *port, key, hook));
     }
     if let Some(Command::RevertGate(args)) = &cli.command {
         std::process::exit(revert_gate::run(args));
@@ -417,8 +413,8 @@ async fn run_daemon(parent_pid: Option<u32>, log_file: log_file::LogFile) -> Res
     account_quotas::spawn(&state);
     archive_cleanup::spawn(&state);
     // Likewise off the runtime: it runs `git` in every project's directory, a few at a time.
-    git_remote::reconcile_remote_urls(&state);
-    git_watch::start(&state);
+    project_git::remote::reconcile_remote_urls(&state);
+    project_git::watch::start(&state);
     // On a thread of its own: what the previous run's agents left is stopped without holding up
     // anything else. A launch meanwhile is safe from it, since its launch id is reserved before its
     // agent starts.

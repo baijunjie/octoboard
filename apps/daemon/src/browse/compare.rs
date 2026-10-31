@@ -25,16 +25,17 @@ use std::time::Instant;
 use anyhow::Result;
 
 use crate::browse::changes::{self, ChangeRead};
-use crate::browse::git::{GitEnv, GitError};
 use crate::browse::line_counts;
 use crate::browse::tree_diff;
-use crate::browse::wire_path;
 use crate::browse::{blob, budget, git_error, git_failed, json_escaped_len, Located};
+use crate::git::isolated::IsolatedGit;
+use crate::git::run::GitError;
 use crate::protocol::{
     error_code, BranchInfo, ChangeEntry, CodedError, ComparedChangeRef, ComparisonEndpoint,
     UpstreamInfo,
 };
 use crate::subprocess::BoundedFailure;
+use crate::wire_path;
 
 /// A repository's local branches, in byte order of their names.
 #[derive(Debug)]
@@ -62,7 +63,7 @@ pub struct BranchList {
 /// repository's remote default branch ([`find_remote_branches`]). A broken branch — naming an
 /// object the repository does not have, or one that is not a commit — is listed as it is rather than looked into, since asking `git` for what a missing object is
 /// fails the whole listing; comparing it is refused (`blob::resolve_branch`).
-pub fn branches(env: &GitEnv, at: &Located, cancel: &AtomicBool) -> Result<BranchList> {
+pub fn branches(env: &IsolatedGit, at: &Located, cancel: &AtomicBool) -> Result<BranchList> {
     branches_in(env, &at.root, &at.repository.common_dir, true, cancel)
 }
 
@@ -71,7 +72,7 @@ pub fn branches(env: &GitEnv, at: &Located, cancel: &AtomicBool) -> Result<Branc
 /// branch is looked for only when `with_default`, so a caller that has no use for it neither pays
 /// for the lookup nor fails on its budgets.
 pub fn branches_in(
-    env: &GitEnv,
+    env: &IsolatedGit,
     dir: &Path,
     common_dir: &Path,
     with_default: bool,
@@ -196,7 +197,7 @@ enum Head {
 /// The branch the main working copy has checked out: what `git symbolic-ref` says of the `HEAD`
 /// of the repository's common directory, which is the main working copy's own, whatever format
 /// the references are kept in. It exits with status 1 for a `HEAD` that is no symbolic reference.
-fn main_branch(env: &GitEnv, common_dir: &Path, cancel: &AtomicBool) -> Result<Head> {
+fn main_branch(env: &IsolatedGit, common_dir: &Path, cancel: &AtomicBool) -> Result<Head> {
     let args: &[&[u8]] = &[b"-q", b"HEAD"];
     match env.run(
         common_dir,
@@ -212,8 +213,8 @@ fn main_branch(env: &GitEnv, common_dir: &Path, cancel: &AtomicBool) -> Result<H
                 .filter(|name| !name.is_empty())
                 .map_or(Head::Detached, |name| Head::Branch(name.to_vec())))
         }
-        Err(GitError::Failed(failed)) if failed.code == Some(1) => Ok(Head::Detached),
-        Err(GitError::Failed(_) | GitError::Stopped(BoundedFailure::StdoutExceeded(_))) => {
+        Err(GitError::Exited { code: Some(1), .. }) => Ok(Head::Detached),
+        Err(GitError::Exited { .. } | GitError::Stopped(BoundedFailure::StdoutExceeded(_))) => {
             Ok(Head::Unknown)
         }
         Err(err) => Err(git_error(err)),
@@ -224,7 +225,7 @@ fn main_branch(env: &GitEnv, common_dir: &Path, cancel: &AtomicBool) -> Result<H
 /// ([`find_remote_branches`]), without listing the repository's branches. `None` for a repository
 /// with none, or whose remotes are past a budget.
 pub fn remote_default_branch(
-    env: &GitEnv,
+    env: &IsolatedGit,
     dir: &Path,
     cancel: &AtomicBool,
 ) -> Result<Option<UpstreamInfo>> {
@@ -265,7 +266,7 @@ struct Found {
 /// asked for, the output of `git remote` or of a lookup) gives up with what it has found so far,
 /// the upstream if that was found, and says it was not complete.
 fn find_remote_branches(
-    env: &GitEnv,
+    env: &IsolatedGit,
     dir: &Path,
     (name, configured): (&[u8], &[u8]),
     with_default: bool,
@@ -386,7 +387,7 @@ const FORMAT: &[u8] = b"--format=%(objectname) %(refname) %(symref)";
 /// and gives back what it printed. `None` when the names are past [`budget::UPSTREAM_PATTERN_BYTES`],
 /// or the output passes its budget.
 fn lookup(
-    env: &GitEnv,
+    env: &IsolatedGit,
     dir: &Path,
     names: Vec<Vec<u8>>,
     cancel: &AtomicBool,
@@ -447,7 +448,7 @@ pub enum Base<'a> {
 /// repository's root is compared within its own directory instead: a rename across its boundary
 /// then reads as the addition or the deletion it is inside, as an unpaired one always does.
 pub fn list(
-    env: &GitEnv,
+    env: &IsolatedGit,
     at: &Located,
     left: Base,
     right: &str,
@@ -508,7 +509,7 @@ pub fn list(
     let scope = &at.repository.scope;
     let stdout = match env.run(&at.root, "diff-tree", &args, limit, cancel) {
         Err(GitError::Stopped(BoundedFailure::StdoutExceeded(_))) if !scope.is_root() => {
-            // A literal pathspec (`GitEnv::run` sets `GIT_LITERAL_PATHSPECS`): the scope's
+            // A literal pathspec (`IsolatedGit::run` sets `GIT_LITERAL_PATHSPECS`): the scope's
             // directory and everything below it.
             args.extend_from_slice(&[b"--", scope.as_bytes()]);
             env.run(&at.root, "diff-tree", &args, limit, cancel)
@@ -554,7 +555,7 @@ pub fn list(
 /// left...right` takes it. The commit itself when both are at one. `git merge-base` exits with
 /// status 1 and prints nothing when there is none, which is told from a failure to run.
 fn merge_base(
-    env: &GitEnv,
+    env: &IsolatedGit,
     at: &Located,
     left: &ComparisonEndpoint,
     right: &ComparisonEndpoint,
@@ -584,7 +585,7 @@ fn merge_base(
         }
         // Status 1 is `git merge-base`'s answer for no common ancestor; a failure to run it is
         // another status.
-        Err(GitError::Failed(failed)) if failed.code == Some(1) => {
+        Err(GitError::Exited { code: Some(1), .. }) => {
             // A shallow clone lacks the history that would show the common commit, so the two
             // may well have one; the reason is told apart for it.
             let shallow = is_shallow(env, at, cancel);
@@ -614,7 +615,7 @@ fn merge_base(
 
 /// Whether the repository is a shallow clone. A failure to ask counts as no: the answer only
 /// words a refusal that is made either way.
-fn is_shallow(env: &GitEnv, at: &Located, cancel: &AtomicBool) -> bool {
+fn is_shallow(env: &IsolatedGit, at: &Located, cancel: &AtomicBool) -> bool {
     let args: &[&[u8]] = &[b"--is-shallow-repository"];
     env.run(
         &at.root,
@@ -634,7 +635,7 @@ type Compared<'a> = (&'a ComparisonEndpoint, &'a ComparisonEndpoint, &'a str);
 /// commit. Whether `base` is the two commits' merge base is not asked again: a read is held to
 /// commits of the repository, as a read of a commit is.
 fn verify_endpoints(
-    env: &GitEnv,
+    env: &IsolatedGit,
     at: &Located,
     (left, right, base): Compared,
     cancel: &AtomicBool,
@@ -677,7 +678,7 @@ fn verify_endpoints(
 /// ([`verify_endpoints`]). The branches are not looked up again; the commits alone decide what is
 /// read: the old side from `base` and the new side from the right commit.
 pub fn read(
-    env: &GitEnv,
+    env: &IsolatedGit,
     at: &Located,
     compared: Compared,
     change: &ComparedChangeRef,
@@ -697,7 +698,7 @@ pub fn read(
 /// Reads the whole bodies of one change of a comparison, checked first as [`read`] checks them,
 /// and read only when both sides are the versions `expected` names.
 pub fn read_bodies(
-    env: &GitEnv,
+    env: &IsolatedGit,
     at: &Located,
     compared: Compared,
     change: &ComparedChangeRef,

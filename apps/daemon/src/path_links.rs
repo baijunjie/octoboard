@@ -35,7 +35,7 @@ use crate::protocol::{error_code, CodedError, PathLink, PathLinkKind, PathLinkVi
 pub const MAX_PROBED_PATHS: usize = 64;
 
 /// How many probes run at once; each can touch the file system for up to `MAX_PROBED_PATHS` paths.
-pub static PROBE_PERMITS: Semaphore = Semaphore::const_new(4);
+pub static PROBE_PERMITS: Semaphore = Semaphore::const_new(crate::blocking_pass::BLOCKING_WIDTH);
 
 /// How long the roots of a project are reused: finding its worktrees runs `git`.
 const ROOTS_TTL: Duration = Duration::from_secs(5);
@@ -438,9 +438,30 @@ fn launchable(canonical: &Path, root: &Path, metadata: &std::fs::Metadata) -> bo
     })
 }
 
-fn roots_cache() -> &'static Mutex<HashMap<String, (Instant, ProjectRoots)>> {
-    static CACHE: OnceLock<Mutex<HashMap<String, (Instant, ProjectRoots)>>> = OnceLock::new();
-    CACHE.get_or_init(Default::default)
+/// The roots of each project as last found, with when: `project_roots` reuses them for
+/// [`ROOTS_TTL`]. Held in memory only, on `AppState`, and dropped with the project.
+#[derive(Default)]
+pub struct RootsCache(Mutex<HashMap<(String, String), (Instant, ProjectRoots)>>);
+
+impl RootsCache {
+    /// What was found for `project` at `path` within [`ROOTS_TTL`].
+    fn get(&self, project: &str, path: &str) -> Option<ProjectRoots> {
+        let cache = self.0.lock().unwrap();
+        let (at, roots) = cache.get(&(project.to_owned(), path.to_owned()))?;
+        (at.elapsed() < ROOTS_TTL).then(|| roots.clone())
+    }
+
+    fn insert(&self, project: &str, path: &str, roots: ProjectRoots) {
+        self.0.lock().unwrap().insert(
+            (project.to_owned(), path.to_owned()),
+            (Instant::now(), roots),
+        );
+    }
+
+    /// Drops everything held for `project`, whichever directory it was found at.
+    pub fn forget(&self, project: &str) {
+        self.0.lock().unwrap().retain(|(id, _), _| id != project);
+    }
 }
 
 /// The roots of `project`, as they were found within the last few seconds unless `fresh`. A
@@ -449,21 +470,20 @@ fn project_roots(state: &crate::state::AppState, project: &str, fresh: bool) -> 
     let record = state.store.get_project(project).ok().flatten();
     // Keyed by the stored path as well, so a project pointed at another directory is not answered
     // from the roots of the old one.
-    let key = format!(
-        "{project}\0{}",
-        record.as_ref().map_or("", |record| &record.path)
-    );
+    let path = record
+        .as_ref()
+        .map_or_else(String::new, |record| record.path.clone());
     if !fresh {
-        let cache = roots_cache().lock().unwrap();
-        if let Some((at, roots)) = cache.get(&key) {
-            if at.elapsed() < ROOTS_TTL {
-                return roots.clone();
-            }
+        if let Some(roots) = state.path_link_roots.get(project, &path) {
+            return roots;
         }
     }
-    let live =
-        crate::browse::project_live_roots(state, project, &crate::browse::git::GitEnv::from_shell)
-            .unwrap_or_default();
+    let live = crate::browse::project_live_roots(
+        state,
+        project,
+        &crate::git::isolated::IsolatedGit::from_shell,
+    )
+    .unwrap_or_default();
     let canonical: Vec<PathBuf> = live.iter().map(|live| live.root.clone()).collect();
     let worktrees = live.into_iter().map(|live| live.worktree).collect();
     let mut lexical = canonical.clone();
@@ -475,10 +495,7 @@ fn project_roots(state: &crate::state::AppState, project: &str, fresh: bool) -> 
         worktrees,
         lexical,
     };
-    roots_cache()
-        .lock()
-        .unwrap()
-        .insert(key, (Instant::now(), roots.clone()));
+    state.path_link_roots.insert(project, &path, roots.clone());
     roots
 }
 
@@ -553,7 +570,7 @@ fn view_of(resolved: &Resolved, roots: &ProjectRoots) -> Option<PathLinkView> {
     let relative = target.strip_prefix(roots.canonical.get(index)?).ok()?;
     Some(PathLinkView {
         worktree: roots.worktrees.get(index)?.clone(),
-        path: crate::browse::wire_path::encode(relative.as_os_str().as_bytes()),
+        path: crate::wire_path::encode(relative.as_os_str().as_bytes()),
     })
 }
 
@@ -600,7 +617,7 @@ fn entry_file(directory: &Path) -> Option<PathBuf> {
 /// resolving it again as `probe` does, from the project's roots as they are now.
 pub fn open(state: &crate::state::AppState, project: Option<&str>, path: &str) -> Result<()> {
     open_with(state, project, path, |path| {
-        crate::open_directory::open_path(path, false)
+        crate::host_open::paths::open_path(path, false)
     })
 }
 

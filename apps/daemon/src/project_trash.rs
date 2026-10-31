@@ -12,11 +12,26 @@ use anyhow::Result;
 use uuid::Uuid;
 
 use crate::hostfs::place::Looking;
+use crate::hostfs::trash::TrashFailure;
 use crate::protocol::{error_code, Code, CodedError, Params, Project};
 use crate::state::AppState;
 use crate::trash_safety::{
     looked_at_for_trash, Blocked, Failure, Overlap, Unresolved, TRASH_LOOK_DEADLINE,
 };
+
+/// The [`PROJECT_DIRECTORY_TRASH_FAILED`] a project's folder raises when the Trash did not take it.
+///
+/// [`PROJECT_DIRECTORY_TRASH_FAILED`]: error_code::PROJECT_DIRECTORY_TRASH_FAILED
+pub fn trash_failed(failure: &TrashFailure) -> anyhow::Error {
+    CodedError::raised(
+        error_code::PROJECT_DIRECTORY_TRASH_FAILED,
+        format!(
+            "could not move {} to the Trash: {}",
+            failure.path, failure.detail
+        ),
+        &[("path", &failure.path), ("detail", &failure.detail)],
+    )
+}
 
 /// A refusal of a move to the Trash, kept so that it can be said again.
 #[derive(Clone, Debug)]
@@ -55,7 +70,7 @@ impl Refusal {
 /// token the answer carried (`inspection`), for the removal confirmed after that inspection to
 /// repeat: a refusal, once ([`directory_to_trash`]), or the worktrees outside the folder it held
 /// back because whether they are or hold another project's folder could not be told
-/// (`crate::branch_origin::cleanup::project`), for every removal that sends the token until one
+/// (`crate::branch_cleanup::project`), for every removal that sends the token until one
 /// stands. Held in memory only. A token goes when a removal uses its refusal, when its project is
 /// removed, or when its project holds [`KEPT_PER_PROJECT`] newer ones.
 #[derive(Default)]

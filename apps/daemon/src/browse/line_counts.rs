@@ -26,11 +26,12 @@ use std::sync::atomic::AtomicBool;
 
 use anyhow::Result;
 
-use crate::browse::git::{GitEnv, GitError};
-use crate::browse::wire_path::RelPath;
 use crate::browse::{budget, changes, git_error, line_count, live, Cancelled, Located};
+use crate::git::isolated::IsolatedGit;
+use crate::git::run::GitError;
 use crate::protocol::{ChangeEntry, ChangeSide, LineStats, SideKind};
 use crate::subprocess::BoundedFailure;
+use crate::wire_path::RelPath;
 
 /// What `git diff --numstat` counted for one text file: its repository path's wire form is the key
 /// of [`Counts`].
@@ -57,7 +58,7 @@ pub(super) fn wanted<'a>(entries: impl Iterator<Item = &'a ChangeEntry>) -> Want
 /// The counts of `git <subcommand> <args>`, which prints a single diff (`diff` or `diff-tree`),
 /// for the paths in `wanted`. See [`read`].
 pub(super) fn read_diff(
-    env: &GitEnv,
+    env: &IsolatedGit,
     at: &Located,
     subcommand: &str,
     args: &[&[u8]],
@@ -76,7 +77,7 @@ pub(super) fn read_diff(
 /// The counts of `git log <args>`, whose format must be the commit's id and a NUL alone: one group
 /// per commit of `wanted`, by its id, holding the records of that commit's paths alone.
 pub(super) fn read_log(
-    env: &GitEnv,
+    env: &IsolatedGit,
     at: &Located,
     args: &[&[u8]],
     wanted: &HashMap<Vec<u8>, Wanted>,
@@ -91,7 +92,7 @@ pub(super) fn read_log(
 /// `git log` (its `%H%x00` format being the only header), and one, under an empty key, for what
 /// comes before any header, which is all a `git diff` or `git diff-tree` prints.
 fn read<'w>(
-    env: &GitEnv,
+    env: &IsolatedGit,
     at: &Located,
     subcommand: &str,
     args: &[&[u8]],
@@ -102,8 +103,8 @@ fn read<'w>(
     let mut all: Vec<&[u8]> = vec![b"-z", b"--numstat", b"--no-relative"];
     all.extend_from_slice(args);
     if !scope.is_root() {
-        // A literal pathspec (`GitEnv::run` sets `GIT_LITERAL_PATHSPECS`): the scope's directory
-        // and everything below it.
+        // A literal pathspec (`IsolatedGit::run` sets `GIT_LITERAL_PATHSPECS`): the scope's
+        // directory and everything below it.
         all.extend_from_slice(&[b"--", scope.as_bytes()]);
     }
     let run = env.run_within(

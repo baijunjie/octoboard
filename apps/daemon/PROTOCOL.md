@@ -1383,8 +1383,9 @@ DocumentAccount   { name, directory, share_default_config: bool, disabled: bool 
   "Configuration import").
 - **`remote_url`** is what is recorded for the project (see "Records"); the export reads it from the stored record
   and runs no `git`. It is absent for a directory that is not a repository and for one with no remote. With
-  `include_paths` false it is kept only when it may be cloned from (`git_remote::is_clonable_url`); a local path or a
-  `file:` URL is dropped, as it would point into the exporting machine.
+  `include_paths` false it is kept only when it may be cloned from
+  (`project_git::remote_url::is_clonable_url`); a local path or a `file:` URL is dropped, as it would point into the
+  exporting machine.
 - **Models and efforts** are exported as stored. They are free text read only when a session is launched, so a value
   the importing machine's agent does not offer is not an error here.
 - **Version.** `format` tells a configuration document from any other JSON; `version` is an integer, 1 today. It is

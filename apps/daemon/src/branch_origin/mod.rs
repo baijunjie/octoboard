@@ -1,15 +1,17 @@
 //! Which session is responsible for a git branch, the one working on it now, kept so the Git mode
-//! can mark the relation.
+//! can mark the relation: the record of branch origins and targets, the handover of a branch to
+//! another session, the listing of a session's branches, what is bound to a session
+//! ([`bound`]), and the reading of the reflog files they lean on.
 //!
 //! A branch is first attributed, to the session that made it, only when that session's own git says
 //! it created it: a project session's agent runs with `core.hooksPath` pointed at Octoboard's hook
-//! dispatchers ([`git_hooks`]), and when a reference transaction of a git anywhere in that agent's
-//! process tree commits a branch that did not exist while it was prepared — whatever command, alias
-//! or script made it — the `reference-transaction` hook reports it, under the session it was
-//! started for, to [`ref_created`]. A forced update of an existing branch names no old value
-//! either, which is why existence is asked before the transaction writes anything. Nothing else
-//! names a session: no timing, no working directory, no guess. A branch the hook never reported has
-//! no responsible session, which is no failure, and cannot be handed over.
+//! dispatchers ([`crate::session_git_hooks`]), and when a reference transaction of a git anywhere
+//! in that agent's process tree commits a branch that did not exist while it was prepared —
+//! whatever command, alias or script made it — the `reference-transaction` hook reports it, under
+//! the session it was started for, to [`ref_created`]. A forced update of an existing branch names
+//! no old value either, which is why existence is asked before the transaction writes anything.
+//! Nothing else names a session: no timing, no working directory, no guess. A branch the hook never
+//! reported has no responsible session, which is no failure, and cannot be handed over.
 //!
 //! A report is taken only for a repository the session's own project is in, and only while the
 //! branch is still the one it reports: in a repository whose references are files, the branch's
@@ -19,8 +21,8 @@
 //!
 //! A row also keeps the branch the new one was created from, its target branch ([`target`]); the
 //! commit it was created at, its `birth_commit`, is the fork point. The revert gate holds the
-//! branch's later work against both ([`revert_gate_inputs`]). A rename carries the target along and
-//! a handover leaves it alone.
+//! branch's later work against both ([`crate::session_git_hooks::gate_inputs`]). A rename carries
+//! the target along and a handover leaves it alone.
 //!
 //! A row's responsible session is the reporting session when the row is written, and another only
 //! through an explicit handover ([`hand_over`]) — never inferred. The row keeps the title the
@@ -44,14 +46,10 @@
 //!   `gc.reflogExpire` (90 days by default) drops it, the row goes. A branch deleted and made again
 //!   at the same commit inside one second has the same first entry and keeps the old row.
 
-mod bound;
-pub mod cleanup;
+pub(crate) mod bound;
 mod gate;
-pub mod git;
 mod git_files;
-pub mod git_hooks;
 pub mod handover;
-pub mod revert_gate_inputs;
 pub mod session_branches;
 mod target;
 #[cfg(test)]
@@ -65,14 +63,15 @@ use std::time::Instant;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
+use crate::browse::budget;
 use crate::browse::compare::BranchList;
-use crate::browse::{budget, wire_path};
+use crate::git::repo_files::{common_dir_of, repository_of, uses_reftable};
 use crate::protocol::{BranchOriginInfo, Session};
 use crate::state::AppState;
 use crate::store::{BranchMove, BranchOrigin};
+use crate::wire_path;
 pub use gate::Gates;
-pub use git_files::repository_of;
-use git_files::{first_reflog_entry, reflog_has_message, uses_reftable};
+use git_files::{first_reflog_entry, reflog_has_message};
 
 /// How far apart the time a report gives and the time of the reflog entry it is about may lie. The
 /// report is made by a process git starts right after the entry is written, so anything further
@@ -192,13 +191,13 @@ fn record_created(state: &AppState, session_id: &str, report: &RefReport) -> Res
 /// The canonical common directory of the repository a hook ran in, from the directory git ran it in
 /// and the `GIT_DIR` it set (wire paths): the one `GIT_DIR` names when git set it, else the one
 /// holding the directory.
-fn reported_repository(cwd: &str, git_dir: Option<&str>) -> Option<PathBuf> {
+pub(crate) fn reported_repository(cwd: &str, git_dir: Option<&str>) -> Option<PathBuf> {
     let cwd = PathBuf::from(std::ffi::OsStr::from_bytes(&wire_path::decode(cwd)?));
     let Some(git_dir) = git_dir else {
         return repository_of(&cwd);
     };
     let git_dir = cwd.join(std::ffi::OsStr::from_bytes(&wire_path::decode(git_dir)?));
-    git_files::common_dir_of(&git_dir)
+    common_dir_of(&git_dir)
 }
 
 /// The branch a created reference is, as a wire path; `None` for a reference outside
@@ -593,7 +592,7 @@ fn renamed_to<'b>(repo: &Path, row: &BranchOrigin, candidates: &[&'b str]) -> Op
 
 /// Whether the branch is still the one `row` was made for. A reftable repository keeps no reflog
 /// files to hold it against, and the row stands until the branch goes.
-fn is_same_branch(repo: &Path, row: &BranchOrigin) -> bool {
+pub(crate) fn is_same_branch(repo: &Path, row: &BranchOrigin) -> bool {
     if uses_reftable(repo) {
         return true;
     }

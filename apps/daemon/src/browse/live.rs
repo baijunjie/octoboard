@@ -31,9 +31,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use anyhow::Result;
 
 use crate::browse::source::file_id;
-use crate::browse::wire_path::{self, RelPath};
-use crate::browse::{budget, ignored, json_escaped_len, Cancelled, Git};
+use crate::browse::{budget, ignored, json_escaped_len, BrowseGit, Cancelled};
 use crate::protocol::{error_code, BrowseEntry, CodedError, EntryKind, LinkTarget};
+use crate::wire_path::{self, RelPath};
 
 /// Resolves `path` inside the scope directory `scope` (already canonical) to the canonical path
 /// it names, refusing one that leads outside.
@@ -251,7 +251,12 @@ pub struct Listing {
 /// [`budget::MAX_LISTING_NAME_BYTES`] of names as they will be sent, without reading the rest of
 /// the directory; an entry that cannot be read is left out and marks it incomplete too. The
 /// entries Git ignores are marked as [`ignored`] says.
-pub fn list_dir(scope: &Path, path: &RelPath, git: &Git, cancel: &AtomicBool) -> Result<Listing> {
+pub fn list_dir(
+    scope: &Path,
+    path: &RelPath,
+    git: &BrowseGit,
+    cancel: &AtomicBool,
+) -> Result<Listing> {
     let canonical = resolve(scope, path)?;
     let mut listing = list_resolved(
         scope,
@@ -371,7 +376,7 @@ pub fn search_files(
     scope: &Path,
     query: &str,
     include_ignored: bool,
-    git: &Git,
+    git: &BrowseGit,
     cancel: &AtomicBool,
 ) -> Result<FileMatches> {
     let started = std::time::Instant::now();
@@ -752,7 +757,7 @@ mod tests {
     /// A search over a `git` that cannot be run, in scopes that hold no repository: nothing is
     /// ignored, and including ignored files only keeps the search from leaving anything out.
     fn search_files(scope: &Path, query: &str, cancel: &AtomicBool) -> Result<FileMatches> {
-        let git = Git::new(&|| anyhow::bail!("no git in this test"));
+        let git = BrowseGit::new(&|| anyhow::bail!("no git in this test"));
         super::search_files(scope, query, true, &git, cancel)
     }
 
@@ -839,7 +844,7 @@ mod tests {
         fs::create_dir_all(scope.join("nested")).unwrap();
         fs::write(scope.join("needle.txt"), b"match").unwrap();
         fs::write(scope.join("nested/needle.txt"), b"match").unwrap();
-        let git = Git::new(&|| anyhow::bail!("no git in this test"));
+        let git = BrowseGit::new(&|| anyhow::bail!("no git in this test"));
         for (visited, matches, bytes, depth, timeout) in [
             (0, 10, 1024, 10, std::time::Duration::from_secs(5)),
             (100, 1, 1024, 10, std::time::Duration::from_secs(5)),

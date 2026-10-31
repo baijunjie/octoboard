@@ -212,20 +212,20 @@ pub struct AppState {
     /// [`GitCheck`] for what an entry carries.
     git_checks: Mutex<HashMap<String, GitCheck>>,
     /// When each project's last check completed, for the minimum-interval floor in
-    /// `git_status::due_for_check` — a second guard next to `git_checks` above, needed because that
-    /// one only stops two checks from overlapping and does nothing about several clients each
-    /// polling on their own 5-minute phase. Entries are removed wherever the project's `GitStatus`
-    /// is, by `remove_git_status`, so a reused project id never inherits a stale timestamp. Each
-    /// carries the wall-clock time too, in milliseconds since the epoch: the `Instant` stops while
-    /// the machine sleeps, which suits the floor but not telling an agent how long ago the check
-    /// was.
+    /// `crate::project_git::status::due_for_check` — a second guard next to `git_checks` above,
+    /// needed because that one only stops two checks from overlapping and does nothing about
+    /// several clients each polling on their own 5-minute phase. Entries are removed wherever the
+    /// project's `GitStatus` is, by `remove_git_status`, so a reused project id never inherits a
+    /// stale timestamp. Each carries the wall-clock time too, in milliseconds since the epoch: the
+    /// `Instant` stops while the machine sleeps, which suits the floor but not telling an agent how
+    /// long ago the check was.
     git_check_completed: Mutex<HashMap<String, (Instant, i64)>>,
     /// Per repository, the gate every write to its branch origins takes and when rows were last
     /// added (`crate::branch_origin`).
     pub branch_origins: crate::branch_origin::Gates,
     /// The removal of the branches and worktrees bound to sessions archived or deleted: its gate
     /// per repository.
-    pub branch_cleanups: crate::branch_origin::cleanup::Cleanups,
+    pub branch_cleanups: crate::branch_cleanup::Cleanups,
     /// What requests reach the host through where a test stands in: `git`, the Trash.
     pub host_tools: crate::host_tools::HostTools,
     /// How long a message written to an idle Claude Code session is given to be reported sent, or
@@ -236,8 +236,8 @@ pub struct AppState {
     /// The context window each Claude Code session's status line last reported.
     pub context_windows: crate::record_context::ReportedWindows,
     /// The repositories' refs under watch, so a commit made outside the daemon is re-read
-    /// (`crate::git_watch`).
-    pub git_watch: crate::git_watch::Watch,
+    /// (`crate::project_git::watch`).
+    pub git_watch: crate::project_git::watch::Watch,
     /// Each agent's availability and what its default account currently resolves to, derived once
     /// per daemon start (`crate::availability`) and broadcast by its own event on change; never a
     /// field of `Store`'s settings row, which only the user's own updates write. Always holds all
@@ -278,6 +278,9 @@ pub struct AppState {
     /// stuck once it has run long enough (`crate::hostfs::place::looked_within`). Held in memory
     /// only.
     pub directory_looks: StalledPasses<std::path::PathBuf>,
+    /// The roots of each project a path link was last checked against, reused for a few seconds
+    /// (`crate::path_links`). Held in memory only. Dropped with their project.
+    pub path_link_roots: crate::path_links::RootsCache,
     /// For each session with a session request waiting, the status its agent's own events
     /// say it has, while the record shows `WaitingUser` for the request. Kept so that the daemon's
     /// decisions about the agent (can a message be written, did a turn end) keep reading the agent
@@ -770,6 +773,7 @@ impl AppState {
             account_sharing: Default::default(),
             shell_terminals: Default::default(),
             directory_looks: Default::default(),
+            path_link_roots: Default::default(),
             events,
             account_writes: Mutex::new(()),
             session_publication: Mutex::new(()),
@@ -1821,7 +1825,8 @@ impl AppState {
             let id = id.as_ref();
             self.remove_git_status(id);
             self.unresolved_removals.forget(id);
-            crate::git_watch::remove(self, id);
+            self.path_link_roots.forget(id);
+            crate::project_git::watch::remove(self, id);
         }
     }
 
@@ -3045,13 +3050,14 @@ impl AppState {
     // -- git status ------------------------------------------------------------
 
     /// Claims the right to check this project's git status, for a check that waits for a place
-    /// before it runs (a sweep's, or `git_status::pull_behind_projects`'s). Released by
-    /// [`GitCheckClaim::release_unless_rerun_owed`] or, if the check panics, when the returned
-    /// guard is dropped, so a wedged step cannot leave its project excluded from every later
-    /// sweep for the rest of the daemon's life. `None` means a check for it is already running and
-    /// the caller must not start another. The claim is held from the moment it is queued, so
-    /// another sweep does not queue the project twice, and a manual pull that finds it still
-    /// waiting takes it over instead of waiting behind the sweep (see [`GitCheckClaim::start`]).
+    /// before it runs (a sweep's, or `crate::project_git::status::pull_behind_projects`'s).
+    /// Released by [`GitCheckClaim::release_unless_rerun_owed`] or, if the check panics, when the
+    /// returned guard is dropped, so a wedged step cannot leave its project excluded from every
+    /// later sweep for the rest of the daemon's life. `None` means a check for it is already
+    /// running and the caller must not start another. The claim is held from the moment it is
+    /// queued, so another sweep does not queue the project twice, and a manual pull that finds it
+    /// still waiting takes it over instead of waiting behind the sweep (see
+    /// [`GitCheckClaim::start`]).
     pub fn claim_git_check_queued(self: &Arc<Self>, project_id: &str) -> Option<GitCheckClaim> {
         self.claim_git_check_with(project_id, GitCheckRequest::Queued)
     }
@@ -3137,7 +3143,7 @@ impl AppState {
     pub(crate) fn publish_git_reread(
         &self,
         project_id: &str,
-        header: Result<crate::git_status::BranchHeader, String>,
+        header: Result<crate::project_git::header::BranchHeader, String>,
     ) {
         if let Ok(None) = self.store.get_project(project_id) {
             self.remove_git_status(project_id);
@@ -3153,7 +3159,7 @@ impl AppState {
             .or_insert_with(|| blank_git_status(project_id));
         status.repository = true;
         match header {
-            Ok(header) => crate::git_status::apply_header(status, header),
+            Ok(header) => crate::project_git::header::apply_header(status, header),
             Err(err) => status.error = Some(err),
         }
         let status = status.clone();
@@ -3263,8 +3269,8 @@ impl AppState {
             .remove(project_id);
     }
 
-    /// When this project's check last completed, for `git_status::due_for_check`. `None` means it
-    /// has never been checked, which that function always treats as due.
+    /// When this project's check last completed, for `crate::project_git::status::due_for_check`.
+    /// `None` means it has never been checked, which that function always treats as due.
     pub fn git_check_completed_at(&self, project_id: &str) -> Option<Instant> {
         self.git_check_completed
             .lock()
@@ -4743,8 +4749,9 @@ mod tests {
     }
 
     /// A check that panics must still release its project's claim, or a wedged step excludes that
-    /// project from every later sweep for the rest of the daemon's life — `spawn_check` relies on
-    /// unwinding through the claim's `Drop` rather than an explicit `end_git_check` call.
+    /// project from every later sweep for the rest of the daemon's life — `run_checks`
+    /// (`crate::project_git::status`) relies on unwinding through the claim's `Drop` rather than an
+    /// explicit `end_git_check` call.
     #[test]
     fn a_git_check_claim_is_released_even_if_the_check_panics() {
         let (state, _dir) = app_state("state-git-claim-panic");
@@ -4851,7 +4858,7 @@ mod tests {
         });
         state.publish_git_reread(
             "p1",
-            Ok(crate::git_status::BranchHeader {
+            Ok(crate::project_git::header::BranchHeader {
                 branch: Some("main".to_string()),
                 upstream: Some("origin/main".to_string()),
                 ahead: 0,
@@ -4917,7 +4924,7 @@ mod tests {
             crate::test_support::repo_with("state-git-push-refused-repo", &[(b"file", b"one")]);
         let project = git_project(&state, &repo);
         let first = state.begin_git_push("p1").unwrap();
-        let err = crate::git_push::push_current_branch(&state, &project).unwrap_err();
+        let err = crate::project_git::push::push_current_branch(&state, &project).unwrap_err();
         let coded = err.downcast_ref::<crate::protocol::CodedError>().unwrap();
         assert_eq!(coded.code, crate::protocol::error_code::PUSH_IN_PROGRESS);
         assert_eq!(state.git_statuses()[0].activity, GitActivity::Pushing);
@@ -4954,7 +4961,7 @@ mod tests {
         );
         state.publish_git_status(git_reading());
         let mut events = state.subscribe();
-        assert!(crate::git_push::push_current_branch(&state, &project).is_err());
+        assert!(crate::project_git::push::push_current_branch(&state, &project).is_err());
         // The header re-read first, ahead of the push being marked in flight.
         for expected in [GitActivity::Idle, GitActivity::Pushing, GitActivity::Idle] {
             let Event::ProjectGitStatus { status } = events.try_recv().unwrap() else {
@@ -4967,7 +4974,7 @@ mod tests {
             Some("fetch failed")
         );
         crate::test_support::git(&dir, &["init", "--bare", remote.to_str().unwrap()]);
-        crate::git_push::push_current_branch(&state, &project).unwrap();
+        crate::project_git::push::push_current_branch(&state, &project).unwrap();
         for expected in [
             GitActivity::Idle,
             GitActivity::Pushing,
@@ -5021,8 +5028,8 @@ mod tests {
 
     /// A completion recorded for a project, then dropped by the publish that follows it because
     /// the project is gone, must stay dropped — `record_git_check_completed` running first (as
-    /// `git_status::check_project` does at both of its exit points) and then losing to
-    /// `remove_git_status` is the order that matters; recording it after the publish would
+    /// `crate::project_git::status::check_project` does at both of its exit points) and then losing
+    /// to `remove_git_status` is the order that matters; recording it after the publish would
     /// resurrect the very entry `remove_git_status` just cleared, with nothing left to ever remove
     /// it again.
     #[test]

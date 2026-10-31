@@ -336,7 +336,7 @@ fn trustable_parent(project_path: &str, home: &Path) -> Result<PathBuf> {
 /// unreadable.
 fn same_directory(a: &Path, b: &Path) -> bool {
     match (std::fs::metadata(a), std::fs::metadata(b)) {
-        (Ok(a), Ok(b)) => hostfs::identity(&a) == hostfs::identity(&b),
+        (Ok(a), Ok(b)) => hostfs::identity::raw(&a) == hostfs::identity::raw(&b),
         _ => false,
     }
 }

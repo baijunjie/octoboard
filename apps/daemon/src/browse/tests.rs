@@ -9,9 +9,9 @@ use std::sync::Arc;
 
 use base64::Engine as _;
 
-use super::git::tests::test_env;
-use super::git::GitEnv;
 use super::*;
+use crate::git::isolated::tests::test_env;
+use crate::git::isolated::IsolatedGit;
 use crate::protocol::{
     Agent, BrowseEntry, BrowseRequest, Console, ContentKind, EntryKind, LinkTarget, Project,
     ProjectSource,
@@ -215,7 +215,7 @@ impl Fixture {
     }
 }
 
-pub(super) fn git_env() -> anyhow::Result<GitEnv> {
+pub(super) fn git_env() -> anyhow::Result<IsolatedGit> {
     Ok(test_env(&[]))
 }
 
@@ -960,7 +960,7 @@ fn a_home_directory_repository_is_not_taken_for_a_project_s_repository() {
         env.set_ceiling(Some(home.clone()));
         Ok(env)
     };
-    let git = Git::new(&make).with_ceiling(Some(home.clone()));
+    let git = BrowseGit::new(&make).with_ceiling(Some(home.clone()));
     let root = source::resolve_root(home.join("project").to_str().unwrap()).unwrap();
     let discovered = source::discover(&root, &git, &AtomicBool::new(false)).unwrap();
     assert!(
@@ -1485,8 +1485,8 @@ fn a_cancel_during_each_git_run_ends_the_read() {
 
     // The listing's `check-ignore`.
     let (program, env, _bin) = stalling("browse-ignored-cancel-listing", "nothing-fails");
-    let make = || Ok(GitEnv::new(program.clone(), env.clone()));
-    let git = Git::new(&make).with_ceiling(None);
+    let make = || Ok(IsolatedGit::new(program.clone(), env.clone()));
+    let git = BrowseGit::new(&make).with_ceiling(None);
     let canonical = std::fs::canonicalize(&*repository).unwrap();
     assert!(cancel_soon(&|cancel| {
         let root = wire_path::RelPath::parse("").unwrap();
@@ -1503,8 +1503,8 @@ fn a_cancel_during_each_git_run_ends_the_read() {
     }));
     // The `check-ignore` of the project folder itself, after its `ls-files` refused to run.
     let (program, env, _bin) = stalling("browse-ignored-cancel-fallback", "ls-files");
-    let make = || Ok(GitEnv::new(program.clone(), env.clone()));
-    let git = Git::new(&make).with_ceiling(None);
+    let make = || Ok(IsolatedGit::new(program.clone(), env.clone()));
+    let git = BrowseGit::new(&make).with_ceiling(None);
     assert!(cancel_soon(&|cancel| {
         live::search_files(&canonical, "a", false, &git, cancel).map(|_| ())
     }));

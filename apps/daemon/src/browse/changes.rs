@@ -44,18 +44,19 @@ use std::sync::atomic::AtomicBool;
 use anyhow::Result;
 
 use crate::browse::blob::{self, IndexEntry};
-use crate::browse::git::{paths_nest, GitEnv, GitError};
 use crate::browse::source::{self, ProjectRoot};
-use crate::browse::wire_path::{self, RelPath};
 use crate::browse::{
     budget, file_content, git_error, git_failed, json_escaped_len, line_count, line_counts, live,
     Located,
 };
+use crate::git::isolated::{paths_nest, IsolatedGit};
+use crate::git::run::GitError;
 use crate::protocol::{
     error_code, ChangeEntry, ChangeGroup, ChangeRef, ChangeSide, CodedError, ConflictKind,
     ContentSource, SideKind, SideRead, SideRef, SideVersion,
 };
 use crate::subprocess::BoundedFailure;
+use crate::wire_path::{self, RelPath};
 
 /// A worktree's changes that touch the project, in `git status`'s order.
 #[derive(Debug)]
@@ -68,7 +69,7 @@ pub struct ChangeList {
 }
 
 /// Lists the uncommitted changes of the worktree `at` names that touch the project's scope.
-pub fn list(env: &GitEnv, at: &Located, cancel: &AtomicBool) -> Result<ChangeList> {
+pub fn list(env: &IsolatedGit, at: &Located, cancel: &AtomicBool) -> Result<ChangeList> {
     let args: &[&[u8]] = &[
         b"--porcelain=v2",
         b"-z",
@@ -135,7 +136,7 @@ pub fn list(env: &GitEnv, at: &Located, cancel: &AtomicBool) -> Result<ChangeLis
 /// Sets the line counts of the listed changes: the staged and unstaged ones from `git diff`, and
 /// an untracked file's from the disk, where every line is an addition.
 fn add_line_counts(
-    env: &GitEnv,
+    env: &IsolatedGit,
     at: &Located,
     changes: &mut [ChangeEntry],
     live: &mut LiveSides,
@@ -178,7 +179,7 @@ fn add_line_counts(
 
 /// Sets the counts of the changes of `changes` that `in_group` accepts, from `git diff <args>`.
 fn count_group(
-    env: &GitEnv,
+    env: &IsolatedGit,
     at: &Located,
     changes: &mut [ChangeEntry],
     in_group: fn(&ChangeEntry) -> bool,
@@ -534,7 +535,7 @@ enum Found {
 /// Reads the change `change` names in the worktree `at` names: both sides from its group's
 /// sources, and its patch — see the module doc.
 pub fn read(
-    env: &GitEnv,
+    env: &IsolatedGit,
     at: &Located,
     change: &ChangeRef,
     cancel: &AtomicBool,
@@ -544,7 +545,7 @@ pub fn read(
 
 /// [`read`], its sides carrying their bodies beside the patch where `inline_bodies` allows.
 fn read_with(
-    env: &GitEnv,
+    env: &IsolatedGit,
     at: &Located,
     change: &ChangeRef,
     cancel: &AtomicBool,
@@ -599,7 +600,7 @@ pub struct BodiesRead {
 /// that has a patch has bodies to expand: an untracked file, and a change with a side outside the
 /// project, are `invalid_change`. See the module doc.
 pub fn read_bodies(
-    env: &GitEnv,
+    env: &IsolatedGit,
     at: &Located,
     change: &ChangeRef,
     expected: &Expected,
@@ -616,7 +617,7 @@ pub fn read_bodies(
 
 /// As [`read_bodies`], for a change between two commits, read as [`read_between`] reads it.
 pub(super) fn read_bodies_between(
-    env: &GitEnv,
+    env: &IsolatedGit,
     at: &Located,
     commits: (&str, &str),
     sides: (&SideRef, &SideRef),
@@ -666,7 +667,7 @@ fn clean_filtered(path: &RelPath, filter: &str) -> anyhow::Error {
 /// that is not has changed under the client, at `path`. The patch the read made is dropped first,
 /// so it is not held beside the bodies.
 fn bodies_of(
-    env: &GitEnv,
+    env: &IsolatedGit,
     at: &Located,
     read: ChangeRead,
     path: &RelPath,
@@ -707,7 +708,7 @@ fn bodies_of(
 /// one, as the sides `old` and `new` name it: both from those commits alone, and its patch made
 /// between exactly them. Both are immutable, so nothing is looked at again once the patch is made.
 pub(super) fn read_between(
-    env: &GitEnv,
+    env: &IsolatedGit,
     at: &Located,
     commits: (&str, &str),
     sides: (&SideRef, &SideRef),
@@ -718,7 +719,7 @@ pub(super) fn read_between(
 
 /// [`read_between`], its sides carrying their bodies beside the patch where `inline_bodies` allows.
 fn read_between_with(
-    env: &GitEnv,
+    env: &IsolatedGit,
     at: &Located,
     commits: (&str, &str),
     (old, new): (&SideRef, &SideRef),
@@ -760,7 +761,7 @@ pub(super) fn is_empty_tree(id: &str) -> bool {
 /// The id of the empty tree in this repository's object format, which a change is compared
 /// against before the first commit, or a commit with no parent against; `git` knows it without its
 /// being stored.
-pub(super) fn empty_tree(env: &GitEnv, at: &Located, cancel: &AtomicBool) -> Result<String> {
+pub(super) fn empty_tree(env: &IsolatedGit, at: &Located, cancel: &AtomicBool) -> Result<String> {
     let args: &[&[u8]] = &[b"-t", b"tree", b"--no-filters", b"/dev/null"];
     let stdout = env
         .run(
@@ -790,7 +791,7 @@ fn side_path(side: &SideRef) -> Result<Option<RelPath>> {
 }
 
 struct Reader<'a> {
-    env: &'a GitEnv,
+    env: &'a IsolatedGit,
     at: &'a Located,
     cancel: &'a AtomicBool,
     /// Whether a reply may carry its sides' bodies beside the patch (`carries_bodies`); false
@@ -880,27 +881,27 @@ impl Reader<'_> {
         };
         let unresolved = match run("rev-parse", &[b"--verify", b"--quiet", b"HEAD^{commit}"]) {
             Ok(stdout) => return Ok(Some(String::from_utf8_lossy(&stdout).trim().to_string())),
-            Err(GitError::Failed(_)) => || git_failed("HEAD names no commit"),
+            Err(GitError::Exited { .. }) => || git_failed("HEAD names no commit"),
             Err(err) => return Err(git_error(err)),
         };
         let branch = match run("symbolic-ref", &[b"--quiet", b"HEAD"]) {
             Ok(stdout) => stdout.strip_suffix(b"\n").unwrap_or(&stdout).to_vec(),
-            Err(GitError::Failed(_)) => return Err(unresolved()),
+            Err(GitError::Exited { .. }) => return Err(unresolved()),
             Err(err) => return Err(git_error(err)),
         };
         // `show-ref --exists` exits 2 only for a reference that is not there; a broken one is
         // there. Before Git 2.43 it does not know the option (129), and a missing reference cannot
         // be told from a broken one, so a failure to find it is taken as a branch not born yet.
         match run("show-ref", &[b"--exists", &branch]) {
-            Err(GitError::Failed(failed)) if failed.code == Some(2) => Ok(None),
-            Err(GitError::Failed(failed)) if failed.code == Some(129) => {
-                match run("show-ref", &[b"--verify", b"--quiet", &branch]) {
-                    Err(GitError::Failed(_)) => Ok(None),
-                    Ok(_) => Err(unresolved()),
-                    Err(err) => Err(git_error(err)),
-                }
-            }
-            Ok(_) | Err(GitError::Failed(_)) => Err(unresolved()),
+            Err(GitError::Exited { code: Some(2), .. }) => Ok(None),
+            Err(GitError::Exited {
+                code: Some(129), ..
+            }) => match run("show-ref", &[b"--verify", b"--quiet", &branch]) {
+                Err(GitError::Exited { .. }) => Ok(None),
+                Ok(_) => Err(unresolved()),
+                Err(err) => Err(git_error(err)),
+            },
+            Ok(_) | Err(GitError::Exited { .. }) => Err(unresolved()),
             Err(err) => Err(git_error(err)),
         }
     }
@@ -939,9 +940,9 @@ impl Reader<'_> {
     /// `git diff <args> -- <paths>` with the presentation fixed whatever the user's configuration
     /// says, refused past the patch budget.
     ///
-    /// Each path is matched exactly and nothing below it (`GitEnv::run_exact`), except where the
-    /// paths nest (a rename from `foo` to `foo/bar`): there `git` sees everything below the outer
-    /// path as well, the patch keeps only the sections between the change's own paths
+    /// Each path is matched exactly and nothing below it (`IsolatedGit::run_exact`), except where
+    /// the paths nest (a rename from `foo` to `foo/bar`): there `git` sees everything below the
+    /// outer path as well, the patch keeps only the sections between the change's own paths
     /// (`own_sections`), and renames are not detected. A pathspec-restricted diff sees another set
     /// of rename candidates than the whole-repository `git status` that listed the change, and
     /// could pair one of its paths with a third path below the outer one, whose section would then

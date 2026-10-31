@@ -15,7 +15,8 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::time::Duration;
 
-use crate::hostfs::place::{followed_directory_identity, Identity, Place};
+use crate::hostfs::identity::{self, Identity};
+use crate::hostfs::place::Place;
 use crate::paths;
 
 /// How long looking at one path on the file system may take. Past it the path counts as one that
@@ -28,11 +29,9 @@ pub(super) const LOOK_DEADLINE: Duration = Duration::from_secs(5);
 /// directories a folder offered for trusting is refused for (`trustable_parent`). With no usable
 /// home directory, the root alone. Blocking.
 pub(super) fn too_broad_to_trust(home: &Path) -> HashSet<Identity> {
-    let mut broad: HashSet<Identity> = followed_directory_identity(Path::new("/"))
-        .into_iter()
-        .collect();
+    let mut broad: HashSet<Identity> = identity::of_directory(Path::new("/")).into_iter().collect();
     if let Some(home) = paths::known_home(home) {
-        broad.extend(home.ancestors().filter_map(followed_directory_identity));
+        broad.extend(home.ancestors().filter_map(identity::of_directory));
         if let Some(place) = Place::of(&home) {
             broad.extend(place.path_identities());
         }

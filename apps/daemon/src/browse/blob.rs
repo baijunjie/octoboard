@@ -13,12 +13,13 @@ use std::sync::atomic::AtomicBool;
 
 use anyhow::Result;
 
-use crate::browse::git::{GitEnv, GitError};
 use crate::browse::live::{too_large, unsupported};
-use crate::browse::wire_path::{self, RelPath};
 use crate::browse::{budget, git_error, git_failed};
+use crate::git::isolated::IsolatedGit;
+use crate::git::run::GitError;
 use crate::protocol::{error_code, CodedError};
 use crate::subprocess::BoundedFailure;
+use crate::wire_path::{self, RelPath};
 
 /// A blob's object id and its bytes.
 #[derive(Debug)]
@@ -44,7 +45,12 @@ impl Entry<'_> {
 
 /// The blob staged for `entry` in the index of the worktree at `root`. A path with conflicting
 /// stages is refused rather than one stage picked.
-pub fn read_index(env: &GitEnv, root: &Path, entry: Entry, cancel: &AtomicBool) -> Result<Blob> {
+pub fn read_index(
+    env: &IsolatedGit,
+    root: &Path,
+    entry: Entry,
+    cancel: &AtomicBool,
+) -> Result<Blob> {
     let full = entry.in_repository();
     let stdout = match env.run(
         root,
@@ -99,7 +105,7 @@ pub fn read_index(env: &GitEnv, root: &Path, entry: Entry, cancel: &AtomicBool) 
 
 /// The blob commit `commit` holds for `entry`, read in the worktree at `root`.
 pub fn read_commit(
-    env: &GitEnv,
+    env: &IsolatedGit,
     root: &Path,
     commit: &str,
     entry: Entry,
@@ -164,7 +170,7 @@ pub struct IndexEntry {
 /// `root`, in the index's order; a path with no entry has none here, and nothing below a path is
 /// listed even where the index holds a directory there.
 pub fn index_entries(
-    env: &GitEnv,
+    env: &IsolatedGit,
     root: &Path,
     paths: &[&[u8]],
     cancel: &AtomicBool,
@@ -199,7 +205,7 @@ pub fn index_entries(
 /// The mode and object id commit `commit` holds at exactly `path` (relative to the repository's
 /// root), or `None` when it holds nothing there.
 pub fn tree_entry(
-    env: &GitEnv,
+    env: &IsolatedGit,
     root: &Path,
     commit: &str,
     path: &[u8],
@@ -228,7 +234,12 @@ pub fn tree_entry(
 }
 
 /// The bytes of blob `oid`, refused past the file budget.
-pub fn read_blob(env: &GitEnv, root: &Path, oid: &str, cancel: &AtomicBool) -> Result<Vec<u8>> {
+pub fn read_blob(
+    env: &IsolatedGit,
+    root: &Path,
+    oid: &str,
+    cancel: &AtomicBool,
+) -> Result<Vec<u8>> {
     let stdout = env
         .run(
             root,
@@ -255,8 +266,8 @@ pub fn read_blob(env: &GitEnv, root: &Path, oid: &str, cancel: &AtomicBool) -> R
 /// changed nothing). The command takes no pathspec, so nothing of the worktree is searched and
 /// `GIT_LITERAL_PATHSPECS` stays in force.
 ///
-/// The flags: `--no-color` (added by [`GitEnv::run`] with `--no-textconv`, see `GREP_SAFETY`) is
-/// the load-bearing one, since with `color.grep` set to `always` the output reads
+/// The flags: `--no-color` (added by [`IsolatedGit::run`] with `--no-textconv`, see `GREP_SAFETY`)
+/// is the load-bearing one, since with `color.grep` set to `always` the output reads
 /// `ESC[35m<id>ESC[mESC[36m:ESC[m3`, which fails the parse below and would turn the read into
 /// `git_failed`; `--no-textconv` is `git grep`'s default and only guards against that changing.
 /// `-G` takes the pattern type out of the user's hands: a configured `grep.patternType` of `perl`
@@ -267,7 +278,7 @@ pub fn read_blob(env: &GitEnv, root: &Path, oid: &str, cancel: &AtomicBool) -> R
 /// `git grep -c` prints `<id>:<count>` for a blob with a match, nothing for an empty one, and exits
 /// 1 when it printed nothing at all; an id with no line is therefore 0 lines. It writes nothing.
 pub fn line_counts(
-    env: &GitEnv,
+    env: &IsolatedGit,
     root: &Path,
     oids: &[&str],
     cancel: &AtomicBool,
@@ -283,7 +294,7 @@ pub fn line_counts(
     args.push(b"--");
     let stdout = match env.run(root, "grep", &args, budget::GIT_METADATA_STDOUT, cancel) {
         Ok(stdout) => stdout,
-        Err(GitError::Failed(failed)) if failed.code == Some(1) => return Ok(counts),
+        Err(GitError::Exited { code: Some(1), .. }) => return Ok(counts),
         Err(err) => return Err(git_error(err)),
     };
     for line in stdout
@@ -331,7 +342,7 @@ fn parse_size(text: &[u8]) -> Result<u64> {
 /// Reads blob `oid`, whose size is `size`, refusing it before reading when it is over the file
 /// budget and, should the size have been wrong, while reading.
 fn read_object(
-    env: &GitEnv,
+    env: &IsolatedGit,
     root: &Path,
     oid: String,
     size: u64,
@@ -363,7 +374,7 @@ fn read_object(
 /// `refs/heads/<name>`: a revision lookup would fall back to other references
 /// (`refs/tags/refs/heads/<name>`, …) when the branch does not exist.
 pub fn resolve_branch(
-    env: &GitEnv,
+    env: &IsolatedGit,
     root: &Path,
     branch: &str,
     cancel: &AtomicBool,
@@ -375,7 +386,7 @@ pub fn resolve_branch(
 /// As [`resolve_branch`], for remote-tracking branch `branch` (a wire path: the name below
 /// `refs/remotes/`, such as `origin/main`).
 pub fn resolve_remote_branch(
-    env: &GitEnv,
+    env: &IsolatedGit,
     root: &Path,
     branch: &str,
     cancel: &AtomicBool,
@@ -394,7 +405,7 @@ pub fn resolve_remote_branch(
 /// The commit the checked reference `refname` points at; `branch` is the name it was given as and
 /// `kind` what it is called in the refusal (`unknown_branch`).
 fn resolve_refname(
-    env: &GitEnv,
+    env: &IsolatedGit,
     root: &Path,
     refname: &[u8],
     branch: &str,
@@ -412,7 +423,7 @@ fn resolve_refname(
     let args: &[&[u8]] = &[b"--verify", b"--hash", refname];
     let target = match env.run(root, "show-ref", args, limit, cancel) {
         Ok(stdout) => String::from_utf8_lossy(&stdout).trim().to_string(),
-        Err(GitError::Failed(_)) => return Err(unknown()),
+        Err(GitError::Exited { .. }) => return Err(unknown()),
         Err(err) => return Err(git_error(err)),
     };
     match peel_to_commit(env, root, &target, cancel)? {
@@ -424,7 +435,7 @@ fn resolve_refname(
 /// `refs/heads/<branch>` for local branch `branch` (a wire path), once the name is checked to be
 /// one: `invalid_branch_name` otherwise. Nothing is looked up.
 pub fn branch_refname(
-    env: &GitEnv,
+    env: &IsolatedGit,
     root: &Path,
     branch: &str,
     cancel: &AtomicBool,
@@ -434,7 +445,7 @@ pub fn branch_refname(
 
 /// As [`branch_refname`], for remote-tracking branch `branch` below `refs/remotes/`.
 pub fn remote_branch_refname(
-    env: &GitEnv,
+    env: &IsolatedGit,
     root: &Path,
     branch: &str,
     cancel: &AtomicBool,
@@ -443,7 +454,7 @@ pub fn remote_branch_refname(
 }
 
 fn checked_refname(
-    env: &GitEnv,
+    env: &IsolatedGit,
     root: &Path,
     prefix: &[u8],
     branch: &str,
@@ -467,14 +478,14 @@ fn checked_refname(
     let limit = budget::GIT_METADATA_STDOUT;
     match env.run(root, "check-ref-format", &[&refname], limit, cancel) {
         Ok(_) => Ok(refname),
-        Err(GitError::Failed(_)) => Err(invalid()),
+        Err(GitError::Exited { .. }) => Err(invalid()),
         Err(err) => Err(git_error(err)),
     }
 }
 
 /// Checks that `oid` is the full id of a commit in the repository — exactly, so a 40-digit prefix
 /// in a SHA-256 repository, or the id of a tag pointing at a commit, is refused.
-pub fn verify_commit(env: &GitEnv, root: &Path, oid: &str, cancel: &AtomicBool) -> Result<()> {
+pub fn verify_commit(env: &IsolatedGit, root: &Path, oid: &str, cancel: &AtomicBool) -> Result<()> {
     let hex = oid.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'));
     if !(hex && (oid.len() == 40 || oid.len() == 64)) {
         return Err(CodedError::raised(
@@ -501,7 +512,7 @@ pub fn verify_commit(env: &GitEnv, root: &Path, oid: &str, cancel: &AtomicBool) 
 /// The full id of the commit object `oid` (an object id already checked to be hexadecimal) names
 /// or peels to, or `None` when it names no object, or one that is not a commit.
 fn peel_to_commit(
-    env: &GitEnv,
+    env: &IsolatedGit,
     root: &Path,
     oid: &str,
     cancel: &AtomicBool,
@@ -511,7 +522,7 @@ fn peel_to_commit(
     let args: &[&[u8]] = &[b"--verify", b"--quiet", b"--end-of-options", &expression];
     match env.run(root, "rev-parse", args, budget::GIT_METADATA_STDOUT, cancel) {
         Ok(stdout) => Ok(Some(String::from_utf8_lossy(&stdout).trim().to_string())),
-        Err(GitError::Failed(_)) => Ok(None),
+        Err(GitError::Exited { .. }) => Ok(None),
         Err(err) => Err(git_error(err)),
     }
 }

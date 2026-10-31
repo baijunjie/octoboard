@@ -21,27 +21,24 @@ use crate::adapter;
 use crate::agent_dialogs;
 use crate::agent_records;
 use crate::availability;
-use crate::branch_origin;
+use crate::blocking_pass::each_blocking;
+use crate::branch_cleanup;
 use crate::config_export;
 use crate::config_import;
 use crate::env_shell;
-use crate::git_push;
-use crate::git_remote;
-use crate::git_restore;
-use crate::git_status;
-use crate::git_switch;
 use crate::git_workflow::{
     GitWorkflowOverride, GitWorkflowOverrideChanges, GitWorkflowSettings,
     GitWorkflowSettingsChanges,
 };
+use crate::host_open;
 use crate::hostfs;
+use crate::hostfs::trash::TrashFailure;
 use crate::launch_settings::{
     self, normalize_session_launch_setting, normalized_launches, trimmed_or_none, LaunchCheck,
 };
 use crate::mcp;
-use crate::open_directory;
-use crate::open_terminal;
 use crate::process_ledger::HeldForLaunch;
+use crate::project_git;
 use crate::project_trash;
 use crate::protocol::{
     error_code, error_parts, notice_code, now_millis, Account, Agent, ApprovalReviewer,
@@ -335,10 +332,10 @@ async fn handle_inner(
                 });
                 let (state, project) = (Arc::clone(state), deleted.clone());
                 match tokio::task::spawn_blocking(move || {
-                    branch_origin::cleanup::project::plan(
+                    branch_cleanup::project::plan(
                         &state,
                         &project,
-                        branch_origin::cleanup::project::Reads::Removal,
+                        branch_cleanup::project::Reads::Removal,
                         &held_back,
                     )
                 })
@@ -367,11 +364,13 @@ async fn handle_inner(
             // in place for a retry. Without `trash_directory` only the association goes away: the
             // directory is the user's. The repository is found first, as it cannot be once the
             // directory is gone.
-            let repository = crate::branch_origin::repository_of(Path::new(&deleted.path));
+            let repository = crate::git::repo_files::repository_of(Path::new(&deleted.path));
             if let Some(directory) = to_trash {
                 // Off the runtime's worker: a move across volumes copies.
                 let trash = state.host_tools.get().trash;
-                tokio::task::spawn_blocking(move || trash(&directory)).await??;
+                tokio::task::spawn_blocking(move || trash(&directory))
+                    .await?
+                    .map_err(|failure| project_trash::trash_failed(&failure))?;
                 // Requests run concurrently, so a session may have been started in the project
                 // while the folder moved, and nothing held it back. The folder is gone by now, so
                 // the project is removed regardless: such a session is ended here as well as it
@@ -406,7 +405,7 @@ async fn handle_inner(
             if let Some(along) = along {
                 let state = Arc::clone(state);
                 tokio::spawn(async move {
-                    let missed = branch_origin::cleanup::project::carry_out_once_stopped(
+                    let missed = branch_cleanup::project::carry_out_once_stopped(
                         state.clone(),
                         session_ids,
                         along,
@@ -433,10 +432,10 @@ async fn handle_inner(
             let planning = Arc::clone(state);
             let (items, held_back) = tokio::task::spawn_blocking(move || {
                 Ok::<_, anyhow::Error>(
-                    branch_origin::cleanup::project::plan(
+                    branch_cleanup::project::plan(
                         &planning,
                         &project,
-                        branch_origin::cleanup::project::Reads::Inspection,
+                        branch_cleanup::project::Reads::Inspection,
                         &[],
                     )?
                     .map(|along| (along.items(), along.held_back()))
@@ -465,7 +464,7 @@ async fn handle_inner(
 
         RequestBody::ListDir { path } => {
             let expanded = hostfs::expand(&path);
-            let entries = hostfs::list_dir(&expanded)?;
+            let entries = hostfs::listing::list_dir(&expanded)?;
             Ok(Some(Event::DirListing {
                 id: request_id,
                 path: expanded.to_string_lossy().into_owned(),
@@ -489,7 +488,7 @@ async fn handle_inner(
             let probed = tokio::task::spawn_blocking(move || {
                 let shell_env = crate::env_shell::cached_snapshot()
                     .context("snapshotting the shell environment")?;
-                hostfs::probe_remote_agent(&remote_url, &shell_env)
+                project_git::clone::probe_remote_agent(&remote_url, &shell_env)
             })
             .await??;
             Ok(Some(Event::AgentDetected {
@@ -825,7 +824,7 @@ async fn handle_inner(
                 for id in &sessions {
                     found.extend(inspected.store.get_session(id)?);
                 }
-                branch_origin::cleanup::inspect(&inspected, &found)
+                branch_cleanup::survey::inspect(&inspected, &found)
             })
             .await??;
             let processes = match ids {
@@ -1089,7 +1088,7 @@ async fn handle_inner(
                 .store
                 .get_project(&project)?
                 .ok_or_else(|| CodedError::unknown_project(&project))?;
-            git_status::pull_project_now(state, project);
+            project_git::status::pull_project_now(state, project);
             Ok(None)
         }
 
@@ -1103,7 +1102,7 @@ async fn handle_inner(
                 project,
                 worktree,
                 path,
-                crate::browse::git::GitEnv::from_shell,
+                crate::git::isolated::IsolatedGit::from_shell,
             )
             .await?;
             Ok(Some(Event::ShellTerminalCreated {
@@ -1131,8 +1130,10 @@ async fn handle_inner(
                 .get_project(&project)?
                 .ok_or_else(|| CodedError::unknown_project(&project))?;
             let path = project.path;
-            tokio::task::spawn_blocking(move || open_terminal::open_directory(Path::new(&path)))
-                .await??;
+            tokio::task::spawn_blocking(move || {
+                host_open::terminal::open_directory(Path::new(&path))
+            })
+            .await??;
             Ok(None)
         }
 
@@ -1142,7 +1143,7 @@ async fn handle_inner(
                 .get_project(&project)?
                 .ok_or_else(|| CodedError::unknown_project(&project))?;
             let path = project.path;
-            tokio::task::spawn_blocking(move || open_directory::open(Path::new(&path))).await??;
+            tokio::task::spawn_blocking(move || host_open::paths::open(Path::new(&path))).await??;
             Ok(None)
         }
 
@@ -1163,9 +1164,9 @@ async fn handle_inner(
                     &project,
                     worktree.as_deref(),
                     &path,
-                    &crate::browse::git::GitEnv::from_shell,
+                    &crate::git::isolated::IsolatedGit::from_shell,
                 )?;
-                open_directory::open_path(&path, reveal)
+                host_open::paths::open_path(&path, reveal)
             })
             .await??;
             Ok(None)
@@ -1199,8 +1200,10 @@ async fn handle_inner(
                 .get_project(&project)?
                 .ok_or_else(|| CodedError::unknown_project(&project))?;
             let state = Arc::clone(state);
-            tokio::task::spawn_blocking(move || git_push::push_current_branch(&state, &project))
-                .await??;
+            tokio::task::spawn_blocking(move || {
+                project_git::push::push_current_branch(&state, &project)
+            })
+            .await??;
             Ok(None)
         }
 
@@ -1211,7 +1214,7 @@ async fn handle_inner(
                 .ok_or_else(|| CodedError::unknown_project(&project))?;
             let state = Arc::clone(state);
             tokio::task::spawn_blocking(move || {
-                git_switch::switch_branch(&state, &project, &branch)
+                project_git::switch::switch_branch(&state, &project, &branch)
             })
             .await??;
             Ok(None)
@@ -1223,8 +1226,10 @@ async fn handle_inner(
                 .get_project(&project)?
                 .ok_or_else(|| CodedError::unknown_project(&project))?;
             let state = Arc::clone(state);
-            tokio::task::spawn_blocking(move || git_restore::restore_project(&state, &project))
-                .await??;
+            tokio::task::spawn_blocking(move || {
+                project_git::restore::restore_project(&state, &project)
+            })
+            .await??;
             Ok(None)
         }
 
@@ -1753,7 +1758,7 @@ pub async fn add_project(
         }
         ProjectSource::Parent => {
             let parent = absolute_path(&path.ok_or_else(|| field_required("path"))?)?;
-            let repos = hostfs::discover_repos(&parent)?;
+            let repos = hostfs::listing::discover_repos(&parent)?;
             if repos.is_empty() {
                 return Err(CodedError::raised(
                     error_code::NO_REPOSITORIES_FOUND,
@@ -1780,7 +1785,8 @@ pub async fn add_project(
             };
             check_new_project_launch(state, &console, &settings, &accounts, check_launch).await?;
             let cloned =
-                tokio::task::spawn_blocking(move || hostfs::clone_repo(&url, &parent)).await??;
+                tokio::task::spawn_blocking(move || project_git::clone::clone_repo(&url, &parent))
+                    .await??;
             vec![cloned]
         }
     };
@@ -1801,7 +1807,7 @@ pub async fn add_project(
         &associated,
         source,
         &directories,
-        git_remote::read_remote_url,
+        project_git::remote::read_remote_url,
     )
     .await?;
 
@@ -1845,7 +1851,7 @@ pub async fn add_project(
         };
         state.store.insert_project(&project)?;
         associated.insert(&directory);
-        crate::git_watch::add(state, &project);
+        project_git::watch::add(state, &project);
         state.broadcast(Event::ProjectUpserted {
             project: project.clone(),
         });
@@ -2013,14 +2019,14 @@ pub async fn update_project(
 async fn associated_directories(
     state: &AppState,
     console_id: &str,
-) -> Result<hostfs::DirectoryIdentities> {
+) -> Result<hostfs::identity::DirectoryIdentities> {
     let paths = state.store.project_paths(console_id)?;
     Ok(identities_within(
         state,
         console_id,
         paths,
         ASSOCIATED_STAT_DEADLINE,
-        |paths| hostfs::DirectoryIdentities::from_paths(paths.iter().map(String::as_str)),
+        |paths| hostfs::identity::DirectoryIdentities::from_paths(paths.iter().map(String::as_str)),
     )
     .await?)
 }
@@ -2039,10 +2045,11 @@ async fn identities_within(
     console_id: &str,
     paths: Vec<String>,
     deadline: Duration,
-    build: impl FnOnce(&[String]) -> hostfs::DirectoryIdentities + Send + 'static,
-) -> Result<hostfs::DirectoryIdentities, tokio::task::JoinError> {
-    let from_text =
-        |paths: &[String]| hostfs::DirectoryIdentities::from_text(paths.iter().map(String::as_str));
+    build: impl FnOnce(&[String]) -> hostfs::identity::DirectoryIdentities + Send + 'static,
+) -> Result<hostfs::identity::DirectoryIdentities, tokio::task::JoinError> {
+    let from_text = |paths: &[String]| {
+        hostfs::identity::DirectoryIdentities::from_text(paths.iter().map(String::as_str))
+    };
     if state.stalled_directory_passes.is_stuck(console_id) {
         return Ok(from_text(&paths));
     }
@@ -2072,12 +2079,12 @@ async fn identities_within(
 /// Read only for the directories that are not already associated, so a parent directory whose
 /// repositories mostly are does not pay a `git` read for each one it then skips; the check in
 /// `add_project`'s loop stays the authority, this one only saves the reads. They run a few at a
-/// time on blocking threads (see `git_remote::read_bounded`), so a directory on a stalled mount
+/// time on blocking threads (see `blocking_pass::each_blocking`), so a directory on a stalled mount
 /// holds up its own read and no other, and a parent directory holding hundreds of repositories
 /// does not take over the blocking pool. A directory whose read did not come back, because its
 /// thread panicked, is simply absent: a project stored without a URL, not a failed association.
 async fn directory_remote_urls(
-    associated: &hostfs::DirectoryIdentities,
+    associated: &hostfs::identity::DirectoryIdentities,
     source: ProjectSource,
     directories: &[PathBuf],
     read: impl Fn(&Path) -> Option<String> + Send + Sync + 'static,
@@ -2090,7 +2097,7 @@ async fn directory_remote_urls(
         .filter(|directory| !associated.contains(directory))
         .cloned()
         .collect();
-    let urls = git_remote::read_bounded(unassociated, move |directory| {
+    let urls = each_blocking(unassociated, move |directory| {
         let url = read(&directory);
         (directory, url)
     })
@@ -2102,11 +2109,11 @@ async fn directory_remote_urls(
 }
 
 /// The agent to store for a project associated with no default agent chosen: the one its
-/// directory is set up for (see `hostfs::detect_agent`), unless that agent has been determined
-/// unavailable. Decided once, at association, and stored like any chosen default; while
-/// availability is still undetermined the detected agent is kept.
+/// directory is set up for, unless that agent has been determined unavailable. Decided once, at
+/// association, and stored like any chosen default; while availability is still undetermined the
+/// detected agent is kept.
 fn detect_project_agent(state: &Arc<AppState>, directory: &Path) -> Option<Agent> {
-    hostfs::detect_agent(directory).filter(|agent| agent_is_available(state, *agent))
+    hostfs::listing::detect_agent(directory).filter(|agent| agent_is_available(state, *agent))
 }
 
 /// Whether `agent` is not known to be missing; while availability is still undetermined it is kept.
@@ -4191,7 +4198,7 @@ async fn start_process(
 /// The user's control-socket request instead explicitly ends running descendants too.
 ///
 /// Returns the sessions it archived, as they were before, for the removal of the branches bound
-/// to them (`branch_origin::cleanup`), which is the caller's: a project's deletion stops its
+/// to them (`branch_cleanup`), which is the caller's: a project's deletion stops its
 /// sessions this way and removes none.
 pub fn archive_session(state: &Arc<AppState>, id: &str) -> Result<Vec<Session>> {
     archive_session_group(state, id, false)
@@ -4265,8 +4272,8 @@ fn archive_session_group(
 
 /// Removes the branches and worktrees bound to `sessions` once their processes have ended, off
 /// the request's path, forcing what `forced` names; every client is told of what is still there
-/// and was not kept on purpose (`session_branches_not_removed`, see `cleanup::to_report`). The
-/// archive or deletion it follows stands either way.
+/// and was not kept on purpose (`session_branches_not_removed`, see
+/// `branch_cleanup::report::to_report`). The archive or deletion it follows stands either way.
 fn remove_branches_once_stopped(
     state: &Arc<AppState>,
     sessions: Vec<Session>,
@@ -4279,11 +4286,11 @@ fn remove_branches_once_stopped(
     let state = Arc::clone(state);
     tokio::spawn(async move {
         let left =
-            branch_origin::cleanup::remove_once_stopped(state.clone(), sessions, forced.clone())
+            branch_cleanup::remove::remove_once_stopped(state.clone(), sessions, forced.clone())
                 .await;
         report_not_removed(
             &state,
-            &branch_origin::cleanup::to_report(left, &forced, &keep),
+            &branch_cleanup::report::to_report(left, &forced, &keep),
         );
     });
 }
@@ -4299,11 +4306,11 @@ fn report_not_removed(state: &AppState, missed: &[SessionBranchItem]) {
         error_code::SESSION_BRANCHES_NOT_REMOVED,
         format!(
             "these were to be removed and are still there: {}",
-            branch_origin::cleanup::lines(missed).join("; ")
+            branch_cleanup::report::lines(missed).join("; ")
         ),
         &[
             ("count", &missed.len().to_string()),
-            ("items", &branch_origin::cleanup::for_client(missed)),
+            ("items", &branch_cleanup::report::for_client(missed)),
         ],
     );
     state.broadcast(Event::from_error(None, &failure));
@@ -5692,7 +5699,7 @@ async fn trash_agent_records_after_delete(state: &Arc<AppState>, deleted: Vec<Se
         state,
         deleted,
         agent_records::Locator::default(),
-        hostfs::move_to_trash,
+        state.host_tools.get().trash,
     )
     .await;
 }
@@ -5704,7 +5711,7 @@ pub(crate) async fn trash_agent_records_with(
     state: &Arc<AppState>,
     deleted: Vec<Session>,
     locator: agent_records::Locator,
-    trash: impl Fn(&Path) -> Result<()> + Send + 'static,
+    trash: impl Fn(&Path) -> Result<(), TrashFailure> + Send + 'static,
 ) {
     if deleted.is_empty() {
         return;
@@ -5734,7 +5741,7 @@ fn trash_agent_records_of(
     state: &AppState,
     deleted: &[Session],
     mut locator: agent_records::Locator,
-    trash: impl Fn(&Path) -> Result<()>,
+    trash: impl Fn(&Path) -> Result<(), TrashFailure>,
 ) {
     let (remaining, accounts) = match (state.store.list_sessions(), state.store.list_accounts()) {
         (Ok(sessions), Ok(accounts)) => (sessions, accounts),
@@ -7132,9 +7139,9 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
     });
     // Turning the automatic pull on takes effect at once rather than at the client's next
     // five-minute sweep: the branches already known to be behind are fast-forwarded now (see
-    // `git_status::pull_behind_projects`).
+    // `project_git::status::pull_behind_projects`).
     if pull_turned_on {
-        git_status::pull_behind_projects(state);
+        project_git::status::pull_behind_projects(state);
     }
     // Likewise the readings already held are looked over now, so an account whose window has not
     // started is not left waiting for its next reading.
@@ -7158,7 +7165,7 @@ fn refresh_git_status(state: &Arc<AppState>, console_id: &str) -> Result<()> {
         .into_iter()
         .filter(|project| project.console_id == console_id)
         .collect();
-    git_status::refresh(state, projects);
+    project_git::status::refresh(state, projects);
     Ok(())
 }
 
@@ -8059,7 +8066,7 @@ mod tests {
             Duration::from_millis(50),
             move |_| {
                 stuck.recv().ok();
-                hostfs::DirectoryIdentities::default()
+                hostfs::identity::DirectoryIdentities::default()
             },
         )
         .await
@@ -14633,7 +14640,7 @@ mod tests {
         let trashed = std::sync::Mutex::new(Vec::new());
         let trash = |path: &Path| {
             trashed.lock().unwrap().push(path.to_path_buf());
-            anyhow::bail!("the Trash refused it")
+            Err(TrashFailure::new(path, "the Trash refused it"))
         };
         let locator = || {
             agent_records::Locator::with_shell(HashMap::from([(
@@ -14762,8 +14769,7 @@ mod tests {
             )])),
             |path| {
                 assert_eq!(path, records);
-                std::fs::rename(path, &trashed)?;
-                Ok(())
+                std::fs::rename(path, &trashed).map_err(|err| TrashFailure::new(path, err))
             },
         );
         assert!(!records.exists());
@@ -14808,8 +14814,7 @@ mod tests {
             )])),
             |path| {
                 assert_eq!(path, rollout);
-                std::fs::rename(path, &trashed)?;
-                Ok(())
+                std::fs::rename(path, &trashed).map_err(|err| TrashFailure::new(path, err))
             },
         );
         assert!(!rollout.exists());

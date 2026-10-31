@@ -70,7 +70,7 @@ A repository's own files are files an agent can plant too, though no listing sho
 linked worktree's `commondir`, reflogs, `packed-refs`, a remote's `HEAD`. A FIFO or a link to `/dev/zero` in their place
 blocks or reads forever just the same, and they are read while watching a project, in a sweep's few slots and under the
 repository's gate, where one stuck read stalls everything behind it. Find a worktree's git and common directories
-through `hostfs::git_dir` (`git_dir`, `common_dir`) rather than reading `.git` or `commondir` yourself, and read any
+through `git::layout` (`git_dir`, `common_dir`) rather than reading `.git` or `commondir` yourself, and read any
 other file in a git directory through `hostfs::open_regular` or `hostfs::read_regular` with a bound; `live` is no
 answer here, since a linked worktree's git directory lies outside the project.
 
@@ -99,7 +99,7 @@ agent configuration directory. Neither normalised text nor `canonicalize` output
 can lead out of it, a link or a case-only respelling (macOS's default file system is case-insensitive) can name a
 directory that is inside, whether `canonicalize` folds case is the file system's doing (it does on APFS, not on
 Linux), and a bind mount or a macOS firmlink gives one directory two real paths. So compare the device and inode of
-what each path resolves to, and for containment walk the resolved path's ancestors: `hostfs::DirectoryIdentities`
+what each path resolves to, and for containment walk the resolved path's ancestors: `hostfs::identity::DirectoryIdentities`
 answers "is this one of these directories", `hostfs::place::Place` answers "does this lie in that one".
 
 Decide which way a path that cannot be resolved (nothing there, unreadable, no inode, the look timed out) counts by

@@ -22,7 +22,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{bail, Result};
 
-use crate::branch_origin::cleanup;
+use crate::branch_cleanup;
 use crate::outbox::Drain;
 use crate::protocol::{error_code, now_millis, CodedError, Session, SessionStatus};
 use crate::state::{AppState, TurnClose};
@@ -418,7 +418,7 @@ fn deliver_and_archive(
         } else if unlocked_with_team(state, &session)?
             && unfinished_bound(state, &session)?.is_empty()
         {
-            let left = cleanup::will_be_left(state, std::slice::from_ref(&session));
+            let left = branch_cleanup::survey::will_be_left(state, std::slice::from_ref(&session));
             (left, coordinator::archive_session(state, session_id)?)
         } else {
             finished = false;
@@ -471,7 +471,7 @@ fn deliver_and_archive(
     if !left.is_empty() {
         note.push_str(&format!(
             " These git branches and worktrees bound to this session will not be removed: {}.",
-            cleanup::lines(&left).join("; ")
+            branch_cleanup::report::lines(&left).join("; ")
         ));
     }
     Ok((note, archived, delivery))
@@ -1006,7 +1006,7 @@ pub async fn deliver_own_report(
             state.clear_reported(session_id);
         }
     })?;
-    cleanup::remove_in_background(state, archived);
+    branch_cleanup::remove::remove_in_background(state, archived);
     Ok((note, delivery))
 }
 

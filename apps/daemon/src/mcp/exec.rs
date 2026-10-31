@@ -25,14 +25,14 @@ use std::sync::Arc;
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
 
-use crate::branch_origin::cleanup;
+use crate::branch_cleanup;
 use crate::branch_origin::handover::{
     branch_name, branch_noun_and_pronoun, move_branches, named_branches_with_targets, Handed,
     Handover,
 };
 use crate::branch_origin::session_branches;
 use crate::coordinator::{self, LaunchEdit, OpenRequest};
-use crate::git_remote;
+use crate::project_git::remote_url;
 use crate::protocol::{
     error_code, Agent, CodedError, Console, Origin, Project, ProjectSource, Role, Session,
     SessionStatus,
@@ -267,8 +267,8 @@ async fn add_project(
 /// and shown in every listing. The user's own git credentials are what a clone uses.
 fn check_clone_url(url: Option<&str>) -> Result<()> {
     let Some(url) = url else { return Ok(()) };
-    let shown = git_remote::without_credentials(url);
-    if git_remote::has_credentials(url) {
+    let shown = remote_url::without_credentials(url);
+    if remote_url::has_credentials(url) {
         return Err(CodedError::raised(
             error_code::INVALID_REMOTE_URL,
             format!(
@@ -278,7 +278,7 @@ fn check_clone_url(url: Option<&str>) -> Result<()> {
             &[("url", &shown)],
         ));
     }
-    if !git_remote::is_clonable_url(url) {
+    if !remote_url::is_clonable_url(url) {
         return Err(CodedError::raised(
             error_code::INVALID_REMOTE_URL,
             format!("`{shown}` is not an http(s), ssh or git repository URL that can be cloned"),
@@ -643,7 +643,7 @@ async fn archive_session(
         return Ok(answer);
     }
     // A task of its own, so the removal finishes even if the call it answers is dropped.
-    let left = tokio::spawn(cleanup::remove_once_stopped(
+    let left = tokio::spawn(branch_cleanup::remove::remove_once_stopped(
         state.clone(),
         archived,
         Vec::new(),
@@ -654,7 +654,7 @@ async fn archive_session(
         Vec::new()
     });
     if !left.is_empty() {
-        answer["branches_left"] = cleanup::for_agent(&left);
+        answer["branches_left"] = branch_cleanup::report::for_agent(&left);
         answer["note"] = json!(
             "Archived. The git branches and worktrees in `branches_left` are bound to the sessions \
              archived and were not removed, for the reason given with each. If they are yours to \
@@ -728,7 +728,7 @@ fn keep_note(
 /// answer has to be on its way before the process is ended.
 async fn archive_self(state: &Arc<AppState>, caller: &Session) -> Result<Value> {
     let caller = archivable_self(state, caller)?;
-    let left = cleanup::left_by(state, vec![caller.clone()]).await;
+    let left = branch_cleanup::survey::left_by(state, vec![caller.clone()]).await;
     // Taken only now, and the checks made again under it, so a lock set while the branches were
     // judged cannot slip past them; held across that wait, it would refuse every change of a lock
     // in the daemon for as long as the judging took.
@@ -737,14 +737,14 @@ async fn archive_self(state: &Arc<AppState>, caller: &Session) -> Result<Value> 
         let caller = archivable_self(state, &caller)?;
         coordinator::archive_session(state, &caller.id)?
     };
-    cleanup::remove_in_background(state, archived);
+    branch_cleanup::remove::remove_in_background(state, archived);
     let mut answer = json!({
         "session": caller.id,
         "status": SessionStatus::Archived,
         "note": "Archived; this session's process will now end.",
     });
     if !left.is_empty() {
-        answer["branches_left"] = cleanup::for_agent(&left);
+        answer["branches_left"] = branch_cleanup::report::for_agent(&left);
         answer["note"] = json!(
             "Archived; this session's process will now end. The git branches and worktrees in \
              `branches_left` are bound to this session and will not be removed, for the reason \
@@ -1735,7 +1735,7 @@ pub(super) mod tests {
         let caller = state.session_record("dev").unwrap();
         let responsible = |branch: &str| {
             let key = crate::branch_origin::repo_key(
-                &crate::branch_origin::repository_of(&repo).unwrap(),
+                &crate::git::repo_files::repository_of(&repo).unwrap(),
             );
             state
                 .store
@@ -4250,7 +4250,7 @@ pub(super) mod tests {
                 disabled: false,
             })
             .unwrap();
-        git_remote::record_remote_url(
+        crate::project_git::remote::record_remote_url(
             &state,
             "project-1",
             Some("https://user:token@example.com/r.git".to_string()),

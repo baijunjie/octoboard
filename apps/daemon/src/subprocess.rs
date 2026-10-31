@@ -164,10 +164,7 @@ fn run_unbounded(
         stderr_limit: usize::MAX,
         reach,
     };
-    run_bounded_with(command, &bounds, &NEVER, input).map_err(|failure| match failure {
-        BoundedFailure::Failed(err) => err,
-        other => anyhow::anyhow!("{other}"),
-    })
+    run_bounded_with(command, &bounds, &NEVER, input).map_err(BoundedFailure::into_error)
 }
 
 /// The ceilings [`run_bounded`] and [`run_exchange`] hold a subprocess to, and what a stop of it
@@ -192,6 +189,17 @@ pub enum BoundedFailure {
     StdoutExceeded(usize),
     Cancelled,
     Failed(anyhow::Error),
+}
+
+impl BoundedFailure {
+    /// The failure as the error [`run_with_timeout`] returns for it: a failure to run carries its
+    /// own error, with whatever context it had, and a stop becomes its message.
+    pub fn into_error(self) -> anyhow::Error {
+        match self {
+            Self::Failed(err) => err,
+            other => anyhow::anyhow!("{other}"),
+        }
+    }
 }
 
 impl std::fmt::Display for BoundedFailure {

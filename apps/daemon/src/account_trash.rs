@@ -443,14 +443,7 @@ async fn moved_waiting(state: &Arc<AppState>, id: &str, login_wait: Duration) ->
     // kept.
     let moved = match tokio::task::spawn_blocking(move || trash(&directory)).await {
         Ok(Ok(())) => Ok(()),
-        Ok(Err(err)) => {
-            let detail = match err.downcast_ref::<CodedError>() {
-                Some(coded) => coded.params.get("detail").cloned(),
-                None => None,
-            }
-            .unwrap_or_else(|| format!("{err:#}"));
-            Err(trash_failed(&shown, &detail, None))
-        }
+        Ok(Err(failure)) => Err(trash_failed(&shown, &failure.detail, None)),
         Err(join) => Err(trash_failed(&shown, &join.to_string(), None)),
     };
     drop(hold);
@@ -477,6 +470,7 @@ mod tests {
 
     use super::*;
     use crate::coordinator::handle;
+    use crate::hostfs::trash::TrashFailure;
     use crate::protocol::{
         AgentAvailability, Availability, Event, Params, RequestBody, Session, SessionStatus,
     };
@@ -656,7 +650,7 @@ mod tests {
         let (state, _dir) = fixture("account-trash-failed");
         let directory = create_directory(&state);
         state.host_tools.replace(crate::host_tools::Tools {
-            trash: |_| Err(anyhow::anyhow!("the Trash is full")),
+            trash: |path| Err(TrashFailure::new(path, "the Trash is full")),
             ..crate::test_support::host_tools()
         });
         let err = remove(&state, true).await.unwrap_err();

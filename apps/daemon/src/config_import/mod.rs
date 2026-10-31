@@ -21,6 +21,7 @@ use std::time::Duration;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
+use crate::blocking_pass::each_blocking;
 use crate::config_export::{
     self, AccountName, ConfigurationDocument, DocumentConsole, DocumentProject, DocumentSettings,
     ProjectAccountRef,
@@ -28,10 +29,9 @@ use crate::config_export::{
 use crate::coordinator::{
     self, AddProjectRequest, NewConsole, NewProjectSettings, SettingsChanges,
 };
-use crate::git_remote;
-use crate::git_remote::read_bounded;
 use crate::git_workflow::GitWorkflowSettings;
 use crate::hostfs;
+use crate::project_git::remote_url;
 use crate::protocol::{
     error_code, Account, Agent, CodedError, Params, PerAgent, ProjectAccount, ProjectSource,
 };
@@ -444,10 +444,10 @@ fn single_segment(name: &str) -> Option<&std::ffi::OsStr> {
 /// from and names a repository.
 fn clone_directory(clone_dir: &str, remote_url: &str) -> Option<PathBuf> {
     let clone_dir = Path::new(clone_dir);
-    if !clone_dir.is_absolute() || !git_remote::is_clonable_url(remote_url) {
+    if !clone_dir.is_absolute() || !remote_url::is_clonable_url(remote_url) {
         return None;
     }
-    let name = hostfs::repo_name(remote_url)?;
+    let name = crate::project_git::clone::repo_name(remote_url)?;
     single_segment(&name)?;
     Some(clone_dir.join(name))
 }
@@ -494,7 +494,7 @@ fn probe_disk(probe: Probe) -> ((usize, usize), Offers) {
     ((probe.console, probe.project), offers)
 }
 
-/// Runs `work` over `probes` on blocking threads, at most `git_remote::read_bounded`'s width at a
+/// Runs `work` over `probes` on blocking threads, at most `blocking_pass::BLOCKING_WIDTH` at a
 /// time, and returns what came back within `deadline`. After it the probes still running are
 /// given up on, along with the ones not yet started: a blocked thread cannot be interrupted, but
 /// nothing waits for it and no more are started behind it.
@@ -505,8 +505,8 @@ async fn probe_offers(
 ) -> HashMap<(usize, usize), Offers> {
     let done = Arc::new(Mutex::new(HashMap::new()));
     let sink = done.clone();
-    // Each result is kept as it arrives, since `read_bounded` returns only when all have.
-    let all = read_bounded(probes, move |probe| {
+    // Each result is kept as it arrives, since `each_blocking` returns only when all have.
+    let all = each_blocking(probes, move |probe| {
         let (key, offers) = work(probe);
         sink.lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())

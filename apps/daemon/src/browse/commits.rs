@@ -19,10 +19,11 @@ use std::sync::atomic::AtomicBool;
 use anyhow::Result;
 
 use crate::browse::changes::{self, ChangeRead};
-use crate::browse::git::{GitEnv, GitError};
 use crate::browse::line_counts;
 use crate::browse::tree_diff;
 use crate::browse::{blob, budget, git_error, git_failed, Located};
+use crate::git::isolated::IsolatedGit;
+use crate::git::run::GitError;
 use crate::protocol::{CommitChanges, ComparedChangeRef};
 use crate::subprocess::BoundedFailure;
 
@@ -87,7 +88,7 @@ fn count_options() -> Vec<&'static [u8]> {
 /// commits that touch the directory (`--full-history`, so none is left out for being the same as
 /// one of its parents there).
 pub fn list(
-    env: &GitEnv,
+    env: &IsolatedGit,
     at: &Located,
     (base, tip): (&str, &str),
     cancel: &AtomicBool,
@@ -120,7 +121,7 @@ pub fn list(
         }
         args.extend_from_slice(&[b"--end-of-options", range.as_bytes()]);
         if within_scope {
-            // A literal pathspec (`GitEnv::run` sets `GIT_LITERAL_PATHSPECS`): the scope's
+            // A literal pathspec (`IsolatedGit::run` sets `GIT_LITERAL_PATHSPECS`): the scope's
             // directory and everything below it.
             args.extend_from_slice(&[b"--", at.repository.scope.as_bytes()]);
         }
@@ -208,7 +209,7 @@ pub fn list(
 /// holds only some of them (cut at a budget) takes what it needs. Within a subdirectory project's
 /// own directory the log is limited to it, as `line_counts::read_log` limits every run.
 fn add_line_counts(
-    env: &GitEnv,
+    env: &IsolatedGit,
     at: &Located,
     (range, count): (&str, &str),
     list: &mut CommitList,
@@ -282,7 +283,7 @@ fn subject_line(field: &[u8]) -> String {
 /// commit's first parent is not asked: a read is held to commits of the repository, as a read of a
 /// commit is.
 fn verify(
-    env: &GitEnv,
+    env: &IsolatedGit,
     at: &Located,
     (commit, parent): (&str, Option<&str>),
     cancel: &AtomicBool,
@@ -300,7 +301,7 @@ fn verify(
 /// Reads one change of `commit`, its old side from `parent` (the empty tree for none) and its new
 /// side from the commit, both checked first.
 pub fn read(
-    env: &GitEnv,
+    env: &IsolatedGit,
     at: &Located,
     (commit, parent): (&str, Option<&str>),
     change: &ComparedChangeRef,
@@ -313,7 +314,7 @@ pub fn read(
 /// Reads the whole bodies of one change of `commit`, checked first as [`read`] checks them, and
 /// read only when both sides are the versions `expected` names.
 pub fn read_bodies(
-    env: &GitEnv,
+    env: &IsolatedGit,
     at: &Located,
     (commit, parent): (&str, Option<&str>),
     change: &ComparedChangeRef,

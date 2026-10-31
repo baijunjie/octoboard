@@ -3,7 +3,8 @@ use std::sync::Mutex;
 use serde_json::json;
 
 use super::*;
-use crate::branch_origin::{repo_key, repository_of};
+use crate::branch_origin::repo_key;
+use crate::git::repo_files::repository_of;
 use crate::mcp::Owner;
 use crate::protocol::{Account, Availability, OrchestrationRole, Role};
 use crate::test_support::{

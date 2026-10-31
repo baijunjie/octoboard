@@ -15,7 +15,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use portable_pty::CommandBuilder;
 
-use crate::browse::git::GitEnv;
+use crate::git::isolated::IsolatedGit;
 use crate::protocol::{
     error_code, now_millis, CodedError, Event, ShellTerminal, ShellTerminalState,
 };
@@ -157,7 +157,7 @@ pub async fn create(
     project: String,
     worktree: Option<String>,
     path: String,
-    git: fn() -> Result<GitEnv>,
+    git: fn() -> Result<IsolatedGit>,
 ) -> Result<ShellTerminal> {
     let cwd = {
         let (state, project, worktree) = (state.clone(), project.clone(), worktree.clone());

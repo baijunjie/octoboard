@@ -14,9 +14,10 @@
 //! target. A reftable repository keeps no reflog to read, so there the branch `HEAD` was on stands
 //! in whatever the start point was.
 
-use crate::browse::wire_path;
+use crate::wire_path;
 
-use super::git_files::{first_reflog_line, reference_exists, uses_reftable};
+use super::git_files::first_reflog_line;
+use crate::git::repo_files::{reference_exists, uses_reftable};
 
 use std::path::Path;
 
@@ -71,7 +72,7 @@ fn local_branch_of(common_dir: &Path, start: &[u8]) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::branch_origin::repository_of;
+    use crate::git::repo_files::repository_of;
     use crate::test_support::{git, repo_with};
 
     /// The target recorded for `branch`, made by `make` in a repository whose `main` is checked

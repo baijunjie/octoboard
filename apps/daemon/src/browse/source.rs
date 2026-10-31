@@ -14,10 +14,13 @@ use std::sync::atomic::AtomicBool;
 
 use anyhow::Result;
 
-use crate::browse::git::{GitEnv, GitError};
-use crate::browse::wire_path::{self, RelPath};
-use crate::browse::{budget, git_error, Git};
+use crate::browse::{budget, git_error, BrowseGit};
+use crate::git::isolated::IsolatedGit;
+use crate::git::layout::{admin_dir, find_dot_git};
+use crate::git::run::GitError;
+use crate::git::worktree_list::parse_worktree_list;
 use crate::protocol::{error_code, CodedError};
+use crate::wire_path::{self, RelPath};
 
 /// A directory's or a file's identity on its filesystem, as sent on the wire: its device and inode
 /// numbers, and its creation time where the filesystem records one. It survives a rename, and
@@ -76,38 +79,10 @@ pub enum Discovery {
     Unreadable(String),
 }
 
-/// The directory discovery never climbs into: the home directory, resolved the way the paths it is
-/// compared with are. See [`find_dot_git`].
-pub fn home_ceiling() -> Option<PathBuf> {
-    crate::paths::known_home_dir().and_then(|home| fs::canonicalize(home).ok())
-}
-
-/// The nearest directory from `start` upwards holding a `.git` entry (a directory, or the file a
-/// linked worktree or a submodule has), stopping below `ceiling` the way `git` does for
-/// `GIT_CEILING_DIRECTORIES`: `start` itself is always looked at, and the climb never steps into
-/// `ceiling`.
-///
-/// The ceiling is the home directory. Without it, a home directory kept under version control —
-/// a dotfiles repository — would make every ordinary project under it look like a subdirectory of
-/// that repository, and its Git review would show the whole home directory's changes.
-pub fn find_dot_git(start: &Path, ceiling: Option<&Path>) -> Option<PathBuf> {
-    let mut dir = start;
-    loop {
-        if fs::symlink_metadata(dir.join(".git")).is_ok() {
-            return Some(dir.to_path_buf());
-        }
-        let parent = dir.parent()?;
-        if Some(parent) == ceiling {
-            return None;
-        }
-        dir = parent;
-    }
-}
-
 /// Finds the repository and worktree holding `root`, and `root`'s place in that worktree.
 /// `git` is only asked for once the filesystem says there is a repository to ask about, so an
 /// ordinary directory costs no subprocess and never depends on `git` being installed.
-pub fn discover(root: &ProjectRoot, git: &Git, cancel: &AtomicBool) -> Result<Discovery> {
+pub fn discover(root: &ProjectRoot, git: &BrowseGit, cancel: &AtomicBool) -> Result<Discovery> {
     if find_dot_git(&root.canonical, git.ceiling()).is_none() {
         return Ok(Discovery::NotARepository);
     }
@@ -126,7 +101,7 @@ pub fn discover(root: &ProjectRoot, git: &Git, cancel: &AtomicBool) -> Result<Di
                 let path = Path::new(std::ffi::OsStr::from_bytes(path));
                 Ok(fs::canonicalize(path).map_err(|err| format!("{}: {err}", path.display())))
             }
-            Err(GitError::Failed(failure)) => Ok(Err(failure.stderr)),
+            Err(GitError::Exited { stderr, .. }) => Ok(Err(stderr)),
             Err(err) => Err(git_error(err)),
         }
     };
@@ -183,7 +158,7 @@ pub struct Worktree {
 /// has gone, or whose `.git` no longer leads back to this repository (its path reused by another
 /// checkout), is left out, so an id that named it no longer resolves.
 pub fn worktrees(
-    env: &GitEnv,
+    env: &IsolatedGit,
     repository: &Repository,
     cancel: &AtomicBool,
 ) -> Result<Vec<Worktree>> {
@@ -229,7 +204,7 @@ pub fn worktrees(
 
 /// The worktree `id` names, checked against the repository as it stands now.
 pub fn find_worktree(
-    env: &GitEnv,
+    env: &IsolatedGit,
     repository: &Repository,
     id: &str,
     cancel: &AtomicBool,
@@ -244,70 +219,6 @@ pub fn find_worktree(
                 &[("worktree", id)],
             )
         })
-}
-
-/// The git directory a worktree's `.git` leads to: the directory itself, or the one a `.git` file
-/// names (relative to the worktree when it is written relative).
-pub(crate) fn admin_dir(root: &Path) -> Option<PathBuf> {
-    fs::canonicalize(crate::hostfs::git_dir::git_dir(root)?).ok()
-}
-
-/// One record of `git worktree list --porcelain -z`.
-#[derive(Debug, Default, PartialEq, Eq)]
-pub(crate) struct WorktreeRecord {
-    pub(crate) path: Vec<u8>,
-    pub(crate) head: Option<String>,
-    /// The checked-out branch, below `refs/heads/`, as raw bytes.
-    pub(crate) branch: Option<Vec<u8>>,
-    pub(crate) bare: bool,
-    pub(crate) locked: bool,
-    pub(crate) prunable: bool,
-}
-
-/// Parses `git worktree list --porcelain -z`: NUL-terminated attribute lines, each record ended
-/// by an empty one. Paths are taken as bytes, so a worktree path holding a newline is read whole.
-pub(crate) fn parse_worktree_list(stdout: &[u8]) -> Vec<WorktreeRecord> {
-    let mut records = Vec::new();
-    let mut current: Option<WorktreeRecord> = None;
-    for field in stdout.split(|&b| b == 0) {
-        if field.is_empty() {
-            records.extend(current.take());
-            continue;
-        }
-        let (key, value) = match field.iter().position(|&b| b == b' ') {
-            Some(at) => (&field[..at], Some(&field[at + 1..])),
-            None => (field, None),
-        };
-        if key == b"worktree" {
-            records.extend(current.take());
-            current = Some(WorktreeRecord {
-                path: value.unwrap_or_default().to_vec(),
-                ..WorktreeRecord::default()
-            });
-            continue;
-        }
-        let Some(record) = current.as_mut() else {
-            continue;
-        };
-        match key {
-            b"HEAD" => {
-                record.head = value
-                    .map(|oid| String::from_utf8_lossy(oid).into_owned())
-                    .filter(|oid| oid.bytes().any(|b| b != b'0'));
-            }
-            b"branch" => {
-                record.branch = value
-                    .and_then(|name| name.strip_prefix(b"refs/heads/"))
-                    .map(<[u8]>::to_vec);
-            }
-            b"bare" => record.bare = true,
-            b"locked" => record.locked = true,
-            b"prunable" => record.prunable = true,
-            _ => {}
-        }
-    }
-    records.extend(current);
-    records
 }
 
 /// The directory `scope` names inside the worktree at `root`, which must be exactly that: a
@@ -423,38 +334,5 @@ mod tests {
             error_code::PERMISSION_DENIED
         );
         assert_eq!(unavailable_cause(&anyhow::anyhow!("not coded")), OTHER);
-    }
-
-    #[test]
-    fn discovery_never_climbs_into_the_ceiling() {
-        let home = crate::test_support::ScratchDir::new("source-ceiling");
-        let home = fs::canonicalize(&*home).unwrap();
-        fs::create_dir_all(home.join(".git")).unwrap();
-        fs::create_dir_all(home.join("project/inner")).unwrap();
-        assert_eq!(find_dot_git(&home.join("project/inner"), Some(&home)), None);
-        assert_eq!(find_dot_git(&home, Some(&home)), Some(home.clone()));
-        assert_eq!(
-            find_dot_git(&home.join("project/inner"), None),
-            Some(home.clone())
-        );
-    }
-
-    #[test]
-    fn worktree_records_are_read_as_bytes() {
-        let stdout = [
-            &b"worktree /r/main\0HEAD 1111111111111111111111111111111111111111\0"[..],
-            b"branch refs/heads/main\0\0",
-            b"worktree /r/new\nline\0HEAD 2222222222222222222222222222222222222222\0detached\0\0",
-            b"worktree /r/gone\0HEAD 3333333333333333333333333333333333333333\0",
-            b"branch refs/heads/caf\xe9\0prunable gitdir file points to non-existent location\0\0",
-        ]
-        .concat();
-        let records = parse_worktree_list(&stdout);
-        assert_eq!(records.len(), 3);
-        assert_eq!(records[0].branch.as_deref(), Some(&b"main"[..]));
-        assert_eq!(records[1].path, b"/r/new\nline");
-        assert_eq!(records[1].branch, None);
-        assert_eq!(records[2].branch.as_deref(), Some(&b"caf\xe9"[..]));
-        assert!(records[2].prunable);
     }
 }

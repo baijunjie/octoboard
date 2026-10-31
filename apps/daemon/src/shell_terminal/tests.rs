@@ -5,7 +5,7 @@ use std::time::Instant;
 use tokio::sync::broadcast;
 
 use super::{close, close_all, create, rename, shell_environment, ShellProcess};
-use crate::browse::git::GitEnv;
+use crate::git::isolated::IsolatedGit;
 use crate::protocol::{error_code, CodedError, Event, Request, ShellTerminal, ShellTerminalState};
 use crate::pty::PtyCore;
 use crate::state::AppState;
@@ -15,12 +15,12 @@ use crate::test_support::{
 };
 
 /// No test here reads a worktree but the one that names one, which passes a `git` of its own.
-fn no_git() -> anyhow::Result<GitEnv> {
+fn no_git() -> anyhow::Result<IsolatedGit> {
     anyhow::bail!("this test runs no git")
 }
 
-fn test_git() -> anyhow::Result<GitEnv> {
-    Ok(GitEnv::new(SYSTEM_GIT.to_string(), isolated_git_env()))
+fn test_git() -> anyhow::Result<IsolatedGit> {
+    Ok(IsolatedGit::new(SYSTEM_GIT.to_string(), isolated_git_env()))
 }
 
 /// A state holding project `p1` of console `console-1`, at a directory of its own.

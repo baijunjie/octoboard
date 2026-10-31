@@ -20,8 +20,8 @@ use super::args::{
     present_agent, present_text, raw_text, required_str, resolve_project,
 };
 use crate::coordinator::{self, ConsoleChanges, ProjectChanges, SettingsChanges};
-use crate::git_remote;
 use crate::git_workflow;
+use crate::project_git::remote_url;
 use crate::protocol::{
     default_account_name_in, Agent, CodedError, Console, LaunchChange, Project, ProjectAccount,
     Session,
@@ -201,7 +201,7 @@ pub(super) async fn refresh_git_status_within(
     projects: Vec<Project>,
     wait: std::time::Duration,
 ) -> Value {
-    let unfinished = crate::git_status::refresh_and_wait(state, projects, wait).await;
+    let unfinished = crate::project_git::status::refresh_and_wait(state, projects, wait).await;
     if unfinished.is_empty() {
         return json!({ "finished": true });
     }
@@ -392,8 +392,8 @@ fn without_credentials_in(text: &str) -> String {
     text.split(' ')
         .map(|word| {
             let url = word.trim_matches(|c: char| c.is_whitespace() || "'\"`(),".contains(c));
-            if url.contains("://") && git_remote::has_credentials(url) {
-                word.replace(url, &git_remote::without_credentials(url))
+            if url.contains("://") && remote_url::has_credentials(url) {
+                word.replace(url, &remote_url::without_credentials(url))
             } else {
                 word.to_string()
             }
@@ -420,7 +420,7 @@ pub(super) fn describe_project(state: &Arc<AppState>, project: &Project) -> Resu
         "host": project.host_id,
         "path": project.path,
         "source": project.source,
-        "remote_url": project.remote_url.as_deref().map(git_remote::without_credentials),
+        "remote_url": project.remote_url.as_deref().map(remote_url::without_credentials),
         "default_agent": project.default_agent,
         "pinned": project.pinned,
         "tags": project.tags,

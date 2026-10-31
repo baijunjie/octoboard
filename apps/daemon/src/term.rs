@@ -13,7 +13,6 @@ use portable_pty::CommandBuilder;
 use uuid::Uuid;
 
 use crate::adapter::{self, LaunchSpec};
-use crate::branch_origin;
 use crate::env_shell;
 use crate::paths;
 use crate::protocol::{
@@ -22,6 +21,7 @@ use crate::protocol::{
 };
 use crate::pty;
 use crate::session::{self, LiveSession, NewSession};
+use crate::session_git_hooks;
 
 /// Bracketed paste, then the text, then the paste end, then Enter — written as one buffer, which is
 /// what makes a multi-line message arrive as a single submitted message with no delay needed
@@ -203,7 +203,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
     let mut environment = shell_env.clone();
     environment.extend(plan.env.iter().cloned());
     if role == Role::Project {
-        environment.extend(branch_origin::git_hooks::session_env(
+        environment.extend(session_git_hooks::session_env(
             &shell_env,
             &self_exe,
             session_id,

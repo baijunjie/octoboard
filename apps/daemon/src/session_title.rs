@@ -85,7 +85,7 @@ pub fn project_names(cwd: &Path) -> Vec<String> {
 /// The main repository of the linked worktree at `dir`, whose `.git` file names
 /// `<main repository>/.git/worktrees/<name>`, absolutely or relative to `dir`.
 fn main_repository(dir: &Path) -> Option<PathBuf> {
-    let gitdir = lexically_normalise(&crate::hostfs::git_dir::git_dir(dir)?);
+    let gitdir = lexically_normalise(&crate::git::layout::git_dir(dir)?);
     let worktrees = gitdir.parent()?;
     let git = worktrees.parent()?;
     (worktrees.file_name()? == "worktrees" && git.file_name()? == ".git")

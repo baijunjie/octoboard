@@ -15,18 +15,18 @@ use std::sync::Arc;
 use anyhow::{anyhow, bail, Result};
 use serde_json::{Map, Value};
 
-use crate::browse::git::GitEnv;
 use crate::browse::lane::Admission;
-use crate::browse::wire_path;
 use crate::browse::{self, budget};
+use crate::git::isolated::IsolatedGit;
 use crate::protocol::{error_code, BrowseBody, CodedError, Event, GitSourceInfo, Project, Session};
 use crate::state::AppState;
+use crate::wire_path;
 
 use super::args::{find_project, optional_string};
 
 /// How the daemon's `git` environment is made: the user's shell in production, a fixture's own in
 /// a test.
-pub(super) type MakeGit = fn() -> Result<GitEnv>;
+pub(super) type MakeGit = fn() -> Result<IsolatedGit>;
 
 /// The project a call names, among the caller's own console's: its own when none is named and it
 /// has one. Another console's project is refused as its `git_status` is not listed by
@@ -137,7 +137,7 @@ pub(super) fn plain(wire: &str) -> String {
 
 /// The `git` environment of a fixture, as the tools' tests make it.
 #[cfg(test)]
-pub(super) fn test_git() -> Result<GitEnv> {
+pub(super) fn test_git() -> Result<IsolatedGit> {
     use crate::test_support::{isolated_git_env, SYSTEM_GIT};
-    Ok(GitEnv::new(SYSTEM_GIT.to_string(), isolated_git_env()))
+    Ok(IsolatedGit::new(SYSTEM_GIT.to_string(), isolated_git_env()))
 }

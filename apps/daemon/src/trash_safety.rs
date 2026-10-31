@@ -19,8 +19,10 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use crate::hostfs::place::{looked_within_stuck, Identity, Looking, Place};
-use crate::hostfs::{self, lexically_normalise};
+use crate::hostfs;
+use crate::hostfs::identity::{self, Identity};
+use crate::hostfs::lexically_normalise;
+use crate::hostfs::place::{looked_within_stuck, Looking, Place};
 use crate::state::AppState;
 
 /// How long looking at one path on the file system may take. Past it the path counts as one that
@@ -102,7 +104,7 @@ impl TrashedEntry {
             .ok_or(Failure::Unresolved)?;
         Ok(Some(Self::Entry {
             parent,
-            identity: file_identity(&own),
+            identity: identity::known(&own),
         }))
     }
 }
@@ -129,12 +131,6 @@ impl Failure {
             Failure::Unresolved => ("could not be looked at", None),
         }
     }
-}
-
-/// The device and inode `metadata` gives, or `None` where the file system reports no inode.
-fn file_identity(metadata: &std::fs::Metadata) -> Option<Identity> {
-    let identity = hostfs::identity(metadata);
-    (identity.1 != 0).then_some(identity)
 }
 
 /// What is at another path that must keep its files, at the home directory or at Octoboard's data
@@ -189,14 +185,14 @@ impl Seen {
                 parents: [Place::of(path.parent()?)?, Place::of(real.parent()?)?],
                 identities: [&own, &metadata]
                     .into_iter()
-                    .filter_map(file_identity)
+                    .filter_map(identity::known)
                     .collect(),
                 paths: [path, real],
             });
         }
         let place = Place::of(&path)?;
         let repository = match repository
-            .then(|| crate::branch_origin::repository_of(&path))
+            .then(|| crate::git::repo_files::repository_of(&path))
             .flatten()
         {
             Some(common_dir) => Some(Place::of(&common_dir)?),

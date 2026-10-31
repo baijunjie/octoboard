@@ -619,7 +619,7 @@ mod with_state {
         let roots = crate::browse::project_live_roots(
             &fixture.state,
             &project,
-            &crate::browse::git::GitEnv::from_shell,
+            &crate::git::isolated::IsolatedGit::from_shell,
         )
         .unwrap();
         assert_eq!(roots.len(), 2, "{roots:?}");

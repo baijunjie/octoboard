@@ -116,6 +116,14 @@ impl AsRef<Path> for ScratchFile {
 pub(crate) const TEST_KEY: &str =
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
+/// A FIFO at `path`, replacing whatever is there: a file whose open blocks until a writer appears.
+pub(crate) fn mkfifo(path: &Path) {
+    use std::os::unix::ffi::OsStrExt;
+    let _ = std::fs::remove_file(path);
+    let c_path = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
+    assert_eq!(unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) }, 0);
+}
+
 /// An `AppState` over a fresh store in a scratch directory labelled `label`, with no console in
 /// it. The caller keeps the directory alive for as long as the state is used. A console added to
 /// the state needs a workdir of its own rather than this directory, because deleting a console
@@ -147,18 +155,18 @@ pub(crate) fn app_state(label: &str) -> (Arc<AppState>, ScratchDir) {
 pub(crate) fn host_tools() -> crate::host_tools::Tools {
     crate::host_tools::Tools {
         git: || {
-            Ok(crate::branch_origin::git::Git::new(
+            Ok(crate::git::branch_git::BranchGit::new(
                 SYSTEM_GIT,
                 isolated_git_env(),
             ))
         },
         trash: |path| {
             if path.is_dir() {
-                std::fs::remove_dir_all(path)?;
+                std::fs::remove_dir_all(path)
             } else {
-                std::fs::remove_file(path)?;
+                std::fs::remove_file(path)
             }
-            Ok(())
+            .map_err(|err| crate::hostfs::trash::TrashFailure::new(path, err))
         },
         shell: || crate::shell_terminal::ShellCommand {
             program: "/bin/bash".to_string(),
@@ -752,6 +760,81 @@ pub(crate) fn isolated_git_env() -> HashMap<String, String> {
 /// fresh-executable cost.
 pub(crate) const SYSTEM_GIT: &str = "/usr/bin/git";
 
+/// A user's shell environment for pinning the command a `git` runner builds: a variable that is
+/// kept, the configuration location the user's own material is named by, a `GIT_*` that would
+/// redirect the command, and the prompt settings the daemon overrides. The values are never run.
+pub(crate) fn pinned_shell_env() -> HashMap<String, String> {
+    [
+        ("HOME", "/home/u"),
+        ("PATH", "/usr/bin:/bin"),
+        ("GIT_CONFIG_GLOBAL", "/home/u/.gitconfig"),
+        ("GIT_CONFIG_NOSYSTEM", "1"),
+        ("GIT_DIR", "/elsewhere/.git"),
+        ("GIT_LITERAL_PATHSPECS", "0"),
+        ("GIT_TERMINAL_PROMPT", "1"),
+        ("GIT_ASKPASS", "/askpass"),
+        ("SSH_ASKPASS", "/askpass"),
+    ]
+    .into_iter()
+    .map(|(key, value)| (key.to_string(), value.to_string()))
+    .collect()
+}
+
+/// What a built `Command` would run: the program, every argument in order, each variable it sets
+/// (`None` for one it marks as removed) and the directory it runs in.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct CommandLine {
+    pub(crate) program: String,
+    pub(crate) args: Vec<String>,
+    pub(crate) env: std::collections::BTreeMap<String, Option<String>>,
+    pub(crate) dir: Option<PathBuf>,
+}
+
+impl CommandLine {
+    /// What `command` would run.
+    pub(crate) fn of(command: &Command) -> Self {
+        let text = |value: &std::ffi::OsStr| value.to_string_lossy().into_owned();
+        Self {
+            program: text(command.get_program()),
+            args: command.get_args().map(text).collect(),
+            env: command
+                .get_envs()
+                .map(|(key, value)| (text(key), value.map(text)))
+                .collect(),
+            dir: command.get_current_dir().map(Path::to_path_buf),
+        }
+    }
+
+    /// The command line a runner over [`pinned_shell_env`] is expected to build: `program` with
+    /// `args` in `dir`, in the environment every daemon `git` gets from that shell environment
+    /// (its `GIT_*` variables cut down to the user's configuration, unable to prompt) plus `extra`.
+    pub(crate) fn pinned(
+        program: &str,
+        args: &[&str],
+        extra: &[(&str, &str)],
+        dir: Option<&str>,
+    ) -> Self {
+        let env: std::collections::BTreeMap<String, Option<String>> = [
+            ("HOME", "/home/u"),
+            ("PATH", "/usr/bin:/bin"),
+            ("GIT_CONFIG_GLOBAL", "/home/u/.gitconfig"),
+            ("GIT_CONFIG_NOSYSTEM", "1"),
+            ("GIT_TERMINAL_PROMPT", "0"),
+            ("GIT_SSH_COMMAND", "ssh -oBatchMode=yes"),
+        ]
+        .into_iter()
+        .chain(extra.iter().copied())
+        .map(|(key, value)| (key.to_string(), Some(value.to_string())))
+        .collect();
+        Self {
+            program: program.to_string(),
+            args: args.iter().map(|arg| arg.to_string()).collect(),
+            env,
+            dir: dir.map(PathBuf::from),
+        }
+    }
+}
+
 /// A `git` command in `dir` for fixture setup, over exactly [`isolated_git_env`] and nothing
 /// more. The caller adds the subcommand, and runs it where it needs its output, its exit status
 /// or a pipe on its stdin.
@@ -842,7 +925,7 @@ pub(crate) fn second_real_path(real: &Path) -> Option<PathBuf> {
     let identity = |path: &Path| {
         std::fs::metadata(path)
             .ok()
-            .map(|metadata| crate::hostfs::identity(&metadata))
+            .map(|metadata| crate::hostfs::identity::raw(&metadata))
     };
     let distinct = std::fs::canonicalize(&second).ok()? != std::fs::canonicalize(real).ok()?;
     (distinct && identity(&second).is_some() && identity(&second) == identity(real))
@@ -886,7 +969,7 @@ pub(crate) fn branch_made_from(
     let mut fields = head.split(' ');
     let commit = fields.nth(1).unwrap().to_string();
     let time: i64 = head.rsplit(' ').nth(1).unwrap().parse().unwrap();
-    let key = crate::branch_origin::repo_key(&crate::branch_origin::repository_of(repo).unwrap());
+    let key = crate::branch_origin::repo_key(&crate::git::repo_files::repository_of(repo).unwrap());
     state
         .store
         .apply_branch_origins(
@@ -920,10 +1003,10 @@ pub(crate) fn repo_pair(label: &str) -> (ScratchDir, ScratchDir) {
 /// The variables a login shell could export that send a `git` to `theirs` instead of the
 /// repository its working directory names: the repository, index and common directory, and a
 /// `remote.origin.url` passed through the environment by both of its channels. The tests that run
-/// a command over these (`git_status`, `git_remote`, `browse`) prove the filter is wired into each
+/// a command over these (`project_git`, `browse`) prove the filter is wired into each
 /// path, each by what its own read can see — a file's content sees the first three, a remote's
 /// URL the last two, and `GIT_WORK_TREE` none. Which names stay kept is pinned by the unit test
-/// in `git_env`, which takes its dropped names from here.
+/// in `crate::git::env`, which takes its dropped names from here.
 pub(crate) fn redirecting_overrides(theirs: &Path) -> Vec<(&'static str, String)> {
     let git_dir = theirs.join(".git");
     vec![

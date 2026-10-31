@@ -20,14 +20,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use super::{identity, lexically_normalise};
+use super::identity::{self, Identity};
+use super::lexically_normalise;
 use crate::state::StalledPasses;
 
-/// A directory told apart by what it is on the file system: its device and inode.
-pub type Identity = (u64, u64);
-
-/// How many paths are looked at at once, this daemon's figure for a pass of blocking threads.
-const LOOKS_AT_ONCE: usize = 4;
+/// How many paths are looked at at once.
+const LOOKS_AT_ONCE: usize = crate::blocking_pass::BLOCKING_WIDTH;
 
 #[cfg(test)]
 thread_local! {
@@ -100,18 +98,7 @@ impl Place {
 /// directory and gives nothing; the components before it are followed as usual. `None` too where
 /// it cannot be read or the file system reports no inode (0).
 fn resolved_directory_identity(path: &Path) -> Option<Identity> {
-    directory_identity(&std::fs::symlink_metadata(path).ok()?)
-}
-
-/// The identity of the directory `path` leads to, following links. `None` as for
-/// [`resolved_directory_identity`].
-pub fn followed_directory_identity(path: &Path) -> Option<Identity> {
-    directory_identity(&std::fs::metadata(path).ok()?)
-}
-
-fn directory_identity(metadata: &std::fs::Metadata) -> Option<Identity> {
-    let identity = identity(metadata);
-    (metadata.is_dir() && identity.1 != 0).then_some(identity)
+    identity::directory(&std::fs::symlink_metadata(path).ok()?)
 }
 
 /// What a look at a path does while an earlier look at it, which outran its deadline, is still

@@ -11,16 +11,17 @@ use std::sync::Arc;
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
 
+use crate::branch_origin;
 use crate::branch_origin::handover::{
     branch_name, branch_noun_and_pronoun, move_branches, named_branches, Handed, Handover,
 };
 use crate::branch_origin::session_branches::{self, Worktree};
-use crate::branch_origin::{self, repository_of};
-use crate::browse::wire_path;
+use crate::git::repo_files::repository_of;
 use crate::protocol::{error_code, CodedError, Project, Role, Session, SessionStatus};
 use crate::reporting::{self, WhenBlocked, NOTICE_PREFIX};
 use crate::sharing::named_session;
 use crate::state::AppState;
+use crate::wire_path;
 
 use super::args::{optional_string, optional_string_list};
 use super::exec::resolve_owned_session;

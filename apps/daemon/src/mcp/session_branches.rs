@@ -11,7 +11,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use serde_json::{json, Map, Value};
 
-use crate::branch_origin::cleanup;
+use crate::branch_cleanup;
 use crate::branch_origin::session_branches::{self, Worktree};
 use crate::protocol::Session;
 use crate::state::AppState;
@@ -39,7 +39,7 @@ pub(super) async fn get_session_branches(
             let inspected = if read.is_empty() {
                 None
             } else {
-                cleanup::inspect_unforced(&state, std::slice::from_ref(&target))
+                branch_cleanup::survey::inspect_unforced(&state, std::slice::from_ref(&target))
                     .map_err(
                         |err| tracing::warn!(%err, "judging what archiving would remove failed"),
                     )
@@ -58,7 +58,7 @@ pub(super) async fn get_session_branches(
             entry["fork_point"] = json!(responsible.fork_point);
             entry["responsible_since"] = json!(responsible.since);
             entry["archive"] = inspected.as_deref().map_or(Value::Null, |items| {
-                cleanup::archive_outlook(items, &responsible.wire)
+                branch_cleanup::report::archive_outlook(items, &responsible.wire)
             });
             entry
         })

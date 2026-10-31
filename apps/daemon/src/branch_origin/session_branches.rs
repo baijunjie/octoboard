@@ -22,11 +22,12 @@ use std::sync::atomic::AtomicBool;
 use anyhow::Result;
 
 use super::bound::bound_in;
-use super::git::{changes, worktrees, Git, Listed};
 use super::handover::branch_name;
-use crate::browse::{compare, wire_path};
+use crate::browse::compare;
+use crate::git::branch_git::{changes, worktrees, BranchGit, Listed};
 use crate::protocol::{Session, UpstreamInfo};
 use crate::state::AppState;
+use crate::wire_path;
 
 /// How many commits and changed files are listed; the totals are always given.
 const LISTED_COMMITS: usize = 50;
@@ -115,7 +116,7 @@ pub struct ResponsibleBranch {
     pub project: String,
     /// The branch as text.
     pub branch: String,
-    /// The branch as a wire path, which names it to [`super::cleanup`].
+    /// The branch as a wire path, which names it to [`crate::branch_cleanup`].
     pub wire: String,
     pub worktree: Worktree,
     /// The branch it was created from, as text; `None` when it was created from something that is
@@ -203,7 +204,7 @@ pub fn worktrees_of(
 
 /// Where the branch `name` is checked out among `listed`, and why its changes could not be read
 /// when they could not.
-fn worktree_of(git: &Git, listed: &[Listed], name: &[u8]) -> (Worktree, Option<String>) {
+fn worktree_of(git: &BranchGit, listed: &[Listed], name: &[u8]) -> (Worktree, Option<String>) {
     let Some(worktree) = listed
         .iter()
         .find(|worktree| worktree.branch.as_deref() == Some(name))
@@ -232,7 +233,7 @@ fn worktree_of(git: &Git, listed: &[Listed], name: &[u8]) -> (Worktree, Option<S
 }
 
 /// Reads each of `names`, branches of `repo`, against one listing of its worktrees.
-fn read_branches(git: &Git, repo: &Path, names: &[Vec<u8>]) -> Vec<BranchState> {
+fn read_branches(git: &BranchGit, repo: &Path, names: &[Vec<u8>]) -> Vec<BranchState> {
     let listed = worktrees(git, repo);
     let main_branch = listed
         .as_ref()
@@ -259,7 +260,11 @@ fn read_branches(git: &Git, repo: &Path, names: &[Vec<u8>]) -> Vec<BranchState> 
 
 /// The remote branch of the main working copy's branch `main`: the one it tracks, else the one of
 /// its name on a remote. The remote default branch the Git mode falls back to is not looked for.
-fn main_upstream(git: &Git, repo: &Path, main: &[u8]) -> Result<Option<UpstreamInfo>, String> {
+fn main_upstream(
+    git: &BranchGit,
+    repo: &Path,
+    main: &[u8],
+) -> Result<Option<UpstreamInfo>, String> {
     let list = compare::branches_in(
         &git.browse_env(),
         repo,
@@ -280,7 +285,7 @@ fn main_upstream(git: &Git, repo: &Path, main: &[u8]) -> Result<Option<UpstreamI
 }
 
 fn read_branch(
-    git: &Git,
+    git: &BranchGit,
     repo: &Path,
     listed: &[Listed],
     name: &[u8],
@@ -349,7 +354,7 @@ fn shortened(reference: &[u8]) -> String {
 
 /// Fills in the commits and changed files of `branch` against `base`: what it has done since the
 /// two forked, as `git diff base...branch` takes it.
-fn compare(git: &Git, repo: &Path, state: &mut BranchState, base: &OsStr, branch: &OsStr) {
+fn compare(git: &BranchGit, repo: &Path, state: &mut BranchState, base: &OsStr, branch: &OsStr) {
     let range = [base.as_bytes(), b"..", branch.as_bytes()].concat();
     let range = OsStr::from_bytes(&range);
     let count = text(
@@ -429,7 +434,7 @@ fn compare(git: &Git, repo: &Path, state: &mut BranchState, base: &OsStr, branch
 }
 
 /// The trimmed text a read prints.
-fn text(git: &Git, repo: &Path, args: &[&OsStr]) -> Result<String, String> {
+fn text(git: &BranchGit, repo: &Path, args: &[&OsStr]) -> Result<String, String> {
     let stdout = git.read(repo, args)?;
     Ok(String::from_utf8_lossy(&stdout).trim().to_owned())
 }

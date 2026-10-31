@@ -12,7 +12,7 @@ use serde_json::{json, Map, Value};
 
 use crate::branch_origin;
 use crate::browse::budget;
-use crate::browse::git::GitEnv;
+use crate::git::isolated::IsolatedGit;
 use crate::protocol::{BrowseBody, Event, Session, SessionStatus};
 use crate::state::AppState;
 
@@ -30,7 +30,7 @@ pub(super) async fn list_project_branches(
     caller: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    list_branches_with(state, caller, arguments, GitEnv::from_shell).await
+    list_branches_with(state, caller, arguments, IsolatedGit::from_shell).await
 }
 
 /// [`list_project_branches`] with the `git` environment made by `make_git`.

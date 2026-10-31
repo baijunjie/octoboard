@@ -14,9 +14,9 @@ use anyhow::Result;
 use tokio::task::JoinHandle;
 
 use crate::agent_records::{self, Locator, Resumability};
-use crate::branch_origin;
+use crate::branch_cleanup;
 use crate::coordinator;
-use crate::hostfs;
+use crate::hostfs::trash::TrashFailure;
 use crate::protocol::{now_millis, Session, SessionStatus};
 use crate::state::AppState;
 
@@ -32,7 +32,7 @@ const SCAN_EVERY_MILLIS: i64 = 24 * 60 * 60 * 1000;
 type LocatorSource = Arc<dyn Fn() -> Locator + Send + Sync>;
 
 /// How a scan moves an agent record to the Trash.
-type TrashRecord = Arc<dyn Fn(&Path) -> Result<()> + Send + Sync>;
+type TrashRecord = Arc<dyn Fn(&Path) -> Result<(), TrashFailure> + Send + Sync>;
 
 /// Starts the task that scans the archive: once now, which also catches up on the time the
 /// machine was off, then whenever a day of wall-clock time has passed since the last scan. The
@@ -44,7 +44,7 @@ pub fn spawn(state: &Arc<AppState>) {
         CHECK_EVERY,
         SCAN_EVERY_MILLIS,
         Arc::new(Locator::default),
-        Arc::new(hostfs::move_to_trash),
+        Arc::new(state.host_tools.get().trash),
     );
 }
 
@@ -113,7 +113,7 @@ async fn scan(state: &Arc<AppState>, locator: LocatorSource, trash: TrashRecord)
     if deleted.is_empty() {
         return;
     }
-    branch_origin::cleanup::remove_logging_left(state.clone(), deleted.clone()).await;
+    branch_cleanup::remove::remove_logging_left(state.clone(), deleted.clone()).await;
     coordinator::trash_agent_records_with(state, deleted, locator(), move |path| trash(path)).await;
 }
 

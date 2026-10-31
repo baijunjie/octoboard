@@ -5,35 +5,36 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
-use super::{is_same_branch, repo_key, repository_of};
+use super::{is_same_branch, repo_key};
+use crate::git::repo_files::repository_of;
 use crate::protocol::Session;
 use crate::state::AppState;
 
 /// One branch a session is responsible for: its name as a wire path, the session, that session's
 /// project, and what its row records of where the branch came from.
 #[derive(Clone)]
-pub(super) struct BoundBranch {
-    pub(super) branch: String,
-    pub(super) session: String,
-    pub(super) project: String,
+pub(crate) struct BoundBranch {
+    pub(crate) branch: String,
+    pub(crate) session: String,
+    pub(crate) project: String,
     /// The branch it was created from, as a wire path.
-    pub(super) target_branch: Option<String>,
+    pub(crate) target_branch: Option<String>,
     /// The commit it was created at, and when its session became responsible for it.
-    pub(super) birth_commit: String,
-    pub(super) since: i64,
+    pub(crate) birth_commit: String,
+    pub(crate) since: i64,
 }
 
 /// One repository the sessions' projects are in, with the branches in it they are responsible
 /// for.
 #[derive(Clone)]
-pub(super) struct Bound {
-    pub(super) repo: PathBuf,
-    pub(super) branches: Vec<BoundBranch>,
+pub(crate) struct Bound {
+    pub(crate) repo: PathBuf,
+    pub(crate) branches: Vec<BoundBranch>,
 }
 
 /// The repositories `sessions`' projects are in that hold a branch one of them is responsible
 /// for. Read from the store and the reflog files only, so it starts no process.
-pub(super) fn bound_in(state: &AppState, sessions: &[Session]) -> Result<Vec<Bound>> {
+pub(crate) fn bound_in(state: &AppState, sessions: &[Session]) -> Result<Vec<Bound>> {
     let mut repos: Vec<(PathBuf, HashMap<&str, String>)> = Vec::new();
     // The repository of each project, found once however many of the sessions are in it.
     let mut found: HashMap<&str, Option<(String, PathBuf)>> = HashMap::new();

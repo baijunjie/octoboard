@@ -6,10 +6,10 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::browse::wire_path;
 use crate::protocol::Session;
 use crate::state::AppState;
 use crate::store::BranchMove;
+use crate::wire_path;
 
 /// The branches of one repository that are handed to a session, checked to be the giver's to give
 /// when the call was made.

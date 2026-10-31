@@ -24,8 +24,8 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::account_dirs::account_dir_key;
-use crate::git_remote;
 use crate::git_workflow::{GitWorkflowOverride, GitWorkflowSettings};
+use crate::project_git::remote_url;
 use crate::protocol::{
     error_code, Account, Agent, CodedError, Console, Launch, PerAgent, Project, ProjectAccount,
     ProjectSource,
@@ -519,7 +519,7 @@ fn document_project(
         source: project.source,
         remote_url: project
             .remote_url
-            .filter(|url| include_paths || git_remote::is_clonable_url(url)),
+            .filter(|url| include_paths || remote_url::is_clonable_url(url)),
         default_agent: project.default_agent,
         pinned: project.pinned,
         tags: project.tags,

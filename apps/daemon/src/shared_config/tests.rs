@@ -843,8 +843,8 @@ async fn deleting_a_sharing_account_with_its_directory_turns_sharing_off_before_
                 .lock()
                 .unwrap()
                 .push((std::fs::read_to_string(&settings).ok(), is_link(&settings)));
-            std::fs::remove_dir_all(directory)?;
-            Ok(())
+            std::fs::remove_dir_all(directory)
+                .map_err(|err| crate::hostfs::trash::TrashFailure::new(directory, err))
         },
         ..test_support::host_tools()
     });

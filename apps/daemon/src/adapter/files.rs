@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
 use crate::browse::live;
-use crate::browse::wire_path::RelPath;
+use crate::wire_path::RelPath;
 
 /// The most bytes read from a small configuration file (a JSON settings file, a TOML config).
 pub(super) const SMALL_FILE_LIMIT: usize = 1024 * 1024;

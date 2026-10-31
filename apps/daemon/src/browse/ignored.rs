@@ -29,10 +29,12 @@ use std::time::{Instant, SystemTime};
 
 use anyhow::Result;
 
-use crate::browse::git::{GitEnv, GitError};
-use crate::browse::{budget, source, wire_path, Cancelled, Git};
+use crate::browse::{budget, BrowseGit, Cancelled};
+use crate::git::isolated::IsolatedGit;
+use crate::git::run::GitError;
 use crate::protocol::BrowseEntry;
 use crate::subprocess::BoundedFailure;
+use crate::wire_path;
 
 /// The most name bytes one `git check-ignore` run is given on its command line, so a listing of
 /// thousands of long names still fits the system's argument limit; a longer listing takes more runs.
@@ -75,8 +77,8 @@ fn stamp(path: &Path) -> Stamp {
 /// The repository's own directory and its common directory (the same, apart from a linked
 /// worktree), for the worktree whose `.git` entry is in `top`.
 fn git_dirs(top: &Path) -> Option<(PathBuf, PathBuf)> {
-    let git_dir = crate::hostfs::git_dir::git_dir(top)?;
-    let common_dir = crate::hostfs::git_dir::common_dir(&git_dir).ok()?;
+    let git_dir = crate::git::layout::git_dir(top)?;
+    let common_dir = crate::git::layout::common_dir(&git_dir).ok()?;
     Some((git_dir, common_dir))
 }
 
@@ -112,14 +114,14 @@ fn names_digest(names: &[Vec<u8>], entries: &[BrowseEntry]) -> u64 {
 }
 
 /// Whether `git` has a repository to be asked about for `dir`, found on the filesystem alone.
-fn repository_top(dir: &Path, git: &Git) -> Option<PathBuf> {
-    source::find_dot_git(dir, git.ceiling())
+fn repository_top(dir: &Path, git: &BrowseGit) -> Option<PathBuf> {
+    crate::git::layout::find_dot_git(dir, git.ceiling())
 }
 
 /// Sets [`BrowseEntry::ignored`] on the entries of the listing of `dir` (canonical) that Git
 /// ignores.
 pub fn mark_listing(
-    git: &Git,
+    git: &BrowseGit,
     dir: &Path,
     entries: &mut [BrowseEntry],
     cancel: &AtomicBool,
@@ -224,7 +226,7 @@ fn has_glob(name: &[u8]) -> bool {
 /// rules alone (`--no-index`), and the ones that are tracked are taken out afterwards with a
 /// `git ls-files` that reads its arguments literally.
 fn check_ignore(
-    env: &GitEnv,
+    env: &IsolatedGit,
     dir: &Path,
     names: &[Vec<u8>],
     cancel: &AtomicBool,
@@ -275,7 +277,7 @@ fn left_until(deadline: Instant) -> Option<std::time::Duration> {
 /// `git check-ignore -v -n <flags> -- <given>` in batches: whether each of `given` is ignored, in
 /// order; `None` when `git` could not say.
 fn check_batches(
-    env: &GitEnv,
+    env: &IsolatedGit,
     dir: &Path,
     flags: &[&[u8]],
     given: &[Vec<u8>],
@@ -306,7 +308,7 @@ fn check_batches(
                 }
             },
             // Exit status 1 is `check-ignore` saying none of the paths is ignored.
-            Err(GitError::Failed(failed)) if failed.code == Some(1) => {
+            Err(GitError::Exited { code: Some(1), .. }) => {
                 ignored.extend(std::iter::repeat_n(false, range.len()));
             }
             Err(GitError::Stopped(BoundedFailure::Cancelled)) => {
@@ -324,7 +326,7 @@ fn check_batches(
 /// Those of `given` (`./name`) that the index holds as files, found with `git ls-files --cached`
 /// whose arguments are literal paths; `None` when `git` could not say.
 fn tracked_among(
-    env: &GitEnv,
+    env: &IsolatedGit,
     dir: &Path,
     given: &[Vec<u8>],
     deadline: Instant,
@@ -408,7 +410,7 @@ fn ignores(line: &[u8]) -> bool {
 /// submodule, a clone inside the project) is a boundary: what lies below it is judged by its own
 /// rules, as the listing of a folder there is, and not by those of the repository around it.
 pub struct IgnoredPaths<'a> {
-    git: &'a Git<'a>,
+    git: &'a BrowseGit<'a>,
     deadline: Instant,
     paths: HashSet<Vec<u8>>,
     repositories: HashSet<Vec<u8>>,
@@ -417,7 +419,7 @@ pub struct IgnoredPaths<'a> {
 
 impl<'a> IgnoredPaths<'a> {
     /// An empty set, whose `git` runs must all end by `deadline`.
-    pub fn new(git: &'a Git<'a>, deadline: Instant) -> Self {
+    pub fn new(git: &'a BrowseGit<'a>, deadline: Instant) -> Self {
         Self {
             git,
             deadline,
@@ -512,7 +514,7 @@ impl<'a> IgnoredPaths<'a> {
             Err(GitError::Stopped(BoundedFailure::Cancelled)) => {
                 return Err(anyhow::Error::new(Cancelled));
             }
-            Err(GitError::Failed(_)) => {
+            Err(GitError::Exited { .. }) => {
                 if is_itself_ignored(env, dir, self.time_left(), cancel)? {
                     self.paths.insert(at.to_vec());
                 }
@@ -558,7 +560,7 @@ impl<'a> IgnoredPaths<'a> {
 /// Whether Git ignores the folder `dir` itself (`git check-ignore ./`), which is how a folder
 /// below an ignored one is found out when `git ls-files` refuses to run in it.
 fn is_itself_ignored(
-    env: &GitEnv,
+    env: &IsolatedGit,
     dir: &Path,
     left: Option<std::time::Duration>,
     cancel: &AtomicBool,
@@ -583,7 +585,7 @@ fn is_itself_ignored(
 #[cfg(test)]
 mod tests {
     use super::{ignores, IgnoredPaths};
-    use crate::browse::Git;
+    use crate::browse::BrowseGit;
     use std::sync::atomic::AtomicBool;
     use std::time::{Duration, Instant};
 
@@ -599,7 +601,7 @@ mod tests {
 
     #[test]
     fn the_output_budget_saturates_and_counts_a_prefix_only_for_a_nested_repository() {
-        let git = Git::new(&|| anyhow::bail!("no git in this test"));
+        let git = BrowseGit::new(&|| anyhow::bail!("no git in this test"));
         let mut paths = IgnoredPaths::new(&git, Instant::now());
         paths.charge(b"a\0b\0", b"");
         assert_eq!(paths.stdout_bytes, 4);
@@ -612,7 +614,7 @@ mod tests {
 
     #[test]
     fn a_repository_found_after_the_deadline_leaves_the_judging_to_the_one_around_it() {
-        let git = Git::new(&|| anyhow::bail!("no git in this test"));
+        let git = BrowseGit::new(&|| anyhow::bail!("no git in this test"));
         let past = Instant::now() - Duration::from_secs(1);
         let mut paths = IgnoredPaths::new(&git, past);
         paths.paths.insert(b"inner".to_vec());

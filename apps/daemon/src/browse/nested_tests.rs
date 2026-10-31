@@ -310,7 +310,7 @@ fn a_nesting_pair_is_looked_up_in_the_index_one_path_at_a_time() {
     git_stdin(&repo, &["update-index", "--index-info"], entries.as_bytes());
 
     // The control: looked up together, the pair lists all of it and is refused.
-    let env = super::git::tests::test_env(&[]);
+    let env = crate::git::isolated::tests::test_env(&[]);
     let together = blob::index_entries(
         &env,
         &repo,

@@ -4,9 +4,9 @@
 //! worktree's uncommitted changes and one change's diff (`changes`), the repository's local
 //! branches and the changes between two of their tips (`compare`), the commits a branch made since
 //! it forked and the changes of each (`commits`), the tree-diff output both read their changes from
-//! (`tree_diff`), which entries Git ignores (`ignored`), how a path travels on the wire
-//! (`wire_path`), the limits all of it is held to (`budget`), and the per-connection lane its
-//! replies take back to the client (`lane`).
+//! (`tree_diff`), which entries Git ignores (`ignored`), the limits all of it is held to
+//! (`budget`), and the per-connection lane its replies take back to the client (`lane`). Paths
+//! travel on the wire in `crate::wire_path`'s form.
 //!
 //! Every request re-resolves its project from the store and its worktree from the repository; a
 //! reply is never built from a directory a client named.
@@ -16,14 +16,12 @@ pub mod budget;
 pub mod changes;
 pub mod commits;
 pub mod compare;
-pub mod git;
 pub mod ignored;
 pub mod lane;
 pub mod line_counts;
 pub mod live;
 pub mod source;
 pub mod tree_diff;
-pub mod wire_path;
 
 #[cfg(test)]
 mod body_tests;
@@ -47,15 +45,16 @@ use std::sync::atomic::AtomicBool;
 use anyhow::Result;
 use base64::Engine as _;
 
+use crate::git::isolated::IsolatedGit;
+use crate::git::run::GitError;
 use crate::protocol::{
     error_code, BrowseBody, CodedError, ContentKind, ContentSource, Event, FileContent,
     GitSourceInfo, Project, ProjectSourceInfo, ReadFrom, WorktreeInfo,
 };
 use crate::state::AppState;
 use crate::subprocess::BoundedFailure;
-use git::{GitEnv, GitError};
+use crate::wire_path::{self, RelPath};
 use source::{Discovery, ProjectRoot, Repository};
-use wire_path::RelPath;
 
 /// The marker a read that was cancelled ends with, so the lane can tell it from a failure.
 #[derive(Debug)]
@@ -73,7 +72,7 @@ impl std::error::Error for Cancelled {}
 /// message, `limit_exceeded` for output past its budget, or [`Cancelled`].
 pub(crate) fn git_error(err: GitError) -> anyhow::Error {
     match err {
-        GitError::Failed(failure) => git_failed(&failure.stderr),
+        GitError::Exited { stderr, .. } => git_failed(&stderr),
         GitError::Stopped(BoundedFailure::Cancelled) => anyhow::Error::new(Cancelled),
         GitError::Stopped(BoundedFailure::StdoutExceeded(limit)) => {
             let max = limit.to_string();
@@ -83,7 +82,7 @@ pub(crate) fn git_error(err: GitError) -> anyhow::Error {
                 &[("limit", "git_output"), ("max", &max)],
             )
         }
-        GitError::Stopped(stopped) => git_failed(&format!("git {stopped}")),
+        stopped @ GitError::Stopped(_) => git_failed(&stopped.to_string()),
     }
 }
 
@@ -94,22 +93,23 @@ pub(crate) fn git_failed(message: &str) -> anyhow::Error {
 
 /// The `git` environment of one request, built the first time the request needs it and reused
 /// after that, so a request that never reaches `git` never takes the shell snapshot either.
-pub struct Git<'a> {
-    make: &'a dyn Fn() -> Result<GitEnv>,
-    env: OnceCell<GitEnv>,
+pub struct BrowseGit<'a> {
+    make: &'a dyn Fn() -> Result<IsolatedGit>,
+    env: OnceCell<IsolatedGit>,
     ceiling: Option<std::path::PathBuf>,
 }
 
-impl<'a> Git<'a> {
-    pub fn new(make: &'a dyn Fn() -> Result<GitEnv>) -> Self {
+impl<'a> BrowseGit<'a> {
+    pub fn new(make: &'a dyn Fn() -> Result<IsolatedGit>) -> Self {
         Self {
             make,
             env: OnceCell::new(),
-            ceiling: source::home_ceiling(),
+            ceiling: crate::git::layout::home_ceiling(),
         }
     }
 
-    /// The directory repository discovery never climbs into; see `source::find_dot_git`.
+    /// The directory repository discovery never climbs into; see
+    /// `crate::git::layout::find_dot_git`.
     pub fn ceiling(&self) -> Option<&std::path::Path> {
         self.ceiling.as_deref()
     }
@@ -120,7 +120,7 @@ impl<'a> Git<'a> {
         self
     }
 
-    pub fn env(&self) -> Result<&GitEnv> {
+    pub fn env(&self) -> Result<&IsolatedGit> {
         if let Some(env) = self.env.get() {
             return Ok(env);
         }
@@ -134,10 +134,10 @@ pub fn serve(
     state: &AppState,
     id: Option<String>,
     body: BrowseBody,
-    git: &dyn Fn() -> Result<GitEnv>,
+    git: &dyn Fn() -> Result<IsolatedGit>,
     cancel: &AtomicBool,
 ) -> Result<Event> {
-    let git = Git::new(git);
+    let git = BrowseGit::new(git);
     match body {
         BrowseBody::GetProjectSource { project } => {
             let source = project_source(&stored_project(state, &project)?, &git, cancel)?;
@@ -457,11 +457,11 @@ pub fn resolve_project_path(
     project: &str,
     worktree: Option<&str>,
     path: &str,
-    git: &dyn Fn() -> Result<GitEnv>,
+    git: &dyn Fn() -> Result<IsolatedGit>,
 ) -> Result<std::path::PathBuf> {
     let rel = parse_path(path)?;
     let record = stored_project(state, project)?;
-    let git = Git::new(git);
+    let git = BrowseGit::new(git);
     let scope = scope_for(&record, worktree, &git, &AtomicBool::new(false))?;
     live::resolve(&scope.canonical, &rel)?;
     if rel.is_root() {
@@ -489,11 +489,11 @@ pub fn resolve_project_directory(
     project: &str,
     worktree: Option<&str>,
     path: &str,
-    git: &dyn Fn() -> Result<GitEnv>,
+    git: &dyn Fn() -> Result<IsolatedGit>,
 ) -> Result<std::path::PathBuf> {
     let rel = parse_path(path)?;
     let record = stored_project(state, project)?;
-    let git = Git::new(git);
+    let git = BrowseGit::new(git);
     let scope = scope_for(&record, worktree, &git, &AtomicBool::new(false))?;
     let canonical = live::resolve(&scope.canonical, &rel)?;
     if !canonical.is_dir() {
@@ -516,7 +516,7 @@ pub struct LiveRoot {
 pub fn project_live_roots(
     state: &AppState,
     project: &str,
-    git: &dyn Fn() -> Result<GitEnv>,
+    git: &dyn Fn() -> Result<IsolatedGit>,
 ) -> Result<Vec<LiveRoot>> {
     let record = stored_project(state, project)?;
     let root = source::resolve_root(&record.path)?;
@@ -524,7 +524,7 @@ pub fn project_live_roots(
         root: root.canonical.clone(),
         worktree: None,
     }];
-    let git = Git::new(git);
+    let git = BrowseGit::new(git);
     let cancel = AtomicBool::new(false);
     let Ok(Discovery::Repository(repository)) = source::discover(&root, &git, &cancel) else {
         return Ok(roots);
@@ -565,7 +565,11 @@ fn stored_project(state: &AppState, project: &str) -> Result<Project> {
         .ok_or_else(|| CodedError::unknown_project(project))
 }
 
-fn project_source(record: &Project, git: &Git, cancel: &AtomicBool) -> Result<ProjectSourceInfo> {
+fn project_source(
+    record: &Project,
+    git: &BrowseGit,
+    cancel: &AtomicBool,
+) -> Result<ProjectSourceInfo> {
     let root = source::resolve_root(&record.path)?;
     let mut info = ProjectSourceInfo {
         project: record.id.clone(),
@@ -622,7 +626,7 @@ fn project_source(record: &Project, git: &Git, cancel: &AtomicBool) -> Result<Pr
 fn repository(
     root: &ProjectRoot,
     project: &str,
-    git: &Git,
+    git: &BrowseGit,
     cancel: &AtomicBool,
 ) -> Result<Repository> {
     match source::discover(root, git, cancel)? {
@@ -645,7 +649,7 @@ fn repository(
 fn scope_for(
     record: &Project,
     worktree: Option<&str>,
-    git: &Git,
+    git: &BrowseGit,
     cancel: &AtomicBool,
 ) -> Result<ProjectRoot> {
     let root = source::resolve_root(&record.path)?;
@@ -671,7 +675,7 @@ pub struct Located {
 fn locate(
     record: &Project,
     worktree: Option<&str>,
-    git: &Git,
+    git: &BrowseGit,
     cancel: &AtomicBool,
 ) -> Result<Located> {
     let root = source::resolve_root(&record.path)?;
@@ -706,7 +710,7 @@ fn read_from_git(
     worktree: Option<&str>,
     path: &RelPath,
     from: GitRead,
-    git: &Git,
+    git: &BrowseGit,
     cancel: &AtomicBool,
 ) -> Result<(ContentSource, Vec<u8>)> {
     // The project's own directory is no file in any source; asking `git` about it would pass an

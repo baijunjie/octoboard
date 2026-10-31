@@ -1657,10 +1657,9 @@ pub enum RequestBody {
         #[serde(default)]
         #[cfg_attr(test, ts(optional = nullable, as = "bindings::PartialPerAgent<bindings::LaunchRequest>"))]
         launch: PerAgent<Launch>,
-        /// Whether an absent `default_agent` is filled in from the directory's marker files (see
-        /// `hostfs::detect_agent`). Absent is true; a client that has already shown the user the
-        /// detection, and so sends what it showed, sends false to have "inherit from console"
-        /// kept as chosen.
+        /// Whether an absent `default_agent` is filled in from the directory's marker files. Absent
+        /// is true; a client that has already shown the user the detection, and so sends what it
+        /// showed, sends false to have "inherit from console" kept as chosen.
         #[serde(default = "default_true")]
         #[cfg_attr(test, ts(optional = nullable))]
         detect_default_agent: bool,
@@ -2012,12 +2011,12 @@ pub enum RequestBody {
     /// worktrees outside the folder (every one when the folder holds the repository, those bound
     /// to the project's sessions otherwise) and, when the repository outlives the folder, the bound
     /// branches. Refused as `delete_project` with `trash_directory` would be. See
-    /// `branch_origin::cleanup::project`.
+    /// `branch_cleanup::project`.
     InspectProjectRemoval {
         project: String,
     },
     /// The git branches and linked worktrees bound to exactly the supplied sessions, as an archive
-    /// or a deletion of them would find them now. See `branch_origin::cleanup`.
+    /// or a deletion of them would find them now. See `branch_cleanup`.
     InspectSessionBranches {
         sessions: Vec<String>,
         /// Also answer with the process trees of these sessions that an archive would stop and
@@ -2815,7 +2814,7 @@ pub enum Event {
         /// it), which its removal stops, whether or not the folder goes.
         processes: Vec<crate::process_ledger::ProcessTree>,
         /// The token the worktrees it held back are kept under, for `delete_project` to send back
-        /// (`crate::branch_origin::cleanup::project`); absent when it held none back.
+        /// (`crate::branch_cleanup::project`); absent when it held none back.
         #[serde(skip_serializing_if = "Option::is_none")]
         #[cfg_attr(test, ts(optional))]
         inspection: Option<String>,

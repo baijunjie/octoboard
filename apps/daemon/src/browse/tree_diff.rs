@@ -6,9 +6,9 @@
 use anyhow::Result;
 
 use crate::browse::changes;
-use crate::browse::wire_path;
 use crate::browse::{budget, git_failed, Located};
 use crate::protocol::{ChangeEntry, ChangeSide};
+use crate::wire_path;
 
 /// One `--raw -z` record of `git diff-tree` or `git log` (`command`, which names it in a failure),
 /// `:<old mode> <new mode> <old id> <new id> <status>` followed by its path — or, for a rename

@@ -13,9 +13,9 @@ use futures_util::{SinkExt, StreamExt};
 use tokio::sync::{broadcast, mpsc};
 
 use crate::browse::budget;
-use crate::browse::git::GitEnv;
 use crate::browse::lane::{Frame, Lane};
 use crate::coordinator::Followup;
+use crate::git::isolated::IsolatedGit;
 use crate::hook_queue::Push;
 use crate::hooks::{self, BackgroundTasksChange};
 use crate::protocol::{
@@ -281,7 +281,7 @@ async fn submit_browse(state: &Arc<AppState>, lane: &Arc<Lane>, request: BrowseR
         BrowseBody::ListProjectCommits { .. } => budget::COMMITS_RESERVATION,
     };
     lane.submit(request.id, request.slot, reservation, move |cancel| {
-        crate::browse::serve(&state, id, request.body, &GitEnv::from_shell, cancel)
+        crate::browse::serve(&state, id, request.body, &IsolatedGit::from_shell, cancel)
     })
     .await;
 }
@@ -1075,12 +1075,12 @@ async fn revert_gate_callback(
     body: Bytes,
 ) -> axum::response::Response {
     let Ok(request) =
-        serde_json::from_slice::<crate::branch_origin::revert_gate_inputs::GateRequest>(&body)
+        serde_json::from_slice::<crate::session_git_hooks::gate_inputs::GateRequest>(&body)
     else {
         return axum::http::StatusCode::BAD_REQUEST.into_response();
     };
     let inputs = tokio::task::spawn_blocking(move || {
-        crate::branch_origin::revert_gate_inputs::inputs(&state, &session_id, &request)
+        crate::session_git_hooks::gate_inputs::inputs(&state, &session_id, &request)
     })
     .await
     .ok()
