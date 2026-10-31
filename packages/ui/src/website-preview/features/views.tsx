@@ -15,6 +15,7 @@ import { AccountUsageBar } from "../../quota/AccountUsageBar";
 import { statusLabel, sessionShownStatusKind } from "../../sessionLabel";
 import { liveSessions } from "../../sidebar/order";
 import { DaemonProvider } from "../../store";
+import { useNow } from "../../useNow";
 import { RenderedDiff, useRendererScope } from "../../viewer/codeRenderer";
 import { ChangeStatusBadge } from "../../viewer/ChangeStatusBadge";
 import { previewCopy as english } from "../locales/en";
@@ -61,6 +62,7 @@ const patch = `diff --git a/src/orders.ts b/src/orders.ts
 export function FeatureView({ feature }: { feature: string }): React.ReactElement {
   const language = useCurrentLanguage();
   const t = useT();
+  const now = useNow();
   const copy = language === "zh-Hans" ? chinese : english;
   useEffect(() => {
     if (feature === "reviewChanges") return;
@@ -74,7 +76,7 @@ export function FeatureView({ feature }: { feature: string }): React.ReactElemen
         <PanelHeader title={t("rail.quota.accounts")} />
         <div className="account-list">{readings.map((quota, index) => <div key={quota.agent} className="account-item">
           <AgentIcon agent={quota.agent} className="size-5" />
-          <div className="account-details"><AccountNameLine name={["Claude Code", "Codex", "Grok Build"][index]} quota={quota} showUpdated={false} /><div className="account-subline"><LoginStateBadge quota={quota} /><AccountUsageBar agent={quota.agent} quota={quota} now={Date.now()} className="w-20" /></div></div>
+          <div className="account-details"><AccountNameLine name={["Claude Code", "Codex", "Grok Build"][index]} quota={quota} showUpdated={false} /><div className="account-subline"><LoginStateBadge quota={quota} /><AccountUsageBar agent={quota.agent} quota={quota} now={now} className="w-20" /></div></div>
         </div>)}</div>
       </section>;
       break;
