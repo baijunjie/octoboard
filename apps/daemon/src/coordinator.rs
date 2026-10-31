@@ -8917,9 +8917,10 @@ mod tests {
             Some(Some("second".to_string()))
         );
 
-        let hour = 3_600_000;
+        // One reset time for all three, so the tie does not depend on the clock ticking between holds.
+        let resets_at = now_millis() + 3_600_000;
         for account in [None, Some("first"), Some("second")] {
-            hold_used_up(&state, account, Some(hour), false);
+            hold_used_up_at(&state, account, Some(resets_at), false);
         }
         assert_eq!(
             soonest_available_account(&state, Agent::Claude).unwrap(),
@@ -8991,6 +8992,21 @@ mod tests {
         resets_in: Option<i64>,
         signed_out: bool,
     ) {
+        hold_used_up_at(
+            state,
+            account,
+            resets_in.map(|span| now_millis() + span),
+            signed_out,
+        );
+    }
+
+    /// `hold_used_up` with an absolute reset time `resets_at` (`None` no reset time).
+    fn hold_used_up_at(
+        state: &Arc<AppState>,
+        account: Option<&str>,
+        resets_at: Option<i64>,
+        signed_out: bool,
+    ) {
         use crate::protocol::{AccountQuota, QuotaUnavailable, QuotaWindow, QuotaWindowKind};
         let quota = AccountQuota {
             agent: Agent::Claude,
@@ -9009,7 +9025,7 @@ mod tests {
                 kind: QuotaWindowKind::Session,
                 label: None,
                 used_percent: 100.0,
-                resets_at: resets_in.map(|span| now_millis() + span),
+                resets_at,
                 window_minutes: None,
             }],
         };
