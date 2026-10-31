@@ -216,14 +216,14 @@ it("floats Files in from its toggle beside the maximized Terminal panel, and doc
   expect(terminalCard()!.hasAttribute("data-panel-maximized")).toBe(true);
 });
 
-it("orders the top bar's panel toggles as the panels stack, Files above Terminal", async () => {
+it("orders the top bar's panel toggles as the panels stack, Terminal above Files", async () => {
   mountApp();
   await pressElement(row("Fix header"));
   await pressElement(toggle("Show terminal panel"));
   const labels = Array.from(document.querySelectorAll("[data-region=topbar] [aria-label$='panel']"), (element) => element.getAttribute("aria-label"));
-  expect(labels).toEqual(["Hide files panel", "Show processes panel", "Hide terminal panel"]);
+  expect(labels).toEqual(["Hide terminal panel", "Hide files panel", "Show processes panel"]);
   const cards = Array.from(document.querySelectorAll("[data-panel-card]"), (card) => card.id);
-  expect(cards).toEqual(["panel-files", "panel-terminal"]);
+  expect(cards).toEqual(["panel-terminal", "panel-files"]);
 });
 
 /** Whether the archive view is open, not just still on screen for its exit. */
