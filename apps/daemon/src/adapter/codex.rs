@@ -1,7 +1,9 @@
-//! Codex adapter. Everything is injected through repeated `-c` overrides, which are
-//! per-invocation and persisted nowhere. Verified releases run those overrides in a private app
-//! server and explicitly connect the TUI to it. Both receive the overrides: rendering and startup
-//! notices are client-side settings, while hooks and model execution belong to the server.
+//! Codex adapter. Configuration is injected through repeated per-invocation `-c` overrides,
+//! without changing the user's configuration files. Verified releases run those overrides in a
+//! private app server and explicitly connect the TUI to it. Rendering and startup notices need client-side
+//! overrides, while hooks and model execution belong to the server. Remote resumes apply an
+//! explicit approval reviewer through the server because the TUI refuses permission overrides;
+//! Codex checkpoints that reviewer in the thread before the TUI attaches.
 //!
 //! `CODEX_HOME` must not be used to *inject* anything: it makes Codex ignore the user's entire
 //! global setup (`~/.codex/AGENTS.md`, model choice, approval policy, skills, plugins), not just add
@@ -99,6 +101,7 @@ pub struct PrivateServerPlan {
     pub tui_args: Vec<String>,
     pub hook_command: String,
     pub resume_thread: Option<String>,
+    pub resume_reviewer: Option<crate::protocol::ApprovalReviewer>,
 }
 
 fn private_server_supported(version: Option<super::AgentVersion>) -> bool {
@@ -394,6 +397,14 @@ impl AgentAdapter for CodexAdapter {
             server_args.push(format!("model_reasoning_effort={}", toml_string(effort)));
         }
 
+        // Remote resumes reject explicit permission overrides in the TUI. Its server receives
+        // the reviewer below; the client still needs the other overrides for local UI settings.
+        let resume_tui_args = spec.resume_agent_session_id.map(|_| {
+            let mut tui_args = args.clone();
+            tui_args.extend(server_args.iter().cloned());
+            tui_args
+        });
+
         if let Some(reviewer) = spec.approval_reviewer {
             let value = match reviewer {
                 crate::protocol::ApprovalReviewer::User => "user",
@@ -417,9 +428,10 @@ impl AgentAdapter for CodexAdapter {
                 args: server_args,
                 // Explicit --remote selects the server even with -c. Omitting the client overrides
                 // would lose its terminal title, resume cwd and startup-notice settings.
-                tui_args: args.clone(),
+                tui_args: resume_tui_args.unwrap_or_else(|| args.clone()),
                 hook_command: command,
                 resume_thread: spec.resume_agent_session_id.map(str::to_string),
+                resume_reviewer: spec.approval_reviewer,
             });
         Ok(LaunchPlan {
             args,
@@ -1186,6 +1198,44 @@ mod tests {
         assert!(!overrides(&plan.args)
             .iter()
             .any(|arg| arg.starts_with("approvals_reviewer=")));
+    }
+
+    #[test]
+    fn remote_resumes_pass_the_reviewer_to_the_server_only() {
+        use crate::protocol::ApprovalReviewer;
+        let mut fixture = spec_fixture();
+        fixture.agent_version = Some((0, 163, 0));
+        for reviewer in [ApprovalReviewer::User, ApprovalReviewer::AutoReview] {
+            for resume in [None, Some("conversation-1")] {
+                let mut spec = fixture.spec();
+                spec.approval_reviewer = Some(reviewer);
+                spec.resume_agent_session_id = resume;
+                let plan = CodexAdapter.plan(&spec).unwrap();
+                let private = plan.codex_server.as_ref().unwrap();
+                assert_eq!(private.resume_reviewer, Some(reviewer));
+                let server_overrides = overrides(&private.args);
+                let client_overrides = overrides(&private.tui_args);
+                let reviewer_override = server_overrides
+                    .iter()
+                    .find(|value| value.starts_with("approvals_reviewer="))
+                    .unwrap();
+                if resume.is_some() {
+                    assert_eq!(&private.tui_args[..2], ["resume", "conversation-1"]);
+                    assert!(!client_overrides.contains(reviewer_override));
+                    assert_eq!(
+                        client_overrides,
+                        server_overrides
+                            .iter()
+                            .filter(|value| *value != reviewer_override)
+                            .cloned()
+                            .collect::<Vec<_>>()
+                    );
+                } else {
+                    assert_eq!(private.tui_args, plan.args);
+                    assert!(client_overrides.contains(reviewer_override));
+                }
+            }
+        }
     }
 
     /// A hand raised for an approval the user is never shown can never be cleared by them, so the
