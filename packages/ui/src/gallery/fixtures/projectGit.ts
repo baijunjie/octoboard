@@ -1358,7 +1358,7 @@ const reviewScenarios: Scenario[] = [
     title: "Change viewer with collapsed lines",
     state,
     preferences,
-    description: "The staged tag and long expansion gaps accompany the diff; other change subjects remain available through navigation. File manager and Default application end the header row, as the change is in a working copy.",
+    description: "Green additions and red removals after the path match the counts in the change list. The staged tag and long expansion gaps accompany the diff; other change subjects remain available through navigation. File manager and Default application end the header row, as the change is in a working copy.",
     steps: [
       ...openGit,
       (ui) => ui.press(ui.changeRow("pipeline.ts", "modified")),

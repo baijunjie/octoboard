@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 
 import type { HostPath } from "../components/useHostPathActions";
 import type { ErrorPresentation } from "../errorPresentation";
-import type { FileContent, MessageParams } from "../protocol";
+import type { FileContent, LineStats, MessageParams } from "../protocol";
 import { joinedPatch, saysNothingChanged } from "./patch";
 import type { StatusKey } from "./statusMarks";
 
@@ -133,6 +133,8 @@ export interface ViewerSubject {
   sourceText?: string;
   stage?: string;
   status?: StatusKey;
+  /** Line counts from the change listing, absent when the change was not counted. */
+  stats?: LineStats;
   content: ViewerContent;
 }
 

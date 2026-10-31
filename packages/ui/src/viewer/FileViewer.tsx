@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, FolderOpen, SquareArrowOutUpRight } from "lu
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "../components/Button";
+import { ChangeLineCounts } from "../components/ChangeLineCounts";
 import { CopyButton } from "../components/CopyButton";
 import { FileTypeIcon } from "../components/FileTypeIcon";
 import { InlineReference } from "../components/InlineReference";
@@ -295,6 +296,11 @@ export function FileViewer({
             <PlainMarkedPath path={displayWirePath(subject.path)} icon={<FileTypeIcon path={subject.path} className="size-3.5 shrink-0 text-app-muted" />} />
             <NoticeSlotBoxes />
           </DetailItem>
+          {subject.stats && subject.stats.added + subject.stats.removed > 0 && (
+            <DetailItem>
+              <ChangeLineCounts stats={subject.stats} />
+            </DetailItem>
+          )}
           {content.state === "file" && (
             <DetailItem>
               <StatusBadge separated={false}>
