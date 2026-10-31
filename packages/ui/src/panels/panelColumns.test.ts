@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 
-import { panelColumns } from "./panelColumns";
+import { columnSplit, panelColumns } from "./panelColumns";
 
 const panels = ["report", "terminal", "files", "processes"];
 
@@ -19,4 +19,12 @@ it("keeps a single panel full-height and four panels in two pairs", () => {
   expect(panelColumns([], 720, 10)).toEqual([]);
   expect(panelColumns(["report"], 720, 10)).toEqual([["report"]]);
   expect(panelColumns(panels, 420, 10)).toEqual([["report", "terminal"], ["files", "processes"]]);
+});
+
+it("clamps column widths to usable bounds and recovers the saved proportion when widened", () => {
+  expect(columnSplit(700, 10, 0.75)).toEqual({ available: 690, minimum: 160, leading: 517.5 });
+  expect(columnSplit(530, 10, 0.75).leading).toBe(360);
+  expect(columnSplit(700, 10, 0.75).leading).toBe(517.5);
+  expect(columnSplit(300, 10, 0.75)).toEqual({ available: 290, minimum: 145, leading: 145 });
+  expect(columnSplit(700, 10, NaN).leading).toBe(345);
 });
