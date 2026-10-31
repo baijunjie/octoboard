@@ -53,6 +53,8 @@ function SessionTitle({ session }: { session: Session }): React.ReactElement {
  * says so, the raw text staying in the details. */
 function Reason({ error }: { error: SwitchFailure["error"] }): React.ReactElement {
   const t = useT();
+  if (error.code === "switch_did_not_come_up") return <p>{t("dialog.switchAccount.relaunchReason")}</p>;
+  if (error.code === "session_did_not_stop") return <p>{t("dialog.switchAccount.stopReason")}</p>;
   return <p>{isUnexpectedWithoutSentence(error) ? t("dialog.switchAccount.unexpectedReason") : <DaemonErrorMessage error={error} part="summary" />}</p>;
 }
 

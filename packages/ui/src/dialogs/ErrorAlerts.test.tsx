@@ -514,6 +514,15 @@ async function failedBatch(failures: Record<string, Error>, accountName = "Work"
   return { alert, details, visible };
 }
 
+it.each([
+  ["switch_did_not_come_up", "The session ended as soon as it was relaunched."],
+  ["session_did_not_stop", "The session did not stop in time. It may still be running."],
+])("keeps %s batch rows to the reason, with the session and account state already named", async (code, reason) => {
+  const { alert, visible } = await failedBatch({ a: new DaemonRequestError("raw", code, { session: "a" }) });
+  expect(alert.querySelector("li")?.textContent).toBe(`Session a${reason}`);
+  expect(visible.match(/stays on its current account/g)).toHaveLength(1);
+});
+
 it("says a code's own remedy once for the code, and not the kind's generic remedy for it", async () => {
   const unreachable = () => new DaemonRequestError("raw", "config_dir_unreachable", { agent: "Claude Code", path: "/home/w/.claude" });
   const { visible } = await failedBatch({ a: unreachable(), b: unreachable(), c: new DaemonRequestError("Session is locked", "session_locked", {}) });

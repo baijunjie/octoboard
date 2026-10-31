@@ -16,7 +16,7 @@ it.each([
   ["session_branches_not_removed", "sessionBranches"], ["project_branches_not_determined", "projectBranches"],
   ["session_working", "wait"], ["session_busy", "wait"], ["session_changing", "wait"], ["session_owner_changing", "ownerChanging"], ["session_binding_changed", "ownerMoved"], ["session_not_bound", "session"], ["quick_create_owner_gone", "ownerGone"], ["icon_not_an_image", "avatarImage"], ["icon_too_large", "avatarSize"], ["console_session_never_bound", "none"], ["session_not_bound_to_owner", "none"], ["handoff_messages_dropped", "lostMessages"], ["sharing_messages_dropped", "sharingLostMessages"], ["message_not_sent", "unsentMessage"],
   ["agent_not_installed", "tool"], ["agent_availability_pending", "availability"], ["added_agents_undecided", "availability"],
-  ["account_order_invalid", "refresh"], ["unknown_shell_terminal", "refresh"], ["agent_already_added", "addedAgents"], ["agent_order_invalid", "addedAgents"], ["agent_not_added", "agentNotAdded"],
+  ["account_order_invalid", "refresh"], ["unknown_shell_terminal", "refresh"], ["queued_messages_lost", "refreshMessages"], ["queued_messages_dropped", "refreshMessages"], ["agent_already_added", "addedAgents"], ["agent_order_invalid", "addedAgents"], ["agent_not_added", "agentNotAdded"],
   ["grok_sandbox_unsupported", "grokSandbox"],
   ["export_empty", "exportSelection"], ["import_accounts_missing", "configuration"], ["import_resolution_invalid", "configuration"], ["import_settings_missing", "configuration"],
   ["default_account_not_shareable", "accountNotShareable"], ["account_sharing_failed", "accountSharing"], ["account_still_sharing", "accountBusy"],

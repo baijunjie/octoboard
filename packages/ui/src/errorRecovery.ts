@@ -7,7 +7,7 @@ export type ErrorRecovery =
   | "diskSpace" | "access" | "connection" | "path" | "account" | "tool" | "shell"
   | "unlock" | "stopSessions" | "wait" | "trust" | "conversation" | "session" | "ownerGone"
   | "configuration" | "exportSelection" | "image" | "avatarSize" | "avatarImage" | "clipboard" | "fileRead" | "fileWrite" | "gitFailure" | "gitSwitchFailure" | "gitRestoreFailure" | "gitHistory" | "branch"
-  | "refresh" | "scope" | "limit" | "openExternal" | "openTerminal" | "openFileManager" | "openDefaultApplication" | "issueAddress"
+  | "refresh" | "refreshMessages" | "scope" | "limit" | "openExternal" | "openTerminal" | "openFileManager" | "openDefaultApplication" | "issueAddress"
   | "hostPathGone" | "readAccess" | "sourceGone" | "sourceLink" | "sourceNotFolder" | "sourceUnreadable" | "pathExists" | "uniqueName" | "launchSetting" | "changeModelSetting" | "modelChange" | "switchRelaunch" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
   | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "submitRetry" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "accountDisabled" | "accountNotSignedIn" | "grokSandbox"
   | "pathLinkAmbiguous" | "pathLinkLaunchable" | "pathLinkNotPrivate"
@@ -89,7 +89,8 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   sessionBranches: ["session_branches_not_removed"],
   projectBranches: ["project_branches_not_determined"],
   branch: ["not_on_a_branch", "restore_not_on_branch", "invalid_branch_name", "unknown_branch", "worktree_unavailable"],
-  refresh: ["account_order_invalid", "source_changed", "unknown_commit", "page_not_current", "unknown_page", "unknown_project", "unknown_console", "unknown_shell_terminal", "queued_messages_lost", "queued_messages_dropped"],
+  refreshMessages: ["queued_messages_lost", "queued_messages_dropped"],
+  refresh: ["account_order_invalid", "source_changed", "unknown_commit", "page_not_current", "unknown_page", "unknown_project", "unknown_console", "unknown_shell_terminal"],
   scope: ["outside_scope", "unsupported_file_type", "clean_filtered"],
   limit: ["limit_exceeded"],
   // One group per application the host opens, so each remedy names only the one that failed. `openExternal` is the

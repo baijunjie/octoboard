@@ -56,8 +56,8 @@ export const structuredErrorScenarios: Scenario[] = [
     ["console", console_.id], ["project", project.id], ["session", session.id],
     ["shell_terminal", shell.id], ["account", account.id],
   ].flatMap(([kind, id]) => [
-    error(`error-unknown-${kind.replaceAll("_", "-")}-known`, `Unknown ${kind.replaceAll("_", " ")} with a retained name`, `unknown_${kind}`, { [kind]: id }, "The current record name is a prose chip whose Arabic and Latin text keeps its own direction."),
-    error(`error-unknown-${kind.replaceAll("_", "-")}-missing`, `Unknown ${kind.replaceAll("_", " ")} with only its ID`, `unknown_${kind}`, { [kind]: `missing-${kind}-42` }, "The missing record's technical ID is a left-to-right code chip, without inventing a name."),
+    error(`error-unknown-${kind.replaceAll("_", "-")}-known`, `Unknown ${kind.replaceAll("_", " ")} with a retained name`, `unknown_${kind}`, { [kind]: id }, "The current record name is a prose chip whose Arabic and Latin text keeps its own direction. Where recovery asks for a refresh, it gives no advice about lost messages."),
+    error(`error-unknown-${kind.replaceAll("_", "-")}-missing`, `Unknown ${kind.replaceAll("_", " ")} with only its ID`, `unknown_${kind}`, { [kind]: `missing-${kind}-42` }, "The missing record's technical ID is a left-to-right code chip, without inventing a name. Where recovery asks for a refresh, it gives no advice about lost messages."),
   ]),
   error("error-not-git-repository-known", "Repository refusal with a project name", "not_a_git_repository", { project: project.id }, "The retained project's name uses a prose chip."),
   error("error-not-git-repository-missing", "Repository refusal with a project ID", "not_a_git_repository", { project: "missing-project-42" }, "Without a project record, the repository refusal keeps its technical ID."),
