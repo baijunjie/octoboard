@@ -2,9 +2,17 @@ import { describe, expect, it } from "vitest";
 
 import { accountOf } from "../gallery/fixtures/builders";
 import type { Account } from "../protocol";
-import { isAbsoluteConfigDir, nameCollision } from "./agentAccounts";
+import { isAbsoluteConfigDir, nameCollision, nextConfigDir } from "./agentAccounts";
 
 const account = (id: string, agent: Account["agent"], name: string): Account => accountOf(id, agent, name, `/home/${id}`);
+
+it.each([
+  [[], "~/.claude-1"],
+  [["/home/dev/.claude-1", "~/.claude-3/"], "~/.claude-2"],
+  [["~/.claude-2", "~/.claude-3"], "~/.claude-1"],
+])("uses the smallest free positive suffix for %j", (occupied, expected) => {
+  expect(nextConfigDir("~/.claude", occupied, "/home/dev")).toBe(expected);
+});
 
 describe("isAbsoluteConfigDir", () => {
   it.each([

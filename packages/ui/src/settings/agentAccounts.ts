@@ -1,5 +1,13 @@
 import { DEFAULT_ACCOUNT_NAME, type Account, type Agent } from "../protocol";
 
+export function nextConfigDir(base: string, occupied: string[], home: string): string {
+  const normalize = (path: string) => path.trim().replace(/^~(?=\/|$)/, () => home).replace(/\/+$/, "");
+  const taken = new Set(occupied.map(normalize));
+  let number = 1;
+  while (taken.has(normalize(`${base}-${number}`))) number++;
+  return `${base}-${number}`;
+}
+
 /** Whether `path` is one the daemon accepts as a config directory: absolute, or starting with
  * `~/` (or just `~`), which it expands. Only the shape is judged — whether the directory exists
  * is not asked, since an agent may be pointed at one that is yet to be created. */

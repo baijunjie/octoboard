@@ -109,7 +109,9 @@ it("keeps the console dialog open and unsaved while an account is added in the S
     vi.unstubAllGlobals();
     document.documentElement.style.removeProperty("--breakpoint-docked");
   });
-  const request = render(consoleOf("c-1", "Main"));
+  const request = render(consoleOf("c-1", "Main"), [], (body) => Promise.resolve(body.type === "list_dir"
+    ? { type: "dir_listing", id: null, path: "/home/dev", entries: [] }
+    : { type: "ack", id: null }));
   await clickButton((b) => b.getAttribute("aria-label") === "Manage accounts");
   await clickButton((b) => b.getAttribute("aria-label") === "Add account");
   const fill = (label: string, value: string) => {
@@ -122,7 +124,10 @@ it("keeps the console dialog open and unsaved while an account is added in the S
   fill("Name", "Work");
   fill("Config directory", "/home/dev/.claude-work");
   await clickButton("Add");
-  expect(sent(request)).toEqual([{ type: "create_account", agent: "claude", name: "Work", config_dir: "/home/dev/.claude-work" }]);
+  expect(sent(request)).toEqual([
+    { type: "list_dir", path: "~" },
+    { type: "create_account", agent: "claude", name: "Work", config_dir: "/home/dev/.claude-work" },
+  ]);
   expect(document.body.textContent).toContain("Console settings");
 });
 

@@ -460,6 +460,19 @@ refusal is shown in an error alert naming the account that uses it — the defau
 with the form left open and what was entered kept. For a Grok Build account the form adds that the directory has to be a
 Grok home that Grok has already been run against, which is checked when a session launches.
 
+For a new account, the directory is filled with the selected agent's usual directory followed by a hyphen and the
+smallest available positive integer: `~/.claude-1`, `~/.codex-1` or `~/.grok-1` to begin with. A path is unavailable if
+it still exists in the home directory, is registered to any account, or is an agent's resolved default account
+directory. Removing an account alone does not free a number while its directory remains on disk; once neither the
+path nor an account's reference to it remains, that number can be used again. For example, with `~/.claude-2` still
+occupied and `~/.claude-1` free, the next Claude Code account starts with `~/.claude-1`.
+
+The generated directory follows the agent choice until the user types a directory or chooses one in the browser;
+after that, changing the agent or finishing the directory lookup keeps what the user entered, even if it is blank.
+Editing an account keeps its existing directory. While the home directory is being read, a new account's directory
+field is empty and can be filled manually. If that lookup fails, the field stays empty and a compact error alert
+offers a retry; entering or choosing a directory dismisses that alert and lets the user continue without the lookup.
+
 Every account is named by the user, and the name is required: it is stored trimmed, and one left blank is refused. A
 name has to be unique within its agent, compared trimmed and ignoring letter case; accounts of different agents may
 share a name. A name already taken by another account of the same agent, or by the default account — the name it is

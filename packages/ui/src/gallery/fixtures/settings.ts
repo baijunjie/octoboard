@@ -1684,6 +1684,21 @@ export const settingsScenarios: Scenario[] = [
     ],
   },
   {
+    id: "settings-account-add-directory",
+    group: GROUP,
+    category: "normal",
+    title: "Add account, first available numbered directory",
+    description: "The config directory is filled with ~/.claude-3: ~/.claude-1 belongs to an existing account even though its folder is missing, ~/.claude-2 still exists on disk without an account, and ~/.claude-4 also exists. The gap at 3 is reused. Changing the agent updates the suggested directory until it is edited or chosen with Browse; the name stays empty and focused.",
+    state: {
+      ...browserState,
+      settings: { ...browserState.settings!, accounts: [...browserState.settings!.accounts, accountOf("a-numbered", "claude", "Archive", "/Users/dev/.claude-1")] },
+    },
+    directories: {
+      "/Users/dev": [2, 4].map((number) => ({ name: `.claude-${number}`, path: `/Users/dev/.claude-${number}`, is_git_repo: false })),
+    },
+    steps: [...openAccounts, (ui) => ui.press(ui.t("settings.accounts.add"))],
+  },
+  {
     id: "settings-account-add-picker",
     group: GROUP,
     category: "normal",
@@ -1822,6 +1837,18 @@ export const settingsScenarios: Scenario[] = [
       (ui) => ui.confirm(),
     ],
   })),
+  {
+    id: "settings-account-add-directory-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Add account, home directory could not be read",
+    description: "The config directory stays empty with ~/.claude as its placeholder. A danger alert beneath it says the directory could not be read, with Details and Try again. The user can retry or enter a config directory manually; entering one dismisses the alert.",
+    state: browserState,
+    directories: {
+      "/Users/dev": { code: "permission_denied", params: { path: "/Users/dev", detail: "Operation not permitted" }, message: "/Users/dev could not be read: Operation not permitted" },
+    },
+    steps: [...openAccounts, (ui) => ui.press(ui.t("settings.accounts.add"))],
+  },
   {
     id: "settings-account-directory-relative",
     group: GROUP,
