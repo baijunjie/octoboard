@@ -183,8 +183,14 @@ fn development_rule(settings: &GitWorkflowSettings, bound: bool) -> Option<Strin
              complete change. Write commit messages that describe the completed work. If the \
              original commit messages contain `Reverts:` lines marking deliberate reverts, \
              preserve them when squashing. Use the common ancestor of the current branch and \
-             its target branch as the base, and rewrite only the current branch's commits \
-             (`git reset --soft $(git merge-base HEAD <target branch>)`). Never squash a pushed \
+             its target branch as the base, and rewrite only the current branch's commits. \
+             Start with a clean working tree, record the pre-squash tip, and use \
+             `git rebase -i $(git merge-base HEAD <target branch>)`, choosing squash or fixup \
+             as appropriate and preserving the deliberate-revert lines in the final messages. \
+             After squashing, verify that `git diff --exit-code <pre-squash tip> HEAD --` \
+             reports no changes before any rebase onto the target branch. Do not reset \
+             the branch to the base first: the revert gate can refuse that intermediate loss \
+             of committed content on a guarded branch. Never squash a pushed \
              branch that other people or sessions also use. Temporary backup pushes during \
              development do not trigger this requirement.",
         );
@@ -1176,12 +1182,17 @@ mod tests {
                     "`Reverts:` lines marking deliberate reverts, preserve them when squashing."
                 ));
                 assert!(
-                    squash_only.contains("git reset --soft $(git merge-base HEAD <target branch>)")
+                    squash_only.contains("git rebase -i $(git merge-base HEAD <target branch>)")
                 );
                 assert!(squash_only.contains(
                     "Never squash a pushed branch that other people or sessions also use"
                 ));
-                assert!(!squash_only.contains("rebase"));
+                assert!(squash_only.contains(
+                    "After squashing, verify that `git diff --exit-code <pre-squash tip> HEAD --`"
+                ));
+                assert!(squash_only.contains("Do not reset the branch to the base first"));
+                assert!(!squash_only.contains("git reset --soft"));
+                assert!(!squash_only.contains("rebase the branch onto its target branch"));
                 let rebase_only = rule(false, true);
                 assert!(rebase_only.contains("rebase the branch onto its target branch"));
                 assert!(rebase_only.contains(

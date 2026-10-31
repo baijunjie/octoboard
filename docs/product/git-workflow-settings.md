@@ -100,18 +100,25 @@ judges what they set out better than a keyword match would, and this works alike
      can be reverted on its own. A branch containing only one complete change gets one commit. Commit messages describe
      the completed work. If the original commit messages contain `Reverts:` lines marking deliberate reverts, it
      preserves them when squashing. It uses the common ancestor of the current branch and its target branch as the base
-     and rewrites only the current branch's commits. It never squashes a pushed branch that other people or sessions
-     also use.
+     and rewrites only the current branch's commits. It starts with a clean working tree, records the pre-squash tip,
+     and uses `git rebase -i $(git merge-base HEAD <target branch>)`, choosing squash or fixup while preserving
+     deliberate-revert lines in the final messages. After squashing, it verifies that
+     `git diff --exit-code <pre-squash tip> HEAD --` reports no changes, before any rebase onto the target branch.
+     It does not reset the branch to the base first:
+     the revert gate can refuse that intermediate loss of committed content on a guarded branch (see "A local update
+     of a guarded branch" in `docs/product/revert-gate.md`). It never squashes a pushed branch that other people or
+     sessions also use.
    - With rebase before delivery on, it rebases onto its target branch. When merging the rebased branch into its target
      branch, it advances the target branch to the rebased branch's latest commit without creating a merge commit (a
      fast-forward merge). It never rebases a pushed branch that other people or sessions also use. To merge such a
      branch into its target branch, it uses a regular merge that preserves the existing commit history.
 
-   An off setting contributes no requirement or guard for that operation to the role text. Squashing alone adds no
-   rebasing instruction, rebasing alone adds no squashing instruction, and with both off only the ordinary local-merge
-   instruction remains in this part of the rule. With both on, squashing comes before rebasing. Temporary backup pushes
-   during development trigger neither requirement. The agent carries out the requested git operations; Octoboard does
-   not execute them itself.
+   An off setting contributes no requirement or guard for that operation to the role text. Squashing alone does not
+   require aligning the branch with its target's latest tip; its interactive rebase keeps the original merge base.
+   Rebase before delivery alone adds no squashing instruction, and with both off only the ordinary local-merge
+   instruction remains in this part of the rule. With both on, squashing and its tree comparison come before rebasing
+   onto the target branch. Temporary backup pushes during development trigger neither requirement. The agent carries
+   out the requested git operations; Octoboard does not execute them itself.
 5. **Cleaning up.** The session cleans up itself as soon as a branch or worktree is no longer needed.
    - On a branch of its own:
      - after a local merge, or after opening a pull request, it switches back to the target branch and deletes the

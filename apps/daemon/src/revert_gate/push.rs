@@ -204,9 +204,10 @@ fn check_pr(
          Against {shown} ({}):\n{}\n\
          The cause is resolving every rebase conflict to only your own side, or a squash that \
          changed the base\n(e.g. committing after `git reset --soft {shown}`). Go back to before \
-         the squash, squash with\n`git reset --soft $(git merge-base HEAD {shown})` instead, then \
-         `git rebase {shown}` and resolve the\nconflicts faithfully, combining the changes from \
-         both sides; do not bypass this with `--no-verify`.\n\
+         the squash, use\n`git rebase -i $(git merge-base HEAD {shown})` to squash without \
+         moving the branch to the base first,\npreserving deliberate-revert lines. Verify the final \
+         tree matches the pre-squash tip, then\n`git rebase {shown}` and resolve the conflicts \
+         faithfully, combining the changes from both sides; do not bypass this with `--no-verify`.\n\
          If the revert really is deliberate, confirm it and use `git revert` instead, or add one\n\
          `Reverts: <sha>` line per undone commit to the message of the commit that undoes it.\n\n",
         short(tip),

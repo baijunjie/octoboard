@@ -27,6 +27,9 @@ Which branch is checked out where plays no part, and a target branch nothing has
 that is not guarded is checked only when a move merges another branch into it (see "A merge into a branch that is not
 guarded" below), so committing on, rebasing or amending a branch of one's own is not checked.
 
+A session's own development branch becomes guarded when another branch records it as its target. This applies even
+when the development branch has never been pushed.
+
 ## Target branches and fork points
 
 When a session's git creates a branch and Octoboard records its responsible session (see "When a branch gets a
@@ -82,6 +85,12 @@ Where a move takes in a tip of one of the branch's own remote-tracking branches 
 above — a pull, a replay onto the remote — the commits that tip holds are judged against the tip: what is already
 undone on the remote does not count against the move, and commits just fetched from the remote count as well.
 
+A reset to the merge base can undo recent commits even with `--soft`, which leaves the index and working tree intact:
+the guarded branch's committed content is removed by that update. An intention to recommit it as a squash does not
+exempt the intermediate update. A squash that preserves the final tree can pass without first moving the branch to
+the base; the development rule prescribes that procedure (see "The development rule" in
+`docs/product/git-workflow-settings.md`). The refusal of dropped published commits still applies.
+
 ### A merge into a branch that is not guarded
 
 A move of an existing local branch that is not guarded is checked when it merges another branch into it, by the same
@@ -136,6 +145,10 @@ commit with the files that show it and why, gives the likely cause and how to re
 and how to mark a deliberate revert. For a refused local update it also says how to restore the working copy for what
 was stopped part-way — a merge or pull, a reset, a rebase. For a refused push it says to fetch, rebase or add a commit
 that brings the changes back, never to force-push or reset.
+
+Where the diagnostic identifies a squash that changed the base, it directs the agent to squash interactively on the
+merge base without first resetting the branch there, preserve deliberate-revert lines, and check that the final tree
+matches the pre-squash tip before rebasing onto the target and combining both sides' changes.
 
 ## The switch
 

@@ -237,6 +237,14 @@ fn a_squash_with_a_changed_base_is_rejected_with_and_without_a_recorded_fork_poi
     });
     let found = main_move(&repo, &[], &old, &new).expect("rejected by content");
     assert!(found.contains("rewrite the head of a.txt"), "{found}");
+    assert!(
+        found.contains("git rebase -i $(git merge-base HEAD <target branch>)"),
+        "{found}"
+    );
+    assert!(
+        !found.contains("git reset --soft $(git merge-base"),
+        "{found}"
+    );
     assert!(main_move(&repo, &[("feature", &fork)], &old, &new).is_some());
 }
 
@@ -1260,7 +1268,11 @@ fn a_pushed_squash_that_changed_the_base_is_rejected_and_an_ordinary_push_is_not
     assert!(
         verdict.text.contains("Refusing to push feature")
             && verdict.text.contains("relative to origin/main")
-            && verdict.text.contains("rewrite the head of a.txt"),
+            && verdict.text.contains("rewrite the head of a.txt")
+            && verdict
+                .text
+                .contains("git rebase -i $(git merge-base HEAD origin/main)")
+            && !verdict.text.contains("git reset --soft $(git merge-base"),
         "{}",
         verdict.text
     );

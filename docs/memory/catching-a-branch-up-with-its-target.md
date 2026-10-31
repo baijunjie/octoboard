@@ -20,6 +20,11 @@ already on a remote-tracking branch, and it refuses it at the local ref update, 
 (the "Repository checks" section of `CLAUDE.md`), so bring the target branch's new commits in with a merge
 (`git merge main` for a branch cut from `main`) and carry on.
 
-Read the gate's own suggestion with that in mind: it prints `git rebase <upstream>`, which replays local unpushed
-commits onto *this* branch's remote tip and brings in nothing from the target branch. Rebasing a development branch
-that is not guarded onto its target before it merges back is unaffected.
+Read the gate's suggestion for dropped published commits with that in mind: its `git rebase <upstream>` replays local
+unpushed commits onto *this* branch's remote tip and brings in nothing from the target branch. Rebasing a development
+branch that is not guarded onto its target before it merges back is unaffected.
+
+Keep delivery-time squashing separate from catching up with the target: follow "The development rule" in
+`docs/product/git-workflow-settings.md` for the squash and its tree comparison first, then apply the catch-up rule
+above if alignment is required. A branch being unpushed does not by itself make reset-based squashing safe; before
+choosing a procedure, check "Guarded branches" and "A local update of a guarded branch" in `docs/product/revert-gate.md`.
