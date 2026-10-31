@@ -37,8 +37,8 @@ export function quitHolders(sessions: readonly Session[], terminals: readonly Sh
 
 interface UseAppExitOptions {
   /** Current sessions, read fresh each time a quit is requested rather than once at mount — omit
-   * entirely where there is no daemon connection to ask about them at all (the daemon-failed-to-
-   * start screen), which skips the confirmation step unconditionally. */
+   * entirely where there is no daemon connection to ask about them at all (the startup screens),
+   * which skips the confirmation step unconditionally. */
   getSessions?: () => Session[];
   /** Current shell terminals, read fresh the same way; a busy one holds the quit up too. */
   getShellTerminals?: () => ShellTerminal[];
@@ -58,18 +58,11 @@ interface UseAppExitResult {
   closeExitConfirm: () => void;
   /** Call when the user confirms the dialog above. */
   confirmExit: () => Promise<void>;
-  /** The same entry point Cmd+Q, the app menu and the menu bar icon's Quit all funnel through —
-   * exposed so a plain "Quit" affordance (the daemon-failed-to-start screen has one) can use it
-   * too. Does nothing where `canQuit` is false. */
-  requestQuit: () => Promise<void>;
-  /** The same as `requestQuit`, except that once confirmed the application relaunches instead of ending, which
+  /** Asks for a restart rather than a quit (a quit is only ever asked for by the shell's gestures, Cmd+Q, the app
+   * menu and the menu bar icon's Quit among them); once confirmed the application relaunches instead of ending, which
    * is how an installed update takes effect. It goes through the confirmation like any quit, since a restart
    * ends the sessions as a quit does, and the user can cancel there. */
   requestRestart: () => Promise<void>;
-  /** Whether the platform has a quit flow at all. A plain browser has none — closing a tab quits
-   * nothing, and shutting the daemon down from a page that merely connects to it would be wrong —
-   * so a screen offers a Quit affordance only when this is true. */
-  canQuit: boolean;
 }
 
 /**
@@ -90,7 +83,7 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
   const [exitHolders, setExitHolders] = useState<QuitHolders>({ sessions: false, terminals: false });
   const [exitRestarts, setExitRestarts] = useState(false);
   // Read through a ref rather than closed over directly: the listener-registration effect below
-  // runs once (mount/unmount only), so `requestQuit`/`doQuit` must look up the latest sessions and
+  // runs once (mount/unmount only), so `request`/`doQuit` must look up the latest sessions and
   // callbacks at call time instead of capturing whatever they were when the effect first ran.
   const optionsRef = useLatest(options);
 
@@ -144,7 +137,6 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
     await doQuit(restart);
   };
 
-  const requestQuit = () => request(false);
   const requestRestart = () => request(true);
 
   const confirmExit = async (): Promise<void> => {
@@ -170,12 +162,12 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
           })().catch(() => {});
         },
       }),
-    // Registration happens once; `requestQuit`/`doQuit` read live state through `optionsRef`.
+    // Registration happens once; `request`/`doQuit` read live state through `optionsRef`.
     [],
   );
 
   const closeExitConfirm = (): void => {
-    // Nothing to tell the Rust side here: `requestQuit` above already pinged the debounce-clearing
+    // Nothing to tell the Rust side here: `request` above already pinged the debounce-clearing
     // heartbeat on the way into this dialog, and that is what matters for the next gesture — a
     // cancel does not need a signal of its own.
     setExitConfirmOpen(false);
@@ -187,8 +179,6 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
     exitRestarts,
     closeExitConfirm,
     confirmExit,
-    requestQuit,
     requestRestart,
-    canQuit: exit !== undefined,
   };
 }

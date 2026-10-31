@@ -3,10 +3,13 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { appConfig } from "./appConfig";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { errorAlerts } from "./errorAlerts";
 import { t } from "./i18n/language";
-import type { PlatformAdapter } from "./platform";
+import type { ExitCapability, PlatformAdapter } from "./platform";
 import { PlatformProvider } from "./platform/react";
+import { createStateStore, DaemonProvider, type Daemon } from "./store";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -17,13 +20,12 @@ function Crashing(): React.ReactElement {
 
 /** Mounts the boundary over a component that crashes, measuring every element as `scrollHeight`
  * tall in a `clientHeight` box, since jsdom has no layout and the fade's state follows those. */
-async function mountCrashed(sizes: { scrollHeight: number; clientHeight: number }, Child: () => React.ReactElement = Crashing): Promise<HTMLElement> {
+async function mountCrashed(sizes: { scrollHeight: number; clientHeight: number }, Child: () => React.ReactElement = Crashing, platform: PlatformAdapter = { kind: "browser" }, daemon?: Daemon, beforeFrame?: (container: HTMLElement) => void): Promise<HTMLElement> {
   const restore = (["scrollHeight", "clientHeight"] as const).map((key) => {
     const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, key);
     Object.defineProperty(HTMLElement.prototype, key, { configurable: true, get: () => sizes[key] });
     return () => (original ? Object.defineProperty(HTMLElement.prototype, key, original) : delete (HTMLElement.prototype as unknown as Record<string, unknown>)[key]);
   });
-  const platform: PlatformAdapter = { kind: "browser" };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -37,12 +39,15 @@ async function mountCrashed(sizes: { scrollHeight: number; clientHeight: number 
   act(() =>
     root.render(
       <PlatformProvider value={platform}>
-        <ErrorBoundary>
-          <Child />
-        </ErrorBoundary>
+        <DaemonProvider value={daemon}>
+          <ErrorBoundary>
+            <Child />
+          </ErrorBoundary>
+        </DaemonProvider>
       </PlatformProvider>,
     ),
   );
+  beforeFrame?.(container);
   // HeroUI writes the fade's state on the next frame.
   await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
   return container;
@@ -87,10 +92,58 @@ it.each([
 it("says the crash in the application's words on the page and keeps the error's own text on a surface under them, with Try again the only button", async () => {
   const container = await mountCrashed({ scrollHeight: 100, clientHeight: 100 });
   expect(container.querySelector("h1")?.textContent).toBe(t("error.crashed.heading"));
+  expect(container.textContent).toContain(t("error.crashed"));
   expect(container.textContent).toContain(t("error.crashed.retry"));
-  // A plain browser has no quit flow, so Try again stands alone.
   expect([...container.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Try again"]);
   expect(stack(container).textContent).toContain("boom");
+});
+
+it("opens no error dialog over the page and announces the failure from the page itself, inserted after the first paint", async () => {
+  let first: Element | null | undefined;
+  const container = await mountCrashed({ scrollHeight: 100, clientHeight: 100 }, Crashing, { kind: "browser" }, undefined, (shown) => {
+    first = shown.querySelector('[role="alert"]');
+  });
+  expect(first).toBeNull();
+  expect(errorAlerts.getSnapshot()).toEqual([]);
+  const announced = container.querySelector('[role="alert"]')!;
+  expect(announced.querySelector("h1")?.textContent).toBe(t("error.crashed.heading"));
+  expect(announced.textContent).toContain(t("error.crashed"));
+});
+
+it("offers Report issue after Try again, as a link to the prefilled Issue page, and leaves the guidance to the remedy line", async () => {
+  const container = await mountCrashed({ scrollHeight: 100, clientHeight: 100 });
+  const row = [...container.querySelectorAll('[data-slot="empty-state"] > div')].at(-1)!;
+  const [retry, report] = [...row.children];
+  expect(retry.textContent).toBe("Try again");
+  expect(report.textContent).toBe(t("error.issue.report"));
+  const link = report as HTMLAnchorElement;
+  expect(link.tagName).toBe("A");
+  const prefilled = new URL(link.href).searchParams;
+  expect(prefilled.get("title")).toMatch(/^Unexpected error: /);
+  expect(prefilled.get("body")).toContain("boom");
+  // The remedy line asks for the report, so the surface holds the stack alone.
+  expect(container.querySelector('[data-slot="empty-state"] > [data-slot="surface"] p')).toBeNull();
+});
+
+it("keeps the report guidance, naming the address, where the platform cannot open links", async () => {
+  const container = await mountCrashed({ scrollHeight: 100, clientHeight: 100 }, Crashing, { kind: "tauri" });
+  expect(container.querySelector("a[data-external-link]")).toBeNull();
+  const guidance = container.querySelector('[data-slot="empty-state"] > [data-slot="surface"] p')!;
+  expect(guidance.textContent).toContain("This may be a bug");
+  expect(guidance.querySelector("[data-inline-reference]")?.textContent).toBe(appConfig.issueUrl);
+});
+
+it("removes the names of the user's records from the report, reading them from the daemon around the boundary", async () => {
+  const store = createStateStore({
+    homeDir: "/Users/alice",
+    projects: new Map([["p", { name: "Zeta Project", path: "/Users/alice/zeta" }]]) as never,
+  });
+  function CrashingOnProject(): React.ReactElement {
+    throw new Error("Cannot open Zeta Project at /Users/alice/zeta/a.ts");
+  }
+  const container = await mountCrashed({ scrollHeight: 100, clientHeight: 100 }, CrashingOnProject, { kind: "browser" }, { store } as unknown as Daemon);
+  const prefilled = new URL(container.querySelector<HTMLAnchorElement>("a[data-external-link]")!.href).searchParams;
+  expect(`${prefilled.get("title")}${prefilled.get("body")}`).not.toMatch(/Zeta|alice/);
 });
 
 it.each([
@@ -107,4 +160,21 @@ it.each([
   }
   const container = await mountCrashed({ scrollHeight: 100, clientHeight: 100 }, CrashingThus);
   expect(stack(container).textContent).toBe(shown);
+});
+
+it("has no Quit button where the platform can quit, yet answers a quit gesture at once", async () => {
+  let onQuitRequested = () => {};
+  const confirmQuit = vi.fn(async () => {});
+  const exit: ExitCapability = {
+    register: (handlers) => {
+      onQuitRequested = handlers.onQuitRequested;
+      return () => {};
+    },
+    heartbeat: async () => {},
+    confirmQuit,
+  };
+  const container = await mountCrashed({ scrollHeight: 100, clientHeight: 100 }, Crashing, { kind: "tauri", exit });
+  expect([...container.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Try again"]);
+  await act(async () => onQuitRequested());
+  expect(confirmQuit).toHaveBeenCalledExactlyOnceWith({ restart: false });
 });

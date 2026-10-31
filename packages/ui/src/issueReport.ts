@@ -29,6 +29,9 @@ export interface IssueEnvironment {
 
 export interface IssueFacts {
   failures: readonly ReportableFailure[];
+  /** A report of a failure the application names and says what to do about, not one to call unexpected: its title is
+   * this, and its failures are labelled `known` in the body, their diagnostic included. */
+  known?: { title: string };
   environment: IssueEnvironment;
   context: SanitizeContext;
 }
@@ -235,7 +238,7 @@ function classificationOf({ error, recovery, unexpected }: ReportableFailure): E
   return unexpected ? { kind: "unexpected" } : classifyError(error, recovery);
 }
 
-function reportedFailures({ failures, context }: IssueFacts): ReportedFailure[] {
+function reportedFailures({ failures, context, known }: IssueFacts): ReportedFailure[] {
   const seen = new Set<string>();
   const reported: ReportedFailure[] = [];
   for (const failure of failures) {
@@ -245,7 +248,7 @@ function reportedFailures({ failures, context }: IssueFacts): ReportedFailure[] 
     // An actionable failure's message is worded for the user and its params are theirs: only what kind it is.
     const diagnostic = classification.kind === "unexpected" ? diagnosticOf(error) : undefined;
     const entry: ReportedFailure = {
-      kind: classification.kind === "unexpected" ? "unexpected" : `actionable (${classification.recovery})`,
+      kind: classification.kind === "unexpected" ? (known ? "known" : "unexpected") : `actionable (${classification.recovery})`,
       code: coded?.code,
       paramKeys: coded ? Object.keys(coded.params).sort().slice(0, MAX_PARAM_KEYS) : [],
       diagnostic: diagnostic ? sanitizeReportText(diagnostic, context).trim() || undefined : undefined,
@@ -265,7 +268,8 @@ function fenced(text: string): string {
   return `${fence}\n${text}\n${fence}`;
 }
 
-function titleOf({ failures, context }: IssueFacts): string {
+function titleOf({ failures, context, known }: IssueFacts): string {
+  if (known) return known.title;
   const main = failures.find((failure) => classificationOf(failure).kind === "unexpected");
   const summary = main && summaryOf(main.error, context);
   return summary ? `Unexpected error: ${summary}` : "Unexpected error";

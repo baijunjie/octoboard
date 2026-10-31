@@ -40,8 +40,7 @@ export const startupScenarios: Scenario[] = [
     category: "exceptional",
     title: "No daemon address or key",
     description:
-      "One main landmark contains the page heading, centred, and a danger alert titled \"Could not connect to the daemon\" with one line under it; the alert and the text below it start at the edge. Outside the alert, a line on the shell's handoff of the port and the key follows, then the three development-server connection methods, each naming the key beside the port, with selectable code tokens. The lines are long: use Narrow and Short to check that they wrap, and that the code tokens wrap or scroll without being clipped; Arabic shows the code inside right-to-left copy. The native-capable browser stub exposes Quit without closing the preview.",
-    quitRequested: true,
+      "One main landmark contains the page heading, centred, and a danger alert titled \"Could not connect to the daemon\" with one line under it; the alert and the text below it start at the edge. Outside the alert, a line on the shell's handoff of the port and the key follows, then the three development-server connection methods, each naming the key beside the port, with selectable code tokens. The lines are long: use Narrow and Short to check that they wrap, and that the code tokens wrap or scroll without being clipped; Arabic shows the code inside right-to-left copy. After the methods come the sentence saying that, if the steps above do not resolve it, Report issue files an Issue, and, centred under it, the Report issue button (a link in the shape of a button that opens the Issue page prefilled with the title \"No daemon address or key\"); there is no Quit.",
     startup: { kind: "noAddress" },
   },
   {
@@ -50,21 +49,8 @@ export const startupScenarios: Scenario[] = [
     category: "exceptional",
     title: "The daemon failed to start",
     description:
-      "The error dialog has been acknowledged, leaving the page that is the whole failure, in the empty-state shape: a danger glyph, the heading naming the failure as the page's only h1 with no mark beside it, and one line in the application's own words saying what to do. Under it, start-aligned on a surface of its own, is the daemon's text, wrapped over as many lines as it needs and no horizontal scroll. The text is taller than the surface allows (up to 40% of the window's height), so it scrolls vertically inside the surface with a fade at the edge it hides the rest behind; Tab onto the text, named Error details, for its focus ring and keyboard scrolling. Use Short to see the page scroll as well, its region named Message. The row under the surface holds Quit alone: there is no Try again, since nothing can be retried from here, and no Details button. The native-capable browser stub exposes Quit without closing the preview.",
-    quitRequested: true,
+      "The page is the whole failure, in the empty-state shape, with no error dialog over it: a danger glyph, the heading naming the failure as the page's only h1 with no mark beside it, one line saying what the daemon is, and under it a second line saying that Octoboard cannot work without it and should be opened again. Under them, start-aligned on a surface of its own, are the sentence saying that, if the steps above do not resolve it, Report issue files an Issue, and then the daemon's text, wrapped over as many lines as it needs and no horizontal scroll. The text is taller than the surface allows (up to 40% of the window's height), so it scrolls vertically inside the surface with a fade at the edge it hides the rest behind; Tab onto the text, named Error details, for its focus ring and keyboard scrolling. Use Short to see the page scroll as well, its region named Message. The row under the surface holds Report issue alone (a link in the shape of a button that opens the Issue page prefilled with the title \"The daemon failed to start\"): there is no Try again, since nothing can be retried from here, no Quit and no Details button.",
     startup: DAEMON_FAILED,
-    steps: [(ui) => ui.press(ui.t("error.acknowledge"))],
-  },
-  {
-    id: "startup-daemon-failed-alert",
-    group: GROUP,
-    category: "exceptional",
-    title: "The daemon failed to start, the error dialog",
-    description:
-      "The error dialog that opens over the page, titled \"The daemon failed to start\": its body is only the application's own two sentences (the daemon is the background process that runs your sessions and terminals; Octoboard cannot work without it and should be opened again to try once more), a known failure, so there is no report guidance and no Report issue button. The daemon's text is behind Error details, open here, wrapped on a surface of its own, not as the dialog's body text, in the ordinary text colour and with no horizontal scroll. The text is taller than the surface allows (up to 40% of the window's height), so it scrolls vertically inside the surface with a fade at the edge it hides the rest behind, while the dialog's body does not scroll; Tab onto the text, named Error details, for its focus ring and keyboard scrolling. Use Short to see the dialog's body scroll as well. The page behind is dimmed and is looked at in the scenario above.",
-    quitRequested: true,
-    startup: DAEMON_FAILED,
-    steps: [(ui) => ui.press(ui.t("error.diagnostics"))],
   },
   {
     id: "startup-crash",
@@ -72,20 +58,7 @@ export const startupScenarios: Scenario[] = [
     category: "exceptional",
     title: "The UI crashed",
     description:
-      "The error dialog has been acknowledged, leaving the crash page in the empty-state shape: a danger glyph, the heading \"An unexpected error occurred\" as the page's only h1 with no mark beside it, and one line in the application's own words reading \"Try again. If the error comes back, report it.\" Under it, start-aligned on a surface of its own, is the stack, wrapped, with no horizontal scroll. The stack is taller than the surface allows (up to 40% of the window's height), so it scrolls vertically inside the surface with a fade at the edge it hides the rest behind; Tab onto the stack, named Error details, for its focus ring and keyboard scrolling. Use Short to see the page scroll as well, its region named Message. The row under the surface holds Try again as the primary button and Quit: two buttons, no Details. The native-capable browser stub exposes Quit without closing the preview.",
-    quitRequested: true,
+      "The crash page in the empty-state shape, with no error dialog over it: a danger glyph, the heading \"An unexpected error occurred\" as the page's only h1 with no mark beside it, one line saying that Octoboard hit an error it could not recover from, and under it \"Try again. If the error comes back, report it.\" Under them, start-aligned on a surface of its own, is the stack alone, wrapped, with no horizontal scroll. The stack is taller than the surface allows (up to 40% of the window's height), so it scrolls vertically inside the surface with a fade at the edge it hides the rest behind; Tab onto the stack, named Error details, for its focus ring and keyboard scrolling. Use Short to see the page scroll as well, its region named Message. The row under the surface holds Try again as the primary button, then Report issue (a link in the shape of a button that opens the prefilled Issue page): no Quit and no Details.",
     startup: { kind: "crash", stack: stackOf(12) },
-    steps: [(ui) => ui.press(ui.t("error.acknowledge"))],
-  },
-  {
-    id: "startup-crash-alert",
-    group: GROUP,
-    category: "exceptional",
-    title: "The UI crashed, the error dialog",
-    description:
-      "The error dialog that opens over the crash page, titled \"An unexpected error occurred\": its body is only the application's own sentence (that Octoboard hit an error it could not recover from) and the report guidance. The stack is behind Error details, open here, wrapped on a surface of its own, not as the dialog's body text, in the ordinary text colour and with no horizontal scroll. The stack is taller than the surface allows (up to 40% of the window's height), so it scrolls vertically inside the surface with a fade at the edge it hides the rest behind, while the dialog's body does not scroll; Tab onto the stack, named Error details, for its focus ring and keyboard scrolling. Use Short to see the dialog's body scroll as well. The page behind is dimmed and is looked at in the scenario above.",
-    quitRequested: true,
-    startup: { kind: "crash", stack: stackOf(12) },
-    steps: [(ui) => ui.press(ui.t("error.diagnostics"))],
   },
 ];

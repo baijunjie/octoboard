@@ -16,7 +16,7 @@ import { uncataloguedSummaryKey } from "../errorPresentation";
 import { isUncataloguedFailure } from "../uncataloguedFailure";
 import { classifyError } from "../errorRecovery";
 import { Dialog } from "../dialogs/Dialog";
-import { useIssueReport } from "../dialogs/ErrorAlerts";
+import { useIssueReport } from "../useIssueReport";
 import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { AccountLogin, Agent, MessageParams } from "../protocol";

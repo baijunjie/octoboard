@@ -42,6 +42,7 @@ export function EmptyPanel({
   remedy,
   action,
   secondaryAction,
+  linkAction,
   details,
   compact,
   silent,
@@ -86,14 +87,25 @@ export function EmptyPanel({
      * rather than in it, as a ref held in a prop object makes every read of that object a read of a ref. */
     actionRef?: React.Ref<HTMLButtonElement>;
     silent?: never;
-    /** A second way out beside the action, quieter than it, for a full panel only. */
-    secondaryAction?: { label: string; icon?: LucideIcon; onPress: () => void };
     /** The rest of a failure (further explanation, then raw text), on a surface of its own under the
      * lines, outside the announcement. The full panel only, and never with `silent`: a raw block too
      * wide or tall for its box scrolls, and takes focus to do it. */
     details?: React.ReactNode;
-  } & Announcement)
-  | (Announcement & { action?: never; actionRef?: never; secondaryAction?: never; details?: never; silent?: true })
+  } & (
+    | {
+      /** A second way out beside the action, quieter than it, for a full panel only. */
+      secondaryAction?: { label: string; icon?: LucideIcon; onPress: () => void };
+      linkAction?: never;
+    }
+    | {
+      /** A link in the shape of a button (`ExternalLink` with `appearance="button"` and `size="sm"`) in the second
+       * place beside the action, for a way to reach something outside the window; the full panel only. It stands
+       * where the secondary action would, so a row never holds three. */
+      linkAction?: React.ReactNode;
+      secondaryAction?: never;
+    }
+  ) & Announcement)
+  | (Announcement & { action?: never; actionRef?: never; secondaryAction?: never; linkAction?: never; details?: never; silent?: true })
 )): React.ReactElement {
   const messageId = useId();
   const actionId = useId();
@@ -170,7 +182,7 @@ export function EmptyPanel({
           <DiagnosticLayoutContext.Provider value={WRAPPED_TALL}>{details}</DiagnosticLayoutContext.Provider>
         </Surface>
       )}
-      {(action || secondaryAction) && (
+      {(action || linkAction || secondaryAction) && (
         <div className="flex flex-wrap items-center justify-center gap-3">
           {action && (
             // A press never takes focus: it would drop to `<body>` when the panel goes away, and
@@ -188,6 +200,7 @@ export function EmptyPanel({
               {action.label}
             </Button>
           )}
+          {linkAction}
           {secondaryAction && (
             <Button size="sm" variant="secondary" preventFocusOnPress onPress={secondaryAction.onPress}>
               {SecondaryIcon && <SecondaryIcon aria-hidden="true" className="size-4" />}

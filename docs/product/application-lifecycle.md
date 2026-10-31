@@ -58,15 +58,14 @@ On every daemon start:
 
 **One Octoboard at a time.** A second daemon running against the same `~/.octoboard` would own a second set of agent
 processes while sharing one database, so it refuses to start, on every attempt. The application then opens its window
-anyway, on a screen that says the daemon failed to start and offers to quit — a failed start never leaves a window with
-no explanation. The reason is on that screen under its explanation (the screen is described in "The window chrome and
-the content panel" in `docs/product/window-layout.md`); the error alert shown over the screen, titled "The daemon failed to start", says that the daemon is the background process that runs the user's
-sessions and terminals, then that Octoboard cannot work without it and that opening Octoboard again tries once more,
-with the same reason in a block under its **Error details**. It is a known failure, not an unexpected one: it asks for
-no report and has no **Report issue** (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`). With no
-daemon running there is nothing to keep running, so closing the window quits whatever that setting says (see "Closing
-the window" below). The lock is per data directory, so on a server it is one daemon per Unix user, whose `~/.octoboard`
-is the daemon's (see "The daemon on its own" below).
+anyway, on a screen that says the daemon failed to start — a failed start never leaves a window with no explanation.
+The screen says what the daemon is and that opening Octoboard again tries once more, with the reason under its
+explanation; no error alert opens over it. It is a known failure, not an unexpected one: it asks for a report only if
+those steps do not resolve it (the screen is described in "The window chrome and the content panel" in
+`docs/product/window-layout.md`). It has no Quit button; it quits like any window with no daemon running, at once and
+asking nothing, and with nothing to keep running, closing the window quits whatever that setting says (see "Closing
+the window" and "Quitting" below). The lock is per data directory, so on a server it is one daemon per Unix user,
+whose `~/.octoboard` is the daemon's (see "The daemon on its own" below).
 
 **A daemon that dies later is started again.** When the daemon has started and then ends on its own, with a non-zero
 exit status or by a signal, the application starts a new one after **1**, then **2**, then **4 seconds**, at most **3
@@ -262,6 +261,10 @@ which the close gestures have no part in.
   the background is not brought back for it.
 - While the daemon is not running — it failed to start, or has exited, or is being started again — every quit is
   immediate and asks nothing, and no daemon is started again after it.
+- On the screen for a UI that failed (see "The window chrome and the content panel" in
+  `docs/product/window-layout.md`), every quit is immediate and asks nothing, even while sessions are running or a
+  shell terminal is busy, since the window no longer knows them; the daemon is not asked to shut down first. It exits
+  once the application is gone, leaving the sessions as a crash does (see "Crashes and forced termination" below).
 - The daemon stopping as part of a quit is not reported as the daemon exiting: no notice is shown and a closed window is
   not brought back for it.
 - Quitting does not depend on the daemon answering: if it does not, the application exits anyway after a short wait.

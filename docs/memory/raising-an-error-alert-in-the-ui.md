@@ -29,7 +29,7 @@ new action's title names what failed, do not write a `.summary` that repeats it 
 ## A failure the UI itself detects is raised as an `ActionableError`, or the alert calls it a bug
 
 Applies wherever code in `packages/ui` raises an error alert for a failure it detects or words itself — a lazy chunk
-that did not load, a refused precondition, a clipboard that refused, a daemon that did not start. The alert classifies
+that did not load, a refused precondition, a clipboard that refused. The alert classifies
 what it is given (`classifyError` in `packages/ui/src/errorRecovery.ts`), and a string, a plain `Error`, or a
 `DaemonRequestError` whose code is in no `GROUPS` entry classifies as unexpected: the alert says the failure may be a
 bug and asks the user to file an Issue, however ordinary the cause. So raise such a failure as

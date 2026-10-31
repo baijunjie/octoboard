@@ -197,16 +197,12 @@ function screen(): React.ReactElement {
   }
   if (viewerSubjects && ViewerGallery)
     return (
-      <store.DaemonProvider value={daemon!}>
+      <>
         <ViewerGallery subjects={viewerSubjects} loadDelay={scenario.viewer?.loadDelay} />
         <Toasts focusTerminal={() => {}} />
-      </store.DaemonProvider>
+      </>
     );
-  return (
-    <store.DaemonProvider value={daemon!}>
-      <App />
-    </store.DaemonProvider>
-  );
+  return <App />;
 }
 
 /** Runs the automatic check a scenario with `updater.checked` says has already happened, once the window is up, as
@@ -236,9 +232,12 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <PlatformProvider value={galleryPlatform()}>
       <LanguageProvider>
         {withUpdates(
-          <ErrorBoundary>
-            <ThemeProvider>{screen()}</ThemeProvider>
-          </ErrorBoundary>,
+          // Outside the boundary, as in `main.tsx`, so the crash page's report finds the records to remove the names of; none for a startup scenario.
+          <store.DaemonProvider value={daemon}>
+            <ErrorBoundary>
+              <ThemeProvider>{screen()}</ThemeProvider>
+            </ErrorBoundary>
+          </store.DaemonProvider>,
         )}
         <ErrorAlerts daemon={daemon} />
       </LanguageProvider>

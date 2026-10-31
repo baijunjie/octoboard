@@ -18,8 +18,6 @@ its body text (see "What an open dialog, menu or popover covers" in `docs/produc
 A failure under a field, on the screen or as a mark never opens an error alert: each is that failure's only
 presentation, with these exceptions:
 
-- The screens for a daemon that could not start and for a UI that failed also open an error alert, shown over them
-  first (see "Failures shown on the screen" below).
 - A check for updates the user pressed that does not finish opens an error alert and still leaves the Updates row's
   warning mark (see "The Updates and Update channel rows" in `docs/product/in-app-updates.md`).
 - An account's sharing change, a long-running change that its own switch retries, that ends unfinished opens an error
@@ -84,9 +82,8 @@ daemon code's own, as "Branches and worktrees not removed" (`session_branches_no
 left in place" (`project_branches_not_determined`) are. A daemon code's own title wins over the action's only for an
 alert a daemon broadcast raises and for some actions' failures outside a dialog; an alert raised by a dialog's submit or
 confirmation always takes that dialog's title for its action, whatever code the failure carries.
-A failure of the application's own lifecycle has its own title too — "The daemon failed to start", "The daemon exited
-unexpectedly", "Could not quit", "Could not restart" (see "Starting up", "Quitting" and "Restarting" in
-`docs/product/application-lifecycle.md`). Only a failure nothing titles — an error nothing caught — is titled
+A failure of the application's own lifecycle has its own title too — "The daemon exited unexpectedly", "Could not
+quit", "Could not restart" (see "Starting up", "Quitting" and "Restarting" in `docs/product/application-lifecycle.md`). Only a failure nothing titles — an error nothing caught — is titled
 "Unexpected error" when it is unexpected, and "Error" when its cause is a known one. A title of its own does not change
 how a failure is classified: the daemon exiting, and a quit or a restart that did not happen, are still unexpected
 failures (see "Recovery and unexpected errors" below). When the failure is
@@ -108,7 +105,9 @@ closing Settings" in `docs/product/settings.md`).
 Errors are queued and normally shown one at a time in arrival order. An identical failure already waiting for
 acknowledgement is not queued again: its message, affected session, original diagnostic message, recovery category
 and available daemon code and parameters must all match. Pending errors survive changes between the application's
-screens until acknowledged. Startup and rendering failures use the same acknowledgement flow.
+screens until acknowledged. They are shown over whichever screen the window is on, so an error nothing caught, or an
+Issue page that could not be opened, still raises one over the screens for a daemon that could not start, for a UI
+that failed and for no daemon address or key being known, which raise none of their own.
 
 When the last pending alert is acknowledged and keyboard focus has nowhere to return to — the control that had it is
 gone, as when a dialog closed before the alert appeared, or the dialog under the alert never had it, as when the alert
@@ -178,8 +177,8 @@ block of it scrolls within itself once taller than its room (see "Names and diag
 mark beside the heading and no **Details** button. Where the panel fills a pane, a panel or a dialog's body and is
 taller than it, it scrolls in its place (see "Scrolling a surface from the keyboard" in
 `docs/product/scrolling-surfaces.md`). The screens for a daemon that could not start and for a UI that failed take this
-shape too, their row kept for the recovery and **Quit** (see "The window chrome and the content panel" in
-`docs/product/window-layout.md`).
+shape too, their row holding the recovery, where there is one, and **Report issue** (see "The window chrome and the
+content panel" in `docs/product/window-layout.md`).
 
 **A compact alert** is a component-level error shown among other content — one that blocks what the user is doing,
 or one a component cannot do its job without: in a form dialog, a settings section, a popover or a submenu, or above
@@ -215,10 +214,9 @@ The places with an empty-state failure:
 - the Processes panel's list when its first reading failed (see "Loading, refreshing and failures" in
   `docs/product/processes-panel.md`);
 - the screens for a daemon that could not start and for a UI that failed, each the whole page, its heading the page's
-  top-level heading and its raw text on the details surface, with **Quit**, where the application can quit itself,
-  after the recovery or, with none, as the one action (see "The window chrome and the content panel" in
-  `docs/product/window-layout.md`). Unlike the others, each also opens an error alert, shown over it first, and so is
-  not announced itself.
+  top-level heading and its raw text on the details surface, with **Report issue** after the recovery or, with none,
+  as the one action (see "The window chrome and the content panel" in `docs/product/window-layout.md`). Unlike the
+  others, each is announced as the page opens, although it is there from the start.
 
 The places with a compact alert:
 
@@ -423,14 +421,12 @@ confirmation, that something unexpected went wrong — and the cause's own text 
 line breaks, indentation and left-to-right order. Long lines scroll horizontally, with a labelled region reachable from
 the keyboard. Raw text that stands as a block of its own — in an alert's body, behind **Error details** or **Details**,
 on an empty-state failure's details surface, or in a mark's popover — sits on a tinted surface of its own rather than
-directly on what holds it, with whatever names it (the disclosure's summary, a heading) outside that surface. Under
-**Error details** in the error alert for a crash, its stack trace, and in the one for a daemon's startup failure, the
-daemon's text, wrap their long lines instead of scrolling sideways, and the block is at most 40% of the window's height,
-scrolling vertically within itself beyond that; while it does, it is a region named "Error details" that the keyboard
-can reach and scroll. A known daemon failure's separately rendered diagnostic `detail`, including a failed Git push's
-hook output and a recognized trust confirmation diagnostic, uses the same wrapping and height limit wherever that block
-is shown. Other diagnostic blocks, including structured sharing details, an unrecognized daemon message and a cause the
-application has no wording for, keep the horizontal scrolling above unless their containing surface sets wrapping and a
+directly on what holds it, with whatever names it (the disclosure's summary, a heading) outside that surface. A known
+daemon failure's separately rendered diagnostic `detail`, including a failed Git push's hook output and a recognized
+trust confirmation diagnostic, wraps its long lines instead of scrolling sideways wherever that block is shown, and the
+block is at most 40% of the window's height, scrolling vertically within itself beyond that; while it does, it is a
+region named "Error details" that the keyboard can reach and scroll. Other diagnostic blocks, including structured
+sharing details, an unrecognized daemon message and a cause the application has no wording for, keep the horizontal scrolling above unless their containing surface sets wrapping and a
 height limit. On an empty-state failure's details surface, every block of raw text does the same, its region named
 "Error details" or, where several blocks stand together, by the heading over it. A reason Octoboard words itself remains
 part of the explanation; it is not turned into a diagnostic block simply because it accompanies an error. Unrecognized

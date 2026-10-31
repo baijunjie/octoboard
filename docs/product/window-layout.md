@@ -110,28 +110,38 @@ bar, the content panel spans the window.
 
 The screens for a daemon that could not start and for a UI that failed are each an empty-state failure of the whole
 page (see "Failures shown on the screen" in `docs/product/error-alerts.md`), centred in the content panel: a red
-circled `!`, a heading that is the page's top-level heading, one line under it in Octoboard's own words, the failure's
-raw text on a surface of its own under that line, and a centred row of at most two buttons. Neither screen holds an
-alert, a mark beside its heading or a **Details** button, and nothing on it but the glyph is drawn in the danger
-colour. **Quit** is there only where the application can quit itself.
+circled `!`, a heading that is the page's top-level heading, a line under it in Octoboard's own words and the remedy
+after that, then a surface of its own holding the failure's raw text, and a centred row of at most two buttons. No
+error alert opens over either screen: the page is the failure's only presentation. Neither holds an alert, a mark
+beside its heading or a **Details** button, and nothing on it but the glyph is drawn in the danger colour.
 
-- **A UI that failed**: headed that an unexpected error occurred, with the line saying to try again and, if the error
-  comes back, to report it. Under it is the stack trace, headed by the error's name and message, the stack following
-  them without repeating that line where the stack already begins with it. Its row holds **Try again**, the primary
-  button, then **Quit**.
-- **A daemon that could not start**: headed that the daemon failed to start, with the line saying Octoboard cannot work
-  without it and that opening Octoboard again tries once more. Under it is the reason it did not start (see "Starting
-  up" in `docs/product/application-lifecycle.md`). Its row holds
-  **Quit** alone.
+- **A UI that failed**: headed that an unexpected error occurred, with the line saying that Octoboard hit an error it
+  could not recover from, then the remedy to try again and, if the error comes back, to report it. The surface holds
+  the stack trace, headed by the error's name and message, the stack following them without repeating that line where
+  the stack already begins with it. Its row holds **Try again**, the primary button, then **Report issue**.
+- **A daemon that could not start**: headed that the daemon failed to start, with the line saying that the daemon is
+  the background process that runs the user's sessions and terminals, then the remedy saying Octoboard cannot work
+  without it and that opening Octoboard again tries once more. The surface starts with a sentence saying that if the
+  steps above do not resolve it, **Report issue** files an Issue with the steps that led to it; the reason the daemon
+  did not start follows (see "Starting up" in `docs/product/application-lifecycle.md`). Its row holds **Report issue**
+  alone.
 
-The error alert shown first, over the screen for a UI that failed, is titled that an unexpected error occurred, and
-its body says that Octoboard hit an error it could not recover from, with the same stack trace, headed the same way,
-under its **Error details**; the one over the screen for a daemon that could not start is described in "Starting up" in
-`docs/product/application-lifecycle.md`.
+On the screen for no daemon address or key being known, the heading is centred, and the rest — its alert, the
+explanation and the list in it, then the same sentence about reporting as on the screen for a daemon that could not
+start — starts at the reading edge, with **Report issue** centred under it. Its alert is titled that the daemon could
+not be connected to, with the detail under the title.
 
-On the screen for no daemon address or key being known, the heading and the button under it are centred, and the rest — its
-alert, the explanation and the list in it — starts at the reading edge. Its alert is titled that the daemon could not
-be connected to, with the detail under the title.
+**Report issue** on these three screens is a link in the shape of a button, with the external-link glyph, and opens a
+prefilled Issue as the error alert's does (see `docs/product/issue-reports.md`). Where the desktop application cannot
+open links it is left out, and its sentence names the issue address to open in the browser instead; on the screen for
+a UI that failed, which has no such sentence otherwise, that sentence — that this may be a bug, with the address to
+report it at — comes first on the surface, above the stack trace.
+
+None of the three screens has a **Quit** button: the window still quits through `Cmd+Q`, the application menu's
+Quit, the menu bar icon's Quit Octoboard and, where closing the window quits, its close button (see "Quitting" in
+`docs/product/application-lifecycle.md`). As the screens for a daemon that could not start and for a UI that failed
+appear, assistive technology is told their heading and the line under it, once; nothing on them takes keyboard focus
+by itself.
 
 ## What an open dialog, menu or popover covers
 

@@ -55,8 +55,12 @@ describe("quitHolders", () => {
 
 describe("restarting", () => {
   function mount(sessions: Parameters<typeof quitHolders>[0], confirmQuit: ExitCapability["confirmQuit"] = async () => {}) {
+    let quitGesture = () => {};
     const exit: ExitCapability = {
-      register: () => () => {},
+      register: ({ onQuitRequested }) => {
+        quitGesture = onQuitRequested;
+        return () => {};
+      },
       heartbeat: async () => {},
       confirmQuit: vi.fn(confirmQuit),
     };
@@ -73,7 +77,7 @@ describe("restarting", () => {
       container.remove();
     });
     act(() => root.render(createElement(PlatformProvider, { value: { kind: "tauri", exit } }, createElement(Host))));
-    return { exit, requestShutdown, hook: () => current };
+    return { exit, requestShutdown, hook: () => current, quit: () => quitGesture() };
   }
 
   it("relaunches at once when nothing is running, after shutting the daemon down", async () => {
@@ -102,9 +106,9 @@ describe("restarting", () => {
   });
 
   it("turns an open restart confirmation into a quit when a quit is asked for meanwhile", async () => {
-    const { exit, hook } = mount([sessionOf("s", "c", "p", "S", "working")]);
+    const { exit, hook, quit } = mount([sessionOf("s", "c", "p", "S", "working")]);
     await act(async () => hook().requestRestart());
-    await act(async () => hook().requestQuit());
+    await act(async () => quit());
     expect(hook().exitRestarts).toBe(false);
     await act(async () => hook().confirmExit());
     expect(exit.confirmQuit).toHaveBeenCalledExactlyOnceWith({ restart: false });
@@ -114,8 +118,8 @@ describe("restarting", () => {
     ["restart", "Could not restart", "Octoboard kept running instead of relaunching. Quit it and open it again."],
     ["quit", "Could not quit", "Octoboard kept running instead of ending. Try quitting it again."],
   ] as const)("says in its own words that a %s did not happen, with the shell's text behind Details", async (action, title, message) => {
-    const { hook } = mount([], async () => { throw new Error("ipc: no such window"); });
-    await act(async () => (action === "restart" ? hook().requestRestart() : hook().requestQuit()));
+    const { hook, quit } = mount([], async () => { throw new Error("ipc: no such window"); });
+    await act(async () => (action === "restart" ? hook().requestRestart() : quit()));
     const [alert] = errorAlerts.getSnapshot();
     onTestFinished(() => act(() => errorAlerts.acknowledge()));
     expect(alert.title).toBe(title);

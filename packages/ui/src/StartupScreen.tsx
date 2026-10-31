@@ -1,8 +1,6 @@
 import { CircleAlert } from "lucide-react";
-import React, { useEffect } from "react";
+import React from "react";
 
-import { Button } from "./components/Button";
-import { errorAlerts } from "./errorAlerts";
 import { ContentPanel } from "./components/ContentPanel";
 import { EmptyPanel } from "./components/EmptyPanel";
 import { ErrorAlert } from "./components/ErrorAlert";
@@ -11,43 +9,20 @@ import { InlineReference } from "./components/InlineReference";
 import { BareTitleBar } from "./components/TitleBar";
 import { FadedScroller, useFadeRegion } from "./components/scrollFade";
 import { Message, useT } from "./i18n/react";
-import { useAppExit } from "./lifecycle/useAppExit";
-
-type StartupScreenProps =
-  | {
-    /** What the screen explains, over its Quit. */
-    message: React.ReactNode;
-    failure?: never;
-    action?: never;
-  }
-  | {
-    /** A failure that is the whole page: the empty state's shape in the danger tone, its heading `title`, the line
-     * under it `description` in the application's own words, and `details` (the raw text) on a surface of its own
-     * under that line (see "A whole subject that failed" in `docs/ui-accessibility.md`). */
-    failure: { title: React.ReactNode; description: React.ReactNode; details: React.ReactNode };
-    message?: never;
-    /** The failure's recovery, its primary button, for a screen that has something to offer besides giving up. */
-    action?: { label: string; onSelect: () => void };
-  };
+import { useIssueReport } from "./useIssueReport";
 
 /**
  * The window with no daemon connection behind it: no address known yet, the daemon failed to
- * start, or the UI itself crashed. Where the platform has a quit flow it always carries its own
- * quit affordance, and that is not cosmetic — the Rust side only lets a window block a quit once
- * some screen has mounted `useAppExit`, and a screen that registers without offering a way out
- * would leave the window unquittable. A plain browser has no quit flow, so there is no Quit.
- *
- * `getSessions`/`requestShutdown` are both omitted: there is no connection here to ask about
- * sessions or to shut down, so quitting happens immediately with no confirmation.
+ * start, or the UI itself crashed. It has no Quit button and registers nothing with the shell's
+ * exit flow, so the shell quits on Cmd+Q, the app menu and the window's close button natively.
+ * `message` is what the screen says: `NoAddressMessage`, or a `StartupFailure`.
  */
-export function StartupScreen({ message, failure, action }: StartupScreenProps): React.ReactElement {
+export function StartupScreen({ message }: { message: React.ReactNode }): React.ReactElement {
   const t = useT();
-  const { requestQuit, canQuit } = useAppExit();
   // Reachable from the keyboard while it scrolls, as a dialog's body is: the buttons sit at the end
   // of the content, so a long message has nothing between them and the top to take focus, and the
   // window itself never scrolls.
   const region = useFadeRegion({ label: t("startup.message") });
-  const quit = canQuit ? { label: t("common.quit"), onPress: () => void requestQuit() } : undefined;
 
   return (
     <div className="flex h-full flex-col">
@@ -59,30 +34,50 @@ export function StartupScreen({ message, failure, action }: StartupScreenProps):
             window. */}
         <main className={`flex min-h-0 flex-1 flex-col ${region.focused ? "ring-2 ring-focus ring-inset" : ""}`}>
           <FadedScroller region={region} className="flex min-h-0 flex-1 flex-col">
-            {failure ? (
-              <div className="m-auto w-full min-w-0 max-w-xl p-8">
-                {/* Quit stands beside the recovery as the second way out; with no recovery it is the one action. */}
-                <EmptyPanel
-                  tone="danger"
-                  icon={CircleAlert}
-                  headingLevel={1}
-                  message={failure.title}
-                  description={failure.description}
-                  action={action ? { label: action.label, variant: "primary", onPress: action.onSelect } : quit}
-                  secondaryAction={action ? quit : undefined}
-                  details={failure.details}
-                />
-              </div>
-            ) : (
-              <div className="m-auto flex w-full min-w-0 flex-col items-center gap-4 p-8">
-                <div className="w-full min-w-0 max-w-xl">{message}</div>
-                {quit && <Button onPress={quit.onPress}>{quit.label}</Button>}
-              </div>
-            )}
+            <div className="m-auto flex w-full min-w-0 flex-col items-center gap-4 p-8">
+              <div className="w-full min-w-0 max-w-xl">{message}</div>
+            </div>
           </FadedScroller>
         </main>
       </ContentPanel>
     </div>
+  );
+}
+
+/**
+ * A failure that is the whole page: the empty state's shape in the danger tone, its heading `title`, the line under it
+ * `description` in the application's own words, the `remedy` after that, and `details` (any further explanation, then
+ * the raw text) on a surface of its own under them (see "A whole subject that failed" in `docs/ui-accessibility.md`). It
+ * is the failure's only presentation, so the page announces its heading and `description`, inserted after the first
+ * paint. `action` is the failure's recovery, its primary button.
+ *
+ * Report issue stands after the recovery, or alone, built from `diagnostic`, the plain text of the failure. By default
+ * the failure is a possible bug (a crash): the remedy line already asks for the report, so the sentence about it only
+ * stands where there is no link to press. A `known` failure is one the application names and says what to do about
+ * (`title` is the Issue's English title): it is not called a bug, and its sentence stays above the raw text.
+ */
+export function StartupFailure({ failure, action, diagnostic, known }: {
+  failure: { title: React.ReactNode; description: React.ReactNode; remedy?: React.ReactNode; details: React.ReactNode };
+  action?: { label: string; onSelect: () => void };
+  diagnostic: string;
+  known?: { title: string };
+}): React.ReactElement {
+  const issue = useIssueReport([{ error: diagnostic, unexpected: true }], { size: "sm", known });
+  return (
+    <EmptyPanel
+      tone="danger"
+      icon={CircleAlert}
+      headingLevel={1}
+      message={failure.title}
+      description={failure.description}
+      remedy={failure.remedy}
+      announce
+      // After the first paint, so the alert is a change to the page rather than part of its first render.
+      announceDelayMs={0}
+      action={action ? { label: action.label, variant: "primary", onPress: action.onSelect } : undefined}
+      linkAction={issue.link}
+      details={<>{(known || !issue.link) && <p>{issue.guidance}</p>}{failure.details}</>}
+    />
   );
 }
 
@@ -92,28 +87,23 @@ export function StartupHeading({ children }: { children: React.ReactNode }): Rea
 }
 
 /** The screen for a daemon that failed to start, which the shell passed along as `?error=`: the failure in the
- * application's own words, with the daemon's own message under it. */
+ * application's own words, with the daemon's own message under it, which is also what its report is built from. */
 export function DaemonFailedScreen({ error }: { error: string }): React.ReactElement {
   const t = useT();
-  // Reported once per error: the alert's words are components that follow the language, so a change of language needs no new report.
-  useEffect(() => {
-    // The alert says it in the application's words; the raw text is its "Error details", on a surface of its own. A
-    // daemon that did not start is a known failure with its remedy in the body, not one to report as a bug.
-    errorAlerts.report({
-      message: error,
-      recovery: "none",
-      title: <Message id="startup.daemonFailed.title" />,
-      content: <div className="flex flex-col gap-4"><p><Message id="startup.daemonFailed.description" /></p><p><Message id="startup.daemonFailed.remedy" /></p></div>,
-      details: <DiagnosticBlock wrap tall>{error}</DiagnosticBlock>,
-    });
-  }, [error]);
   return (
     <StartupScreen
-      failure={{
-        title: t("startup.daemonFailed.title"),
-        description: t("startup.daemonFailed.remedy"),
-        details: <DiagnosticBlock>{error}</DiagnosticBlock>,
-      }}
+      message={
+        <StartupFailure
+          failure={{
+            title: t("startup.daemonFailed.title"),
+            description: t("startup.daemonFailed.description"),
+            remedy: t("startup.daemonFailed.remedy"),
+            details: <DiagnosticBlock>{error}</DiagnosticBlock>,
+          }}
+          diagnostic={error}
+          known={{ title: "The daemon failed to start" }}
+        />
+      }
     />
   );
 }
@@ -122,6 +112,12 @@ export function DaemonFailedScreen({ error }: { error: string }): React.ReactEle
 export function NoAddressMessage(): React.ReactElement {
   const t = useT();
   const code = (text: string) => <InlineReference monospace wrap unbroken>{text}</InlineReference>;
+  // The report describes the failure in fixed English rather than the screen's localized wording, which a report never
+  // carries.
+  const issue = useIssueReport(
+    [{ error: "The UI was given no daemon address or key to connect with.", unexpected: true }],
+    { size: "sm", known: { title: "No daemon address or key" } },
+  );
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <StartupHeading>{t("startup.noAddress.title")}</StartupHeading>
@@ -143,6 +139,8 @@ export function NoAddressMessage(): React.ReactElement {
           <Message id="startup.noAddress.proxy" params={{ proxyVar: code("OCTOBOARD_DAEMON_PORT"), key: code("?key="), keyVar: code("VITE_DAEMON_KEY") }} />
         </li>
       </ul>
+      <p>{issue.guidance}</p>
+      {issue.link && <div className="flex justify-center">{issue.link}</div>}
     </div>
   );
 }

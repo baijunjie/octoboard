@@ -67,6 +67,8 @@ export const zhHans: Translation<"other"> = {
   "startup.noAddress.env": "将 {portVar} 设为守护进程端口，{keyVar} 设为密钥。",
   "startup.noAddress.proxy": "启动开发服务器时，将 {proxyVar} 设为守护进程端口，通过代理连接；页面仍需通过 {key} 或 {keyVar} 提供密钥。",
   "startup.message": "说明",
+  "startup.report.prefilledGuidance": "如果按上述方法仍无法解决，请通过 {report} 提交 Issue，说明触发问题的操作步骤。",
+  "startup.report.manualGuidance": "如果按上述方法仍无法解决，请在浏览器中打开 {address} 报告问题，并说明触发问题的操作步骤。",
   "error.recovery.repository": "请选择包含 {git} 仓库的项目文件夹，或在{terminal}中为该文件夹初始化 {git}，然后刷新项目。",
   "error.recovery.trash": "请取消将目录移到废纸篓，仅移除项目关联；也可检查文件夹内容后手动移动。",
   "error.recovery.noCommits": "请在项目{terminal}创建首个提交，然后重试。",
