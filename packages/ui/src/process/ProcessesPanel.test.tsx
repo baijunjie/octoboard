@@ -3,6 +3,7 @@ import { act, useState } from "react";
 import { getInteractionModality, setInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { windowAttention } from "../components/windowTestSupport";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import { mountForTooltip } from "../components/tooltipTestSupport";
 import { DaemonRequestError } from "../daemon-client";
@@ -120,7 +121,10 @@ it("filters a project's trees by a session picked in a selector that starts empt
     id: null,
     trees: [tree("1:1"), tree("2:2", { session_id: second.id, command: "vite" }), tree("3:3", { session_id: undefined, command: "node kept.js" })],
   }));
+  expect(panel().querySelector('button[aria-haspopup="listbox"]')).toBeNull();
+  act(() => panel().querySelector<HTMLButtonElement>('button[aria-label="Filter by session"]')!.click());
   const trigger = panel().querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!;
+  expect(document.activeElement).toBe(trigger);
   expect(trigger.textContent).toBe("All sessions");
   expect(trigger.getAttribute("aria-label")).toBe("Filter by session");
   expect(rows()).toHaveLength(3);
@@ -141,6 +145,55 @@ it("filters a project's trees by a session picked in a selector that starts empt
   act(() => { trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "Backspace", bubbles: true })); });
   expect(trigger.textContent).toBe("All sessions");
   expect(rows()).toHaveLength(3);
+});
+
+
+it("hides an empty session filter on blur but keeps a selected session visible, including after clearing until focus leaves", async () => {
+  await mount({ project }, async () => ({ type: "processes_listed", id: null, trees: [tree("1:1")] }));
+  windowAttention();
+  const toggle = () => panel().querySelector<HTMLButtonElement>("button[aria-expanded]")!;
+  const trigger = () => panel().querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]');
+  act(() => toggle().click());
+  act(() => panel().querySelector<HTMLElement>('button[aria-label^="Keep "]')!.focus());
+  await act(async () => vi.advanceTimersByTime(20));
+  expect(trigger()).toBeNull();
+  act(() => toggle().click());
+  act(() => {
+    const native = panel().querySelector("select")!;
+    native.value = running.id;
+    native.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  act(() => panel().querySelector<HTMLElement>('button[aria-label^="Keep "]')!.focus());
+  await act(async () => vi.advanceTimersByTime(20));
+  expect(trigger()?.textContent).toBe("Fix search");
+  act(() => panel().querySelector<HTMLElement>('[data-slot="select-clear-button"]')!.click());
+  expect(trigger()?.textContent).toBe("All sessions");
+  expect(document.activeElement).toBe(trigger());
+  act(() => panel().querySelector<HTMLElement>('button[aria-label^="Keep "]')!.focus());
+  await act(async () => vi.advanceTimersByTime(20));
+  expect(trigger()).toBeNull();
+});
+
+it("closes and clears the session filter through its toggle and returns focus there", async () => {
+  await mount({ session: running }, async () => ({ type: "processes_listed", id: null, trees: [tree("1:1"), tree("2:2", { session_id: second.id })] }));
+  const trigger = panel().querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!;
+  expect(trigger.textContent).toBe("Fix search");
+  act(() => trigger.focus());
+  act(() => panel().querySelector<HTMLButtonElement>('button[aria-label="Hide session filter"]')!.click());
+  expect(panel().querySelector('button[aria-haspopup="listbox"]')).toBeNull();
+  expect(rows()).toHaveLength(2);
+  expect(document.activeElement).toBe(panel().querySelector('button[aria-label="Filter by session"]'));
+});
+
+it("keeps an empty session filter when the window loses focus", async () => {
+  await mount({ project }, async () => ({ type: "processes_listed", id: null, trees: [] }));
+  const attend = windowAttention();
+  attend(false);
+  act(() => panel().querySelector<HTMLButtonElement>('button[aria-label="Filter by session"]')!.click());
+  const trigger = panel().querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!;
+  act(() => trigger.blur());
+  await act(async () => vi.advanceTimersByTime(20));
+  expect(panel().querySelector('button[aria-haspopup="listbox"]')).toBe(trigger);
 });
 
 it("sets the panel's explanation and the Project processes note in one style", async () => {
@@ -166,7 +219,7 @@ it("groups a project's trees under the sessions' titles and puts those no sessio
   expect(headings).toEqual(["Session processes", "Project processes"]);
   expect([...panel().querySelectorAll("h4")].map((heading) => heading.textContent)).toEqual(["Fix search", "Add filters"]);
   expect(panel().textContent).toContain("These processes belong to no session. They are never stopped automatically; only you can stop them.");
-  const group = [...panel().querySelectorAll("section")].find((section) => section.querySelector(":scope > h3")?.textContent === "Project processes")!;
+  const group = [...panel().querySelectorAll("section")].find((section) => section.querySelector(":scope > [data-sticky-heading] > h3")?.textContent === "Project processes")!;
   expect([...group.querySelectorAll("li")].map((row) => row.textContent)).toEqual([expect.stringContaining("node kept.js"), expect.stringMatching(/node old\.js.*Directory deleted/)]);
 });
 
@@ -464,7 +517,7 @@ it("leaves focus alone after a stop opened and confirmed with the pointer, with 
   expect(getInteractionModality()).toBe("pointer");
 });
 
-it("hands focus to the panel's landing, the session filter of a project, after the last row is kept", async () => {
+it("hands focus to the panel's landing, the session filter toggle of a project, after the last row is kept", async () => {
   const kept = new Set<string>();
   await mount({ project }, async (body) => {
     if (body.type === "keep_processes") {
@@ -478,7 +531,7 @@ it("hands focus to the panel's landing, the session filter of a project, after t
   await confirmStop();
   await settleFocus();
   expect(rows()).toHaveLength(0);
-  expect(document.activeElement).toBe(panel().querySelector('button[aria-haspopup="listbox"]'));
+  expect(document.activeElement).toBe(panel().querySelector('button[aria-label="Filter by session"]'));
 });
 
 it("keeps the confirmation, the toast and the focus hand-over when a refresh takes the tree out while the stop is in flight", async () => {
@@ -498,7 +551,7 @@ it("keeps the confirmation, the toast and the focus hand-over when a refresh tak
   await settleFocus();
   expect(daemon.toastNotice).toHaveBeenCalledWith("Stopped the process.");
   expect(confirmation()).toBeNull();
-  expect(document.activeElement).toBe(panel().querySelector('button[aria-haspopup="listbox"]'));
+  expect(document.activeElement).toBe(panel().querySelector('button[aria-label="Filter by session"]'));
 });
 
 const tryAgain = () => [...panel().querySelectorAll("button")].find((candidate) => candidate.textContent === "Try again")!;
@@ -515,11 +568,11 @@ it("gives the failed first list's place to the loading line when Try again start
   await act(async () => tryAgain().click());
   expect(panel().textContent).toContain("Loading processes");
   expect(panel().textContent).not.toContain("Could not list the processes");
-  expect(document.activeElement).toBe(panel().querySelector('button[aria-haspopup="listbox"]'));
+  expect(document.activeElement).toBe(panel().querySelector('button[aria-label="Filter by session"]'));
   await act(async () => answer({ type: "processes_listed", id: null, trees: [tree("1:1")] }));
   await settleFocus();
   expect(rows()).toHaveLength(1);
-  expect(document.activeElement).toBe(panel().querySelector('button[aria-haspopup="listbox"]'));
+  expect(document.activeElement).toBe(panel().querySelector('button[aria-label="Filter by session"]'));
 });
 
 it("announces a retry that fails again as a new failure, once the focus move it came with has been spoken", async () => {

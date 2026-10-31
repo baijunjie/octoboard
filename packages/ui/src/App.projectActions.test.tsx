@@ -236,7 +236,9 @@ it.each([false, true])("opens the project's Processes panel from Open panel, lis
   await openPanel("Processes");
   expect(toggle("Hide processes panel")).not.toBeNull();
   expect(vi.mocked(daemon.request).mock.calls.filter(([body]) => body.type === "list_processes").at(-1)).toEqual([{ type: "list_processes", project_id: project.id }]);
-  expect(document.body.textContent).toContain("All sessions");
+  const panel = document.getElementById("panel-processes")!;
+  expect(panel.querySelector('button[aria-label="Filter by session"]')).not.toBeNull();
+  expect(panel.querySelector('button[aria-haspopup="listbox"]')).toBeNull();
   for (const command of ["vite of the selected", "vite of another", "vite of the project"]) expect(document.body.textContent).toContain(command);
   expect(vi.mocked(daemon.request).mock.calls.filter(([body]) => body.type === "create_shell_terminal")).toEqual([]);
 });

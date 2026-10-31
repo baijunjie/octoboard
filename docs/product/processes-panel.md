@@ -10,9 +10,10 @@ stop or keep them. Both kinds of owner have it:
 - **a console session's stack**, where it lists the console session's own trees; it is stacked under the report panel.
 
 It is **closed** until the user opens it, from its toggle in the top bar, whose icon is a square with a pulse line
-across it and whose label is "Show processes panel" or "Hide processes panel" (see "The panel toggles in the top bar"
-in `docs/product/right-pane-panels.md`). Its header's title is "Processes", with nothing beside it and no Maximize
-panel; for assistive technology the panel is a region named "Processes".
+across it and whose label is "Show processes panel" or "Hide processes panel" (see "The panel toggles in the top bar" in
+`docs/product/right-pane-panels.md`). Its header's title is "Processes". A project's panel has a session-filter toggle
+in the header (see "The session filter" below); neither kind has Maximize panel. For assistive technology the panel is a
+region named "Processes".
 
 ## What it lists
 
@@ -27,9 +28,11 @@ each shown only while it has trees:
   note saying that they belong to no session, are never stopped automatically, and only the user can stop them.
   Kept trees and trees left behind are listed alike.
 
-The category headings stay at the top of the scrolling list, below the session filter, while their category passes
-through it; the next category's heading replaces the previous one. The explanatory notes and session group headings
-scroll with their contents.
+Each category heading and its explanatory note stay together at the top of the scrolling list while their category
+passes through it; the next category's heading and note replace the previous pair. The first category starts close below
+the header, or below the session filter while it is shown. Its note sits directly beneath the heading. Category headings
+are 14px semibold, smaller than the 16px semibold panel title. Session group headings use the same 14px size in medium
+weight and the normal foreground colour, and scroll with their contents.
 
 **With a session filtered on**, only that session's trees are listed, with no heading, and no project processes. A
 note leads the nonempty list, saying that its processes stop automatically when the session ends. **A console
@@ -46,17 +49,24 @@ with a session filtered on or in a console session's panel, that nothing the ses
 
 ## The session filter
 
-A project's panel has a **session filter** under its header, a select with no visible label (its name for assistive
-technology says it filters by session). Left empty it shows the placeholder "All sessions" and the panel lists every
-session's trees and the project processes; picking a session narrows the list to that session's trees, and the
-select's clear button goes back to all of them. It offers the project's sessions that are not archived, by displayed
-name; an archived session only while it is the one filtered on. A console session's panel has no filter.
+A project's panel has a **session filter**, a select under its header with no visible label (its name for assistive
+technology says it filters by session). With no session filtered on the field is hidden by default. The header's funnel
+button reveals it and focuses the select. Left empty it shows the placeholder "All sessions" and the panel lists every
+session's trees and the project processes. Picking a session narrows the list to that session's trees; a selected
+session keeps the field visible, including after focus leaves it.
+
+The select's clear button returns to all sessions and leaves the empty field visible while it holds focus. Moving focus
+away from an empty field hides it; opening its choices does not count as leaving it. While the field is shown, the
+header's toggle is selected and shows a crossed funnel: pressing it clears the selection and closes the field together.
+
+The select offers the project's sessions that are not archived, by displayed name; an archived session only while it is
+the one filtered on. A console session's panel has no filter or filter toggle.
 
 **The filter follows the sidebar's selection**: whenever the session selected in the sidebar changes, the filter is set
-to that session when it belongs to the project, and emptied otherwise. Opening the panel from **Open panel** in the
-project's action menu (see "Opening a panel from a project's action menu" in `docs/product/right-pane-panels.md`) leaves
-it empty, whatever session is selected. A choice made in the filter, clearing it included, lasts until the sidebar's
-selection changes again or the right pane passes to another owner.
+to that session when it belongs to the project, showing the field automatically, and emptied otherwise. Opening the
+panel from **Open panel** in the project's action menu (see "Opening a panel from a project's action menu" in
+`docs/product/right-pane-panels.md`) leaves it empty, whatever session is selected. A choice made in the filter,
+clearing it included, lasts until the sidebar's selection changes again or the right pane passes to another owner.
 
 ## A tree's card
 
@@ -124,11 +134,11 @@ own announcement has finished. Then the list is read again:
 A reading that falls due while the window is hidden waits until it is shown again.
 
 **When the first reading fails**, the panel's body shows an empty-state failure (see "Failures shown on the screen" in
-`docs/product/error-alerts.md`) saying the processes could not be listed because the list did not come from
-Octoboard's background service, with **Try again**; the list is not read again until Try again is pressed. The session
-filter stays above it. Pressing Try again gives the failure's place to the loading line while the answer is awaited,
-and where focus was on Try again it goes first to where `F6` lands in the panel; a retry that fails again shows the
-failure, and announces it, afresh.
+`docs/product/error-alerts.md`) saying the processes could not be listed because the list did not come from Octoboard's
+background service, with **Try again**; the list is not read again until Try again is pressed. A shown session filter
+stays above it, and the header's filter toggle remains available. Pressing Try again gives the failure's place to the
+loading line while the answer is awaited, and where focus was on Try again it goes first to where `F6` lands in the
+panel; a retry that fails again shows the failure, and announces it, afresh.
 
 **When a later reading fails**, the last list stays, under an amber warning that the list could not be refreshed and
 the processes shown may be out of date; readings go on, and the warning goes with the next one that succeeds.

@@ -702,6 +702,7 @@ it("shows all project processes when opened from a project with no session selec
   await pressElement(toggle("Show processes panel"));
   const panel = document.getElementById("panel-processes")!;
   expect(panel.querySelector("h2")?.textContent).toBe("Processes");
-  expect(panel.textContent).toContain("All sessions");
+  expect(panel.querySelector('button[aria-label="Filter by session"]')).not.toBeNull();
+  expect(panel.querySelector('button[aria-haspopup="listbox"]')).toBeNull();
   expect(panel.textContent).toContain("vite all sessions");
 });

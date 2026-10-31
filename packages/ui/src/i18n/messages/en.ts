@@ -2666,6 +2666,7 @@ export const en = {
   "titleBar.processes.hide": "Hide processes panel",
   "processes.allSessions": "All sessions",
   "processes.sessionFilter": "Filter by session",
+  "processes.sessionFilter.hide": "Hide session filter",
   "processes.panelMessage": "Processes started by a session stop automatically when the session ends.",
   "processes.stopTitle": "Stop process",
   "processes.stopMessage": "This process and its child processes will be stopped.",

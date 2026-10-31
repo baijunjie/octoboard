@@ -16,6 +16,7 @@ export function IconToggle({
   onChange,
   expanded,
   inHeader,
+  landing,
   ref,
   children,
 }: {
@@ -27,6 +28,8 @@ export function IconToggle({
   expanded?: boolean;
   /** Joins the section heading's arrow-key walk instead of the tab order. */
   inHeader?: boolean;
+  /** Makes the toggle where F6 lands while the region it reveals is hidden. */
+  landing?: boolean;
   /** The button itself, for a region that has to hand keyboard focus back to it as it goes. */
   ref?: React.Ref<HTMLButtonElement>;
   /** The icon of the current state. */
@@ -44,6 +47,7 @@ export function IconToggle({
         className={`icon-toggle row-icon-control ${ROW_ICON_BUTTON_CLASS}`}
         aria-label={label}
         aria-expanded={expanded}
+        data-region-landing={landing || undefined}
         isSelected={isSelected}
         onChange={onChange}
         preventFocusOnPress

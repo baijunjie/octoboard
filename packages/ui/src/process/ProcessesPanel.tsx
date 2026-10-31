@@ -1,5 +1,5 @@
-import { SquareActivity } from "lucide-react";
-import React, { useEffect, useId, useRef, useState } from "react";
+import { Funnel, FunnelX, SquareActivity } from "lucide-react";
+import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
 import { afterCollectionFocus } from "../components/afterCollectionFocus";
@@ -10,6 +10,7 @@ import { errorDetails } from "../components/errorParts";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { focusFellToPage, focusLanding } from "../components/regionFocus";
 import { PaneFailure } from "../components/PaneFailure";
+import { IconToggle } from "../components/IconToggle";
 import { PanelHeader } from "../components/PanelHeader";
 import { ProcessCommand, ProcessTreeDetails, StopGlyph } from "../components/ProcessTreeDetails";
 import { FadedScroller, useFadeRegion } from "../components/scrollFade";
@@ -44,14 +45,40 @@ const ACTIONS = {
   keep: { title: "processes.keepTitle", message: "processes.keepMessage", confirm: "processes.keep", failedTitle: "processes.keepFailedTitle", done: "processes.kept", send: keepProcesses },
 } as const satisfies Record<ProcessAction, { title: PlainMessageKey; message: PlainMessageKey; confirm: PlainMessageKey; failedTitle: PlainMessageKey; done: PlainMessageKey; send: unknown }>;
 
-const CATEGORY_HEADING_HEIGHT = 36;
-
 function ProcessesContent({ data }: { data: NonNullable<ReturnType<typeof useProcessPanelContext>> }): React.ReactElement {
   const t = useT();
   const { toastNotice } = useDaemon();
   const { trees, error, retry, settle } = data;
   const scrollRegion = useFadeRegion({ label: t("panel.processes.name") });
   const bodyRef = useRef<HTMLDivElement>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [categoryHeadingHeight, setCategoryHeadingHeight] = useState(0);
+  // Notes wrap with the pane width and language; keep focused rows below the whole pinned header.
+  useLayoutEffect(() => {
+    const headings = bodyRef.current?.querySelectorAll<HTMLElement>("[data-sticky-heading]");
+    const scroller = scrollerRef.current;
+    if (!headings || !scroller) return;
+    const measure = () => {
+      const top = scroller.getBoundingClientRect().top;
+      const heading = Array.from(headings).find((element) => element.getBoundingClientRect().bottom > top);
+      setCategoryHeadingHeight(heading?.getBoundingClientRect().height ?? 0);
+    };
+    const observer = new ResizeObserver(measure);
+    headings.forEach((heading) => observer.observe(heading));
+    scroller.addEventListener("scroll", measure, { passive: true });
+    measure();
+    return () => {
+      observer.disconnect();
+      scroller.removeEventListener("scroll", measure);
+    };
+  });
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterToggle = useRef<HTMLButtonElement>(null);
+  const filterShown = filterOpen || data.sessionId !== undefined;
+  const toggleFilter = (open: boolean) => {
+    setFilterOpen(open);
+    if (!open) data.selectSession(undefined);
+  };
   const failed = trees === undefined && error !== undefined;
   const grouped = data.projectId !== undefined && data.sessionId === undefined;
   const [selected, setSelected] = useState<{ tree: ProcessTree; action: ProcessAction; nextId?: string }>();
@@ -114,10 +141,14 @@ function ProcessesContent({ data }: { data: NonNullable<ReturnType<typeof usePro
   };
   return (
     <>
-      <PanelHeader title={t("panel.processes.name")} />
-      {data.projectId && <ProcessSessionSelect projectId={data.projectId} value={data.sessionId} onChange={data.selectSession} landing={!failed} />}
+      <PanelHeader title={t("panel.processes.name")} actions={data.projectId && (
+        <IconToggle ref={filterToggle} landing={!failed && !filterShown} label={t(filterShown ? "processes.sessionFilter.hide" : "processes.sessionFilter")} isSelected={filterShown} expanded={filterShown} onChange={toggleFilter}>
+          {filterShown ? <FunnelX aria-hidden="true" className="size-4" /> : <Funnel aria-hidden="true" className="size-4" />}
+        </IconToggle>
+      )} />
+      {data.projectId && <ProcessSessionSelect projectId={data.projectId} value={data.sessionId} onChange={(id) => { setFilterOpen(true); data.selectSession(id); }} landing={!failed} shown={filterShown} opened={filterOpen} onEmptyBlur={() => setFilterOpen(false)} toggleRef={filterToggle} />}
       <div ref={bodyRef} className={`flex min-h-0 flex-1 flex-col ${scrollRegion.focused ? "ring-2 ring-inset ring-focus" : ""}`}>
-        <FadedScroller region={scrollRegion} stickyHeadingHeight={grouped && trees?.length ? CATEGORY_HEADING_HEIGHT : undefined} className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-(--pane-inset)">
+        <FadedScroller ref={scrollerRef} region={scrollRegion} stickyHeadingHeight={grouped && trees?.length ? categoryHeadingHeight : undefined} className={`flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto ${grouped && trees?.length ? "px-(--pane-inset) pb-4" : "p-(--pane-inset)"}`}>
           {failed ? (
             <PaneFailure title={t("processes.listFailedTitle")} summary={t("processes.listFailed")} details={errorDetails(error)} onRetry={retryList} announce announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} landing />
           ) : (
@@ -228,10 +259,10 @@ function ProcessCategory({ title, note, children }: { title: string; note: strin
   const headingId = useId();
   return (
     <section aria-labelledby={headingId} className="flex min-w-0 shrink-0 flex-col gap-2">
-      <h3 id={headingId} data-sticky-heading="" className="sticky top-[calc(-1*var(--pane-inset))] z-3 -mx-(--pane-inset) flex h-[36px] shrink-0 items-center bg-panel-sidebar px-(--pane-inset) text-sm font-semibold">
-        {title}
-      </h3>
-      <p className={NOTE_CLASS}>{note}</p>
+      <div data-sticky-heading="" className="sticky top-0 z-3 -mx-(--pane-inset) flex shrink-0 flex-col gap-1 bg-panel-sidebar px-(--pane-inset) py-3">
+        <h3 id={headingId} className="text-sm font-semibold">{title}</h3>
+        <p className={NOTE_CLASS}>{note}</p>
+      </div>
       {children}
     </section>
   );
@@ -276,7 +307,7 @@ function TreeGroup({ group, acting, onStop, onKeep }: {
   const heading = session ? sessionDisplayTitle(t, session) : t("processes.sessionUnknown");
   return (
     <section aria-labelledby={headingId} className="flex min-w-0 flex-col gap-2">
-      <h4 id={headingId} className="text-sm font-semibold">
+      <h4 id={headingId} className="text-sm font-medium">
         <FadeOverflow as="span" dir="auto" className="block" titleWhenClipped={heading}>{heading}</FadeOverflow>
       </h4>
       <TreeList trees={group.trees} acting={acting} keepable onStop={onStop} onKeep={onKeep} labelledBy={headingId} />
