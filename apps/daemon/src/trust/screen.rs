@@ -6,15 +6,15 @@ use super::*;
 
 /// One agent's folder-trust confirmation as [`normalise`] leaves its text, and how it is pressed.
 pub(super) struct Screen {
-    /// The screen as first drawn: these pieces, in this order, anything between them. The first
-    /// drawing is the only form the screen has at its start, so nothing looser is accepted.
-    pub(super) first_draw: &'static [&'static str],
-    /// The option that trusts the folder and the one that declines it: both for reading where a
+    /// The known first drawings: any one sequence of pieces, in order, anything between them.
+    /// Only complete first drawings are accepted, including across CLI versions.
+    pub(super) first_draw: &'static [&'static [&'static str]],
+    /// The option that trusts the folder and the options that decline it: both for reading where a
     /// cursor is, and for telling whether the screen is still drawn after a key the person typed
     /// ([`Self::replaced_in`]); only the one that trusts after Octoboard's own key
     /// ([`Self::gone_in`]), since a later screen can say the same words as the one that declines.
     pub(super) accept: &'static str,
-    pub(super) decline: &'static str,
+    pub(super) decline: &'static [&'static str],
     /// The glyph in front of the option the cursor is on, for a screen that has a cursor.
     pub(super) cursor: Option<char>,
     pub(super) press: Press,
@@ -75,9 +75,9 @@ pub(super) enum Press {
 
 /// Claude Code 2.1.289: the cursor on "No, exit", then "Yes, I trust this folder".
 pub(super) const CLAUDE: Screen = Screen {
-    first_draw: &["\u{276F}No,exitYes,Itrustthisfolder"],
+    first_draw: &[&["\u{276F}No,exitYes,Itrustthisfolder"]],
     accept: "Yes,Itrustthisfolder",
-    decline: "No,exit",
+    decline: &["No,exit"],
     cursor: Some('\u{276F}'),
     press: Press::DownThenEnter,
     next_screen: None,
@@ -90,14 +90,22 @@ pub(super) const CLAUDE: Screen = Screen {
     waits_for_paste_mode: true,
 };
 
-/// Codex 0.161.0: the question, then "› 1. Trust and continue" and "2. Quit". Codex redraws only
+/// Codex trust screens offer "› 1. Trust and continue" and either "2. Quit" (0.161.0) or
+/// "2. Back to Agent Command Center" (the folder-access form). Codex redraws only
 /// the cells that changed, so its text can lose characters wherever the frame before held the
 /// same one; only phrases measured intact in its first drawing are matched. Its hook-review modal
 /// ("Trust all and continue") holds neither piece.
 pub(super) const CODEX: Screen = Screen {
-    first_draw: &["Trustthisfolder?", "\u{203A}1.Trustandcontinue2.Quit"],
+    first_draw: &[
+        &["Trustthisfolder?", "\u{203A}1.Trustandcontinue2.Quit"],
+        &[
+            "Folderaccess",
+            "Trustthisfolder?",
+            "\u{203A}1.Trustandcontinue2.BacktoAgentCommandCenter",
+        ],
+    ],
     accept: "1.Trustandcontinue",
-    decline: "2.Quit",
+    decline: &["2.Quit", "2.BacktoAgentCommandCenter"],
     cursor: Some('\u{203A}'),
     press: Press::Enter,
     // Its banner, ">_ OpenAI Codex (v…)", drawn whole over the screen it replaces.
@@ -112,12 +120,12 @@ pub(super) const CODEX: Screen = Screen {
 
 /// Grok Build 1.0.50: the question, then "Yes, proceed y" and "No, quit n", with no cursor.
 pub(super) const GROK: Screen = Screen {
-    first_draw: &[
+    first_draw: &[&[
         "Doyoutrustthecontentsofthisdirectory?",
         "Yes,proceedyNo,quitn",
-    ],
+    ]],
     accept: "Yes,proceedy",
-    decline: "No,quitn",
+    decline: &["No,quitn"],
     cursor: None,
     press: Press::Yes,
     next_screen: None,
@@ -211,13 +219,15 @@ impl Screen {
     /// Whether this output holds the screen as it is first drawn.
     pub(super) fn is_shown_in(&self, raw: &[u8]) -> bool {
         let text = normalise(raw);
-        let mut rest = text.as_str();
-        self.first_draw.iter().all(|piece| match rest.find(piece) {
-            Some(at) => {
-                rest = &rest[at + piece.len()..];
-                true
-            }
-            None => false,
+        self.first_draw.iter().any(|drawing| {
+            let mut rest = text.as_str();
+            drawing.iter().all(|piece| match rest.find(piece) {
+                Some(at) => {
+                    rest = &rest[at + piece.len()..];
+                    true
+                }
+                None => false,
+            })
         })
     }
 
@@ -242,7 +252,11 @@ impl Screen {
     /// option that trusts.
     fn last_drawn(&self, text: &str) -> Option<usize> {
         std::iter::once(self.accept)
-            .chain(self.first_draw.iter().copied())
+            .chain(
+                self.first_draw
+                    .iter()
+                    .flat_map(|drawing| drawing.iter().copied()),
+            )
             .filter_map(|piece| text.rfind(piece))
             .max()
     }
@@ -264,7 +278,12 @@ impl Screen {
             return false;
         };
         self.last_drawn(&text)
-            .max(text.rfind(self.decline))
+            .max(
+                self.decline
+                    .iter()
+                    .filter_map(|piece| text.rfind(piece))
+                    .max(),
+            )
             .is_none_or(|last| last < next)
     }
 
@@ -276,7 +295,7 @@ impl Screen {
         let glyph = self.cursor?;
         let text = normalise(raw);
         let after = &text[text.rfind(glyph)? + glyph.len_utf8()..];
-        if after.starts_with(self.decline) {
+        if self.decline.iter().any(|piece| after.starts_with(piece)) {
             Some(Cursor::Decline)
         } else if after.starts_with(self.accept) {
             Some(Cursor::Accept)

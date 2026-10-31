@@ -24,6 +24,9 @@ const CODEX_SCREEN: &[u8] = include_bytes!("../../testdata/codex_trust_screen.bi
 const CODEX_AFTER_DOWN: &[u8] = include_bytes!("../../testdata/codex_trust_after_down.bin");
 const CODEX_DISMISSED: &[u8] = include_bytes!("../../testdata/codex_trust_dismissed.bin");
 const CODEX_HOOK_REVIEW: &[u8] = include_bytes!("../../testdata/codex_hook_review.bin");
+// Visible text transcribed from the user's folder-access screenshot; CLI version unknown.
+// Its provenance and the unavailable terminal bytes are recorded beside the fixture.
+const CODEX_FOLDER_ACCESS: &[u8] = include_bytes!("../../testdata/codex_folder_access_screen.txt");
 
 // What Grok Build 1.0.50 printed in a folder holding an `AGENTS.md` it had not been told to
 // trust: the confirmation as first drawn, and 2 KiB of the logo animation it keeps drawing
@@ -53,6 +56,7 @@ fn each_agents_screen_is_recognised_in_its_first_drawing_alone() {
     for (screen, output, shown) in [
         (&CLAUDE, SCREEN, true),
         (&CODEX, CODEX_SCREEN, true),
+        (&CODEX, CODEX_FOLDER_ACCESS, true),
         (&GROK, GROK_SCREEN, true),
         (&CODEX, CODEX_AFTER_DOWN, false),
         (&CODEX, CODEX_DISMISSED, false),
@@ -72,6 +76,31 @@ fn each_agents_screen_is_recognised_in_its_first_drawing_alone() {
     }
 }
 
+/// The new screen needs its heading, question and complete options in order. Mentioning the
+/// choices in prose, or a partly drawn option, must not authorise a key.
+#[test]
+fn codex_folder_access_needs_its_complete_first_drawing() {
+    let screen = std::str::from_utf8(CODEX_FOLDER_ACCESS).unwrap();
+    for piece in [
+        "Folder access",
+        "Trust this folder?",
+        "› 1. Trust and continue",
+        "2. Back to Agent Command Center",
+    ] {
+        assert!(
+            !CODEX.is_shown_in(screen.replace(piece, "").as_bytes()),
+            "{piece}"
+        );
+    }
+    for text in [
+        "Folder access: Trust this folder? › 1. Trust and continue or 2. Back to Agent Command Center",
+        "Folder access Trust this folder? › 1. Trust all and continue 2. Back to Agent Command Center",
+        "Folder access Trust this folder? › 1. Trust and continue 2. Back to Agent Command",
+    ] {
+        assert!(!CODEX.is_shown_in(text.as_bytes()), "{text}");
+    }
+}
+
 /// After Octoboard's own Enter the screen is gone once readable text that is not the screen's
 /// own is drawn — a later screen may still say "No, exit". After keys the person typed, Codex's
 /// screen counts as replaced only once its next screen is drawn after the last drawing of its own.
@@ -83,6 +112,8 @@ fn a_screen_is_gone_only_when_something_else_is_drawn_in_its_place() {
     let other_text = &b"some other text"[..];
     let down_then_enter = [CODEX_AFTER_DOWN, CODEX_DISMISSED].concat();
     let drawn_again = [CODEX_DISMISSED, CODEX_AFTER_DOWN].concat();
+    let folder_access_again = [CODEX_DISMISSED, CODEX_FOLDER_ACCESS].concat();
+    let back_after_banner = [CODEX_DISMISSED, b"2. Back to Agent Command Center"].concat();
     for (screen, output, gone, replaced) in [
         (&CODEX, CODEX_DISMISSED, true, true),
         (&CODEX, &down_then_enter[..], false, true),
@@ -96,6 +127,10 @@ fn a_screen_is_gone_only_when_something_else_is_drawn_in_its_place() {
         (&CODEX, other_text, true, false),
         (&CODEX, IGNORED_KEY, false, false),
         (&CODEX, CODEX_AFTER_DOWN, false, false),
+        (&CODEX, CODEX_FOLDER_ACCESS, false, false),
+        (&CODEX, &folder_access_again[..], false, false),
+        (&CODEX, &back_after_banner[..], true, false),
+        (&CODEX, &b"Folder access"[..], false, false),
         (&CLAUDE, DISMISSED, true, true),
         (
             &CLAUDE,
@@ -126,6 +161,13 @@ fn codexs_cursor_is_read_off_its_latest_redraw_and_grok_has_none() {
         Some(Cursor::Decline)
     );
     assert_eq!(GROK.cursor_on(GROK_SCREEN), None);
+    assert_eq!(CODEX.cursor_on(CODEX_FOLDER_ACCESS), Some(Cursor::Accept));
+    let moved = [
+        CODEX_FOLDER_ACCESS,
+        "› 2. Back to Agent Command Center".as_bytes(),
+    ]
+    .concat();
+    assert_eq!(CODEX.cursor_on(&moved), Some(Cursor::Decline));
 }
 
 /// A fixture's path as a shell script names it, quoted.
@@ -351,6 +393,7 @@ fn the_screen_is_sighted_once_however_it_is_cut_into_reads() {
     for (agent, screen, after) in [
         (Agent::Claude, SCREEN, AFTER_DOWN),
         (Agent::Codex, CODEX_SCREEN, CODEX_AFTER_DOWN),
+        (Agent::Codex, CODEX_FOLDER_ACCESS, CODEX_AFTER_DOWN),
         (Agent::Grok, GROK_SCREEN, GROK_ANIMATION),
     ] {
         for size in [1, 3, 7, 200, screen.len()] {
@@ -958,6 +1001,87 @@ async fn a_consented_project_is_answered_without_a_prompt() {
     while let Ok(event) = events.try_recv() {
         assert!(!matches!(event, Event::TrustPrompt { .. }));
     }
+}
+
+/// The screenshot's first drawing enters the same consent flow as the captured older screen:
+/// a project without consent raises its hand and asks; a consented project is pressed directly.
+#[tokio::test]
+async fn codex_folder_access_asks_and_raises_the_hand_only_without_consent() {
+    for consent in [false, true] {
+        let (state, dir) = state_with_project("codex-folder-access");
+        state
+            .store
+            .set_project_trust_consent("project-1", consent)
+            .unwrap();
+        let mut events = state.subscribe();
+        let mut record = session("s", Agent::Codex, Role::Project, Some("project-1"));
+        record.status = SessionStatus::Working;
+        let script = codex_script(Path::new("%RECEIVED%"))
+            .replace("codex_trust_screen.bin", "codex_folder_access_screen.txt");
+        let (live, received) = start(&state, &dir, record, &script);
+        screen_printed(&live).await;
+        on_sighting(&state, &live).await.unwrap();
+
+        let mut prompted = false;
+        while let Ok(event) = events.try_recv() {
+            prompted |= matches!(event, Event::TrustPrompt { session, agent: Agent::Codex, .. } if session == "s");
+        }
+        assert_eq!(prompted, !consent, "consent {consent}");
+        if !consent {
+            assert_eq!(
+                state
+                    .wire_session(state.session_record("s").unwrap())
+                    .status,
+                SessionStatus::WaitingUser
+            );
+            assert!(live.trust.holds_writes());
+            assert!(!live.trust.answered.load(Ordering::Acquire));
+            assert!(sent(&received).is_empty());
+            confirm(&state, "s", false, false).await.expect("confirmed");
+        }
+        assert_eq!(sent(&received), ENTER);
+        assert!(!live.trust.holds_writes());
+        assert_eq!(
+            state
+                .wire_session(state.session_record("s").unwrap())
+                .status,
+            SessionStatus::Working
+        );
+    }
+}
+
+/// A cursor redraw onto the new decline option stops an automatic press and leaves the hand up.
+#[tokio::test]
+async fn codex_folder_access_on_the_decline_option_is_never_pressed() {
+    let (state, dir) = state_with_project("codex-folder-access-decline");
+    let script = [
+        load(&[("SCREEN", "codex_folder_access_screen.txt")]),
+        show("SCREEN"),
+        "printf '\n› 2. Back to Agent Command Center'".to_string(),
+        take(1, "'%RECEIVED%'"),
+        "sleep 30".to_string(),
+    ]
+    .join("; ");
+    let record = session("s", Agent::Codex, Role::Project, Some("project-1"));
+    let (live, received) = start(&state, &dir, record, &script);
+    screen_printed(&live).await;
+    let err = answer_off_the_runtime(&state, live.clone())
+        .await
+        .expect_err("decline is not pressed");
+    let coded = err.downcast_ref::<CodedError>().unwrap();
+    assert_eq!(coded.code, error_code::TRUST_ANSWER_FAILED);
+    assert_eq!(
+        coded.params["reason_code"],
+        trust_reason::CURSOR_NOT_AT_START
+    );
+    assert!(sent(&received).is_empty());
+    assert_eq!(
+        state
+            .wire_session(state.session_record("s").unwrap())
+            .status,
+        SessionStatus::WaitingUser
+    );
+    assert!(live.trust.holds_writes());
 }
 
 /// A go-ahead that names a session which is not a running project session at its own screen
