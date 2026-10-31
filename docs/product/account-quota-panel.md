@@ -34,6 +34,9 @@ behaves" in `docs/product/labels-and-tooltips.md`), at its own width, with its c
   `docs/product/labels-and-tooltips.md`; what follows them on the name line — the Disabled and Limit reached badges, a
   failure mark, how long ago the reading was taken — moves to the next line when it does not fit beside them. The panel
   shows no directories and offers nothing to edit.
+- **A Codex account holding a usage limit reset** shows, under its meters, how many it holds with when the next
+  expires, and a **Redeem reset** button, which closes the panel and opens the confirmation that redeems one (see
+  "Where resets are shown" in `docs/product/usage-limit-resets.md`).
 - The list of accounts is at most 384 px high, or 60% of the window's height where that is less, and the panel is as
   tall as the tallest agent's list, so choosing a tab with fewer accounts never moves the tab strip from under the
   pointer (which would close a panel opened by hover). Beyond that height a list scrolls and fades at its edges, and

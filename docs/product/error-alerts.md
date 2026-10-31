@@ -544,6 +544,7 @@ acknowledgement button, instead of the step naming where to go:
 | An account problem (`unknown_account`, `grok_home_not_initialized`) | **Manage accounts** | Settings on Agent accounts |
 | An account that is turned off (`account_disabled`) | **Manage accounts** | Settings on Agent accounts, where it can be turned back on (see "Turning an account off" in `docs/product/agent-accounts.md`) |
 | An account that is not logged in (`account_not_signed_in`) | **Manage accounts** | Settings on Agent accounts, where it can be logged in to (see "An account that is not logged in" in `docs/product/account-quotas.md`) |
+| A usage limit reset refused because the account is not logged in (`reset_credit_not_signed_in`) | **Manage accounts** | Settings on Agent accounts, where it can be logged in to before the reset is redeemed again (see "How a redeem ends" in `docs/product/usage-limit-resets.md`) |
 | The added agents not being as the change expected (`agent_already_added`, `agent_order_invalid`) | **Manage accounts** | Settings on Agent accounts |
 
 Pressing the button acknowledges the alert and opens Settings there, above whatever dialog was open; when Settings is

@@ -1,7 +1,7 @@
 import type { Reason } from "../components/ReasonText";
 import { isolate } from "../i18n/isolate";
 import type { Translate } from "../i18n/catalog";
-import type { AccountQuota, Agent, QuotaUnavailable, QuotaWindow } from "../protocol";
+import type { AccountQuota, Agent, QuotaUnavailable, QuotaWindow, ResetCredit, ResetCredits } from "../protocol";
 
 const MINUTE = 60_000;
 const DAY_MINUTES = 24 * 60;
@@ -105,6 +105,33 @@ export function quotaResetsIn(t: Translate, window: QuotaWindow, now: number): s
   if (window.resets_at === null) return null;
   if (window.resets_at <= now) return t("quota.resetsNow");
   return t("quota.resetsIn", { time: countdown(t, window.resets_at, now) });
+}
+
+/** "expires in 6d 3h" for a time the credit expires at, "expires now" once it has passed (the next reading has not
+ * landed yet), to follow the count in a line. */
+export function expiresIn(t: Translate, expiresAt: number, now: number): string {
+  return expiresAt <= now ? t("quota.resetCredits.expiresNow") : t("quota.resetCredits.expiresIn", { time: countdown(t, expiresAt, now) });
+}
+
+/** `expiresIn` as a sentence of its own: "Expires in 6d 3h", "Expires now". */
+export function expiryLine(t: Translate, expiresAt: number, now: number): string {
+  return expiresAt <= now ? t("quota.resetCredits.expiresNowLine") : t("quota.resetCredits.expiresInLine", { time: countdown(t, expiresAt, now) });
+}
+
+/** The credit a redeem names: the first listed (soonest expiry first) that has not expired, as the daemon picks it.
+ * When all have expired, or the reading is out of date, the daemon names none and Codex picks, most likely the same
+ * one; the first listed is shown when all have expired, expiring now. None when only the count is known. */
+export function nextResetCredit(resetCredits: ResetCredits, now: number): ResetCredit | undefined {
+  const credits = resetCredits.credits;
+  return credits?.find((credit) => credit.expires_at === null || credit.expires_at > now) ?? credits?.[0];
+}
+
+/** An account's reset credits in one line: "1 usage limit reset available · expires in 6d 3h". The expiry is the
+ * next credit's (`nextResetCredit`), left out when it has none or the list is not known. */
+export function resetCreditsSummary(t: Translate, resetCredits: ResetCredits, now: number): string {
+  const available = t("quota.resetCredits.available", { count: resetCredits.available_count });
+  const expiresAt = nextResetCredit(resetCredits, now)?.expires_at;
+  return expiresAt == null ? available : t("quota.resetCredits.summary", { available, expiry: expiresIn(t, expiresAt, now) });
 }
 
 /** The plan in display case, with a short name for Codex's self-serve Business Pro Lite tier: a name that

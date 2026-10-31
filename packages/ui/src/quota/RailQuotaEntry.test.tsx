@@ -62,12 +62,14 @@ const OPEN_DELAY = 250;
 const CLOSE_DELAY = 150;
 
 const request = vi.fn(() => Promise.resolve({}));
+const toastNotice = vi.fn();
 const onOpenSettingsAt = vi.fn();
 const language = currentLanguage();
 
 beforeEach(() => {
   act(() => setLanguage("en"));
   request.mockClear();
+  toastNotice.mockClear();
   onOpenSettingsAt.mockClear();
   overflowing.reports = [];
   // jsdom has no Web Animations, which the popover's exit waits for.
@@ -106,7 +108,7 @@ function mount(
     settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
     accountQuotas: [quota("claude", null, "max"), quota("claude", "claude-work", "pro"), quota("codex", null, "plus")],
   });
-  const daemon = { store, request } as unknown as Daemon;
+  const daemon = { store, request, toastNotice } as unknown as Daemon;
   const container = mountForTooltip(
     <DaemonProvider value={daemon}>
       <button type="button" id="before">before</button>
@@ -1222,4 +1224,101 @@ it("draws no bar on the rail button for a stopped session on a turned-off defaul
   expect(button.querySelector(CAPSULE)).not.toBeNull();
   act(() => store.setState({ sessions: new Map([[session.id, { ...session, status: "interrupted", account_id: null, config_dir: null }]]) }));
   expect(button.querySelector(CAPSULE)).toBeNull();
+});
+
+const CREDIT_EXPIRES = NOW + 6 * 24 * 60 * MINUTE + 3 * 60 * MINUTE;
+
+/** The Codex tab of a panel opened by the mouse, on an account holding one reset credit. */
+function openCodexWithResetCredit() {
+  const view = mount();
+  act(() => view.store.setState({
+    accountQuotas: [
+      ...view.store.getState().accountQuotas.filter((held) => held.agent !== "codex"),
+      { ...quota("codex", null, "plus"), reset_credits: { available_count: 1, credits: [{ id: "credit-1", title: "Full reset (Weekly + 5 hr)", description: null, granted_at: NOW, expires_at: CREDIT_EXPIRES }] } },
+    ],
+  }));
+  openPanel(view.button);
+  click(tabs()[1]);
+  return view;
+}
+
+const useResetButton = () => Array.from(panel()!.querySelectorAll("button")).find((button) => button.textContent === "Redeem reset")!;
+
+it("shows an account's reset credit beside an action to use it, on its row only", () => {
+  const { button } = openCodexWithResetCredit();
+  expect(panel()!.textContent).toContain("1 usage limit reset available · expires in 6d 3h");
+  expect(panel()!.querySelectorAll("button[aria-label^='Redeem reset for']")).toHaveLength(1);
+  expect(button.getAttribute("aria-expanded")).toBe("true");
+});
+
+it("closes the panel when Redeem reset is pressed and asks for the confirmation outside it, which uses the credit", async () => {
+  request.mockImplementation(() => Promise.resolve({ type: "reset_credit_used", id: null, outcome: "reset" }));
+  onTestFinished(() => void request.mockImplementation(() => Promise.resolve({})));
+  openCodexWithResetCredit();
+  click(useResetButton());
+  advance(CLOSE_DELAY);
+  expect(panel()).toBeNull();
+  const confirmation = document.querySelector<HTMLElement>('[role="alertdialog"]')!;
+  expect(confirmation.textContent).toContain("Full reset (Weekly + 5 hr)");
+  expect(confirmation.textContent).toContain("Expires in 6d 3h");
+
+  expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ type: "use_codex_reset_credit" }));
+  const confirm = confirmation.querySelector<HTMLButtonElement>("button[type=submit]")!;
+  await act(async () => confirm.click());
+  expect(request).toHaveBeenCalledWith({ type: "use_codex_reset_credit", account: null });
+  // A use that worked keeps the dialog open to show the meters fill, with Done to leave it; no notice.
+  expect(toastNotice).not.toHaveBeenCalled();
+  const done = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).find((candidate) => candidate.textContent === "Done")!;
+  expect(document.querySelector('[role="alertdialog"]')!.textContent).toContain("Usage of");
+  await act(async () => done.click());
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+});
+
+it("takes Cancel as leaving the credit unused and the confirmation gone", () => {
+  openCodexWithResetCredit();
+  click(useResetButton());
+  advance(CLOSE_DELAY);
+  const cancel = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).find((candidate) => candidate.textContent === "Cancel")!;
+  click(cancel);
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ type: "use_codex_reset_credit" }));
+});
+
+it("returns focus to the rail button after a keyboard-opened panel raised the confirmation and it was cancelled", () => {
+  withFakeTimers();
+  const { store, button } = mount();
+  act(() => store.setState({
+    accountQuotas: [
+      ...store.getState().accountQuotas.filter((held) => held.agent !== "codex"),
+      { ...quota("codex", null, "plus"), reset_credits: { available_count: 1, credits: null } },
+    ],
+  }));
+  act(() => button.focus());
+  press(button, "Enter");
+  click(tabs()[1]);
+  act(() => useResetButton().focus());
+  click(useResetButton());
+  advance(CLOSE_DELAY);
+  expect(panel()).toBeNull();
+  expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
+  const cancel = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).find((candidate) => candidate.textContent === "Cancel")!;
+  click(cancel);
+  advance(CLOSE_DELAY);
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  expect(document.activeElement).toBe(button);
+});
+
+it.each(["nothing_to_reset", "no_credit"] as const)("hands focus to the rail button when the confirmation closes itself on %s and focus fell to the page", async (outcome) => {
+  request.mockImplementation(() => Promise.resolve({ type: "reset_credit_used", id: null, outcome }));
+  onTestFinished(() => void request.mockImplementation(() => Promise.resolve({})));
+  const { button } = openCodexWithResetCredit();
+  click(useResetButton());
+  advance(CLOSE_DELAY);
+  (document.activeElement as HTMLElement | null)?.blur();
+  await act(async () => document.querySelector<HTMLButtonElement>('[role="alertdialog"] button[type=submit]')!.click());
+  expect(toastNotice).toHaveBeenCalled();
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  (document.activeElement as HTMLElement | null)?.blur();
+  advance(100);
+  expect(document.activeElement).toBe(button);
 });

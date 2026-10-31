@@ -693,6 +693,7 @@ mod tests {
         let setup = setup("login-due", Agent::Claude, "exit 1");
         let mut events = setup.state.subscribe();
         let quota = crate::protocol::AccountQuota {
+            reset_credits: None,
             agent: Agent::Claude,
             account: Some("a".to_string()),
             fetched_at: 1,

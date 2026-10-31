@@ -8,7 +8,8 @@ shown in Settings' **Agent accounts** section, in the rail's account quota panel
 quota indicator" below) and, in the macOS application, on the menu bar icon and in its quota submenus (see "The icon's
 menu" in `docs/product/menu-bar-icon.md`). An account whose quota is used up cannot open a session or have one switched
 onto it (see "A used-up account" below). Octoboard can also start a window that has reset but not begun counting, at the
-user's choice (see `docs/product/starting-usage-windows.md`).
+user's choice (see `docs/product/starting-usage-windows.md`), and, for a Codex account, shows the usage limit resets it
+holds and lets the user redeem one (see `docs/product/usage-limit-resets.md`).
 
 ## Which accounts have a quota
 
@@ -127,9 +128,11 @@ below).
   last attempt is at least **60 seconds** old (see "Reading quotas from a session" below).
 - **After a kick** (see `docs/product/starting-usage-windows.md`), the account is read again once the kick has ended,
   whether or not it succeeded.
-- At most **four** readings and kicks, together, run at once across the whole daemon, and one account is never read
-  twice at the same time. While a kick runs on an account the account is not read either, unless its login
-  ends meanwhile.
+- **After a usage limit reset is redeemed**, the account is read again once Codex has been run for it, whatever the
+  outcome (see "How a reset is redeemed" in `docs/product/usage-limit-resets.md`).
+- At most **four** readings, kicks and redeems of a usage limit reset, together, run at once across the whole daemon,
+  and one account is never read twice at the same time. While a kick runs on an account the account is not read either,
+  unless its login ends meanwhile.
 
 Each finished reading reaches every connected window straight away. A fresh successful reading can also continue a
 turn waiting after the usage limit stopped it while automatic switching is on (see "When no account qualifies" in
@@ -162,8 +165,8 @@ Windows within the same kind keep the order the agent reported, including the mo
 The plan is shown as the agent names it, with each word capitalised (`max` as **Max**, `plus` as **Plus**, `pro_lite`
 as **Pro Lite**); a name that already has capitals inside it keeps its own casing (**SuperGrok**). Codex's exact plan
 identifier `self_serve_business_prolite` is displayed as **Business Pro Lite**; the quota reading and session tools retain
-the source identifier. Only the plan and these windows are shown: extra usage, spend, credit balances and pace estimates
-are not.
+the source identifier. Only the plan, these windows and a Codex account's usage limit resets (see
+`docs/product/usage-limit-resets.md`) are shown: extra usage, spend, credit balances and pace estimates are not.
 
 ## How an account's quota is shown
 
@@ -478,7 +481,7 @@ seconds:
   is returned as it is, with no error.
 - An account whose reading is already running is not read again; the call answers with what is held for it.
 - The reading is an ordinary one (see "How a quota is read" above): it reaches every window like any other, and counts
-  towards the four readings and kicks that may run at once.
+  towards the four readings, kicks and redeems that may run at once.
 - It never kicks (see "When an account is kicked" in `docs/product/starting-usage-windows.md`).
 - A `refresh` that is not `true` or `false` is refused.
 

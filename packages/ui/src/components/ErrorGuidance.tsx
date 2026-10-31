@@ -13,6 +13,7 @@ export function recoveryAction(t: Translate, recovery: ErrorRecovery): { label: 
     case "account":
     case "accountDisabled":
     case "accountNotSignedIn":
+    case "resetCreditLogin":
     case "addedAgents": return { label: t("sidebar.session.manageAccounts") };
     case "changeModelSetting":
     case "modelChange": return { label: t("sidebar.session.changeModel"), sessionModel: true };

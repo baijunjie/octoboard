@@ -523,6 +523,7 @@ mod tests {
         };
         let reading =
             |id: &str, window: crate::protocol::QuotaWindow| crate::protocol::AccountQuota {
+                reset_credits: None,
                 agent: Agent::Codex,
                 account: Some(id.to_string()),
                 fetched_at: 1,
@@ -637,6 +638,7 @@ mod tests {
                 .unwrap();
             state.account_quotas.hold_in_dir_for_test(
                 &crate::protocol::AccountQuota {
+                    reset_credits: None,
                     agent: Agent::Codex,
                     account: Some(id.to_string()),
                     fetched_at: 1,

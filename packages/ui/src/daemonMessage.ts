@@ -133,6 +133,7 @@ export const NAME_PARAMS: Record<string, readonly string[]> = {
   switch_did_not_come_up: ["session"],
   account_disabled: ["account"],
   account_not_signed_in: ["account"],
+  reset_credit_not_signed_in: ["account"],
   account_quota_exhausted: ["account"],
   "account_quota_exhausted.resets": ["account"],
   account_switched_automatically: ["from", "account", "session"],
@@ -379,7 +380,7 @@ export const DETAIL_BLOCK_CODES = new Set([
   "git_push_failed", "git_switch_failed", "git_restore_failed", "git_unavailable",
   "models_command_failed", "models_shell_environment_failed", "quota_command_failed", "quota_shell_environment_failed", "codex_unarchive_failed", "login_failed", "sharing_resume_failed", "shell_environment_timeout", "relocation_failed",
   "directory_unreadable", "source_unavailable", "permission_denied", "path_link_refused",
-  "unreadable_request", "project_directory_trash_failed", "account_directory_trash_failed", "configuration_unreadable", "terminal_unavailable", "path_open_failed", "directory_unavailable", "terminal_input_lost",
+  "unreadable_request", "project_directory_trash_failed", "account_directory_trash_failed", "configuration_unreadable", "terminal_unavailable", "path_open_failed", "directory_unavailable", "terminal_input_lost", "reset_credit_failed",
 ]);
 
 /** These trust reasons carry an OS write/read diagnostic, not another daemon error code. */
@@ -403,7 +404,7 @@ export const RECOVERY_CODES = new Set([
  * `{detail}`, stays for text-only consumers; `daemonMessage` with `summary` says nothing for such a code, as there is
  * no summary to say and the plain message would restate the title and show the raw text. */
 export const NO_SUMMARY_CODES = new Set([
-  "git_switch_failed", "git_push_failed", "git_restore_failed", "terminal_unavailable", "path_open_failed", "directory_unavailable",
+  "git_switch_failed", "git_push_failed", "git_restore_failed", "terminal_unavailable", "path_open_failed", "directory_unavailable", "reset_credit_failed",
 ]);
 
 /** The rich sentence omits a raw diagnostic that is rendered separately. Plain messages keep the
@@ -531,6 +532,7 @@ const DEFAULT_ACCOUNT_NAME_PARAMS: Record<string, readonly string[]> = {
   account_quota_exhausted: ["account"],
   account_disabled: ["account"],
   account_not_signed_in: ["account"],
+  reset_credit_not_signed_in: ["account"],
   account_switched_automatically: ["from", "account"],
   account_switch_automatically_failed: ["from", "account"],
 };

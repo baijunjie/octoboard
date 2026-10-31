@@ -7,7 +7,7 @@ import { accountOf, ALL_AGENTS, SAMPLE, accountSharingOf, minutesAgo, sessionOf,
 import { noneAddedState } from "./empty";
 import { agentAvailability } from "./liveChanges";
 import type { FixtureError } from "./projectFiles";
-import { USED_UP_MIX, manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow } from "./quotas";
+import { USED_UP_MIX, manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow, PERSONAL_RESET_CREDITS, resetCreditOf, resetCreditsOf } from "./quotas";
 
 const GROUP = "Settings";
 
@@ -225,6 +225,26 @@ const longModelNameState: Scenario["state"] = {
   ),
 };
 
+/** `quotaState` with Codex's Personal account used up by its weekly window and holding two reset credits, the soonest
+ * expiring in 6d 3h; the other Codex accounts hold none. */
+const resetCreditsState: Scenario["state"] = {
+  ...quotaState,
+  accountQuotas: quotaState.accountQuotas!.map((quota) =>
+    quota.agent === "codex" && quota.account === "a-codex"
+      ? quotaOf("codex", "a-codex", "pro", [quotaWindow("session", 34, 190), quotaWindow("weekly", 100, 2 * 24 * 60 + 5 * 60)], {
+        fetched_at: minutesAgo(3),
+        reset_credits: PERSONAL_RESET_CREDITS,
+      })
+      : quota),
+};
+
+/** `resetCreditsState` with Personal holding a single credit, the one a use takes. */
+const lastResetCreditState: Scenario["state"] = {
+  ...resetCreditsState,
+  accountQuotas: resetCreditsState.accountQuotas!.map((quota) =>
+    quota.agent === "codex" && quota.account === "a-codex" ? { ...quota, reset_credits: resetCreditsOf([resetCreditOf("credit-1", 6 * 24 * 60 + 3 * 60)]) } : quota),
+};
+
 /** Claude Code's accounts with their sign-in emails: the default account's, Work's, Client's (an address longer than
  * the name column), and Trial, signed out and so with none. Codex and Grok keep their readings as they were. */
 const emailsState: Scenario["state"] = {
@@ -343,6 +363,10 @@ const defaultAccount = (ui: Ui) => ui.t("settings.accounts.defaultName");
 
 /** Settings → Agent accounts with the read-only details of the account `name` in front. */
 const accountDetails = (name: string | ((ui: Ui) => string), agent: Agent = "claude"): Step[] => [...openAccounts, openDetails(name, agent)];
+
+/** Settings → Agent accounts on Codex's tab with Personal's details in front. */
+const codexDetails: Step[] = [...openAccounts, (ui) => ui.press(AGENT_LABEL.codex), openDetails("Personal", "codex")];
+const redeemFromDetails: Step = (ui) => ui.press(ui.t("quota.resetCredits.useFor", { account: "Personal" }));
 
 /** Settings → Agent accounts with the settings (the switches) of the account `name` in front. */
 const accountSettings = (name: string | ((ui: Ui) => string), agent: Agent = "claude"): Step[] => [...openAccounts, openSettings(name, agent)];
@@ -946,6 +970,42 @@ export const settingsScenarios: Scenario[] = [
     description: "Work's details after a usage read that failed for a reason other than being signed out: the first line is the name Work followed by the plain muted \"Unknown\" in place of a login badge, with no plan, then the danger-coloured circled \"!\" for the failed read; the email dev@work.octoboard.example is on the line under it, not beside the name. The config directory is the line under the email, and the Usage section is a dash, with no windows to show.",
     state: unknownLoginEmailState,
     steps: accountDetails("Work"),
+  },
+  {
+    id: "settings-account-details-reset-credits",
+    group: GROUP,
+    category: "normal",
+    title: "Account details, a used-up Codex account holding reset credits",
+    description: "Personal's details on the Codex tab: its weekly window is used up (0% remaining), and under the Usage meters a line reads \"2 usage limit resets available · expires in 6d 3h\" beside a \"Redeem reset\" button.",
+    state: resetCreditsState,
+    steps: codexDetails,
+  },
+  {
+    id: "settings-account-details-reset-credit-confirm",
+    group: GROUP,
+    category: "normal",
+    title: "Account details, the Redeem reset confirmation opened over it",
+    description: "\"Redeem reset\" in Personal's details has opened the confirmation above the details dialog, which stays behind it: \"One usage limit reset will be used on Personal.\", the first credit's title, description and \"Expires in 6d 3h\", Personal's usage meters and the note that the reset applies to the eligible usage windows now.",
+    state: resetCreditsState,
+    steps: [...codexDetails, redeemFromDetails],
+  },
+  {
+    id: "settings-account-details-reset-credit-used",
+    group: GROUP,
+    category: "normal",
+    title: "Account details, right after a reset was used",
+    description: "Use reset was confirmed in Personal's details and the new reading has arrived: the confirmation, kept open above the details, is titled \"Usage reset\" with \"Usage updated.\" under both meters, which are back to 100% remaining, and Done as its only button. In the details behind it the line has dropped to \"1 usage limit reset available · expires in 21d 9h\", the second credit's expiry.",
+    state: resetCreditsState,
+    steps: [...codexDetails, redeemFromDetails, (ui) => ui.confirm(), (ui) => ui.wait(700)],
+  },
+  {
+    id: "settings-account-details-reset-credit-last-used",
+    group: GROUP,
+    category: "normal",
+    title: "Account details, after the last reset was used and Done pressed",
+    description: "Personal holds a single credit, which was used: the confirmation has been dismissed with Done and the details dialog is back in front with both meters at 100% remaining and no reset line under them, the \"Redeem reset\" button gone with the credit. Focus is where the details dialog puts it on opening, not on the removed button.",
+    state: lastResetCreditState,
+    steps: [...codexDetails, redeemFromDetails, (ui) => ui.confirm(), (ui) => ui.wait(700), (ui) => ui.press(ui.t("quota.resetCredits.doneAction"))],
   },
   {
     id: "settings-account-settings-default",

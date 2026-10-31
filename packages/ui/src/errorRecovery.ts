@@ -9,7 +9,7 @@ export type ErrorRecovery =
   | "configuration" | "exportSelection" | "image" | "avatarSize" | "avatarImage" | "clipboard" | "fileRead" | "fileWrite" | "gitFailure" | "gitSwitchFailure" | "gitRestoreFailure" | "gitHistory" | "branch"
   | "refresh" | "refreshMessages" | "scope" | "limit" | "openExternal" | "openTerminal" | "openFileManager" | "openDefaultApplication" | "issueAddress"
   | "hostPathGone" | "readAccess" | "sourceGone" | "sourceLink" | "sourceNotFolder" | "sourceUnreadable" | "pathExists" | "uniqueName" | "launchSetting" | "changeModelSetting" | "modelChange" | "switchRelaunch" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
-  | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "submitRetry" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "accountDisabled" | "accountNotSignedIn" | "grokSandbox"
+  | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "submitRetry" | "unresumable" | "unarchive" | "resetCredit" | "resetCreditLogin" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "accountDisabled" | "accountNotSignedIn" | "grokSandbox"
   | "pathLinkAmbiguous" | "pathLinkLaunchable" | "pathLinkNotPrivate"
   | "fileBusy" | "codexConfig" | "sqliteHome" | "symlink" | "notRestored" | "notRestoredAutomatic"
   | "accountNotShareable" | "accountSharing" | "accountBusy" | "accountChanging" | "sharingStop" | "ownerChanging" | "ownerMoved"
@@ -68,6 +68,8 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   sharingStop: ["sharing_session_did_not_stop"],
   unresumable: ["conversation_unresumable"],
   unarchive: ["codex_unarchive_failed"],
+  resetCredit: ["reset_credit_failed"],
+  resetCreditLogin: ["reset_credit_not_signed_in"],
   conversation: ["conversation_not_found", "conversation_to_resume_not_found", "resume_id_invalid", "conversation_outside_project", "conversation_in_session"],
   ownerGone: ["quick_create_owner_gone"],
   session: ["session_archived", "session_not_running", "session_already_on_account", "unknown_session", "session_request_not_waiting", "session_request_answered", "trust_not_waiting", "session_not_bound"],
@@ -106,7 +108,7 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   // link the daemon will not open; its `cause` picks the remedy (`PATH_LINK_REFUSED_RECOVERY`), which is none for the
   // causes whose sentence says it all. `login_codex_busy` has a step of its own (`RECOVERY_CODES`), and the login dialog
   // takes up a login already running and ignores a cancel of one that has ended.
-  none: ["quick_create_unavailable", "daemon_shutting_down", "git_operation_in_progress", "push_in_progress", "path_link_refused", "sharing_resume_failed", "trust_not_carried_over", "account_sharing_repair_failed", "console_session_never_bound", "session_not_bound_to_owner", "message_acceptance_unconfirmed", "terminal_input_lost", "login_codex_busy", "login_already_running", "login_not_running"],
+  none: ["quick_create_unavailable", "daemon_shutting_down", "git_operation_in_progress", "push_in_progress", "path_link_refused", "sharing_resume_failed", "trust_not_carried_over", "account_sharing_repair_failed", "console_session_never_bound", "session_not_bound_to_owner", "message_acceptance_unconfirmed", "terminal_input_lost", "login_codex_busy", "login_already_running", "login_not_running", "reset_credit_in_progress", "reset_credit_timed_out"],
 };
 const DOMAIN_RECOVERY = new Map(Object.entries(GROUPS).flatMap(([recovery, codes]) => codes.map((code) => [code, recovery as ErrorRecovery] as const)));
 const OS_RECOVERY: Record<string, ErrorRecovery> = {

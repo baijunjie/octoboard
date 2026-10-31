@@ -5,7 +5,7 @@ import { daemonMessage } from "../daemonMessage";
 import { noticeErrorPresentation, noticeKind } from "../errorPresentation";
 import { FOLLOWING_GIT_WORKFLOW } from "../gitWorkflow";
 import { currentLanguage, t } from "../i18n/language";
-import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, scopeCause, type Account, type AccountLogin, type AccountSharing, type Agent, type ConsoleSessionColour, type Launch, type LaunchChange, type PerAgent, type ProjectAccount, type BrowseEntry, type Console, type DirEntry, type Event, type PathLinkKind, type PathLinkView, type ProcessTree, type Project, type QuotaWindow, type RequestBody, type Session, type SharingCause, type SessionRecordsPresence, type ShellTerminal, type GitWorkflowOverride, type GitWorkflowOverrideChanges, type SourceUnavailableCause } from "../protocol";
+import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, scopeCause, type Account, type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type ConsoleSessionColour, type Launch, type LaunchChange, type PerAgent, type ResetCreditOutcome, type ProjectAccount, type BrowseEntry, type Console, type DirEntry, type Event, type PathLinkKind, type PathLinkView, type ProcessTree, type Project, type QuotaWindow, type RequestBody, type Session, type SharingCause, type SessionRecordsPresence, type ShellTerminal, type GitWorkflowOverride, type GitWorkflowOverrideChanges, type SourceUnavailableCause } from "../protocol";
 import { hasClaudeCompatibility } from "../settings/claudeCompatibility";
 import { accountQuotaOf } from "../quota/accountQuotaOf";
 import { exhaustedQuotaWindow, isNotLoggedIn } from "../quota/quotaFormat";
@@ -19,6 +19,60 @@ import { SAMPLE_MODELS } from "./fixtures/agentModels";
 import { ALL_AGENTS, consoleOf, effectiveClaudeCompatibility, projectOf } from "./fixtures/builders";
 import { SAMPLE_FILES, permissionDenied, sourceUnavailable, type FixtureError, type FixtureFile, type FixtureFiles } from "./fixtures/projectFiles";
 import { SAMPLE_GIT } from "./fixtures/projectGit";
+
+/** Whether a held reading has a credit a use can take: the first the list names that has not expired (the list is in
+ * the order they are used), or any, where the reading holds only the count. */
+function usableResetCredit(reading: AccountQuota, now: number): boolean {
+  const credits = reading.reset_credits;
+  if (!credits) return false;
+  return credits.credits === null || credits.credits.some((credit) => credit.expires_at === null || credit.expires_at > now);
+}
+
+/** A held reading without the credit a use that came back `reset` took, as the daemon edits it before it answers: one
+ * fewer, the credit named off the list (the first that has not expired, and only from a reading that was read, else
+ * none is named and the list is not known any more), and no `reset_credits` at all when none is left. Its windows and
+ * time are as they were. */
+function quotaWithoutUsedCredit(reading: AccountQuota, now: number): AccountQuota {
+  const { reset_credits: credits, ...rest } = reading;
+  if (!credits) return reading;
+  const list = credits.credits;
+  const taken = reading.unavailable === null && list ? list.findIndex((credit) => credit.expires_at === null || credit.expires_at > now) : -1;
+  const available_count = credits.available_count - 1;
+  if (available_count <= 0) return rest;
+  return { ...rest, reset_credits: { available_count, credits: list && taken >= 0 ? list.filter((_, index) => index !== taken) : null } };
+}
+
+/** An account's reading as the daemon reads it again after a run of Codex: a `reset` leaves every window full (the
+ * credits as `quotaWithoutUsedCredit` left them); `no_credit` drops the credits; anything else (`nothing_to_reset`,
+ * `already_redeemed`, a failed run) changes only the time. */
+function quotaAfterResetCredit(reading: AccountQuota, outcome: ResetCreditOutcome | "failed"): AccountQuota {
+  const now = Date.now();
+  if (outcome === "no_credit") {
+    const { reset_credits: _, ...rest } = reading;
+    return { ...rest, fetched_at: now };
+  }
+  if (outcome !== "reset") return { ...reading, fetched_at: now };
+  return {
+    ...reading,
+    fetched_at: now,
+    windows: reading.windows.map((window) => ({ ...window, used_percent: 0, resets_at: window.window_minutes == null ? null : now + window.window_minutes * 60_000 })),
+  };
+}
+
+/** The staged refusals that come before Codex runs (or when it cannot be run), after which the daemon reads nothing
+ * again: it reads again after every run of Codex, a failed one included. */
+const NO_REREAD_REFUSALS = new Set([
+  "binary_not_found",
+  "reset_credit_in_progress",
+  "daemon_shutting_down",
+  "unknown_account",
+  "agent_not_available",
+  "shell_environment_timeout",
+]);
+
+/** How long after answering a use of a reset credit the fixture daemon reads the account's quota again, unless the scenario
+ * says otherwise (`resetCreditReading`): after the reply has reached the window, as the real daemon's read does. */
+const RESET_CREDIT_REREAD_MS = 100;
 
 /** How long after the app subscribes to toasts the scenario's own are raised, for the stack to be
  * on screen to receive them. */
@@ -945,6 +999,44 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           if (!running) return fail({ code: "login_not_running", params: { agent: AGENT_LABEL[body.agent] }, message: `${AGENT_LABEL[body.agent]} is not being signed in for this account` });
           store.setState((state) => ({ accountLogins: state.accountLogins.map((login) => login === running ? { ...login, status: "cancelled", authorization_url: null, device_code: null } : login) }));
           return { type: "ack", id: null };
+        }
+        case "use_codex_reset_credit": {
+          const current = store.getState();
+          const account = body.account ?? null;
+          if (account !== null && !current.settings.accounts.some((held) => held.id === account && held.agent === "codex")) {
+            return fail({ code: "unknown_account", params: { account }, message: `unknown account ${account}` });
+          }
+          const staged = scenario.resetCreditUse;
+          if (staged === "pending") return new Promise<Event>(() => {});
+          const reading = accountQuotaOf(current.accountQuotas, "codex", account);
+          const held = typeof reading === "object" ? reading : undefined;
+          // The daemon reads the account again after every run of Codex, a failed one included, a moment after it
+          // answers: as the scenario says, or never. A refusal that comes before Codex runs reads nothing again.
+          const rereading = scenario.resetCreditReading;
+          const reread = (outcome: ResetCreditOutcome | "failed") => {
+            if (!held || rereading === "never") return;
+            setTimeout(() => {
+              const latest = accountQuotaOf(store.getState().accountQuotas, "codex", account);
+              if (typeof latest !== "object") return;
+              // A failed read keeps the windows and the credits as they were and carries the failure.
+              const next: AccountQuota = rereading?.unavailable ? { ...latest, unavailable: rereading.unavailable } : quotaAfterResetCredit(latest, outcome);
+              applyDaemonEvent(store, { type: "account_quotas_updated", account_quotas: store.getState().accountQuotas.map((quota) => quota === latest ? next : quota) });
+            }, rereading?.after ?? RESET_CREDIT_REREAD_MS);
+          };
+          if (typeof staged === "object") {
+            if (!NO_REREAD_REFUSALS.has(staged.code)) reread("failed");
+            return fail(staged);
+          }
+          // Without a staged outcome Codex uses a credit when the reading holds one it can (not expired) and says none
+          // is left otherwise.
+          const outcome = staged ?? (held && usableResetCredit(held, Date.now()) ? "reset" : "no_credit");
+          // Only a use that came back `reset` spends a credit: it takes it off the held reading, windows as they were,
+          // before the daemon answers; the reading that follows brings the new windows.
+          if (held && outcome === "reset") {
+            applyDaemonEvent(store, { type: "account_quotas_updated", account_quotas: current.accountQuotas.map((quota) => quota === held ? quotaWithoutUsedCredit(held, Date.now()) : quota) });
+          }
+          reread(outcome);
+          return { type: "reset_credit_used", id: null, outcome };
         }
         case "create_account":
         case "update_account": {

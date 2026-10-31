@@ -150,6 +150,11 @@ export type AccountQuota = {
    */
   windows: Array<QuotaWindow>,
   unavailable: QuotaUnavailable | null,
+  /**
+   * The account's usable rate limit reset credits (Codex only); absent when it has none or the
+   * agent says nothing of them. Kept, like the windows, over a failed re-read.
+   */
+  reset_credits?: ResetCredits,
 };
 
 /**
@@ -1255,6 +1260,11 @@ export type Event = {
   "type": "conversation_located",
   id: string | null,
   location: ConversationLocation,
+}
+| {
+  "type": "reset_credit_used",
+  id: string | null,
+  outcome: ResetCreditOutcome,
 }
 | {
   "type": "configuration_exported",
@@ -2810,6 +2820,10 @@ export type Request = {
   account?: string | null,
 }
   | {
+  "type": "use_codex_reset_credit",
+  account?: string | null,
+}
+  | {
   "type": "cancel_account_login",
   agent: Agent,
   account?: string | null,
@@ -3484,6 +3498,10 @@ export type RequestBody = {
   account?: string | null,
 }
 | {
+  "type": "use_codex_reset_credit",
+  account?: string | null,
+}
+| {
   "type": "cancel_account_login",
   agent: Agent,
   account?: string | null,
@@ -3556,6 +3574,51 @@ export type RequestBody = {
 }
 | {
   "type": "shutdown"
+};
+
+/**
+ * One of an account's rate limit reset credits that can still be used, as Codex describes it.
+ */
+export type ResetCredit = {
+  id: string,
+  /**
+   * The backend's name for the credit ("Full reset (Weekly + 5 hr)"), if it gives one.
+   */
+  title: string | null,
+  /**
+   * The backend's description of the credit, if it gives one.
+   */
+  description: string | null,
+  /**
+   * When the credit was granted, in milliseconds since the epoch, if Codex says.
+   */
+  granted_at: number | null,
+  /**
+   * When the credit expires, in milliseconds since the epoch; null for one that never does.
+   */
+  expires_at: number | null,
+};
+
+/**
+ * What Codex did with a request to use a reset credit (`reset_credit_used`).
+ */
+export type ResetCreditOutcome = "reset" | "nothing_to_reset" | "no_credit" | "already_redeemed";
+
+/**
+ * The rate limit reset credits of a Codex account that can be used now. Only present while there
+ * is at least one.
+ */
+export type ResetCredits = {
+  /**
+   * How many credits can be used, whatever the list below holds.
+   */
+  available_count: number,
+  /**
+   * The usable credits in the order they would be used: the one that expires first, a credit
+   * with no expiry last. Null when Codex gave only the count, and may be shorter than
+   * `available_count` when Codex caps its list.
+   */
+  credits: Array<ResetCredit> | null,
 };
 
 export type Role = "console" | "project";

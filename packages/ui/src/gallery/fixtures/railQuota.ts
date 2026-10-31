@@ -1,10 +1,12 @@
+import { AGENT_LABEL } from "../../agents";
 import { DEFAULT_SETTINGS } from "../../defaultSettings";
 import type { Account, Agent, AgentAvailability, AccountQuota, Settings } from "../../protocol";
 import { describing } from "../interact";
-import type { Scenario } from "../scenario";
+import type { Scenario, Step } from "../scenario";
 import { accountOf, ALL_AGENTS, SAMPLE, minutesAgo, sessionOf, snapshotState } from "./builders";
 import { accountAdded, accountRemoved, agentAvailability } from "./liveChanges";
-import { USED_UP_MIX, manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow } from "./quotas";
+import type { FixtureError } from "./projectFiles";
+import { USED_UP_MIX, manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow, PERSONAL_RESET_CREDITS, resetCreditOf, resetCreditsOf } from "./quotas";
 
 const GROUP = "Window layout";
 
@@ -234,6 +236,55 @@ const archivedOnWork = sessionOf("s-web-old", console_.id, web.id, "Old checkout
 
 /** Claude Code's accounts in every state a person meets (`USED_UP_MIX`), the default account being the usable one. */
 const usedUpMixState = railQuotaState(USED_UP_MIX.accounts, USED_UP_MIX.quotas);
+
+/** Codex's accounts in every state of reset credits a person meets. Default: none. Personal: its
+ * weekly window used up, two credits, the soonest expiring in 6d 3h. Production: three credits of which Codex gave only
+ * the count. Contractor: one credit whose expiry passed a minute ago, with no newer reading. */
+const resetCreditsState = {
+  ...railQuotaState(
+    [
+      accountOf("a-codex", "codex", "Personal", "/Users/dev/.codex-personal"),
+      accountOf("a-codex-user", "codex", "Production", "/Users/dev/.codex-production"),
+      accountOf("a-codex-temp", "codex", "Contractor", "/Users/dev/.codex-contractor"),
+    ],
+    [
+      quotaOf("codex", null, "plus", [quotaWindow("session", 64, 140), quotaWindow("weekly", 31, 5 * 24 * 60 + 2 * 60)]),
+      quotaOf("codex", "a-codex", "pro", [quotaWindow("session", 34, 190), quotaWindow("weekly", 100, 2 * 24 * 60 + 5 * 60)], {
+        fetched_at: minutesAgo(3),
+        reset_credits: PERSONAL_RESET_CREDITS,
+      }),
+      quotaOf("codex", "a-codex-user", "plus", [quotaWindow("session", 52, 120), quotaWindow("weekly", 62, 3 * 24 * 60)], {
+        reset_credits: resetCreditsOf(null, 3),
+      }),
+      quotaOf("codex", "a-codex-temp", "plus", [quotaWindow("session", 20, 200), quotaWindow("weekly", 91, 2 * 24 * 60)], {
+        fetched_at: minutesAgo(9),
+        reset_credits: resetCreditsOf([resetCreditOf("credit-4", -1)]),
+      }),
+    ],
+  ),
+};
+
+/** `resetCreditsState` with Hub running on the Codex account `account`, so the panel opens on Codex's tab with the list
+ * scrolled to that account. */
+const resetCreditsOn = (account: string) => ({
+  ...resetCreditsState,
+  sessions: new Map(sessions.map((session) => [session.id, session.id === "s-console" ? { ...session, agent: "codex" as const, account_id: account } : session])),
+});
+
+/** The steps that float the usage panel in on Codex's tab (Hub is on a Codex account) and press the "Redeem reset" of the account named,
+ * which closes the panel and opens the confirmation. */
+const redeemFromPanel = (account: string): Step[] => [
+  (ui) => ui.press(ui.session("Hub")),
+  (ui) => ui.hoverPanel(describing("usage button with a session's bar", (name) => name.startsWith(ui.t("rail.quota"))), ui.t("rail.quota")),
+  (ui) => ui.press(ui.t("quota.resetCredits.useFor", { account })),
+];
+
+/** A failure of Codex's own command, as the daemon words it. */
+const RESET_CREDIT_FAILED: FixtureError = {
+  code: "reset_credit_failed",
+  params: { agent: "Codex", detail: "unexpected status 503 Service Unavailable: upstream connect error" },
+  message: "Codex could not use the reset: unexpected status 503 Service Unavailable: upstream connect error",
+};
 
 export const railQuotaScenarios: Scenario[] = [
   {
@@ -541,5 +592,147 @@ export const railQuotaScenarios: Scenario[] = [
     description: "Work (never logged in) and Client (whose config directory does not exist yet) both read \"Not logged in yet. Log in to use this account.\" in place of a usage reading and a raw CLI error; the default account above them has its windows.",
     state: notSignedInState,
     steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
+  },
+  {
+    id: "rail-quota-reset-credits",
+    group: GROUP,
+    category: "normal",
+    title: "Rail usage panel, an account holding rate limit reset credits",
+    description: "Codex's tab: Personal, used up by its weekly window, reads \"2 usage limit resets available · expires in 6d 3h\" under its meters beside a \"Redeem reset\" button, while the default account above it, which holds no credit, has no such line.",
+    state: resetCreditsState,
+    steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota")), (ui) => ui.press(AGENT_LABEL.codex)],
+  },
+  {
+    id: "rail-quota-reset-credits-expiry-unknown",
+    group: GROUP,
+    category: "normal",
+    title: "Rail usage panel, reset credits without an expiry or past it",
+    description: "Hub runs on Production, so the panel opens on Codex's tab scrolled to it. Production reads \"3 usage limit resets available\" alone, since Codex gave no list and so no expiry, and Contractor, whose credit expired a minute ago with no newer reading, \"1 usage limit reset available · expires now\"; both keep their \"Redeem reset\" buttons.",
+    state: resetCreditsOn("a-codex-user"),
+    steps: [
+      (ui) => ui.press(ui.session("Hub")),
+      (ui) => ui.hoverPanel(describing("usage button with a session's bar", (name) => name.startsWith(ui.t("rail.quota"))), ui.t("rail.quota")),
+    ],
+  },
+  {
+    id: "rail-quota-reset-credit-confirm",
+    group: GROUP,
+    category: "normal",
+    title: "Redeem reset confirmation, the credit that would be used",
+    description: "\"Redeem reset\" on Personal has closed the panel and opened the confirmation, titled Redeem reset: \"One usage limit reset will be used on Personal.\", the first credit's title and description as Codex gives them, \"Expires in 6d 3h\" (the soonest of the two), Personal's usage meters as they stand (weekly 0% remaining), and the note that the reset applies to the account's eligible usage windows now, then Cancel and Use reset.",
+    state: resetCreditsOn("a-codex"),
+    steps: redeemFromPanel("Personal"),
+  },
+  {
+    id: "rail-quota-reset-credit-confirm-count-only",
+    group: GROUP,
+    category: "normal",
+    title: "Redeem reset confirmation, a credit Codex gave no details of",
+    description: "\"Redeem reset\" on Production: Codex gave only the count, so the confirmation names no credit, with no title, description or expiry, over Production's usage meters, and keeps the note that the reset applies to the account's eligible usage windows now.",
+    state: resetCreditsOn("a-codex-user"),
+    steps: redeemFromPanel("Production"),
+  },
+  {
+    id: "rail-quota-reset-credit-busy",
+    group: GROUP,
+    category: "normal",
+    title: "Redeem reset confirmation, waiting for Codex",
+    description: "Use reset has been confirmed on Personal and Codex has not answered: the confirm button reads \"Resetting usage…\" and Cancel and the close button are held, so the dialog cannot be left meanwhile; the usage meters stay as they were.",
+    state: resetCreditsOn("a-codex"),
+    resetCreditUse: "pending",
+    steps: [...redeemFromPanel("Personal"), (ui) => ui.confirm()],
+  },
+  {
+    id: "rail-quota-reset-credit-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Redeem reset confirmation, Codex failed to reset the usage",
+    description: "Use reset has been confirmed on Personal and Codex failed: an error alert titled \"Could not reset usage\" is up over the confirmation, with the remedy for a failed reset (check that Codex runs in the login shell and is logged in to the account) and Codex's raw reason under Error details; the confirmation stays open behind it, to try again or cancel once the alert is dismissed.",
+    state: resetCreditsOn("a-codex"),
+    resetCreditUse: RESET_CREDIT_FAILED,
+    steps: [...redeemFromPanel("Personal"), (ui) => ui.confirm()],
+  },
+  {
+    id: "rail-quota-reset-credit-not-signed-in",
+    group: GROUP,
+    category: "exceptional",
+    title: "Redeem reset confirmation, the account is not logged in",
+    description: "Use reset has been confirmed on Personal and Codex refused it because the account is not logged in: an error alert titled \"Could not reset usage\" is up over the confirmation, saying Personal (Codex) is not logged in so a reset cannot be redeemed on it and to log in, then redeem again, with a Manage accounts button beside OK; the confirmation stays open behind it.",
+    state: resetCreditsOn("a-codex"),
+    resetCreditUse: {
+      code: "reset_credit_not_signed_in",
+      params: { agent: "Codex", account: "Personal" },
+      message: "Personal (Codex) is not logged in, so a reset cannot be used on it.",
+    },
+    steps: [...redeemFromPanel("Personal"), (ui) => ui.confirm()],
+  },
+  {
+    id: "rail-quota-reset-credit-waiting",
+    group: GROUP,
+    category: "normal",
+    title: "Redeem reset, waiting for the new usage reading",
+    description: "Codex answered that the reset was used on Personal, and the reading that follows has not come: the dialog is titled \"Usage reset\" and says \"Usage of Personal has been reset.\", the usage meters are frozen as they were (weekly 0% remaining), the status line reads \"Updating usage…\", and Done is the only button.",
+    state: resetCreditsOn("a-codex"),
+    resetCreditReading: "never",
+    steps: [...redeemFromPanel("Personal"), (ui) => ui.confirm(), (ui) => ui.wait(300)],
+  },
+  {
+    id: "rail-quota-reset-credit-refilled",
+    group: GROUP,
+    category: "normal",
+    title: "Redeem reset, the meters refilling when the new reading arrives",
+    description: "Use reset was confirmed on Personal. The dialog first waits (\"Usage reset\", \"Updating usage…\", meters as before), then about a second and a half later the reading arrives and both bars grow to full over a third of a second, the status line turning to \"Usage updated.\" with Done as the only button. The picture settles on that.",
+    state: resetCreditsOn("a-codex"),
+    resetCreditReading: { after: 1500 },
+    steps: [...redeemFromPanel("Personal"), (ui) => ui.confirm()],
+  },
+  {
+    id: "rail-quota-reset-credit-update-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Redeem reset, the usage reading after it failed",
+    description: "Codex answered that the reset was used on Personal, but the reading that follows failed: the dialog reads \"Usage of Personal has been reset.\" over the meters as last read (weekly 0% remaining) with the out-of-date mark, the status line \"Usage could not be updated yet.\", and Done as the only button.",
+    state: resetCreditsOn("a-codex"),
+    resetCreditReading: { unavailable: quotaFailure("quota_timed_out", { agent: "Codex" }, "Codex took too long to report its usage.") },
+    steps: [...redeemFromPanel("Personal"), (ui) => ui.confirm(), (ui) => ui.wait(500)],
+  },
+  {
+    id: "rail-quota-reset-credit-none-left",
+    group: GROUP,
+    category: "exceptional",
+    title: "Redeem reset confirmation, the credit was used or expired meanwhile",
+    description: "The confirmation of Personal is open when a new reading arrives with no credit in it: it says \"Personal has no usage limit resets available.\" with no credit named and no note about what a reset does, and Use reset is disabled, leaving Cancel.",
+    state: resetCreditsOn("a-codex"),
+    steps: [
+      ...redeemFromPanel("Personal"),
+      (ui) => ui.daemonEvents((state) => ({
+        type: "account_quotas_updated",
+        account_quotas: state.accountQuotas.map((quota) => {
+          if (quota.agent !== "codex" || quota.account !== "a-codex") return quota;
+          const { reset_credits: _, ...unspent } = quota;
+          return unspent;
+        }),
+      })),
+    ],
+  },
+  {
+    id: "rail-quota-reset-credit-nothing-to-reset",
+    group: GROUP,
+    category: "exceptional",
+    title: "Redeem reset, no window needed a reset",
+    description: "Use reset was confirmed on Personal and Codex found no usage window eligible for a reset: the dialog has closed and a notice reads \"The usage of Personal does not need a reset right now.\"",
+    state: resetCreditsOn("a-codex"),
+    resetCreditUse: "nothing_to_reset",
+    steps: [...redeemFromPanel("Personal"), (ui) => ui.confirm()],
+  },
+  {
+    id: "rail-quota-reset-credit-no-credit",
+    group: GROUP,
+    category: "exceptional",
+    title: "Redeem reset, no reset left",
+    description: "Use reset was confirmed on Personal and Codex had no credit left to use: the dialog has closed and a notice reads \"Personal has no usage limit resets available.\"",
+    state: resetCreditsOn("a-codex"),
+    resetCreditUse: "no_credit",
+    steps: [...redeemFromPanel("Personal"), (ui) => ui.confirm()],
   },
 ];

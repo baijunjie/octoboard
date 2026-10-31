@@ -634,7 +634,37 @@ export interface AccountQuota {
    * can be shown as stale. */
   windows: QuotaWindow[];
   unavailable: QuotaUnavailable | null;
+  /** The account's usable rate limit reset credits (Codex only); absent when it has none or the agent says nothing of
+   * them. Kept, like the windows, over a failed re-read. */
+  reset_credits?: ResetCredits;
 }
+
+/** One of an account's rate limit reset credits that can still be used, as Codex describes it. */
+export interface ResetCredit {
+  id: string;
+  /** The backend's name for the credit ("Full reset (Weekly + 5 hr)"), if it gives one. */
+  title: string | null;
+  /** The backend's description of the credit, if it gives one. */
+  description: string | null;
+  /** When the credit was granted, in milliseconds since the epoch, if Codex says. */
+  granted_at: number | null;
+  /** When the credit expires, in milliseconds since the epoch; null for one that never does. */
+  expires_at: number | null;
+}
+
+/** The rate limit reset credits of a Codex account that can be used now; only present while there is at least one. */
+export interface ResetCredits {
+  /** How many credits can be used, whatever the list holds. */
+  available_count: number;
+  /** The usable credits in the order they would be used (the one that expires first, a credit with no expiry last);
+   * null when Codex gave only the count, and possibly shorter than `available_count`. */
+  credits: ResetCredit[] | null;
+}
+
+/** What Codex did with a request to use a reset credit: `reset` (used, and the windows that could be reset were),
+ * `nothing_to_reset` (no window is eligible for a reset now; whether the credit is kept was not measured), `no_credit`
+ * (none left), `already_redeemed` (this request's idempotency key had already succeeded). */
+export type ResetCreditOutcome = "reset" | "nothing_to_reset" | "no_credit" | "already_redeemed";
 
 /** Where an account's login is. */
 export type LoginStatus = "starting" | "waiting" | "succeeded" | "failed" | "cancelled" | "timed_out";
@@ -1622,6 +1652,13 @@ export type RequestBody =
    * `binary_not_found`, `login_already_running`, `account_being_removed` while the account is being removed and, for a
    * second Codex account at once, `login_codex_busy`. A success re-reads the account's quota. */
   | { type: "start_account_login"; agent: Agent; account?: string | null }
+  /** Uses one of a Codex account's rate limit reset credits (`account` omitted or null is the default account), after
+   * the user confirmed it: the first the held reading lists, or the one Codex picks when it holds no details.
+   * Answered with `reset_credit_used` once Codex has answered; the account's quota is read again after. Refused with
+   * `unknown_account`, `agent_not_available`, `shell_environment_timeout`, `binary_not_found`,
+   * `reset_credit_not_signed_in`, `reset_credit_in_progress`, `daemon_shutting_down`, `reset_credit_timed_out` and
+   * `reset_credit_failed`. */
+  | { type: "use_codex_reset_credit"; account?: string | null }
   /** Ends a login that is running; refused with `login_not_running` when there is none. */
   | { type: "cancel_account_login"; agent: Agent; account?: string | null }
   /** Answered with `ack` at once; the statuses arrive as `project_git_status` broadcasts as each
@@ -1984,6 +2021,8 @@ export type Event =
     models: AgentModel[];
     unavailable: ModelsUnavailable | null;
   }
+  /** The reply to `use_codex_reset_credit`. */
+  | { type: "reset_credit_used"; id: string | null; outcome: ResetCreditOutcome }
   /** The reply to `locate_conversation_to_resume`. */
   | { type: "conversation_located"; id: string | null; location: ConversationLocation }
   /** The reply to `export_configuration`: the document to save as a file. */

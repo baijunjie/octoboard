@@ -1769,6 +1769,38 @@ reply to id 2 is `{"id":2,"result":{...}}`, or `{"id":2,"error":{"code","message
 Unix **seconds** — and `planType` is `"plus"`. `result.rateLimitsByLimitId` repeats the same under each limit id. The
 schema is available from `codex app-server generate-json-schema` (`v2/GetAccountRateLimitsResponse.json`).
 
+The same reply carries the account's **rate limit reset credits** beside `rateLimits`, as `result.rateLimitResetCredits`
+(measured on codex-cli 0.163.0, on an account holding one):
+
+```
+{"availableCount":1,"credits":[{"id":"RateLimitResetCredit_462e…","resetType":"codexRateLimits","status":"available",
+"grantedAt":1791413156,"expiresAt":1794005156,"title":"Full reset (Weekly + 5 hr)",
+"description":"Thanks for using Codex! You've been granted one free rate limit reset."}]}
+```
+
+From the schema: `availableCount` is an integer and the only required member; `credits` is a list or `null`, where
+`null` means only the count is known, and the list may be capped below `availableCount`; the whole field may be `null`
+or absent. A credit has `id`, `resetType` (`codexRateLimits` or `unknown`), `status` (`available`, `redeeming`,
+`redeemed` or `unknown`), `grantedAt` and `expiresAt` in Unix **seconds** (`expiresAt` is `null` for a credit that does
+not expire) and `title` and `description`, both nullable. The read request also takes `excludeResetCreditDetails` to get
+the count alone; Octoboard sends no params, so the details come back. Claude Code's and Grok Build's replies carry
+nothing like it.
+
+**Using a reset credit** is a further request on the same app server, started and bounded like the probe:
+
+```
+{"jsonrpc":"2.0","id":2,"method":"account/rateLimitResetCredit/consume","params":{"creditId":"RateLimitResetCredit_…","idempotencyKey":"<uuid>"}}
+```
+
+`creditId` is optional: left out, the backend picks the next available credit. `idempotencyKey` is required, a UUID;
+the same value is reused when the same attempt is retried, and a new one for a new attempt. The reply is
+`{"id":2,"result":{"outcome":…}}` with `outcome` one of `reset` (the credit was consumed and the eligible windows were
+reset), `nothingToReset` (no current window is eligible), `noCredit` (none available) or `alreadyRedeemed` (that
+idempotency key already succeeded). Whether `nothingToReset` keeps the credit was not measured: the schema does not say,
+and using a credit is irreversible, so it was not run against an account holding one. An account signed in to nothing
+(an empty `CODEX_HOME`, measured) is refused with `{"code":-32600,"message":"codex account authentication required for
+rate limit reset credits"}`.
+
 **Grok Build**:
 
 ```

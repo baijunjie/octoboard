@@ -126,6 +126,22 @@ wherever the CLI is installed. Call `test_support::offer_models` for that agent 
 models and efforts the test uses. It seeds the default account only; a test that gives a model under another account
 is checked against that account's own list.
 
+## No daemon test may be able to reach the real agent CLI with an action that spends anything
+
+Applies to a daemon request handler or task that runs an agent CLI for an effect on the account that cannot be undone
+— using a Codex reset credit, a kick that starts a usage window — and to any test that sends such a request through
+`coordinator::handle`. A daemon test runs in the user's own environment: `env_shell::launch_snapshot` and the other
+`env_shell` snapshots take their real login shell, so the CLI that runs is the one installed on the machine, signed in
+to their default config directory, and the spend is real. A test meant only to check a refusal is no guard: an agent
+whose availability has not been determined yet counts as available (`agent_is_available` in
+`apps/daemon/src/coordinator.rs`), so a request the test expects to be refused for that goes through to the CLI.
+
+So such a handler never calls an `env_shell` snapshot directly: it takes its shell environment from a
+`#[cfg(not(test))]` / `#[cfg(test)]` pair of functions whose test variant bails (`reset_credit_shell` in
+`apps/daemon/src/coordinator.rs`, `held_shell` in `apps/daemon/src/account_quotas/mod.rs`), which keeps every test off
+the real CLI by construction instead of by each test's care. The action itself is tested one level down, handed the
+environment `test_support::fake_agent` returns, whose `PATH` finds only the fake.
+
 ## Test a daemon budget by lowering it, never by asserting its value
 
 Applies to daemon tests of a limit in `apps/daemon/src/browse/budget.rs` whose real figure no small fixture reaches. A

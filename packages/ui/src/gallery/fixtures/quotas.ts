@@ -1,4 +1,4 @@
-import type { Account, AccountQuota, Agent, QuotaUnavailable, QuotaWindow, QuotaWindowKind } from "../../protocol";
+import type { Account, AccountQuota, Agent, QuotaUnavailable, QuotaWindow, QuotaWindowKind, ResetCredit, ResetCredits } from "../../protocol";
 import { accountOf, minutesAgo, minutesFromNow } from "./builders";
 
 /** The length of each kind of window as the agents give it, in minutes. */
@@ -33,6 +33,29 @@ export function quotaOf(agent: Agent, account: string | null, plan: string | nul
 export function quotaFailure(code: string, params: Record<string, string>, message: string): QuotaUnavailable {
   return { code, params, message };
 }
+
+/** A Codex rate limit reset credit as the backend describes it (a reply's own title and description), granted 30 days
+ * before it expires; it expires `expiresIn` minutes after the page loaded, never when `null`, and a negative number is
+ * an expiry already past, which the reading has not caught up with. `patch` is what differs. */
+export function resetCreditOf(id: string, expiresIn: number | null, patch: Partial<ResetCredit> = {}): ResetCredit {
+  return {
+    id,
+    title: "Full reset (Weekly + 5 hr)",
+    description: "Thanks for using Codex! You've been granted one free rate limit reset.",
+    granted_at: minutesFromNow((expiresIn ?? 0) - 30 * 24 * 60),
+    expires_at: expiresIn === null ? null : minutesFromNow(expiresIn),
+    ...patch,
+  };
+}
+
+/** An account's reset credits: the list in the order they are used, `available_count` being its length unless
+ * `count` says more are held than the list names; a `null` list is the count alone. */
+export function resetCreditsOf(credits: ResetCredit[] | null, count = credits?.length ?? 0): ResetCredits {
+  return { available_count: count, credits };
+}
+
+/** The two credits of the Codex account Personal in the reset credit scenarios: the soonest expires in 6d 3h, the other in 21d 9h. */
+export const PERSONAL_RESET_CREDITS = resetCreditsOf([resetCreditOf("credit-1", 6 * 24 * 60 + 3 * 60), resetCreditOf("credit-2", 21 * 24 * 60 + 9 * 60)]);
 
 const MANY_CLAUDE_ACCOUNT_NAMES = ["Research", "Billing", "Support", "Docs", "Staging", "Mobile", "Data", "Infra"] as const;
 

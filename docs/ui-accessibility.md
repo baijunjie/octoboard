@@ -1824,8 +1824,8 @@ the hues cannot reach: react-aria's Arabic names give violet and fuchsia one nam
 to green-cyan, cyan and cyan-blue (teal and cyan collide in light, teal and sky in dark). `sessionColours.test.ts`
 lists them and fails on any other.
 
-A usage bar — the compact one in front of an account option and in the accounts table, and the rail panel's and the
-details' meters — carries its meaning in words, so its colours are decorative in the same way. The compact bar is hidden
+A usage bar — the compact one in front of an account option and in the accounts table, and the meters of the rail
+panel, the account details and the usage-reset confirmation — carries its meaning in words, so its colours are decorative in the same way. The compact bar is hidden
 from assistive technology, and the option's description or the cell's hidden text states the remaining usage; a meter
 states it in its own accessible name and value, while its drawn headline is hidden. Its track is `--default`, which
 inside `.control-fills` (Settings, the dialogs, the rail panel) is `--control-fill`; in dark the compact bar's

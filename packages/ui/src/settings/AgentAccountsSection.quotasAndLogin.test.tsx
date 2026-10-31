@@ -365,3 +365,29 @@ it("leaves an account whose agent is not available without a quota block", () =>
   expect(container.querySelector('[data-slot="meter"]')).toBeNull();
   expect(container.textContent).not.toContain("Reading usage");
 });
+
+it("offers a Codex account's reset credit in its details, and asks for the confirmation over them", async () => {
+  const day = 24 * 60 * 60_000;
+  accountQuotas.push(quotaOf("codex", "codex-work", { reset_credits: { available_count: 1, credits: [{ id: "credit-1", title: "Full reset (Weekly + 5 hr)", description: null, granted_at: Date.now(), expires_at: Date.now() + 6 * day + 60_000 }] } }));
+  const { container } = mount("Codex");
+  expect(rowOf(container, "codex-work").textContent).not.toContain("usage limit reset available");
+  const dialog = await openDetailsOf(container, "codex-work");
+  expect(dialog.textContent).toContain("1 usage limit reset available · expires in 6d");
+  const use = dialog.querySelector<HTMLButtonElement>("button[aria-label^='Redeem reset for']");
+  expect(use).not.toBeNull();
+  await act(async () => use!.click());
+  const confirmation = document.querySelector('[role="alertdialog"]')!;
+  expect(confirmation.textContent).toContain("Full reset (Weekly + 5 hr)");
+  request.mockClear();
+  request.mockResolvedValueOnce({ type: "reset_credit_used", id: null, outcome: "reset" } as never);
+  await act(async () => confirmation.querySelector<HTMLButtonElement>("button[type=submit]")!.click());
+  expect(request).toHaveBeenCalledWith({ type: "use_codex_reset_credit", account: "codex-work" });
+  expect(confirmation.textContent).toContain("Usage of");
+  await act(async () => [...confirmation.querySelectorAll("button")].find((button) => button.textContent === "Done")!.click());
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  expect(dialog.isConnected).toBe(true);
+  // Focus that fell to the page (a press that took none opened the confirmation) goes back to the button.
+  (document.activeElement as HTMLElement | null)?.blur();
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
+  expect(document.activeElement).toBe(use);
+});

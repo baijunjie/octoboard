@@ -588,3 +588,9 @@ are now wrong or it leaves out one thing, the meaning has changed.
   optional control under the message settles what Confirm does rather than gating it, and Enter submits even from that
   control, so the Confirm label and the control's own label must each read correctly with it left untouched.
   (`packages/ui/src/dialogs/ConfirmDialog.tsx`; `docs/ui-accessibility.md`, "Keyboard")
+- **Codex usage limit resets**: the copy for a Codex account's usage limit resets follows Codex's own wording rather
+  than terms of our own: "usage limit reset(s)" for the credit, "Redeem reset" for the command and the confirmation's
+  title, "Use reset" for its Confirm, "Usage reset" once used. The title and Confirm deliberately use different verbs,
+  as Codex does, overriding the "Destructive actions" rule above that they share the trigger's word. zh-Hans keeps the
+  same split: 用量限额重置, 兑换重置, 使用重置, 用量已重置. (the user's decision; `packages/ui/src/i18n/messages/en.ts`,
+  `quota.resetCredits`)

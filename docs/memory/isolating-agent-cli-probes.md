@@ -84,6 +84,16 @@ per-model `[model.<name>]` entry in the scratch `config.toml` carrying a `base_u
 the terminal: its `auth method selection` record should name the API key with `has_cached_token` false, and no
 `auth: inline auth flow` or `cached_token` record should appear.
 
+## A probe never spends or changes anything on a real account
+
+Applies to probing any agent request that acts on the account rather than reading it — using a Codex rate limit reset
+credit, for instance — through the CLI, its app server or a session. Reading an account's state (its quota, its
+credits) against the real login is fine; an action is not, since it cannot be undone and the user's account is the
+only one that holds what it spends. Measure such an action only where there is nothing to spend: from a scratch config
+directory with no login, which gives its not-signed-in reply, or against a fake or stub. What can be learned only
+from a real account — what the action does to it — stays unmeasured and is recorded as unmeasured, unless the user
+runs it, or explicitly agrees to it, on an account they choose.
+
 ## A probe that goes through the daemon runs against the user's live Octoboard data unless its `HOME` is a throwaway one
 
 The daemon derives its data directory, its database and its single-instance lock from `$HOME`, and writes its port file

@@ -144,6 +144,18 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   shown straight away; build them with the `loginOf` helper in `fixtures/settings.ts`. `loginOutcome`
   (`"succeeded"`, `"failed"`, `"timed_out"`) is how a login the steps start ends, a moment after it reaches waiting;
   left out, it stays waiting until cancelled. `loginStartError` makes `start_account_login` refuse with that error.
+  `resetCreditUse` is how `use_codex_reset_credit` ends for a Codex account: an outcome, a refusal error, or
+  `"pending"` for a use never answered. Only `reset` spends a credit: it takes the first one that has not expired off
+  the held reading before the answer, and the re-read then brings the windows back full; `already_redeemed` and
+  `nothing_to_reset` spend nothing; `no_credit` drops the credits at the re-read. Left out, a usable held credit is
+  used (`reset`) and an account holding none gets `no_credit`. The quota is read again after the answer and after a
+  failure of Codex's run, but not after a refusal that comes before Codex runs (`binary_not_found`,
+  `reset_credit_in_progress`, `daemon_shutting_down`, `unknown_account`, `agent_not_available`,
+  `shell_environment_timeout`).
+  `resetCreditReading` is the quota reading the fixture daemon takes then, as the real one does: `{ after }`
+  milliseconds later (default 100; a delay shows the confirmation waiting and its meters filling), `{ unavailable }`
+  for a read that fails and keeps the windows and credits, or `"never"` to leave the confirmation waiting. Build a
+  reading's `reset_credits` with `resetCreditOf` and `resetCreditsOf` (`fixtures/quotas.ts`).
   `agentListError` makes `add_agent`, `remove_agent` and `reorder_agents` refuse with that error, for what the window
   could not have seen coming; left out, they follow the added list's own rules. `trustParentDirError` makes a
   `confirm_trust` that ticks the parent folder (`trust_parent_dir`) refuse with that error; a go-ahead for the project
@@ -340,7 +352,7 @@ Imports run one way between the feature directories: `src/panels/` imports `src/
 | `src/panels/` | The right pane, a stack of inset panel cards: `RightPane`, `PanelStack`, the registry of panel kinds (stacked and toggled in the order Report, Terminal, Files, Processes), `panelMeta.ts` (each kind's name and icon, which the sidebar's menus use without importing the panels) and the persisted per-owner stack state, with a project's Report open or closed per session |
 | `src/browser/` | The project browser, the Files panel's content: `ProjectBrowser` with its Files tree and search, and the Git mode's Changes view over uncommitted changes, branch comparison and commits; also the viewer over a file a terminal path link named |
 | `src/viewer/` | The read-only file viewer modal: `FileViewer` over the application-owned `ViewerSubject` model, with code, diff and Markdown surfaces; `renderer.tsx` is the only importer of `@pierre/diffs` |
-| `src/quota/` | Agent account plan quota: wording and used-up judgement, the meters and usage bars, and `RailQuotaEntry`, the rail's quota entry and panel |
+| `src/quota/` | Agent account plan quota: wording and used-up judgement, the meters and usage bars, `RailQuotaEntry`, the rail's quota entry and panel, and `ResetCredits.tsx`, a Codex account's usage limit reset credits (`ResetCreditsLine`, `UseResetCreditDialog`) shown in that panel and in the account details dialog |
 | `src/settings/` | The settings modal: `SettingsDialog` and its sections (general, git, agent accounts and the added agents, where an account opens a read-only details dialog (`AccountDetailsDialog.tsx`, with the account's email) or a settings dialog for sharing and turning it off (`AccountSettingsDialog.tsx`), and removal's confirmation with its option to move the account's directory to the Trash (`RemoveAccountDialog.tsx`), with each agent's Claude compatibility switch in `AgentClaudeCompatibilitySetting.tsx` and `hasClaudeCompatibility` (`claudeCompatibility.ts`) saying which agents have it, agent behavior, trusted folders, macOS permissions, notifications, shortcuts, configuration, About) |
 | `src/dialogs/` | The console, project, session, rename, confirmation, directory-picker and daemon-question dialogs on the shared `Dialog` frame, `ErrorAlerts` (the acknowledgement host), `ConfirmConsequences` (what a confirmation says it takes along: sessions and lines), `useAfterErrorAlert` (runs something once a failure's alert has closed), `useFailureWhenBlocked` (turns a dialog unusable as it stands into a failure modal) and the shared form controls; `SessionModelDialog.tsx` changes a session's model and effort, using the `LaunchPickers` and `useLaunchModels` shared with the Advanced sections in `LaunchSettingsFields.tsx`, and `sessionModelLauncher.ts` connects the window to controls opening that dialog from outside it; `RequestedDialog` also confirms an archive or removal with its branch and process choices, on `useSessionBranches` (the archive and removal inspections), `BranchCleanupOptions`, `ProcessStopOptions` (`StoppedRow`, `useProcessStopping`) and `OptionDetails` (the collapsed details of an option) |
 | `src/process/` | The Processes panel and what feeds it: `ProcessesPanel` (a session's or project's process trees, each with Stop and Keep), `ProcessSessionSelect`, `useProcessPanel` (the panel's data, given to it through `ProcessPanelProvider`), `useProcessTrees` (one target's listings, polled) and `useProjectProcesses` (the project processes a project removal lists) |

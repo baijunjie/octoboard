@@ -14,7 +14,7 @@ import { terminalFixtureUrl } from "./fakeTerminal";
 import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./fixtures/restore";
 import type { FixtureFile } from "./fixtures/projectFiles";
 import { SAMPLE_GIT } from "./fixtures/projectGit";
-import { quotaFailure, quotaOf, quotaWindow } from "./fixtures/quotas";
+import { quotaFailure, quotaOf, quotaWindow, resetCreditOf, resetCreditsOf } from "./fixtures/quotas";
 import { accountOf, accountSharingOf, branchItemOf, consoleOf, gitStatusOf, leftoverOf, pageOf, processTreeOf, projectOf, sessionOf, shellTerminalOf, snapshotState, worktreeItemOf } from "./fixtures/builders";
 import { DEFAULT_GIT_WORKFLOW, FOLLOWING_GIT_WORKFLOW } from "../gitWorkflow";
 
@@ -2249,5 +2249,119 @@ describe("the fixture daemon's process ledger", () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
       expect(answered).not.toHaveBeenCalled();
     }
+  });
+});
+
+describe("the fixture daemon's rate limit reset credits", () => {
+  const personal = accountOf("personal", "codex", "Personal", "/Users/dev/.codex-personal");
+  const withCredits = (credits: ReturnType<typeof resetCreditsOf> | undefined) => ({
+    id: "reset-credit",
+    title: "",
+    group: "Settings" as const,
+    category: "normal" as const,
+    state: snapshotState({
+      settings: { ...DEFAULT_SETTINGS, added_agents: [], accounts: [personal, accountOf("work", "claude", "Work", "/Users/dev/.claude-work")] },
+      accountQuotas: [quotaOf("codex", "personal", "pro", [quotaWindow("session", 40, 120), quotaWindow("weekly", 100, 3 * 24 * 60)], { reset_credits: credits })],
+    }),
+  });
+  const rereadDone = () => new Promise((resolve) => setTimeout(resolve, 150));
+  const reading = (daemon: ReturnType<typeof createFixtureDaemon>) => daemon.store.getState().accountQuotas[0]!;
+
+  it("takes the used credit off the held reading at once and reads the quota again after, with the windows full", async () => {
+    const daemon = createFixtureDaemon(withCredits(resetCreditsOf([resetCreditOf("a", 60), resetCreditOf("b", 600)])));
+    const fetched = reading(daemon).fetched_at;
+    await expect(daemon.request({ type: "use_codex_reset_credit", account: "personal" })).resolves.toEqual({ type: "reset_credit_used", id: null, outcome: "reset" });
+    expect(reading(daemon)).toMatchObject({ fetched_at: fetched, windows: [{ used_percent: 40 }, { used_percent: 100 }], reset_credits: { available_count: 1, credits: [expect.objectContaining({ id: "b" })] } });
+    await rereadDone();
+    expect(reading(daemon).windows.map((window) => window.used_percent)).toEqual([0, 0]);
+    expect(reading(daemon).fetched_at).toBeGreaterThan(fetched);
+    await daemon.request({ type: "use_codex_reset_credit", account: "personal" });
+    expect(reading(daemon).reset_credits).toBeUndefined();
+  });
+
+  it("takes the first credit that has not expired, and says none is left where only expired ones remain", async () => {
+    const daemon = createFixtureDaemon(withCredits(resetCreditsOf([resetCreditOf("old", -5), resetCreditOf("b", 600)])));
+    await daemon.request({ type: "use_codex_reset_credit", account: "personal" });
+    expect(reading(daemon).reset_credits).toEqual({ available_count: 1, credits: [expect.objectContaining({ id: "old" })] });
+    const expired = createFixtureDaemon(withCredits(resetCreditsOf([resetCreditOf("old", -5)])));
+    await expect(expired.request({ type: "use_codex_reset_credit", account: "personal" })).resolves.toMatchObject({ outcome: "no_credit" });
+  });
+
+  it("spends a credit only on reset: already_redeemed and nothing_to_reset leave the credits and refill nothing", async () => {
+    const credits = resetCreditsOf([resetCreditOf("a", 60), resetCreditOf("b", 600)]);
+    for (const outcome of ["already_redeemed", "nothing_to_reset"] as const) {
+      const daemon = createFixtureDaemon({ ...withCredits(credits), resetCreditUse: outcome });
+      const fetched = reading(daemon).fetched_at;
+      await expect(daemon.request({ type: "use_codex_reset_credit", account: "personal" })).resolves.toMatchObject({ outcome });
+      expect(reading(daemon).reset_credits).toEqual(credits);
+      await rereadDone();
+      expect(reading(daemon)).toMatchObject({ reset_credits: credits, windows: [{ used_percent: 40 }, { used_percent: 100 }] });
+      expect(reading(daemon).fetched_at).toBeGreaterThan(fetched);
+    }
+  });
+
+  it("keeps the count and drops the list where the credit used was not named, and reads again after a refusal", async () => {
+    const unnamed = createFixtureDaemon(withCredits(resetCreditsOf(null, 3)));
+    await unnamed.request({ type: "use_codex_reset_credit", account: "personal" });
+    expect(reading(unnamed).reset_credits).toEqual({ available_count: 2, credits: null });
+    const refused = createFixtureDaemon({ ...withCredits(resetCreditsOf([resetCreditOf("a", 60)])), resetCreditUse: { code: "reset_credit_failed", params: { agent: "Codex", detail: "x" }, message: "x" } });
+    const fetched = reading(refused).fetched_at;
+    await expect(refused.request({ type: "use_codex_reset_credit", account: "personal" })).rejects.toMatchObject({ code: "reset_credit_failed" });
+    await rereadDone();
+    expect(reading(refused).fetched_at).toBeGreaterThan(fetched);
+    expect(reading(refused).reset_credits?.available_count).toBe(1);
+    for (const code of ["binary_not_found", "reset_credit_in_progress", "shell_environment_timeout"]) {
+      const staged = { code, params: { agent: "Codex" }, message: "x" };
+      const early = createFixtureDaemon({ ...withCredits(resetCreditsOf([resetCreditOf("a", 60)])), resetCreditUse: staged });
+      const before = reading(early).fetched_at;
+      const request = early.request({ type: "use_codex_reset_credit", account: "personal" });
+      await expect(request).rejects.toMatchObject({ code });
+      await rereadDone();
+      expect(reading(early).fetched_at).toBe(before);
+    }
+  });
+
+  it("reads again later, never, or with a failure that keeps the windows and credits, as the scenario stages", async () => {
+    const credits = resetCreditsOf([resetCreditOf("a", 60), resetCreditOf("b", 600)]);
+    const failure = quotaFailure("quota_timed_out", { agent: "Codex" }, "Codex took too long to report its usage.");
+    const later = createFixtureDaemon({ ...withCredits(credits), resetCreditReading: { after: 300 } });
+    await later.request({ type: "use_codex_reset_credit", account: "personal" });
+    await rereadDone();
+    expect(reading(later).windows[1]!.used_percent).toBe(100);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(reading(later).windows[1]!.used_percent).toBe(0);
+    const never = createFixtureDaemon({ ...withCredits(credits), resetCreditReading: "never" });
+    await never.request({ type: "use_codex_reset_credit", account: "personal" });
+    await rereadDone();
+    expect(reading(never).windows[1]!.used_percent).toBe(100);
+    const failed = createFixtureDaemon({ ...withCredits(credits), resetCreditReading: { unavailable: failure } });
+    const before = reading(failed).fetched_at;
+    await failed.request({ type: "use_codex_reset_credit", account: "personal" });
+    await rereadDone();
+    expect(reading(failed)).toMatchObject({ fetched_at: before, unavailable: failure, reset_credits: { available_count: 1, credits: [expect.objectContaining({ id: "b" })] }, windows: [{ used_percent: 40 }, { used_percent: 100 }] });
+  });
+
+  it("keeps the reading for nothing_to_reset, drops the credits for no_credit, and answers no_credit where none is held", async () => {
+    const credits = resetCreditsOf([resetCreditOf("a", 60)]);
+    const kept = createFixtureDaemon({ ...withCredits(credits), resetCreditUse: "nothing_to_reset" });
+    await expect(kept.request({ type: "use_codex_reset_credit", account: "personal" })).resolves.toMatchObject({ outcome: "nothing_to_reset" });
+    await rereadDone();
+    expect(reading(kept)).toMatchObject({ reset_credits: credits, windows: [{ used_percent: 40 }, { used_percent: 100 }] });
+    const gone = createFixtureDaemon({ ...withCredits(credits), resetCreditUse: "no_credit" });
+    await expect(gone.request({ type: "use_codex_reset_credit", account: "personal" })).resolves.toMatchObject({ outcome: "no_credit" });
+    await rereadDone();
+    expect(reading(gone).reset_credits).toBeUndefined();
+    await expect(createFixtureDaemon(withCredits(undefined)).request({ type: "use_codex_reset_credit", account: "personal" })).resolves.toMatchObject({ outcome: "no_credit" });
+  });
+
+  it("refuses an account that is not a Codex one, a staged failure, and keeps a staged request pending", async () => {
+    const daemon = createFixtureDaemon(withCredits(resetCreditsOf([resetCreditOf("a", 60)])));
+    await expect(daemon.request({ type: "use_codex_reset_credit", account: "work" })).rejects.toMatchObject({ code: "unknown_account" });
+    const failing = createFixtureDaemon({ ...withCredits(resetCreditsOf([resetCreditOf("a", 60)])), resetCreditUse: { code: "reset_credit_failed", params: { agent: "Codex", detail: "x" }, message: "x" } });
+    await expect(failing.request({ type: "use_codex_reset_credit", account: "personal" })).rejects.toMatchObject({ code: "reset_credit_failed" });
+    const answered = vi.fn();
+    void createFixtureDaemon({ ...withCredits(resetCreditsOf([resetCreditOf("a", 60)])), resetCreditUse: "pending" }).request({ type: "use_codex_reset_credit", account: "personal" }).then(answered, answered);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(answered).not.toHaveBeenCalled();
   });
 });

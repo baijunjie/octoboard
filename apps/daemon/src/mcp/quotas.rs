@@ -203,6 +203,7 @@ mod tests {
 
     fn quota(agent: Agent, account: Option<&str>, windows: Vec<QuotaWindow>) -> AccountQuota {
         AccountQuota {
+            reset_credits: None,
             agent,
             account: account.map(str::to_string),
             fetched_at: 1_000,

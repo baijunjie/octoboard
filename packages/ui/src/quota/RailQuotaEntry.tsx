@@ -1,6 +1,7 @@
 import { Tabs } from "@heroui/react";
 import { Bot, Gauge, KeyRound } from "lucide-react";
 import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { mergeRefs } from "react-aria";
 
 import { orderedAccounts } from "../accountOrder";
 import { accountDisabled } from "../accountChoices";
@@ -22,10 +23,14 @@ import { INACTIVE_VEIL_CLASS } from "../components/inactiveVeil";
 import { useDaemon, useDaemonStore } from "../store";
 import { useNow } from "../useNow";
 import { AccountNameLine, AccountQuotaSummary } from "./AccountQuotaSummary";
+import { ResetCreditsLine, UseResetCreditDialog, useResetFocusReturn } from "./ResetCredits";
 import { MODAL_OPEN } from "../layout/useRegionCycle";
 import { useAccountQuota } from "./useAccountQuota";
 import { exhaustedQuotaWindow, remainingPercentAt, type QuotaBar } from "./quotaFormat";
 import { accountInUse, accountQuotaLabel, sessionQuotaBarOf } from "./sessionQuota";
+
+/** Asks to use a reset credit of an account (its id, null for the default account) under the name the panel shows it by. */
+type ResetRequest = (account: string | null, name: string) => void;
 
 /** The popover of a `StatusMark` in the panel, which is portalled out of it but belongs to it. */
 const NESTED_POPOVER = "[data-status-mark-popover]";
@@ -148,77 +153,93 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
   const [onButton, setOnButton] = useState(false);
   const label = session && bar ? accountQuotaLabel(t, session.agent, account?.name, bar, defaultNames, now) : t("rail.quota");
 
+  const [resetting, setResetting] = useState<{ account: string | null; name: string }>();
+  // The panel closes on a press of Redeem reset, so with the confirmation gone focus has nowhere to go but this button.
+  const railButton = useRef<HTMLButtonElement>(null);
+  const handBack = useResetFocusReturn(() => railButton.current?.focus());
   return (
-    <Hint
-      kind="popover"
-      label={t("rail.quota")}
-      placement="end bottom"
-      offset={8}
-      // A panel, not a hint: the surface, shadow and corners are the tooltip's, but it pads its own content edge to
-      // edge and keeps the text size it had.
-      contentClassName="w-96 max-w-[calc(100vw-4rem)] p-0 text-sm"
-      // A status mark's popover is portalled out of the panel but belongs to it, and Escape with one
-      // open (by hover, which holds no focus) is the mark's to take first, where it would take it.
-      isInside={(target) => target instanceof Element && target.closest(NESTED_POPOVER) != null}
-      yieldsEscape={(event) => {
-        const target = event.target instanceof Element ? event.target : null;
-        if (target?.closest(NESTED_POPOVER)) return true;
-        return document.querySelector(NESTED_TOPMOST) != null && !keepsEscapeFromPanel(target);
-      }}
-      // The quotas already held are shown whether or not this succeeds, and the daemon's own poller
-      // keeps them current, so a failed request has nothing to report.
-      onOpenChange={(open) => {
-        if (open) void request({ type: "refresh_account_quotas" }).catch(() => {});
-        else setOnButton(false);
-      }}
-      trigger={({ ref, onHoverStart: _start, onHoverEnd: _end, preventFocusOnPress: _prevent, onMouseHoverChange, ...wiring }) => (
-        <ChromeButton
-          label={label}
-          className="relative"
-          buttonRef={ref}
-          noTooltip
-          {...wiring}
-          onMouseHoverChange={(hovered) => {
-            if (hovered) setOnButton(true);
-            else if (!wiring.expanded) setOnButton(false);
-            onMouseHoverChange(hovered);
-          }}
-        >
-          <Gauge aria-hidden="true" className={!session || !bar ? "size-4" : bar.thin ? "size-4 -translate-y-1" : "size-4 -translate-y-0.5"} />
-          {session && bar && <RailQuotaBars bar={bar} now={now} />}
-        </ChromeButton>
-      )}
-    >
-      {({ close, form, popupId }) => (
-        <>
-          <CloseWhenCovered close={close} own={popupId} />
-          <QuotaPanel
-            // The tab it opens on: the agent whose quota the button shows, if any.
-            shownAgent={session && bar ? session.agent : undefined}
-            // The account the panel scrolls to on that tab: the selected session's, the default account when the session names none.
-            shownAccount={session?.account_id ?? null}
-            // The one account a turned-off account's exception is for: the selected session's, while it still runs on it.
-            inUse={inUse}
-            // A press opens a panel that floats outside the rail's tab order, so focus is brought to its
-            // first control; one a mouse rests on leaves focus where it was.
-            focusSelectedTab={form === "press"}
-            // The account the button shows stands out and the others dim from when the mouse is on the button
-            // until it enters the panel or the panel closes; only a mouse does it, so keyboard focus on the
-            // button (which does not open the panel) leaves them alone.
-            emphasiseShown={onButton && shownListed}
-            onMouseEnter={() => setOnButton(false)}
-            onOpenAccounts={() => {
-              close();
-              onOpenSettingsAt("accounts");
+    <>
+      <Hint
+        kind="popover"
+        label={t("rail.quota")}
+        placement="end bottom"
+        offset={8}
+        // A panel, not a hint: the surface, shadow and corners are the tooltip's, but it pads its own content edge to
+        // edge and keeps the text size it had.
+        contentClassName="w-96 max-w-[calc(100vw-4rem)] p-0 text-sm"
+        // A status mark's popover is portalled out of the panel but belongs to it, and Escape with one
+        // open (by hover, which holds no focus) is the mark's to take first, where it would take it.
+        isInside={(target) => target instanceof Element && target.closest(NESTED_POPOVER) != null}
+        yieldsEscape={(event) => {
+          const target = event.target instanceof Element ? event.target : null;
+          if (target?.closest(NESTED_POPOVER)) return true;
+          return document.querySelector(NESTED_TOPMOST) != null && !keepsEscapeFromPanel(target);
+        }}
+        // The quotas already held are shown whether or not this succeeds, and the daemon's own poller
+        // keeps them current, so a failed request has nothing to report.
+        onOpenChange={(open) => {
+          if (open) void request({ type: "refresh_account_quotas" }).catch(() => {});
+          else setOnButton(false);
+        }}
+        trigger={({ ref, onHoverStart: _start, onHoverEnd: _end, preventFocusOnPress: _prevent, onMouseHoverChange, ...wiring }) => (
+          <ChromeButton
+            label={label}
+            className="relative"
+            buttonRef={mergeRefs(ref, railButton)}
+            noTooltip
+            {...wiring}
+            onMouseHoverChange={(hovered) => {
+              if (hovered) setOnButton(true);
+              else if (!wiring.expanded) setOnButton(false);
+              onMouseHoverChange(hovered);
             }}
-            onAddAgent={() => {
-              close();
-              onOpenSettingsAt("accounts", { addAgent: true });
-            }}
-          />
-        </>
-      )}
-    </Hint>
+          >
+            <Gauge aria-hidden="true" className={!session || !bar ? "size-4" : bar.thin ? "size-4 -translate-y-1" : "size-4 -translate-y-0.5"} />
+            {session && bar && <RailQuotaBars bar={bar} now={now} />}
+          </ChromeButton>
+        )}
+      >
+        {({ close, form, popupId }) => (
+          <>
+            <CloseWhenCovered close={close} own={popupId} />
+            <QuotaPanel
+              // The tab it opens on: the agent whose quota the button shows, if any.
+              shownAgent={session && bar ? session.agent : undefined}
+              // The account the panel scrolls to on that tab: the selected session's, the default account when the session names none.
+              shownAccount={session?.account_id ?? null}
+              // The one account a turned-off account's exception is for: the selected session's, while it still runs on it.
+              inUse={inUse}
+              // A press opens a panel that floats outside the rail's tab order, so focus is brought to its
+              // first control; one a mouse rests on leaves focus where it was.
+              focusSelectedTab={form === "press"}
+              // The account the button shows stands out and the others dim from when the mouse is on the button
+              // until it enters the panel or the panel closes; only a mouse does it, so keyboard focus on the
+              // button (which does not open the panel) leaves them alone.
+              emphasiseShown={onButton && shownListed}
+              onMouseEnter={() => setOnButton(false)}
+              onOpenAccounts={() => {
+                close();
+                onOpenSettingsAt("accounts");
+              }}
+              onAddAgent={() => {
+                close();
+                onOpenSettingsAt("accounts", { addAgent: true });
+              }}
+              // The confirmation is held out here: a modal opening closes the panel (`CloseWhenCovered`), and a dialog
+              // held inside it would go with it.
+              onUseReset={(account, name) => {
+                close();
+                setResetting({ account, name });
+              }}
+            />
+          </>
+        )}
+      </Hint>
+      {resetting && <UseResetCreditDialog account={resetting.account} accountName={resetting.name} onClose={() => {
+        setResetting(undefined);
+        handBack();
+      }} />}
+    </>
   );
 }
 
@@ -244,7 +265,7 @@ function CloseWhenCovered({ close, own }: { close: () => void; own: string }): n
  * added, each listing the agent's accounts that are not turned off (bar the selected running session's own, `inUse`), and
  * the way into Settings' accounts section. The panel mounts afresh on each opening, so the tab starts on `shownAgent`
  * (the first tab if it is not listed or none is given) and the user's own choice lasts only until it closes. */
-function QuotaPanel({ shownAgent, shownAccount, inUse, focusSelectedTab, emphasiseShown, onMouseEnter, onOpenAccounts, onAddAgent }: { shownAgent?: Agent; shownAccount: string | null; inUse?: { agent: Agent; account: string | null }; focusSelectedTab: boolean; emphasiseShown: boolean; onMouseEnter: () => void; onOpenAccounts: () => void; onAddAgent: () => void }): React.ReactElement {
+function QuotaPanel({ shownAgent, shownAccount, inUse, focusSelectedTab, emphasiseShown, onMouseEnter, onOpenAccounts, onAddAgent, onUseReset }: { shownAgent?: Agent; shownAccount: string | null; inUse?: { agent: Agent; account: string | null }; focusSelectedTab: boolean; emphasiseShown: boolean; onMouseEnter: () => void; onOpenAccounts: () => void; onAddAgent: () => void; onUseReset: ResetRequest }): React.ReactElement {
   const t = useT();
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
@@ -307,7 +328,7 @@ function QuotaPanel({ shownAgent, shownAccount, inUse, focusSelectedTab, emphasi
               from each other's dividers. */}
           <div className="grid grid-cols-1">
             {listed.map(({ agent, rows }) => (
-              <AgentPanel key={agent} agent={agent} rows={rows} currentAccount={agent === shownAgent ? shownAccount : undefined} dimOthers={emphasiseShown} />
+              <AgentPanel key={agent} agent={agent} rows={rows} currentAccount={agent === shownAgent ? shownAccount : undefined} dimOthers={emphasiseShown} onUseReset={onUseReset} />
             ))}
           </div>
         </Tabs>
@@ -340,7 +361,7 @@ function QuotaPanel({ shownAgent, shownAccount, inUse, focusSelectedTab, emphasi
  * Only the region is held here, and the list is the panel's content (`AgentAccountList`): `Tabs`
  * renders its children a second time in the hidden copy it builds its collection from, where the panel
  * renders nothing but this component renders in full, so the list's hooks would run there too. */
-function AgentPanel({ agent, rows, currentAccount, dimOthers }: { agent: Agent; rows: QuotaRow[]; currentAccount?: string | null; dimOthers: boolean }): React.ReactElement {
+function AgentPanel({ agent, rows, currentAccount, dimOthers, onUseReset }: { agent: Agent; rows: QuotaRow[]; currentAccount?: string | null; dimOthers: boolean; onUseReset: ResetRequest }): React.ReactElement {
   const t = useT();
   const region = useFadeRegion({ label: t("rail.quota.accounts") });
   return (
@@ -354,7 +375,7 @@ function AgentPanel({ agent, rows, currentAccount, dimOthers }: { agent: Agent; 
       // and not the library's exit placement out of the flow, which would drop the cell's height.
       className="col-start-1 row-start-1 m-0 self-start p-0 data-[exiting=true]:static data-[inert=true]:invisible"
     >
-      <AgentAccountList agent={agent} rows={rows} currentAccount={currentAccount} dimOthers={dimOthers} region={region} />
+      <AgentAccountList agent={agent} rows={rows} currentAccount={currentAccount} dimOthers={dimOthers} region={region} onUseReset={onUseReset} />
     </Tabs.Panel>
   );
 }
@@ -366,7 +387,7 @@ function AgentPanel({ agent, rows, currentAccount, dimOthers }: { agent: Agent; 
  * in any other way, except that with `dimOthers` (from the mouse on the rail button until it enters the panel
  * or the panel closes) every row but that one, on every agent's panel, is dimmed. The `rows` are what the panel lists
  * (`listedRows`); accounts added or removed while it is open move with the shared list motion. */
-function AgentAccountList({ agent, rows, currentAccount, dimOthers, region }: { agent: Agent; rows: QuotaRow[]; currentAccount?: string | null; dimOthers: boolean; region: FadeRegion }): React.ReactElement {
+function AgentAccountList({ agent, rows, currentAccount, dimOthers, region, onUseReset }: { agent: Agent; rows: QuotaRow[]; currentAccount?: string | null; dimOthers: boolean; region: FadeRegion; onUseReset: ResetRequest }): React.ReactElement {
   const t = useT();
   const defaultName = defaultAccountName(t, useDaemonStore((s) => s.settings.default_account_names), agent);
   const scroller = useRef<HTMLDivElement>(null);
@@ -388,6 +409,8 @@ function AgentAccountList({ agent, rows, currentAccount, dimOthers, region }: { 
               agent={agent}
               account={account?.id ?? null}
               name={account ? <FadeOverflow dir="auto" titleWhenClipped={account.name}>{account.name}</FadeOverflow> : defaultName}
+              plainName={account?.name ?? defaultName}
+              onUseReset={onUseReset}
               rowRef={currentAccount === (account?.id ?? null) ? currentRow : undefined}
               dimmed={dimOthers && currentAccount !== (account?.id ?? null)}
               disabled={disabled}
@@ -406,7 +429,7 @@ function AgentAccountList({ agent, rows, currentAccount, dimOthers, region }: { 
  * visual only and lets pointer events through. It takes the dimmed text below WCAG AA on purpose, by the user's
  * decision: a de-emphasis cue, lifted when the mouse enters the panel or the panel closes. A turned-off account, which
  * only the selected running session's exception lists, carries a warning-coloured "Disabled" badge. */
-function QuotaAccount({ agent, account, name, rowRef, dimmed, disabled }: { agent: Agent; account: string | null; name: React.ReactNode; rowRef?: React.Ref<HTMLDivElement>; dimmed: boolean; disabled: boolean }): React.ReactElement {
+function QuotaAccount({ agent, account, name, plainName, rowRef, dimmed, disabled, onUseReset }: { agent: Agent; account: string | null; name: React.ReactNode; plainName: string; rowRef?: React.Ref<HTMLDivElement>; dimmed: boolean; disabled: boolean; onUseReset: ResetRequest }): React.ReactElement {
   const quota = useAccountQuota(agent, account);
   const now = useNow();
   const usedUp = exhaustedQuotaWindow(quota, now) !== undefined;
@@ -415,6 +438,7 @@ function QuotaAccount({ agent, account, name, rowRef, dimmed, disabled }: { agen
     <div ref={rowRef} data-list-motion={account ?? `default:${agent}`} data-dimmed={dimmed || undefined} className={`${INACTIVE_VEIL_CLASS} flex flex-col gap-2 groove-b py-3 data-dimmed:after:bg-overlay/55 [&:not(:has(~[data-list-motion]))]:border-b-0`}>
       <AccountNameLine name={name} quota={quota} usedUp={usedUp} disabled={disabled} />
       <AccountQuotaSummary quota={quota} single usedUp={usedUp} />
+      <ResetCreditsLine quota={quota} accountName={plainName} onUse={() => onUseReset(account, plainName)} preventFocusOnPress />
     </div>
   );
 }

@@ -1234,6 +1234,7 @@ mod tests {
             unavailable: Option<crate::protocol::QuotaUnavailable>,
         ) {
             let quota = AccountQuota {
+                reset_credits: None,
                 agent: Agent::Claude,
                 account: account.map(str::to_string),
                 fetched_at: 1,
@@ -1393,6 +1394,7 @@ mod tests {
 
         fn refresh_quota(&self, account: Option<&str>, used: f64) -> tokio::task::JoinHandle<()> {
             let quota = AccountQuota {
+                reset_credits: None,
                 agent: Agent::Claude,
                 account: account.map(str::to_string),
                 fetched_at: now_millis(),
@@ -1682,6 +1684,7 @@ mod tests {
         let fixture = Fixture::new("quota-recovery-model-only", SessionStatus::Idle);
         fixture.waiting_for_quota().await;
         let quota = AccountQuota {
+            reset_credits: None,
             agent: Agent::Claude,
             account: Some("claude-a".to_string()),
             fetched_at: now_millis(),
@@ -2056,6 +2059,7 @@ mod tests {
         let (state, env) = (fixture.state.clone(), fixture.env());
         let (started, launches) = (fixture.started.clone(), fixture.launches.clone());
         let recovered = AccountQuota {
+            reset_credits: None,
             agent: Agent::Claude,
             account: None,
             fetched_at: 1,
@@ -2953,6 +2957,7 @@ mod tests {
             .unwrap();
         fixture.state.account_quotas.hold_in_dir_for_test(
             &AccountQuota {
+                reset_credits: None,
                 agent: Agent::Grok,
                 account: Some("grok-a".to_string()),
                 fetched_at: 1,

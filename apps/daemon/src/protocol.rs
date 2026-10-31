@@ -2377,6 +2377,21 @@ pub enum RequestBody {
         #[cfg_attr(test, ts(optional = nullable))]
         account: Option<String>,
     },
+    /// Uses one of a Codex account's rate limit reset credits, after the user confirmed it: the
+    /// credit of the held reading that expires first (one with no expiry last), or the one the
+    /// backend picks when the reading holds no details. `account` is an account id, null for
+    /// Codex's default account. Answered with `reset_credit_used` once Codex has answered, and
+    /// the account's quota is then read again. A credit is never used on any other path.
+    /// Refused with `unknown_account` for an account that does not exist or is not Codex's,
+    /// `agent_not_available` for a Codex that is not available, `shell_environment_timeout`,
+    /// `binary_not_found`, `reset_credit_not_signed_in` for an account Codex says is signed in to
+    /// nothing, `reset_credit_in_progress` while a use of the same account is running,
+    /// `daemon_shutting_down`, `reset_credit_timed_out` and `reset_credit_failed`.
+    UseCodexResetCredit {
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
+        account: Option<String>,
+    },
     /// Ends the login of an account that is being signed in, and its CLI with it. Answered with
     /// `ack`; the `cancelled` update follows. Refused with `login_not_running` when there is none.
     CancelAccountLogin {
@@ -3041,6 +3056,11 @@ pub enum Event {
         id: Option<String>,
         location: ConversationLocation,
     },
+    /// The reply to `use_codex_reset_credit`: what Codex did with the request.
+    ResetCreditUsed {
+        id: Option<String>,
+        outcome: ResetCreditOutcome,
+    },
     /// The reply to `export_configuration`: the configuration document, which a client saves as
     /// the file the user keeps (see "Configuration export" in `apps/daemon/PROTOCOL.md`).
     ConfigurationExported {
@@ -3399,6 +3419,50 @@ impl QuotaWindow {
     }
 }
 
+/// One of an account's rate limit reset credits that can still be used, as Codex describes it.
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ResetCredit {
+    pub id: String,
+    /// The backend's name for the credit ("Full reset (Weekly + 5 hr)"), if it gives one.
+    pub title: Option<String>,
+    /// The backend's description of the credit, if it gives one.
+    pub description: Option<String>,
+    /// When the credit was granted, in milliseconds since the epoch, if Codex says.
+    pub granted_at: Option<i64>,
+    /// When the credit expires, in milliseconds since the epoch; null for one that never does.
+    pub expires_at: Option<i64>,
+}
+
+/// The rate limit reset credits of a Codex account that can be used now. Only present while there
+/// is at least one.
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ResetCredits {
+    /// How many credits can be used, whatever the list below holds.
+    pub available_count: u32,
+    /// The usable credits in the order they would be used: the one that expires first, a credit
+    /// with no expiry last. Null when Codex gave only the count, and may be shorter than
+    /// `available_count` when Codex caps its list.
+    pub credits: Option<Vec<ResetCredit>>,
+}
+
+/// What Codex did with a request to use a reset credit (`reset_credit_used`).
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResetCreditOutcome {
+    /// The credit was used and the windows that could be reset were.
+    Reset,
+    /// No window of the account is eligible for a reset now. Whether the credit is kept was not
+    /// measured.
+    NothingToReset,
+    /// The account has no credit left to use.
+    NoCredit,
+    /// The request's idempotency key had already succeeded.
+    AlreadyRedeemed,
+}
+
 /// Why an account's quota has no windows, as a coded message of the same shape as an `error`. It
 /// is part of the reading rather than a failure of anything else.
 #[cfg_attr(test, derive(ts_rs::TS))]
@@ -3439,6 +3503,11 @@ pub struct AccountQuota {
     /// stay (with their `fetched_at`) and `unavailable` says why the newer attempt failed.
     pub windows: Vec<QuotaWindow>,
     pub unavailable: Option<QuotaUnavailable>,
+    /// The account's usable rate limit reset credits (Codex only); absent when it has none or the
+    /// agent says nothing of them. Kept, like the windows, over a failed re-read.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub reset_credits: Option<ResetCredits>,
 }
 
 /// Where an account's login is.
@@ -4102,6 +4171,19 @@ pub mod error_code {
     /// `params`.
     pub const ADDED_AGENTS_UNDECIDED: Code = Code("added_agents_undecided");
     pub const UNKNOWN_ACCOUNT: Code = Code("unknown_account");
+    /// A `use_codex_reset_credit` for an account whose use of a credit is already running. Nothing
+    /// was sent. `params` names `agent`.
+    pub const RESET_CREDIT_IN_PROGRESS: Code = Code("reset_credit_in_progress");
+    /// Codex did not answer a `use_codex_reset_credit` in time. The credit may or may not have been
+    /// used; the quota is read again. `params` names `agent`.
+    pub const RESET_CREDIT_TIMED_OUT: Code = Code("reset_credit_timed_out");
+    /// Codex refused a `use_codex_reset_credit` for want of a sign-in. The quota is read again.
+    /// `params` names the `agent` and the `account` (by name).
+    pub const RESET_CREDIT_NOT_SIGNED_IN: Code = Code("reset_credit_not_signed_in");
+    /// A `use_codex_reset_credit` could not be carried out: Codex could not be run, ended without
+    /// answering, refused the request or answered with something that could not be read. The
+    /// quota is read again. `params` names `agent` and `detail`.
+    pub const RESET_CREDIT_FAILED: Code = Code("reset_credit_failed");
     /// A `start_account_login` for an account that is being signed in already. `params` names
     /// `agent`.
     pub const LOGIN_ALREADY_RUNNING: Code = Code("login_already_running");
@@ -5070,6 +5152,7 @@ mod tests {
             window_minutes: Some(300),
         };
         let quotas = vec![super::AccountQuota {
+            reset_credits: None,
             agent: super::Agent::Claude,
             account: None,
             fetched_at: 7,
@@ -5156,6 +5239,22 @@ mod tests {
                 account: Some(_)
             }
         ));
+        let request: Request =
+            serde_json::from_str(r#"{"type":"use_codex_reset_credit","id":"r"}"#).unwrap();
+        assert!(matches!(
+            request.body,
+            RequestBody::UseCodexResetCredit { account: None }
+        ));
+        let event = serde_json::to_value(super::Event::ResetCreditUsed {
+            id: Some("r".to_string()),
+            outcome: super::ResetCreditOutcome::NothingToReset,
+        })
+        .unwrap();
+        assert_eq!(
+            event,
+            serde_json::json!({"type": "reset_credit_used", "id": "r",
+                "outcome": "nothing_to_reset"})
+        );
         let event = serde_json::to_value(super::Event::AccountLoginUpdated {
             login: super::AccountLogin {
                 agent: super::Agent::Grok,

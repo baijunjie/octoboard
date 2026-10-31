@@ -5392,6 +5392,7 @@ pub(super) mod tests {
         let (state, _dir, caller) = codex_caller_state("defaults-passed-over");
         state.account_quotas.hold_in_dir_for_test(
             &AccountQuota {
+                reset_credits: None,
                 agent: Agent::Codex,
                 account: Some("codex-work".to_string()),
                 fetched_at: 1,
@@ -5462,6 +5463,7 @@ pub(super) mod tests {
 
     fn quota(agent: Agent, account: Option<&str>, windows: Vec<QuotaWindow>) -> AccountQuota {
         AccountQuota {
+            reset_credits: None,
             agent,
             account: account.map(str::to_string),
             fetched_at: 1,
@@ -6430,6 +6432,7 @@ pub(super) mod tests {
         state.store.update_project(&project).unwrap();
         let hold = |account: Option<&str>, used_percent: f64| {
             let quota = AccountQuota {
+                reset_credits: None,
                 agent: Agent::Claude,
                 account: account.map(str::to_string),
                 fetched_at: 1,
@@ -6489,6 +6492,7 @@ pub(super) mod tests {
             .unwrap();
         let hold = |account: Option<&str>, resets_in: i64| {
             let quota = AccountQuota {
+                reset_credits: None,
                 agent: Agent::Claude,
                 account: account.map(str::to_string),
                 fetched_at: 1,

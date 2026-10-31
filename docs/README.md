@@ -78,6 +78,8 @@ Development plan docs and bug tickets are temporary and are not listed here.
   up.
 - [The account quota panel](product/account-quota-panel.md) — the rail's Account usage panel.
 - [Starting a usage window](product/starting-usage-windows.md) — kicking a usage window that has not begun counting.
+- [Codex usage limit resets](product/usage-limit-resets.md) — how a Codex account's usage limit resets are read and
+  shown, and redeeming one from the rail's panel or the account details dialog.
 - [Folder trust](product/folder-trust.md) — the agents' trust confirmations, the trust permission and trusted folders.
 - [macOS privacy permissions](product/macos-privacy-permissions.md) — the Screen Recording and Accessibility
   permissions agents in terminals can need.

@@ -6,7 +6,8 @@
 //!   and then `get_usage`. The reply's `limits[]` lists the windows with their kind; the older
 //!   `five_hour`, `seven_day` and `model_scoped` fields are read only when `limits[]` yields none.
 //! - **Codex** is `codex app-server`, given `initialize`, `initialized`, `account/rateLimits/read`
-//!   and `account/read`: a primary and a secondary window and the plan, and who is signed in.
+//!   and `account/read`: a primary and a secondary window and the plan, who is signed in, and the
+//!   rate limit reset credits that can be used.
 //! - **Grok Build** is `grok agent --no-leader stdio`, given ACP `initialize` and `_x.ai/billing`:
 //!   one credit pool over a billing period and the subscription tier.
 //!
@@ -32,6 +33,7 @@ use serde_json::{json, Value};
 use crate::adapter;
 use crate::protocol::{
     quota_unavailable_code as code, Agent, QuotaUnavailable, QuotaWindow, QuotaWindowKind,
+    ResetCredit, ResetCredits,
 };
 use crate::rfc3339::parse_rfc3339_millis;
 use crate::subprocess::{run_exchange, Bounds, ExchangeFailure, Reach};
@@ -44,7 +46,7 @@ pub(super) const PROBE_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// The most a probe may print. Claude Code's reply to `initialize` lists every command and runs
 /// to hundreds of kilobytes.
-const OUTPUT_LIMIT: usize = 8 * 1024 * 1024;
+pub(super) const OUTPUT_LIMIT: usize = 8 * 1024 * 1024;
 
 /// How much of a probe's or a kick's stderr is kept for the failure that reports it.
 pub(super) const STDERR_LIMIT: usize = 4096;
@@ -85,6 +87,9 @@ const APP_SERVER_ARGS: [&str; 1 + CODEX_QUIET_FEATURES.len()] = {
 pub(super) struct Reading {
     pub plan: Option<String>,
     pub windows: Vec<QuotaWindow>,
+    /// Codex's rate limit reset credits that can be used; `None` for the other agents and for
+    /// an account with none.
+    pub reset_credits: Option<ResetCredits>,
 }
 
 /// Why a reply that arrived gives no reading.
@@ -160,10 +165,8 @@ fn conversation(agent: Agent) -> Conversation {
         Agent::Codex => Conversation {
             args: CODEX_APP_SERVER_ARGS,
             input: lines(vec![
-                json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
-                    "params": {"clientInfo": {"name": "octoboard",
-                        "version": env!("CARGO_PKG_VERSION")}}}),
-                json!({"jsonrpc": "2.0", "method": "initialized"}),
+                codex_initialize(),
+                codex_initialized(),
                 json!({"jsonrpc": "2.0", "id": 2, "method": "account/rateLimits/read"}),
                 json!({"jsonrpc": "2.0", "id": 3, "method": "account/read", "params": {}}),
             ]),
@@ -202,8 +205,19 @@ fn is_second_response(value: &Value) -> bool {
     is_response(value, 2)
 }
 
+/// The `initialize` request that opens a conversation with `codex app-server` (id 1).
+pub(super) fn codex_initialize() -> Value {
+    json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": {"clientInfo": {"name": "octoboard", "version": env!("CARGO_PKG_VERSION")}}})
+}
+
+/// The `initialized` notification that follows [`codex_initialize`].
+pub(super) fn codex_initialized() -> Value {
+    json!({"jsonrpc": "2.0", "method": "initialized"})
+}
+
 /// The JSON-RPC response to the request with `id`.
-fn is_response(value: &Value, id: i64) -> bool {
+pub(super) fn is_response(value: &Value, id: i64) -> bool {
     value.get("id").and_then(Value::as_i64) == Some(id) && value.get("method").is_none()
 }
 
@@ -379,6 +393,7 @@ fn reading(
             .filter(|plan| !plan.is_empty())
             .map(str::to_string),
         windows,
+        reset_credits: None,
     })
 }
 
@@ -493,7 +508,7 @@ fn claude_fallback(limits: &Value) -> Vec<QuotaWindow> {
 /// since Grok Build refuses an account whose stored credentials have expired with a bare "Internal
 /// error" (code -32603) and the cause only in `data` ("Billing service error: Invalid or expired
 /// credentials (...)").
-fn rpc_error_detail(reply: &Value) -> Option<String> {
+pub(super) fn rpc_error_detail(reply: &Value) -> Option<String> {
     let error = reply.get("error")?;
     let message = error
         .get("message")
@@ -596,7 +611,76 @@ fn read_codex(reply: &Value, account_reply: Option<&Value>) -> Result<Reading, R
             })
         })
         .collect();
-    reading(limits.get("planType"), windows, false)
+    let mut reading = reading(limits.get("planType"), windows, false)?;
+    reading.reset_credits = reply
+        .pointer("/result/rateLimitResetCredits")
+        .and_then(codex_reset_credits);
+    Ok(reading)
+}
+
+/// The usable credits in Codex's `rateLimitResetCredits` (`availableCount` and `credits`, which
+/// is null when only the count is known), or `None` for a count of zero or a field in a shape
+/// this code does not know: the credits are an addition to the reading, never a reason to fail
+/// it. The listed credits are the ones whose `status` is `available`, in the order they would be
+/// used (see [`reset_credit_order`]).
+fn codex_reset_credits(summary: &Value) -> Option<ResetCredits> {
+    let available_count = summary
+        .get("availableCount")
+        .and_then(Value::as_u64)
+        .and_then(|count| u32::try_from(count).ok())
+        .filter(|count| *count > 0)?;
+    let credits = summary
+        .get("credits")
+        .and_then(Value::as_array)
+        .map(|list| {
+            let mut credits: Vec<ResetCredit> =
+                list.iter().filter_map(codex_reset_credit).collect();
+            credits.sort_by_key(reset_credit_order);
+            credits
+        });
+    Some(ResetCredits {
+        available_count,
+        credits,
+    })
+}
+
+/// One entry of Codex's `credits[]`, when it is a credit that can be used.
+fn codex_reset_credit(credit: &Value) -> Option<ResetCredit> {
+    if credit.get("status").and_then(Value::as_str) != Some("available") {
+        return None;
+    }
+    let text = |field: &str| {
+        credit
+            .get(field)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+            .map(str::to_string)
+    };
+    let millis = |field: &str| {
+        credit
+            .get(field)
+            .and_then(Value::as_i64)
+            .map(|seconds| seconds.saturating_mul(1000))
+    };
+    // The id goes back to Codex as it came, so it is not trimmed.
+    let id = credit
+        .get("id")
+        .and_then(Value::as_str)
+        .filter(|id| !id.is_empty())?;
+    Some(ResetCredit {
+        id: id.to_string(),
+        title: text("title"),
+        description: text("description"),
+        granted_at: millis("grantedAt"),
+        expires_at: millis("expiresAt"),
+    })
+}
+
+/// Where a credit stands in the order they are used: the one that expires first, a credit with no
+/// expiry last.
+fn reset_credit_order(credit: &ResetCredit) -> (bool, i64) {
+    (credit.expires_at.is_none(), credit.expires_at.unwrap_or(0))
 }
 
 fn read_grok(reply: &Value, initialize_meta: Option<&Value>) -> Result<Reading, ReplyProblem> {
@@ -1102,6 +1186,105 @@ mod tests {
             ["initialize", "initialized", "account/rateLimits/read"]
         );
         assert!(methods.get(3).is_none_or(|method| method == "account/read"));
+    }
+
+    /// A Codex reply holding the quota of `CODEX_REPLY` and `credits` as its
+    /// `rateLimitResetCredits`.
+    fn codex_reply_with_credits(credits: Option<Value>) -> Value {
+        let mut reply: Value = serde_json::from_str(CODEX_REPLY).unwrap();
+        if let Some(credits) = credits {
+            reply["result"]["rateLimitResetCredits"] = credits;
+        }
+        reply
+    }
+
+    #[test]
+    fn codex_reports_the_reset_credits_it_can_use_in_the_order_they_would_be_used() {
+        let reply = codex_reply_with_credits(Some(json!({
+            "availableCount": 3,
+            "credits": [
+                {"id": "none", "resetType": "codexRateLimits", "status": "available",
+                 "grantedAt": 1_791_413_100, "expiresAt": null, "title": null,
+                 "description": null},
+                {"id": "used", "resetType": "codexRateLimits", "status": "redeemed",
+                 "grantedAt": 1_791_413_100, "expiresAt": 1_794_005_000, "title": "Used",
+                 "description": null},
+                {"id": "late", "resetType": "codexRateLimits", "status": "available",
+                 "grantedAt": 1_791_413_200, "expiresAt": 1_794_005_200, "title": "Late",
+                 "description": "Later"},
+                {"id": "soon", "resetType": "codexRateLimits", "status": "available",
+                 "grantedAt": 1_791_413_156, "expiresAt": 1_794_005_156,
+                 "title": " Full reset (Weekly + 5 hr) ", "description": ""},
+            ],
+        })));
+        let credits = read_codex(&reply, None).unwrap().reset_credits.unwrap();
+        assert_eq!(credits.available_count, 3);
+        let listed = credits.credits.unwrap();
+        assert_eq!(
+            listed.iter().map(|c| c.id.as_str()).collect::<Vec<_>>(),
+            ["soon", "late", "none"]
+        );
+        assert_eq!(
+            listed[0],
+            ResetCredit {
+                id: "soon".to_string(),
+                title: Some("Full reset (Weekly + 5 hr)".to_string()),
+                description: None,
+                granted_at: Some(1_791_413_156_000),
+                expires_at: Some(1_794_005_156_000),
+            }
+        );
+        assert_eq!(listed[2].expires_at, None);
+    }
+
+    #[test]
+    fn a_reset_credit_keeps_its_id_as_given_and_survives_a_missing_grant_time() {
+        let reply = codex_reply_with_credits(Some(json!({
+            "availableCount": 3,
+            "credits": [
+                {"id": " spaced ", "status": "available", "grantedAt": "soon",
+                 "expiresAt": 1_794_005_156},
+                {"id": "", "status": "available", "grantedAt": 1, "expiresAt": 2},
+                {"id": "ungranted", "status": "available", "expiresAt": 1_794_005_100},
+            ],
+        })));
+        let listed = read_codex(&reply, None)
+            .unwrap()
+            .reset_credits
+            .unwrap()
+            .credits
+            .unwrap();
+        assert_eq!(
+            listed
+                .iter()
+                .map(|c| (c.id.as_str(), c.granted_at))
+                .collect::<Vec<_>>(),
+            [("ungranted", None), (" spaced ", None)]
+        );
+    }
+
+    #[test]
+    fn codex_reset_credits_with_only_a_count_keep_the_count() {
+        let reply = codex_reply_with_credits(Some(json!({"availableCount": 2, "credits": null})));
+        let credits = read_codex(&reply, None).unwrap().reset_credits.unwrap();
+        assert_eq!((credits.available_count, credits.credits), (2, None));
+    }
+
+    #[test]
+    fn no_reset_credits_and_unreadable_ones_never_fail_the_reading() {
+        for credits in [
+            None,
+            Some(Value::Null),
+            Some(json!({"availableCount": 0, "credits": []})),
+            Some(json!({"availableCount": "one"})),
+            Some(json!("credits")),
+            Some(json!({"availableCount": -1})),
+        ] {
+            let reading = read_codex(&codex_reply_with_credits(credits.clone()), None)
+                .unwrap_or_else(|problem| panic!("{credits:?}: {problem:?}"));
+            assert_eq!(reading.reset_credits, None, "{credits:?}");
+            assert_eq!(reading.windows.len(), 2);
+        }
     }
 
     #[test]

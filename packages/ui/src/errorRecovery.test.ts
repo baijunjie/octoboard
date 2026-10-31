@@ -26,6 +26,7 @@ it.each([
   ["terminal_unavailable", "openTerminal"], ["directory_unavailable", "openFileManager"], ["path_open_failed", "openDefaultApplication"],
   ["sharing_resume_failed", "none"], ["message_acceptance_unconfirmed", "none"], ["terminal_input_lost", "none"], ["trust_not_carried_over", "none"], ["account_sharing_repair_failed", "none"],
   ["login_codex_busy", "none"], ["login_already_running", "none"], ["login_not_running", "none"],
+  ["reset_credit_in_progress", "none"], ["reset_credit_timed_out", "none"], ["reset_credit_failed", "resetCredit"], ["reset_credit_not_signed_in", "resetCreditLogin"],
 ])("classifies the known domain code %s with its specific remedy", (code, recovery) => {
   const error = new DaemonRequestError("localized text", code, { session: "s1" });
   expect(errorPresentation(error)).toBe(error);

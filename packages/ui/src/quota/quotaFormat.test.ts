@@ -4,7 +4,7 @@ import { isolate } from "../i18n/isolate";
 import { format, type Translate } from "../i18n/catalog";
 import type { QuotaWindow } from "../protocol";
 import type { AccountQuota } from "../protocol";
-import { exhaustedQuotaWindow, orderedQuotaWindows, primaryQuotaWindow, planLabel, quotaHeadline, quotaResetsIn, quotaUsedUpDetail, quotaUsedUpSentence, quotaUsedUpShort, quotaWindowLabel, quotaWindowPhrase, remainingPercentAt, twoLayerWindows, usageBarSummary, usageBarWindows } from "./quotaFormat";
+import { nextResetCredit, expiryLine, exhaustedQuotaWindow, orderedQuotaWindows, primaryQuotaWindow, planLabel, quotaHeadline, quotaResetsIn, quotaUsedUpDetail, quotaUsedUpSentence, quotaUsedUpShort, quotaWindowLabel, quotaWindowPhrase, remainingPercentAt, resetCreditsSummary, twoLayerWindows, usageBarSummary, usageBarWindows } from "./quotaFormat";
 
 const t: Translate = (key, ...args) => format("en", key, args[0]);
 const MINUTE = 60_000;
@@ -224,5 +224,33 @@ describe("the compact usage bar", () => {
   it("states both windows in words, or the one", () => {
     expect(usageBarSummary(t, { main: session, thin: weekly, naming: codex }, NOW)).toBe("5h 70% remaining, Weekly 40% remaining");
     expect(usageBarSummary(t, { main: weekly, naming: codex }, NOW)).toBe("Weekly 40% remaining");
+  });
+});
+
+describe("resetCreditsSummary", () => {
+  const credit = (expiresAt: number | null) => ({ id: "c", title: null, description: null, granted_at: NOW - MINUTE, expires_at: expiresAt });
+
+  it("counts the credits and counts down to the first one's expiry", () => {
+    expect(resetCreditsSummary(t, { available_count: 1, credits: [credit(NOW + (6 * 24 * 60 + 3 * 60) * MINUTE)] }, NOW)).toBe("1 usage limit reset available · expires in 6d 3h");
+    expect(resetCreditsSummary(t, { available_count: 3, credits: [credit(NOW + 90 * MINUTE), credit(null)] }, NOW)).toBe("3 usage limit resets available · expires in 1h 30m");
+  });
+
+  it("says the credit expires now once its time has passed", () => {
+    expect(resetCreditsSummary(t, { available_count: 1, credits: [credit(NOW - 1)] }, NOW)).toBe("1 usage limit reset available · expires now");
+  });
+
+  it("skips an expired credit for the next one, as the daemon does when it picks the credit to use", () => {
+    expect(resetCreditsSummary(t, { available_count: 2, credits: [credit(NOW - 1), credit(NOW + 90 * MINUTE)] }, NOW)).toBe("2 usage limit resets available · expires in 1h 30m");
+    expect(nextResetCredit({ available_count: 2, credits: [credit(NOW - 1), credit(null)] }, NOW)?.expires_at).toBeNull();
+  });
+
+  it("says no expiry for a credit that has none or when only the count is known", () => {
+    expect(resetCreditsSummary(t, { available_count: 1, credits: [credit(null)] }, NOW)).toBe("1 usage limit reset available");
+    expect(resetCreditsSummary(t, { available_count: 2, credits: null }, NOW)).toBe("2 usage limit resets available");
+  });
+
+  it("starts the expiry with a capital when it stands as a sentence of its own", () => {
+    expect(expiryLine(t, NOW + 90 * MINUTE, NOW)).toBe("Expires in 1h 30m");
+    expect(expiryLine(t, NOW - 1, NOW)).toBe("Expires now");
   });
 });

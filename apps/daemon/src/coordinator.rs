@@ -587,6 +587,22 @@ async fn handle_inner(
             Ok(None)
         }
 
+        RequestBody::UseCodexResetCredit { account } => {
+            refuse_if_agent_unavailable(state, Agent::Codex)?;
+            let account = checked_account_reference(state, Agent::Codex, account)?;
+            let outcome = account_quotas::use_reset_credit(
+                state,
+                account,
+                reset_credit_shell(),
+                account_quotas::RESET_CREDIT_TIMEOUT,
+            )
+            .await?;
+            Ok(Some(Event::ResetCreditUsed {
+                id: request_id,
+                outcome,
+            }))
+        }
+
         RequestBody::CancelAccountLogin { agent, account } => {
             state.account_logins.cancel(agent, account)?;
             Ok(None)
@@ -5930,6 +5946,18 @@ async fn submit_page(state: &Arc<AppState>, page_id: &str, data: serde_json::Val
     Ok(())
 }
 
+/// The shell environment a use of a reset credit runs Codex in. A test has none: a request that
+/// got through to it would spend a credit of the machine's own Codex account.
+#[cfg(not(test))]
+fn reset_credit_shell() -> account_quotas::ShellSource {
+    Arc::new(env_shell::launch_snapshot)
+}
+
+#[cfg(test)]
+fn reset_credit_shell() -> account_quotas::ShellSource {
+    Arc::new(|| anyhow::bail!("no shell environment under test"))
+}
+
 /// Refuses to open a session whose resolved agent has been *determined* unavailable — never while
 /// that determination is still pending, which the launch's own refusal of a missing binary already
 /// covers; see "When the agent or the account cannot open a session" in
@@ -7398,6 +7426,7 @@ mod tests {
         use crate::protocol::{AccountQuota, QuotaWindow, QuotaWindowKind};
         let (state, _dir) = crate::test_support::app_state("coordinator-quota-windows");
         let unstarted = |agent| AccountQuota {
+            reset_credits: None,
             agent,
             account: None,
             fetched_at: 1,
@@ -8364,6 +8393,7 @@ mod tests {
             .unwrap();
         let reset = now_millis() + 60_000;
         let used_up = |account: Option<&str>, resets_at| AccountQuota {
+            reset_credits: None,
             agent: Agent::Claude,
             account: account.map(str::to_string),
             fetched_at: 1,
@@ -8515,6 +8545,7 @@ mod tests {
 
         // Automatic selection passes over both, even with a reading that ranks them.
         let weekly = |account: Option<&str>| crate::protocol::AccountQuota {
+            reset_credits: None,
             agent: Agent::Claude,
             account: account.map(str::to_string),
             fetched_at: 1,
@@ -8621,6 +8652,7 @@ mod tests {
 
         let (state, _dir) = console_with_project_and_accounts("coordinator-disabled-kick");
         let unstarted = AccountQuota {
+            reset_credits: None,
             agent: Agent::Claude,
             account: Some("claude-a".to_string()),
             fetched_at: 1,
@@ -8714,6 +8746,7 @@ mod tests {
             .unwrap()
             .unwrap();
         let reading = |unavailable: Option<QuotaUnavailable>| AccountQuota {
+            reset_credits: None,
             agent: Agent::Claude,
             account: Some("claude-a".to_string()),
             fetched_at: 1,
@@ -8891,6 +8924,7 @@ mod tests {
         for id in ["first", "second"] {
             state.account_quotas.hold_in_dir_for_test(
                 &AccountQuota {
+                    reset_credits: None,
                     agent: Agent::Claude,
                     account: Some(id.to_string()),
                     fetched_at: 1,
@@ -8954,6 +8988,7 @@ mod tests {
             .unwrap();
         state.account_quotas.hold_in_dir_for_test(
             &AccountQuota {
+                reset_credits: None,
                 agent: Agent::Claude,
                 account: Some("claude-weekly".to_string()),
                 fetched_at: 1,
@@ -9016,6 +9051,7 @@ mod tests {
     ) {
         use crate::protocol::{AccountQuota, QuotaUnavailable, QuotaWindow, QuotaWindowKind};
         let quota = AccountQuota {
+            reset_credits: None,
             agent: Agent::Claude,
             account: account.map(str::to_string),
             fetched_at: 1,
@@ -10512,6 +10548,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn using_a_reset_credit_is_refused_for_a_foreign_or_unknown_account() {
+        let (state, _dir) = crate::test_support::app_state("coordinator-use-reset-credit");
+        handle(
+            &state,
+            None,
+            create_account_request(Agent::Claude, "Work", "/home/u/.claude-work"),
+        )
+        .await
+        .expect("created");
+        let claude_account = only_account(&state).id;
+        let use_on = |account: Option<String>| RequestBody::UseCodexResetCredit { account };
+        let code_of = |refused: anyhow::Error| refused.downcast_ref::<CodedError>().unwrap().code;
+
+        // Refused before any shell is asked for; `reset_credit_shell` has none under test either,
+        // so a request that got through would fail on that instead of reaching Codex.
+        set_availability(&state, Agent::Codex, Availability::Available);
+        for account in [Some(claude_account), Some("no-such-account".to_string())] {
+            let refused = handle(&state, None, use_on(account)).await.unwrap_err();
+            assert_eq!(code_of(refused), error_code::UNKNOWN_ACCOUNT);
+        }
+    }
+
+    #[tokio::test]
     async fn a_login_is_refused_for_a_foreign_account_and_a_cancel_for_a_login_that_is_not_running()
     {
         let (state, _dir) = crate::test_support::app_state("coordinator-account-login");
@@ -10736,6 +10795,7 @@ mod tests {
             state
                 .account_quotas
                 .hold_for_test(&crate::protocol::AccountQuota {
+                    reset_credits: None,
                     agent: Agent::Codex,
                     account: Some(account.clone()),
                     fetched_at: 1,

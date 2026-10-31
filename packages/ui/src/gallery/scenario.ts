@@ -6,7 +6,7 @@ import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/importPlan";
 import type { AvailableUpdate, MacosPermissionsStatus, UpdateChannel, UpdateProgress } from "../platform";
 import type { OwnerKind, PanelKind } from "../panels/stackState";
-import type { AccountTrashOutcome, Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, MessageParams, ModelsUnavailable, PathLinkKind, PathLinkRefusedCause, PathLinkView, ProcessTree, SessionBranchItem, SessionRecordsPresence } from "../protocol";
+import type { AccountTrashOutcome, Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, MessageParams, ModelsUnavailable, PathLinkKind, PathLinkRefusedCause, PathLinkView, ProcessTree, QuotaUnavailable, ResetCreditOutcome, SessionBranchItem, SessionRecordsPresence } from "../protocol";
 import type { FixtureError, FixtureFiles } from "./fixtures/projectFiles";
 import type { GroupTitle } from "./fixtures/groups";
 import type { FixtureGit } from "./fixtures/changeFixtures";
@@ -379,6 +379,20 @@ export interface Scenario {
    * device code); `failed` carries `login_failed`. Left out, a started login stays waiting until it is cancelled. A
    * state shown from the start is set in `state.accountLogins` instead. */
   loginOutcome?: "succeeded" | "failed" | "timed_out";
+  /** How `use_codex_reset_credit` ends for any Codex account: the outcome Codex answers with, a refusal as the daemon
+   * words one, or `"pending"` for a use never answered, which keeps the confirmation busy. The quota is read again
+   * after the answer and after a failure of Codex's run, but not after a refusal that comes before Codex runs
+   * (`binary_not_found`, `reset_credit_in_progress`, `daemon_shutting_down`, `unknown_account`,
+   * `agent_not_available`, `shell_environment_timeout`). Only `reset` spends a credit: it takes the first one that
+   * has not expired off the held reading, windows as they were, before the answer; `already_redeemed` and
+   * `nothing_to_reset` spend nothing, and `no_credit` drops the credits at the next read. Left out, a usable held
+   * credit is used (`reset`) and an account holding none gets `no_credit`. */
+  resetCreditUse?: ResetCreditOutcome | FixtureError | "pending";
+  /** The quota reading the fixture daemon takes after it answered a use of a reset credit (or Codex's run failed), as
+   * it does after the real one: `after` milliseconds later (default 100), with the windows full after a `reset` and
+   * only its time moved after any other answer; with `unavailable`, a read that failed, which keeps the windows and
+   * the credits and carries that failure; or `"never"`, so the window keeps waiting for it. */
+  resetCreditReading?: { after?: number; unavailable?: QuotaUnavailable } | "never";
   /** A refusal of `start_account_login`, as the daemon words one. */
   loginStartError?: FixtureError;
   /** A refusal of `add_agent`, `remove_agent` and `reorder_agents`, for what the window could not have seen coming
