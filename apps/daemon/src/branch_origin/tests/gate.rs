@@ -991,3 +991,96 @@ fn a_daemon_that_cannot_be_reached_lets_everything_through() {
     ok(&fixture, &["commit", "-q", "--allow-empty", "-m", "next"]);
     ok(&fixture, &["push", "-q", "--force", "origin", "main"]);
 }
+
+#[test]
+fn squashing_on_the_merge_base_passes_even_when_the_unpushed_branch_is_guarded() {
+    for guarded in [false, true] {
+        let (fixture, _) = project_with_remote();
+        let daemon = Daemon::start(&fixture.state);
+        fixture.port.store(daemon.port, Ordering::Relaxed);
+        ok(&fixture, &["switch", "-q", "-c", "feature"]);
+        fixture.deliver(1);
+        session_commit(&fixture, "a.txt", &numbered("feature", 10), "replace alpha");
+        session_commit(
+            &fixture,
+            "other.txt",
+            &numbered("changed", 6),
+            "replace other",
+        );
+        let old = rev(&fixture.repo, "HEAD");
+        let tree = rev(&fixture.repo, "HEAD^{tree}");
+        ok(&fixture, &["switch", "-q", "main"]);
+        session_commit(&fixture, "new.txt", "target work\n", "target moves on");
+        ok(&fixture, &["switch", "-q", "feature"]);
+        let base = String::from_utf8(git(
+            &fixture.repo,
+            &["merge-base", "HEAD", "refs/heads/main"],
+        ))
+        .unwrap()
+        .trim()
+        .to_string();
+        assert_ne!(base, rev(&fixture.repo, "main"));
+        if guarded {
+            ok(&fixture, &["branch", "child", "feature"]);
+            fixture.deliver(2);
+            assert!(fixture
+                .rows()
+                .iter()
+                .any(|row| row.target_branch.as_deref() == Some("feature")));
+        }
+        let output = real_gate(&fixture, &fixture.repo, &["reset", "--soft", &base]);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.success(), !guarded, "{stderr}");
+        if guarded {
+            assert!(
+                stderr.contains("[revert-gate] Refusing to move feature"),
+                "{stderr}"
+            );
+            assert!(
+                stderr.contains("this update undoes changes made by existing commits"),
+                "{stderr}"
+            );
+            assert!(!stderr.contains("drop published commits"), "{stderr}");
+            assert_eq!(rev(&fixture.repo, "HEAD"), old);
+        } else {
+            ok(&fixture, &["reset", "--soft", &old]);
+        }
+        let output = fixture
+            .session_git("a", &fixture.repo, &[])
+            .env(
+                "OCTOBOARD_TEST_GATE_BINARY",
+                std::env::current_exe().unwrap(),
+            )
+            .env("GIT_SEQUENCE_EDITOR", "sed -i.bak '2,$s/^pick /fixup /'")
+            .env("GIT_EDITOR", "true")
+            .args(["rebase", "-i", &base])
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(output.status.success(), "interactive squash: {stderr}");
+        assert!(!stderr.contains("[revert-gate] Check failed"), "{stderr}");
+        assert_eq!(rev(&fixture.repo, "HEAD^{tree}"), tree);
+        ok(&fixture, &["diff", "--exit-code", &old, "HEAD", "--"]);
+        assert_eq!(
+            String::from_utf8(git(
+                &fixture.repo,
+                &["rev-list", "--count", &format!("{base}..HEAD")]
+            ))
+            .unwrap()
+            .trim(),
+            "1"
+        );
+        assert_eq!(rev(&fixture.repo, "HEAD^"), base);
+        if guarded {
+            let squashed = rev(&fixture.repo, "HEAD");
+            let output = real_gate(&fixture, &fixture.repo, &["reset", "--hard", &base]);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(!output.status.success(), "{stderr}");
+            assert!(
+                stderr.contains("[revert-gate] Refusing to move feature"),
+                "{stderr}"
+            );
+            assert_eq!(rev(&fixture.repo, "HEAD"), squashed);
+        }
+    }
+}

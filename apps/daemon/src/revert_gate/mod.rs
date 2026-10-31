@@ -766,9 +766,12 @@ fn report(
     } else {
         format!(
             "The most common cause is a squash that changed the base without merging the content\n\
-             (e.g. committing after `git reset --soft {branch}`). On the branch, go back to before\n\
-             the squash, squash with `git reset --soft $(git merge-base HEAD {branch})` instead,\n\
-             then `git rebase {branch}` and resolve the conflicts faithfully."
+             (e.g. committing after `git reset --soft {branch}`). On the source branch, go back to\n\
+             before the squash and identify its target branch. Use\n\
+             `git rebase -i $(git merge-base HEAD <target branch>)` to squash without moving\n\
+             the branch to the base first, preserving deliberate-revert lines. Verify the final\n\
+             tree matches the pre-squash tip, then `git rebase <target branch>` and resolve\n\
+             the conflicts faithfully."
         )
     };
     text.push_str(&format!(
