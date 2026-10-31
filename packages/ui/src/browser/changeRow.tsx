@@ -1,13 +1,14 @@
 import { FileSymlink, FolderGit2 } from "lucide-react";
 import React, { useRef, useState } from "react";
 
+import { ChangeLineCounts } from "../components/ChangeLineCounts";
 import { InlineReference } from "../components/InlineReference";
 import { AnchoredTooltip } from "../components/AnchoredTooltip";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { FileTypeIcon } from "../components/FileTypeIcon";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
-import { Message, useCurrentLanguage, useT } from "../i18n/react";
+import { Message, useT } from "../i18n/react";
 import type { LineStats } from "../protocol";
 import { ChangeStatusBadge } from "../viewer/ChangeStatusBadge";
 import { STATUS_LABELS, STATUS_MARKS, type StatusKey } from "../viewer/statusMarks";
@@ -119,14 +120,11 @@ export function ChangeRowBody({ item, name, detail, contextTargetRef }: { item: 
  * digits whatever the text direction, as a diff's own gutter does. It never shrinks: the line of the
  * name and its detail gives way first. */
 function LineCounts({ item }: { item: ChangeItem }): React.ReactElement | null {
-  const language = useCurrentLanguage();
   const stats = lineStats(item);
   if (!stats) return null;
-  const number = new Intl.NumberFormat(language);
   return (
-    <span aria-hidden="true" dir="ltr" className="flex shrink-0 gap-1.5 text-xs tabular-nums">
-      {stats.added > 0 && <span className="text-(--tint-success-fg)">+{number.format(stats.added)}</span>}
-      {stats.removed > 0 && <span className="text-(--tint-danger-fg)">-{number.format(stats.removed)}</span>}
+    <span aria-hidden="true" className="flex shrink-0">
+      <ChangeLineCounts stats={stats} />
     </span>
   );
 }

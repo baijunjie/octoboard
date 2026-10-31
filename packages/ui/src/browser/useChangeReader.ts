@@ -437,7 +437,7 @@ export function useChangeReader(project: string, onWorktreeGone?: () => void): C
         : t("git.commit.source", { commit: isolate(shortCommit(commit)), parent: isolate(shortCommit(parent)) });
   }
   return {
-    subject: { key, path: opened.item.path, host: origin.kind === "worktree" && opened.item.status !== "deleted" ? { project, worktree: origin.worktree, path: opened.item.path } : undefined, source, sourceText, stage, status: opened.item.status, content },
+    subject: { key, path: opened.item.path, host: origin.kind === "worktree" && opened.item.status !== "deleted" ? { project, worktree: origin.worktree, path: opened.item.path } : undefined, source, sourceText, stage, status: opened.item.status, stats: opened.item.entry.group === "conflicted" ? undefined : opened.item.entry.stats, content },
     item: opened.item,
     origin,
     shown: current?.failed ? { state: "error", changing: current.failed.changing } : content.state === "loading" ? { state: "loading" } : { state: "read" },

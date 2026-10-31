@@ -43,6 +43,13 @@ code and read left to right, and in its tooltip, which is plain text, each keeps
 Under that are the change's details, laid out as the viewer lays out any subject's (see "The header" in
 `docs/product/file-viewer.md`): the path within the project and, for a rename, the path it was renamed from.
 
+**The line counts follow the path as a detail of their own**: the additions and removals listed for the change, in
+the same green `+` and red `-` and the current language's number format as the list (see "Line counts" in
+`docs/product/project-pane-git-change-list.md`). A zero side is omitted; no counts appear when both are zero, none
+were available, or the path is in conflict. Assistive technology hears the counts as lines added and lines removed.
+These are the listing's counts, even while the content is loading or cannot be read, rather than counts of the lines
+currently drawn in the viewer.
+
 A committed change is read from two commits, and is shown as a staged change is below; it is never untracked or in
 conflict. Listed together, its old side is read from the commit the branch and its base forked at — the empty tree
 for a branch listed with its whole history, every change of which is an addition — and its new side from the branch's

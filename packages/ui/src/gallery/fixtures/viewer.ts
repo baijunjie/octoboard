@@ -8,7 +8,7 @@ import { createElement } from "react";
 import { format, type Translate } from "../../i18n/catalog";
 import { isolate } from "../../i18n/isolate";
 import type { Language } from "../../i18n/languages";
-import type { FileContent } from "../../protocol";
+import type { FileContent, LineStats } from "../../protocol";
 import { RENDER_BUDGETS } from "../../viewer/budgets";
 import { bodyFromFileContent, type ChangeBodies, ChangeBodiesError, type ViewerBody, type ViewerChangeSide, type ViewerSubject } from "../../viewer/content";
 import { formatFileSize } from "../../viewer/format";
@@ -760,15 +760,30 @@ const newSession = text("src/session.ts", NEW_SESSION);
 const before = binary("assets/logo.png", IMAGES.before_png);
 const after = binary("assets/logo.png", IMAGES.after_png);
 
+/** Listing counts for the same patch a standalone viewer fixture shows. No patch leaves them unavailable. */
+function patchStats(patch: string | undefined): LineStats | undefined {
+  if (patch === undefined) return undefined;
+  const stats = { added: 0, removed: 0 };
+  let inHunk = false;
+  for (const line of patch.split("\n")) {
+    if (line.startsWith("diff --git")) inHunk = false;
+    else if (line.startsWith("@@")) inHunk = true;
+    else if (inHunk && line.startsWith("+")) stats.added++;
+    else if (inHunk && line.startsWith("-")) stats.removed++;
+  }
+  return stats;
+}
+
 function change(t: Translate, path: string, oldSide: ViewerChangeSide, newSide: ViewerChangeSide, patch?: string, stage: "staged" | "unstaged" = "unstaged"): ViewerSubject {
   // A change in the working copy has its file to show in the file manager, unless it is deleted there.
   const host = newSide.state === "present" ? hostOf(path) : undefined;
-  return { key: `${stage}:${path}`, path, host, stage: t(stage === "staged" ? "git.group.staged" : "git.group.unstaged"), content: { state: "change", change: { old: oldSide, new: newSide, patch } } };
+  return { key: `${stage}:${path}`, path, host, stats: patchStats(patch), stage: t(stage === "staged" ? "git.group.staged" : "git.group.unstaged"), content: { state: "change", change: { old: oldSide, new: newSide, patch } } };
 }
 
 // An untracked file is shown alone, with the Untracked chip and no stage tag.
 function untracked(path: string, body: ViewerBody): ViewerSubject {
-  return { key: `Untracked:${path}`, path, host: hostOf(path), status: "untracked", content: { state: "change", change: { old: { state: "absent" }, new: present(path, body) } } };
+  const stats = body.kind === "text" ? { added: body.text === "" ? 0 : body.text.replace(/\n$/, "").split("\n").length, removed: 0 } : undefined;
+  return { key: `Untracked:${path}`, path, host: hostOf(path), status: "untracked", stats, content: { state: "change", change: { old: { state: "absent" }, new: present(path, body) } } };
 }
 
 // An untracked symbolic link, or a repository of its own, is shown alone with nothing to read on its side.
@@ -782,6 +797,7 @@ function compared(parts: LiveParts, t: Translate): ViewerSubject {
   return {
     key: "Compare:src/session.ts",
     path: "src/session.ts",
+    stats: patchStats(MODIFIED_PATCH),
     ...wording,
     content: { state: "change", change: { old: present("src/session.ts", oldSession), new: present("src/session.ts", newSession), patch: MODIFIED_PATCH } },
   };
@@ -832,6 +848,7 @@ async function allChanges(language: Language): Promise<ViewerSubject[]> {
     {
       key: "Compare:docs/guide.md",
       path: "docs/guide.md",
+      stats: { added: GUIDE.replace(/\n$/, "").split("\n").length, removed: 0 },
       ...longComparison(parts, t),
       content: { state: "change", change: { old: { state: "absent" }, new: present("docs/guide.md", text("docs/guide.md", GUIDE)) } },
     },
@@ -849,6 +866,7 @@ async function allChanges(language: Language): Promise<ViewerSubject[]> {
     {
       key: "Compare:docs/handbook/renamed-notes.md",
       path: "docs/handbook/engineering/onboarding/renamed-notes.md",
+      stats: { added: 1, removed: 1 },
       ...longComparison(parts, t),
       content: {
         state: "change",
@@ -866,6 +884,7 @@ async function allChanges(language: Language): Promise<ViewerSubject[]> {
     {
       key: `Compare:${DESIGN_PATH}`,
       path: DESIGN_PATH,
+      stats: { added: GUIDE.replace(/\n$/, "").split("\n").length, removed: 0 },
       ...designComparison(parts, t),
       content: { state: "change", change: { old: { state: "absent" }, new: present(DESIGN_PATH, text("design-notes.md", GUIDE)) } },
     },
@@ -1311,7 +1330,7 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Renamed file, long source path in the viewer header",
-    description: "The comparison subtitle starts at the same inset as the current path's file icon. Both current and renamed-from paths use Markdown icons matching the file tree. The renamed-from path is plain monospace text without a chip background. Narrow the window to check that the long comparison clips and the source path wraps inside the header.",
+    description: "Green +1 and red -1 line counts follow the path and stay visible when the path is long. The comparison subtitle starts at the same inset as the current path's file icon. Both current and renamed-from paths use Markdown icons matching the file tree. The renamed-from path is plain monospace text without a chip background. Narrow the window to check that the long comparison clips and the source path wraps inside the header.",
     viewer: {
       subjects: async (language) => (await changes(language)).filter(({ key }) => key === "Compare:docs/handbook/renamed-notes.md"),
     },
@@ -1337,7 +1356,7 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Changes",
-    description: "Successful modified, added, deleted, renamed, type-changed, untracked and compared changes. Includes binary notices, empty diffs, and the notes and warnings that stand as marks after the path: a patch too large to draw, a missing newline at the end of a file, a side outside the project (warning), and an unchanged file or rename shown in full. Previous / Next stays within normal subjects; compare the soft status badges beside the title (untracked is neutral), long comparison subtitles and layout controls. File manager and Default application end the header row of the working-copy changes (staged, unstaged, untracked and conflicted) but not of the ones whose file is gone from the working copy (src/legacy.ts, src/moved-out.ts) nor of the committed ones, which carry a comparison under the title.",
+    description: "Successful modified, added, deleted, renamed, type-changed, untracked and compared changes. Green additions and red removals follow the path: the opening file shows +6 and -3, added and untracked files show additions only, deleted files show removals only, and empty or unavailable counts and binary changes show no count. Includes binary notices, empty diffs, and the notes and warnings that stand as marks after the path: a patch too large to draw, a missing newline at the end of a file, a side outside the project (warning), and an unchanged file or rename shown in full. Previous / Next stays within normal subjects; compare the soft status badges beside the title (untracked is neutral), long comparison subtitles and layout controls. File manager and Default application end the header row of the working-copy changes (staged, unstaged, untracked and conflicted) but not of the ones whose file is gone from the working copy (src/legacy.ts, src/moved-out.ts) nor of the committed ones, which carry a comparison under the title.",
     viewer: { subjects: changes },
   },
 ];
