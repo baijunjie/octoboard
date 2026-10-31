@@ -84,8 +84,8 @@ it("lists a session's trees with their command, working directory, ports, memory
   const text = rows()[0].textContent!.replace(/[\u2066-\u2069]/g, "");
   expect(text).toContain("npm run dev");
   expect(text).toContain("/work/search");
-  expect(text).toContain("120 MB of memory, listening on ports 3000 and 5173, started 5 minutes ago, 3 processes");
-  expect(rows()[1].textContent).toContain("2.5 MB of memory, started 5 minutes ago");
+  expect(text).toContain("120 MB of memory · listening on ports 3000 and 5173 · started 5 minutes ago · 3 processes");
+  expect(rows()[1].textContent).toContain("2.5 MB of memory · started 5 minutes ago");
   expect(rows()[1].textContent).not.toContain("process");
   expect(panel().querySelector("h2")?.textContent).toBe("Processes");
 });

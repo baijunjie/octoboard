@@ -12,8 +12,7 @@ async function start(): Promise<void> {
   const language = isLanguage(requestedLanguage) ? requestedLanguage : "en";
   localStorage.setItem(PREFERENCE_KEYS.language, language);
   localStorage.setItem("heroui-theme", "dark");
-  const [{ default: React }, { createRoot }, { FeatureView }, { LanguageProvider }, { PlatformProvider }, { ThemeProvider }] = await Promise.all([
-    import("react"),
+  const [{ createRoot }, { FeatureView }, { LanguageProvider }, { PlatformProvider }, { ThemeProvider }] = await Promise.all([
     import("react-dom/client"),
     import("./views"),
     import("../../i18n/react"),

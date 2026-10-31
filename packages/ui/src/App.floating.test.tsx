@@ -170,21 +170,21 @@ it("floats the panel opened last as the window narrows, else the stack's top one
   const { resize, stacks } = mountApp(1400);
   await pressElement(row("Fix header"));
   await pressElement(toggle("Show terminal panel"));
-  expect(cards()).toEqual(["panel-files", "panel-terminal"]);
+  expect(cards()).toEqual(["panel-terminal", "panel-files"]);
   await resize(390);
   expect(cards()).toEqual(["panel-terminal"]);
   expect(floatingPane()).not.toBeNull();
   await resize(1400);
-  expect(cards()).toEqual(["panel-files", "panel-terminal"]);
-  expect(stacks().stacks.project.open).toEqual(["files", "terminal"]);
+  expect(cards()).toEqual(["panel-terminal", "panel-files"]);
+  expect(stacks().stacks.project.open).toEqual(["terminal", "files"]);
 });
 
 it("floats the stack's top panel as the window narrows when none was opened in this window", async () => {
   const { resize, stacks } = mountApp(1400);
-  act(() => stacks().setStack("project", { open: ["files", "terminal"], shares: {} }));
+  act(() => stacks().setStack("project", { open: ["terminal", "files"], shares: {} }));
   await pressElement(row("Fix header"));
   await resize(390);
-  expect(cards()).toEqual(["panel-files"]);
+  expect(cards()).toEqual(["panel-terminal"]);
 });
 
 it("shows one panel at a time while floating, leaving the stored stack as it is", async () => {
@@ -474,17 +474,17 @@ it("brings the panel the owner had open last in on a swipe towards the start, el
   await act(async () => daemon.store.setState({ shellTerminals: new Map([["shell", shellTerminalOf("shell", project, "Shell", 0)]]) }));
   await selectProjectSession();
   await swipe(-120);
-  expect(cards()).toEqual(["panel-files"]);
-  await swipe(-120);
   expect(cards()).toEqual(["panel-terminal"]);
   await swipe(-120);
   expect(cards()).toEqual(["panel-files"]);
   await swipe(-120);
   expect(cards()).toEqual(["panel-terminal"]);
+  await swipe(-120);
+  expect(cards()).toEqual(["panel-files"]);
   await swipe(120);
   expect(cards()).toEqual([]);
   await swipe(-120);
-  expect(cards()).toEqual(["panel-terminal"]);
+  expect(cards()).toEqual(["panel-files"]);
 });
 
 it("closes the floating panel before opening the drawer, so the two are never on screen together", async () => {
