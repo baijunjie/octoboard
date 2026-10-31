@@ -975,10 +975,11 @@ fn following(state: &Arc<AppState>) -> StandIn {
     agent(state, "s0", "true")
 }
 
-/// A scan between a launch's reservation and its start finds the agent's internals carrying its
-/// tag and gives them to it; the start takes them back at once, before any other scan.
+/// A scan between a launch's reservation and its start leaves the agent's internals alone, tag
+/// and all: they sit in the terminal session the daemon's direct child leads, though the agent is
+/// not known yet. Its start changes nothing.
 #[test]
-fn a_launch_takes_back_its_agents_internals_a_scan_before_its_start_gave_it() {
+fn a_scan_before_a_launch_starts_leaves_its_agents_internals_alone() {
     let (state, dir) = app_state("ledger-early-scan");
     let _first = following(&state);
     let ledger = &state.process_ledger;
@@ -998,13 +999,12 @@ fn a_launch_takes_back_its_agents_internals_a_scan_before_its_start_gave_it() {
     wait_for_tag(helper);
     ledger.scan(false);
     assert_eq!(
-        launch_of(ledger, helper).as_deref(),
-        Some(pending.tag().launch_id()),
-        "in the agent's session, but the agent is not known yet"
+        launch_of(ledger, helper),
+        None,
+        "in the agent's session, though the agent is not known yet"
     );
 
     ledger.launch_started(pending.tag().launch_id(), "s1", live.pid);
-    assert_eq!(launch_of(ledger, helper), None);
     ledger.scan(false);
     assert_eq!(launch_of(ledger, helper), None);
 }
