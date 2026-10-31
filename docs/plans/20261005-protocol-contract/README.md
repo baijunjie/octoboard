@@ -4,7 +4,8 @@
 
 The protocol is documented in prose and mirrored by hand in the web client's types. Native iOS and Android clients will be
 written in other languages against it, so it has to become a contract that can be consumed mechanically, and one that
-cannot drift from the daemon.
+cannot drift from the daemon. Once clients built against one release meet a daemon of a later one, the contract also
+has to stop a change that would break them.
 
 ## Key design decisions
 
@@ -13,42 +14,21 @@ cannot drift from the daemon.
 - **Derived from, or checked against, the daemon's own types**, never a second hand-kept copy.
 - **The web client consumes it too.**
 - **Field meaning lives in the schema's descriptions**, since native clients will be written from it.
+- **The protocol only grows between releases.** A check compares the current schema with a snapshot of the last
+  release's:
+  - inputs may only accept more;
+  - outputs may only give more fields, and never a new kind of value or a lost type or required field;
+  - added requests and events are allowed;
+  - a real break needs a deliberate new protocol generation.
 
-## Milestone
+## Milestones
 
-> Goal: native clients can be generated from the protocol description, and the description cannot drift.
-> Completion criteria: the schema covers every request, event and record; a quality check fails when the daemon's types
-> and the schema disagree; the web client's types come from, or are checked against, the schema.
-
-### Technical design
-
-- [ ] The schema and its place in the repository.
-- [ ] The way it is produced from, or checked against, the daemon's types.
-- [ ] The web client's types switched over to it.
-
-### Implementation plan
-
-- [ ] Add the drift check to the repository's quality checks.
-- [ ] Keep the prose protocol document consistent with the schema.
-
-### Notes for the developer
-
-- **Reusable capabilities**: the daemon's protocol module already defines every message as a typed structure.
-- **Reference docs**: `apps/daemon/PROTOCOL.md`.
+- [01 Machine-readable schema](01-machine-readable-schema.md)
+- [02 Protocol compatibility guard](02-protocol-compatibility-guard.md) — needs 01's language-neutral schema, not the
+  web client's switch-over to it
 
 ## Open
 
 - The schema format and the tool that produces it; decide when starting.
-
-## Progress
-
-The drift check is delivered; the machine-readable schema for native clients is not.
-
-- **Delivered**: the daemon renders every wire type reachable from its requests and events as TypeScript with `ts-rs`
-  (a dev-dependency, derived only under `cfg(test)`) into `packages/ui/src/protocol.generated.ts`, which is committed. A
-  daemon test fails when the file is stale, and `packages/ui/src/protocol.contract.ts` makes `tsc` fail when a type of
-  `protocol.ts` differs from its generated counterpart, optional key and `null` included; the terminal stream's control
-  frames are covered too. Both run under `pnpm verify` for a change to either side.
-- **Remaining**: the schema in `contracts/` for the Swift and Kotlin clients (the generated file is TypeScript and
-  carries Rust doc comments, not a language-neutral description); the web client importing the generated types instead
-  of mirroring them (`protocol.ts` would keep its helpers and constants); and keeping `PROTOCOL.md` consistent with it.
+- Whether error and notice codes are exempt from the rule that output values only shrink, given that clients already
+  handle an unknown code from a newer daemon.
