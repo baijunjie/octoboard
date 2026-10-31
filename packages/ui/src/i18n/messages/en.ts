@@ -810,6 +810,7 @@ export const en = {
   "pane.resize": "Resize",
   "pane.resizeAside": "Resize panel area",
   "pane.resizePanels": "Resize {upper} and {lower} panels",
+  "pane.resizePanelColumns": "Resize panel columns",
   "panel.report.name": "Report",
   "panel.files.name": "Files",
   "panel.terminal.name": "Terminal",

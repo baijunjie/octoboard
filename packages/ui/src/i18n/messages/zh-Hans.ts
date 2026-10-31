@@ -730,6 +730,7 @@ export const zhHans: Translation<"other"> = {
   "pane.resize": "调整大小",
   "pane.resizeAside": "调整面板区域大小",
   "pane.resizePanels": "调整{upper}和{lower}面板的大小",
+  "pane.resizePanelColumns": "调整面板列宽",
   "panel.report.name": "报告",
   "panel.files.name": "文件",
   "panel.terminal.name": "终端",

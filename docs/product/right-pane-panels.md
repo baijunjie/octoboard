@@ -34,8 +34,9 @@ terminal and **10 px** from each other; the gaps on the terminal's side and betw
 "Resizing the sidebar and the right pane" in `docs/product/window-layout.md` and "Resizing panels" below). Below 782 px
 the gaps are in "Below 782 px: one panel floats over the terminal" below. What shows around and between the cards is the
 terminal's area, in the terminal's own background, so the cards read as lying on the content. A single panel in a column
-takes that column's full height. Columns share the pane's chosen total width equally, with a 10 px gap between them;
-adding a column does not enlarge the pane or add a column-width handle.
+takes that column's full height. Columns divide the pane's chosen total width, with a 10 px gap between them; their
+widths start equal and can be adjusted in that gap (see "Resizing panels" below). Changing their proportion does not
+change the pane's total width.
 
 A panel is never shorter than **120 px**.
 
@@ -247,13 +248,34 @@ terminal taking the content panel's whole width under it. The threshold is the s
 
 ## Resizing panels
 
-Between the two panels sharing a column, in the gap that separates them, is a **resize handle**, drawn as a grip like
-the right pane's width handle (see "Resizing the sidebar and the right pane" in `docs/product/window-layout.md`), with
-the same "Resize" tooltip. It moves only the boundary between that pair: the pair keeps its combined height, neither
-panel goes under 120 px, and the other panels and the stack's own height stay as they are, so **resizing panels never
-resizes the terminal**. Its name says which pair it resizes, naming both panels' kinds, upper one first. Each column's
-pair is resized independently. No vertical resize handle is shown while a panel is maximized; restoring it brings the
-handles back.
+**Column widths.** Whenever two columns are docked, a full-height resize handle sits in their gap, including while
+another panel is maximized. It changes the columns' relative widths within the pane, leaving the pane's total width
+and the agent terminal's size unchanged. Its accessible name identifies it as resizing the panel columns, and its
+hover tooltip says "Resize".
+
+- **Dragging** moves the boundary between the columns.
+- **Double-clicking** restores equal widths.
+- It is reachable with Tab. Left and Right move the boundary in their physical directions, by **16 px**, or **64 px**
+  with Shift held. Home makes the leading column as narrow as possible; End makes it as wide as possible. The leading
+  column is on the left in a left-to-right language and on the right in a right-to-left language.
+- Each column keeps at least **160 px**, measured after subtracting the gap from the available card width. When
+  three or four docked panels keep two columns at less than **320 px** of combined column width, the columns share
+  that width equally. Shrinking the window clamps the displayed widths without changing the chosen proportion;
+  widening it restores that proportion when there is room.
+- Its pointer target is **24 px** wide, centred on the gap. Pressing it with the mouse leaves keyboard focus where it
+  was, and the resize cursor stays visible throughout the drag.
+
+The chosen proportion starts at **50:50**. It is kept when the layout temporarily has one column, when all panels
+close, and when a panel is maximized or restored. How the choice is remembered across sessions is in "What is
+remembered" below.
+
+**Panel heights.** Between the two panels sharing a column, in the gap that separates them, is a **resize handle**,
+drawn as a grip like the right pane's width handle (see "Resizing the sidebar and the right pane" in
+`docs/product/window-layout.md`), with the same "Resize" tooltip. It moves only the boundary between that pair: the pair
+keeps its combined height, neither panel goes under 120 px, and the other panels and the stack's own height stay as they
+are, so **resizing panels never resizes the terminal**. Its name says which pair it resizes, naming both panels' kinds,
+upper one first. Each column's pair is resized independently. No panel-height resize handle is shown while a panel is
+maximized; restoring it brings those handles back.
 
 - **Dragging** it moves the boundary.
 - **Double-clicking** it gives the pair an even split of their combined height.
@@ -279,8 +301,9 @@ in its place, the archive view included — and nothing else:
 - **The sidebar keeps its own state**, docked, hidden, floating in or as a drawer, and a floating sidebar or its drawer
   comes up above the maximized card as usual.
 - **The other open panels stay docked**, repacked using the remaining docked count and available width (see "Opening
-  and closing panels" above), with their height weights preserved. Their vertical resize handles are hidden until the
-  maximized panel is restored. The right pane's width handle stays with the docked panels.
+  and closing panels" above), with their height weights and chosen column proportion preserved. Their panel-height
+  resize handles are hidden until the maximized panel is restored; the column-width handle remains while two columns
+  are docked. The right pane's width handle stays with the docked panels.
 - **With no other panel open, the docked pane folds away**: the terminal's area, and the maximized card over it, reach
   the window's end edge, and the pane's width handle goes with it. Opening or closing another panel meanwhile — its
   toggle, Open panel in a project's action menu — brings the docked pane back or folds it again, and leaves the
@@ -348,9 +371,9 @@ The report and Processes panels play none. The system's Reduce motion setting di
 ## What is remembered
 
 **Per kind of owner, per client**, in that client's own browser storage, as the right pane's width is (see "Resizing the
-sidebar and the right pane" in `docs/product/window-layout.md`): which panels are open and each one's height weight
-within its column, so the stack comes back as it was after a reload or a restart. Without that storage they last until
-the page is reloaded.
+sidebar and the right pane" in `docs/product/window-layout.md`): which panels are open, each one's height weight
+within its column, and the chosen column-width proportion, so the stack comes back as it was after a reload or a
+restart. Without that storage they last until the page is reloaded.
 
 There are two stacks, one for projects and one for console sessions: every project shares the first and every console
 session the second, so passing the right pane to another project keeps the open panels, their heights and which panel is

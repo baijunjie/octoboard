@@ -46,6 +46,7 @@ function physicalGrow(element: HTMLElement, orientation: keyof typeof AXES, grow
  * the default.
  */
 export function ResizeSeparator({
+  id,
   orientation,
   value,
   min,
@@ -62,6 +63,7 @@ export function ResizeSeparator({
   appearance = "line",
   tooltip,
 }: {
+  id?: string;
   orientation: keyof typeof AXES;
   value: number;
   min: number;
@@ -134,6 +136,7 @@ export function ResizeSeparator({
 
   return (
     <div
+      id={id}
       role="separator"
       aria-orientation={orientation}
       aria-label={label}

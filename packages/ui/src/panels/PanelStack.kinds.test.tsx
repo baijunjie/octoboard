@@ -4,6 +4,8 @@ import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { focusRegion } from "../components/regionFocus";
+import { PREFERENCE_KEYS } from "../preferenceKeys";
 import { PanelHeader } from "../components/PanelHeader";
 import type { PanePeek } from "../layout/usePaneToggles";
 import type { Project } from "../protocol";
@@ -124,8 +126,9 @@ it("changes between paired and full-height columns on pane resize without replac
   let width = 530;
   const observers: (() => void)[] = [];
   vi.stubGlobal("ResizeObserver", class {
-    constructor(callback: () => void) { observers.push(callback); }
+    constructor(callback: ResizeObserverCallback) { observers.push(() => callback([], this as unknown as ResizeObserver)); }
     observe() {}
+    unobserve() {}
     disconnect() {}
   });
   const bounds = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(() => DOMRect.fromRect({ width, height: 600 }));
@@ -140,13 +143,26 @@ it("changes between paired and full-height columns on pane resize without replac
   grid.style.columnGap = "10px";
   act(() => observers.forEach((measure) => measure()));
   const columns = () => grid.style.gridTemplateColumns;
-  expect(columns()).toBe("repeat(2, minmax(0, 1fr))");
+  expect(columns()).toBe("minmax(0, 0.5fr) minmax(0, 0.5fr)");
+  act(() => { expect(focusRegion("panel-files", () => {})).toBe(true); });
+  expect(document.activeElement?.closest("[data-panel-card]")?.id).toBe("panel-files");
+  act(() => control.focus());
+  const handle = grid.querySelector<HTMLElement>("#panel-column-resize")!;
+  expect(handle.getAttribute("aria-valuenow")).toBe("260");
+  act(() => handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })));
+  expect(handle.getAttribute("aria-valuenow")).toBe("276");
+  const stored = JSON.parse(localStorage.getItem(PREFERENCE_KEYS.panelStacks)!);
+  expect(stored.project.columnShare).toBeCloseTo(276 / 520);
   width = 529;
   act(() => observers.forEach((measure) => measure()));
-  expect(columns()).toBe("repeat(1, minmax(0, 1fr))");
+  expect(columns()).toBe("minmax(0, 1fr)");
+  expect(grid.querySelector("#panel-column-resize")).toBeNull();
   width = 530;
   act(() => observers.forEach((measure) => measure()));
-  expect(columns()).toBe("repeat(2, minmax(0, 1fr))");
+  const restored = grid.querySelector<HTMLElement>("#panel-column-resize")!;
+  expect(restored.getAttribute("aria-valuenow")).toBe("276");
+  act(() => restored.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })));
+  expect(columns()).toBe("minmax(0, 0.5fr) minmax(0, 0.5fr)");
   expect(stack.container.querySelector("#panel-files")).toBe(first);
   expect(stack.container.querySelector("#panel-fake")).toBe(second);
   expect(document.activeElement).toBe(control);

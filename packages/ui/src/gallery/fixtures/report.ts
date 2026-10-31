@@ -105,7 +105,7 @@ export const reportScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Three panels in two columns",
-    description: "Report fills the first column, with Terminal above Files in the second column. Each column holds at most two cards. Drag the separator between Terminal and Files to resize that column; Report keeps its full height. Report offers Maximize panel beside Close panel. Choose Narrow (800px) to inspect both columns in the available pane width.",
+    description: "Report fills the first column, with Terminal above Files in the second column. Each column holds at most two cards. Drag the full-height grip between the columns to change their widths, or the separator between Terminal and Files to change only their heights; Report keeps its full height. Report offers Maximize panel beside Close panel. Choose Narrow (800px) to inspect both columns in the available pane width.",
     // Below the docked-panel breakpoint only one floating card can be shown.
     minWidth: 782,
     state: panelState,
@@ -117,7 +117,7 @@ export const reportScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Four panels in two columns",
-    description: "Report and Terminal stack in the first column, Files and Processes in the second. Each column has its own height separator: resizing one leaves the other unchanged. Both Report and Terminal offer Maximize panel. Close a card to see the remaining cards fill columns in Report, Terminal, Files, Processes order, with at most two in each column.",
+    description: "Report and Terminal stack in the first column, Files and Processes in the second. A full-height grip between the columns changes their widths together. Drag it, or focus it and press Left or Right; Shift makes a larger step, Home and End reach the limits, and double-click restores equal widths. The chosen proportion is remembered for this owner kind. Each column keeps at least 160px when the available card width is at least 320px; below that, forced columns stay equal. Each column also has its own height separator: resizing one leaves the other unchanged. Both Report and Terminal offer Maximize panel. Close a card to see the remaining cards fill columns in Report, Terminal, Files, Processes order, with at most two in each column.",
     // Below the docked-panel breakpoint only one floating card can be shown.
     minWidth: 782,
     state: panelState,
@@ -130,7 +130,7 @@ export const reportScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Report panel maximized",
-    description: "Report covers the agent terminal's area, keeping its page and pager, while Terminal fills the first column and Files and Processes stack in the second. Restore panel size returns Report above Terminal and puts Files above Processes. Restoring or maximizing leaves the report page and shell in place.",
+    description: "Report covers the agent terminal's area, keeping its page and pager, while Terminal fills the first column and Files and Processes stack in the second. The full-height grip still adjusts the widths of the remaining two columns while Report is maximized. Restore panel size returns Report above Terminal and puts Files above Processes, preserving the chosen column proportion. Restoring or maximizing leaves the report page and shell in place.",
     // Floating cards have no maximize control.
     minWidth: 782,
     state: panelState,

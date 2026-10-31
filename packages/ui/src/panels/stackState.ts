@@ -60,6 +60,8 @@ export interface PanelStack {
   open: readonly string[];
   shares: Readonly<Record<string, number>>;
   maximized?: string;
+  /** The leading column's preferred fraction of the width shared by two columns. */
+  columnShare?: number;
 }
 
 /** What an owner's stack is until the user changes it: its default kinds open (`DEFAULT_OPEN`). */
@@ -122,7 +124,7 @@ export function closePanel(stack: PanelStack, kind: string, order: Order = PANEL
   if (!open.includes(kind)) return stack;
   const kinds = open.filter((candidate) => candidate !== kind);
   const maximized = stack.maximized === kind ? undefined : stack.maximized;
-  if (kinds.length === 0) return { open: [], shares: {} };
+  if (kinds.length === 0) return { open: [], shares: {}, ...(stack.columnShare === undefined ? {} : { columnShare: stack.columnShare }) };
   const remaining = sharesOf(stack, open).filter((_, index) => open[index] !== kind);
   return withShares({ ...stack, maximized }, kinds, remaining);
 }
@@ -183,12 +185,12 @@ export type PanelStacks = Record<OwnerKind, PanelStack>;
 function parseOne(value: unknown, owner: OwnerKind): PanelStack {
   const stored = OWNER_KINDS[owner].filter((kind) => !SESSION_KINDS[owner].includes(kind));
   if (typeof value !== "object" || value === null) return defaultStack(owner);
-  const { open, shares } = value as { open?: unknown; shares?: unknown };
+  const { open, shares, columnShare } = value as { open?: unknown; shares?: unknown; columnShare?: unknown };
   if (!Array.isArray(open)) return defaultStack(owner);
   const kinds = ordered(open.filter((kind): kind is string => typeof kind === "string"), stored);
   const storedShares = typeof shares === "object" && shares !== null ? (shares as Record<string, unknown>) : {};
   const kept = Object.fromEntries(kinds.flatMap((kind) => (typeof storedShares[kind] === "number" ? [[kind, storedShares[kind]]] : [])));
-  return { open: kinds, shares: kept };
+  return { open: kinds, shares: kept, ...(typeof columnShare === "number" && Number.isFinite(columnShare) && columnShare > 0 && columnShare < 1 ? { columnShare } : {}) };
 }
 
 /** Reads the stored text; whatever is not a well-formed stack of known kinds is the default.
@@ -212,7 +214,7 @@ export function parseStacks(raw: string | null, legacyHidden = false): PanelStac
 
 /** The text to store: each owner's open kinds and their shares, not the maximized one. */
 export function serializeStacks(stacks: PanelStacks): string {
-  const one = ({ open, shares }: PanelStack) => ({ open, shares });
+  const one = ({ open, shares, columnShare }: PanelStack) => ({ open, shares, columnShare });
   return JSON.stringify({ project: one(stacks.project), report: one(stacks.report) });
 }
 

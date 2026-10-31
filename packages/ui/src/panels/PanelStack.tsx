@@ -28,7 +28,7 @@ import {
   type PanelStack as Stack,
 } from "./stackState";
 import { usePanelStacks } from "./usePanelStacks";
-import { panelColumns } from "./panelColumns";
+import { columnSplit, panelColumns } from "./panelColumns";
 
 /**
  * A card's content, keyed by owner so a panel drops whatever it read for the owner before. Once the
@@ -188,6 +188,8 @@ export function PanelStack({
   const maximized = maximizedKind(stack, order);
   const [containerSize, setContainerSize] = useState({ width: 0, gap: 0 });
   const columns = panelColumns(stacked, containerSize.width, containerSize.gap);
+  const splitWidth = columnSplit(containerSize.width, containerSize.gap, base.columnShare);
+  const leadingShare = splitWidth.available > 0 ? splitWidth.leading / splitWidth.available : 0.5;
   const containerRef = useRef<HTMLDivElement>(null);
   // The heights the cards are laid out at, which the handles' values and the drag's arithmetic need
   // in px; the shares alone cannot say, as the gaps and the minimum heights take their part.
@@ -244,7 +246,7 @@ export function PanelStack({
   };
 
   return (
-    <div ref={containerRef} className="grid min-h-0 min-w-0 flex-1 grid-rows-[minmax(0,1fr)] gap-x-(--panel-stack-gap)" style={{ gridTemplateColumns: `repeat(${Math.max(1, columns.length)}, minmax(0, 1fr))` }}>
+    <div ref={containerRef} className="grid min-h-0 min-w-0 flex-1 grid-rows-[minmax(0,1fr)] gap-x-(--panel-stack-gap)" style={{ gridTemplateColumns: columns.length === 2 ? `minmax(0, ${leadingShare}fr) minmax(0, ${1 - leadingShare}fr)` : "minmax(0, 1fr)" }}>
       {maximized !== undefined && area && <div aria-hidden="true" className={`${MAXIMIZED_LAYER_CLASS} bg-panel`} style={backdropStyle(area)} />}
       {kinds.map((kind) => {
         const entry = PANEL_ENTRIES[kind as PanelKind];
@@ -326,6 +328,32 @@ export function PanelStack({
           </React.Fragment>
         );
       })}
+      {columns.length === 2 && (
+        <>
+          <HandOffOnUnmount from="#panel-column-resize" to={focusTerminal} />
+          <ResizeSeparator
+            id="panel-column-resize"
+            orientation="vertical"
+            value={Math.round(splitWidth.leading)}
+            min={Math.round(splitWidth.minimum)}
+            max={Math.round(splitWidth.available - splitWidth.minimum)}
+            label={t("pane.resizePanelColumns")}
+            grow={1}
+            appearance="grip"
+            tooltip={t("pane.resize")}
+            onChange={(width, options) => {
+              if (!(splitWidth.available > 0)) return;
+              const leading = Math.min(Math.max(width, splitWidth.minimum), splitWidth.available - splitWidth.minimum);
+              setStack({ ...base, columnShare: leading / splitWidth.available }, { persist: options?.commit !== false });
+            }}
+            onCommit={persist}
+            onReset={() => setStack({ ...base, columnShare: 0.5 })}
+            region={panelRegion(columns[0][0] as PanelKind)}
+            className="relative z-20 h-full w-6 pointer-events-auto"
+            style={{ gridColumn: 1, gridRow: 1, justifySelf: "end", insetInlineEnd: "calc((var(--panel-stack-gap) + 24px) / -2)" }}
+          />
+        </>
+      )}
     </div>
   );
 }

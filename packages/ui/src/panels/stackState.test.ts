@@ -144,3 +144,14 @@ it("evens out shares that are missing or not positive", () => {
   expect(sharesOf({ open: ["files", "fake"], shares: { files: 3 } }, ["files", "fake"])).toEqual([0.5, 0.5]);
   expect(sharesOf({ open: ["files", "fake"], shares: { files: 1, fake: 3 } }, ["files", "fake"])).toEqual([0.25, 0.75]);
 });
+
+it("remembers each owner's column proportion through reloads and closing the last card", () => {
+  const project = { ...openPanel(empty, "files"), columnShare: 0.65 };
+  const report = { open: ["report"], shares: {}, columnShare: 0.4 };
+  expect(parseStacks(serializeStacks({ project, report }))).toEqual({ project, report });
+  const closed = closePanel(project, "files");
+  expect(openPanel(closed, "terminal").columnShare).toBe(0.65);
+  for (const columnShare of [0, 1, -1, null, "0.5", NaN, Infinity]) {
+    expect(parseStacks(JSON.stringify({ project: { open: ["files"], shares: {}, columnShare } })).project.columnShare).toBeUndefined();
+  }
+});
