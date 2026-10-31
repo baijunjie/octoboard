@@ -15,8 +15,8 @@ test("affected consumers are combined without unrelated checks, light steps firs
   assert.ok(!combined.includes("web type check"));
 });
 
-test("any Rust change runs the one combined Rust pair, since the tests always cover the workspace", () => {
-  const pair = [["cargo", "fmt", "--all", "--", "--check"], ["pnpm", "test:rust"]];
+test("any Rust change runs the combined Rust checks, since the tests always cover the workspace", () => {
+  const pair = [["cargo", "fmt", "--all", "--", "--check"], ["pnpm", "clippy:rust"], ["pnpm", "test:rust"]];
   for (const file of ["apps/daemon/src/main.rs", "apps/desktop/src-tauri/src/lib.rs", "Cargo.lock"]) {
     assert.deepEqual(steps([file]).filter((step) => /rust/.test(step.label)).map((step) => step.cmd), pair, file);
   }
@@ -32,7 +32,7 @@ test("--full lists every consumer's steps, light steps before heavy ones", () =>
   const full = checkSteps({ mode: "full" });
   assert.deepEqual(full.map((step) => step.label), [
     "verify lint", "verify tests", "ui lint", "ui type check", "web lint", "web type check", "web locales", "desktop lint",
-    "desktop script tests", "rustfmt check", "ui tests", "web build", "web tests", "rust tests",
+    "desktop script tests", "rustfmt check", "ui tests", "web build", "web tests", "rust clippy", "rust tests",
   ]);
   const firstHeavy = full.findIndex((step) => step.heavy);
   assert.ok(full.slice(firstHeavy).every((step) => step.heavy));
@@ -52,7 +52,7 @@ test("UI reruns remain narrowed and release checks exclude website and gallery s
   const ui = steps(["packages/ui/src/App.tsx"]).find((step) => step.label === "ui tests");
   assert.deepEqual(ui.rerun(["packages/ui/src/a/X.test.tsx"]), [["pnpm", "--filter", "@octoboard/ui", "test", "src/a/X.test.tsx"]]);
   const release = checkSteps({ mode: "release" });
-  assert.deepEqual(release.map((step) => step.label), ["application lint", "application type check", "desktop script tests", "rustfmt check", "application UI tests", "rust tests"]);
+  assert.deepEqual(release.map((step) => step.label), ["application lint", "application type check", "desktop script tests", "rustfmt check", "application UI tests", "rust clippy", "rust tests"]);
   assert.ok(release[0].cmd.includes("**/src/gallery/**"));
   assert.ok(release[1].cmd.includes("typecheck:app"));
   assert.ok(release[4].cmd.includes("test:app"));

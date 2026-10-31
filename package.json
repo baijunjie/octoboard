@@ -7,6 +7,7 @@
     "typecheck": "pnpm -r typecheck",
     "build": "pnpm -r build",
     "install:macos": "pnpm --filter @octoboard/desktop install:macos",
+    "clippy:rust": "node scripts/clippy-rust.mjs",
     "test:rust": "node scripts/test-rust.mjs",
     "verify": "node scripts/verify.mjs",
     "lint": "eslint . --cache --cache-strategy content --cache-location node_modules/.cache/eslint/ --max-warnings 0",

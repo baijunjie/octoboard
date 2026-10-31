@@ -33,6 +33,8 @@ checked with `cargo`. `src-tauri/` is a member of the root Cargo workspace along
   both crates in one invocation, so their shared dependencies build once. It sets `TAURI_CONFIG` to empty
   `bundle.externalBin`, which the tests can do because they never start the sidecar, so it needs no daemon build; a
   plain `cargo test` that includes `src-tauri/` still needs one. Switching between the two rebuilds this crate.
+- `pnpm clippy:rust` (from the repository root, `scripts/clippy-rust.mjs`) — lints both crates and all targets
+  with `cargo clippy --workspace --all-targets -- -D warnings`, using the same sidecar override as the Rust tests.
 - `pnpm tauri dev` — starts the `packages/ui` dev server (port 5174) and opens the window on it.
 - `pnpm build:tauri` — builds the daemon sidecar, then `packages/ui`, whose `dist/` the application bundles.
 - `pnpm build:app` — builds the app without signing, to check a change (below).

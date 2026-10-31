@@ -159,7 +159,10 @@ that terminal, so the call works there. Check what a crate does on macOS before 
 Finder through `osascript` (the `trash` crate's default `DeleteMethod::Finder`), and pick the consent-free path
 instead: a Foundation API such as `NSFileManager`, or `/usr/bin/open`.
 
-## Lint the Rust crates with `cargo clippy --all-targets`
+## Lint both Rust crates and their tests with warnings denied
+
+`pnpm clippy:rust` runs `cargo clippy --workspace --all-targets -- -D warnings`, with the same sidecar override as
+`pnpm test:rust`. Both package-scoped and release verification include it.
 
 Plain `cargo clippy` checks only the lib and bin targets, and every test in these crates sits in a `#[cfg(test)]`
 module (there is no `tests/` directory), so it lints none of the test code — and most changes here add more test code

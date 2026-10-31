@@ -241,6 +241,8 @@ impl PendingRecovery {
 
 /// The shell environment snapshot and the launch that a recovery run in the background uses: the
 /// real ones, or in a test the stand-ins its fixture installed (none installed, none returned).
+// Opaque callbacks keep test launch injection statically dispatched without boxing.
+#[allow(clippy::type_complexity)]
 fn recovery_env(
     state: &Arc<AppState>,
 ) -> Option<(

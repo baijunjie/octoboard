@@ -296,13 +296,12 @@ fn add_bar(
     fraction: f64,
     agent: AgentKind,
     used_up_fill: Option<&NSColor>,
-    mtm: MainThreadMarker,
 ) {
     let bar = QuotaBar::new(
         rect(INSET, y, width - INSET * 2.0, thickness),
         fraction.clamp(0.0, 1.0),
         used_up_fill.map_or_else(|| fill_colour(agent), NSColor::retain),
-        mtm,
+        row.mtm(),
     );
     bar.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable);
     row.addSubview(&bar);
@@ -331,7 +330,6 @@ fn window_row(
         fraction,
         agent,
         used_up_fill,
-        mtm,
     );
     row
 }
@@ -374,7 +372,6 @@ fn meter_row(
         session.fraction,
         agent,
         used_up_fill,
-        mtm,
     );
     add_bar(
         &row,
@@ -384,7 +381,6 @@ fn meter_row(
         weekly.fraction,
         agent,
         used_up_fill,
-        mtm,
     );
     weekly_line.place(&row, width, BAR_BOTTOM);
     row

@@ -86,7 +86,7 @@ pub struct LiveSession {
     /// attached terminal's own protocol replies (focus reports, answers to the agent's terminal
     /// queries) are not counted, because they cannot move a cursor. Changed only under the PTY's
     /// input lock, so that the trust path's check of the count and its key are one step that no
-    /// other writer can fall between. See [`Self::write_input`].
+    /// other writer can fall between. See [`Self::write_raw_input`].
     input_writes: AtomicU64,
     draft: Mutex<Draft>,
     swap: Mutex<swap::InputSwap>,
@@ -348,6 +348,7 @@ impl LiveSession {
     /// traffic all the time and none of it answers a screen. A mouse button press is counted: it
     /// is the person acting. Where mouse reporting is off, as at Codex's trust screen, the wheel
     /// arrives as arrow keys, which are counted too.
+    #[cfg(test)]
     pub fn write_input(&self, data: &[u8]) -> Result<(), ptyio::PartialWrite> {
         self.write_raw_input(data, false)
     }
