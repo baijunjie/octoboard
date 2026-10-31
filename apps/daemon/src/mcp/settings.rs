@@ -19,7 +19,9 @@ use super::args::{
     optional_agent, optional_bool, optional_string_list, own_console, own_project, parse_agent,
     present_agent, present_text, raw_text, required_str, resolve_project,
 };
-use crate::coordinator::{self, ConsoleChanges, ProjectChanges, SettingsChanges};
+use crate::coordinator::{
+    self, consoles::ConsoleChanges, projects::ProjectChanges, settings::SettingsChanges,
+};
 use crate::git_workflow;
 use crate::project_git::remote_url;
 use crate::protocol::{
@@ -51,7 +53,7 @@ pub(super) async fn update_project(
         description: present_text(arguments, "description")?,
         git_workflow: git_workflow_argument(arguments)?,
     };
-    let updated = coordinator::update_project(state, &project.id, changes).await?;
+    let updated = coordinator::projects::update_project(state, &project.id, changes).await?;
     describe_project(state, &updated)
 }
 
@@ -74,7 +76,8 @@ pub(super) async fn update_console(
         icon: None,
         console_session_prompt: None,
     };
-    let updated = coordinator::update_console(state, &console_session.console_id, changes).await?;
+    let updated =
+        coordinator::consoles::update_console(state, &console_session.console_id, changes).await?;
     Ok(describe_console(&updated))
 }
 
@@ -126,7 +129,7 @@ pub(super) fn update_settings(
     state: &Arc<AppState>,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    coordinator::update_settings(
+    coordinator::settings::update_settings(
         state,
         SettingsChanges {
             auto_pull_repositories: optional_bool(arguments, "auto_pull_repositories")?,
@@ -321,12 +324,14 @@ pub(super) fn resolve_account(
     if wanted.eq_ignore_ascii_case("default") {
         return Ok(None);
     }
-    let key = coordinator::account_name_key(wanted);
+    let key = coordinator::accounts::account_name_key(wanted);
     let accounts = state.store.list_accounts()?;
     let of_agent = || accounts.iter().filter(|account| account.agent == agent);
     of_agent()
         .find(|account| account.id == wanted)
-        .or_else(|| of_agent().find(|account| coordinator::account_name_key(&account.name) == key))
+        .or_else(|| {
+            of_agent().find(|account| coordinator::accounts::account_name_key(&account.name) == key)
+        })
         .map(|account| Some(account.id.clone()))
         .ok_or_else(|| CodedError::unknown_account(wanted))
 }
@@ -434,7 +439,7 @@ pub(super) fn describe_project(state: &Arc<AppState>, project: &Project) -> Resu
         // The same resolution a launch makes, so that what an agent reads is what a session
         // started in this project gets when nothing names otherwise.
         "effective": {
-            "default_agent": coordinator::session_agent(None, Some(project), &console),
+            "default_agent": coordinator::account_choice::session_agent(None, Some(project), &console),
             "accounts": per_agent_object(|agent| {
                 json!(console
                     .resolve_project_account(agent, project.accounts.get(agent))
@@ -442,7 +447,7 @@ pub(super) fn describe_project(state: &Arc<AppState>, project: &Project) -> Resu
                     .unwrap_or("default"))
             }),
             "launch": per_agent_object(|agent| {
-                json!(coordinator::project_launch_settings(project, &console, agent))
+                json!(coordinator::launch::project_launch_settings(project, &console, agent))
             }),
         },
         "git_workflow": {
@@ -472,3 +477,6 @@ pub(super) fn describe_console(console: &Console) -> Value {
         "workdir": console.workdir,
     })
 }
+
+#[cfg(test)]
+mod tests;

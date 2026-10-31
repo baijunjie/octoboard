@@ -1638,7 +1638,7 @@ async fn archiving_oneself_names_what_will_stay() {
     let (fixture, root) = agent_fixture("cleanup-agent-self");
     let owner_root = fixture.worktree("own", "owner");
     std::fs::write(owner_root.join("new.txt"), "untracked\n").unwrap();
-    crate::coordinator::archive_session(&fixture.state, "worker").unwrap();
+    crate::coordinator::lifecycle::archive_session(&fixture.state, "worker").unwrap();
     let answer = crate::mcp::exec::call(&fixture.state, "owner", "archive_self", &Map::new())
         .await
         .unwrap();

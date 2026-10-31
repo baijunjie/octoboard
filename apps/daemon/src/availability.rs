@@ -85,7 +85,7 @@ pub fn fill_added_agents(state: &AppState) -> Result<()> {
         state.store.set_added_agents_if_undecided(&agents)?
     };
     if filled {
-        crate::coordinator::broadcast_settings(state)?;
+        crate::coordinator::settings::broadcast_settings(state)?;
     }
     Ok(())
 }

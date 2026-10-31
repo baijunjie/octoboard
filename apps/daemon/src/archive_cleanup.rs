@@ -114,7 +114,10 @@ async fn scan(state: &Arc<AppState>, locator: LocatorSource, trash: TrashRecord)
         return;
     }
     branch_cleanup::remove::remove_logging_left(state.clone(), deleted.clone()).await;
-    coordinator::trash_agent_records_with(state, deleted, locator(), move |path| trash(path)).await;
+    coordinator::lifecycle::trash_agent_records_with(state, deleted, locator(), move |path| {
+        trash(path)
+    })
+    .await;
 }
 
 /// Deletes each group of archived sessions that is wholly unresumable and returns every session
@@ -143,7 +146,11 @@ fn delete_unresumable_groups(state: &Arc<AppState>, locator: &Locator) -> Vec<Se
                 .is_some_and(|owner| archived_ids.contains(owner))
     });
     for root in roots {
-        match delete_group_if_unresumable(state, locator, &coordinator::group_in(&sessions, root)) {
+        match delete_group_if_unresumable(
+            state,
+            locator,
+            &coordinator::bindings::group_in(&sessions, root),
+        ) {
             Ok(Judged::SwitchedOff) => break,
             Ok(Judged::Deleted(gone)) => {
                 for session in &gone {
@@ -244,7 +251,7 @@ fn delete_judged(state: &Arc<AppState>, judged: &[&Session]) -> Result<Judged> {
     let Some(root) = sessions.iter().find(|session| session.id == judged[0].id) else {
         return Ok(Judged::Deleted(Vec::new()));
     };
-    let current = coordinator::group_in(&sessions, root);
+    let current = coordinator::bindings::group_in(&sessions, root);
     let unchanged = current.len() == judged.len()
         && judged.iter().all(|before| {
             current
@@ -260,7 +267,7 @@ fn delete_judged(state: &Arc<AppState>, judged: &[&Session]) -> Result<Judged> {
     }
     let mut gone = Vec::new();
     // What was deleted before a failure still needs its branches and records cleaned up.
-    if let Err(err) = coordinator::delete_archived_group(state, root, &mut gone) {
+    if let Err(err) = coordinator::lifecycle::delete_archived_group(state, root, &mut gone) {
         tracing::warn!(session = %root.id, %err, "deleting an unresumable archived group stopped partway");
     }
     Ok(Judged::Deleted(gone))
@@ -602,7 +609,7 @@ mod tests {
         let judged = state.store.list_sessions().unwrap();
         let judged_group = || {
             let hub = judged.iter().find(|session| session.id == "hub").unwrap();
-            coordinator::group_in(&judged, hub)
+            coordinator::bindings::group_in(&judged, hub)
         };
         let leaf = |change: &dyn Fn(&mut Session)| {
             let mut session = state.store.get_session("leaf").unwrap().unwrap();
@@ -640,7 +647,7 @@ mod tests {
         }
         let judged = state.store.list_sessions().unwrap();
         let hub = judged.iter().find(|session| session.id == "hub").unwrap();
-        let group = coordinator::group_in(&judged, hub);
+        let group = coordinator::bindings::group_in(&judged, hub);
         state
             .store
             .insert_session(&account.session("late", Some("hub")))
@@ -711,7 +718,7 @@ mod tests {
         }
         let judged = state.store.list_sessions().unwrap();
         let hub = judged.iter().find(|session| session.id == "hub").unwrap();
-        let group = coordinator::group_in(&judged, hub);
+        let group = coordinator::bindings::group_in(&judged, hub);
         let claim = state.begin_launch("leaf").unwrap();
         assert!(gone(delete_judged(&state, &group).unwrap()).is_empty());
         assert_eq!(session_ids(&state), ["hub", "leaf"]);

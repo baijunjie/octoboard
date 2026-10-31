@@ -198,7 +198,7 @@ fn request_id_of(event: &Event) -> String {
     }
 }
 
-/// Stands in for `coordinator::open_session`, which would launch a real agent: records the
+/// Stands in for `coordinator::open::open_session`, which would launch a real agent: records the
 /// session the request describes, with a stand-in process, and counts the launches.
 struct Launcher {
     state: Arc<AppState>,
@@ -243,8 +243,8 @@ impl Launcher {
     }
 }
 
-/// Stands in for `coordinator::resume_session` where a request that starts a session is answered:
-/// nothing there brings a session back.
+/// Stands in for `coordinator::resume::resume_session` where a request that starts a session is
+/// answered: nothing there brings a session back.
 async fn never_resumed(_id: String) -> Result<()> {
     bail!("no session is brought back here")
 }
@@ -564,7 +564,7 @@ async fn a_waiting_request_holds_the_hand_up_whatever_the_agent_reports() {
     let written = {
         let state = state.clone();
         tokio::task::spawn_blocking(move || {
-            reporting::write_message(&state, "asker", "hello", WhenBlocked::Refuse)
+            delivery::write_message(&state, "asker", "hello", WhenBlocked::Refuse)
         })
         .await
         .unwrap()
@@ -1203,8 +1203,8 @@ fn holder(id: &str, status: SessionStatus, bound_to: Option<&str>) -> Session {
     }
 }
 
-/// Stands in for `coordinator::resume_session`, which would launch a real agent: moves the session
-/// out of its dormant status, and counts the calls.
+/// Stands in for `coordinator::resume::resume_session`, which would launch a real agent: moves the
+/// session out of its dormant status, and counts the calls.
 struct Resumer {
     state: Arc<AppState>,
     resumed: Mutex<Vec<String>>,

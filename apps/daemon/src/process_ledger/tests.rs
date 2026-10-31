@@ -941,7 +941,7 @@ async fn a_launch_is_followed_under_the_tag_it_reserved_before_its_agent_started
     let started = Arc::new(std::sync::Mutex::new(Vec::<StandIn>::new()));
     let launches = Arc::new(std::sync::Mutex::new(Vec::<Launched>::new()));
     let claim = state.begin_launch("s1").unwrap();
-    crate::coordinator::relaunch_session_with(
+    crate::coordinator::launch::relaunch_session_with(
         &state,
         &claim,
         "s1",
@@ -1241,7 +1241,7 @@ async fn ending_an_agent_first_attributes_what_it_started_a_moment_before() {
     let mut guard = KillOnDrop(vec![child]);
     let child_id = identity(child);
 
-    crate::coordinator::stop_process(&state, (*live).clone())
+    crate::coordinator::launch::stop_process(&state, (*live).clone())
         .await
         .unwrap();
     std::fs::write(&go, "").unwrap();

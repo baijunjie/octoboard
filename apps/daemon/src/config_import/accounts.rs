@@ -198,12 +198,12 @@ fn judge_account(
         in_use_by: None,
         error: Some(ImportFailure::of(&err)),
     };
-    let name = match coordinator::normalize_account_name(&account.name) {
+    let name = match coordinator::accounts::normalize_account_name(&account.name) {
         Ok(name) => name,
         Err(err) => return Ok(invalid(proposed.ok(), err)),
     };
-    let key = coordinator::account_name_key(&name);
-    let taken_by = match coordinator::colliding_account_name(state, agent, &name, None)? {
+    let key = coordinator::accounts::account_name_key(&name);
+    let taken_by = match coordinator::accounts::colliding_account_name(state, agent, &name, None)? {
         Some(existing) => Some(existing),
         None => earlier
             .iter()
@@ -213,14 +213,14 @@ fn judge_account(
     if let Some(existing) = taken_by {
         return Ok(invalid(
             proposed.ok(),
-            coordinator::account_name_taken(agent, &name, &existing),
+            coordinator::accounts::account_name_taken(agent, &name, &existing),
         ));
     }
     let dir = match proposed {
         Ok(dir) => dir,
         Err(err) => return Ok(invalid(None, err)),
     };
-    let in_use_by = match coordinator::colliding_account_dir(state, agent, &dir, None)? {
+    let in_use_by = match coordinator::accounts::colliding_account_dir(state, agent, &dir, None)? {
         Some(existing) => Some(existing),
         None => {
             let key = account_dir_key(&dir);
@@ -253,8 +253,8 @@ fn default_name_applies(
     name: &str,
     created: &HashSet<(Agent, String)>,
 ) -> Result<bool> {
-    let key = coordinator::account_name_key(name);
-    if coordinator::clears_default_account_name(name)
+    let key = coordinator::accounts::account_name_key(name);
+    if coordinator::accounts::clears_default_account_name(name)
         || state
             .store
             .default_account_names()?
@@ -263,7 +263,7 @@ fn default_name_applies(
     {
         return Ok(false);
     }
-    Ok(coordinator::colliding_owned_account_name(state, agent, name, None)?.is_none())
+    Ok(coordinator::accounts::colliding_owned_account_name(state, agent, name, None)?.is_none())
 }
 
 /// What importing the document's accounts would do on this machine.
@@ -291,7 +291,7 @@ pub(super) fn inspect_accounts(
         let mut earlier: Vec<Earlier> = Vec::new();
         let mut accounts = Vec::new();
         for account in &group.accounts {
-            let key = coordinator::account_name_key(&account.name);
+            let key = coordinator::accounts::account_name_key(&account.name);
             let inspected = if rebinder.find(group.agent, &account.name).is_some() {
                 let proposed = normalize_account_dir(group.agent, &account.directory);
                 (proposed.ok(), AccountStatus::Existing, None, None)
@@ -382,7 +382,7 @@ pub(super) fn index_account_resolutions(
         }
         let choice = match (directory, leave_out) {
             (Some(directory), false) => {
-                coordinator::absolute_path(&directory)
+                coordinator::validate::absolute_path(&directory)
                     .map_err(|_| invalid("the directory is not absolute"))?;
                 AccountChoice::Directory(directory)
             }
@@ -425,7 +425,7 @@ pub(super) async fn apply_accounts(
             }
         }
         if !agents_added.is_empty() {
-            coordinator::broadcast_settings(state)?;
+            coordinator::settings::broadcast_settings(state)?;
         }
     }
 
@@ -453,7 +453,7 @@ pub(super) async fn apply_accounts(
                 Some(AccountChoice::Directory(directory)) => directory,
                 None => account.directory.clone(),
             };
-            match coordinator::insert_new_account(
+            match coordinator::accounts::insert_new_account(
                 state,
                 group.agent,
                 account.name.clone(),
@@ -492,7 +492,7 @@ pub(super) async fn apply_accounts(
             // The rule an inspection reports, checked under the lock the write takes: a name
             // given to the default account since is kept, and a name an account has taken since
             // is refused, which is expected here and not reported.
-            match coordinator::name_unnamed_default_account(state, agent, name) {
+            match coordinator::accounts::name_unnamed_default_account(state, agent, name) {
                 Ok(written) => default_name_applied = written,
                 Err(err) if is_name_taken(&err) => {}
                 Err(err) => {
@@ -538,7 +538,7 @@ fn place_after_existing(state: &Arc<AppState>, agent: Agent, created: &[String])
     };
     match placed() {
         Ok(true) => {
-            if let Err(err) = coordinator::broadcast_settings(state) {
+            if let Err(err) = coordinator::settings::broadcast_settings(state) {
                 tracing::warn!(%err, "broadcasting the account order after an import failed");
             }
         }
@@ -1099,19 +1099,30 @@ mod tests {
         let area = ScratchDir::new("import-name-default-race-area");
         let (state, _state_dir) = account_state("import-name-default-race", &area);
 
-        assert!(
-            coordinator::name_unnamed_default_account(&state, Agent::Claude, " Personal ").unwrap()
-        );
+        assert!(coordinator::accounts::name_unnamed_default_account(
+            &state,
+            Agent::Claude,
+            " Personal "
+        )
+        .unwrap());
         // A rename made since the check an inspection reports leaves the machine's name alone.
-        assert!(
-            !coordinator::name_unnamed_default_account(&state, Agent::Claude, "Other").unwrap()
-        );
+        assert!(!coordinator::accounts::name_unnamed_default_account(
+            &state,
+            Agent::Claude,
+            "Other"
+        )
+        .unwrap());
         let names = state.store.default_account_names().unwrap();
         assert_eq!(names.get("claude").map(String::as_str), Some("Personal"));
 
         // A blank name or the word for an unnamed one clears nothing here.
         for name in ["  ", "DEFAULT"] {
-            assert!(!coordinator::name_unnamed_default_account(&state, Agent::Grok, name).unwrap());
+            assert!(!coordinator::accounts::name_unnamed_default_account(
+                &state,
+                Agent::Grok,
+                name
+            )
+            .unwrap());
         }
 
         // A name an account has meanwhile taken is refused, the one refusal an import expects.
@@ -1119,7 +1130,7 @@ mod tests {
             .store
             .insert_account(&account("codex-work", Agent::Codex, "Work"))
             .unwrap();
-        let err = coordinator::name_unnamed_default_account(&state, Agent::Codex, "work")
+        let err = coordinator::accounts::name_unnamed_default_account(&state, Agent::Codex, "work")
             .expect_err("the name is taken");
         assert!(is_name_taken(&err));
         assert!(!state

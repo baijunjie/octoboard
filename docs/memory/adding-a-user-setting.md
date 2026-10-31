@@ -31,7 +31,7 @@ application setting that is not machine-local is added, in the same change, to:
   present, because an export from a released build lacks it and a required field would make that export unreadable;
   otherwise raise `VERSION` and add the step that upgrades the previous version (its doc comment there);
 - the import inspection in `apps/daemon/src/config_import/mod.rs` (`InspectedSettings`), with the document's value and
-  the current one, and the `coordinator::update_settings` call that applies the document's settings;
+  the current one, and the `coordinator::settings::update_settings` call that applies the document's settings;
 - the window: for a setting that is a switch, one entry in `BOOLEAN_SETTINGS` in
   `packages/ui/src/configuration/importParts.tsx` (its settings-page label, its document field, and a
   `configuration.import.settings.consequence.<name>` message saying what turning it on then does, added to

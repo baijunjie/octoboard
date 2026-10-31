@@ -80,7 +80,9 @@ async fn get_account_quotas_with(
     let now = now_millis();
     let mut listed = Vec::new();
     for agent in Agent::ALL {
-        if only.is_some_and(|only| only != agent) || !coordinator::agent_can_open(state, agent)? {
+        if only.is_some_and(|only| only != agent)
+            || !coordinator::account_choice::agent_can_open(state, agent)?
+        {
             continue;
         }
         let stored = accounts.iter().filter(|account| account.agent == agent);
@@ -157,7 +159,7 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    use crate::mcp::exec::tests::{arguments, shared_console_state};
+    use crate::mcp::test_support::{arguments, shared_console_state};
     use crate::protocol::{
         Account, AccountQuota, AgentAvailability, Availability, QuotaUnavailable, QuotaWindowKind,
         DEFAULT_ACCOUNT_NAME,

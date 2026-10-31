@@ -8,12 +8,13 @@ So a new reason is checked at every one of these places in the same change. If y
 other places still put work on the account or offer it with nothing marked. The daemon then refuses that work later,
 or starts the work anyway where nothing refuses it.
 
-- Daemon refusals: opening a session (`resolve_open`) and switching a session's account
-  (`switch_session_account_with`), both in `apps/daemon/src/coordinator.rs`. If the refusal has a new error code, the
-  UI classifies that code too.
-- Daemon choices made without asking: automatic account selection (`account_can_open`), the MCP fallback to the
-  calling session's account (`apps/daemon/src/mcp/exec.rs`), and the descriptions of that fallback in the MCP tool
-  descriptions and schemas (`apps/daemon/src/mcp/mod.rs`) and in `apps/daemon/PROTOCOL.md`.
+- Daemon refusals: opening a session (`resolve_open` in `apps/daemon/src/coordinator/open.rs`) and switching a
+  session's account (`switch_session_account_with` in `apps/daemon/src/coordinator/account_switch.rs`). If the refusal
+  has a new error code, the UI classifies that code too.
+- Daemon choices made without asking: automatic account selection (`account_can_open` in
+  `apps/daemon/src/coordinator/account_choice.rs`), the MCP fallback to the calling session's account
+  (`callers_account` and `automatic_choice` in `apps/daemon/src/mcp/exec/sessions.rs`), and the descriptions of that
+  fallback in the MCP tool descriptions and schemas (`apps/daemon/src/mcp/mod.rs`) and in `apps/daemon/PROTOCOL.md`.
 - Daemon work that spends an account: starting usage windows automatically (`AccountQuotas::kick_allowed` in
   `apps/daemon/src/account_quotas/mod.rs`, which both the kick itself and the due mark an on-demand refresh leaves for
   the poller consult).

@@ -661,8 +661,8 @@ fn window(answer: &mut Value, shown: Shown, offset: usize, max_bytes: usize) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mcp::exec::tests::{arguments, RepoState};
     use crate::mcp::project_browse::test_git;
+    use crate::mcp::test_support::{arguments, RepoState};
     use crate::test_support::{git, ScratchDir};
 
     async fn list(fixture: &RepoState, caller: &str, input: Value) -> Result<Value> {

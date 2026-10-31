@@ -1,0 +1,417 @@
+use super::*;
+use crate::coordinator::handle;
+use crate::coordinator::launch::stop_process;
+use crate::coordinator::launch::LaunchEdit;
+use crate::coordinator::lifecycle::archive_record;
+use crate::coordinator::test_support::{code_of, shell_env, status_of};
+use crate::protocol::{
+    error_code, Agent, Event, ModelChangeOutcome, RequestBody, Session, SessionStatus,
+};
+use crate::term;
+use crate::test_support::{
+    console_session, console_with_project_and_accounts, fake_live_session, idle_stand_in,
+    project_session,
+};
+use anyhow::Result;
+use std::sync::Arc;
+use std::time::Duration;
+
+/// Clients are shown a session a change of its model restarts as starting for as long as the
+/// change's claim lasts, and a mark without that claim shows nothing.
+#[tokio::test]
+async fn a_session_shows_as_starting_while_a_model_change_restarts_it() {
+    let (state, _dir) = console_with_project_and_accounts("coordinator-model-change-shown");
+    state
+        .store
+        .insert_session(&project_session("s", Agent::Claude, SessionStatus::Idle))
+        .unwrap();
+    let mut events = state.subscribe();
+    let shown = |events: &mut tokio::sync::broadcast::Receiver<Event>| {
+        let mut last = None;
+        while let Ok(event) = events.try_recv() {
+            if let Event::SessionUpserted { session } = event {
+                last = Some(session.status);
+            }
+        }
+        last
+    };
+
+    state.mark_model_change("s");
+    assert_eq!(shown(&mut events), None, "no claim, no mark");
+    let claim = state.begin_switch("s").unwrap();
+    state.mark_model_change("s");
+    assert_eq!(shown(&mut events), Some(SessionStatus::Starting));
+    drop(claim);
+    assert!(!state.is_changing_model("s"));
+    assert_eq!(shown(&mut events), Some(SessionStatus::Idle));
+}
+
+/// A launch that must never run, for a change that records or refuses.
+fn no_launch(_: term::LaunchRequest) -> Result<term::Launch> {
+    panic!("nothing is launched")
+}
+
+/// A model change asks for something to change, and is refused, with nothing written, for an
+/// archived session, one being started and a value the agent does not offer; an interrupted
+/// session only has the values recorded, and values it already has change nothing.
+#[tokio::test]
+async fn a_model_change_is_checked_and_an_interrupted_session_only_records_it() {
+    let (state, dir) = console_with_project_and_accounts("coordinator-model-change-checks");
+    for (id, status) in [
+        ("archived", SessionStatus::Archived),
+        ("starting", SessionStatus::Starting),
+        ("down", SessionStatus::Interrupted),
+    ] {
+        state
+            .store
+            .insert_session(&Session {
+                model: Some(Some("sonnet".to_string())),
+                ..project_session(id, Agent::Claude, status)
+            })
+            .unwrap();
+    }
+    let change = |id: &'static str, model: Option<&str>| {
+        set_session_model_with(
+            &state,
+            id,
+            LaunchEdit {
+                model: model.map(|model| Some(model.to_string())),
+                effort: None,
+            },
+            ModelAsker::User,
+            None,
+            shell_env(&dir),
+            no_launch,
+        )
+    };
+
+    let err = change("down", None).await.expect_err("nothing given");
+    assert_eq!(code_of(&err), error_code::FIELD_REQUIRED);
+    let err = change("archived", Some("opus"))
+        .await
+        .expect_err("archived");
+    assert_eq!(code_of(&err), error_code::SESSION_ARCHIVED);
+    let err = change("starting", Some("opus"))
+        .await
+        .expect_err("starting");
+    assert_eq!(code_of(&err), error_code::SESSION_ALREADY_STARTING);
+    let err = change("down", Some("gpt-9"))
+        .await
+        .expect_err("not offered");
+    assert_eq!(code_of(&err), error_code::INVALID_LAUNCH_SETTING);
+    for id in ["archived", "starting", "down"] {
+        let after = state.store.get_session(id).unwrap().unwrap();
+        assert_eq!(after.model, Some(Some("sonnet".to_string())), "{id}");
+    }
+
+    assert_eq!(
+        change("down", Some("sonnet")).await.unwrap(),
+        ModelChange::Unchanged
+    );
+    assert_eq!(
+        change("down", Some("opus")).await.unwrap(),
+        ModelChange::Recorded
+    );
+    let after = state.store.get_session("down").unwrap().unwrap();
+    assert_eq!(after.model, Some(Some("opus".to_string())));
+    assert_eq!(after.status, SessionStatus::Interrupted);
+}
+
+/// The control request is answered with what the change did.
+#[tokio::test]
+async fn a_set_session_model_request_is_answered_with_its_outcome() {
+    let (state, _dir) = console_with_project_and_accounts("coordinator-model-change-reply");
+    crate::test_support::offer_models(&state, Agent::Claude, &[("opus", &["high"])]);
+    state
+        .store
+        .insert_session(&project_session(
+            "s",
+            Agent::Claude,
+            SessionStatus::Interrupted,
+        ))
+        .unwrap();
+    let ask = || RequestBody::SetSessionModel {
+        session: "s".to_string(),
+        model: Some(Some("opus".to_string())),
+        effort: None,
+        terminal_appearance: None,
+    };
+    let outcome = |reply: Option<Event>| match reply {
+        Some(Event::SessionModelSet {
+            id,
+            session,
+            outcome,
+            continued,
+        }) => {
+            assert_eq!((id.as_deref(), session.as_str()), (Some("r"), "s"));
+            (outcome, continued)
+        }
+        other => panic!("answered with {other:?}"),
+    };
+
+    let reply = handle(&state, Some("r".to_string()), ask()).await.unwrap();
+    assert_eq!(outcome(reply), (ModelChangeOutcome::Recorded, None));
+    let reply = handle(&state, Some("r".to_string()), ask()).await.unwrap();
+    assert_eq!(outcome(reply), (ModelChangeOutcome::Unchanged, None));
+}
+
+#[tokio::test]
+async fn an_unchanged_model_no_longer_in_the_catalogue_is_not_revalidated() {
+    let (state, dir) = console_with_project_and_accounts("model-unlisted-noop");
+    crate::test_support::offer_models(&state, Agent::Claude, &[("sonnet", &["low"])]);
+    state
+        .store
+        .insert_session(&Session {
+            model: Some(Some("retired-model".to_string())),
+            effort: Some(Some("retired-effort".to_string())),
+            ..project_session("s", Agent::Claude, SessionStatus::Interrupted)
+        })
+        .unwrap();
+    let changed = set_session_model_with(
+        &state,
+        "s",
+        LaunchEdit {
+            model: Some(Some(" retired-model ".to_string())),
+            effort: None,
+        },
+        ModelAsker::User,
+        None,
+        shell_env(&dir),
+        no_launch,
+    )
+    .await
+    .unwrap();
+    assert_eq!(changed, ModelChange::Unchanged);
+    // A changed field is checked without revalidating the unrelated legacy override.
+    let changed = set_session_model_with(
+        &state,
+        "s",
+        LaunchEdit {
+            model: Some(Some("sonnet".to_string())),
+            effort: None,
+        },
+        ModelAsker::User,
+        None,
+        shell_env(&dir),
+        no_launch,
+    )
+    .await
+    .unwrap();
+    assert_eq!(changed, ModelChange::Recorded);
+    let after = state.session_record("s").unwrap();
+    assert_eq!(
+        after.effort.as_ref().and_then(|value| value.as_deref()),
+        Some("retired-effort")
+    );
+}
+
+#[tokio::test]
+async fn an_interrupted_session_archived_during_model_validation_is_not_changed() {
+    let (state, dir) = console_with_project_and_accounts("model-late-archive");
+    crate::test_support::offer_models(&state, Agent::Claude, &[("sonnet", &["low"])]);
+    state
+        .store
+        .insert_session(&project_session(
+            "s",
+            Agent::Claude,
+            SessionStatus::Interrupted,
+        ))
+        .unwrap();
+    let change = set_session_model_with(
+        &state,
+        "s",
+        LaunchEdit {
+            model: Some(Some("sonnet".to_string())),
+            effort: None,
+        },
+        ModelAsker::User,
+        None,
+        shell_env(&dir),
+        no_launch,
+    );
+    // Model validation awaits a blocking catalogue read, even for a seeded catalogue.
+    let (result, ()) = tokio::join!(change, async { archive_record(&state, "s").unwrap() });
+    assert_eq!(code_of(&result.unwrap_err()), error_code::SESSION_ARCHIVED);
+    let after = state.session_record("s").unwrap();
+    assert_eq!(after.status, SessionStatus::Archived);
+    assert!(after.model.is_none());
+}
+
+/// A running session whose relaunch ends at once is left interrupted with the model and effort
+/// it had, on its account, with its earlier process ended; the observed model the records
+/// showed is to be read afresh.
+#[tokio::test]
+async fn a_model_change_whose_relaunch_does_not_come_up_keeps_the_model_it_had() {
+    let (state, dir) = console_with_project_and_accounts("coordinator-model-change-down");
+    let mut project = state.store.get_project("project-1").unwrap().unwrap();
+    project.path = dir.to_string_lossy().into_owned();
+    state.store.update_project(&project).unwrap();
+    state
+        .store
+        .insert_session(&Session {
+            effort: Some(Some("high".to_string())),
+            ..project_session("s", Agent::Claude, SessionStatus::Idle)
+        })
+        .unwrap();
+    let live = idle_stand_in("s");
+    state.register_live(live.clone());
+    state.watch_exit(live.clone());
+    let launch = |request: term::LaunchRequest| {
+        let gone = fake_live_session(&request.session_id, request.agent, 80, 24, "exit 1");
+        Ok(term::Launch {
+            session: (*gone).clone(),
+            agent_session_id: None,
+            notice: None,
+        })
+    };
+
+    let err = set_session_model_with(
+        &state,
+        "s",
+        LaunchEdit {
+            model: Some(Some("opus".to_string())),
+            effort: None,
+        },
+        ModelAsker::User,
+        None,
+        shell_env(&dir),
+        launch,
+    )
+    .await
+    .expect_err("the relaunch ended at once");
+
+    assert_eq!(code_of(&err), error_code::MODEL_CHANGE_DID_NOT_COME_UP);
+    assert!(live.poll_exit(), "its process was ended");
+    let after = state.store.get_session("s").unwrap().unwrap();
+    assert_eq!(after.status, SessionStatus::Interrupted);
+    assert_eq!(
+        (after.model, after.effort),
+        (None, Some(Some("high".to_string())))
+    );
+    assert_eq!((after.account_id, after.config_dir), (None, None));
+    assert!(!state.is_changing_model("s"));
+    assert!(state.store.observed_boundary("s").unwrap().is_some());
+}
+
+/// What the process of a session whose model is changed started is carried over to the
+/// relaunch and keeps running, listed under the session.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_model_change_carries_what_the_process_started_over_to_the_relaunch() {
+    use crate::test_support::{stand_in_launch, Launched, StandIn};
+    let (state, dir) = console_with_project_and_accounts("coordinator-model-carry-over");
+    state
+        .store
+        .insert_session(&project_session("s", Agent::Claude, SessionStatus::Idle))
+        .unwrap();
+    let (first, child) = crate::test_support::running_leaving_one(&state, &dir, "s");
+    let _guard = crate::test_support::KillOnDrop(vec![child]);
+    let started = Arc::new(std::sync::Mutex::new(Vec::<StandIn>::new()));
+    let launches = Arc::new(std::sync::Mutex::new(Vec::<Launched>::new()));
+
+    set_session_model_with(
+        &state,
+        "s",
+        LaunchEdit {
+            model: Some(Some("opus".to_string())),
+            effort: None,
+        },
+        ModelAsker::User,
+        None,
+        shell_env(&dir),
+        stand_in_launch(&started, &launches, || {}),
+    )
+    .await
+    .unwrap();
+
+    let relaunched = state.live_session("s").expect("relaunched");
+    assert_ne!(relaunched.launch_id, first.launch_id);
+    state.process_ledger.tick_now();
+    assert!(
+        crate::test_support::is_running(child),
+        "stopped with the process restarted"
+    );
+    let trees = state
+        .process_ledger
+        .trees_of_sessions(&["s".to_string()], Duration::ZERO);
+    assert_eq!(trees.len(), 1, "{trees:?}");
+    assert!(trees[0].id.starts_with(&format!("{child}:")));
+
+    stop_process(&state, relaunched).await.unwrap();
+    assert!(
+        crate::test_support::stops_running(&state, child).await,
+        "kept running past the relaunch"
+    );
+}
+
+/// A model change that fails once it has ended the session's process leaves the session
+/// interrupted, and what its process had started running and kept among its project's
+/// processes.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_model_change_that_fails_keeps_what_the_process_started_under_its_project() {
+    let (state, dir) = console_with_project_and_accounts("coordinator-model-carry-failed");
+    state
+        .store
+        .insert_session(&project_session("s", Agent::Claude, SessionStatus::Idle))
+        .unwrap();
+    let (_first, child) = crate::test_support::running_leaving_one(&state, &dir, "s");
+    let _guard = crate::test_support::KillOnDrop(vec![child]);
+
+    set_session_model_with(
+        &state,
+        "s",
+        LaunchEdit {
+            model: Some(Some("opus".to_string())),
+            effort: None,
+        },
+        ModelAsker::User,
+        None,
+        shell_env(&dir),
+        |_| Err(anyhow::anyhow!("the agent could not be started")),
+    )
+    .await
+    .expect_err("the relaunch failed");
+
+    assert_eq!(status_of(&state, "s"), Some(SessionStatus::Interrupted));
+    state.process_ledger.tick_now();
+    assert!(
+        crate::test_support::is_running(child),
+        "stopped with a failed model change"
+    );
+    let listed = state.process_ledger.trees_of_project(&[], "project-1", &[]);
+    assert_eq!(listed.len(), 1, "{listed:?}");
+    assert!(listed[0].id.starts_with(&format!("{child}:")));
+    assert!(listed[0].kept && listed[0].session_id.is_none());
+}
+
+/// A console session keeps nothing: what its process had started is stopped when its model
+/// change fails.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_console_session_whose_model_change_fails_stops_what_its_process_started() {
+    let (state, dir) = console_with_project_and_accounts("coordinator-model-console-failed");
+    state
+        .store
+        .insert_session(&console_session("hub", SessionStatus::Idle))
+        .unwrap();
+    let (_first, child) = crate::test_support::running_leaving_one(&state, &dir, "hub");
+    let _guard = crate::test_support::KillOnDrop(vec![child]);
+
+    set_session_model_with(
+        &state,
+        "hub",
+        LaunchEdit {
+            model: Some(Some("opus".to_string())),
+            effort: None,
+        },
+        ModelAsker::User,
+        None,
+        shell_env(&dir),
+        |_| Err(anyhow::anyhow!("the agent could not be started")),
+    )
+    .await
+    .expect_err("the relaunch failed");
+
+    assert!(
+        crate::test_support::stops_running(&state, child).await,
+        "kept running past the failed model change"
+    );
+}

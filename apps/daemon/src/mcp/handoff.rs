@@ -17,7 +17,8 @@ use crate::session_request::{self, Change, Edits, Perform, Performed};
 use crate::state::AppState;
 
 use super::args::{optional_string, parse_agent, present_text, required_str};
-use super::exec::{automatic_choice, callers_account, resolve_owned_session};
+use super::exec::resolve::resolve_owned_session;
+use super::exec::sessions::{automatic_choice, callers_account};
 use super::settings::resolve_account;
 
 /// Hands a session of the caller's off to a new session of another agent, which takes its place and
@@ -76,7 +77,7 @@ pub(super) async fn handoff_session(
     // Where nothing the user changes in the dialog could help.
     operation::refuse_unless_it_can_be_handed_off(&target, agent)?;
     let open = operation::receiving_request(state, &target, &asked.handoff(&target), None);
-    let account = coordinator::check_open_asking(state, &open).await?;
+    let account = coordinator::open::check_open_asking(state, &open).await?;
     let change = Change::Handoff {
         target: target_id,
         agent,
@@ -272,7 +273,7 @@ async fn perform(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mcp::exec::tests::{arguments, peer_state, project_session, shared_console_state};
+    use crate::mcp::test_support::{arguments, peer_state, project_session, shared_console_state};
     use crate::protocol::{Agent, Event, SessionRequestAction, SessionStatus};
     use crate::test_support::{heard_after_marker, running, stand_in_launch, Launched, StandIn};
     use std::sync::Mutex;
@@ -698,7 +699,7 @@ mod tests {
             request_id,
             account,
             ..
-        } = crate::mcp::exec::tests::wait_for_request(&state, "a").await
+        } = crate::mcp::test_support::wait_for_request(&state, "a").await
         else {
             panic!("a session request");
         };
@@ -819,7 +820,7 @@ mod tests {
             model,
             effort,
             ..
-        } = crate::mcp::exec::tests::wait_for_request(&state, "a").await
+        } = crate::mcp::test_support::wait_for_request(&state, "a").await
         else {
             panic!("a session request");
         };
@@ -885,7 +886,7 @@ mod tests {
             })
         };
         let Event::SessionRequest { request_id, .. } =
-            crate::mcp::exec::tests::wait_for_request(&state, "a").await
+            crate::mcp::test_support::wait_for_request(&state, "a").await
         else {
             panic!("a session request");
         };
@@ -923,7 +924,7 @@ mod tests {
             })
         };
         let Event::SessionRequest { request_id, .. } =
-            crate::mcp::exec::tests::wait_for_request(&state, "a").await
+            crate::mcp::test_support::wait_for_request(&state, "a").await
         else {
             panic!("a session request");
         };

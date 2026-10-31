@@ -1,11 +1,11 @@
 //! The tool with which an owner changes the model and reasoning effort of a session of its own,
 //! `set_session_model`. What the change does and refuses is the coordinator's
-//! (`coordinator::set_session_model_with`); what is here is the caller's side: that the session is
-//! its own and not archived, and what the result tells it, since the session is not sent a message
-//! for the change (only, at times, one to carry on with its turn). It needs no approval: the
-//! session stays on its account, so no other account's quota is spent. The change runs on a task
-//! of its own (`session_request::run_to_the_end`), so a call dropped mid-way, as when the caller's
-//! process ends, never leaves the session half restarted.
+//! (`coordinator::model_change::set_session_model_with`); what is here is the caller's side: that
+//! the session is its own and not archived, and what the result tells it, since the session is not
+//! sent a message for the change (only, at times, one to carry on with its turn). It needs no
+//! approval: the session stays on its account, so no other account's quota is spent. The change
+//! runs on a task of its own (`session_request::run_to_the_end`), so a call dropped mid-way, as
+//! when the caller's process ends, never leaves the session half restarted.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -13,17 +13,21 @@ use std::sync::Arc;
 use anyhow::{bail, Result};
 use serde_json::{json, Map, Value};
 
-use crate::coordinator::{self, LaunchEdit, ModelAsker, ModelChange};
+use crate::coordinator::{
+    self,
+    launch::LaunchEdit,
+    model_change::{ModelAsker, ModelChange},
+};
 use crate::protocol::{Session, SessionStatus};
 use crate::session_request;
 use crate::state::AppState;
 
 use super::args::{present_text, required_str};
-use super::exec::resolve_owned_session;
+use super::exec::resolve::resolve_owned_session;
 
 /// Changes the model and reasoning effort of a session of the caller's; see
-/// `coordinator::set_session_model_with`. The shell environment the default account is read from
-/// comes from `snapshot` and the session is relaunched through `launch`:
+/// `coordinator::model_change::set_session_model_with`. The shell environment the default account
+/// is read from comes from `snapshot` and the session is relaunched through `launch`:
 /// `env_shell::launch_snapshot` and `term::launch` outside the tests, which cannot start an agent.
 pub(super) async fn set_session_model(
     state: &Arc<AppState>,
@@ -50,7 +54,7 @@ pub(super) async fn set_session_model(
     let run = {
         let (state, caller_id, target_id) = (state.clone(), caller.id.clone(), target.id.clone());
         async move {
-            let change = coordinator::set_session_model_with(
+            let change = coordinator::model_change::set_session_model_with(
                 &state,
                 &target_id,
                 edit,
@@ -116,7 +120,7 @@ fn outcome(changed: &Session, change: ModelChange) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mcp::exec::tests::{arguments, peer_state, shared_console_state};
+    use crate::mcp::test_support::{arguments, peer_state, shared_console_state};
     use crate::protocol::{Agent, OrchestrationRole};
     use crate::term::{Launch, LaunchRequest};
     use crate::test_support::{
@@ -462,7 +466,7 @@ mod tests {
         snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
         launch: impl FnOnce(LaunchRequest) -> Result<Launch> + Send + 'static,
     ) -> Result<ModelChange> {
-        coordinator::set_session_model_with(
+        coordinator::model_change::set_session_model_with(
             state,
             "mine",
             LaunchEdit {
@@ -535,7 +539,7 @@ mod tests {
                     }
                 }
             }
-            let second = coordinator::set_session_model_with(
+            let second = coordinator::model_change::set_session_model_with(
                 &state,
                 "mine",
                 LaunchEdit {
@@ -625,7 +629,7 @@ mod tests {
         let (_, _sharing) = state.lock_account_sharing(&account, |_, _| Ok(())).unwrap();
         let mut events = state.subscribe();
         let change = |model: &str| {
-            coordinator::set_session_model_with(
+            coordinator::model_change::set_session_model_with(
                 &state,
                 "mine",
                 LaunchEdit {
@@ -773,7 +777,7 @@ mod tests {
             .unwrap()
             .is_some());
 
-        let err = coordinator::set_session_model_with(
+        let err = coordinator::model_change::set_session_model_with(
             &state,
             "mine",
             LaunchEdit {
@@ -969,7 +973,7 @@ mod tests {
         assert!(state.quota_recovery.is_waiting_for_test("mine"));
 
         let ask = |model: &str| {
-            coordinator::set_session_model_with(
+            coordinator::model_change::set_session_model_with(
                 &state,
                 "mine",
                 LaunchEdit {
@@ -1019,7 +1023,7 @@ mod tests {
             snapshot()
         };
         let ask = |model: &str| {
-            coordinator::set_session_model_with(
+            coordinator::model_change::set_session_model_with(
                 &state,
                 "mine",
                 LaunchEdit {

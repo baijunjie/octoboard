@@ -2,7 +2,7 @@
 //! is unbound or a lead session, pushes pages to its report panel, `show_page`, reads back the ones
 //! it pushed, `list_pages`, and withdraws them, `delete_pages`. A session reads and deletes only
 //! its own pages. A session that becomes a worker has them all withdrawn
-//! ([`withdraw_pages`]).
+//! ([`crate::pages::withdraw_pages`]).
 
 use std::sync::Arc;
 
@@ -10,6 +10,7 @@ use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
 use uuid::Uuid;
 
+use crate::pages::announce_deleted;
 use crate::protocol::{now_millis, Event, Page, Session};
 use crate::state::AppState;
 
@@ -162,43 +163,6 @@ pub(super) fn delete_pages(
     Ok(json!({ "deleted": deleted }))
 }
 
-/// Withdraws every page `session_id` pushed, as `delete_pages` with `all` does, for a session that
-/// has just lost the report panel's tools by becoming a worker: its pages would stay
-/// on the panel, and be submittable, with no way left for it to list or delete them.
-pub(crate) fn withdraw_pages(state: &Arc<AppState>, session_id: &str) -> Result<()> {
-    // With `None` the store names no id, so its `Err(id)` arm, a named id that is not the
-    // session's, cannot happen.
-    if let Ok(deleted) = state.store.delete_pages(session_id, None)? {
-        announce_deleted(state, session_id, &deleted);
-    }
-    Ok(())
-}
-
-/// Withdraws the pages of every session that has the role of a worker now: those a binding
-/// change could not withdraw (a failed withdrawal, a page stored while the binding was being
-/// written) and those pushed before pages were withdrawn on binding. Run once when the daemon
-/// starts. One session's failure is logged and does not stop the others.
-pub(crate) fn withdraw_stray_pages(state: &Arc<AppState>) -> Result<()> {
-    for session_id in state.store.session_ids_with_pages_and_worker_role()? {
-        if let Err(err) = withdraw_pages(state, &session_id) {
-            tracing::warn!(
-                session = %session_id, %err, "withdrawing the pages of a worker session failed"
-            );
-        }
-    }
-    Ok(())
-}
-
-/// Tells the panel which of a session's pages the store removed; nothing when none was.
-fn announce_deleted(state: &Arc<AppState>, session_id: &str, deleted: &[String]) {
-    if !deleted.is_empty() {
-        state.broadcast(Event::PagesDeleted {
-            session_id: session_id.to_string(),
-            pages: deleted.to_vec(),
-        });
-    }
-}
-
 /// The text of a page's `<title>`, when it has a non-blank one.
 fn page_title(html: &str) -> Option<String> {
     let lower = html.to_ascii_lowercase();
@@ -216,7 +180,7 @@ fn page_title(html: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use crate::mcp::exec::call;
-    use crate::mcp::exec::tests::{arguments, lead_state, peer_state};
+    use crate::mcp::test_support::{arguments, lead_state, peer_state};
     use crate::protocol::{Event, OrchestrationRole};
     use serde_json::{json, Map};
 
@@ -289,7 +253,7 @@ mod tests {
         let mut events = state.subscribe();
         super::BEFORE_PAGE_CREATED.with(|hook| {
             *hook.borrow_mut() = Some(Box::new(|state, session| {
-                super::withdraw_pages(state, session).unwrap();
+                crate::pages::withdraw_pages(state, session).unwrap();
             }));
         });
         let refused = call(
@@ -509,7 +473,7 @@ mod tests {
         }
         let mut events = state.subscribe();
 
-        super::withdraw_stray_pages(&state).unwrap();
+        crate::pages::withdraw_stray_pages(&state).unwrap();
 
         assert!(state.store.list_pages("mine").unwrap().is_empty());
         assert_eq!(state.store.list_pages("starter").unwrap().len(), 1);
@@ -522,7 +486,7 @@ mod tests {
         assert!(events.try_recv().is_err());
 
         // Nothing left to withdraw: nothing said.
-        super::withdraw_stray_pages(&state).unwrap();
+        crate::pages::withdraw_stray_pages(&state).unwrap();
         assert!(events.try_recv().is_err());
     }
 }

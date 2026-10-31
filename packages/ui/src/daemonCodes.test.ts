@@ -16,24 +16,24 @@ import { zhHans } from "./i18n/messages/zh-Hans";
 // calls a deliberate refusal a bug and asks for an Issue. The codes of a quota reading, a models list and a login are
 // shown where they are read, not in an alert classified by code, so they need only their words.
 //
-// The daemon's registry of the codes it sends: a code is a `Code`, which only `protocol.rs` can make, and each is a
-// `pub const NAME: Code = Code("code");` of one of its code modules.
+// The daemon's registry of the codes it sends: a code is a `Code`, which only `protocol/codes.rs` can make, and each is
+// a `pub const NAME: Code = Code("code");` of one of its code modules.
 const MODULES = ["error_code", "models_unavailable_code", "quota_unavailable_code", "login_failure_code", "notice_code"] as const;
 type Module = (typeof MODULES)[number];
 
 function readRegistry(): Record<Module, string[]> {
-  const source = readFileSync(new URL("../../../apps/daemon/src/protocol.rs", pathToFileURL(`${import.meta.dirname}/`)), "utf8");
+  const source = readFileSync(new URL("../../../apps/daemon/src/protocol/codes.rs", pathToFileURL(`${import.meta.dirname}/`)), "utf8");
   const registry = {} as Record<Module, string[]>;
   let declared = 0;
   for (const module of MODULES) {
     const body = new RegExp(`\\npub mod ${module} \\{\\n([\\s\\S]*?)\\n\\}\\n`).exec(source)?.[1];
-    if (body === undefined) throw new Error(`protocol.rs has no module ${module}`);
+    if (body === undefined) throw new Error(`protocol/codes.rs has no module ${module}`);
     registry[module] = [...body.matchAll(/pub const [A-Z0-9_]+: Code =\s*Code\("([a-z0-9_]+)"\);/g)].map((match) => match[1]);
     declared += registry[module].length;
   }
   // A code made in any other shape would escape this reading.
   const made = source.match(/\bCode\("/g)?.length ?? 0;
-  if (made !== declared) throw new Error(`protocol.rs makes ${made} codes, of which ${declared} are read as declarations`);
+  if (made !== declared) throw new Error(`protocol/codes.rs makes ${made} codes, of which ${declared} are read as declarations`);
   return registry;
 }
 

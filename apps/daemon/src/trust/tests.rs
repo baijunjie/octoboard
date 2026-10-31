@@ -2033,14 +2033,14 @@ async fn a_message_waits_while_codex_is_at_its_screen_and_follows_the_press() {
     let (live, received) = start(&state, &dir, record, &script);
     assert!(wait_for(PATIENCE, || live.trust.waiting()));
 
-    let delivery = crate::reporting::write_message(
+    let delivery = crate::delivery::write_message(
         &state,
         "codex-1",
         "hello",
-        crate::reporting::WhenBlocked::Queue,
+        crate::delivery::WhenBlocked::Queue,
     )
     .expect("accepted");
-    assert!(matches!(delivery, crate::reporting::Delivery::Queued));
+    assert!(matches!(delivery, crate::delivery::Delivery::Queued));
     tokio::time::sleep(Duration::from_millis(300)).await;
     assert!(sent(&received).is_empty(), "nothing reaches the screen");
 
@@ -2102,14 +2102,14 @@ async fn a_message_for_codex_is_let_through_at_its_first_title_with_no_screen() 
     let (live, received) = start(&state, &dir, record, &script);
     supervise(&state, &live);
 
-    let delivery = crate::reporting::write_message(
+    let delivery = crate::delivery::write_message(
         &state,
         "codex-1",
         "hello",
-        crate::reporting::WhenBlocked::Queue,
+        crate::delivery::WhenBlocked::Queue,
     )
     .expect("accepted");
-    assert!(matches!(delivery, crate::reporting::Delivery::Queued));
+    assert!(matches!(delivery, crate::delivery::Delivery::Queued));
     tokio::time::sleep(Duration::from_millis(600)).await;
     assert!(sent(&received).is_empty(), "held while there is no title");
 
@@ -2151,14 +2151,14 @@ async fn codex_answered_in_the_terminal_lets_held_messages_through_once_the_scre
     for live in [&answered_live, &moved_live] {
         assert!(wait_for(PATIENCE, || live.trust.waiting()));
         supervise(&state, live);
-        let delivery = crate::reporting::write_message(
+        let delivery = crate::delivery::write_message(
             &state,
             &live.id,
             "hello",
-            crate::reporting::WhenBlocked::Queue,
+            crate::delivery::WhenBlocked::Queue,
         )
         .expect("accepted");
-        assert!(matches!(delivery, crate::reporting::Delivery::Queued));
+        assert!(matches!(delivery, crate::delivery::Delivery::Queued));
     }
 
     // Enter, and typing on into the next screen at once.
@@ -2464,14 +2464,14 @@ async fn grok_messages_are_let_through_when_no_hook_comes_within_the_bound() {
     let (live, received) = start(&state, &dir, record, &script);
     release_when_no_hook_comes(&state, &live, Duration::from_millis(600));
 
-    let delivery = crate::reporting::write_message(
+    let delivery = crate::delivery::write_message(
         &state,
         "grok-1",
         "hello",
-        crate::reporting::WhenBlocked::Queue,
+        crate::delivery::WhenBlocked::Queue,
     )
     .expect("accepted");
-    assert!(matches!(delivery, crate::reporting::Delivery::Queued));
+    assert!(matches!(delivery, crate::delivery::Delivery::Queued));
     tokio::time::sleep(Duration::from_millis(200)).await;
     assert!(live.trust.holds_writes(), "held before the bound");
     assert!(sent(&received).is_empty());
@@ -2640,14 +2640,14 @@ async fn claude_messages_wait_for_bracketed_paste_after_the_first_hook() {
     let (live, received) = start(&state, &dir, record, &script);
     release_when_paste_mode_comes(&state, &live);
 
-    let delivery = crate::reporting::write_message(
+    let delivery = crate::delivery::write_message(
         &state,
         "claude-1",
         "hello",
-        crate::reporting::WhenBlocked::Queue,
+        crate::delivery::WhenBlocked::Queue,
     )
     .expect("accepted");
-    assert!(matches!(delivery, crate::reporting::Delivery::Queued));
+    assert!(matches!(delivery, crate::delivery::Delivery::Queued));
     on_hook(&state, &live);
     tokio::time::sleep(Duration::from_millis(600)).await;
     assert!(live.trust.holds_writes(), "the hook alone is not enough");
@@ -2716,14 +2716,14 @@ async fn claude_messages_are_not_released_by_the_start_probes_bracketed_paste() 
     let (live, received) = start(&state, &dir, record, &script);
     release_when_paste_mode_comes(&state, &live);
 
-    let delivery = crate::reporting::write_message(
+    let delivery = crate::delivery::write_message(
         &state,
         "claude-1",
         "hello",
-        crate::reporting::WhenBlocked::Queue,
+        crate::delivery::WhenBlocked::Queue,
     )
     .expect("accepted");
-    assert!(matches!(delivery, crate::reporting::Delivery::Queued));
+    assert!(matches!(delivery, crate::delivery::Delivery::Queued));
     // Long enough between the two for the release's poll to see bracketed paste on.
     live.on_output(b"\x1b[?2004h\x1b[?2031h");
     tokio::time::sleep(RELEASE_POLL * 3).await;

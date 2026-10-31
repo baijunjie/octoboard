@@ -587,7 +587,7 @@ async fn on_sighting(state: &Arc<AppState>, live: &Arc<LiveSession>) -> Result<(
     }
     live.trust.needs_user.store(true, Ordering::Release);
     state.publish_session(&session);
-    crate::reporting::spawn_tell_owner_it_waits(state, &live.id);
+    crate::owner_notices::spawn_tell_owner_it_waits(state, &live.id);
     let trust_dir = offered(state, vec![project.path.clone()])
         .await
         .remove(&project.path);
@@ -655,7 +655,7 @@ async fn answer_off_the_runtime(state: &Arc<AppState>, live: Arc<LiveSession>) -
     }
     publish_status(state, &live);
     if live.trust.needs_user() {
-        crate::reporting::spawn_tell_owner_it_waits(state, &live.id);
+        crate::owner_notices::spawn_tell_owner_it_waits(state, &live.id);
     }
     outcome?;
     if !hook_at_start {

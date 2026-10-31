@@ -14,7 +14,7 @@ use crate::session_history;
 use crate::state::AppState;
 
 use super::args::optional_count;
-use super::exec::session_or_caller;
+use super::exec::resolve::session_or_caller;
 
 /// How many entries a call returns when `limit` is left out.
 const DEFAULT_LIMIT: usize = 20;
@@ -95,7 +95,7 @@ fn page(
 mod tests {
     use super::*;
     use crate::mcp::exec::call;
-    use crate::mcp::exec::tests::{arguments, shared_console_state};
+    use crate::mcp::test_support::{arguments, shared_console_state};
     use crate::protocol::{Account, Agent, HistorySpeaker};
 
     fn messages(count: usize) -> Vec<HistoryMessage> {

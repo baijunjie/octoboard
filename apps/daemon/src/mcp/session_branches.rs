@@ -16,7 +16,7 @@ use crate::branch_origin::session_branches::{self, Worktree};
 use crate::protocol::Session;
 use crate::state::AppState;
 
-use super::exec::session_or_caller;
+use super::exec::resolve::session_or_caller;
 
 /// The branches `session` (any session; the caller's own when it is left out) is responsible for,
 /// each with the project it is in, its worktree, the target branch and fork point recorded for it,
@@ -109,7 +109,7 @@ fn uncommitted(worktree: &Worktree) -> Option<bool> {
 mod tests {
     use super::*;
     use crate::mcp::exec::call;
-    use crate::mcp::exec::tests::{arguments, RepoState};
+    use crate::mcp::test_support::{arguments, RepoState};
     use crate::test_support::{git, ScratchDir};
 
     async fn read(fixture: &RepoState, caller: &str, input: Value) -> Value {

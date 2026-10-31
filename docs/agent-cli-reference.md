@@ -35,7 +35,7 @@ says about input written before bracketed paste is turned on, and about pasted p
 **Claude Code 2.1.310** on 2026-10-26. All three rewrite their hook surface, their payload fields, their configuration
 layering and their on-disk layout on upgrade, so check a detail here against the installed version before relying on it.
 
-How Octoboard's status mapping handles these traps is encoded in `apps/daemon/src/hooks.rs`; the product behavior
+How Octoboard's status mapping handles these traps is encoded in `apps/daemon/src/hooks/mod.rs`; the product behavior
 built on them is in the product docs.
 
 ## Claude Code

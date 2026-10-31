@@ -208,7 +208,7 @@ async fn change(
         None => {
             async {
                 state.store.set_account_sharing(&account.id, share, true)?;
-                crate::coordinator::broadcast_settings(state)?;
+                crate::coordinator::settings::broadcast_settings(state)?;
                 status::start_change(
                     state,
                     &account.id,
@@ -299,7 +299,7 @@ async fn stop(
             let task = {
                 let id = id.clone();
                 tokio::spawn(async move {
-                    crate::coordinator::stop_carrying_processes(&state, &id).await
+                    crate::coordinator::restart::stop_carrying_processes(&state, &id).await
                 })
             };
             ending.push((id, task));
@@ -340,7 +340,7 @@ async fn stop(
 /// Waits for `id`, a session the change ended, to be recorded down.
 async fn wait_until_down(state: &Arc<AppState>, id: &str) -> Result<()> {
     #[allow(unused_mut)]
-    let mut timeout = crate::coordinator::SWITCH_STOP_TIMEOUT;
+    let mut timeout = crate::coordinator::launch::SWITCH_STOP_TIMEOUT;
     #[cfg(test)]
     if let Some(shorter) = *state
         .account_sharing
@@ -350,7 +350,7 @@ async fn wait_until_down(state: &Arc<AppState>, id: &str) -> Result<()> {
     {
         timeout = shorter;
     }
-    crate::coordinator::wait_until_down_within(state, id, timeout).await
+    crate::coordinator::launch::wait_until_down_within(state, id, timeout).await
 }
 
 fn session_did_not_stop(account: &Account, session: &str) -> anyhow::Error {
@@ -375,7 +375,7 @@ fn session_did_not_stop(account: &Account, session: &str) -> anyhow::Error {
 /// relaunched; either is told as a `sharing_resume_failed` notice, without failing the change.
 /// What the session's process started, held for the relaunch, is given up once that is over: kept
 /// among its project's processes when the session was not relaunched after the change ended its
-/// process (see [`crate::coordinator::give_up_what_a_restart_held`]).
+/// process (see [`crate::coordinator::restart::give_up_what_a_restart_held`]).
 async fn resume(
     state: &Arc<AppState>,
     lock: &mut AccountSharingLock,
@@ -409,7 +409,7 @@ async fn resume(
         // is kept for the user then, and its trees stay its own, stopped when it ends. A session
         // deleted meanwhile has no project to keep them in.
         let kept = !relaunched && ended && !still_running && session_exists;
-        crate::coordinator::give_up_what_a_restart_held(state, id, held, kept).await;
+        crate::coordinator::restart::give_up_what_a_restart_held(state, id, held, kept).await;
     }
     if let Err(err) = resumed {
         tracing::warn!(session = %id, %err, still_running, "resuming a session after a sharing change failed");
@@ -457,7 +457,7 @@ async fn relaunch(
             .expect("relaunch seam lock poisoned")
             .clone();
         if let Some(launch) = launch {
-            return crate::coordinator::relaunch_session_with(
+            return crate::coordinator::launch::relaunch_session_with(
                 state,
                 claim,
                 id,
@@ -470,7 +470,7 @@ async fn relaunch(
             .await;
         }
     }
-    crate::coordinator::relaunch_session_with(
+    crate::coordinator::launch::relaunch_session_with(
         state,
         claim,
         id,
@@ -660,6 +660,6 @@ async fn carry_out(
     {
         return changed_meanwhile();
     }
-    crate::coordinator::broadcast_settings(state)?;
+    crate::coordinator::settings::broadcast_settings(state)?;
     Ok(Ok(()))
 }

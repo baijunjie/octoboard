@@ -6,7 +6,10 @@
 //! with the repositories it builds with it, the state a read must leave untouched and the stale
 //! stat that makes a read want to write. Compiled only for tests, and one module rather than a
 //! `tests/` directory because some of the fixtures reach private items (`LiveSession::new`,
-//! `AppState::new`).
+//! `AppState::new`). An owner with sessions bound to it, for the tests of what is written into an
+//! owner, is [`owner_team`].
+
+pub(crate) mod owner_team;
 
 use std::collections::HashMap;
 use std::ops::Deref;
@@ -346,11 +349,11 @@ pub(crate) fn heard_after_marker(state: &Arc<AppState>, live: &LiveSession) -> S
         "marker-after-the-call-{}",
         NEXT.fetch_add(1, Ordering::Relaxed)
     );
-    crate::reporting::write_message(
+    crate::delivery::write_message(
         state,
         &live.id,
         &marker,
-        crate::reporting::WhenBlocked::Queue,
+        crate::delivery::WhenBlocked::Queue,
     )
     .unwrap();
     let heard = output_containing(live, &marker);

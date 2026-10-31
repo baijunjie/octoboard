@@ -25,12 +25,12 @@ mod config_import;
 mod coordinator;
 mod crash_cleanup;
 mod default_effort;
+mod delivery;
 mod env_shell;
 mod git;
 mod git_workflow;
 mod handoff;
 mod hook_mode;
-mod hook_queue;
 mod hooks;
 mod host_open;
 mod host_tools;
@@ -44,6 +44,8 @@ mod log_file;
 mod loopback;
 mod mcp;
 mod outbox;
+mod owner_notices;
+mod pages;
 mod path_links;
 mod paths;
 mod process_ledger;
@@ -72,6 +74,7 @@ mod session;
 mod session_git_hooks;
 mod session_history;
 mod session_request;
+mod session_texts;
 mod session_title;
 mod shared_config;
 mod shared_items;
@@ -388,7 +391,7 @@ async fn run_daemon(parent_pid: Option<u32>, log_file: log_file::LogFile) -> Res
     handoff::sweep(&state)?;
     // Pages a session pushed before it took the bound role, which no tool of its can list or
     // delete, and which a failed withdrawal or a push racing a binding may have left.
-    if let Err(err) = mcp::withdraw_stray_pages(&state) {
+    if let Err(err) = pages::withdraw_stray_pages(&state) {
         tracing::warn!(%err, "withdrawing the pages of bound sessions failed");
     }
 

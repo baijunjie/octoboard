@@ -100,7 +100,7 @@ straight after the call under test passes an absence whether or not the message 
 reader thread (`idle_stand_in`) it is always empty.
 
 So use a stand-in started with `test_support::running`, and read what it was sent through
-`test_support::heard_after_marker`: it sends a marker of its own through `reporting::write_message`, which queues
+`test_support::heard_after_marker`: it sends a marker of its own through `delivery::write_message`, which queues
 every message so none overtakes one sent before it, waits for the marker to arrive, and only then hands back the
 output for the absence to be asserted in.
 
@@ -134,12 +134,13 @@ Applies to a daemon request handler or task that runs an agent CLI for an effect
 `env_shell` snapshots take their real login shell, so the CLI that runs is the one installed on the machine, signed in
 to their default config directory, and the spend is real. A test meant only to check a refusal is no guard: an agent
 whose availability has not been determined yet counts as available (`agent_is_available` in
-`apps/daemon/src/coordinator.rs`), so a request the test expects to be refused for that goes through to the CLI.
+`apps/daemon/src/coordinator/account_choice.rs`), so a request the test expects to be refused for that goes through to
+the CLI.
 
 So such a handler never calls an `env_shell` snapshot directly: it takes its shell environment from a
 `#[cfg(not(test))]` / `#[cfg(test)]` pair of functions whose test variant bails (`reset_credit_shell` in
-`apps/daemon/src/coordinator.rs`, `held_shell` in `apps/daemon/src/account_quotas/mod.rs`), which keeps every test off
-the real CLI by construction instead of by each test's care. The action itself is tested one level down, handed the
+`apps/daemon/src/coordinator/mod.rs`, `held_shell` in `apps/daemon/src/account_quotas/mod.rs`), which keeps every test
+off the real CLI by construction instead of by each test's care. The action itself is tested one level down, handed the
 environment `test_support::fake_agent` returns, whose `PATH` finds only the fake.
 
 ## Test a daemon budget by lowering it, never by asserting its value

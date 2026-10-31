@@ -200,8 +200,8 @@ function changedLaunch(current: Launch, change: LaunchChange): Launch {
 /** What a `create_console` or `update_console` request sets of the console, each field only where
  * the request names it, on top of the console it changes (a blank one for a new console); an
  * `update_console` that leaves a field out leaves it alone, and one that names it as `null`
- * clears it, as `update_console` of `coordinator.rs` does. Account and model references are
- * taken as given, not checked against the settings or an agent's list. */
+ * clears it, as `update_console` of `coordinator/consoles.rs` does. Account and model references
+ * are taken as given, not checked against the settings or an agent's list. */
 function consoleFields(current: Console, body: Extract<RequestBody, { type: "create_console" | "update_console" }>): Partial<Console> {
   const fields: Partial<Console> = {};
   if (body.name !== undefined) fields.name = body.name.trim();
@@ -546,7 +546,8 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           // The trees the user chose to keep are theirs before anything else happens, so a refusal leaves them kept.
           keepTrees(body.keep_process_ids ?? []);
           if (scenario.sessionArchiveError) return fail(scenario.sessionArchiveError);
-          // Match coordinator::team over the valid fixture hierarchy: owners reach two levels.
+          // Match coordinator::bindings::team over the valid fixture hierarchy: owners reach two
+          // levels.
           const childrenOf = (owner: Session) => [...current.sessions.values()].filter((child) => child.bound_to === owner.id);
           const direct = childrenOf(session);
           const team = [...direct.flatMap(childrenOf), ...direct];
@@ -1213,7 +1214,8 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
         }
         case "create_console": {
           // As the daemon does, the new console reaches the store before the request is answered
-          // (`coordinator.rs` broadcasts first), so a scenario can reach the first console's arrival.
+          // (`coordinator/consoles.rs` broadcasts first), so a scenario can reach the first
+          // console's arrival.
           const id = `console-${Date.now()}`;
           const blank = consoleOf(id, body.name.trim(), { workdir: `${HOME}/.octoboard/consoles/${id}`, created_at: Date.now() });
           store.setState((state) => ({
@@ -1373,7 +1375,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           const session = store.getState().sessions.get(body.session);
           if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: "Unknown session" });
           refuseLocked([session]);
-          // As `delete_session_if_unused` of `store.rs`, repeated here and not taken from the sidebar's
+          // As `delete_session_if_unused` of `store/sessions.rs`, repeated here and not taken from the sidebar's
           // `isUnusedSession`: no conversation, nothing bound to it, and either no owner or opened by
           // the user (one an agent started was dispatched by its owner, which expects it to exist,
           // so it is archived instead).
@@ -1406,11 +1408,11 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           // view a scenario has open empties as it would.
           const all = Array.from(store.getState().sessions.values());
           const doomed = new Set<string>();
-          // As `delete_archived_group` of `coordinator.rs`: an archived session goes, and with it
-          // the archived sessions bound to it, each with its own; one that is not archived stays
-          // and keeps what is bound to it. The daemon's own rule is repeated here and not taken
-          // from the sidebar's `boundArchivedSessions`, so that a change to what the sidebar lists
-          // does not change what a deletion removes.
+          // As `delete_archived_group` of `coordinator/lifecycle.rs`: an archived session goes, and
+          // with it the archived sessions bound to it, each with its own; one that is not archived
+          // stays and keeps what is bound to it. The daemon's own rule is repeated here and not
+          // taken from the sidebar's `boundArchivedSessions`, so that a change to what the sidebar
+          // lists does not change what a deletion removes.
           const deleteGroup = (session: Session) => {
             if (doomed.has(session.id) || session.status !== "archived") return;
             doomed.add(session.id);

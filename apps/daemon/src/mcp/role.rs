@@ -10,8 +10,9 @@
 //! reporting relationship can change while it lives: an independent session can set a parent, and
 //! a parent can transfer a child session to another. So the text names its parent at launch,
 //! and says that a later change is told to it by Octoboard and replaces what it says here; the
-//! change itself is told in prose where it happens (`super::bindings`). A coordinator that set a
-//! console parent after its first launch still receives its original independent-session text.
+//! change itself is told in prose where it happens (`crate::owner_notices`, and `mcp::bindings`
+//! for the tools' own handover texts). A coordinator that set a console parent after its first
+//! launch still receives its original independent-session text.
 //!
 //! Every console session's role description is only a short pointer to its instruction file.
 //!

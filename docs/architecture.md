@@ -289,9 +289,9 @@ Each has an established solution unless noted; any outstanding manual verificati
 
 Stored entities: console, host, project, session, account, report-panel page, trusted folders, information held for an
 interrupted session, branch origin (the session responsible for a branch) and application-wide settings. The shapes
-are in `apps/daemon/src/store.rs`; what is worth knowing is the reasoning behind a few fields.
+are in `apps/daemon/src/store/`; what is worth knowing is the reasoning behind a few fields.
 
-The database carries a schema version (`PRAGMA user_version`, `SCHEMA_VERSION` in `store.rs`), and a new database gets the
+The database carries a schema version (`PRAGMA user_version`, `SCHEMA_VERSION` in `store/schema.rs`), and a new database gets the
 whole current schema at once. A file at the current version is used as is, and a file with no tables is initialized in
 place. The current version is 1 and has no upgrade steps, since no build has been released: a file with tables and no
 version (the only older state) is moved aside as `<name>.superseded-<unix seconds>` (never deleted, with a warning

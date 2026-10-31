@@ -14,13 +14,13 @@ import { focusTopBar } from "./regionFocus";
  * while the screen was still there, and another window's console, which empties the screen here
  * too, must not pull focus. The hand-off is owed from the screen going away until focus has
  * actually been placed, and not sampled once: the daemon broadcasts the new console before it
- * answers the request (`coordinator.rs`), so the store can get it in an earlier render than the
- * dialog's `onClose`, while the dialog is still open and holding focus. The dialog then closes and
- * its restore target, the button, is already gone. Either order lands here once no dialog or menu
- * is open (asked of the document, so a modal that is not the new-console dialog counts too) and
- * focus is on `<body>`; a launch that already has consoles never shows the screen and so never owes
- * it, and focus that is somewhere by then is left alone. The check runs after every render, as the
- * document is what it asks. */
+ * answers the request (`coordinator/consoles.rs`), so the store can get it in an earlier render
+ * than the dialog's `onClose`, while the dialog is still open and holding focus. The dialog then
+ * closes and its restore target, the button, is already gone. Either order lands here once no
+ * dialog or menu is open (asked of the document, so a modal that is not the new-console dialog
+ * counts too) and focus is on `<body>`; a launch that already has consoles never shows the screen
+ * and so never owes it, and focus that is somewhere by then is left alone. The check runs after
+ * every render, as the document is what it asks. */
 export function useFirstConsoleHandoff(welcomeShown: boolean, creating: boolean): void {
   const wasShown = useRef(welcomeShown);
   const creatingHere = useRef(false);

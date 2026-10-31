@@ -64,13 +64,14 @@ use tokio::sync::oneshot;
 use uuid::Uuid;
 
 use crate::branch_origin::handover::{move_branches, Handover};
-use crate::coordinator::{self, OpenRequest};
+use crate::coordinator::{self, open::OpenRequest};
+use crate::delivery::{self, WhenBlocked};
 use crate::mcp::qualified_tool_name;
 use crate::protocol::{
     error_code, now_millis, Agent, CodedError, Event, Role, Session, SessionRequestAction,
     SessionRequestEnding, SessionStatus,
 };
-use crate::reporting::{self, WhenBlocked};
+use crate::session_texts;
 use crate::state::AppState;
 
 pub(crate) use change::{
@@ -623,7 +624,7 @@ pub(crate) async fn ask_to_approve(
         action,
         automatic,
         limit,
-        move |request| async move { coordinator::open_session(&opener, request).await },
+        move |request| async move { coordinator::open::open_session(&opener, request).await },
         move |id| resume_through_coordinator(resumer, id),
     )
     .await
@@ -632,12 +633,12 @@ pub(crate) async fn ask_to_approve(
 /// Brings a session back as the user's own resume does: no instruction, and no window appearance
 /// to match, since an approval is not a window's.
 async fn resume_through_coordinator(state: Arc<AppState>, id: String) -> Result<()> {
-    coordinator::resume_session(&state, &id, None, None).await
+    coordinator::resume::resume_session(&state, &id, None, None).await
 }
 
 /// [`ask_to_approve`], starting a session through `launch` and bringing one back through
-/// `resume`: `coordinator::open_session` and `coordinator::resume_session` outside the tests,
-/// which cannot launch an agent.
+/// `resume`: `coordinator::open::open_session` and `coordinator::resume::resume_session` outside
+/// the tests, which cannot launch an agent.
 pub(crate) async fn ask_with<F, Fut, R, RFut>(
     state: &Arc<AppState>,
     caller: &Session,
@@ -655,7 +656,7 @@ where
 {
     let (agent, console, project) = match &action {
         Action::Start { open, .. } | Action::ResumeRecord { open, .. } => (
-            coordinator::check_open(state, open).await?,
+            coordinator::open::check_open(state, open).await?,
             open.console_id.clone(),
             open.project_id.clone(),
         ),
@@ -747,7 +748,7 @@ async fn wait_for_answer(
     if let Err(err) = state.raise_request_hand(&caller.id) {
         tracing::debug!(session = %caller.id, %err, "raising the session request's hand failed");
     } else {
-        crate::reporting::spawn_tell_owner_it_waits(state, &caller.id);
+        crate::owner_notices::spawn_tell_owner_it_waits(state, &caller.id);
     }
     // The request was answerable from `hold` on, so it may have ended before the hand went up, and
     // then nothing else would lower it. Costs nothing while the request still waits.
@@ -798,7 +799,7 @@ pub async fn answer(
         request_id,
         approve,
         edits,
-        |request| coordinator::open_session(state, request),
+        |request| coordinator::open::open_session(state, request),
         |id| resume_through_coordinator(state.clone(), id),
     )
     .await
@@ -989,7 +990,7 @@ where
     let owners = if action == "already_running" {
         Vec::new()
     } else {
-        coordinator::archived_owners(state, target)?
+        coordinator::resume::archived_owners(state, target)?
     };
     if action != "already_running" {
         if let Err(err) = resume(target.to_string()).await {
@@ -1014,7 +1015,7 @@ where
                 }
             ));
         } else if state.session_record(target)?.title != title {
-            match coordinator::rename_session(state, target, title) {
+            match coordinator::lifecycle::rename_session(state, target, title) {
                 Ok(_) => renamed = Some(true),
                 Err(err) => {
                     renamed = Some(false);
@@ -1074,7 +1075,7 @@ fn refused_as_running(state: &Arc<AppState>, err: &anyhow::Error, target: &str) 
 
 /// How an approval's outcome written into the caller's session opens, which is what tells the turn
 /// it starts from any other.
-const OUTCOME_OPENING: &str = concat!(reporting::notice_prefix!(), " about your");
+const OUTCOME_OPENING: &str = concat!(session_texts::notice_prefix!(), " about your");
 
 /// The message that tells a caller's session what became of its call of `tool`, the note being the
 /// call's own, for a caller whose agent gave up on the call without any signal reaching Octoboard.
@@ -1092,7 +1093,7 @@ pub(crate) fn outcome_message(agent: Agent, tool: &str, note: &str) -> String {
 pub(crate) async fn tell_the_caller(state: &Arc<AppState>, caller_id: &str, message: String) {
     state.credit_turn_opened_by(caller_id, OUTCOME_OPENING.to_string());
     if let Err(err) =
-        reporting::write_message_off_runtime(state, caller_id, message, WhenBlocked::Queue).await
+        delivery::write_message_off_runtime(state, caller_id, message, WhenBlocked::Queue).await
     {
         state.clear_turn_credit(caller_id, OUTCOME_OPENING);
         tracing::debug!(

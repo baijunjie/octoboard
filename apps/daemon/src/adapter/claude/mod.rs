@@ -111,16 +111,16 @@ fn parse_version(text: &str) -> Option<AgentVersion> {
 }
 
 impl ClaudeAdapter {
-    /// The `--settings` JSON. A Claude Code that takes HTTP hooks posts each event to the
-    /// daemon itself, so a hook costs no process at all, except for [`COMMAND_ONLY_EVENTS`];
-    /// with an older or unknown version, or when a settings file's `allowedHttpHookUrls` leaves
-    /// the daemon's URL out (Claude Code then skips every HTTP hook silently), each event runs
-    /// a command instead. `async` keeps a slow command off the turn's critical path (a 30 s
-    /// hook took a turn from 6.8 s to 36.7 s without it) and `timeout` bounds it regardless; an
-    /// HTTP hook has no `async`, and is kept off the critical path by the route answering
-    /// before the event is applied (see `server::hook_callback`). Claude Code runs a command
-    /// through a shell, so the daemon is exec'd by the command itself rather than through the
-    /// per-session hook script, which would be one more process to start per event.
+    /// The `--settings` JSON. A Claude Code that takes HTTP hooks posts each event to the daemon
+    /// itself, so a hook costs no process at all, except for [`COMMAND_ONLY_EVENTS`]; with an older
+    /// or unknown version, or when a settings file's `allowedHttpHookUrls` leaves the daemon's URL
+    /// out (Claude Code then skips every HTTP hook silently), each event runs a command instead.
+    /// `async` keeps a slow command off the turn's critical path (a 30 s hook took a turn from
+    /// 6.8 s to 36.7 s without it) and `timeout` bounds it regardless; an HTTP hook has no `async`,
+    /// and is kept off the critical path by the route answering before the event is applied (see
+    /// `server::callbacks::hook_callback`). Claude Code runs a command through a shell, so the
+    /// daemon is exec'd by the command itself rather than through the per-session hook script,
+    /// which would be one more process to start per event.
     ///
     /// A daemon that cannot be reached, or does not answer within the timeout, shows a
     /// non-blocking error notice in Claude Code for an HTTP hook, where the command form swallows

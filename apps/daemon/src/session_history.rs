@@ -18,17 +18,17 @@ use crate::handoff::record::{for_each_line, line_entries, Entry};
 use crate::hooks::without_paste_wrapper;
 use crate::protocol::{Account, Agent, HistoryMessage, HistorySpeaker, Session};
 use crate::state::AppState;
-use crate::{handoff, mcp, reporting, rfc3339, sharing};
+use crate::{handoff, rfc3339, session_texts, sharing};
 
 /// How the messages Octoboard writes into a session begin, by what wrote them. The notices are
 /// worded at several places and all begin alike.
 const OCTOBOARD_OPENINGS: [&str; 8] = [
-    reporting::NOTICE_PREFIX,
-    mcp::exec::REQUEST_OPENING,
+    session_texts::NOTICE_PREFIX,
+    session_texts::REQUEST_OPENING,
     handoff::operation::TAKEOVER_OPENING,
-    reporting::BRIEF_OPENING,
-    reporting::REPORT_OPENING,
-    reporting::PAGE_SUBMISSION_OPENING,
+    session_texts::BRIEF_OPENING,
+    session_texts::REPORT_OPENING,
+    session_texts::PAGE_SUBMISSION_OPENING,
     sharing::INFO_OPENING,
     sharing::INFO_COPY_OPENING,
 ];
@@ -58,11 +58,11 @@ fn from_octoboard(text: &str) -> bool {
     OCTOBOARD_OPENINGS
         .iter()
         .any(|opening| text.starts_with(opening))
-        || (text.starts_with(mcp::exec::BRANCHES_OPENING)
+        || (text.starts_with(session_texts::BRANCHES_OPENING)
             && text
                 .lines()
                 .next()
-                .is_some_and(|line| line.contains(mcp::exec::BRANCHES_MARKER)))
+                .is_some_and(|line| line.contains(session_texts::BRANCHES_MARKER)))
 }
 
 /// The history of `session`: empty for one that has had no conversation, `None` when its record is
@@ -229,7 +229,7 @@ mod tests {
                     .is_some_and(|args| {
                         args.trim_start()
                             .trim_start_matches("crate::")
-                            .trim_start_matches("reporting::")
+                            .trim_start_matches("session_texts::")
                             .starts_with("notice_prefix!()")
                     });
                 assert!(
@@ -345,9 +345,9 @@ mod tests {
             targets: Default::default(),
         };
         let prompts = [
-            mcp::exec::request_opening_prompt(&caller, None, false, "the brief"),
-            mcp::exec::request_opening_prompt(&caller, Some(&handover), true, "the brief"),
-            mcp::exec::branches_opening_prompt(&caller, &handover, "the brief"),
+            session_texts::request_opening_prompt(&caller, None, false, "the brief"),
+            session_texts::request_opening_prompt(&caller, Some(&handover), true, "the brief"),
+            session_texts::branches_opening_prompt(&caller, &handover, "the brief"),
             handoff::operation::brief(&caller, Path::new("/tmp/package.md"), Some("a note")),
         ];
         for prompt in prompts {

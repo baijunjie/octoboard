@@ -42,7 +42,7 @@ mod tests {
     use super::*;
     use crate::agent_models::Listing;
     use crate::mcp::exec::call;
-    use crate::mcp::exec::tests::{arguments, peer_state};
+    use crate::mcp::test_support::{arguments, peer_state};
     use crate::protocol::{Account, Agent, AgentModel, ModelsUnavailable};
 
     async fn list(state: &Arc<AppState>, caller: &str, input: Value) -> Result<Value> {

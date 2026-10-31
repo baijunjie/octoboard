@@ -646,7 +646,7 @@ async fn deleting_the_receiving_session_removes_its_package() {
         .join(format!("{}.md", receiving.id));
     assert!(package.is_file());
 
-    crate::coordinator::archive_session(&fixture.state, &receiving.id).unwrap();
+    crate::coordinator::lifecycle::archive_session(&fixture.state, &receiving.id).unwrap();
     assert!(fixture.state.delete_if_archived(&receiving.id).unwrap());
 
     assert!(!package.exists());
@@ -664,14 +664,14 @@ async fn messages_for_the_original_during_a_handoff_are_forwarded_to_the_receivi
         .queue_message("original", "queued before the handoff");
     let state = fixture.state.clone();
     let during = fixture.launch_after(move || {
-        let delivery = crate::reporting::write_message(
+        let delivery = crate::delivery::write_message(
             &state,
             "original",
             "sent during the handoff",
             WhenBlocked::Queue,
         )
         .unwrap();
-        assert_eq!(delivery, crate::reporting::Delivery::Queued);
+        assert_eq!(delivery, crate::delivery::Delivery::Queued);
     });
 
     let receiving = fixture
@@ -779,14 +779,14 @@ async fn messages_for_the_original_during_a_failed_handoff_reach_the_original() 
             terminal_appearance: None,
         },
         move |_| {
-            let delivery = crate::reporting::write_message(
+            let delivery = crate::delivery::write_message(
                 &state,
                 "original",
                 "sent during the handoff",
                 WhenBlocked::Queue,
             )
             .unwrap();
-            assert_eq!(delivery, crate::reporting::Delivery::Queued);
+            assert_eq!(delivery, crate::delivery::Delivery::Queued);
             Err(anyhow!("the agent would not start"))
         },
     )
@@ -810,7 +810,7 @@ async fn messages_held_for_the_original_go_to_the_receiving_session_when_the_han
     let during = fixture.launch_after(move || {
         // The user locks the original while the receiving session starts, so archiving it fails.
         state.store.set_session_locked("original", true).unwrap();
-        crate::reporting::write_message(
+        crate::delivery::write_message(
             &state,
             "original",
             "sent during the handoff",
@@ -941,7 +941,7 @@ async fn what_the_original_started_is_carried_over_to_the_receiving_session() {
         .trees_of_sessions(&["original".to_string()], std::time::Duration::ZERO)
         .is_empty());
 
-    coordinator::archive_session(&fixture.state, &receiving.id).unwrap();
+    coordinator::lifecycle::archive_session(&fixture.state, &receiving.id).unwrap();
     assert!(
         stops_running(child).await,
         "kept running past the receiving session"
@@ -970,7 +970,7 @@ async fn a_receiving_session_that_does_not_start_leaves_what_the_original_starte
     assert!(crate::test_support::is_running(child));
     assert_eq!(fixture.stored("original").status, SessionStatus::Idle);
 
-    coordinator::archive_session(&fixture.state, &original.id).unwrap();
+    coordinator::lifecycle::archive_session(&fixture.state, &original.id).unwrap();
     assert!(stops_running(child).await, "kept running past the original");
 }
 
@@ -1008,7 +1008,7 @@ async fn a_failed_archive_takes_back_the_carry_over_of_what_the_original_started
         .store
         .set_session_locked("original", false)
         .unwrap();
-    coordinator::archive_session(&fixture.state, &original.id).unwrap();
+    coordinator::lifecycle::archive_session(&fixture.state, &original.id).unwrap();
     assert!(
         stops_running(child).await,
         "carried to the receiving session though the handoff failed"

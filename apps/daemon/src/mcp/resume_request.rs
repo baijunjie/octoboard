@@ -3,16 +3,17 @@
 //! the user, with the same limits, behind the user's approval.
 //!
 //! What is here is the caller's side: reading the arguments, finding where the conversation is
-//! held with the lookup the tab asks the daemon for (`coordinator::locate_conversation`), and
-//! refusing before the user is asked whatever the approval could never carry out. The asking, the
-//! waiting and what an approval does are `crate::session_request`'s, shared with `request_session`.
+//! held with the lookup the tab asks the daemon for (`coordinator::resume::locate_conversation`),
+//! and refusing before the user is asked whatever the approval could never carry out. The asking,
+//! the waiting and what an approval does are `crate::session_request`'s, shared with
+//! `request_session`.
 
 use std::sync::Arc;
 
 use anyhow::{anyhow, bail, Result};
 use serde_json::{Map, Value};
 
-use crate::coordinator::{self, OpenRequest};
+use crate::coordinator::{self, open::OpenRequest};
 use crate::protocol::{ConversationLocation, Origin, Project, Role, Session, SessionStatus};
 use crate::session_request::{self, Action};
 use crate::sharing::{named_session, one_line, place_of, reports_to, ReportsTo};
@@ -33,9 +34,9 @@ pub(super) async fn request_resume_session(
         caller,
         arguments,
         async |project, conversation| {
-            coordinator::locate_conversation(state, project, conversation).await
+            coordinator::resume::locate_conversation(state, project, conversation).await
         },
-        async |id| coordinator::check_can_resume(state, id).await,
+        async |id| coordinator::resume::check_can_resume(state, id).await,
     )
     .await?;
     // Read once, as `request_session` reads its own setting: the call acts on it.
@@ -77,7 +78,7 @@ async fn plan(
         .into_iter()
         .any(|value| matches!(value, Some(Some(text)) if !text.trim().is_empty()));
 
-    let id = coordinator::parse_conversation_id(wanted)?;
+    let id = coordinator::resume::parse_conversation_id(wanted)?;
     let location = locate(&project.id, &id).await?;
     let holder = match location {
         ConversationLocation::ArchivedSession { session }
@@ -213,7 +214,7 @@ fn held_elsewhere(state: &Arc<AppState>, holder: &Session, asked: &Project) -> a
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mcp::exec::tests::{arguments, shared_console_state};
+    use crate::mcp::test_support::{arguments, shared_console_state};
     use crate::protocol::Agent;
     use serde_json::json;
 

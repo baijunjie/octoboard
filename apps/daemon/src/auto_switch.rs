@@ -10,13 +10,19 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 
-use crate::coordinator::{self, LaunchEdit, NoLongerDue, SwitchOnlyIf};
+use crate::coordinator::{
+    self,
+    account_switch::{NoLongerDue, SwitchOnlyIf},
+    launch::LaunchEdit,
+};
+use crate::delivery::{self, WhenBlocked};
 use crate::mcp;
+use crate::owner_notices;
 use crate::protocol::{
     error_code, error_parts, notice_code, Agent, CodedError, Notice, Session, SessionStatus,
     DEFAULT_ACCOUNT_NAME,
 };
-use crate::reporting::{self, WhenBlocked, NOTICE_PREFIX};
+use crate::session_texts::NOTICE_PREFIX;
 use crate::sharing;
 use crate::state::AppState;
 use crate::term::{Launch, LaunchRequest};
@@ -182,7 +188,7 @@ impl PendingRecovery {
             account,
             dir.as_deref(),
             self.since + 1,
-        ) && coordinator::account_can_open(state, self.session.agent, account)?
+        ) && coordinator::account_choice::account_can_open(state, self.session.agent, account)?
             && !account.is_some_and(|id| state.sharing_locked(id).is_some()))
     }
 
@@ -336,7 +342,8 @@ async fn recover_after_refresh(
         if switchable_session(state, &id).ok().flatten().is_none() {
             continue;
         }
-        if !coordinator::account_can_open(state, agent, account.as_deref()).unwrap_or(false)
+        if !coordinator::account_choice::account_can_open(state, agent, account.as_deref())
+            .unwrap_or(false)
             || account
                 .as_deref()
                 .is_some_and(|id| state.sharing_locked(id).is_some())
@@ -564,15 +571,16 @@ async fn try_switch_captured(
     // account has no directory of its own); the switch is given it in place of the original, which
     // is spent. Otherwise the switch takes the original itself.
     type Snapshot = Box<dyn FnOnce() -> Result<HashMap<String, String>> + Send>;
-    let (shell_env, snapshot): (_, Snapshot) = if coordinator::record_needs_shell_env(&session) {
-        let env = tokio::task::spawn_blocking(snapshot)
-            .await?
-            .context("snapshotting the user's shell environment")?;
-        (Some(env.clone()), Box::new(move || Ok(env)))
-    } else {
-        (None, Box::new(snapshot))
-    };
-    if !coordinator::wait_for_usage_limit(&session, shell_env).await? {
+    let (shell_env, snapshot): (_, Snapshot) =
+        if coordinator::restart::record_needs_shell_env(&session) {
+            let env = tokio::task::spawn_blocking(snapshot)
+                .await?
+                .context("snapshotting the user's shell environment")?;
+            (Some(env.clone()), Box::new(move || Ok(env)))
+        } else {
+            (None, Box::new(snapshot))
+        };
+    if !coordinator::account_switch::wait_for_usage_limit(&session, shell_env).await? {
         return Ok(false);
     }
     // The wait took time: what the session is doing is read again, and the account the limit was
@@ -719,7 +727,12 @@ async fn wait_for_claim(state: &Arc<AppState>, id: &str) {
 fn pick_target(state: &Arc<AppState>, session: &Session) -> Result<Option<Option<String>>> {
     let mut except = state.recently_left_for_limit(&session.id, LEFT_FOR_LIMIT_FOR);
     except.push(session.account_id.clone());
-    coordinator::preferred_weekly_account_except(state, session.agent, &except, true)
+    coordinator::account_choice::preferred_weekly_account_except(
+        state,
+        session.agent,
+        &except,
+        true,
+    )
 }
 
 /// The session `id` as it stands if it is in a state to be switched now: a process at its prompt or
@@ -780,7 +793,7 @@ async fn switch_to_with_recovery(
         watch_launch: true,
         note: Some(&note),
     };
-    let continued = match coordinator::switch_session_account_if(
+    let continued = match coordinator::account_switch::switch_session_account_if(
         state,
         id,
         Some(target.clone()),
@@ -848,7 +861,7 @@ async fn switch_to_with_recovery(
             } else {
                 "It is awaiting instructions."
             };
-            reporting::tell_owner(&state, &moved, |_| {
+            owner_notices::tell_owner(&state, &moved, |_| {
                 format!(
                 "{NOTICE_PREFIX}: session `{}` resumed automatically after its account's usage \
                  quota recovered. {continuation}", moved.id)
@@ -897,7 +910,9 @@ async fn restore(
     target: Option<&str>,
     launch: impl FnOnce(LaunchRequest) -> Result<Launch> + Send + 'static,
 ) -> Result<()> {
-    match coordinator::restore_after_failed_switch(state, session, target, launch).await {
+    match coordinator::account_switch::restore_after_failed_switch(state, session, target, launch)
+        .await
+    {
         Ok(()) => Ok(()),
         Err(err) if is_quiet(&err) || is_already_up(&err) || state.is_shutting_down() => Ok(()),
         Err(err) => {
@@ -912,10 +927,10 @@ async fn restore(
 }
 
 async fn tell_recovery_failed(state: &Arc<AppState>, session: &Session, err: &anyhow::Error) {
-    coordinator::report_failed_launch(state, session, err);
+    coordinator::open::report_failed_launch(state, session, err);
     let (state, session, reason) = (state.clone(), session.clone(), format!("{err:#}"));
     let _ = tokio::task::spawn_blocking(move || {
-        reporting::tell_owner(&state, &session, |_| {
+        owner_notices::tell_owner(&state, &session, |_| {
             format!(
             "{NOTICE_PREFIX}: session `{}` (\"{}\") could not resume after its account's usage \
              quota recovered. It is interrupted and its work is stopped. Reason: {reason}",
@@ -993,7 +1008,7 @@ async fn tell_switch_failed(
     let (state, session, reason) = (state.clone(), session.clone(), format!("{err:#}"));
     // Delivery writes into the owner's PTY, which blocks.
     let _ = tokio::task::spawn_blocking(move || {
-        reporting::tell_owner_the_switch_failed(&state, &session, &reason)
+        owner_notices::tell_owner_the_switch_failed(&state, &session, &reason)
     })
     .await;
 }
@@ -1053,7 +1068,7 @@ fn note_to_session(agent: Agent, from: &str, to: &str) -> String {
 
 /// Tells the switched session, when its relaunch did not carry the note, and its owner if it has
 /// one, what became of it. A message to a session that cannot take one now is queued, and one for
-/// an owner that is interrupted is kept for its resume (see `reporting::tell_owner`); one that
+/// an owner that is interrupted is kept for its resume (see `owner_notices::tell_owner`); one that
 /// cannot be delivered at all is logged and goes no further.
 fn tell_sessions(
     state: &Arc<AppState>,
@@ -1074,7 +1089,7 @@ fn tell_sessions(
             state.clear_turn_credit(&moved.id, NOTICE_PREFIX);
         }
     }
-    reporting::tell_owner(state, moved, |owner| {
+    owner_notices::tell_owner(state, moved, |owner| {
         format!(
             "{NOTICE_PREFIX}: {session} reached the usage limit of its {} account `{from}`, so \
              Octoboard switched it to `{to}` by itself. Its conversation came with it. {}",
@@ -1097,7 +1112,7 @@ fn tell_sessions(
 
 /// Writes `text` into the session `id`, queued until it can take it. Whether it was accepted.
 fn tell(state: &Arc<AppState>, id: &str, text: &str) -> bool {
-    match reporting::write_message(state, id, text, WhenBlocked::Queue) {
+    match delivery::write_message(state, id, text, WhenBlocked::Queue) {
         Ok(_) => true,
         Err(err) => {
             tracing::debug!(session = %id, %err, "telling a session of its switch failed");
@@ -1503,7 +1518,7 @@ mod tests {
                     .set_session_launch_overrides("w", &None, &None)
                     .unwrap(),
                 "archive" => {
-                    coordinator::archive_session(&fixture.state, "w").unwrap();
+                    coordinator::lifecycle::archive_session(&fixture.state, "w").unwrap();
                 }
                 "setting" => {
                     fixture
@@ -2496,7 +2511,7 @@ mod tests {
             let fixture = &fixture;
             let env = fixture.env();
             async move {
-                coordinator::switch_session_account_if(
+                coordinator::account_switch::switch_session_account_if(
                     &fixture.state,
                     id,
                     Some(Some("claude-a".to_string())),
@@ -2511,7 +2526,7 @@ mod tests {
                 .expect_err("refused")
             }
         };
-        let refusal = |failed: &coordinator::SwitchFailed| {
+        let refusal = |failed: &coordinator::account_switch::SwitchFailed| {
             assert!(!failed.ended_process);
             failed.error.downcast_ref::<NoLongerDue>().map(|due| due.0)
         };
@@ -3002,7 +3017,7 @@ mod tests {
 
         // Under the claim the wait is not what refuses it: the switch goes on to its own checks,
         // and refuses the Grok target there.
-        let err = coordinator::switch_session_account_if(
+        let err = coordinator::account_switch::switch_session_account_if(
             &fixture.state,
             "g",
             Some(Some("grok-a".to_string())),
@@ -3027,7 +3042,7 @@ mod tests {
         );
 
         // Without the usage-limit part, and for a dialog of another kind, it is still a wait.
-        let plain = coordinator::switch_session_account_if(
+        let plain = coordinator::account_switch::switch_session_account_if(
             &fixture.state,
             "g",
             Some(Some("grok-a".to_string())),
@@ -3209,7 +3224,7 @@ mod tests {
         let (started, launches) = (fixture.started.clone(), fixture.launches.clone());
         let env = fixture.env();
 
-        let failed = coordinator::switch_session_account_if(
+        let failed = coordinator::account_switch::switch_session_account_if(
             &fixture.state,
             "w",
             Some(Some("claude-a".to_string())),
@@ -3266,9 +3281,12 @@ mod tests {
         });
         let (started, launches) = (fixture.started.clone(), fixture.launches.clone());
 
-        coordinator::restore_after_failed_switch(&fixture.state, &before, None, move |request| {
-            stand_in_launch(&started, &launches, || {})(request)
-        })
+        coordinator::account_switch::restore_after_failed_switch(
+            &fixture.state,
+            &before,
+            None,
+            move |request| stand_in_launch(&started, &launches, || {})(request),
+        )
         .await
         .expect("restored once the other claim ended");
 
@@ -3285,9 +3303,12 @@ mod tests {
             ..fixture.worker()
         };
 
-        let err = coordinator::restore_after_failed_switch(&fixture.state, &before, None, |_| {
-            anyhow::bail!("not reached")
-        })
+        let err = coordinator::account_switch::restore_after_failed_switch(
+            &fixture.state,
+            &before,
+            None,
+            |_| anyhow::bail!("not reached"),
+        )
         .await
         .expect_err("it runs");
 
@@ -3307,9 +3328,12 @@ mod tests {
             })
             .await
         );
-        let err = coordinator::restore_after_failed_switch(&fixture.state, &before, None, |_| {
-            anyhow::bail!("not reached")
-        })
+        let err = coordinator::account_switch::restore_after_failed_switch(
+            &fixture.state,
+            &before,
+            None,
+            |_| anyhow::bail!("not reached"),
+        )
         .await
         .expect_err("archived");
         assert!(is_quiet(&err), "{err:#}");
@@ -3339,9 +3363,12 @@ mod tests {
             .set_session_account("w", Some("claude-b"), moved_dir.to_str())
             .unwrap();
 
-        coordinator::restore_after_failed_switch(&fixture.state, &before, Some("claude-a"), |_| {
-            anyhow::bail!("not reached")
-        })
+        coordinator::account_switch::restore_after_failed_switch(
+            &fixture.state,
+            &before,
+            Some("claude-a"),
+            |_| anyhow::bail!("not reached"),
+        )
         .await
         .expect("nothing to restore");
 
@@ -3409,7 +3436,7 @@ mod tests {
             [None]
         );
 
-        coordinator::archive_session(&fixture.state, "w").unwrap();
+        coordinator::lifecycle::archive_session(&fixture.state, "w").unwrap();
 
         assert!(fixture
             .state

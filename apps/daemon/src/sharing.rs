@@ -6,7 +6,7 @@
 //! sender, says whether the sender is the receiver's owner, and quotes the body line by line
 //! between a header and a closing line, so that text in the body cannot pass for one of
 //! Octoboard's own messages (a report, a report panel form submission) or for the end of this one.
-//! Delivery to a session with a process is [`reporting::write_message`], with everything that
+//! Delivery to a session with a process is [`delivery::write_message`], with everything that
 //! brings: sanitizing, and holding for a session that is waiting for the user. A session with no
 //! process is handled here instead (see [`write_or_hold`]): an interrupted one has the
 //! information kept in the store and handed to it when it is resumed, and an archived one is
@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
+use crate::delivery::{self, Delivery, WhenBlocked};
 use crate::protocol::{error_code, CodedError, Session, SessionStatus};
-use crate::reporting::{self, Delivery, WhenBlocked};
 use crate::state::AppState;
 
 /// What became of the copy of shared information that goes to the receiving session's owner.
@@ -66,13 +66,13 @@ pub fn deliver_info(
     Ok((delivery, copy))
 }
 
-/// [`reporting::write_message`], except for a session with no process: an interrupted one has the
+/// [`delivery::write_message`], except for a session with no process: an interrupted one has the
 /// message kept in the store, and a resume puts it on the session's queue (`coordinator`'s
 /// `relaunch_session_with`), so it is written once the session is up and can take it, and is not
 /// lost with the daemon or a relaunch that failed; archiving or deleting the session drops it. An
 /// archived session is refused, since nothing says it will ever be resumed.
 ///
-/// **Blocks** like [`reporting::write_message`].
+/// **Blocks** like [`delivery::write_message`].
 fn write_or_hold(state: &Arc<AppState>, id: &str, text: &str) -> Result<Delivery> {
     let session = state.session_record(id)?;
     if session.status == SessionStatus::Archived {
@@ -87,7 +87,7 @@ fn write_or_hold(state: &Arc<AppState>, id: &str, text: &str) -> Result<Delivery
     {
         return Ok(Delivery::Kept);
     }
-    reporting::write_message(state, id, text, WhenBlocked::Queue)
+    delivery::write_message(state, id, text, WhenBlocked::Queue)
 }
 
 /// Why a copy failed, from the sender's side: the error text speaks of "this session", which the

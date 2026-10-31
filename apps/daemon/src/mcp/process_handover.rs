@@ -9,9 +9,10 @@ use std::time::Duration;
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
 
+use crate::delivery::{self, WhenBlocked};
 use crate::process_ledger::{MoveRefused, ProcessTree};
 use crate::protocol::{error_code, CodedError, Session, SessionStatus};
-use crate::reporting::{self, WhenBlocked, NOTICE_PREFIX};
+use crate::session_texts::NOTICE_PREFIX;
 use crate::sharing::named_session;
 use crate::state::AppState;
 
@@ -294,7 +295,7 @@ async fn tell(
             continue;
         }
         if let Err(err) =
-            reporting::write_message_off_runtime(state, &session.id, text, WhenBlocked::Queue).await
+            delivery::write_message_off_runtime(state, &session.id, text, WhenBlocked::Queue).await
         {
             tracing::warn!(
                 session = %session.id,
@@ -310,7 +311,7 @@ async fn tell(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mcp::exec::tests::{arguments, project_session, shared_console_state};
+    use crate::mcp::test_support::{arguments, project_session, shared_console_state};
     use crate::test_support::{
         assert_stops_running, fake_live_session, is_running, output_containing, perl_write,
         running, wait_for_pid, KillOnDrop, ScratchDir, StandIn,

@@ -26,13 +26,14 @@ use std::sync::Arc;
 use anyhow::{anyhow, Context, Result};
 use uuid::Uuid;
 
-use crate::coordinator::{self, OpenRequest};
+use crate::coordinator::{self, open::OpenRequest};
+use crate::delivery::{self, WhenBlocked};
 use crate::mcp::qualified_tool_name;
 use crate::protocol::{
     error_code, notice_code, Agent, CodedError, Notice, OrchestrationRole, Session, SessionStatus,
     TerminalAppearance,
 };
-use crate::reporting::{self, WhenBlocked, NOTICE_PREFIX};
+use crate::session_texts::NOTICE_PREFIX;
 use crate::sharing::{named_session, one_line, place_of, quote};
 use crate::state::{AppState, OutboxHold};
 use crate::term;
@@ -78,7 +79,7 @@ pub(crate) async fn hand_off_with(
     // Held from the claim on, before anything is read: a refusal just drops it.
     let hold = state.hold_outbox(&request.session);
     let original = state.session_record(&request.session)?;
-    coordinator::refuse_unless_still_askers(&original, request.asked_by.as_deref())?;
+    coordinator::bindings::refuse_unless_still_askers(&original, request.asked_by.as_deref())?;
     refuse_unless_it_can_be_handed_off(&original, request.agent)?;
     // Its conversation is read from its account's directory, which a change of sharing moves.
     crate::shared_config::refuse_if_changing(state, original.account_id.as_deref())?;
@@ -87,7 +88,7 @@ pub(crate) async fn hand_off_with(
     let open = receiving_request(state, &original, &request, Some(key.clone()));
 
     // Refused here for what opening would refuse, before the package is read and written.
-    coordinator::check_open(state, &open).await?;
+    coordinator::open::check_open(state, &open).await?;
 
     // The original's brief is not kept anywhere, so the package has none; the first user message in
     // its conversation is the same text.
@@ -99,7 +100,7 @@ pub(crate) async fn hand_off_with(
         task: Some(brief(&original, &path, request.note.as_deref())),
         ..open
     };
-    let receiving = match coordinator::open_session_with(state, open, launch).await {
+    let receiving = match coordinator::open::open_session_with(state, open, launch).await {
         Ok(receiving) => receiving,
         Err(err) => {
             if let Err(remove_err) = super::remove(state, &key) {
@@ -122,7 +123,7 @@ pub(crate) async fn hand_off_with(
     });
     // No branch cleanup follows the archive: the branches the original was responsible for have
     // moved to the receiving session, and any that could not move are not the archive's to remove.
-    coordinator::archive_session(state, &original.id).map_err(|err| {
+    coordinator::lifecycle::archive_session(state, &original.id).map_err(|err| {
         // The original stays as it is, and what it started stays its own.
         if let Some(launch) = &carried {
             state.process_ledger.withdraw_hand_over(launch);
@@ -208,7 +209,7 @@ pub(crate) fn refuse_unless_it_can_be_handed_off(original: &Session, agent: Agen
         }
         SessionStatus::WaitingUser | SessionStatus::Idle | SessionStatus::Interrupted => {}
     }
-    coordinator::ensure_unlocked([original.clone()])?;
+    coordinator::lifecycle::ensure_unlocked([original.clone()])?;
     if agent == original.agent {
         return Err(CodedError::raised(
             error_code::HANDOFF_TO_SAME_AGENT,
@@ -377,12 +378,13 @@ pub(super) async fn tell(
              were started. `{from_id}` no longer drives you; it is archived.",
             from = named_session(original),
             to = named_session(receiving),
-            owner_now = crate::mcp::owner_from_now_on(session.agent, "It"),
+            owner_now = crate::owner_notices::owner_from_now_on(session.agent, "It"),
             from_id = original.id,
         );
-        let told = match crate::mcp::running_or_leave(state, &session) {
+        let told = match crate::owner_notices::running_or_leave(state, &session) {
             Ok(running) => {
-                crate::mcp::tell_now_or_leave(state, &session.id, text, running, None).await
+                crate::owner_notices::tell_now_or_leave(state, &session.id, text, running, None)
+                    .await
             }
             Err(err) => Err(err),
         };
@@ -412,7 +414,7 @@ pub(super) async fn tell(
         );
         // Kept for an owner that is interrupted, as a session's own report to it would be.
         if let Err(err) =
-            reporting::write_notice_to_owner_off_runtime(state, owner, original, text).await
+            delivery::write_notice_to_owner_off_runtime(state, owner, original, text).await
         {
             tracing::warn!(session = %owner.id, %err, "telling an owner of a handoff failed");
         }
@@ -521,7 +523,7 @@ async fn forward_queued(state: &Arc<AppState>, original: &str, receiving: &str) 
     }
     for text in texts {
         if let Err(err) =
-            reporting::write_message_off_runtime(state, receiving, text, WhenBlocked::Queue).await
+            delivery::write_message_off_runtime(state, receiving, text, WhenBlocked::Queue).await
         {
             tracing::warn!(session = %receiving, %err, "forwarding a message queued for the original session failed");
             // A lost queue was announced as `queued_messages_dropped` by the drain that lost it.
@@ -568,8 +570,7 @@ fn word_of(status: SessionStatus) -> &'static str {
 /// Delivers `text` to a session through the ordinary message delivery. A session that cannot take
 /// it is told nothing more: the record is already right, and a relaunch tells it.
 async fn send(state: &Arc<AppState>, id: &str, text: String) {
-    if let Err(err) =
-        reporting::write_message_off_runtime(state, id, text, WhenBlocked::Queue).await
+    if let Err(err) = delivery::write_message_off_runtime(state, id, text, WhenBlocked::Queue).await
     {
         tracing::warn!(session = %id, %err, "telling a session of a handoff failed");
     }

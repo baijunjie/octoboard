@@ -324,7 +324,7 @@ impl Launches {
 /// Resumes `session` through the coordinator's relaunch.
 async fn resume(fixture: &Fixture, session: &str, launches: &Launches) -> Result<()> {
     let claim = fixture.state.begin_launch(session).unwrap();
-    crate::coordinator::relaunch_session_with(
+    crate::coordinator::launch::relaunch_session_with(
         &fixture.state,
         &claim,
         session,
@@ -1163,13 +1163,13 @@ async fn a_switch_onto_an_account_that_stopped_sharing_that_fails_leaves_the_con
 
     let launches = Launches::default();
     let shell = on_default_shell(&fixture);
-    let err = crate::coordinator::switch_session_account_with(
+    let err = crate::coordinator::account_switch::switch_session_account_with(
         &fixture.state,
         "moving",
         Some(Some("claude-a".to_string())),
         None,
         None,
-        crate::coordinator::LaunchEdit::default(),
+        crate::coordinator::launch::LaunchEdit::default(),
         move || Ok(shell),
         launches.launch(true),
     )
@@ -1533,9 +1533,9 @@ async fn nothing_of_the_account_starts_while_its_change_runs() {
     in_progress(fixture.state.begin_launch("s").map(drop));
     // Creating one.
     let launches = Launches::default();
-    let opened = crate::coordinator::open_session_with(
+    let opened = crate::coordinator::open::open_session_with(
         &fixture.state,
-        crate::coordinator::OpenRequest {
+        crate::coordinator::open::OpenRequest {
             console_id: "console-1".to_string(),
             project_id: Some("project-1".to_string()),
             agent: Some(Agent::Claude),
@@ -1557,13 +1557,13 @@ async fn nothing_of_the_account_starts_while_its_change_runs() {
     assert_eq!(fixture.state.store.list_sessions().unwrap().len(), 2);
     // Switching a session to it, which keeps running.
     in_progress(
-        crate::coordinator::switch_session_account_with(
+        crate::coordinator::account_switch::switch_session_account_with(
             &fixture.state,
             "moving",
             Some(Some("claude-a".to_string())),
             None,
             None,
-            crate::coordinator::LaunchEdit::default(),
+            crate::coordinator::launch::LaunchEdit::default(),
             || Ok(std::collections::HashMap::new()),
             launches.launch(false),
         )
@@ -1574,13 +1574,13 @@ async fn nothing_of_the_account_starts_while_its_change_runs() {
     assert!(fixture.state.live_session("moving").is_some());
     // Switching one of its sessions away from it, or handing one off.
     in_progress(
-        crate::coordinator::switch_session_account_with(
+        crate::coordinator::account_switch::switch_session_account_with(
             &fixture.state,
             "s",
             Some(None),
             None,
             None,
-            crate::coordinator::LaunchEdit::default(),
+            crate::coordinator::launch::LaunchEdit::default(),
             || Ok(std::collections::HashMap::new()),
             launches.launch(false),
         )
@@ -1728,13 +1728,13 @@ async fn no_launch_or_switch_carries_a_change_out() {
     };
     fixture.state.store.insert_session(&session).unwrap();
     let launches = Launches::default();
-    crate::coordinator::switch_session_account_with(
+    crate::coordinator::account_switch::switch_session_account_with(
         &fixture.state,
         "moving",
         Some(Some("claude-a".to_string())),
         None,
         None,
-        crate::coordinator::LaunchEdit::default(),
+        crate::coordinator::launch::LaunchEdit::default(),
         || Ok(std::collections::HashMap::new()),
         launches.launch(false),
     )
@@ -2539,7 +2539,7 @@ async fn claimed_and_down(fixture: &Fixture, id: &str) -> crate::state::AccountS
 
 #[tokio::test]
 async fn messages_sent_once_the_process_is_down_are_held_for_the_resume() {
-    use crate::reporting::{write_message, Delivery, WhenBlocked};
+    use crate::delivery::{write_message, Delivery, WhenBlocked};
     let fixture = Fixture::new();
     claude_setup(&fixture);
     let mut lock = claimed_and_down(&fixture, "idle").await;
@@ -2565,7 +2565,7 @@ async fn messages_sent_once_the_process_is_down_are_held_for_the_resume() {
 #[tokio::test]
 async fn a_message_queued_after_the_queue_went_to_the_launch_is_written_when_the_session_is_let_go()
 {
-    use crate::reporting::{write_message, Delivery, WhenBlocked};
+    use crate::delivery::{write_message, Delivery, WhenBlocked};
     let fixture = Fixture::new();
     claude_setup(&fixture);
     *fixture.state.send_wait.lock().unwrap() = None;
@@ -2607,7 +2607,7 @@ async fn a_message_queued_after_the_queue_went_to_the_launch_is_written_when_the
 
 #[tokio::test]
 async fn a_message_queued_after_a_failed_relaunch_is_dropped_and_told_when_the_session_is_let_go() {
-    use crate::reporting::{write_message, WhenBlocked};
+    use crate::delivery::{write_message, WhenBlocked};
     let fixture = Fixture::new();
     claude_setup(&fixture);
     let mut lock = claimed_and_down(&fixture, "idle").await;
@@ -2633,7 +2633,7 @@ async fn a_message_queued_after_a_failed_relaunch_is_dropped_and_told_when_the_s
 
 #[tokio::test]
 async fn messages_held_for_a_session_that_is_not_relaunched_are_dropped_and_told() {
-    use crate::reporting::{write_message, WhenBlocked};
+    use crate::delivery::{write_message, WhenBlocked};
     let fixture = Fixture::new();
     claude_setup(&fixture);
     let lock = claimed_and_down(&fixture, "idle").await;
@@ -2658,7 +2658,7 @@ async fn messages_held_for_a_session_that_is_not_relaunched_are_dropped_and_told
 
 #[tokio::test]
 async fn a_session_being_restarted_is_described_to_agents_as_starting() {
-    use crate::mcp::exec::describe_session;
+    use crate::mcp::exec::resolve::describe_session;
     use crate::mcp::reads::list_sessions;
     let fixture = Fixture::new();
     claude_setup(&fixture);
@@ -2712,7 +2712,7 @@ async fn a_session_being_restarted_is_described_to_agents_as_starting() {
 
 #[tokio::test]
 async fn the_hold_a_sharing_change_takes_on_a_queue_is_told_apart_from_a_handoffs() {
-    use crate::mcp::exec::describe_session;
+    use crate::mcp::exec::resolve::describe_session;
     use crate::state::WriteHold;
     let fixture = Fixture::new();
     claude_setup(&fixture);

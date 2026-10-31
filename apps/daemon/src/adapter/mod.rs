@@ -202,10 +202,10 @@ pub fn mcp_server_command(spec: &LaunchSpec<'_>) -> (String, Vec<String>) {
 
 /// The session's pinned configuration directory, refused when it has gone and this launch is
 /// resuming a conversation the agent actually has — `spec.resume_agent_session_id` is set only
-/// then (see `protocol::Session::has_conversation` and `coordinator::resume_session`), never for a
-/// fresh launch or for resuming a session that never had a turn. Those two launch into the missing
-/// directory instead: Claude Code creates it itself, as it would for an unpinned launch, and the
-/// Codex adapter creates it before launching.
+/// then (see `protocol::Session::has_conversation` and `coordinator::resume::resume_session`),
+/// never for a fresh launch or for resuming a session that never had a turn. Those two launch into
+/// the missing directory instead: Claude Code creates it itself, as it would for an unpinned
+/// launch, and the Codex adapter creates it before launching.
 ///
 /// Checked here rather than left to the agent: Claude Code would quietly create the missing
 /// directory and come up logged out, without the conversation the resume was meant to continue —

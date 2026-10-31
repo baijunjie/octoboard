@@ -4,8 +4,8 @@ use std::time::{Duration, Instant};
 
 use super::input_box::captures::*;
 use super::*;
+use crate::delivery::{self, Delivery, WhenBlocked};
 use crate::protocol::{Agent, CodedError, Session, SessionStatus};
-use crate::reporting::{self, Delivery, WhenBlocked};
 use crate::state::AppState;
 use crate::test_support::{
     app_state, console, console_session, fake_live_session, watched_live_session, ScratchDir,
@@ -345,7 +345,7 @@ async fn a_message_sent_during_the_clearing_goes_in_after_it() {
                 CTRL_U,
                 Box::new(move || {
                     let written =
-                        reporting::write_message(&state, "s", "sent meanwhile", WhenBlocked::Queue);
+                        delivery::write_message(&state, "s", "sent meanwhile", WhenBlocked::Queue);
                     sent.send(written.unwrap()).unwrap();
                     draw(&first, ONE_CTRL_U);
                 }),

@@ -10,10 +10,11 @@ and fails for one with no words in the catalogs, or (an `error_code`, or a notic
 that classifies as unexpected; it checks none of the per-code tables below, so getting those right is still on you. So
 when daemon code starts sending a new code, the same change:
 
-- Declares it in `apps/daemon/src/protocol.rs`, as its own `pub const NAME: Code = Code("code");` in the code module
-  for its kind (`error_code`, `notice_code`, `models_unavailable_code`, `quota_unavailable_code`,
-  `login_failure_code`); every wire `code` field is a `Code`, which nothing outside that file can make. A code of a
-  quota reading, a models list or a login is shown where it is read, so it needs only its words, not a group.
+- Declares it in `apps/daemon/src/protocol/codes.rs`, as its own `pub const NAME: Code = Code("code");` in the code
+  module for its kind (`error_code`, `notice_code`, `models_unavailable_code`, `quota_unavailable_code`,
+  `login_failure_code`, reached elsewhere as `crate::protocol::error_code` and so on); every wire `code` field is a
+  `Code`, which nothing outside that file can make. A code of a quota reading, a models list or a login is shown where
+  it is read, so it needs only its words, not a group.
 - Adds `daemon.<code>` in every message catalog under `packages/ui/src/i18n/messages/`. It says what happened, and no
   remedy beyond a code-specific step as set out below. Where `messageCode` words the code only by a param (one key per
   `kind` or `cause`), the key it resolves to with no such param is still needed: it is what a newer daemon's variant
@@ -49,8 +50,8 @@ when daemon code starts sending a new code, the same change:
   type check where a place lacks it. Cover both defaults in `errorRecovery.test.ts`; nothing else makes you decide them,
   and either can otherwise land on a remedy that does not fit or on the unexpected alert. Name the param `cause`, never
   `reason`, `reason_code` or `title`: when the failure ends a launch, `report_failed_launch`
-  (`apps/daemon/src/coordinator.rs`) writes those over the failure's own params. `reason` is also the daemon's English
-  text, which the window scans for an operating-system error signature.
+  (`apps/daemon/src/coordinator/open.rs`) writes those over the failure's own params. `reason` is also the daemon's
+  English text, which the window scans for an operating-system error signature.
 - Where the code is in `DETAIL_BLOCK_CODES` (`packages/ui/src/daemonMessage.ts`), its `detail` shown as raw text of its
   own: an error of it that carries `detail` is worded by `daemon.<messageCode>.summary` (`richMessageCode`), and with
   that key missing the alert shows the daemon's own English message, which no type check or test catches. So where

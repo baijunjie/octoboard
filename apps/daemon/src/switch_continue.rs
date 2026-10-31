@@ -37,7 +37,7 @@ macro_rules! continue_words {
 /// The prompt a continued session is sent: a notice from Octoboard, so that the session's history
 /// tells it from what the user typed.
 pub const CONTINUE_PROMPT: &str = concat!(
-    crate::reporting::notice_prefix!(),
+    crate::session_texts::notice_prefix!(),
     ": your session was restarted. ",
     continue_words!()
 );

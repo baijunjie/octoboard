@@ -52,7 +52,7 @@ impl TitleObserver {
                 let id = session.id.clone();
                 runtime.spawn_blocking(move || {
                     if action_required {
-                        crate::reporting::tell_owner_it_waits(&state, &id);
+                        crate::owner_notices::tell_owner_it_waits(&state, &id);
                     }
                     if cleared {
                         if let Ok(record) = state.session_record(&id) {

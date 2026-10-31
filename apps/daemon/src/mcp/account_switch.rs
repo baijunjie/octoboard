@@ -1,10 +1,10 @@
 //! The tool with which an owner moves a session of its own to another account of its agent,
 //! `switch_session_account`. What the switch does and refuses is the coordinator's
-//! (`coordinator::switch_session_account`); what is here is the caller's side: that the session is
-//! its own, the account is read for the session's own agent, the user being asked first unless
-//! they chose to have switches approved without asking (`session_request`), and what the result
-//! tells it, since the session is not sent a message for the switch (only, at times, one to carry
-//! on with its turn).
+//! (`coordinator::account_switch::switch_session_account`); what is here is the caller's side: that
+//! the session is its own, the account is read for the session's own agent, the user being asked
+//! first unless they chose to have switches approved without asking (`session_request`), and what
+//! the result tells it, since the session is not sent a message for the switch (only, at times, one
+//! to carry on with its turn).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -12,20 +12,20 @@ use std::sync::Arc;
 use anyhow::Result;
 use serde_json::{json, Map, Value};
 
-use crate::coordinator::{self, LaunchEdit};
+use crate::coordinator::{self, launch::LaunchEdit};
 use crate::protocol::Session;
 use crate::session_request::{self, Change, Edits, Perform, Performed};
 use crate::state::AppState;
 
 use super::args::required_str;
-use super::exec::resolve_owned_session;
+use super::exec::resolve::resolve_owned_session;
 use super::settings::resolve_account;
 
 /// Moves a session of the caller's to another account of its own agent, keeping its conversation;
-/// see `coordinator::switch_session_account` for what happens to it and what is refused. The
-/// session is not told of the switch: it is relaunched on the new account and comes back awaiting
-/// instructions, which the result tells the caller to send — unless the relaunch was sent a prompt
-/// to carry on with its turn, which the result says instead.
+/// see `coordinator::account_switch::switch_session_account` for what happens to it and what is
+/// refused. The session is not told of the switch: it is relaunched on the new account and comes
+/// back awaiting instructions, which the result tells the caller to send — unless the relaunch was
+/// sent a prompt to carry on with its turn, which the result says instead.
 ///
 /// Unless the user has chosen to have account switches approved without asking, the call
 /// waits while the user is asked, who may change the account and the session's model and
@@ -69,9 +69,9 @@ pub(super) async fn switch_session_account(
         .await;
     }
     // Where nothing the user changes in the dialog could help.
-    coordinator::refuse_if_archived(&target)?;
-    coordinator::refuse_if_on_account(&target, &account)?;
-    coordinator::refuse_if_account_disabled(state, target.agent, account.as_deref())?;
+    coordinator::lifecycle::refuse_if_archived(&target)?;
+    coordinator::account_switch::refuse_if_on_account(&target, &account)?;
+    coordinator::accounts::refuse_if_account_disabled(state, target.agent, account.as_deref())?;
     let change = Change::Switch {
         target: target.id.clone(),
         account,
@@ -111,7 +111,7 @@ async fn perform(
     let target = state.session_record(target_id)?;
     let account = edits.account.clone().unwrap_or_else(|| asked.clone());
     let chose_otherwise = account != asked;
-    let continued = coordinator::switch_session_account_with(
+    let continued = coordinator::account_switch::switch_session_account_with(
         state,
         &target.id,
         Some(account),
@@ -186,7 +186,7 @@ async fn perform(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mcp::exec::tests::{arguments, peer_state, shared_console_state};
+    use crate::mcp::test_support::{arguments, peer_state, shared_console_state};
     use crate::protocol::{
         Account, Agent, Event, SessionRequestAction, SessionStatus, DEFAULT_ACCOUNT_NAME,
     };
@@ -587,7 +587,7 @@ mod tests {
             account,
             agent,
             ..
-        } = crate::mcp::exec::tests::wait_for_request(&state, "a").await
+        } = crate::mcp::test_support::wait_for_request(&state, "a").await
         else {
             panic!("a session request");
         };
@@ -644,7 +644,7 @@ mod tests {
             recording_launch(&started, &launches, &resumed),
         );
         let Event::SessionRequest { request_id, .. } =
-            crate::mcp::exec::tests::wait_for_request(&state, "a").await
+            crate::mcp::test_support::wait_for_request(&state, "a").await
         else {
             panic!("a session request");
         };
@@ -681,7 +681,7 @@ mod tests {
             |_| Err(anyhow::anyhow!("the agent would not start")),
         );
         let Event::SessionRequest { request_id, .. } =
-            crate::mcp::exec::tests::wait_for_request(&state, "a").await
+            crate::mcp::test_support::wait_for_request(&state, "a").await
         else {
             panic!("a session request");
         };
@@ -802,7 +802,7 @@ mod tests {
         let snapshot = prepare(&state, &dir, "of-a");
         state
             .store
-            .insert_session(&crate::mcp::exec::tests::project_session(
+            .insert_session(&crate::mcp::test_support::project_session(
                 "of-a-too",
                 "console-1",
                 Some("a"),
@@ -817,7 +817,7 @@ mod tests {
             snapshot,
             recording_launch(&started, &launches, &resumed),
         );
-        crate::mcp::exec::tests::wait_for_request(&state, "a").await;
+        crate::mcp::test_support::wait_for_request(&state, "a").await;
         let other = spawn_switch(
             &state,
             "a",
@@ -862,7 +862,7 @@ mod tests {
             snapshot,
             recording_launch(&started, &launches, &resumed),
         );
-        crate::mcp::exec::tests::wait_for_request(&state, "a").await;
+        crate::mcp::test_support::wait_for_request(&state, "a").await;
         state.store.set_auto_approve_account_switches(true).unwrap();
         let unasked = spawn_switch(
             &state,

@@ -4,7 +4,7 @@
 
 A piece of per-entity state the daemon reads off the outside world and does not persist — a project's git status, a
 repository's branch, anything recomputed rather than written by the user — is held in its own map on `AppState`
-(`apps/daemon/src/state.rs`), never in a column of the `Console`, `Project` or `Session` row. It reaches clients in
+(`apps/daemon/src/state/mod.rs`), never in a column of the `Console`, `Project` or `Session` row. It reaches clients in
 one of two shapes:
 
 - An event of its own carrying the whole derived record, replayed inside `snapshot` so a reconnecting client never has
@@ -28,7 +28,7 @@ the record itself is removed, and with the event shape the client's reducer also
 
 ## A store write outside a transaction is a journalled pair of fsyncs under the one lock
 
-`Store::open` (`apps/daemon/src/store.rs`) sets only `foreign_keys`: `journal_mode` and `synchronous` keep SQLite's
+`Store::open` (`apps/daemon/src/store/mod.rs`) sets only `foreign_keys`: `journal_mode` and `synchronous` keep SQLite's
 defaults, and the store is a single `Connection` behind a mutex that every method takes. So each statement run outside
 a transaction commits on its own — a rollback journal written and fsynced, the pages written and fsynced, the journal
 removed — while every other caller of the store waits on the mutex for it. A loop calling a one-row method is
@@ -42,8 +42,8 @@ transaction instead of around the call: a method of this kind is reached by call
 branch records from the `POST /git-ref/:session` route, which any number of a session's background reporter
 processes post to at once and which records each on the blocking pool, and from the Git mode's branch listing, a
 repeating refresh each connected client runs on its own phase — so a read-modify-write split across two takes of the
-mutex gets another caller's writes in between and one of the two is lost. `Store::apply_branch_origins` is the shape
-to copy.
+mutex gets another caller's writes in between and one of the two is lost. `Store::apply_branch_origins`
+(`apps/daemon/src/store/branch_origins.rs`) is the shape to copy.
 
 ## Time a repeating refresh from the client, and bound it in the daemon
 
@@ -118,7 +118,7 @@ account login flows in `apps/daemon/src/account_login/flows.rs` do.
 
 ## A request handler or daemon task is never alone with the state: re-check after a step, or hold a claim
 
-Every control request is handled on a task of its own (`apps/daemon/src/server.rs`) on a multi-threaded runtime
+Every control request is handled on a task of its own (`apps/daemon/src/server/control.rs`) on a multi-threaded runtime
 (`apps/daemon/src/main.rs`), so any other request — another client's, or the same client's next one — can run between
 any two lines of a handler, not only across an `.await`; a background task the daemon runs on its own is in the same
 position. Making a step synchronous, or dropping an `.await` from it, gives the code no exclusivity. A check made

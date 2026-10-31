@@ -6,11 +6,11 @@ builds process trees for the request layer in `apps/daemon/src/process_requests.
 [`apps/daemon/PROTOCOL.md`](../../PROTOCOL.md).
 
 The ledger is held on `AppState`. Launch setup and the carry-over of a restart (an account switch, a model change, a
-change of an account's sharing) enter through `apps/daemon/src/coordinator.rs` and
-`apps/daemon/src/shared_config/change.rs`, the handoff's carry-over through `apps/daemon/src/handoff/operation.rs`,
-environment tagging through `apps/daemon/src/term.rs`, process-end cleanup and shutdown through
-`apps/daemon/src/state.rs`, startup reconciliation through `apps/daemon/src/main.rs`, and the owner's moves of trees
-through `apps/daemon/src/mcp/process_handover.rs`.
+change of an account's sharing) enter through `apps/daemon/src/coordinator/launch.rs`,
+`apps/daemon/src/coordinator/restart.rs` and `apps/daemon/src/shared_config/change.rs`, the handoff's carry-over through
+`apps/daemon/src/handoff/operation.rs`, environment tagging through `apps/daemon/src/term.rs`, process-end cleanup and
+shutdown through `apps/daemon/src/state/process_exit.rs`, startup reconciliation through `apps/daemon/src/main.rs`, and
+the owner's moves of trees through `apps/daemon/src/mcp/process_handover.rs`.
 
 Where things are: `mod.rs` the ledger and launch lifecycle, `attribute.rs` the rules that attribute processes to launches,
 `trees.rs` listings and stop, keep and move by tree, `carry.rs` carry-over between launches, `persist.rs` what is kept on

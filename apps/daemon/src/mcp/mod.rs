@@ -44,16 +44,12 @@ mod session_branches;
 mod session_model;
 mod settings;
 pub mod stdio;
+#[cfg(test)]
+mod test_support;
 
 use serde_json::{json, Value};
 
 use crate::protocol::{Agent, Role};
-
-pub(crate) use bindings::{
-    is_running, owner_from_now_on, owner_notice, running_or_leave, tell_former_owner,
-    tell_now_or_leave, tell_released,
-};
-pub(crate) use pages::{withdraw_pages, withdraw_stray_pages};
 
 /// The tools whose call the daemon has to learn the agent cancelled: a session request, or a switch
 /// or a handoff the user is asked to approve, waits in front of the user and is withdrawn when its
@@ -79,11 +75,11 @@ pub(crate) fn runs_on_the_call(tool: &str) -> bool {
 /// spawned.
 pub const SERVER_KEY: &str = "octoboard";
 
-/// Who a worker reports to at launch, as far as what the session is
-/// told depends on it. A binding can change while the session runs, and the session is told of
-/// that change in a message (`crate::mcp::bindings`), or, when it binds itself, in the call's
-/// result; its role text, recorded once by some agents, is written so that it still holds
-/// afterwards.
+/// Who a worker reports to at launch, as far as what the session is told depends on it. A binding
+/// can change while the session runs, and the session is told of that change in a message
+/// (`crate::owner_notices`, and `mcp::bindings` for the tools' own handover texts), or, when it
+/// binds itself, in the call's result; its role text, recorded once by some agents, is written so
+/// that it still holds afterwards.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Owner {
     Console,

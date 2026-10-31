@@ -27,7 +27,10 @@ use crate::config_export::{
     ProjectAccountRef,
 };
 use crate::coordinator::{
-    self, AddProjectRequest, NewConsole, NewProjectSettings, SettingsChanges,
+    self,
+    consoles::NewConsole,
+    projects::{AddProjectRequest, NewProjectSettings},
+    settings::SettingsChanges,
 };
 use crate::git_workflow::GitWorkflowSettings;
 use crate::hostfs;
@@ -330,11 +333,12 @@ impl Rebinder {
     /// The id of the account of `agent` named `name`, compared as account names are unique, without
     /// regard to case.
     fn find(&self, agent: Agent, name: &str) -> Option<String> {
-        let wanted = coordinator::account_name_key(name);
+        let wanted = coordinator::accounts::account_name_key(name);
         self.accounts
             .iter()
             .find(|account| {
-                account.agent == agent && coordinator::account_name_key(&account.name) == wanted
+                account.agent == agent
+                    && coordinator::accounts::account_name_key(&account.name) == wanted
             })
             .map(|account| account.id.clone())
     }
@@ -650,7 +654,7 @@ fn index_resolutions(
             return Err(invalid("the document has no such project"));
         }
         if let DirectoryChoice::Directory { path } = &choice {
-            coordinator::absolute_path(path)
+            coordinator::validate::absolute_path(path)
                 .map_err(|_| invalid("the directory is not absolute"))?;
         }
         if chosen.insert((console, project), choice).is_some() {
@@ -754,7 +758,7 @@ pub async fn apply(
     let unbound = Rebinder::default();
     for document_console in &document.consoles {
         let new = new_console(document_console.clone(), unbound.console(document_console));
-        coordinator::check_new_console(state, &new)
+        coordinator::consoles::check_new_console(state, &new)
             .map_err(|err| naming_console(err, &new.name))?;
     }
 
@@ -782,7 +786,7 @@ pub async fn apply(
         prepared.into_iter().enumerate()
     {
         let name = new.name.clone();
-        let created = match coordinator::create_console(state, new) {
+        let created = match coordinator::consoles::create_console(state, new) {
             Ok(created) => created,
             Err(err) => {
                 let projects = document_projects
@@ -844,7 +848,7 @@ pub async fn apply(
             claude_compatibility: known_claude_compatibility(&settings.claude_compatibility)
                 .collect(),
         };
-        match coordinator::update_settings(state, changes) {
+        match coordinator::settings::update_settings(state, changes) {
             Ok(()) => settings_applied = Some(settings),
             Err(err) => settings_error = Some(ImportFailure::of(&err)),
         }
@@ -922,7 +926,7 @@ async fn place_project(
     };
     let added = match placement {
         Ok((source, path, remote_url)) => {
-            coordinator::add_project(
+            coordinator::projects::add_project(
                 state,
                 AddProjectRequest {
                     console_id: console_id.to_string(),

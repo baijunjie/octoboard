@@ -75,8 +75,11 @@ export function uiTests(files, exists = () => true) {
 export const CRATE_WIDE_TESTS = {
   daemon: [
     { filter: "protocol::", why: "the wire-type contract (`protocol/bindings.rs`) covers every type deriving `TS`", covers: [
-      "src/protocol.rs", "src/config_export.rs", "src/config_import/accounts.rs", "src/config_import/mod.rs", "src/git_workflow.rs",
-      "src/process_ledger/trees.rs", "src/shared_config/link.rs",
+      "src/protocol/accounts.rs", "src/protocol/agents.rs", "src/protocol/browse.rs", "src/protocol/events.rs", "src/protocol/history.rs",
+      "src/protocol/models.rs", "src/protocol/path_links.rs", "src/protocol/quotas.rs", "src/protocol/records.rs", "src/protocol/requests.rs",
+      "src/protocol/session_branches.rs", "src/protocol/settings.rs", "src/protocol/terminal.rs", "src/config_export.rs",
+      "src/config_import/accounts.rs", "src/config_import/mod.rs", "src/git_workflow.rs", "src/process_ledger/trees.rs",
+      "src/shared_config/link.rs",
     ] },
     { filter: "session_history::", why: "scans every source file for `*_OPENING` constants", covers: ["src/session_history.rs"] },
   ],

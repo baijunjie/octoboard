@@ -1,0 +1,1013 @@
+use super::*;
+use crate::coordinator::account_switch::switch_session_account;
+use crate::coordinator::accounts::set_account_disabled;
+use crate::coordinator::open::{
+    check_open, open_session, open_session_detached, resolve_open, resolve_open_with, OpenRequest,
+};
+use crate::coordinator::test_support::{
+    code_of, console, console_workdir, open_request, pins, project_of, shell_env, state_for_opening,
+};
+use crate::protocol::{
+    error_code, now_millis, Account, Agent, Availability, CodedError, Origin, Project,
+    ProjectAccount, SessionStatus,
+};
+use crate::state::AppState;
+use crate::test_support::{console_with_project_and_accounts, project_session};
+use std::path::Path;
+use std::sync::Arc;
+
+/// A session whose resolved agent has been determined unavailable is refused before anything
+/// is launched or written — no record, no claim, no process.
+#[tokio::test]
+async fn opening_a_session_is_refused_when_its_resolved_agent_is_unavailable() {
+    let (state, dir) = crate::test_support::app_state("coordinator-open-session-agent-unavailable");
+    let workdir = console_workdir(&dir);
+    state
+        .store
+        .insert_console(&console(Agent::Claude, &workdir))
+        .unwrap();
+    state.set_agent_availability(
+        [Agent::Claude, Agent::Codex]
+            .into_iter()
+            .map(|agent| crate::protocol::AgentAvailability {
+                agent,
+                availability: Availability::Unavailable,
+                default_account_dir: None,
+            })
+            .collect(),
+    );
+    for (chosen, expected) in [(None, Agent::Claude), (Some(Agent::Codex), Agent::Codex)] {
+        let err = open_session(
+            &state,
+            OpenRequest {
+                console_id: "console-1".to_string(),
+                project_id: None,
+                agent: chosen,
+                account: None,
+                task: None,
+                title: None,
+                model: None,
+                effort: None,
+                origin: Origin::User,
+                bound_to: None,
+                resume_agent_session_id: None,
+                session_id: None,
+                terminal_appearance: None,
+            },
+        )
+        .await
+        .expect_err("refused");
+        let coded = err.downcast_ref::<CodedError>().expect("a coded error");
+        assert_eq!(coded.code, error_code::AGENT_NOT_AVAILABLE);
+        assert_eq!(coded.params["agent"], expected.label());
+        assert!(state.store.list_sessions().unwrap().is_empty());
+    }
+}
+
+/// An account whose held quota reading has a window used up is refused with the window and
+/// its reset time when known, for the default account and a stored one alike; an account with
+/// no reading is not.
+#[test]
+fn opening_a_session_is_refused_on_an_account_whose_quota_is_used_up() {
+    use crate::protocol::{AccountQuota, Params, QuotaWindow, QuotaWindowKind};
+
+    let (state, dir) = crate::test_support::app_state("coordinator-open-quota-exhausted");
+    let workdir = console_workdir(&dir);
+    state
+        .store
+        .insert_console(&console(Agent::Claude, &workdir))
+        .unwrap();
+    state
+        .store
+        .insert_account(&Account {
+            id: "claude-acct".to_string(),
+            agent: Agent::Claude,
+            name: "Claude work".to_string(),
+            config_dir: "/home/u/.claude-alt".to_string(),
+            share_default_config: false,
+            share_default_config_incomplete: false,
+            disabled: false,
+        })
+        .unwrap();
+    let reset = now_millis() + 60_000;
+    let used_up = |account: Option<&str>, resets_at| AccountQuota {
+        reset_credits: None,
+        agent: Agent::Claude,
+        account: account.map(str::to_string),
+        fetched_at: 1,
+        plan: None,
+        email: None,
+        windows: vec![QuotaWindow {
+            kind: QuotaWindowKind::Weekly,
+            label: None,
+            used_percent: 100.0,
+            resets_at,
+            window_minutes: None,
+        }],
+        unavailable: None,
+    };
+    let request = |account: Option<String>| OpenRequest {
+        console_id: "console-1".to_string(),
+        project_id: None,
+        agent: None,
+        account: Some(account),
+        task: None,
+        title: None,
+        model: None,
+        effort: None,
+        origin: Origin::User,
+        bound_to: None,
+        resume_agent_session_id: None,
+        session_id: None,
+        terminal_appearance: None,
+    };
+    let refusal =
+        |account: Option<&str>| resolve_open(&state, &request(account.map(str::to_string))).err();
+    let coded = |err: &anyhow::Error| -> (crate::protocol::Code, Params) {
+        let coded = err.downcast_ref::<CodedError>().expect("a coded error");
+        (coded.code, coded.params.clone())
+    };
+
+    // Nothing read yet: usable.
+    assert!(refusal(Some("claude-acct")).is_none());
+    assert!(refusal(None).is_none());
+
+    state.account_quotas.hold_in_dir_for_test(
+        &used_up(Some("claude-acct"), Some(reset)),
+        "/home/u/.claude-alt",
+    );
+    let (code, params) = coded(&refusal(Some("claude-acct")).expect("refused"));
+    assert_eq!(code, error_code::ACCOUNT_QUOTA_EXHAUSTED);
+    assert_eq!(params["agent"], Agent::Claude.label());
+    assert_eq!(params["account"], "Claude work");
+    assert_eq!(params["window"], "Weekly");
+    assert_eq!(params["window_kind"], "weekly");
+    assert!(!params.contains_key("window_minutes"));
+    assert!(!params.contains_key("model_weekly"));
+    assert_eq!(params["resets_at"], reset.to_string());
+
+    // The default account, whose reading does not say when it resets.
+    state.account_quotas.hold_for_test(&used_up(None, None));
+    let (code, params) = coded(&refusal(None).expect("refused"));
+    assert_eq!(code, error_code::ACCOUNT_QUOTA_EXHAUSTED);
+    assert_eq!(params["account"], crate::protocol::DEFAULT_ACCOUNT_NAME);
+    assert!(!params.contains_key("resets_at"));
+
+    // An account the reading found not logged in is refused too, the default one included.
+    let signed_out = |account: Option<&str>| AccountQuota {
+        windows: Vec::new(),
+        unavailable: Some(crate::protocol::QuotaUnavailable::new(
+            crate::protocol::quota_unavailable_code::NOT_SIGNED_IN,
+            "x",
+            &[("agent", "Claude Code")],
+        )),
+        ..used_up(account, None)
+    };
+    state
+        .account_quotas
+        .hold_in_dir_for_test(&signed_out(Some("claude-acct")), "/home/u/.claude-alt");
+    state.account_quotas.hold_for_test(&signed_out(None));
+    for account in [Some("claude-acct"), None] {
+        let (code, params) = coded(&refusal(account).expect("refused"));
+        assert_eq!(code, error_code::ACCOUNT_NOT_SIGNED_IN);
+        assert_eq!(params["agent"], Agent::Claude.label());
+    }
+}
+
+/// A disabled account, the default one included, is refused for a new session whether the
+/// request names it or the console inherits it, is passed over by automatic selection and by
+/// `account_can_open`, and turning it back on undoes all of that. A session already on the
+/// account keeps it.
+#[tokio::test]
+async fn a_disabled_account_is_skipped_and_refused_for_new_sessions_but_not_for_running_ones() {
+    let (state, _dir) = console_with_project_and_accounts("coordinator-account-disabled");
+    let alt_dir = state
+        .store
+        .account_dir(&Some("claude-a".to_string()))
+        .unwrap()
+        .unwrap();
+    state
+        .store
+        .insert_session(&project_session("s", Agent::Claude, SessionStatus::Working))
+        .unwrap();
+    state
+        .store
+        .set_session_account("s", Some("claude-a"), Some(&alt_dir))
+        .unwrap();
+    let request = |account: Option<Option<String>>| OpenRequest {
+        console_id: "console-1".to_string(),
+        project_id: None,
+        agent: None,
+        account,
+        task: None,
+        title: None,
+        model: None,
+        effort: None,
+        origin: Origin::User,
+        bound_to: None,
+        resume_agent_session_id: None,
+        session_id: None,
+        terminal_appearance: None,
+    };
+    let refused = |account: Option<Option<String>>| {
+        resolve_open(&state, &request(account)).err().map(|err| {
+            let coded = err.downcast_ref::<CodedError>().expect("a coded error");
+            (coded.code, coded.params.clone())
+        })
+    };
+    assert!(refused(Some(Some("claude-a".to_string()))).is_none());
+
+    // An id that is no account of the agent cannot be turned off.
+    let err = set_account_disabled(&state, Agent::Codex, Some("claude-a"), true)
+        .expect_err("another agent's account");
+    assert_eq!(code_of(&err), error_code::UNKNOWN_ACCOUNT);
+
+    set_account_disabled(&state, Agent::Claude, Some("claude-a"), true).unwrap();
+    set_account_disabled(&state, Agent::Claude, None, true).unwrap();
+    let settings = state.store.get_settings().unwrap();
+    assert!(settings.accounts[0].disabled);
+    assert!(settings.disabled_default_accounts.contains("claude"));
+
+    for account in [Some(Some("claude-a".to_string())), Some(None)] {
+        let (code, params) = refused(account).expect("refused");
+        assert_eq!(code, error_code::ACCOUNT_DISABLED);
+        assert_eq!(params["agent"], Agent::Claude.label());
+    }
+    // Inherited from the console as well as named.
+    assert_eq!(refused(None).unwrap().0, error_code::ACCOUNT_DISABLED);
+    assert!(!account_can_open(&state, Agent::Claude, Some("claude-a")).unwrap());
+    assert!(!account_can_open(&state, Agent::Claude, None).unwrap());
+    // Another agent's default account is unaffected.
+    assert!(account_can_open(&state, Agent::Codex, None).unwrap());
+
+    // Automatic selection passes over both, even with a reading that ranks them.
+    let weekly = |account: Option<&str>| crate::protocol::AccountQuota {
+        reset_credits: None,
+        agent: Agent::Claude,
+        account: account.map(str::to_string),
+        fetched_at: 1,
+        plan: None,
+        email: None,
+        windows: vec![crate::protocol::QuotaWindow {
+            kind: crate::protocol::QuotaWindowKind::Weekly,
+            label: None,
+            used_percent: 10.0,
+            resets_at: Some(now_millis() + 3_600_000),
+            window_minutes: None,
+        }],
+        unavailable: None,
+    };
+    state
+        .account_quotas
+        .hold_in_dir_for_test(&weekly(Some("claude-a")), &alt_dir);
+    state.account_quotas.hold_for_test(&weekly(None));
+    assert_eq!(
+        preferred_weekly_account(&state, Agent::Claude).unwrap(),
+        None
+    );
+
+    // The running session keeps its account.
+    let running = state.store.get_session("s").unwrap().unwrap();
+    assert_eq!(running.account_id.as_deref(), Some("claude-a"));
+    assert_eq!(running.status, SessionStatus::Working);
+
+    // Turning one back on lets it be picked again; the other stays off.
+    set_account_disabled(&state, Agent::Claude, Some("claude-a"), false).unwrap();
+    assert!(refused(Some(Some("claude-a".to_string()))).is_none());
+    assert_eq!(
+        preferred_weekly_account(&state, Agent::Claude).unwrap(),
+        Some(Some("claude-a".to_string()))
+    );
+    set_account_disabled(&state, Agent::Claude, None, false).unwrap();
+    assert!(state
+        .store
+        .get_settings()
+        .unwrap()
+        .disabled_default_accounts
+        .is_empty());
+}
+
+/// An account the last quota reading found not logged in is refused for a switch and passed
+/// over by `account_can_open` and by the choice of a target, the signed-out reasons both
+/// included; a reading that failed for another reason refuses and passes over nothing there
+/// (the choice of a target for the automatic switch alone asks for a readable one).
+#[tokio::test]
+async fn an_account_found_not_logged_in_is_refused_and_a_failed_reading_is_not() {
+    use crate::protocol::{
+        quota_unavailable_code as code, AccountQuota, QuotaUnavailable, QuotaWindow,
+        QuotaWindowKind,
+    };
+
+    let (state, dir) = console_with_project_and_accounts("coordinator-switch-signed-out");
+    state
+        .store
+        .insert_session(&project_session(
+            "s",
+            Agent::Claude,
+            SessionStatus::Interrupted,
+        ))
+        .unwrap();
+    let alt_dir = state
+        .store
+        .account_dir(&Some("claude-a".to_string()))
+        .unwrap()
+        .unwrap();
+    let reading = |unavailable: Option<QuotaUnavailable>| AccountQuota {
+        reset_credits: None,
+        agent: Agent::Claude,
+        account: Some("claude-a".to_string()),
+        fetched_at: 1,
+        plan: None,
+        email: None,
+        windows: vec![QuotaWindow {
+            kind: QuotaWindowKind::Weekly,
+            label: None,
+            used_percent: 10.0,
+            resets_at: Some(now_millis() + 60_000),
+            window_minutes: None,
+        }],
+        unavailable,
+    };
+    let switch = || {
+        switch_session_account(
+            &state,
+            "s",
+            Some(Some("claude-a".to_string())),
+            None,
+            shell_env(&dir),
+        )
+    };
+
+    for reason in [code::NOT_SIGNED_IN, code::CONFIG_DIR_MISSING] {
+        let held = reading(Some(QuotaUnavailable::new(
+            reason,
+            "x",
+            &[("agent", "Claude")],
+        )));
+        state.account_quotas.hold_in_dir_for_test(&held, &alt_dir);
+        let err = switch().await.expect_err("refused");
+        assert_eq!(code_of(&err), error_code::ACCOUNT_NOT_SIGNED_IN, "{reason}");
+        let coded = err.downcast_ref::<CodedError>().unwrap();
+        assert_eq!(coded.params["agent"], Agent::Claude.label());
+        assert!(!account_can_open(&state, Agent::Claude, Some("claude-a")).unwrap());
+        assert_eq!(
+            preferred_weekly_account(&state, Agent::Claude).unwrap(),
+            None,
+            "{reason}: not picked for a new session either"
+        );
+        assert_eq!(
+            state.store.get_session("s").unwrap().unwrap().account_id,
+            None
+        );
+    }
+
+    // A reading that failed for a passing reason still counts for what it holds.
+    let failed = reading(Some(QuotaUnavailable::new(
+        code::COMMAND_FAILED,
+        "x",
+        &[("agent", "Claude"), ("detail", "network")],
+    )));
+    state.account_quotas.hold_in_dir_for_test(&failed, &alt_dir);
+    assert!(account_can_open(&state, Agent::Claude, Some("claude-a")).unwrap());
+    assert_eq!(
+        preferred_weekly_account(&state, Agent::Claude).unwrap(),
+        Some(Some("claude-a".to_string()))
+    );
+    assert_eq!(
+        preferred_weekly_account_except(&state, Agent::Claude, &[], true).unwrap(),
+        None,
+        "the automatic switch wants an account it can read now"
+    );
+    let err = switch()
+        .await
+        .expect_err("fails further on, for want of a process");
+    assert_ne!(code_of(&err), error_code::ACCOUNT_NOT_SIGNED_IN);
+}
+
+#[test]
+fn automatic_open_choice_uses_another_agent_only_after_all_preferred_accounts() {
+    let (state, _dir) = state_for_opening("automatic-open-agent-fallback");
+    state.store.set_auto_select_account(true).unwrap();
+    state
+        .store
+        .set_added_agents_if_undecided(&[Agent::Claude, Agent::Grok, Agent::Codex])
+        .unwrap();
+    set_account_disabled(&state, Agent::Claude, None, true).unwrap();
+    let resolved = resolve_open(&state, &open_request()).unwrap();
+    assert_eq!(resolved.agent, Agent::Grok);
+    assert_eq!(resolved.account_id, None);
+
+    let explicit = OpenRequest {
+        agent: Some(Agent::Claude),
+        ..open_request()
+    };
+    assert_eq!(
+        code_of(&resolve_open(&state, &explicit).err().unwrap()),
+        error_code::ACCOUNT_DISABLED
+    );
+    let explicit = OpenRequest {
+        account: Some(None),
+        ..open_request()
+    };
+    assert_eq!(
+        code_of(&resolve_open(&state, &explicit).err().unwrap()),
+        error_code::ACCOUNT_DISABLED
+    );
+
+    state
+        .store
+        .insert_account(&Account {
+            id: "claude-unread".to_string(),
+            agent: Agent::Claude,
+            name: "Unread".to_string(),
+            config_dir: "/tmp/claude-unread".to_string(),
+            share_default_config: false,
+            share_default_config_incomplete: false,
+            disabled: false,
+        })
+        .unwrap();
+    let resolved = resolve_open(&state, &open_request()).unwrap();
+    assert_eq!(resolved.agent, Agent::Claude);
+    assert_eq!(resolved.account_id.as_deref(), Some("claude-unread"));
+    let account = state.store.get_account("claude-unread").unwrap().unwrap();
+    let (_, lock) = state.lock_account_sharing(&account, |_, _| Ok(())).unwrap();
+    assert_eq!(
+        resolve_open(&state, &open_request()).unwrap().agent,
+        Agent::Grok
+    );
+    drop(lock);
+    state.store.set_auto_select_account(false).unwrap();
+    assert_eq!(
+        code_of(&resolve_open(&state, &open_request()).err().unwrap()),
+        error_code::ACCOUNT_DISABLED
+    );
+}
+
+#[test]
+fn automatic_open_choice_uses_saved_account_order_for_unranked_accounts() {
+    let (state, _dir) = state_for_opening("automatic-open-account-order");
+    state.store.set_auto_select_account(true).unwrap();
+    set_account_disabled(&state, Agent::Claude, None, true).unwrap();
+    for id in ["first", "second"] {
+        state
+            .store
+            .insert_account(&Account {
+                id: id.to_string(),
+                agent: Agent::Claude,
+                name: id.to_string(),
+                config_dir: format!("/tmp/{id}"),
+                share_default_config: false,
+                share_default_config_incomplete: false,
+                disabled: false,
+            })
+            .unwrap();
+    }
+    state
+        .store
+        .reorder_accounts(
+            Agent::Claude,
+            &[Some("second".to_string()), None, Some("first".to_string())],
+        )
+        .unwrap();
+    assert_eq!(
+        resolve_open(&state, &open_request())
+            .unwrap()
+            .account_id
+            .as_deref(),
+        Some("second")
+    );
+}
+
+/// Accounts an automatic choice finds alike are taken in the order the user keeps them in: a
+/// weekly tie, and a tie on when a used-up quota resets.
+#[test]
+fn automatic_choices_break_a_tie_in_the_users_account_order() {
+    use crate::protocol::{AccountQuota, QuotaWindow, QuotaWindowKind};
+    let (state, _dir) = state_for_opening("automatic-tie-account-order");
+    for id in ["first", "second"] {
+        insert_claude_account(&state, id, false);
+    }
+    let resets_at = now_millis() + 60_000;
+    for id in ["first", "second"] {
+        state.account_quotas.hold_in_dir_for_test(
+            &AccountQuota {
+                reset_credits: None,
+                agent: Agent::Claude,
+                account: Some(id.to_string()),
+                fetched_at: 1,
+                plan: None,
+                email: None,
+                windows: vec![QuotaWindow {
+                    kind: QuotaWindowKind::Weekly,
+                    label: None,
+                    used_percent: 10.0,
+                    resets_at: Some(resets_at),
+                    window_minutes: None,
+                }],
+                unavailable: None,
+            },
+            &format!("/tmp/{id}"),
+        );
+    }
+    assert_eq!(
+        preferred_weekly_account(&state, Agent::Claude).unwrap(),
+        Some(Some("first".to_string()))
+    );
+    state
+        .store
+        .reorder_accounts(
+            Agent::Claude,
+            &[Some("second".to_string()), None, Some("first".to_string())],
+        )
+        .unwrap();
+    assert_eq!(
+        preferred_weekly_account(&state, Agent::Claude).unwrap(),
+        Some(Some("second".to_string()))
+    );
+
+    // One reset time for all three, so the tie does not depend on the clock ticking between holds.
+    let resets_at = now_millis() + 3_600_000;
+    for account in [None, Some("first"), Some("second")] {
+        hold_used_up_at(&state, account, Some(resets_at), false);
+    }
+    assert_eq!(
+        soonest_available_account(&state, Agent::Claude).unwrap(),
+        Some(Some("second".to_string()))
+    );
+}
+
+#[test]
+fn automatic_open_choice_keeps_a_weekly_preference_within_its_agent() {
+    use crate::protocol::{AccountQuota, QuotaWindow, QuotaWindowKind};
+    let (state, _dir) = state_for_opening("automatic-open-weekly");
+    state.store.set_auto_select_account(true).unwrap();
+    state
+        .store
+        .insert_account(&Account {
+            id: "claude-weekly".to_string(),
+            agent: Agent::Claude,
+            name: "Weekly".to_string(),
+            config_dir: "/tmp/claude-weekly".to_string(),
+            share_default_config: false,
+            share_default_config_incomplete: false,
+            disabled: false,
+        })
+        .unwrap();
+    state.account_quotas.hold_in_dir_for_test(
+        &AccountQuota {
+            reset_credits: None,
+            agent: Agent::Claude,
+            account: Some("claude-weekly".to_string()),
+            fetched_at: 1,
+            plan: None,
+            email: None,
+            unavailable: None,
+            windows: vec![QuotaWindow {
+                kind: QuotaWindowKind::Weekly,
+                label: None,
+                used_percent: 70.0,
+                resets_at: Some(now_millis() + 60_000),
+                window_minutes: None,
+            }],
+        },
+        "/tmp/claude-weekly",
+    );
+    assert_eq!(
+        resolve_open(&state, &open_request())
+            .unwrap()
+            .account_id
+            .as_deref(),
+        Some("claude-weekly")
+    );
+    assert_eq!(
+        resolve_open(
+            &state,
+            &OpenRequest {
+                account: Some(None),
+                ..open_request()
+            }
+        )
+        .unwrap()
+        .account_id,
+        None
+    );
+}
+
+/// Holds a reading of a Claude account whose session window is used up, resetting in
+/// `resets_in` milliseconds (`None` no reset time), as `signed_out` or not.
+fn hold_used_up(
+    state: &Arc<AppState>,
+    account: Option<&str>,
+    resets_in: Option<i64>,
+    signed_out: bool,
+) {
+    hold_used_up_at(
+        state,
+        account,
+        resets_in.map(|span| now_millis() + span),
+        signed_out,
+    );
+}
+
+/// `hold_used_up` with an absolute reset time `resets_at` (`None` no reset time).
+fn hold_used_up_at(
+    state: &Arc<AppState>,
+    account: Option<&str>,
+    resets_at: Option<i64>,
+    signed_out: bool,
+) {
+    use crate::protocol::{AccountQuota, QuotaUnavailable, QuotaWindow, QuotaWindowKind};
+    let quota = AccountQuota {
+        reset_credits: None,
+        agent: Agent::Claude,
+        account: account.map(str::to_string),
+        fetched_at: 1,
+        plan: None,
+        email: None,
+        unavailable: signed_out.then(|| {
+            QuotaUnavailable::new(
+                crate::protocol::quota_unavailable_code::NOT_SIGNED_IN,
+                "not signed in",
+                &[],
+            )
+        }),
+        windows: vec![QuotaWindow {
+            kind: QuotaWindowKind::Session,
+            label: None,
+            used_percent: 100.0,
+            resets_at,
+            window_minutes: None,
+        }],
+    };
+    match account {
+        None => state.account_quotas.hold_for_test(&quota),
+        Some(id) => state
+            .account_quotas
+            .hold_in_dir_for_test(&quota, &format!("/tmp/{id}")),
+    }
+}
+
+fn insert_claude_account(state: &Arc<AppState>, id: &str, disabled: bool) {
+    state
+        .store
+        .insert_account(&Account {
+            id: id.to_string(),
+            agent: Agent::Claude,
+            name: id.to_string(),
+            config_dir: format!("/tmp/{id}"),
+            share_default_config: false,
+            share_default_config_incomplete: false,
+            disabled,
+        })
+        .unwrap();
+}
+
+/// With automatic selection on and no usable account, the session opens on the account of the
+/// preferred agent that becomes usable soonest, so the refusal names it; an account that is
+/// turned off or logged out is not chosen, a missing reset time counts as never, and an equal
+/// time keeps the default account.
+#[test]
+fn automatic_open_without_a_usable_account_is_refused_on_the_soonest_one() {
+    let (state, _dir) = state_for_opening("automatic-open-soonest");
+    state.store.set_auto_select_account(true).unwrap();
+    state
+        .store
+        .set_added_agents_if_undecided(&[Agent::Claude])
+        .unwrap();
+    for (id, disabled) in [
+        ("later", false),
+        ("soonest", false),
+        ("off", true),
+        ("out", false),
+    ] {
+        insert_claude_account(&state, id, disabled);
+    }
+    let hour = 3_600_000;
+    hold_used_up(&state, None, Some(5 * hour), false);
+    hold_used_up(&state, Some("later"), Some(3 * hour), false);
+    hold_used_up(&state, Some("soonest"), Some(2 * hour), false);
+    hold_used_up(&state, Some("off"), Some(hour), false);
+    hold_used_up(&state, Some("out"), Some(hour / 2), true);
+
+    let refused = resolve_open(&state, &open_request()).err().unwrap();
+    let coded = refused.downcast_ref::<CodedError>().expect("a coded error");
+    assert_eq!(coded.code, error_code::ACCOUNT_QUOTA_EXHAUSTED);
+    assert!(coded.message.starts_with("soonest "), "{}", coded.message);
+    assert_eq!(
+        soonest_available_account(&state, Agent::Claude).unwrap(),
+        Some(Some("soonest".to_string()))
+    );
+
+    // A reset time that is missing counts as never; equal times keep the earlier candidate.
+    hold_used_up(&state, Some("soonest"), None, false);
+    let mut tied = state
+        .account_quotas
+        .held(Agent::Claude, None, None)
+        .unwrap();
+    tied.account = Some("later".to_string());
+    state
+        .account_quotas
+        .hold_in_dir_for_test(&tied, "/tmp/later");
+    assert_eq!(
+        soonest_available_account(&state, Agent::Claude).unwrap(),
+        Some(None)
+    );
+    assert_eq!(
+        resolve_open_with(&state, &open_request(), false)
+            .unwrap()
+            .account_id,
+        None
+    );
+
+    // A usable account of the agent, or automatic selection off, leaves it as it was.
+    insert_claude_account(&state, "fresh", false);
+    assert_eq!(
+        soonest_available_account(&state, Agent::Claude).unwrap(),
+        None
+    );
+    assert_eq!(
+        resolve_open(&state, &open_request())
+            .unwrap()
+            .account_id
+            .as_deref(),
+        Some("fresh")
+    );
+    state.store.delete_account("fresh").unwrap();
+    state.store.set_auto_select_account(false).unwrap();
+    let refused = resolve_open(&state, &open_request()).err().unwrap();
+    assert!(
+        refused
+            .downcast_ref::<CodedError>()
+            .unwrap()
+            .message
+            .starts_with("Default "),
+        "{refused}"
+    );
+}
+
+/// A session is opened only on an added agent, wherever the agent comes from: the request's
+/// own choice or the console's default. An undecided list refuses nothing.
+#[tokio::test]
+async fn opening_a_session_is_refused_when_its_resolved_agent_is_not_added() {
+    let (state, _dir) = state_for_opening("coordinator-open-session-agent-not-added");
+    let refused = |err: anyhow::Error, agent: Agent| {
+        let coded = err.downcast_ref::<CodedError>().expect("a coded error");
+        assert_eq!(coded.code, error_code::AGENT_NOT_ADDED);
+        assert_eq!(coded.params["agent"], agent.label());
+        assert!(coded.message.contains("Settings → Agent accounts"));
+    };
+
+    assert!(check_open(&state, &open_request()).await.is_ok());
+    state
+        .store
+        .set_added_agents_if_undecided(&[Agent::Codex])
+        .unwrap();
+
+    // The console's default agent, Claude, is not added.
+    refused(
+        check_open(&state, &open_request()).await.unwrap_err(),
+        Agent::Claude,
+    );
+    let err = open_session(&state, open_request()).await.unwrap_err();
+    refused(err, Agent::Claude);
+    let err = open_session_detached(
+        &state,
+        OpenRequest {
+            agent: Some(Agent::Grok),
+            ..open_request()
+        },
+    )
+    .await
+    .map(|_| ())
+    .unwrap_err();
+    refused(err, Agent::Grok);
+    assert!(state.store.list_sessions().unwrap().is_empty());
+
+    let codex = OpenRequest {
+        agent: Some(Agent::Codex),
+        ..open_request()
+    };
+    assert_eq!(check_open(&state, &codex).await.unwrap(), Agent::Codex);
+}
+
+/// A list emptied on purpose is decided, so it refuses every agent.
+#[tokio::test]
+async fn an_empty_added_list_refuses_every_agent() {
+    let (state, _dir) = state_for_opening("coordinator-open-session-nothing-added");
+    state.store.set_added_agents_if_undecided(&[]).unwrap();
+    for agent in Agent::ALL {
+        let err = check_open(
+            &state,
+            &OpenRequest {
+                agent: Some(agent),
+                ..open_request()
+            },
+        )
+        .await
+        .unwrap_err();
+        let coded = err.downcast_ref::<CodedError>().expect("a coded error");
+        assert_eq!(coded.code, error_code::AGENT_NOT_ADDED);
+    }
+}
+
+/// A session's account is its own pick, else the project's reference for its agent, else the
+/// console's, else the default account: a project's reference overrides the console's, and one
+/// left unset falls back to it, agent by agent. Another agent's account is never borrowed.
+#[test]
+fn a_sessions_account_is_its_own_pick_else_its_projects_else_its_consoles() {
+    let (state, _dir) = crate::test_support::app_state("coordinator-session-account");
+    for (id, agent, name, dir) in [
+        (
+            "claude-acct",
+            Agent::Claude,
+            "Claude work",
+            "/home/u/.claude-alt",
+        ),
+        (
+            "claude-other",
+            Agent::Claude,
+            "Claude other",
+            "/home/u/.claude-other",
+        ),
+        (
+            "claude-project",
+            Agent::Claude,
+            "Claude project",
+            "/home/u/.claude-project",
+        ),
+        (
+            "codex-acct",
+            Agent::Codex,
+            "Codex work",
+            "/home/u/.codex-alt",
+        ),
+        (
+            "grok-project",
+            Agent::Grok,
+            "Grok project",
+            "/home/u/.grok-project",
+        ),
+    ] {
+        state
+            .store
+            .insert_account(&Account {
+                id: id.to_string(),
+                agent,
+                name: name.to_string(),
+                config_dir: dir.to_string(),
+                share_default_config: false,
+                share_default_config_incomplete: false,
+                disabled: false,
+            })
+            .unwrap();
+    }
+    let mut console = console(Agent::Claude, Path::new("/tmp/unused"));
+    console.accounts.claude = Some("claude-acct".to_string());
+    console.accounts.codex = Some("codex-acct".to_string());
+
+    let resolved = |agent: Agent, project: Option<&Project>, chosen: Option<Option<&str>>| {
+        session_account(
+            &state,
+            agent,
+            &console,
+            project,
+            chosen.map(|choice| choice.map(str::to_string)),
+        )
+        .unwrap()
+    };
+    let account = |id: &str, dir: &str| (Some(id.to_string()), Some(dir.to_string()));
+    let project = |claude: ProjectAccount, grok: ProjectAccount| {
+        let mut project = project_of("console-1", "project-1");
+        project.accounts.claude = claude;
+        project.accounts.grok = grok;
+        Some(project)
+    };
+    let claude_acct = || account("claude-acct", "/home/u/.claude-alt");
+    let claude_other = || account("claude-other", "/home/u/.claude-other");
+    let claude_project = || account("claude-project", "/home/u/.claude-project");
+    let codex_acct = || account("codex-acct", "/home/u/.codex-alt");
+
+    // (agent, the session's project, the choice made for the session, what it launches under)
+    let cases = [
+        // No project and no choice: the console's account for the session's own agent.
+        (Agent::Claude, None, None, claude_acct()),
+        (Agent::Codex, None, None, codex_acct()),
+        // Nothing referenced for Grok, and another agent's account is never borrowed for it:
+        // the default account, which pins nothing.
+        (Agent::Grok, None, None, (None, None)),
+        // A choice wins over the console's reference...
+        (
+            Agent::Claude,
+            None,
+            Some(Some("claude-other")),
+            claude_other(),
+        ),
+        // ...and a choice of the default account wins over it too.
+        (Agent::Claude, None, Some(None), (None, None)),
+        // The project's reference wins over the console's...
+        (
+            Agent::Claude,
+            project(pins("claude-project"), pins("grok-project")),
+            None,
+            claude_project(),
+        ),
+        // ...a project that sets nothing for the agent falls back to the console's...
+        (
+            Agent::Codex,
+            project(pins("claude-project"), pins("grok-project")),
+            None,
+            codex_acct(),
+        ),
+        // ...and to the default account when the console sets nothing either; the project's
+        // reference for another agent is never borrowed.
+        (
+            Agent::Grok,
+            project(pins("claude-project"), pins("grok-project")),
+            None,
+            account("grok-project", "/home/u/.grok-project"),
+        ),
+        (
+            Agent::Grok,
+            project(pins("claude-project"), ProjectAccount::Inherit),
+            None,
+            (None, None),
+        ),
+        // A project that says the default account ends the chain there, where the console would
+        // have named an account; the agents it says nothing for still inherit.
+        (
+            Agent::Claude,
+            project(ProjectAccount::Default, ProjectAccount::Inherit),
+            None,
+            (None, None),
+        ),
+        (
+            Agent::Codex,
+            project(ProjectAccount::Default, ProjectAccount::Inherit),
+            None,
+            codex_acct(),
+        ),
+        // The session's own pick wins over the project's reference, the default account
+        // included, and over a project that says the default account.
+        (
+            Agent::Claude,
+            project(ProjectAccount::Default, ProjectAccount::Inherit),
+            Some(Some("claude-other")),
+            claude_other(),
+        ),
+        (
+            Agent::Claude,
+            project(pins("claude-project"), ProjectAccount::Inherit),
+            Some(Some("claude-other")),
+            claude_other(),
+        ),
+        (
+            Agent::Claude,
+            project(pins("claude-project"), ProjectAccount::Inherit),
+            Some(None),
+            (None, None),
+        ),
+    ];
+    for (index, (agent, project, chosen, expected)) in cases.into_iter().enumerate() {
+        assert_eq!(
+            resolved(agent, project.as_ref(), chosen),
+            expected,
+            "case {index}: {agent:?} {chosen:?}"
+        );
+    }
+
+    // A choice naming no account, or an account of another agent, is refused.
+    for chosen in ["missing", "codex-acct"] {
+        let err = session_account(
+            &state,
+            Agent::Claude,
+            &console,
+            None,
+            Some(Some(chosen.to_string())),
+        )
+        .expect_err(chosen);
+        let coded = err.downcast_ref::<CodedError>().expect("a coded error");
+        assert_eq!(coded.code, error_code::UNKNOWN_ACCOUNT, "{chosen}");
+    }
+}
+
+/// A project session falls back to the project's own default, then the console's project
+/// session agent, then (for a console that names none) `default_agent`; a console session
+/// always takes `default_agent`.
+#[test]
+fn a_session_agent_falls_back_through_the_project_to_the_project_session_default() {
+    let workdir = Path::new("/tmp/console-1");
+    let mut console = console(Agent::Claude, workdir);
+    let mut project = project_of("console-1", "p1");
+    assert_eq!(session_agent(None, Some(&project), &console), Agent::Claude);
+
+    console.project_session_agent = Some(Agent::Codex);
+    assert_eq!(session_agent(None, Some(&project), &console), Agent::Codex);
+    assert_eq!(session_agent(None, None, &console), Agent::Claude);
+
+    project.default_agent = Some(Agent::Grok);
+    assert_eq!(session_agent(None, Some(&project), &console), Agent::Grok);
+    assert_eq!(
+        session_agent(Some(Agent::Claude), Some(&project), &console),
+        Agent::Claude
+    );
+}

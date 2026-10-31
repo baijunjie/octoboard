@@ -339,7 +339,7 @@ pub(crate) fn react_to_dialog(state: &Arc<AppState>, id: &str, current: Option<D
         match current {
             None => state.spawn_flush_outbox(id, state.agent_status(&session)),
             Some(dialog) if is_a_wait_for_the_user(&dialog) => {
-                crate::reporting::spawn_tell_owner_it_waits(state, id)
+                crate::owner_notices::spawn_tell_owner_it_waits(state, id)
             }
             Some(_) => {}
         }

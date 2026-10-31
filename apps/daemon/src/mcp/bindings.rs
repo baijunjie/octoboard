@@ -1,36 +1,30 @@
 //! The tools that change who a session reports to: `transfer_session`, with which an owner hands
 //! a session of its own to another, `release_session`, with which it lets one go, and
 //! `bind_to_session`, with which an unbound project session binds itself to an owner. What may own
-//! what is `coordinator::owner_refusal`'s; what is here is telling each session concerned what
-//! became of it, since a session that was told at launch who it reports to is not told again by
-//! anything else.
+//! what is `coordinator::bindings::owner_refusal`'s, and the notices that tell a session its owner
+//! changed are [`crate::owner_notices`]'s; what is here is reading each tool's arguments, the
+//! notices of a handover to the session and its new owner, and telling the caller what became of
+//! each session concerned.
 
 use std::sync::Arc;
 
 use anyhow::Result;
 use serde_json::{json, Map, Value};
 
-use crate::coordinator::{self, Released};
-use crate::protocol::{Agent, OrchestrationRole, Role, Session};
-use crate::reporting::{self, Delivery, ReportStatus, WhenBlocked, NOTICE_PREFIX};
+use crate::coordinator::{self, bindings::Released};
+use crate::delivery::{self, Delivery};
+use crate::owner_notices::{lost_tools, owner_from_now_on, tell_now_or_leave, tell_released};
+use crate::protocol::{OrchestrationRole, Session};
+use crate::reporting::{self, ReportStatus};
+use crate::session_texts::NOTICE_PREFIX;
 use crate::sharing;
 use crate::state::AppState;
 
 use super::args::{optional_string, required_str};
-use super::exec::resolve_owned_session;
+use super::exec::resolve::resolve_owned_session;
 
 /// The most characters of the parting note of a `release_session`.
 const MAX_NOTE_CHARS: usize = 4000;
-
-/// The tools a project session has, as a worker or not, by the names its agent shows them, for
-/// telling a session whose binding has just changed what it has.
-fn project_tools(agent: Agent, worker: bool) -> String {
-    super::tools_for(Role::Project, worker)
-        .iter()
-        .map(|tool| format!("`{}`", super::qualified_tool_name(agent, tool.name)))
-        .collect::<Vec<_>>()
-        .join(", ")
-}
 
 /// What a delivery to `who` came to, for the sender's result. `None` is a session with no process,
 /// which is told when it next starts.
@@ -51,105 +45,9 @@ fn told(delivery: &Result<Option<Delivery>>, who: &str) -> String {
     }
 }
 
-/// The sentence that tells a session it can no longer start or drive sessions, with the tools it
-/// has left.
-fn lost_tools(agent: Agent) -> String {
-    format!(
-        "Your role is worker. You can no longer start or drive sessions: of Octoboard's tools \
-         you now have {}, and a call of any other is refused. Any pages you pushed to the \
-         report panel were withdrawn with the tools for them.",
-        project_tools(agent, true)
-    )
-}
-
-/// The sentence that tells a session whose it is from now on, in the words of its `agent`'s tool
-/// names.
-pub(crate) fn owner_from_now_on(agent: Agent, owner: &str) -> String {
-    format!(
-        "{owner} is your parent session from now on: take work only from it, or from the user \
-         typing in this terminal, and report to it with `{report}`.",
-        report = super::qualified_tool_name(agent, "report"),
-    )
-}
-
-/// Whether `session` has a process to write into. Decided by the one who changes its owner, while
-/// it holds the claim a launch needs, and handed to [`tell_now_or_leave`]; a session with none is
-/// left owed a notice for its next launch (see [`owner_notice`]). Also what decides whether a
-/// former owner is told of a release by the user ([`tell_former_owner`]).
-pub(crate) fn is_running(state: &Arc<AppState>, session: &Session) -> bool {
-    !session.status.is_dormant() && state.live_session(&session.id).is_some()
-}
-
-/// [`is_running`], marking a session with no process owed its notice now: for a change of owner
-/// that is not a write of its own binding.
-pub(crate) fn running_or_leave(state: &Arc<AppState>, session: &Session) -> Result<bool> {
-    let running = is_running(state, session);
-    if !running {
-        state.store.mark_owner_notice(&session.id)?;
-    }
-    Ok(running)
-}
-
-/// Writes `text` into the session `id`, queued while it cannot take a message, when `running` says
-/// it has a process (see [`running_or_leave`]); `None` is a session left to be told when it next
-/// starts. A write that fails, a process that ended meanwhile say, leaves the notice for the next
-/// launch too: it is built then from the binding as it stands, so telling twice does no harm. A
-/// `note`, the parting words of a release, is kept with the notice that is left owed, as long as
-/// the session is still unbound.
-pub(crate) async fn tell_now_or_leave(
-    state: &Arc<AppState>,
-    id: &str,
-    text: String,
-    running: bool,
-    note: Option<&str>,
-) -> Result<Option<Delivery>> {
-    if !running {
-        return Ok(None);
-    }
-    match reporting::write_message_off_runtime(state, id, text, WhenBlocked::Queue).await {
-        Ok(delivery) => Ok(Some(delivery)),
-        Err(err) => {
-            tracing::debug!(session = %id, %err, "telling a session of its parent session failed");
-            match note {
-                Some(note) => state.store.mark_owner_notice_with_note(id, note)?,
-                None => state.store.mark_owner_notice(id)?,
-            }
-            Ok(None)
-        }
-    }
-}
-
-/// What a session that was not running when its owner changed is told when it next starts, built
-/// from its binding as it stands then, so a later change cannot leave it stale: who its owner is,
-/// or that it has none, and, for one bound to a project session, the tools it has left. A session
-/// is told at launch because Claude Code and Grok replay what they were first told of their owner
-/// on every resume.
-pub(crate) fn owner_notice(state: &Arc<AppState>, session: &Session) -> Result<String> {
-    let Some(owner_id) = &session.bound_to else {
-        // The note of the release is told only while the release is the latest change of owner.
-        let note = state.store.owner_notice_note(&session.id)?;
-        return Ok(released_text(session, note.as_deref()));
-    };
-    // An owner no longer on record is named by its id alone, as a report to it would be.
-    let owner = match state.store.get_session(owner_id)? {
-        Some(owner) => sharing::named_session(&owner),
-        None => format!("`{owner_id}`"),
-    };
-    let tools = if session.is_worker() {
-        format!(" {}", lost_tools(session.agent))
-    } else {
-        " Your role is coordinator: you can create and manage child sessions.".to_string()
-    };
-    Ok(format!(
-        "{NOTICE_PREFIX}: your parent session has changed while you were not running. {owner} \
-         This replaces what you were told of your parent session when you were started.{tools}",
-        owner = owner_from_now_on(session.agent, &owner),
-    ))
-}
-
-/// Hands a session of the caller's to another owner; see `coordinator::transfer_session` for what
-/// may own what. The session is told who it now reports to, the new owner is told it has the
-/// session with the caller's note, and the caller learns from the result what became of both.
+/// Hands a session of the caller's to another owner; see `coordinator::bindings::transfer_session`
+/// for what may own what. The session is told who it now reports to, the new owner is told it has
+/// the session with the caller's note, and the caller learns from the result what became of both.
 pub(super) async fn transfer_session(
     state: &Arc<AppState>,
     caller: &Session,
@@ -159,7 +57,7 @@ pub(super) async fn transfer_session(
     let to = required_str(arguments, "to")?;
     let note = required_str(arguments, "note")?.to_string();
     let (moved, owner, running) =
-        coordinator::transfer_session(state, &session.id, &caller.id, to)?;
+        coordinator::bindings::transfer_session(state, &session.id, &caller.id, to)?;
 
     let tools = if !session.is_worker() && moved.is_worker() {
         format!(" {}", lost_tools(moved.agent))
@@ -201,7 +99,7 @@ pub(super) async fn transfer_session(
     // and stops without reporting, the report Octoboard synthesises is the safety net, and it is
     // wanted there.
     let child = tell_now_or_leave(state, &moved.id, to_session, running, None).await;
-    let told_owner = reporting::write_notice_to_owner_off_runtime(state, &owner, &moved, to_owner)
+    let told_owner = delivery::write_notice_to_owner_off_runtime(state, &owner, &moved, to_owner)
         .await
         .map(Some);
     let mut result_note = format!(
@@ -226,87 +124,9 @@ pub(super) async fn transfer_session(
     }))
 }
 
-/// Tells the project session `released`, just released from its owner, that it has none: its role
-/// description, recorded when it was launched, still says whose it is. Queued while the session
-/// cannot take a message; one with no process is told when it next starts (see [`owner_notice`]),
-/// with the former owner's parting `note` if the release stored one.
-pub(crate) async fn tell_released(
-    state: &Arc<AppState>,
-    released: &Session,
-    running: bool,
-    note: Option<&str>,
-) -> Result<Option<Delivery>> {
-    tell_now_or_leave(
-        state,
-        &released.id,
-        released_text(released, note),
-        running,
-        note,
-    )
-    .await
-}
-
-/// Tells the former owner `owner_id` that the user released `released` from it, when it has a
-/// process to be told in: one that has none is not told, and a later attempt by it to drive the
-/// session is refused as not its own. Queued while it cannot take a message. Only the user's
-/// release is told this way, since an owner that releases a session knows.
-pub(crate) async fn tell_former_owner(
-    state: &Arc<AppState>,
-    owner_id: &str,
-    released: &Session,
-) -> Result<Option<Delivery>> {
-    let Some(owner) = state.store.get_session(owner_id)? else {
-        return Ok(None);
-    };
-    if !is_running(state, &owner) {
-        return Ok(None);
-    }
-    let text = format!(
-        "{NOTICE_PREFIX}: the user released {released} from you. It is no longer yours: it has \
-         no parent session now and answers only to the user, so you can no longer instruct, \
-         drive or archive it, and it does not report to you. You can still tell it something \
-         with `{send_message}`, which it weighs rather than obeys. Do not count on it any more, \
-         and treat any work you handed it as left with the user.",
-        released = sharing::named_session(released),
-        send_message = super::qualified_tool_name(owner.agent, "send_message"),
-    );
-    reporting::write_message_off_runtime(state, owner_id, text, WhenBlocked::Queue)
-        .await
-        .map(Some)
-}
-
-/// The notice of a release, ending with the former owner's parting `note` when there is one.
-fn released_text(released: &Session, note: Option<&str>) -> String {
-    let tool = |name: &str| super::qualified_tool_name(released.agent, name);
-    let note = match note {
-        Some(note) => format!(
-            " Your former parent session left this note:\n\n{note}\n— end of the note —",
-            note = sharing::quote(note),
-        ),
-        None => String::new(),
-    };
-    format!(
-        "{NOTICE_PREFIX}: you have no parent session now. Your role is coordinator and your \
-         reporting relationship is independent. You were released from the session you reported \
-         to, and you are the user's own session: take work only from the user typing in this \
-         terminal, and do not call `{report}`, which is refused for a session with no parent \
-         session. This replaces what you were told of your parent session when you were \
-         started. You can start and drive sessions of your own with `{new_session}` and the \
-         tools that go with it (call `{get_session}` once with no arguments first, so that your \
-         tool list catches up), and you can still tell your former parent session something \
-         with `{send_message}`, which it weighs rather than obeys; of Octoboard's tools you now \
-         have {tools}.{note}",
-        report = tool("report"),
-        get_session = tool("get_session"),
-        new_session = tool("new_session"),
-        send_message = tool("send_message"),
-        tools = project_tools(released.agent, false),
-    )
-}
-
-/// Releases a session of the caller's from its binding; see `coordinator::release_session`. The
-/// session is told it has no owner now, with the caller's `note` if it gave one, and the caller
-/// learns from the result what became of it.
+/// Releases a session of the caller's from its binding; see
+/// `coordinator::bindings::release_session`. The session is told it has no owner now, with the
+/// caller's `note` if it gave one, and the caller learns from the result what became of it.
 pub(super) async fn release_session(
     state: &Arc<AppState>,
     caller: &Session,
@@ -325,7 +145,12 @@ pub(super) async fn release_session(
         session: released,
         running,
         ..
-    } = coordinator::release_session(state, &session.id, Some(&caller.id), note.as_deref())?;
+    } = coordinator::bindings::release_session(
+        state,
+        &session.id,
+        Some(&caller.id),
+        note.as_deref(),
+    )?;
     let delivery = tell_released(state, &released, running, note.as_deref()).await;
     Ok(json!({
         "session": released.id,
@@ -341,8 +166,8 @@ pub(super) async fn release_session(
     }))
 }
 
-/// Binds the unbound caller to an owner; see `coordinator::bind_session` for what may own what.
-/// The owner is sent the caller's summary as its first report, and the caller is told in the
+/// Binds the unbound caller to an owner; see `coordinator::bindings::bind_session` for what may own
+/// what. The owner is sent the caller's summary as its first report, and the caller is told in the
 /// result what it now is and which tools it has: its role description, recorded when it was
 /// launched unbound, says otherwise.
 pub(super) async fn bind_to_session(
@@ -352,7 +177,7 @@ pub(super) async fn bind_to_session(
 ) -> Result<Value> {
     let owner_id = required_str(arguments, "owner")?;
     let summary = required_str(arguments, "summary")?;
-    let (bound, owner) = coordinator::bind_session(state, &caller.id, owner_id)?;
+    let (bound, owner) = coordinator::bindings::bind_session(state, &caller.id, owner_id)?;
     let coordinator = bound.orchestration_role == OrchestrationRole::Coordinator;
 
     let first_report = if coordinator {
@@ -441,7 +266,8 @@ pub(super) async fn bind_to_session(
 mod tests {
     use super::*;
     use crate::mcp::exec::call;
-    use crate::mcp::exec::tests::{arguments, peer_state};
+    use crate::mcp::test_support::{arguments, peer_state};
+    use crate::protocol::Agent;
     use crate::test_support::{fake_live_session, heard_after_marker, output_containing, running};
 
     /// A handover moves the session to its new owner, tells it whose it now is, and sends the new

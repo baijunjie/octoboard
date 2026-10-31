@@ -16,15 +16,16 @@ use crate::branch_origin::handover::{
     branch_name, branch_noun_and_pronoun, move_branches, named_branches, Handed, Handover,
 };
 use crate::branch_origin::session_branches::{self, Worktree};
+use crate::delivery::{self, WhenBlocked};
 use crate::git::repo_files::repository_of;
 use crate::protocol::{error_code, CodedError, Project, Role, Session, SessionStatus};
-use crate::reporting::{self, WhenBlocked, NOTICE_PREFIX};
+use crate::session_texts::NOTICE_PREFIX;
 use crate::sharing::named_session;
 use crate::state::AppState;
 use crate::wire_path;
 
 use super::args::{optional_string, optional_string_list};
-use super::exec::resolve_owned_session;
+use super::exec::resolve::resolve_owned_session;
 use super::session_branches::branch_entry;
 
 /// The names in the list argument `key`, each trimmed, as wire paths and named once. `None` when
@@ -449,7 +450,7 @@ async fn tell(
             continue;
         }
         if let Err(err) =
-            reporting::write_message_off_runtime(state, &session.id, text, WhenBlocked::Queue).await
+            delivery::write_message_off_runtime(state, &session.id, text, WhenBlocked::Queue).await
         {
             tracing::warn!(
                 session = %session.id,
@@ -466,7 +467,7 @@ async fn tell(
 mod tests {
     use super::*;
     use crate::branch_origin::repo_key;
-    use crate::mcp::exec::tests::{arguments, project_session, shared_console_state};
+    use crate::mcp::test_support::{arguments, project_session, shared_console_state};
     use crate::protocol::Agent;
     use crate::test_support::{
         branch_made_by, git, heard_after_marker, output_containing, repo_with, running, ScratchDir,

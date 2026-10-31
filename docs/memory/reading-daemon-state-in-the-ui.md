@@ -72,15 +72,14 @@ visible at the call site in `App.tsx`, or drive the pre-snapshot inputs directly
 
 ## A request's reply and the broadcast of its change reach the UI in either order
 
-A mutating request's handler in `apps/daemon/src/coordinator.rs` broadcasts the change before it answers, but that
+A mutating request's handler under `apps/daemon/src/coordinator/` broadcasts the change before it answers, but that
 order is lost on the way: on the control socket the reply is queued by the request's own task and the broadcast by the
-connection's `forward_broadcasts` task (`apps/daemon/src/server.rs`), two tasks feeding one outbound queue, so either
-can reach the client first. `DaemonClient` then queues broadcasts and hands them to the store as one batch on the next
-animation frame (after 250 ms at the latest, where frames are not running), while a reply first flushes the
-broadcasts already queued and then settles the request. So when the code after an `await request(...)` runs, the
-store may or may not hold the change yet, and React may or may not have rendered on it — which decides whether the
-component that sent the request, or anything the new state hides, is still mounted. Nothing fails loudly when the
-order flips.
+connection's `forward_broadcasts` task (`apps/daemon/src/server/control.rs`), two tasks feeding one outbound queue, so
+either can reach the client first. `DaemonClient` then queues broadcasts and hands them to the store as one batch on the
+next animation frame (after 250 ms at the latest, where frames are not running), while a reply first flushes the
+broadcasts already queued and then settles the request. So when the code after an `await request(...)` runs, the store
+may or may not hold the change yet, and React may or may not have rendered on it — which decides whether the component
+that sent the request, or anything the new state hides, is still mounted. Nothing fails loudly when the order flips.
 
 So write what follows an `await request(...)` to be correct under either order:
 

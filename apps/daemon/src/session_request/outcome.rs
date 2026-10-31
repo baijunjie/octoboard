@@ -201,7 +201,10 @@ fn reach_note(state: &Arc<AppState>, caller: &Session, session: &Session) -> Str
 
 /// Whether `owner` could own `session` right now, by the rules a binding keeps.
 fn can_own(state: &Arc<AppState>, session: &Session, owner: &Session) -> bool {
-    matches!(coordinator::owner_refusal(state, session, owner), Ok(None))
+    matches!(
+        coordinator::bindings::owner_refusal(state, session, owner),
+        Ok(None)
+    )
 }
 
 /// What became of the branches a request handed over, as a sentence or two for the outcome note,

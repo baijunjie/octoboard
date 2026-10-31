@@ -1,6 +1,6 @@
 // Wire types for `apps/daemon/PROTOCOL.md`. Kept as a hand-written mirror of the daemon's
-// `protocol.rs` rather than generated, to keep the frontend build free of a codegen step. Field
-// names and enum spellings must match `protocol.rs` exactly — in particular, no
+// `protocol/` module rather than generated, to keep the frontend build free of a codegen step.
+// Field names and enum spellings must match it exactly — in particular, no
 // request field is named `id`: what a request acts on is named for its kind (`console`, `project`,
 // `session`), because the envelope's own `id` and the request's fields share one flat object.
 
@@ -1329,8 +1329,8 @@ export type SideRead =
 
 /**
  * The body of a client request, without the envelope's `id`. One variant per `RequestBody` case
- * in `protocol.rs` and per `BrowseBody` case (the browse requests, whose envelope also carries
- * `slot`), tagged the same way (`type`, snake_case).
+ * in `protocol/requests.rs` and per `BrowseBody` case (the browse requests, whose envelope also
+ * carries `slot`), tagged the same way (`type`, snake_case).
  */
 export type RequestBody =
   | {

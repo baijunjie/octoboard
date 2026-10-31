@@ -3,11 +3,12 @@
 ## A path built from a hook's values is built as if an attacker chose them
 
 Applies to daemon code that turns a value an agent's hook reported into a path it removes, moves or writes to — and
-`Session.agent_session_id` is such a value, since `hook_callback` (`apps/daemon/src/server.rs`) records it from the
-payload, as are the transcript paths the hooks report. `POST /hook/:session` takes no `Origin`, and the key it needs is
-readable by any local process (it is in every session's command lines), so any local process can post to it
-(`apps/daemon/PROTOCOL.md`, "Who may connect"), the agent's own model included once something it read steers it there.
-The daemon trusting local processes does not make these values safe to name a path with.
+`Session.agent_session_id` is such a value, since applying a hook event (`apply_hook` in
+`apps/daemon/src/hooks/apply.rs`) records it from the payload, as are the transcript paths the hooks report.
+`POST /hook/:session` takes no `Origin`, and the key it needs is readable by any local process (it is in every
+session's command lines), so any local process can post to it (`apps/daemon/PROTOCOL.md`, "Who may connect"), the
+agent's own model included once something it read steers it there. The daemon trusting local processes does not make
+these values safe to name a path with.
 
 So such a path holds to four conditions: the id must match the agent's real id shape exactly (a canonical UUID),
 never be cut out of a reported path; the path is built from a records directory the daemon resolved itself and that
@@ -113,8 +114,8 @@ Octoboard's data whatever else is found. Code that destroys a directory asks it;
 The looks read the file system, so they run on blocking threads after the store's lock is released, each with a
 deadline, and one that outran it is left to finish and, once it has run past its stuck threshold, recorded in a
 `state::StalledPasses` under its key, so later decisions take the fallback at once instead of starting another thread a
-stuck mount holds the same way; `hostfs::place::looked_within` and `coordinator::identities_within` are the shape.
-`state.directory_looks` is one registry for every decision of this kind (trust, project removal, branch cleanup,
+stuck mount holds the same way; `hostfs::place::looked_within` and `coordinator::projects::identities_within` are the
+shape. `state.directory_looks` is one registry for every decision of this kind (trust, project removal, branch cleanup,
 account removal), so a look with a shorter deadline than theirs — a quick check ahead of a confirmation — keeps
 `hostfs::place::Looking::stuck_after` at the full deadline: a merely slow path recorded as stuck makes all of them take
 a healthy path as unreachable. A decision that must not be cut short by what such an earlier look left running takes
