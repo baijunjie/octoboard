@@ -553,7 +553,7 @@ impl ProcessLedger {
 
     /// The kept processes running in `table` that are listed under `project` (see
     /// [`Book::kept_projects`](super::attribute::Book::kept_projects)), or with `None` every
-    /// kept process. Never the daemon, one of its ancestors or one of its direct children.
+    /// kept process. Never a daemon-managed process or an internal in its child's session.
     fn kept_members(&self, table: &Table, project: Option<&str>) -> HashSet<Identity> {
         let protected = table.protected(self.own);
         let book = self.book();
@@ -630,13 +630,6 @@ impl ProcessLedger {
             }
         }
         let protected = table.protected(self.own);
-        // The terminal sessions the daemon's direct children lead: a shell terminal's, and what
-        // the user runs in it.
-        let users: HashSet<i32> = table
-            .procs()
-            .filter(|proc| proc.ppid == self.own && proc.sid == proc.id.pid)
-            .map(|proc| proc.sid)
-            .collect();
         let candidates: Vec<Identity> = {
             let book = self.book();
             let agents: Vec<Identity> = book
@@ -648,7 +641,6 @@ impl ProcessLedger {
                 .procs()
                 .filter(|proc| {
                     !protected.covers(proc)
-                        && !users.contains(&proc.sid)
                         && !book.kept.contains(&proc.id)
                         && book
                             .attributed
@@ -731,4 +723,55 @@ fn command_of(id: Identity) -> String {
         end -= 1;
     }
     trimmed[..end].to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::table::Proc;
+    use super::*;
+
+    #[test]
+    fn a_previously_kept_internal_is_not_listed_as_a_project_process() {
+        let dir = crate::test_support::ScratchDir::new("ledger-kept-internal");
+        let ledger = ProcessLedger::new(&dir);
+        let server = Proc {
+            id: Identity {
+                pid: 300,
+                start: 1000,
+            },
+            ppid: ledger.own,
+            sid: 300,
+            comm: String::new(),
+        };
+        let helper = Proc {
+            id: Identity {
+                pid: 301,
+                start: 1001,
+            },
+            ppid: 300,
+            sid: 300,
+            comm: String::new(),
+        };
+        let task = Proc {
+            id: Identity {
+                pid: 302,
+                start: 1002,
+            },
+            ppid: 300,
+            sid: 302,
+            comm: String::new(),
+        };
+        let table = Table::from_procs([server, helper.clone(), task.clone()]);
+        {
+            let mut book = ledger.book();
+            for proc in [&helper, &task] {
+                book.kept.insert(proc.id);
+                book.kept_projects.insert(proc.id, "project".to_string());
+            }
+        }
+        assert_eq!(
+            ledger.kept_members(&table, Some("project")),
+            HashSet::from([task.id])
+        );
+    }
 }

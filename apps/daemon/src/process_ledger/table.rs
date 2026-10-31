@@ -115,13 +115,23 @@ impl Table {
     }
 
     /// The pids that are never any launch's: `own` — the daemon — and its ancestors, its
-    /// direct children (the agents themselves, and what else the daemon runs), and pid 1.
+    /// direct children (the agents themselves, and what else the daemon runs), the terminal
+    /// sessions those children lead, and pid 1.
     pub fn protected(&self, own: i32) -> Protected {
         let mut ancestors: HashSet<i32> = HashSet::from([1, own]);
         if let Some(me) = self.get(own) {
             ancestors.extend(self.ancestors(me).map(|ancestor| ancestor.id.pid));
         }
-        Protected { own, ancestors }
+        let sessions = self
+            .procs()
+            .filter(|proc| proc.ppid == own && proc.sid == proc.id.pid)
+            .map(|proc| proc.sid)
+            .collect();
+        Protected {
+            own,
+            ancestors,
+            sessions,
+        }
     }
 
     pub fn get(&self, pid: i32) -> Option<&Proc> {
@@ -165,12 +175,20 @@ impl Table {
 pub struct Protected {
     own: i32,
     ancestors: HashSet<i32>,
+    sessions: HashSet<i32>,
 }
 
 impl Protected {
-    /// Whether `proc` is the daemon, one of its ancestors, or one of its direct children.
+    /// Whether `proc` is managed by the daemon itself, including internals in a terminal
+    /// session led by its direct child. Commands that start their own session are not covered.
     pub fn covers(&self, proc: &Proc) -> bool {
-        proc.ppid == self.own || self.ancestors.contains(&proc.id.pid)
+        proc.ppid == self.own
+            || self.ancestors.contains(&proc.id.pid)
+            || self.covers_session(proc.sid)
+    }
+
+    pub fn covers_session(&self, sid: i32) -> bool {
+        self.sessions.contains(&sid)
     }
 }
 

@@ -4,9 +4,9 @@
 //! A process P belongs to launch L when, in this order:
 //!
 //! 1. P is the daemon, one of its ancestors or one of its direct children (an agent among them),
-//!    or sits in an agent's own terminal session: it belongs to no launch here, whatever was
-//!    decided of it before. An agent's session holds its internals, which the end of the agent's
-//!    PTY sweeps.
+//!    or sits in an agent's own terminal session or one led by the daemon's direct child: it
+//!    belongs to no launch here, whatever was decided of it before. These sessions hold
+//!    internals whose lifetimes the daemon manages separately.
 //! 2. P was attributed before and is still running (same pid, same start): L stays.
 //! 3. P's chain of parents, as this read shows it, reaches L's agent or a process of L's.
 //! 4. P sits in the terminal session of a kept process, or in one recorded as kept: it is kept
@@ -455,6 +455,28 @@ pub(crate) fn attribute(
     prove_read_back(book, table);
     forget_gone(book, table);
     let order = table.by_start();
+    let protected = table.protected(own);
+    let agent_pids = book.agent_pids();
+    // Internals kept by an earlier listing must not pass that choice to new tool commands.
+    let kept_count = book.kept.len()
+        + book.kept_projects.len()
+        + book.kept_sessions.len()
+        + book.kept_session_projects.len();
+    for proc in &order {
+        if never_attributed(book, &protected, &agent_pids, proc) {
+            book.kept.remove(&proc.id);
+            book.kept_projects.remove(&proc.id);
+        }
+    }
+    book.kept_sessions
+        .retain(|sid, _| !agent_pids.contains(sid) && !protected.covers_session(*sid));
+    book.kept_session_projects
+        .retain(|sid, _| !agent_pids.contains(sid) && !protected.covers_session(*sid));
+    book.dirty |= kept_count
+        != book.kept.len()
+            + book.kept_projects.len()
+            + book.kept_sessions.len()
+            + book.kept_session_projects.len();
     for proc in &order {
         if book.kept.contains(&proc.id) {
             continue;
@@ -471,15 +493,15 @@ pub(crate) fn attribute(
 
     // Before anything attributed earlier is taken as it stands: a scan that ran before the
     // agent's launch was known may have attributed the agent or its internals.
-    let protected = table.protected(own);
-    let agent_pids = book.agent_pids();
     for proc in &order {
         if never_attributed(book, &protected, &agent_pids, proc) {
             book.attributed.remove(&proc.id);
         }
     }
     for launch in book.launches.values_mut() {
-        launch.sessions.retain(|sid, _| !agent_pids.contains(sid));
+        launch
+            .sessions
+            .retain(|sid, _| !agent_pids.contains(sid) && !protected.covers_session(*sid));
     }
 
     let mut tags: HashMap<Identity, Option<String>> = HashMap::new();
@@ -900,9 +922,8 @@ mod tests {
         assert_eq!(launch_of(&book, 701), Some(LAUNCH));
     }
 
-    /// A scan that ran before the agent's launch was known may have attributed the agent, which
-    /// carries the tag, and what runs in its session; once the agent is known, neither is any
-    /// launch's. The daemon, its ancestors and its direct children never are, tag or not.
+    /// The daemon's children and their sessions are excluded even before a launch is known.
+    /// An agent registered afterwards also clears any earlier attribution of the agent.
     #[test]
     fn the_agent_its_session_and_the_daemon_with_its_kin_are_never_attributed() {
         let mut book = book();
@@ -921,11 +942,7 @@ mod tests {
         assert_eq!(launch_of(&book, OWN), None, "the daemon");
         assert_eq!(launch_of(&book, 100), None, "the daemon's child");
         assert_eq!(launch_of(&book, 300), None, "the daemon's child");
-        assert_eq!(
-            launch_of(&book, 101),
-            Some(LAUNCH),
-            "before the agent is known"
-        );
+        assert_eq!(launch_of(&book, 101), None, "in the daemon child's session");
 
         let launch = book.launches.get_mut(LAUNCH).unwrap();
         launch.agent = Some(agent_id);
@@ -941,6 +958,87 @@ mod tests {
         assert_eq!(launch_of(&book, 101), None, "in the agent's session");
         assert_eq!(launch_of(&book, 100), None, "the agent");
         assert!(!book.launches[LAUNCH].sessions.contains_key(&100));
+    }
+
+    #[test]
+    fn a_private_server_session_is_internal_but_its_detached_tasks_are_followed() {
+        let mut book = book();
+        let server = proc(300, 1001, OWN, 300);
+        let helper = proc(301, 1002, 300, 300);
+        let task = proc(302, 1003, 300, 302);
+        let table = Table::from_procs([
+            agent(),
+            server,
+            helper.clone(),
+            task,
+            proc(303, 1004, 302, 302),
+            // A direct child sharing another session does not make that session internal.
+            proc(400, 1005, OWN, 98),
+            proc(401, 1006, 1, 98),
+        ]);
+        book.attributed.insert(
+            helper.id,
+            Attributed {
+                launch: LAUNCH.to_string(),
+                sid: 300,
+            },
+        );
+        book.launches
+            .get_mut(LAUNCH)
+            .unwrap()
+            .sessions
+            .insert(300, Some(1001));
+        let candidates = tag_candidates(&book, &table, OWN, Some(0));
+        assert!(!candidates
+            .iter()
+            .any(|proc| [300, 301].contains(&proc.id.pid)));
+        let mut tagged = |proc: &Proc| {
+            assert!(
+                ![300, 301].contains(&proc.id.pid),
+                "an internal's tag was read"
+            );
+            Some(LAUNCH.to_string())
+        };
+        attribute(&mut book, &table, OWN, &mut tagged);
+        for pid in [300, 301, 400] {
+            assert_eq!(launch_of(&book, pid), None, "internal process {pid}");
+        }
+        for pid in [302, 303, 401] {
+            assert_eq!(launch_of(&book, pid), Some(LAUNCH), "task {pid}");
+        }
+        assert!(!book.launches[LAUNCH].sessions.contains_key(&300));
+    }
+
+    #[test]
+    fn a_previously_kept_internal_does_not_keep_new_tool_commands() {
+        let mut book = book();
+        let helper = proc(301, 1002, 300, 300);
+        let already_kept = proc(303, 1004, 301, 303);
+        let table = Table::from_procs([
+            agent(),
+            proc(300, 1001, OWN, 300),
+            helper.clone(),
+            proc(302, 1003, 301, 302),
+            already_kept.clone(),
+        ]);
+        for proc in [&helper, &already_kept] {
+            book.kept.insert(proc.id);
+            book.kept_projects.insert(proc.id, "project".to_string());
+            book.kept_sessions.insert(proc.sid, Some(proc.id.start));
+            book.kept_session_projects
+                .insert(proc.sid, "project".to_string());
+        }
+        attribute(&mut book, &table, OWN, &mut |_| Some(LAUNCH.to_string()));
+        assert_eq!(launch_of(&book, 302), Some(LAUNCH));
+        assert!(!book.kept.contains(&helper.id));
+        assert!(!book.kept_projects.contains_key(&helper.id));
+        assert!(!book.kept_sessions.contains_key(&300));
+        assert!(!book.kept_session_projects.contains_key(&300));
+        assert!(book.kept.contains(&already_kept.id));
+        assert_eq!(
+            book.kept_projects.get(&already_kept.id).map(String::as_str),
+            Some("project")
+        );
     }
 
     /// The session of a kept process keeps what is found in it once the kept process has

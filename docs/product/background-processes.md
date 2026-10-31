@@ -84,9 +84,14 @@ once every process of the session has exited it can pass to unrelated processes.
 last started name nothing. If those records cannot be read, it does not assume that a process was not kept: it leaves
 the processes identified only by their launch tag running and records them as kept.
 
-The daemon, its ancestors and its direct children are protected. The user's shell terminals and the processes in their
-terminal sessions are excluded from the background-process lists and cleanup described here; closing those terminals
-still follows "Closing a shell terminal" in `docs/product/shell-terminals.md`.
+The daemon, its ancestors and its direct children are protected. Processes in terminal sessions led by those direct
+children, including a Codex session's private app-server and its internal helpers, are excluded from the
+background-process lists and Stop and Keep controls. Their lifecycle remains managed with the agent session. Tool
+commands that start a terminal session of their own remain subject to the attribution rules above.
+
+The user's shell terminals and the processes in their terminal sessions are excluded from the background-process lists
+and cleanup described here; closing those terminals still follows "Closing a shell terminal" in
+`docs/product/shell-terminals.md`.
 
 The agent itself and processes in its own terminal session are not offered in these lists. That terminal's remaining
 processes are killed outright when the agent exits and cannot be kept through the controls described here.
