@@ -110,7 +110,7 @@ it("clears a value to the agent's own default, and says an interrupted session t
   const { onChangeModel } = await mount(session);
 
   expect(document.body.textContent).toContain("It is not running, so it takes them the next time it is resumed.");
-  await act(async () => picker("Model").querySelector<HTMLElement>('[data-slot="select-clear-button"]')!.click());
+  await act(async () => picker("Model").parentElement!.querySelector<HTMLElement>('[data-slot="select-clear-button"]')!.click());
   await act(async () => confirm().click());
 
   expect(onChangeModel).toHaveBeenCalledExactlyOnceWith("s-1", { model: null });
@@ -120,7 +120,7 @@ it("does not offer Confirm while the session is starting", async () => {
   const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "starting", { model: "sonnet" });
   const { onChangeModel } = await mount(session);
 
-  await act(async () => picker("Model").querySelector<HTMLElement>('[data-slot="select-clear-button"]')!.click());
+  await act(async () => picker("Model").parentElement!.querySelector<HTMLElement>('[data-slot="select-clear-button"]')!.click());
   expect(confirm().disabled).toBe(true);
   await act(async () => confirm().click());
   expect(onChangeModel).not.toHaveBeenCalled();

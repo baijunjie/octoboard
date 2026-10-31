@@ -254,7 +254,7 @@ it("keeps the Advanced tab of an agent that is not added while the console store
   await openAdvanced();
   expect(tabNames()).toEqual(["Claude Code", "Codex, Not added"]);
   await clickTab("Codex, Not added");
-  await click(groupPicker("Project sessions", "Model").querySelector<HTMLElement>('[data-slot="select-clear-button"]'));
+  await click(groupPicker("Project sessions", "Model").parentElement!.querySelector<HTMLElement>('[data-slot="select-clear-button"]'));
   expect(tabNames()).toEqual(["Claude Code"]);
 });
 

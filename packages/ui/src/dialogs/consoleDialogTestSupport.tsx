@@ -120,7 +120,7 @@ export const groupPicker = (group: string, name: string) =>
   })!;
 /** The console session picker of the Advanced setting `name`. */
 export const pickerNamed = (name: string) => groupPicker("Console sessions", name);
-export const clearButton = (name: string) => pickerNamed(name).querySelector<HTMLElement>('[data-slot="select-clear-button"]');
+export const clearButton = (name: string) => pickerNamed(name).parentElement!.querySelector<HTMLElement>('[data-slot="select-clear-button"]');
 
 export const stored = consoleOf("c-1", "Main", {
   launch: { claude: { model: "alpha", effort: "high" }, codex: { model: "retired" } },
