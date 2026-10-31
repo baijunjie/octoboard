@@ -43,8 +43,9 @@ Per-package commands are in that package's doc.
 ## Repository-level code and configuration
 
 - [`scripts/`](../scripts/) — repository-level commands and hook helpers: `env.mjs` (shared env-file reader),
-  `test-rust.mjs` (Rust tests), `format-staged.mjs` (staged-file formatting), `pre-push.mjs` (push verification), and
-  `verify.mjs` with `verify/` (checks selected from changed inputs, plus the application release checks).
+  `test-rust.mjs` (Rust tests), `clippy-rust.mjs` (Rust lint with warnings denied), `format-staged.mjs` (staged-file
+  formatting), `pre-push.mjs` (push verification), and `verify.mjs` with `verify/` (checks selected from changed inputs,
+  plus the application release checks).
 - [`.githooks/`](../.githooks/) — git hook entry points: `hook.sh` dispatches pre-commit to `scripts/format-staged.mjs`
   and pre-push to `scripts/pre-push.mjs`; `install.sh` installs them into the common hooks directory (and migrates
   older clones), and `auto-install.sh` runs it on `pnpm install` in the main checkout.

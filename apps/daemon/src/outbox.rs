@@ -111,9 +111,11 @@ impl<P: PromptSignal> Drop for ScreenWatch<'_, P> {
     }
 }
 
+type MessageQueue = VecDeque<(Ticket, String, Option<Instant>)>;
+
 #[derive(Default)]
 pub struct Outbox {
-    queues: Mutex<HashMap<String, VecDeque<(Ticket, String, Option<Instant>)>>>,
+    queues: Mutex<HashMap<String, MessageQueue>>,
     /// The ticket the next message pushed gets.
     next_ticket: AtomicU64,
     /// The sessions a drainer currently owns.

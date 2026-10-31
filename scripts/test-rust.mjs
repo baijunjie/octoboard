@@ -6,7 +6,7 @@
 // The desktop crate's `build.rs` makes `tauri-build` refuse to build when the sidecar named by
 // `bundle.externalBin` in `tauri.conf.json` has not been built, which is what a real build wants.
 // The tests never start the sidecar, so this run overrides that list to empty through `TAURI_CONFIG`
-// and needs no daemon build. Only this script sets the override: a plain `cargo build` or
+// and needs no daemon build. Only the test and clippy scripts set this override: a plain `cargo build` or
 // `pnpm tauri build` still fails without the sidecar.
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";

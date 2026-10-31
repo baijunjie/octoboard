@@ -1,4 +1,4 @@
-// Read-only checks for affected consumers; only tests and builds acquire the machine-wide heavy slot.
+// Read-only checks for affected consumers; tests, builds and Rust lint acquire the machine-wide heavy slot.
 import path from "node:path";
 import { ALL_PACKAGES } from "./scope.mjs";
 
@@ -14,10 +14,10 @@ const uiTestFiles = (files) => files.length === 0 ? [] : [
 
 // Light steps come first, heavy ones last, so a cheap failure does not wait for a long suite.
 const lightFirst = (steps) => [...steps.filter((step) => !step.heavy), ...steps.filter((step) => step.heavy)];
-// Both crates are checked together whatever changed: `pnpm test:rust` always runs the whole workspace
-// (`scripts/test-rust.mjs`), so a per-crate command would not narrow anything.
+// Both crates are checked together whatever changed: the test and clippy scripts cover the workspace.
 const RUST_STEPS = [
   { label: "rustfmt check", cmd: ["cargo", "fmt", "--all", "--", "--check"] },
+  pnpm("rust clippy", ["clippy:rust"], { heavy: true }),
   pnpm("rust tests", ["test:rust"], { heavy: true }),
 ];
 
@@ -29,7 +29,7 @@ export function checkSteps(scope) {
       pnpm("desktop script tests", ["--filter", "@octoboard/desktop", "test"]),
       RUST_STEPS[0],
       pnpm("application UI tests", ["--filter", "@octoboard/ui", "test:app"], { heavy: true }),
-      RUST_STEPS[1],
+      ...RUST_STEPS.slice(1),
     ]);
   }
   const packages = scope.mode === "full" ? ALL_PACKAGES : scope.packages;

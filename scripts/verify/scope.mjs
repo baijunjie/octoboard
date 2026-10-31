@@ -77,7 +77,7 @@ export const RULES = [
   { match: ["pnpm-lock.yaml", "pnpm-workspace.yaml", "patches/", "eslint.config.mjs"], consumers: JS_PACKAGES, why: "dependency versions and the lint rules apply to every JavaScript package" },
   { match: ["package.json"], consumers: ALL_PACKAGES, why: "holds the scripts of every package, including `test:rust`, and the shared dev dependencies" },
   { match: ["scripts/env.mjs", "scripts/env.d.mts"], consumers: ["verify", "ui", "desktop"], why: "imported by `scripts/verify/lock.mjs`, `packages/ui/vite.config.ts` (its declaration types that import) and the desktop release scripts" },
-  { match: ["scripts/test-rust.mjs"], consumers: ["verify", ...RUST_PACKAGES], why: "the command the Rust test step runs, linted with the scripts" },
+  { match: ["scripts/test-rust.mjs", "scripts/clippy-rust.mjs"], consumers: ["verify", ...RUST_PACKAGES], why: "the commands the Rust check steps run, linted with the scripts" },
   { match: [".githooks/"], consumers: ["verify"], why: "the hook entry point is exercised by the pre-push tests; nothing else reads it" },
   { match: [".gitignore"], consumers: ["verify"], why: "decides which files the working-tree snapshot (`tree.mjs`) counts; no other check reads it" },
   { match: ["config/"], consumers: ALL_PACKAGES, builds: ["ui"], why: "`config/app.json` is the product identity every package reads, and `vite.config.ts` bakes it into the UI build" },
