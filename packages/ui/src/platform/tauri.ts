@@ -157,11 +157,10 @@ function tauriExit(): ExitCapability {
       (async () => {
         const { invoke } = await import("@tauri-apps/api/core");
         // Tells the Rust side a confirmation flow actually exists now, so it starts asking before
-        // letting an exit through instead of defaulting to letting every exit straight through —
-        // called from every screen that registers, including the daemon-failed-to-start one, so a
-        // window stuck there is always still quittable. `heartbeat` re-invokes the same command on
-        // every quit gesture handled thereafter, which is what clears the Rust side's force-quit
-        // debounce (see `frontend_exit_heartbeat` in `apps/desktop/src-tauri/src/exit.rs`).
+        // letting an exit through instead of defaulting to letting every exit straight through.
+        // `heartbeat` re-invokes the same command on every quit gesture handled thereafter, which is what
+        // clears the Rust side's force-quit debounce (see `frontend_exit_heartbeat` in
+        // `apps/desktop/src-tauri/src/exit.rs`).
         await invoke("frontend_exit_heartbeat");
 
         // No close listener: the shell answers the window's close button itself, by hiding the

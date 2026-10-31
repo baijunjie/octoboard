@@ -265,6 +265,7 @@ mapping.
 | [WARN-5 Trust prompt caution as plain body text](#warn-5-trust-prompt-caution-as-plain-body-text) | the caution as one plain paragraph, no prefix or title | Pass for sequential reading; opening announcement unconfirmed |
 | [Known not to work](#known-not-to-work) | nine failing or negative observations (KNW-1 to KNW-9; each names the case that replaced it) | **Fail** (history) |
 | [OPEN-1 Import result dialog rename](#open-1-import-result-dialog-rename) | focus move onto a renamed dialog | Unconfirmed |
+| [OPEN-2 Startup failure page alert](#open-2-startup-failure-page-alert) | delayed `EmptyPanel` alert on a page with no focus move | Unconfirmed |
 
 ### NAME-1 Retained picker trigger
 
@@ -1464,6 +1465,21 @@ the bare-mark Enter naming of the recording behind FOCUS-3, whose other results 
 - **Result.** Unconfirmed. That VoiceOver reads the renamed dialog on this focus move has not been listened to yet.
 - **Reuse scope.** None until confirmed.
 
+### OPEN-2 Startup failure page alert
+
+- **Location and state change.** The window opens on a startup failure page (the daemon failed to start, or the crash
+  fallback after the application crashed) with no dialog over it and no focus move. On the crash page focus has fallen
+  to the document, as what held it went with the crashed view.
+- **Mechanism.** `packages/ui/src/StartupScreen.tsx` (`StartupFailure`) passes `announce` and `announceDelayMs={0}` to
+  `packages/ui/src/components/EmptyPanel.tsx` (`EmptyPanel`), through `packages/ui/src/components/useAnnouncement.ts`
+  (`useAnnouncement`): the heading and the first line are inserted in a keyed `role="alert"` wrapper from a timer
+  after the first paint, so the alert is a change to the page, as in ALERT-1's remount, rather than part of its first
+  render.
+- **ARIA wiring, capture, environment, date.** Not recorded: this case has not been listened to.
+- **Result.** Unconfirmed. That VoiceOver speaks the heading and the first line once when the window opens on this page,
+  and whether the alert is spoken at all for a page with no focus move, has not been listened to yet.
+- **Reuse scope.** None until confirmed.
+
 ## Existing `StatusAnnouncer` callers and the case each matches
 
 Compared strictly against the rules above, from the code and the recordings. Paths are relative to `packages/ui/src`.
@@ -1548,6 +1564,8 @@ Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
   image failure or replacement sequence, nor `SpotNotice`. Its native live politeness, atomicity and relevance were not
   captured; it is not a complete native-attribute record for matching other callers.
 - Import result dialog rename: not yet listened to (OPEN-1).
+- Startup failure page alert (daemon-failed and crash pages): not yet listened to (OPEN-2). No case matches an alert
+  inserted after the first paint on a page the window opens on, with no focus move.
 - A choice-consequence warning (`ErrorAlert` with `announce` and `announceDelayMs` of `AFTER_FOCUS_MOVE_DELAY_MS`,
   mounted under a checkbox as it is ticked inside a dialog, focus kept on the checkbox, and added to the checkbox's
   `aria-describedby`): the export dialog's full-paths option and the trust prompt's folder option. No case matches it;

@@ -6,18 +6,23 @@ prefilled with a title and a body that describe the failure. The prefill is pass
 parameters added to that address; nothing else is attached, no screenshot and no file. The Issue is not created until
 the user submits it on the Issue page, where the prefilled text can be edited first.
 
-The same prefill is used wherever **Report issue** is offered: the error alert, and the account login failure dialog
-when its failure is unexpected (see "When a login fails" in `docs/product/logging-accounts-in.md`).
+The same prefill is used wherever **Report issue** is offered: the error alert, the account login failure dialog
+when its failure is unexpected (see "When a login fails" in `docs/product/logging-accounts-in.md`), and the screens
+for a UI that failed, for a daemon that could not start and for no daemon address or key being known (see "The window
+chrome and the content panel" in `docs/product/window-layout.md`).
 
 ## Which failures a report describes
 
 A report describes the failures the alert is about: each failure it lists, or else its one failure. An alert that has
-no error of its own but shows raw text under **Error details** — a UI that failed, a daemon that exited — is
-described by that text as its failure. The login failure dialog's report describes the daemon's own failure, not the
-sentence the dialog words for the user.
+no error of its own but shows raw text under **Error details** — a daemon that exited — is described by that text as
+its failure. The login failure dialog's report describes the daemon's own failure, not the sentence the dialog words
+for the user. A startup screen's report describes one failure, by its raw text: the stack trace of a UI that failed, the
+reason a daemon could not start, or, for no daemon address or key being known, a fixed English sentence saying so.
 
 The failure an alert stands for as a whole is unexpected; each listed failure keeps its own classification, so a batch
-of failures can mix unexpected and actionable items. Identical entries are listed once.
+of failures can mix unexpected and actionable items. Identical entries are listed once. The failures of a daemon that
+could not start and of no daemon address or key being known are **known** ones, which Octoboard names and says what to
+do about: they are not called unexpected in their reports (see the title and the body below).
 
 ## The prefilled title
 
@@ -26,10 +31,15 @@ The title is `Unexpected error: <summary>`, the summary taken from the first une
 - a failure the daemon reported with a code: the code itself, such as `git_failed`, except for the generic codes
   `internal_error` and `unexpected_error`, which use the first line of their raw text instead (or the code when that
   text is empty);
+- a failure described by its raw text, as a UI that failed is: the first line of that text, which for a UI that
+  failed is the error's name and message;
 - any other error: the first line of its message, or its name when it has no message.
 
 A summary from text is sanitized as described in "What is removed from a report" below and cut to 80 characters,
 ending in an ellipsis when cut. With no summary the title is `Unexpected error` alone.
+
+A report of a known failure is titled with the screen's English heading instead, whatever language the UI is shown
+in: `The daemon failed to start`, or `No daemon address or key`.
 
 ## The prefilled body
 
@@ -46,12 +56,13 @@ The body is Markdown in three sections:
   agent names them (such as `macOS 10.15.7`), nothing else of the device; and the UI's current language as its code
   (such as `zh-Hans`). With none known, the section says `Unknown`.
 - **Error**: one entry per failure:
-  - its kind: `unexpected`, or `actionable (<remedy>)` with the name of the remedy kind it was classified under;
+  - its kind: `unexpected`, `known` for a known failure, or `actionable (<remedy>)` with the name of the remedy kind
+    it was classified under;
   - for a failure the daemon reported with a code, the code and the names of its parameters (at most 20, sorted),
     never their values;
-  - for an unexpected failure only, its raw text, sanitized, as a code block: for a failure the daemon coded, the raw
-    text its alert shows under **Error details**, where it has one; for an error of the window's own, its stack led by
-    its name and message; for an alert described by its raw text, that text.
+  - for an unexpected or known failure only, its raw text, sanitized, as a code block: for a failure the daemon coded,
+    the raw text its alert shows under **Error details**, where it has one; for an error of the window's own, its stack
+    led by its name and message; for an alert or a screen described by its raw text, that text.
 
   With no failure to describe, the section says no error details were captured.
 

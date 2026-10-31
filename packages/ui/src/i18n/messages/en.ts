@@ -81,6 +81,8 @@ export const en = {
   "startup.noAddress.env": "Set {portVar} to the daemon port and {keyVar} to the daemon key.",
   "startup.noAddress.proxy": "Start the dev server with {proxyVar} set to the daemon port to proxy to it; the page still needs the key, through {key} or {keyVar}.",
   "startup.message": "Message",
+  "startup.report.prefilledGuidance": "If the steps above do not resolve it, use {report} to file an Issue with the steps that led to it.",
+  "startup.report.manualGuidance": "If the steps above do not resolve it, open {address} in your browser to report it, and describe the steps that led to it.",
   "error.recovery.repository": "Select a project folder containing a {git} repository, or initialize {git} in that folder from {terminal}, then refresh the project.",
   "error.recovery.trash": "Remove the project association without moving its directory to the Trash, or move the folder manually after checking its contents.",
   "error.recovery.noCommits": "Create the first commit in the project’s {terminal}, then retry.",

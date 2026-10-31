@@ -89,6 +89,15 @@ it("treats a failure its caller calls unexpected as one, whatever its text alone
   expect(parse(issueReportUrl(BASE, facts([{ error }]))).body).toContain("- Kind: actionable");
 });
 
+it("titles a report of a known failure as its caller says and labels it known, with its diagnostic", () => {
+  const error = "listen EADDRINUSE 127.0.0.1:4580";
+  const { title, body } = parse(issueReportUrl(BASE, facts([{ error, unexpected: true }], { known: { title: "The daemon failed to start" } })));
+  expect(title).toBe("The daemon failed to start");
+  expect(body).toContain("- Kind: known");
+  expect(body).not.toContain("unexpected");
+  expect(body).toContain("listen EADDRINUSE");
+});
+
 it("replaces a home directory only up to a segment boundary", () => {
   const home = { names: [], homeDir: "/data/alice" };
   expect(sanitizeReportText("/data/alicex/foo vs /data/alice", home)).toBe("<path> vs ~");

@@ -26,9 +26,13 @@ The form an empty state takes wherever it fills an area of its own, centred in i
 - **a button**, where there is something to do about the state, named by that action and sometimes carrying a glyph of
   its own. It uses the secondary button style unless the view makes it the primary action.
 - **a second action**, where there is another way out of the state worth offering beside the first. It uses the
-  secondary button style. The actions sit beside each other in a centred row and wrap onto another line when there
-  is not enough width. The welcome screen's two actions are described in "What the welcome screen shows" in
+  secondary button style. The actions sit beside each other in a centred row and wrap onto another line when there is
+  not enough width. The welcome screen's two actions are described in "What the welcome screen shows" in
   `docs/product/welcome-screen.md`.
+- **an action that reaches something outside the window**, a link in the shape of a secondary button with the
+  external-link glyph. **Report issue** is one, on the screens for a daemon that could not start and for a UI that
+  failed: it follows the recovery where there is one, and is otherwise the row's only action (see "The window chrome
+  and the content panel" in `docs/product/window-layout.md`).
 
 The heading is a heading for assistive technology as well, so the panel shows in the outline of the view it fills, at
 the level of the heading naming whatever the panel stands in for: the two then read as one thing rather than the panel

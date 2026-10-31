@@ -76,9 +76,11 @@ export interface ExitCapability {
   /**
    * Registers this webview as the one handling the exit flow and subscribes to the shell's quit
    * gestures, returning the function that undoes the subscriptions. The shell only starts asking
-   * before letting an exit through once this has run, so every screen that can be on show calls
-   * it — including the daemon-failed-to-start one — or a window stuck there would not be
-   * quittable.
+   * before letting an exit through once this has run, and it never stops: it has no unregister, so
+   * a page that replaces one that registered (the crash fallback) must register itself, or quits
+   * and window closes would wait on a page that no longer answers. A page shown before anything
+   * registered (the daemon-failed and no-address screens) must not, and is quit by the shell
+   * directly.
    */
   register(handlers: ExitHandlers): () => void;
   /** Proof this webview is alive and answering; see `useAppExit` for when it is sent. */

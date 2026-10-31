@@ -59,10 +59,10 @@ const FORCE_QUIT_WINDOW: Duration = Duration::from_secs(2);
 /// - `frontend_registered`: set once the webview has called `frontend_exit_heartbeat`, meaning a
 ///   confirmation dialog actually exists to show. Before that point (or if the page never finishes
 ///   loading at all), deferring to it would trap the user in a window nothing can close — the
-///   daemon-failed-to-start screen hits this if it does not register, so the default is to let the
-///   exit through rather than trap first and hope the frontend shows up.
+///   daemon-failed-to-start screen, which never registers, relies on this, so the default is to let
+///   the exit through rather than trap first and hope the frontend shows up.
 /// - `last_prevented_at`: when the previous attempt was deferred, for the `FORCE_QUIT_WINDOW` check
-///   above. Cleared by `frontend_exit_heartbeat` too: `useAppExit.ts`'s `requestQuit` re-invokes it
+///   above. Cleared by `frontend_exit_heartbeat` too: `useAppExit.ts`'s `request` re-invokes it
 ///   on every quit gesture the frontend actually receives — not only when the user cancels the
 ///   dialog — which is itself proof the frontend is alive and answering, so the next gesture should
 ///   wait for it rather than treat a prompt the frontend is still showing as one that wedged. A

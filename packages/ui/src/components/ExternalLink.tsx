@@ -14,6 +14,8 @@ export { ExternalLinkIcon } from "./ExternalLinkIcon";
 type Props = Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "onClick" | "onAuxClick" | "target" | "rel"> & {
   href: string;
   appearance?: "text" | "button";
+  /** The button appearance's size, `sm` beside the small buttons of an empty-state panel's row. */
+  size?: "sm";
   onOpen?: (href: string) => void | Promise<void>;
   isPending?: boolean;
 };
@@ -24,7 +26,7 @@ export function reportExternalLinkFailure(t: Translate, href: string, cause: unk
 }
 
 /** A browser destination stays a real anchor while native shells open it outside the application. */
-export function ExternalLink({ href, appearance = "text", onOpen, isPending = false, children, className = "", ...props }: Props): React.ReactElement {
+export function ExternalLink({ href, appearance = "text", size, onOpen, isPending = false, children, className = "", ...props }: Props): React.ReactElement {
   const t = useT();
   const platform = useOptionalPlatform();
   const focus = useFocusVisibleProps();
@@ -67,7 +69,7 @@ export function ExternalLink({ href, appearance = "text", onOpen, isPending = fa
       aria-disabled={busy || undefined}
       aria-busy={busy || undefined}
       data-external-link=""
-      className={`outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus ${appearance === "button" ? buttonVariants({ variant: "secondary" }) : "rounded-sm break-words text-(--tint-accent-fg) underline underline-offset-2"} ${className}`}
+      className={`outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus ${appearance === "button" ? buttonVariants({ variant: "secondary", size }) : "rounded-sm break-words text-(--tint-accent-fg) underline underline-offset-2"} ${className}`}
       onClick={(event) => {
         if (busy || opening.current) { event.preventDefault(); return; }
         if (!intercepted) return;

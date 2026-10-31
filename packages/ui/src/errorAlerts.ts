@@ -32,8 +32,7 @@ export interface ErrorAlertRequest {
    * errors: for an alert whose failures each have details of their own, set apart by whose they are. `null` says
    * there are none, and the alert shows no disclosure; only when absent does it work them out. A single failure's
    * raw part (see `rawErrorDetails`) is passed here by `reportError`, and by `Toasts` and a failure modal from
-   * `errorAlertParts`, and the startup screens pass their own block; they word the failure themselves, so the alert does not work
-   * out a second copy of its raw text. */
+   * `errorAlertParts`; they word the failure themselves, so the alert does not work out a second copy of its raw text. */
   details?: ReactNode;
   /** The body already says what to do about the failure (a daemon message with a remedy of its own), so the alert adds
    * no remedy line of the failure's kind after it: that line is the general advice for the kind, and would repeat or

@@ -81,11 +81,7 @@ function screen(): React.ReactElement {
     // packaged shell always passes a port and a key, or an error.
     return <StartupScreen message={<NoAddressMessage />} />;
   }
-  return (
-    <DaemonProvider value={daemon}>
-      <App />
-    </DaemonProvider>
-  );
+  return <App />;
 }
 
 // Mounted once, as a sibling of `screen()`, rather than from inside either screen: `App` is not on
@@ -115,6 +111,9 @@ function BackgroundRunSync(): null {
 // `UpdatesProvider` is outside `ErrorBoundary` too: a crash and its Try again remount everything below the boundary,
 // and the update state (an installed update waiting for its restart, a download under way) must survive that.
 //
+// `DaemonProvider` is outside `ErrorBoundary` too, so the crash page's report can remove the names of the user's records
+// (it reads them from the daemon in context); there is none for the screens that have no daemon.
+//
 // One render for every screen, so none of them is outside the boundary. `ErrorBoundary` wraps
 // `ThemeProvider`, not the other way around: `useTheme`'s state initialiser reads `localStorage`
 // unguarded, and a throw there must still land on the boundary's fallback rather than a blank
@@ -129,12 +128,14 @@ root.render(
         <NativeMenuLabelsSync />
         <BackgroundRunSync />
         <UpdatesProvider>
-          <ErrorBoundary>
-            <ThemeProvider>
-              <NativeWindowThemeSync />
-              {screen()}
-            </ThemeProvider>
-          </ErrorBoundary>
+          <DaemonProvider value={daemon}>
+            <ErrorBoundary>
+              <ThemeProvider>
+                <NativeWindowThemeSync />
+                {screen()}
+              </ThemeProvider>
+            </ErrorBoundary>
+          </DaemonProvider>
         </UpdatesProvider>
         <ErrorAlerts daemon={daemon} />
       </LanguageProvider>
