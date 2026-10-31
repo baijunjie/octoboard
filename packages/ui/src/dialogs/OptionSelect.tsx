@@ -4,6 +4,7 @@ import { ButtonContext } from "react-aria-components";
 
 import { CodeToneContext } from "../components/codeTone";
 import { FadeOverflow } from "../components/FadeOverflow";
+import { FieldClearButton } from "../components/FieldClearButton";
 import { HandOffOnUnmount } from "../components/HandOffOnUnmount";
 import { MarkLineBox } from "../components/MarkLineBox";
 import { MotionListBox } from "../components/MotionListBox";
@@ -260,9 +261,26 @@ export function OptionSelect<T extends string>({
           </Select.Value>
           {/* The room for the mark, after the value and before the clear button. */}
           {mark && <span aria-hidden="true" className="w-6 shrink-0" />}
-          {placeholder !== undefined && <Select.ClearButton />}
+          {placeholder !== undefined && <span aria-hidden="true" className="ms-2 w-6 shrink-0" />}
           <Select.Indicator />
         </Select.Trigger>
+        {placeholder !== undefined && (
+          // A real button must be a sibling of the trigger, never nested inside it. Keep HeroUI's
+          // clear action and shortcut registration while drawing the shared ghost button.
+          <ButtonContext.Provider value={{}}>
+            <Select.ClearButton<"button">
+              onClick={() => trigger.current?.focus()}
+              render={(props) => (
+                <FieldClearButton
+                  {...props}
+                  aria-hidden={undefined}
+                  isDisabled={isDisabled}
+                  className="absolute end-7 top-1/2 -translate-y-1/2 data-[empty=true]:invisible"
+                />
+              )}
+            />
+          </ButtonContext.Provider>
+        )}
         {mark && (
           <>
             {handOffToTrigger(markId)}
@@ -270,7 +288,7 @@ export function OptionSelect<T extends string>({
                 the mark is not that button, so it is reset around the mark. The select's other contexts (text,
                 label, list state) are not reset and still reach the popover's body, which holds no such parts. */}
             <ButtonContext.Provider value={{}}>
-              <span className={`absolute inset-y-0 flex items-center ${placeholder !== undefined ? "end-12" : "end-7"}`}>{mark(markId)}</span>
+              <span className={`absolute inset-y-0 flex items-center ${placeholder !== undefined ? "end-15" : "end-7"}`}>{mark(markId)}</span>
             </ButtonContext.Provider>
           </>
         )}

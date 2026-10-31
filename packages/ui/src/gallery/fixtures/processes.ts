@@ -10,6 +10,7 @@ const GROUP = "Processes";
 const preview = sessionOf("s-proc-preview", console_.id, web.id, "Serve the preview", "idle");
 const summary = sessionOf("s-proc-summary", console_.id, web.id, "Fix the summary layout", "working");
 const state = snapshotState({ consoles: [console_], projects: [web], sessions: [preview, summary] });
+const longPreview = { ...preview, title: "Serve the website preview while reviewing the selected session filter spacing" };
 
 const WEBSITE = "/Users/dev/code/website";
 const VITE = `node ${WEBSITE}/node_modules/.bin/vite --host 0.0.0.0 --port 5173 --config ${WEBSITE}/vite.config.ts --mode development --clearScreen false --logLevel info`;
@@ -80,18 +81,21 @@ export const processScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Processes of a session, one row of each kind",
-    description: "The native right panel is open beside the selected session. Its session filter, a picker with no label, follows Serve the preview; below the general message it lists that session's processes, oldest first, each in a white card whose leading success-green Play icon stays still. At the end of the command's line, hovering the row or moving keyboard focus into it reveals a danger-soft Stop and a secondary Keep button without moving the command; touch devices show both directly. The directory and the facts line below take the card's whole width, with or without the buttons. The top-bar Processes toggle uses a SquareActivity glyph; the leading command control lines up with the folder icon before its working directory. The Vite command is longer than the row: it fades at the right edge and its tooltip (hover it) shows it whole; under it come the working directory and one line of facts: memory, the two ports it listens on (\"5173 and 24678\"), its age and, for a tree of several, the number of processes. The newest row reads \"started just now\". The row with no readable command says Unknown command over Working directory unknown, which starts in the text column, level with the directories above it, and the row whose directory was deleted carries a soft warning badge Directory deleted after the path.",
-    state,
+    description: "The native right panel is open beside the selected session. Its session filter, a picker with no label, follows the selected session's long title: the text fades before a visible gap to its clear (×) button. Choose 800px to inspect the narrow docked panel or 420px for the floating panel. Below the general message it lists that session's processes, oldest first, each in a white card whose leading success-green Play icon stays still. At the end of the command's line, hovering the row or moving keyboard focus into it reveals a danger-soft Stop and a secondary Keep button without moving the command; touch devices show both directly. The directory and the facts line below take the card's whole width, with or without the buttons. The top-bar Processes toggle uses a SquareActivity glyph; the leading command control lines up with the folder icon before its working directory. The Vite command is longer than the row: it fades at the right edge and its tooltip (hover it) shows it whole; under it come the working directory and one line of facts: memory, the two ports it listens on (\"5173 and 24678\"), its age and, for a tree of several, the number of processes. The newest row reads \"started just now\". The row with no readable command says Unknown command over Working directory unknown, which starts in the text column, level with the directories above it, and the row whose directory was deleted carries a soft warning badge Directory deleted after the path.",
+    state: snapshotState({ consoles: [console_], projects: [web], sessions: [longPreview, summary] }),
     preferences: panelPreferences,
     processes: { trees: sessionTrees },
-    steps: openSession,
+    steps: [
+      (ui) => ui.press(ui.session(longPreview.title)),
+      (ui) => ui.press(ui.t("titleBar.processes.show")),
+    ],
   },
   {
     id: "processes-with-files-search",
     group: GROUP,
     category: "normal",
     title: "Processes panel under the Files search field",
-    description: "In a docked window Files and Processes are stacked in the right column (a narrower window floats one panel at a time, so only Files is on screen). Files' search field holds a typed query with its clear (×) button; the Processes card below carries its session filter, Serve the preview picked and ending in its clear (×) button, in the same strip: the same inset, groove below and field height as the search field above. Both clear buttons use the default foreground colour, not a muted one. Processes lists that session's rows, whose buttons are on the command's line alone.",
+    description: "In a docked window Files and Processes are stacked in the right column (a narrower window floats one panel at a time, so only Files is on screen). Files' search field holds a typed query with its clear (×) button; the Processes card below carries its session filter, Serve the preview picked and ending in its clear (×) button, in the same strip: the same inset, groove below and field height as the search field above. Both clear actions use the standard compact ghost icon button with an ×: compare their resting, hovered, pressed and keyboard-focused appearances in light and dark themes. Hovering a clear button shows a distinct fill over the gray field, including while the field is focused; pressing it strengthens that fill. At rest, and when only the surrounding field is hovered, the clear button stays transparent. Processes lists that session's rows, whose buttons are on the command's line alone.",
     state,
     preferences: { panelStacks: { project: { open: ["files", "processes"], shares: {} }, report: { open: [], shares: {} } } },
     processes: { trees: pair },
