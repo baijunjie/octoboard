@@ -300,7 +300,7 @@ list reaches its content; one holding a tabbable control or scroll region is not
 
 Copy explains; a button acts. Replace an instruction pointing the user elsewhere ("go to Settings → Agent accounts
 and …") with a button that takes them there, opening the target dialog when there is one. One view offers one entry
-for an action: remove a second entry that does the same thing, such as "Add agent…" beside "Manage accounts…" when
+for an action: remove a second entry that does the same thing, such as "Add agent" beside "Manage accounts" when
 both lead to the same account management view.
 
 **Button order follows the group's alignment.** A trailing-aligned group — a dialog's or a popover's footer, an
@@ -1126,7 +1126,7 @@ outside press, Escape or a close button for dismissal. Use HeroUI's `AlertDialog
 focus and announces its title and body through `role="alertdialog"`, without a second live announcement inside
 it; the body's opening sentence is optional, never restating the title, so an alert without one announces its title and
 remedy; focus lands on the alert itself, not on its first control, also when it opens over a dialog that a press without a
-pointer opened (an assistive technology's press), where Enter on a first control such as Manage accounts… would act.
+pointer opened (an assistive technology's press), where Enter on a first control such as Manage accounts would act.
 Distinct failures wait in a queue; repeated copies of a pending failure do not multiply it. An error above a form leaves
 that form available after acknowledgement, with its values and retry action intact. Acknowledging it returns focus to
 where it was; where that is gone, or the dialog under the alert never had focus (the alert came in the same moment as

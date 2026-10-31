@@ -291,7 +291,7 @@ scope:
 - **When no agent is both added and installed** (see "When no agent can open a session" in
   `docs/product/opening-sessions.md`), an otherwise offered **New session** or **New console session** is replaced by
   what is missing. When an installed agent waits to be added, the panel carries the bot icon, says that no agent is
-  added and that one is to be added to open a session, and offers **Add agent…**, which opens Settings on its Agent
+  added and that one is to be added to open a session, and offers **Add agent**, which opens Settings on its Agent
   accounts section with the Add agent dialog in front (see "Opening and closing Settings" in
   `docs/product/settings.md`). Otherwise it carries a warning icon, says that no agent was found and how to make one
   available, and offers no button. An added agent whose availability has not yet been determined does not prevent either

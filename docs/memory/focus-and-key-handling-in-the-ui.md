@@ -67,7 +67,7 @@ case where it mounts with another modal:
   render stays in the same task, after the dialog's hider has run and before its observer reports.
 - Pass `topLayerAtMount` to its `Dialog` / `ConfirmDialog` (`packages/ui/src/dialogs/useTopLayerAtMount.ts`). The
   delay moves it out of the press's commit but into the next one, where a dialog that the press's dialog opens in turn
-  from a mount effect also mounts (Settings opening the account settings dialog; an alert's Add agent…), and where an
+  from a mount effect also mounts (Settings opening the account settings dialog; an alert's Add agent), and where an
   alert and a question raised in the same task meet. The flag keeps the modal out of every hider of its mount commit,
   and of several flagged in one commit leaves the last rendered on top.
 

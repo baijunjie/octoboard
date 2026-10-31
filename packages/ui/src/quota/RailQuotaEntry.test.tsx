@@ -278,7 +278,7 @@ it("moves a keyboard pin's focus to Add agent when there is no tab to take it", 
   const { button } = mount(undefined, []);
   act(() => button.focus());
   press(button, "Enter");
-  expect(document.activeElement?.textContent).toBe("Add agent…");
+  expect(document.activeElement?.textContent).toBe("Add agent");
 });
 
 it("closes on a press outside, handing focus back to the button for a keyboard pin", () => {
@@ -588,8 +588,8 @@ it("says so, pointing to Settings, when agents are installed but none is added",
   expect(panel()!.textContent).toContain("No agent added");
   expect(panel()!.textContent).toContain("Add an agent to see its usage here.");
   // The footer link would repeat the button.
-  expect(panel()!.textContent).not.toContain("Manage accounts…");
-  const add = Array.from(panel()!.querySelectorAll("button")).find((b) => b.textContent === "Add agent…");
+  expect(panel()!.textContent).not.toContain("Manage accounts");
+  const add = Array.from(panel()!.querySelectorAll("button")).find((b) => b.textContent === "Add agent");
   click(add!);
   expect(onOpenSettingsAt).toHaveBeenCalledWith("accounts", { addAgent: true });
   expect(panel()).toBeNull();
@@ -601,7 +601,7 @@ it("says that no agent is available when the added ones are not installed and no
   openPanel(button);
   expect(tabs()).toHaveLength(0);
   expect(panel()!.textContent).toContain("No agent available");
-  expect(panel()!.textContent).toContain("Manage accounts…");
+  expect(panel()!.textContent).toContain("Manage accounts");
 });
 
 it("asks the daemon to refresh the quotas each time the panel opens, and not when it only changes mode", () => {
@@ -628,7 +628,7 @@ it("opens Settings' accounts section from the panel, and closes the panel", () =
   withFakeTimers();
   const { button } = mount();
   openPanel(button);
-  const manage = Array.from(panel()!.querySelectorAll("button")).find((b) => b.textContent === "Manage accounts…")!;
+  const manage = Array.from(panel()!.querySelectorAll("button")).find((b) => b.textContent === "Manage accounts")!;
   click(manage);
   expect(onOpenSettingsAt).toHaveBeenCalledExactlyOnceWith("accounts");
   expect(panel()).toBeNull();
@@ -1105,7 +1105,7 @@ it("drops the tab of an agent whose accounts are all turned off, bar the one the
   expect(panel()!.textContent).toContain("Disabled accounts are not shown here.");
   expect(panel()!.textContent).not.toContain("turned on");
   // The way to Settings is the empty state's own action, not also a footer link.
-  const manage = Array.from(panel()!.querySelectorAll("button")).filter((b) => b.textContent === "Manage accounts…");
+  const manage = Array.from(panel()!.querySelectorAll("button")).filter((b) => b.textContent === "Manage accounts");
   expect(manage).toHaveLength(1);
   expect(manage[0]!.closest(".groove-t")).toBeNull();
   click(manage[0]!);
@@ -1203,7 +1203,7 @@ it("hands focus to the panel's button when focus is in the row that goes with th
   focusKeptRowMark(store);
   setStatus("interrupted");
   expect(tabs()).toEqual([]);
-  expect(document.activeElement?.textContent).toBe("Manage accounts…");
+  expect(document.activeElement?.textContent).toBe("Manage accounts");
 });
 
 it("leaves focus alone when the panel was opened by the mouse and holds none", () => {

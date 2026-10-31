@@ -6,7 +6,7 @@ import { Dialog } from "./Dialog";
 import { TextInput } from "./TextInput";
 
 /** A "Settings" dialog that opens an "Account settings" dialog over itself from a passive effect as it mounts, as
- * Settings does for View in Settings or an alert's Add agent…: the second dialog mounts a commit after the first. */
+ * Settings does for View in Settings or an alert's Add agent: the second dialog mounts a commit after the first. */
 export function OpensAnotherDialog(): React.ReactElement {
   const [second, setSecond] = useState(false);
   useEffect(() => setSecond(true), []);

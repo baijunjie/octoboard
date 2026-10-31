@@ -67,7 +67,7 @@ and removing an account" in `docs/product/agent-accounts.md`) or a conversation 
 
 The error alert uses the standard danger icon and a danger acknowledgement button. It appears above any open dialog and
 takes keyboard focus. That includes a dialog opening in the same moment, even one that another dialog opens as it
-mounts — **View in Settings** opening Settings, which opens the account settings dialog, or an alert's **Add agent…**
+mounts — **View in Settings** opening Settings, which opens the account settings dialog, or an alert's **Add agent**
 opening Settings with the Add agent dialog in front — and a question the user did not ask for that comes up in the same
 moment (see "Where a question the user did not ask for stands among other dialogs" in `docs/product/dialogs.md`). A
 dialog that opens later, while the alert is up, goes on top of it and takes keyboard focus; the alert waits under it,
@@ -540,11 +540,11 @@ acknowledgement button, instead of the step naming where to go:
 
 | Failure | Button | What it opens |
 |---|---|---|
-| The agent is not added (`agent_not_added`) | **Add agent…** | Settings on Agent accounts, with the Add agent dialog in front (see "Adding an agent" in `docs/product/agent-accounts.md`) |
-| An account problem (`unknown_account`, `grok_home_not_initialized`) | **Manage accounts…** | Settings on Agent accounts |
-| An account that is turned off (`account_disabled`) | **Manage accounts…** | Settings on Agent accounts, where it can be turned back on (see "Turning an account off" in `docs/product/agent-accounts.md`) |
-| An account that is not logged in (`account_not_signed_in`) | **Manage accounts…** | Settings on Agent accounts, where it can be logged in to (see "An account that is not logged in" in `docs/product/account-quotas.md`) |
-| The added agents not being as the change expected (`agent_already_added`, `agent_order_invalid`) | **Manage accounts…** | Settings on Agent accounts |
+| The agent is not added (`agent_not_added`) | **Add agent** | Settings on Agent accounts, with the Add agent dialog in front (see "Adding an agent" in `docs/product/agent-accounts.md`) |
+| An account problem (`unknown_account`, `grok_home_not_initialized`) | **Manage accounts** | Settings on Agent accounts |
+| An account that is turned off (`account_disabled`) | **Manage accounts** | Settings on Agent accounts, where it can be turned back on (see "Turning an account off" in `docs/product/agent-accounts.md`) |
+| An account that is not logged in (`account_not_signed_in`) | **Manage accounts** | Settings on Agent accounts, where it can be logged in to (see "An account that is not logged in" in `docs/product/account-quotas.md`) |
+| The added agents not being as the change expected (`agent_already_added`, `agent_order_invalid`) | **Manage accounts** | Settings on Agent accounts |
 
 Pressing the button acknowledges the alert and opens Settings there, above whatever dialog was open; when Settings is
 already open, it moves to that section instead (see "Opening and closing Settings" in `docs/product/settings.md`). The
@@ -567,7 +567,7 @@ account that was used up after the confirmation opened (see "Confirming a switch
 whose push is still running (`push_in_progress`; see "Pushing the current branch" in
 `docs/product/project-git-actions.md`), and it is the form of every failure modal (see "The failure modal" above). A
 switch confirmed onto an account turned off, or found not logged in, after the confirmation opened is not a plain alert:
-it has the remedy and the **Manage accounts…** button above.
+it has the remedy and the **Manage accounts** button above.
 
 **An unexpected failure** explains that it may be a bug the user cannot resolve in the current interface. The alert
 keeps the error explanation and offers expandable diagnostic details, **Error details**, when the original message or

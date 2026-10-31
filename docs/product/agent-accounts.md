@@ -84,7 +84,7 @@ While the list is undecided every Add button is unavailable. The dialog stays op
 turning to Added, so several can be added in turn; it closes on its **Close** button.
 
 The dialog also opens by itself, in front of Settings, when Settings is opened or navigated from one of the window's
-**Add agent…** buttons (see "Opening and closing Settings" in `docs/product/settings.md`): Settings shows this section
+**Add agent** buttons (see "Opening and closing Settings" in `docs/product/settings.md`): Settings shows this section
 and the dialog opens over it, holding keyboard focus. It opens once per such request; switching to another section of
 Settings and back does not open it again. When the user closes a dialog opened this way, keyboard focus goes to the
 **Add agent** button at the end of the agent strip, or, while no agent is added and there is no strip, to the empty

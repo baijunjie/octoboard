@@ -7,8 +7,8 @@ the document's regions, the machine, account references and their fallbacks — 
 
 ## Where they are
 
-Exporting is the **Export…** button of Settings' **Configuration** section, and nowhere else.
-Importing is the **Import…** button of that section, and the **Import configuration…** button of the welcome screen,
+Exporting is the **Export** button of Settings' **Configuration** section, and nowhere else.
+Importing is the **Import** button of that section, and the **Import configuration** button of the welcome screen,
 which is what an installation with no console yet shows. Both go through the window's own file dialogs, so no place is
 imposed on the file: the desktop app raises its save and open dialogs, and a browser tab downloads the file and opens a
 file picker. Where the window can do neither, the welcome screen's button is not shown and the Configuration section

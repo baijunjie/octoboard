@@ -754,7 +754,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Console account switch, every failure shares one remedy",
-    description: "Both failed sessions say the target account no longer exists, so the alert gives that one remedy once, under the two rows, and its footer carries a Manage accounts… button, left of OK; the rows carry no button of their own. The alert has no Error details and no paragraph about a bug. Compare the partial failure above, whose different remedies each come once after the list and whose footer has no Manage accounts….",
+    description: "Both failed sessions say the target account no longer exists, so the alert gives that one remedy once, under the two rows, and its footer carries a Manage accounts button, left of OK; the rows carry no button of their own. The alert has no Error details and no paragraph about a bug. Compare the partial failure above, whose different remedies each come once after the list and whose footer has no Manage accounts.",
     state: switchAccountState,
     sessionAccountSwitches: {
       "s-switch-bound": { code: "unknown_account", params: { account: "a-removed" }, message: "unknown account a-removed" },
@@ -1222,7 +1222,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Session launch refused, the agent is not added",
-    description: "The daemon finds Claude Code off the added list, which the window has not heard yet. The danger alert says the session cannot be opened with it, with the remedy in words and an Add agent… button in the footer, left of OK; the dialog stays behind it.",
+    description: "The daemon finds Claude Code off the added list, which the window has not heard yet. The danger alert says the session cannot be opened with it, with the remedy in words and an Add agent button in the footer, left of OK; the dialog stays behind it.",
     sessionOpenError: { code: "agent_not_added", params: { agent: "Claude Code" }, message: "Claude Code is not added. Add it in Settings → Agent accounts to open a session with it." },
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.openSession")),
@@ -1236,7 +1236,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Session launch refused, the account is gone",
-    description: "The daemon finds the account the session was to run under removed. The danger alert says so, with the remedy in words and a Manage accounts… button in the footer, left of OK; the dialog stays behind it.",
+    description: "The daemon finds the account the session was to run under removed. The danger alert says so, with the remedy in words and a Manage accounts button in the footer, left of OK; the dialog stays behind it.",
     sessionOpenError: { code: "unknown_account", params: { account: "a-removed" }, message: "unknown account a-removed" },
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.openSession")),

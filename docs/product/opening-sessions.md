@@ -163,7 +163,7 @@ project's focus mode alike; and no **+** offers to open a session with defaults 
 below). Where the window says why:
 
 - when some supported agent is installed, or not yet determined unavailable, but none of those is added, the terminal's
-  empty panel, where it would otherwise offer a new session, says that no agent is added and offers **Add agent…** (see
+  empty panel, where it would otherwise offer a new session, says that no agent is added and offers **Add agent** (see
   "A console with nothing in it" in `docs/product/session-terminal.md`), and the console sessions section, with room for
   less, says only that no agent is added;
 - when every agent has been determined unavailable, the terminal's empty panel, where it would otherwise offer a new
@@ -187,7 +187,7 @@ with defaults, `open_session`, a console or project session's `new_session` (wit
 approved session request — a new session whose agent, once resolved (see "Which agent a session uses" below), is not on
 the list of added agents is refused with `agent_not_added`, and nothing is recorded. The refusal names the agent and
 says it is not added, pointing to Settings → Agent accounts; in the window it is shown in an error alert offering **Add
-agent…** (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`). A session request is refused that way
+agent** (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`). A session request is refused that way
 before the user is asked, and again on approval should the agent have been removed meanwhile (see
 `docs/product/session-requests.md`). Handing a session off to an agent that is not added is refused the same way (see
 "What can be handed off" in `docs/product/handing-off-sessions.md`). While the list is undecided (see "Added agents" in
@@ -203,7 +203,7 @@ with `account_disabled`, and nothing is recorded; the user's own request is refu
 so a turned-off account is refused as turned off whatever its quota says. The refusal carries `agent` and `account` (the
 account's name; the default account under the name the user gave it, else `Default`). In the window it is shown in an
 error alert, in the UI's language, saying the account is turned off, so a session cannot be opened on it; the next step
-is to choose another account, or to turn this one back on, and the alert has a **Manage accounts…** button (see
+is to choose another account, or to turn this one back on, and the alert has a **Manage accounts** button (see
 "Recovery and unexpected errors" in `docs/product/error-alerts.md`). An agent's tool call is refused with a reason in
 English naming the account and the agent and saying to choose another account or turn it back on in Settings. A session
 request is refused that way before the user is asked, and again on approval should the account have been turned off by
@@ -216,7 +216,7 @@ session whose account, once resolved, is found not logged in by the reading the 
 with `account_not_signed_in`, and nothing is recorded; the user's own request is refused too. It is checked after the
 quota. The refusal carries `agent` and `account` (the account's name). In the window it is shown in an error alert, in
 the UI's language, saying the account is not logged in, so a session cannot be opened on it; the next step is to
-choose another account, or to log in to this one, and the alert has a **Manage accounts…** button (see "Recovery and
+choose another account, or to log in to this one, and the alert has a **Manage accounts** button (see "Recovery and
 unexpected errors" in `docs/product/error-alerts.md`). An agent's tool call is refused with a reason in English naming
 the account and the agent and saying to choose another account or log in to it in Settings → Agent accounts. A session
 request is refused that way before the user is asked, and again on approval should the account be found not logged in

@@ -54,7 +54,7 @@ is disabled, since no session can be opened from the window (see "When no agent 
 `docs/product/opening-sessions.md`, which gives the full rule). When an installed agent waits to be added, the row
 carries the bot icon and says that no agent is added; otherwise it carries a warning icon and says that no agent was
 found on the user's `PATH`. It says that much and no more, and offers nothing to press: the terminal's empty panel,
-where it would otherwise offer a new session, says the rest, with **Add agent…** when an agent waits to be added (see "A
+where it would otherwise offer a new session, says the rest, with **Add agent** when an agent waits to be added (see "A
 console with nothing in it" in `docs/product/session-terminal.md`); the welcome screen's supported-tool list and hint
 are described in "What the welcome screen shows" in `docs/product/welcome-screen.md`. The row shows whatever the section
 lists — a console session left interrupted from before an agent went off the `PATH` still has its row — and it takes the

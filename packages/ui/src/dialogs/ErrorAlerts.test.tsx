@@ -241,11 +241,11 @@ it.each([
 });
 
 it.each([
-  ["account", "Manage accounts…", undefined],
-  ["addedAgents", "Manage accounts…", undefined],
-  ["accountDisabled", "Manage accounts…", undefined],
-  ["accountNotSignedIn", "Manage accounts…", undefined],
-  ["agentNotAdded", "Add agent…", true],
+  ["account", "Manage accounts", undefined],
+  ["addedAgents", "Manage accounts", undefined],
+  ["accountDisabled", "Manage accounts", undefined],
+  ["accountNotSignedIn", "Manage accounts", undefined],
+  ["agentNotAdded", "Add agent", true],
 ] as const)("offers a button for %s recovery that opens Settings' Agent accounts", (recovery, label, addAgent) => {
   mount();
   const open = vi.fn();
@@ -280,10 +280,10 @@ it("offers the footer action for a batch only when every failure shares that rec
   mount();
   const labels = () => Array.from(document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).map((b) => b.textContent);
   act(() => errorAlerts.report({ message: "Batch", failures: [{ error: "a", recovery: "account" }, { error: "b", recovery: "account" }] }));
-  expect(labels()).toContain("Manage accounts…");
+  expect(labels()).toContain("Manage accounts");
   act(() => errorAlerts.acknowledge());
   act(() => errorAlerts.report({ message: "Mixed", failures: [{ error: "a", recovery: "account" }, { error: "b", recovery: "path" }] }));
-  expect(labels()).not.toContain("Manage accounts…");
+  expect(labels()).not.toContain("Manage accounts");
 });
 
 it("hands focus to the window's fallback when acknowledging the last alert leaves it on the page body", async () => {
@@ -673,7 +673,7 @@ it("adds no remedy line of the failure's kind after a daemon message that says w
 });
 
 // A dialog that opens a second one from a passive effect as it mounts (Settings opening an account's settings dialog for
-// View in Settings, or its Add agent dialog for an alert's Add agent…) mounts that second one in the same commit as an
+// View in Settings, or its Add agent dialog for an alert's Add agent) mounts that second one in the same commit as an
 // alert raised in the task of the press that opened it: the alert must stay usable over both, and the second dialog
 // be usable once the alert is acknowledged.
 describe.each([{ strict: false }, { strict: true }])("raised as a dialog opens another dialog a commit later (StrictMode: $strict)", ({ strict }) => {

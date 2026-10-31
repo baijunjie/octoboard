@@ -124,7 +124,7 @@ covers. These are:
   it scrolls, and its lines and details hold little or nothing that takes focus, so without it what is scrolled out of
   view there would be out of the keyboard's reach.
 - **the list of accounts in the rail's account quota panel**, named "Accounts". Its rows hold nothing that takes focus,
-  so nothing else would scroll it. In Tab order it comes after the agent tabs and before Manage accounts… (see "What the
+  so nothing else would scroll it. In Tab order it comes after the agent tabs and before Manage accounts (see "What the
   panel shows" in `docs/product/account-quota-panel.md`).
 - **the update notice's release notes**, named "What is new", as the disclosure that opens them is. Nothing in them
   takes focus. In Tab order they come after the notice's buttons (see "A newer version is available" in

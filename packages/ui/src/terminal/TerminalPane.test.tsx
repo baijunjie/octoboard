@@ -345,7 +345,7 @@ it("offers to add an agent instead of the installation step when installed agent
   expect(container.textContent).toContain("No agent added");
   expect(container.textContent).toContain("Add an agent to open a session.");
   expect(container.textContent).not.toContain("install at least one tool");
-  const button = Array.from(container.querySelectorAll("button")).find((b) => b.textContent === "Add agent…");
+  const button = Array.from(container.querySelectorAll("button")).find((b) => b.textContent === "Add agent");
   act(() => button!.click());
   expect(onAddAgent).toHaveBeenCalledOnce();
 });

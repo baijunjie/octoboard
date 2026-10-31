@@ -64,13 +64,13 @@ Settings opens from:
 - the **Manage accounts** button beside the title of the console dialog's Agent default accounts section, which opens
   it on the Agent accounts section above the console dialog, left open beneath it (see "Agent config directories" in
   `docs/product/consoles.md`);
-- the **Manage accounts…** button in the rail's account quota panel, which closes the panel and opens it on the Agent
+- the **Manage accounts** button in the rail's account quota panel, which closes the panel and opens it on the Agent
   accounts section (see `docs/product/account-quota-panel.md`);
-- the **Add agent…** button of the "No agent added" states — the terminal's empty panel (see "A console with nothing
+- the **Add agent** button of the "No agent added" states — the terminal's empty panel (see "A console with nothing
   in it" in `docs/product/session-terminal.md`) and the rail's account quota panel, which it closes first — which
   opens it on the Agent accounts section with the Add agent dialog in front (see "Adding an agent" in
   `docs/product/agent-accounts.md`);
-- an error alert's **Add agent…** or **Manage accounts…** button, which acknowledges the alert and opens it the same
+- an error alert's **Add agent** or **Manage accounts** button, which acknowledges the alert and opens it the same
   way, above whatever dialog is open (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`).
 
 When the Add agent dialog is put in front, that dialog holds keyboard focus rather than the selected section's tab. A
@@ -92,7 +92,7 @@ With no dialog beneath it and no session's terminal to take focus — no session
 from the open drawer — focus is still handed to something. It goes, in order:
 
 1. to the control whose press opened Settings, while that control is still on screen, even when the press gave it no
-   focus — a screen reader's press on the terminal empty panel's **Add agent…**, say, or on the rail's **Settings**
+   focus — a screen reader's press on the terminal empty panel's **Add agent**, say, or on the rail's **Settings**
    button. Settings opened from the macOS application menu has no such control;
 2. else to what held keyboard focus when Settings opened, while that is still there;
 3. else to the sidebar, or, when the sidebar is not shown or has no control to take it, to the rail, each landing where

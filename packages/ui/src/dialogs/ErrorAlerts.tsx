@@ -47,7 +47,7 @@ function ErrorAlertHost(): React.ReactElement | null {
   // a dialog under the alert that has no focused element of its own yet (one opened by a press without a pointer,
   // whose own opening focus react-aria's `focusSafely` defers to the next frame or past the open transition) treats
   // focus on the not-yet-containing alert as escaping its containment and queues `focusSafely` on the alert's first
-  // control, where Enter would then press it (for Manage accounts…, opening Settings). It must also land before the
+  // control, where Enter would then press it (for Manage accounts, opening Settings). It must also land before the
   // next frame, because that dialog's deferred opening focus fires then unless focus has moved: once it lands on the
   // dialog, the alert is outside the containment it joins and focus is taken back from it.
   const [mountedId, setMountedId] = useState<number>();

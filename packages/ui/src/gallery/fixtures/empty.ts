@@ -86,7 +86,7 @@ export const emptyScenarios: Scenario[] = [
     category: "normal",
     title: "A console, agents installed but none added",
     description:
-      "Under Console sessions the row says \"No agent added\" with nothing about PATH, and the console header's \"+\" (New console session) is disabled; the console session left over from before still shows beneath it. Landing page's \"No sessions yet\" row has no action, and the project's \"+\", which a hover over its row reveals, is disabled too. The row carries a bot glyph. With Landing page selected, the main area has a bot glyph too, says the same and asks for an agent to be added, with an Add agent… button beneath that opens Settings → Agent accounts.",
+      "Under Console sessions the row says \"No agent added\" with nothing about PATH, and the console header's \"+\" (New console session) is disabled; the console session left over from before still shows beneath it. Landing page's \"No sessions yet\" row has no action, and the project's \"+\", which a hover over its row reveals, is disabled too. The row carries a bot glyph. With Landing page selected, the main area has a bot glyph too, says the same and asks for an agent to be added, with an Add agent button beneath that opens Settings → Agent accounts.",
     state: noneAddedState,
     steps: [(ui) => ui.press("Landing page")],
   },

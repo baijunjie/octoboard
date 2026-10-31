@@ -14,7 +14,7 @@ has been detected on the machine.
 - A primary button, **New console**, which opens the same new-console dialog the rail's New console opens (see
   `docs/product/consoles.md`). A console created here becomes the current one as soon as it appears, as one created from
   the rail does (see "The console switcher" in `docs/product/console-switcher.md`).
-- Beside it, a secondary button, **Import configuration…**, which opens the import dialog for a configuration document
+- Beside it, a secondary button, **Import configuration**, which opens the import dialog for a configuration document
   exported on another machine (see "Choosing the file to import" in
   `docs/product/configuration-export-and-import-dialogs.md`) — the way a
   machine with nothing on it is set up from one that has. It is there only where the window can open a file, which the
@@ -70,7 +70,7 @@ console appears, the panes come back exactly as the user had left them — a sid
   rather than pulling it onto a control.
 - It is **a region of its own** in the `F6` cycle, between the rail and where the sidebar would be, and focus lands on
   its New console button (see "Moving focus between regions with F6" in
-  `docs/product/moving-focus-between-regions.md`); Import configuration…, where shown, is the next Tab stop.
+  `docs/product/moving-focus-between-regions.md`); Import configuration, where shown, is the next Tab stop.
 - The content area itself becomes a Tab stop only when it overflows, so the keyboard can scroll it; the tool rows
   and their badges do not add Tab stops. `F6` continues to land on New console even while the area scrolls.
 - Wherever the window would hand keyboard focus to the terminal — the connection banner's Retry going away, a toast
@@ -79,7 +79,7 @@ console appears, the panes come back exactly as the user had left them — a sid
   which hands focus to the top bar (see "With no session selected" in `docs/product/session-terminal.md`); here the top
   bar has no enabled control to take it.
 - **When the first console is created** from the welcome screen's New console, focus moves to the first control in the
-  top bar a keyboard can reach. The hand-off is New console's alone: consoles arriving through Import configuration…
+  top bar a keyboard can reach. The hand-off is New console's alone: consoles arriving through Import configuration
   appear while its dialog is still open on the import's result, and get no such hand-off.
 - **When the last console goes away** while keyboard focus is inside the sidebar, the archive view, the terminal or
   the right pane — all of which go with it — focus is handed to the rail's New console button. Focus that was already

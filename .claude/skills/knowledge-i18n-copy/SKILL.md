@@ -510,16 +510,17 @@ are now wrong or it leaves out one thing, the meaning has changed.
   model wrote and is not localized. (`docs/product/language.md`, "What follows the language")
 - **Capitalization**: the UI is a web UI and uses sentence case (Close sessions, Try again); the macOS application
   menu's items follow Apple's Title Case (Hide Others, Select All). (`packages/ui/src/i18n/messages/en.ts`)
-- **Ellipsis**: this overrides the web default under "Ellipsis" above. A command in the window — a button or menu item —
-  takes a trailing ellipsis when the action it names is not done when the press lands: it leads into a flow of two or
-  more dialogs or screens (Export…: a scope, then a save location, as the desktop app asks it; Import…: a file, then its
-  review), or lands somewhere the user goes on to do it (Manage accounts… in Settings, Grant… finished in System
-  Settings). It takes none when it leads to a single dialog or chooser where the user enters or picks one thing and
-  confirms (Rename, Choose file), to a pure confirmation, or to a submenu, nor when its name is the navigation itself
-  and the landing completes it (Settings, View all, Browse files, Open terminal, Open System Settings). A dialog or
-  screen counts as one step, however many keystrokes it takes, and a label read only as an accessible name or tooltip
-  takes none. The macOS application menu keeps Apple's (Settings…), and in-progress text and the menu bar's "N more…"
-  line keep their own. (the user's decision; `packages/ui/src/i18n/messages/en.ts`)
+- **Ellipsis**: this replaces the command guidance under "Ellipsis" above — its criterion, its platform defaults and its
+  table, examples included; the U+2026 character and the same-in-every-language bullet still apply. A command in the
+  window — a button or menu item — takes a trailing ellipsis only when it opens a place holding several further
+  choices that the command itself leaves open, so what the user goes on to do there cannot be told from the command: a
+  visible Settings… that opens every settings page (the window has none today; the rail's Settings button is
+  icon-only). Every other command takes none: one with a single purpose, whatever it opens — a dialog or a flow of
+  several, a chooser, a form, a confirmation, a submenu (Rename, Export, Import, Add agent, Choose file, Grant) — and one
+  that opens settings scoped to one thing or lands on one section, whose purpose is already settled (Console settings,
+  Project settings, Manage accounts). A label read only as an accessible name or tooltip takes none. The macOS
+  application menu follows Apple's convention throughout, and in-progress text and the menu bar's "N more…" line keep
+  their own. (the user's decision; `packages/ui/src/i18n/messages/en.ts`)
 - **en contractions**: the en catalog uses no contractions — could not, is not, does not — overriding the default
   register above; keep new strings consistent with it. (`packages/ui/src/i18n/messages/en.ts`)
 - **A name is mentioned once per screen**: within one dialog, panel or other single view, the name of a user's own

@@ -93,7 +93,7 @@ edges: a console session, a project coordinator reporting to it, and a worker re
   permission prompts; the project pane's shell terminals are the user's.
 - **Exporting the configuration.** An export carries what the settings tools deliberately do not expose (a console's
   avatar and console session instructions, and application settings that stay the user's own; see
-  `docs/product/agent-settings-tools.md`), so no tool writes it out; it stays with the user's **Export…** button (see
+  `docs/product/agent-settings-tools.md`), so no tool writes it out; it stays with the user's **Export** button (see
   `docs/product/configuration-export-and-import.md`).
 
 **Only an owner can interrupt a turn.** An owner can stop the turn of a session it owns with `interrupt_session` (see

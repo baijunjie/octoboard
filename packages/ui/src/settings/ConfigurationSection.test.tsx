@@ -53,19 +53,19 @@ const docs = consoleOf("c-docs", "Docs");
 
 it("exports the console the sidebar shows when the export is opened", async () => {
   mount([main, docs]);
-  await press("Export…");
+  await press("Export");
   expect(document.body.textContent).toContain("Console Docs and its projects");
 });
 
 it("falls back to the first console when the one the sidebar chose is gone", async () => {
   mount([main]);
-  await press("Export…");
+  await press("Export");
   expect(document.body.textContent).toContain("Console Main and its projects");
 });
 
 it("opens the import from its own button", async () => {
   mount([main]);
-  await press("Import…");
+  await press("Import");
   expect(document.body.textContent).toContain("Choose an exported configuration file");
 });
 

@@ -267,7 +267,7 @@ function QuotaPanel({ shownAgent, shownAccount, inUse, focusSelectedTab, emphasi
   };
   const root = useRef<HTMLDivElement>(null);
   // With no tab to take it, a keyboard pin's focus goes to the first button of the panel: the empty state's Add agent
-  // or Manage accounts…, or else the link to Settings' accounts.
+  // or Manage accounts, or else the link to Settings' accounts.
   useEffect(() => {
     if (focusSelectedTab && selected === undefined) root.current?.querySelector("button")?.focus();
   }, []);

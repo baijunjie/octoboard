@@ -6,9 +6,11 @@
  * filled globally from `config/app.json`.
  *
  * Web UI is sentence case and uses no contractions. The macOS application menu is Title Case,
- * matching Apple's own menu items. A command in the window takes a trailing ellipsis only when the
- * action it names is not done when the press lands; the rule and its exceptions are the
- * "Ellipsis" entry of "This project" in `.claude/skills/knowledge-i18n-copy/SKILL.md`.
+ * matching Apple's own menu items. A command in the window takes a trailing ellipsis only when it
+ * opens a place holding several further choices the command leaves open (a visible Settings…
+ * opening every settings page); every other command takes none. The rule and its exceptions are
+ * the "Ellipsis" entry of "This project" in
+ * `.claude/skills/knowledge-i18n-copy/SKILL.md`.
  */
 export const en = {
   "common.openIn": "Open in",
@@ -56,7 +58,7 @@ export const en = {
   "agents.noneFound": "No agent found on {pathVar}",
   "agents.noneAdded": "No agent added",
   "agents.addPrompt": "Add an agent to open a session.",
-  "agents.addAction": "Add agent…",
+  "agents.addAction": "Add agent",
   "agents.badge.notAdded": "Not added",
   "agents.badge.notInstalled": "Not installed",
   "agents.notInstalled": "{agent} (not installed)",
@@ -805,7 +807,7 @@ export const en = {
   "rail.quota.noEnabledHint": "Disabled accounts are not shown here.",
   "rail.quota.noneInstalled": "No agent available",
   "rail.quota.noneInstalledHint": "An agent's usage is shown once its command is found on your {pathVar}.",
-  "rail.quota.manage": "Manage accounts…",
+  "rail.quota.manage": "Manage accounts",
   "rail.settings": "Settings",
 
   "pane.resizeSidebar": "Resize sidebar",
@@ -941,7 +943,7 @@ export const en = {
   "sidebar.session.deleteItem": "Delete session {title}",
   "sidebar.session.delete": "Delete",
   "sidebar.session.switchAccount": "Switch account",
-  "sidebar.session.manageAccounts": "Manage accounts…",
+  "sidebar.session.manageAccounts": "Manage accounts",
   "sidebar.session.changeModel": "Change model",
   "sidebar.session.handOff": "Hand off",
   "sidebar.session.handOffNoTarget": "No other agent is available to take this session over.",
@@ -1029,7 +1031,7 @@ export const en = {
   "welcome.heading": "No consoles yet",
   "welcome.description": "A console holds the projects you work in and the sessions you run in them.",
   "welcome.newConsole": "New console",
-  "welcome.importConfiguration": "Import configuration…",
+  "welcome.importConfiguration": "Import configuration",
   "welcome.supportedTools": "Supported CLI tools",
   "welcome.toolInstalled": "Installed",
   "welcome.toolNotFound": "Not detected",
@@ -2639,7 +2641,7 @@ export const en = {
   "settings.permissions.announcement.accessibility.granted": "Accessibility is granted.",
   "settings.permissions.announcement.accessibility.notGranted": "Accessibility is not granted.",
   "settings.permissions.announcement.accessibility.refused": "Accessibility is not granted. Switch {appName} on in {systemSettings}.",
-  "settings.permissions.grant": "Grant…",
+  "settings.permissions.grant": "Grant",
   "settings.permissions.openSettings": "Open System Settings",
   "settings.permissions.openFailed": "{systemSettings} did not open. Open it yourself, choose {privacy}, then choose {pane}.",
   "settings.permissions.openFailedTitle": "Could not open {systemSettings}",
@@ -2653,11 +2655,11 @@ export const en = {
   "settings.configuration.export.label": "Export configuration",
   "settings.configuration.export.description":
     "Save consoles and projects, the application settings or the accounts as a file to import on another computer.",
-  "settings.configuration.export.button": "Export…",
+  "settings.configuration.export.button": "Export",
   "settings.configuration.import.label": "Import configuration",
   "settings.configuration.import.description":
     "Create consoles, projects and accounts, and apply application settings, from a file exported on another computer.",
-  "settings.configuration.import.button": "Import…",
+  "settings.configuration.import.button": "Import",
   "titleBar.processes.show": "Show processes panel",
   "titleBar.processes.hide": "Hide processes panel",
   "processes.allSessions": "All sessions",

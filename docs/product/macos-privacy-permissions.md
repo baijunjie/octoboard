@@ -16,8 +16,8 @@ One row per permission, naming it, what agents use it for and its current state.
 | State | What the row shows |
 |---|---|
 | Granted | A large **Granted** badge in the success colour, with a circled check before its label, at the row's end in place of a control; the row's description says nothing more about the state. |
-| Not granted | That it is not granted, with a **Grant…** button. Pressing it raises the system's permission prompt; this is the only thing in Octoboard that ever raises one. |
-| A request made in this window came back without the grant | That it is not granted and where to switch it on, with an **Open System Settings** button in place of Grant…, which opens that permission's own pane in System Settings. |
+| Not granted | That it is not granted, with a **Grant** button. Pressing it raises the system's permission prompt; this is the only thing in Octoboard that ever raises one. |
+| A request made in this window came back without the grant | That it is not granted and where to switch it on, with an **Open System Settings** button in place of the Grant button, which opens that permission's own pane in System Settings. |
 
 The wording of that last state differs per permission: for Screen Recording it says macOS will not ask a second time,
 which is what macOS does — a prompt the user refused is never raised again, and a later request is answered with a
@@ -30,20 +30,20 @@ macOS 15 and later shows it: Screen & System Audio Recording for Screen Recordin
 has only its acknowledgement button, with no remedy button and no request to report an issue (see "The error alert" in
 `docs/product/error-alerts.md`). Whether or not the pane opened, the row's grants are read again afterwards.
 
-When pressing **Grant…** fails to make the request at all, an error alert titled "Could not request the permission"
+When pressing **Grant** fails to make the request at all, an error alert titled "Could not request the permission"
 opens. It is an unexpected failure, not a refusal: its body says the request for that permission did not go through and
 to grant it by hand in System Settings — choose Privacy & Security, then the permission's pane as named above, adding
 Octoboard with the + button if it is not listed — followed by the request to report an issue, with **Report issue** and
 what the failed request reported under **Error details** (see "Recovery and unexpected errors" in
 `docs/product/error-alerts.md`). The button stops being pending and the row's grants are read again; since no refusal
-was recorded, the row keeps offering Grant… rather than the System Settings wording. A request macOS answers, granted or
-not, opens no alert.
+was recorded, the row keeps offering the Grant button rather than the System Settings wording. A request macOS answers,
+granted or not, opens no alert.
 
-**Accessibility is granted in System Settings, not from the prompt.** Its Grant… button raises the system's dialog
+**Accessibility is granted in System Settings, not from the prompt.** Its Grant button raises the system's dialog
 asking to let Octoboard control the computer, whose effect is that Octoboard appears in System Settings' own list, so
 the user only flips a switch there instead of adding the application by hand. The request reports back at once, while
 that dialog is still coming up, and normally reports the permission not granted, so the row moves to the System Settings
-wording straight after the press. Screen Recording's Grant… button instead waits for the user to answer the prompt, and
+wording straight after the press. Screen Recording's Grant button instead waits for the user to answer the prompt, and
 is marked pending until they have.
 
 **A change made outside Octoboard is picked up when the window comes back.** The grants are read again every time the
@@ -65,8 +65,8 @@ ordinary quit (see "Quitting" in `docs/product/application-lifecycle.md`).
 
 **Nothing about these permissions is stored.** Every row's state comes from macOS alone. macOS cannot tell a permission
 that was never asked for from one the user refused, so a permission that is not granted starts at not granted with the
-Grant… button, and the System Settings wording appears only after a request made in this window has come back without
-the grant. Switching to another Settings section and back puts the Grant… button back; pressing it brings the guidance
+Grant button, and the System Settings wording appears only after a request made in this window has come back without
+the grant. Switching to another Settings section and back puts the Grant button back; pressing it brings the guidance
 back with it — answered by macOS with a silent no for Screen Recording, and with that dialog again for Accessibility,
 which macOS keeps no refusal for.
 

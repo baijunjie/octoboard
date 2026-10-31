@@ -336,5 +336,5 @@ it("tells of each account's outcome in the result, with a note that the new ones
   expect(text).toContain("The agent Codex was added to your agents.");
   expect(text).toContain("The default account of Claude Code is now named as in the file.");
   expect(text).toContain("The new accounts are not logged in yet.");
-  expect(Array.from(document.body.querySelectorAll("button")).map((button) => button.textContent)).not.toContain("Log in…");
+  expect(Array.from(document.body.querySelectorAll("button")).map((button) => button.textContent)).not.toContain("Log in");
 });

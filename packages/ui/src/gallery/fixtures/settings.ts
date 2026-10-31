@@ -1197,7 +1197,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Add agent, reached from the terminal's empty state",
-    description: "The Add agent… button under \"No agent added\" opens Settings on Agent accounts with the Add agent dialog already in front: all three agents are Installed with their Add buttons, none is Added, and the section behind shows no tabs.",
+    description: "The Add agent button under \"No agent added\" opens Settings on Agent accounts with the Add agent dialog already in front: all three agents are Installed with their Add buttons, none is Added, and the section behind shows no tabs.",
     state: noneAddedState,
     steps: [
       (ui) => ui.press("Landing page"),

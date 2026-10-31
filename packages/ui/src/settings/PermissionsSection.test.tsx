@@ -100,9 +100,9 @@ it("offers nothing for a permission that is granted, and shows a success badge a
   expect(container.querySelector(".groove-t")!.textContent).not.toContain("Granted.");
 });
 
-it("offers Grant… for one that is not, and asks for it on press", async () => {
+it("offers Grant for one that is not, and asks for it on press", async () => {
   const { capability, container, buttons } = await mount({ statuses: [SCREEN_RECORDING_MISSING] });
-  expect(buttons()).toEqual(["Grant…"]);
+  expect(buttons()).toEqual(["Grant"]);
   await act(async () => {
     container.querySelector("button")!.click();
   });
@@ -174,7 +174,7 @@ it("leaves the button pressable and the row reading its status after a rejected 
   const reads = capability.status.mock.calls.length;
   await act(async () => container.querySelector("button")!.click());
   // Not refused (the row would offer System Settings instead), no longer pending, and read again.
-  expect(buttons()).toEqual(["Grant…"]);
+  expect(buttons()).toEqual(["Grant"]);
   expect(container.querySelector("button")!.hasAttribute("data-pending")).toBe(false);
   expect(container.textContent).toContain("Not granted.");
   expect(capability.status.mock.calls.length).toBe(reads + 1);

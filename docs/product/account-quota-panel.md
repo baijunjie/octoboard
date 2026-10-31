@@ -41,15 +41,15 @@ behaves" in `docs/product/labels-and-tooltips.md`), at its own width, with its c
   `docs/product/scrolling-surfaces.md`).
 - **With no agent that is added and installed** there are no tabs, and an empty state stands in their place. When some
   agent is installed, or not yet determined unavailable, but none of them is added, it carries the bot icon, is titled
-  "No agent added", with a line saying to add an agent to see its usage there, and offers an **Add agent…** button,
+  "No agent added", with a line saying to add an agent to see its usage there, and offers an **Add agent** button,
   which closes the panel and opens Settings on its Agent accounts section with the Add agent dialog in front (see
   "Opening and closing Settings" in `docs/product/settings.md`). When every agent has been determined unavailable, it
   carries the gauge icon, is titled "No agent available", with a line saying an agent's usage is shown once its command
   is found on the user's `PATH`, and offers nothing to press.
 - **With agents added and installed but no tab left**, every account of each being turned off, the empty state carries
   the gauge icon, is titled "No enabled account", with a line saying that disabled accounts are not shown there, and
-  offers a **Manage accounts…** button, which closes the panel and opens Settings on its Agent accounts section.
-- At the panel's foot, **Manage accounts…** closes the panel and opens Settings on its Agent accounts section (see
+  offers a **Manage accounts** button, which closes the panel and opens Settings on its Agent accounts section.
+- At the panel's foot, **Manage accounts** closes the panel and opens Settings on its Agent accounts section (see
   "Opening and closing Settings" in `docs/product/settings.md`). It is left out while the panel shows "No agent added"
   or "No enabled account", whose button already leads there.
 
@@ -65,8 +65,8 @@ at their point" in `docs/product/error-alerts.md`):
 - **A mouse click on the button opens nothing and pins nothing**: where there is a mouse there is the hover. A click on
   the button of a panel the mouse floated in leaves it as it is.
 - **A tap** (touch or pen), **assistive technology** and **Enter or Space** open it with keyboard focus moved into the
-  panel, onto the selected agent's tab, or, with no tab, onto the panel's first button (Add agent… or Manage
-  accounts…). A panel opened this way is modal, as a menu is: the window's shortcuts and F6 wait until it closes, and a
+  panel, onto the selected agent's tab, or, with no tab, onto the panel's first button (Add agent or Manage
+  accounts). A panel opened this way is modal, as a menu is: the window's shortcuts and F6 wait until it closes, and a
   tap on a floating panel turns it into this form.
 
 **While the mouse is on the button** and the button shows the selected session's account (see "The selected session's

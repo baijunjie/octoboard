@@ -851,8 +851,8 @@ it("lets Manage accounts recovery dismiss a stale editor and focus the real Sett
   });
   request.mockRejectedValueOnce(new DaemonRequestError("Account no longer exists.", "unknown_account", {}));
   await act(async () => buttonNamed(document, "Save")!.click());
-  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Manage accounts…");
-  act(() => buttonNamed(document, "Manage accounts…")!.click());
+  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Manage accounts");
+  act(() => buttonNamed(document, "Manage accounts")!.click());
   await act(async () => {
     for (let frame = 0; frame < 4; frame++) await new Promise((resolve) => requestAnimationFrame(resolve));
   });

@@ -34,7 +34,7 @@ confirmation has opened. Confirm stays available all the same, and pressing it t
 titled that the account could not be switched opens over the confirmation, which stays open. For a turned-off account
 it says that the account is disabled, so a session cannot use it, and to choose another account or turn it back on;
 for one found not logged in, that the account is not logged in, so a session cannot use it, and to choose another
-account or log in to it; either has a **Manage accounts…** button (see "Recovery and unexpected errors" in
+account or log in to it; either has a **Manage accounts** button (see "Recovery and unexpected errors" in
 `docs/product/error-alerts.md`). For a used-up account (see "A used-up account" in `docs/product/account-quotas.md`) it
 says that the account cannot be used for now, naming the quota it has reached and when it resets, and is a plain alert.
 Each is a known refusal, with no request to report an issue.
