@@ -7,7 +7,7 @@ import type { AccountLogin, AccountTrashOutcome, Session } from "../protocol";
 import { DaemonRequestError } from "../daemon-client";
 import { errorAlerts } from "../errorAlerts";
 import { ErrorAlerts } from "../dialogs/ErrorAlerts";
-import { trackMountRefocus } from "../dialogs/dialogTestSupport";
+import { framesAsTimers, settleFrames, trackMountRefocus } from "../dialogs/dialogTestSupport";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import { windowAttention } from "../components/windowTestSupport";
 import { SettingsDialog } from "./SettingsDialog";
@@ -614,6 +614,7 @@ describe("an account's actions menu", () => {
   });
 
   it.each(["account_directory_shared", "account_directory_protected", "account_directory_trash_failed"])("asks about the directory again once the alert for %s has closed, so its reason stands, is announced and takes focus off Remove", async (code) => {
+    framesAsTimers();
     const alerts = document.body.appendChild(document.createElement("div"));
     const alertsRoot = createRoot(alerts);
     onTestFinished(() => act(() => alertsRoot.unmount()));
@@ -629,6 +630,7 @@ describe("an account's actions menu", () => {
     }) as never);
     const { container } = mount();
     await openRemoval(container);
+    await trackMountRefocus()();
     await act(async () => trashOption().click());
     expect(inspections()).toBe(1);
     expect(removeHeld()).toBe(false);
@@ -644,7 +646,7 @@ describe("an account's actions menu", () => {
     await act(async () => buttonNamed(failure, "OK")!.click());
     expect(inspections()).toBe(2);
     // Focus goes back to Remove, which is still held (not disabled) while the question is out.
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+    await settleFrames();
     expect(document.activeElement).toBe(remove);
     vi.useFakeTimers();
     onTestFinished(() => { vi.useRealTimers(); });
