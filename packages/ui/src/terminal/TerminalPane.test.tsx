@@ -7,7 +7,7 @@ import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "../errorAlerts";
 import type { PlatformAdapter } from "../platform";
-import { sessionOf } from "../gallery/fixtures/builders";
+import { sessionOf } from "../fixtures/builders";
 import { CATALOGS, format } from "../i18n/catalog";
 import { currentLanguage, setLanguage } from "../i18n/language";
 import type { Language } from "../i18n/languages";

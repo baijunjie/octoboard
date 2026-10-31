@@ -73,7 +73,7 @@
 @import "./viewer/markdown-github.css";
 @import "./viewer/markdown-newsprint.css";
 @import "./viewer/markdown-latex.css";
-@import "./terminal/sessionHistory.css";
+@import "./terminal/history/sessionHistory.css";
 
 /* WebKit insets a focused input's outline by 2px. Keep HeroUI's invalid outline against its
    focus ring so the two draw as one edge. */
@@ -352,7 +352,7 @@ html {
 
   /* Where the connection banner's strip is stacked, and where a dialog's backdrop is stacked under
      it: the strip has to be above the backdrop, which covers the whole viewport, so the Retry it
-     offers can be pressed while a dialog is open (`components/ConnectionBanner.tsx`). It is the
+     offers can be pressed while a dialog is open (`shell/ConnectionBanner.tsx`). It is the
      backdrop that gives way rather than the strip that rises, so the strip stays level with
      React Aria's own popover-level overlays (menus, selects, tooltips, all at
      `--z-index-overlay`), which the portal order then draws above it: a popover reaching the
@@ -880,7 +880,7 @@ html {
    dialog's own bottom edge, where it would swallow every press that landed there (React Aria ignores a press inside
    a top layer, so such a press does not even dismiss the dialog). The container keeps its padding and HeroUI's own
    auto margins still centre the dialog in what is left, so a dialog that fills the window takes the strip out of
-   its height too (`dialogs/Dialog.tsx`, `settings/SettingsDialog.tsx`) rather than overflowing. Unlayered, so it
+   its height too (`components/dialog/Dialog.tsx`, `settings/SettingsDialog.tsx`) rather than overflowing. Unlayered, so it
    wins over HeroUI's layered rule. Every modal here scrolls inside its own dialog; the one HeroUI variant this
    would fight, `--scroll-outside`, grows with its content from a `min-height` instead and is left out. Being
    unlayered the rule also wins over a utility a caller puts on the container, so the height and the anchoring are
@@ -997,7 +997,7 @@ html {
 
 /* HeroUI's toast region sits 1rem above the window bottom; lifted by the bottom chrome, it floats
    over the content above the connection banner instead of over the banner, and while a dialog whose
-   footer reaches this corner is open, above that footer (`dialogs/useToastClearance.ts`), whose
+   footer reaches this corner is open, above that footer (`components/dialog/useToastClearance.ts`), whose
    buttons would otherwise sit under it. Unlayered, so it wins over HeroUI's layered rule. */
 .toast-region--bottom-end {
   bottom: calc(1rem + max(var(--bottom-chrome-height), var(--dialog-footer-clearance, 0px)));
@@ -1300,7 +1300,7 @@ html.pane-resizing * {
   background-size: 16px 16px;
 }
 
-/* A vertical fade that also scrolls sideways (`components/scrollFade.tsx` sets the attribute while it
+/* A vertical fade that also scrolls sideways (`components/scroll/scrollFade.tsx` sets the attribute while it
    does). HeroUI's mask keeps an opaque strip along the right edge for the vertical scrollbar and
    nothing along the bottom, so a horizontal scrollbar sits inside the fade's band and is dimmed with
    the content (measured in Safari with always-shown scroll bars: 34% opacity 3px up from the bottom).

@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { agentOpeningChoice, choiceChangingSharing, choiceDisabled, choiceExhaustion, choiceGroups, choiceSignedOut, choiceKey, currentChoice, findEntry, openingChoice, type AccountChoice, type ChoiceGroup } from "../accountChoices";
 import { AGENT_LABEL, agentsInListingOrder, defaultAccountName, inheritedSessionLaunch, launchWithOverrides, pickableAgents, projectSessionAgent } from "../agents";
-import { agentIconPickerOptions } from "../components/AgentIcon";
+import { agentIconPickerOptions } from "../components/icons/AgentIcon";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { Agent, Console, Project } from "../protocol";

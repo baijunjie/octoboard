@@ -1,7 +1,7 @@
 import { noAgentState, type NoAgentReason } from "../agents";
 import type { NewSessionBinding } from "../dialogs/dialogRequest";
 import type { Agent, AgentAvailability, Console, Project, Session } from "../protocol";
-import { consoleSessionAbove } from "../sidebar/order";
+import { consoleSessionAbove } from "../sessions/order";
 import type { FocusTarget } from "../sidebar/types";
 
 export type TerminalEmptyState =

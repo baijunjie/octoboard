@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import { canGo, EMPTY_HISTORY, go, HISTORY_LIMIT, isLive, type Location, type NavigationHistory, push, replaceCurrent } from "./history";
 
 const at = (session: string): Location => ({ console: "c-1", session });

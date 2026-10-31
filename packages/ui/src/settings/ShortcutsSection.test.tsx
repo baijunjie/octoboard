@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 
 import { LanguageProvider } from "../i18n/react";
 import type { PlatformAdapter } from "../platform";

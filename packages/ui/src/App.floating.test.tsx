@@ -3,9 +3,9 @@ import { act } from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { App } from "./App";
-import { PanelHeader } from "./components/PanelHeader";
-import { mountForTooltip, openTooltip } from "./components/tooltipTestSupport";
-import { ALL_AGENTS, consoleOf, projectOf, sessionOf, shellTerminalOf, snapshotState } from "./gallery/fixtures/builders";
+import { PanelHeader } from "./components/panel/PanelHeader";
+import { mountForTooltip, openTooltip } from "./components/hint/tooltipTestSupport";
+import { ALL_AGENTS, consoleOf, projectOf, sessionOf, shellTerminalOf, snapshotState } from "./fixtures/builders";
 import { isolate } from "./i18n/isolate";
 import { touchEvent } from "./layout/touchTestSupport";
 import { defaultStack } from "./panels/stackState";
@@ -19,7 +19,7 @@ import { ThemeProvider } from "./theme";
 // Each test mounts the whole App, which a machine under load can take longer than the default 5s for.
 vi.setConfig({ testTimeout: 20_000 });
 
-vi.mock("./browser/LazyProjectBrowser", () => ({
+vi.mock("./project-browser/LazyProjectBrowser", () => ({
   LazyProjectBrowser: ({ project }: { project: Project }) => (
     <>
       <PanelHeader title={project.name} />
@@ -28,7 +28,7 @@ vi.mock("./browser/LazyProjectBrowser", () => ({
   ),
 }));
 // The shell's text input stands in for a terminal view, inside the element that marks a shell terminal.
-vi.mock("./terminal/ShellTerminalPanel", () => ({
+vi.mock("./terminal/shell/ShellTerminalPanel", () => ({
   ShellTerminalPanel: () => (
     <>
       <PanelHeader title="Terminal" />
@@ -38,8 +38,8 @@ vi.mock("./terminal/ShellTerminalPanel", () => ({
     </>
   ),
 }));
-vi.mock("./terminal/shellTerminals", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./terminal/shellTerminals")>();
+vi.mock("./terminal/shell/shellTerminals", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./terminal/shell/shellTerminals")>();
   return { ...actual, startShellTerminal: vi.fn(async () => undefined) };
 });
 vi.mock("./report/ReportPanel", () => ({ ReportPanel: () => <PanelHeader title="Report" /> }));

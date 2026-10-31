@@ -1,9 +1,9 @@
 import { useId } from "react";
 
-import { DaemonErrorMessage, ShellTimeoutCommand } from "./components/DaemonErrorMessage";
-import { DiagnosticBlock } from "./components/DiagnosticBlock";
-import { RecoveryGuidance } from "./components/ErrorGuidance";
-import { InlineReference } from "./components/InlineReference";
+import { DaemonErrorMessage, ShellTimeoutCommand } from "./components/alerts/DaemonErrorMessage";
+import { DiagnosticBlock } from "./components/alerts/DiagnosticBlock";
+import { RecoveryGuidance } from "./components/alerts/ErrorGuidance";
+import { InlineReference } from "./components/text/InlineReference";
 import { messageCode, RECOVERY_CODES } from "./daemonMessage";
 import { errorAlerts } from "./errorAlerts";
 import { DaemonRequestError } from "./daemon-client";

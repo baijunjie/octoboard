@@ -1,7 +1,7 @@
 import React from "react";
 
-import { Button } from "../components/Button";
-import { InlineReference } from "../components/InlineReference";
+import { Button } from "../components/controls/Button";
+import { InlineReference } from "../components/text/InlineReference";
 import { ActionableError } from "../actionableError";
 import { Message, useT } from "../i18n/react";
 import { useNotificationPermission } from "../lifecycle/useNotificationPermission";

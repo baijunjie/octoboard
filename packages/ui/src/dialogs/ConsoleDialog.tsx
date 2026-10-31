@@ -8,8 +8,8 @@ import {
   selectableAgent,
 } from "../agents";
 import { imageToAvatar } from "../avatarImage";
-import { focusOpenDialog } from "../components/regionFocus";
-import { AgentIcon, agentIconPickerOptions } from "../components/AgentIcon";
+import { focusOpenDialog } from "../components/focus/regionFocus";
+import { AgentIcon, agentIconPickerOptions } from "../components/icons/AgentIcon";
 import { useT } from "../i18n/react";
 import type { Agent, Console } from "../protocol";
 import { SettingsDialog } from "../settings/SettingsDialog";
@@ -17,12 +17,12 @@ import { useDaemon, useDaemonStore } from "../store";
 import { AvatarField } from "./AvatarField";
 import { ConsoleAccountsField } from "./ConsoleAccountsField";
 import { type ConsoleAgentSettings, ConsoleLaunchFields } from "./ConsoleLaunchFields";
-import { Dialog, useDialogAction, useSubmitValidation } from "./Dialog";
-import { GroupRow, GroupRows } from "./GroupRows";
-import { LabelledGroup } from "./LabelledGroup";
-import { OptionSelect } from "./OptionSelect";
-import { TextAreaInput } from "./TextAreaInput";
-import { TextInput } from "./TextInput";
+import { Dialog, useDialogAction, useSubmitValidation } from "../components/dialog/Dialog";
+import { GroupRow, GroupRows } from "../components/form/GroupRows";
+import { LabelledGroup } from "../components/form/LabelledGroup";
+import { OptionSelect } from "../components/form/OptionSelect";
+import { TextAreaInput } from "../components/form/TextAreaInput";
+import { TextInput } from "../components/form/TextInput";
 
 export function ConsoleDialog({
   console: editing,

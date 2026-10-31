@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "../errorAlerts";
-import { sessionOf } from "../gallery/fixtures/builders";
+import { sessionOf } from "../fixtures/builders";
 import type { ExitCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import type { SessionStatus, ShellTerminal } from "../protocol";

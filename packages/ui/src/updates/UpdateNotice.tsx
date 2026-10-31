@@ -2,11 +2,11 @@ import { Label, ProgressBar } from "@heroui/react";
 import { ChevronDown, Download, X } from "lucide-react";
 import React, { useId, useState } from "react";
 
-import { AttendedStatusAnnouncer } from "../components/AttendedStatusAnnouncer";
-import { Button } from "../components/Button";
-import { FadedScroller, useFadeRegion } from "../components/scrollFade";
-import { TitledControl } from "../components/TitledControl";
-import { useBottomStrip } from "../components/useBottomStrip";
+import { AttendedStatusAnnouncer } from "../components/announce/AttendedStatusAnnouncer";
+import { Button } from "../components/controls/Button";
+import { FadedScroller, useFadeRegion } from "../components/scroll/scrollFade";
+import { TitledControl } from "../components/hint/TitledControl";
+import { useBottomStrip } from "../components/panel/useBottomStrip";
 import { isolate } from "../i18n/isolate";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { updateNoticeKind } from "./noticeKind";

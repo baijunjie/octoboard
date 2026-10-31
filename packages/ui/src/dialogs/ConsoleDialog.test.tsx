@@ -3,7 +3,7 @@ import { act } from "react";
 import { expect, it, vi } from "vitest";
 
 import { errorAlerts } from "../errorAlerts";
-import { consoleOf } from "../gallery/fixtures/builders";
+import { consoleOf } from "../fixtures/builders";
 import { imageToAvatar } from "../avatarImage";
 import { work, personal, render, buttons, click, clickButton, choose, sent, type, openAdvanced, pickerNamed, clearButton, stored } from "./consoleDialogTestSupport";
 

@@ -2,7 +2,7 @@ import React from "react";
 
 import { errorPresentation } from "../errorPresentation";
 import { useT } from "../i18n/react";
-import { ordersByStatus } from "../sidebar/order";
+import { ordersByStatus } from "../sessions/order";
 import { useDaemon, useDaemonStore } from "../store";
 import { SwitchSettingRow } from "./SettingRow";
 

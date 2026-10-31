@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { accountOf, consoleOf, sessionOf } from "../gallery/fixtures/builders";
+import { accountOf, consoleOf, sessionOf } from "../fixtures/builders";
 import type { AccountQuota } from "../protocol";
 import type { PlatformAdapter, StatusItemCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";

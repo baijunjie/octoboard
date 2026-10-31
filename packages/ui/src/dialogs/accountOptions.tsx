@@ -1,7 +1,7 @@
 import { accountDisabledPickable, accountDisabledUnavailable, accountSignedOutUnavailable, type ChoiceEntry } from "../accountChoices";
 import type { Translate } from "../i18n/catalog";
 import { accountUsage } from "../quota/accountUsage";
-import type { Option } from "./OptionSelect";
+import type { Option } from "../components/form/OptionSelect";
 
 /** An account's entry in a picker: its name behind a compact usage bar. One that is turned off, is not logged in,
  * has its quota used up, or has a sharing change running is shown but cannot be chosen. The first two say why in short

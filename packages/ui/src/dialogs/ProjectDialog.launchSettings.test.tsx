@@ -2,8 +2,8 @@
 import { act } from "react";
 import { expect, it } from "vitest";
 
-import { press } from "../components/detailsTestSupport";
-import { projectOf } from "../gallery/fixtures/builders";
+import { press } from "../components/alerts/detailsTestSupport";
+import { projectOf } from "../fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import type { Agent, ModelsUnavailable, ProjectAccount } from "../protocol";
 import { type Pending, work, personal, render, input, type, settle, click, answer, chooseSource, buttons, buttonText, accountPicker, pickerNamed, sentOf, fillDirectory, stored } from "./projectDialogTestSupport";

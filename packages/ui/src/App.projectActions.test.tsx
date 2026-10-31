@@ -5,14 +5,14 @@ import * as reactAria from "react-aria";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { DaemonRequestError } from "./daemon-client";
-import { ErrorAlerts } from "./dialogs/ErrorAlerts";
+import { ErrorAlerts } from "./shell/ErrorAlerts";
 import { errorAlerts } from "./errorAlerts";
 import { App } from "./App";
-import { setProjectBrowserMode, useProjectBrowserState } from "./browser/browserState";
-import { AFTER_FOCUS_MOVE_DELAY_MS } from "./components/StatusAnnouncer";
-import { mountForTooltip } from "./components/tooltipTestSupport";
-import { windowAttention } from "./components/windowTestSupport";
-import { consoleOf, projectOf, sessionOf, snapshotState } from "./gallery/fixtures/builders";
+import { setProjectBrowserMode, useProjectBrowserState } from "./project-browser/browserState";
+import { AFTER_FOCUS_MOVE_DELAY_MS, FIRST_WRITE_DELAY_MS } from "./components/announce/StatusAnnouncer";
+import { mountForTooltip } from "./components/hint/tooltipTestSupport";
+import { windowAttention } from "./components/announce/windowTestSupport";
+import { accountOf, consoleOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
 import { isolate } from "./i18n/isolate";
 import { PlatformProvider } from "./platform/react";
 import type { PlatformAdapter } from "./platform";
@@ -25,18 +25,21 @@ import { FileViewer } from "./viewer/FileViewer";
 // Each test mounts the whole App, which a machine under load can take longer than the default 5s for.
 vi.setConfig({ testTimeout: 20_000 });
 
+/** Waits out, on the real clock, the first write delay the window's status region armed when the app mounted. */
+const firstWriteDelayPassed = () => act(async () => new Promise((resolve) => setTimeout(resolve, FIRST_WRITE_DELAY_MS + 50)));
+
 vi.mock("react-aria", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-aria")>();
   return { ...actual, setInteractionModality: vi.fn(actual.setInteractionModality) };
 });
-vi.mock("./browser/LazyProjectBrowser", () => ({
+vi.mock("./project-browser/LazyProjectBrowser", () => ({
   LazyProjectBrowser: ({ project }: { project: Project }) => {
     const state = useProjectBrowserState(project.id);
     return <div data-browser={project.id} data-mode={state.mode} />;
   },
 }));
 // The terminal view needs a real browser; a project's shells are only listed as tabs here.
-vi.mock("./terminal/ShellTerminalView", () => ({ ShellTerminalView: () => null }));
+vi.mock("./terminal/shell/ShellTerminalView", () => ({ ShellTerminalView: () => null }));
 vi.mock("./terminal/TerminalController", () => ({
   TerminalController: class {
     mount() {}
@@ -626,6 +629,9 @@ async function pickSonnetInChangeModel(answer: (body: { type: string }) => unkno
     button.getAttribute("aria-labelledby")?.split(" ").some((id) => document.getElementById(id)?.textContent === "Model"))!;
   await act(async () => model.click());
   await act(async () => Array.from(document.querySelectorAll<HTMLElement>('[role="option"]')).find((option) => option.textContent === "Sonnet")!.click());
+  // The window's status region armed its first write delay (`StatusAnnouncer`) on the real clock when the app
+  // mounted; until it has passed, the region writes nothing, however far the faked clock below is advanced.
+  await firstWriteDelayPassed();
   // From here only the announcement's waits are timed by the test.
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   onTestFinished(() => { vi.useRealTimers(); });
@@ -694,6 +700,28 @@ it("holds an announcement while a modal is open over the window", async () => {
   await passTime(AFTER_FOCUS_MOVE_DELAY_MS + 100);
   expect(said()).toContain("will use its new model settings when it is resumed");
   expect(daemon.toastError).not.toHaveBeenCalled();
+});
+
+it("announces a batch of account switches once its last switch is done", async () => {
+  windowAttention();
+  const { daemon } = mountApp(false, undefined, true);
+  await act(async () => daemon.store.setState((state) => ({ settings: { ...state.settings, accounts: [accountOf("a-work", "claude", "Work", "/Users/dev/.claude-work")] } })));
+  await press(`Actions for session ${isolate("Fix bug")}`);
+  await press("Switch account");
+  const work = Array.from(document.querySelectorAll<HTMLElement>("[role=menuitemradio], [role=menuitem]")).find((item) => controlName(item) === "Work");
+  expect(work).toBeDefined();
+  await act(async () => work!.click());
+  // The window's status region armed its first write delay on the real clock when the app mounted; it runs out first.
+  await firstWriteDelayPassed();
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  onTestFinished(() => { vi.useRealTimers(); });
+  await act(async () => Array.from(document.querySelectorAll<HTMLButtonElement>("[role=alertdialog] button, [role=dialog] button")).find((button) => button.textContent === "Switch")!.click());
+  expect(sentOf(daemon, "switch_session_account")).toEqual([[
+    { type: "switch_session_account", session: "s-archive", account: "a-work", terminal_appearance: expect.stringMatching(/^(light|dark)$/) },
+  ]]);
+  expect(said()).toBeUndefined();
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS + 100);
+  expect(said()).toBe(`1 session switched to ${isolate("Work")}`);
 });
 
 it("announces nothing when the session had the model settings already", async () => {

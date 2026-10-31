@@ -1,7 +1,7 @@
-import { type Ui } from "../interact";
+import { type Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
-import type { FixtureGit } from "./changeFixtures";
-import { SAMPLE, consoleOf, gitStatusOf, projectOf, sessionOf, snapshotState } from "./builders";
+import type { FixtureGit } from "../../fixtures/changeFixtures";
+import { SAMPLE, consoleOf, gitStatusOf, projectOf, sessionOf, snapshotState } from "../../fixtures/builders";
 import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./restore";
 
 const GROUP = "Branch badges";

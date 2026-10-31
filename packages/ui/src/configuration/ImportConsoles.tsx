@@ -1,11 +1,11 @@
 import { Info, CircleCheck, CloudDownload, type LucideIcon } from "lucide-react";
 import React, { useId } from "react";
 
-import { Button } from "../components/Button";
-import { MarkLineBox } from "../components/MarkLineBox";
-import { StatusMark } from "../components/StatusMark";
-import { LabelledGroup } from "../dialogs/LabelledGroup";
-import { OptionSelect } from "../dialogs/OptionSelect";
+import { Button } from "../components/controls/Button";
+import { MarkLineBox } from "../components/status/MarkLineBox";
+import { StatusMark } from "../components/status/StatusMark";
+import { LabelledGroup } from "../components/form/LabelledGroup";
+import { OptionSelect } from "../components/form/OptionSelect";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";

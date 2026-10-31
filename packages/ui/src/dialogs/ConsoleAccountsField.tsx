@@ -1,20 +1,20 @@
 import { KeyRound } from "lucide-react";
 import React, { useId, useRef, useState } from "react";
 
-import { Button } from "../components/Button";
+import { Button } from "../components/controls/Button";
 import { choiceGroups, choiceKey, findEntry, storedAccount } from "../accountChoices";
 import { AGENT_LABEL, agentChoiceBadge, defaultAccountName, isAgentPickable, isDefaultAccountRenamed, listedPickerAgents } from "../agents";
-import { AgentIcon } from "../components/AgentIcon";
-import { FadeOverflow } from "../components/FadeOverflow";
-import { StatusBadge } from "../components/StatusBadge";
-import { TitledControl } from "../components/TitledControl";
-import { useFocusHandoff } from "../components/useFocusHandoff";
+import { AgentIcon } from "../components/icons/AgentIcon";
+import { FadeOverflow } from "../components/text/FadeOverflow";
+import { StatusBadge } from "../components/status/StatusBadge";
+import { TitledControl } from "../components/hint/TitledControl";
+import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { useT } from "../i18n/react";
 import type { Agent, PerAgent } from "../protocol";
 import { useDaemonStore } from "../store";
 import { markDisabledPickable } from "./accountOptions";
-import { LabelledGroup } from "./LabelledGroup";
-import { OptionSelect } from "./OptionSelect";
+import { LabelledGroup } from "../components/form/LabelledGroup";
+import { OptionSelect } from "../components/form/OptionSelect";
 
 /**
  * The account a console's sessions use, for each agent that can be used: one row per added agent, in the

@@ -1,4 +1,4 @@
-import type { FixtureError } from "./projectFiles";
+import type { FixtureError } from "../../fixtures/sampleFiles";
 
 /** The daemon preserves each literal separately so the UI can present the command as code. */
 export const SHELL_TIMEOUT: FixtureError = {

@@ -49,7 +49,7 @@ built `packages/ui/dist/assets/*.css` for it.
 `packages/ui` merges no classes (there is no `tailwind-merge`). A component of the project's own that appends the
 caller's `className` to its own utilities emits both, and where both set the same property the one Tailwind emits later
 in its stylesheet wins, whatever their order in the class string: `px-0` passed to `StatusBadge`
-(`packages/ui/src/components/StatusBadge.tsx`), whose own class is `px-2`, loses with nothing to show it. The habit
+(`packages/ui/src/components/status/StatusBadge.tsx`), whose own class is `px-2`, loses with nothing to show it. The habit
 comes from HeroUI, where a `className` does win, only because `packages/ui/src/style.css` imports HeroUI's sheets into
 the `components` layer, which Tailwind's `utilities` layer outranks. So to change a property such a component sets
 itself, add a prop to it that picks the value (as `StatusBadge`'s `single` drops the side padding), rather than passing
@@ -137,7 +137,7 @@ When a deferred focus move never lands under virtual modality, find the stuck tr
 `transitionrun` / `transitionend` / `transitioncancel` document-wide against the gallery. jsdom runs no transitions,
 ignores rules inside `@layer` and does not expand the `transition` shorthand in computed style, so a test asserts the
 computed `transition-property` with the section collapsed and expanded, as
-`packages/ui/src/dialogs/AdvancedSection.test.tsx` does.
+`packages/ui/src/components/form/AdvancedSection.test.tsx` does.
 
 ## A line height given as a ratio must not come a hair under a whole pixel
 
@@ -192,7 +192,7 @@ In `packages/ui`, a line that divides a pane's parts or rows is a groove utility
 (`groove-b` and its siblings), never `border-b border-separator`, a bare `border-*` or a `divide-*`. `--separator` is
 left to HeroUI's own components and to the few lines the "The window chrome and the content panel" section of
 `docs/product/window-layout.md` lists as not grooves, and to a frame a composite puts around a region of its own (the
-list in `packages/ui/src/dialogs/DirectoryPicker.tsx`, the panel in `packages/ui/src/dialogs/ConsoleLaunchFields.tsx`):
+list in `packages/ui/src/components/dialog/DirectoryPicker.tsx`, the panel in `packages/ui/src/dialogs/ConsoleLaunchFields.tsx`):
 neither a divider nor a card outline, it keeps `border border-separator`. A card takes no decorative outline border, and
 its shadow depends on whether it floats:
 

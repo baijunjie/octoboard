@@ -2,9 +2,9 @@
 import { act } from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { accountOf, consoleOf } from "../gallery/fixtures/builders";
+import { accountOf, consoleOf } from "../fixtures/builders";
 import type { Account } from "../protocol";
-import { trackMountRefocus } from "./dialogTestSupport";
+import { trackMountRefocus } from "../components/dialog/dialogTestSupport";
 import { work, lastStore, render, buttons, click, clickButton, choose, sent, asked, type, openAdvanced, clickTab, groupPicker, optionTexts, picker, tabNames } from "./consoleDialogTestSupport";
 
 const codexWork: Account = accountOf("a-codex", "codex", "Codex work", "/home/dev/.codex-work");

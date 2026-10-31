@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-import { useLatest } from "../components/useLatest";
+import { useLatest } from "../components/hooks/useLatest";
 
 /** What the user can choose for themselves in the press that makes a console current. */
 export type Choice = "selection" | "owner";

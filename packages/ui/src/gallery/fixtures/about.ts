@@ -1,7 +1,7 @@
 import type { LicensedPackage, ThirdPartyLicenses } from "../../about/thirdPartyLicenses";
-import { describing, type Matcher } from "../interact";
-import type { Scenario, Step } from "../scenario";
-import { SAMPLE, snapshotState } from "./builders";
+import { describing, type Matcher, type Step } from "../../fixtures/interact";
+import type { Scenario } from "../scenario";
+import { SAMPLE, snapshotState } from "../../fixtures/builders";
 
 const GROUP = "Settings";
 

@@ -10,7 +10,7 @@ message catalog. The routes and where each takes the title:
   `openPathTarget`'s `toastError` is: the third argument.
 - `reportError(error, session?, recovery?, content?, title?)` (`packages/ui/src/reportError.tsx`): the fifth argument.
 - `errorAlerts.report({ ... })` called directly: its `title`.
-- `useDialogAction(resetKey, errorTitle)` (`packages/ui/src/dialogs/Dialog.tsx`), and the `errorTitle` prop of
+- `useDialogAction(resetKey, errorTitle)` (`packages/ui/src/components/dialog/Dialog.tsx`), and the `errorTitle` prop of
   `ConfirmDialog` and `RenameDialog`: required, so the type check catches a missing one.
 
 The first three take the title as optional, so leaving it out there fails no type check and no test: the alert is then

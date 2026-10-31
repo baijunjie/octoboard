@@ -1,6 +1,6 @@
 import type { HistoryMessage, Session, SessionContext } from "../../protocol";
 import type { Scenario } from "../scenario";
-import { consoleOf, contextOf, minutesAgo, projectOf, sessionOf, snapshotState } from "./builders";
+import { consoleOf, contextOf, minutesAgo, projectOf, sessionOf, snapshotState } from "../../fixtures/builders";
 
 const GROUP = "Terminal";
 

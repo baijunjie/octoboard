@@ -3,8 +3,8 @@ import { act } from "react";
 import { setInteractionModality } from "react-aria";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
-import { consoleOf } from "../gallery/fixtures/builders";
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
+import { consoleOf } from "../fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import type { SavedConfigurationFile } from "../platform";
 import type { ConfigurationDocument, Event, RequestBody } from "../protocol";

@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 
-import { AnchoredTooltip } from "../components/AnchoredTooltip";
-import { ValueTooltipText } from "../components/ValueTooltipText";
+import { AnchoredTooltip } from "../components/hint/AnchoredTooltip";
+import { ValueTooltipText } from "../components/hint/ValueTooltipText";
 import { TERMINAL_FONT_FAMILY } from "./TerminalController";
-import type { HoveredTerminalLink } from "./terminalLinks";
+import type { HoveredTerminalLink } from "./links/terminalLinks";
 
 /**
  * Tells the target of the OSC 8 hyperlink the pointer is on, which its visible text may differ

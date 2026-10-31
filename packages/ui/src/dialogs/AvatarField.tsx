@@ -1,9 +1,9 @@
 import { ImageUp, X } from "lucide-react";
 import React, { useRef } from "react";
 
-import { Button } from "../components/Button";
-import { handFocusOff } from "../components/handFocusOff";
-import { TitledControl } from "../components/TitledControl";
+import { Button } from "../components/controls/Button";
+import { handFocusOff } from "../components/focus/handFocusOff";
+import { TitledControl } from "../components/hint/TitledControl";
 import { useT } from "../i18n/react";
 import type { Console } from "../protocol";
 

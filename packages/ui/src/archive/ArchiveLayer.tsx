@@ -2,7 +2,7 @@ import React, { useLayoutEffect, useRef, useState } from "react";
 
 import { onReducedMotion, prefersReducedMotion } from "../reducedMotion";
 import { ringForAutomaticFocus } from "../touchInput";
-import { useLatest } from "../components/useLatest";
+import { useLatest } from "../components/hooks/useLatest";
 import { ArchiveView } from "./ArchiveView";
 
 type View = React.ComponentProps<typeof ArchiveView>;

@@ -10,7 +10,7 @@ import type { Account, AccountQuota, Agent, AgentAvailability, Console, QuotaWin
 import { exhaustedQuotaWindow, isNotLoggedIn, orderedQuotaWindows, planLabel, quotaResetsIn, quotaWindowLabel, remainingPercentAt, twoLayerWindows, usageBarWindows, type QuotaNaming } from "../quota/quotaFormat";
 import { formatRelativeTime, isJustNow } from "../relativeTime";
 import { accountQuotaLabel } from "../quota/sessionQuota";
-import { accountQuotaOf } from "../quota/accountQuotaOf";
+import { accountQuotaOf } from "../accountQuotaOf";
 import { agentIconKey } from "./statusItemIconKeys";
 
 const MINUTE = 60_000;

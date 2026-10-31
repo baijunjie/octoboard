@@ -10,6 +10,54 @@ const javascript = ["**/*.{js,mjs,cjs}"];
 const typescript = ["**/*.{ts,tsx,mts,cts}", "**/*.vue"];
 const source = [...javascript, ...typescript];
 
+// ESLint replaces a rule's options with those of the last block that matches a file and sets it, so every UI
+// block below restates the Alert restrictions through `uiImports`.
+const ALERT_MESSAGE = "Use ErrorAlert, or FailureAlert or ChoiceWarning built on it, which require a title.";
+const ALERT_PATHS = [
+  {
+    name: "@heroui/react",
+    importNames: ["Alert", "AlertRoot", "AlertIndicator", "AlertContent", "AlertTitle", "AlertDescription"],
+    message: ALERT_MESSAGE,
+  },
+  { name: "@heroui/react/alert", message: ALERT_MESSAGE },
+];
+const ALERT_FRAME = {
+  group: ["**/AlertFrame"],
+  message: "AlertFrame draws an Alert with no title; use ErrorAlert, FailureAlert or ChoiceWarning.",
+};
+const uiImports = (patterns = [], { alerts = true } = {}) =>
+  ["error", alerts ? { paths: ALERT_PATHS, patterns: [ALERT_FRAME, ...patterns] } : { patterns }];
+
+const UI_SRC = "packages/ui/src";
+const UI_TESTS = ["**/*.test.{ts,tsx}", "**/*{TestSupport,testSupport,TestState}.{ts,tsx}"];
+// The rule sees only the import's text, not the file it resolves to, so each block is for files at one depth
+// below src/: there exactly `depth` steps of `../` reach src/, and the name after them is a top-level directory
+// (followed by `/`) or a file at src/'s root. A name after fewer steps is a sibling inside the same directory,
+// such as `../shell/` from `terminal/links/`, which a gitignore pattern like `**/shell/**` would also match.
+// src/store/ is a module with an index, so it counts as a root file.
+const DEPTHS = [1, 2, 3, 4];
+const below = (dir, depth) => `${UI_SRC}/${dir}/${"*/".repeat(depth - 1)}*.{ts,tsx}`;
+const onlyInto = (depth, allowed, message) =>
+  ({ regex: `^(?:\\.\\./){${depth}}(?!(?:${allowed.join("|")})/)[^/]+/`, message });
+const notInto = (depth, denied, message) =>
+  ({ regex: `^(?:\\.\\./){${depth}}(?:${denied.join("|")})(?:/|$)`, message });
+/** Outside itself, `dir` imports only the `allowed` top-level directories and files at src/'s root. */
+const layer = (dir, allowed, message) => DEPTHS.map((depth) => ({
+  files: [below(dir, depth)],
+  ignores: UI_TESTS,
+  rules: { "no-restricted-imports": uiImports([onlyInto(depth, allowed, message)]) },
+}));
+const LEAF = ["i18n", "platform", "sessions"];
+const LEAF_MESSAGE = "components/ is the leaf layer: outside itself it imports only i18n/, platform/, sessions/ and files at src/'s root.";
+const SHELL_MESSAGE = "Only the files at src/'s root and App's hooks put the window shell together; nothing else below src/ imports shell/.";
+const APP_MESSAGE = "app/ holds App's own hooks: only App.tsx and the tests import it.";
+// Case-sensitive, as the patterns match case-insensitively by default and `./App` is not app/.
+const APP_ROOT_IMPORT = { regex: "^\\./app(?:/|$)", message: APP_MESSAGE, caseSensitive: true };
+const PRODUCTION_MESSAGE = "Production code does not import fixtures/ or gallery/: they are the runtime of the gallery and the website preview.";
+const GALLERY_MESSAGE = "gallery/ is the dev-only gallery: the website preview and fixtures/ depend on nothing in it.";
+const ROOT_PRODUCTION_IMPORT = { regex: "^\\./(?:fixtures|gallery)(?:/|$)", message: PRODUCTION_MESSAGE };
+const notIntoApp = (depth) => ({ ...notInto(depth, ["app"], APP_MESSAGE), caseSensitive: true });
+
 export default defineConfig(
   globalIgnores([
     "**/node_modules/**",
@@ -78,34 +126,74 @@ export default defineConfig(
   },
   {
     files: ["packages/ui/**/*.{ts,tsx}"],
-    rules: {
-      // Every Alert has a title. ErrorAlert (exempted in the next block, with AlertFrame) requires it in its types.
-      "no-restricted-imports": ["error", {
-        paths: [
-          {
-            name: "@heroui/react",
-            importNames: ["Alert", "AlertRoot", "AlertIndicator", "AlertContent", "AlertTitle", "AlertDescription"],
-            message: "Use ErrorAlert, or FailureAlert or ChoiceWarning built on it, which require a title.",
-          },
-          {
-            name: "@heroui/react/alert",
-            message: "Use ErrorAlert, or FailureAlert or ChoiceWarning built on it, which require a title.",
-          },
-        ],
-        patterns: [{
-          group: ["**/AlertFrame"],
-          message: "AlertFrame draws an Alert with no title; use ErrorAlert, FailureAlert or ChoiceWarning.",
-        }],
-      }],
-    },
+    // Every Alert has a title. ErrorAlert (exempted below, with AlertFrame) requires it in its types.
+    rules: { "no-restricted-imports": uiImports() },
+  },
+  // Window shell: every directory below src/ but the shell itself, App's own hooks (app/) and the dev-only pages
+  // leaves shell/ to the files at src/'s root. App's hooks: app/ is App's own layer and imports what App.tsx does,
+  // and nothing but App.tsx and the tests imports it. The directories with a rule of their own below forbid both
+  // by their whitelist.
+  // Production code (everything but the gallery, the shared fixtures, the website preview, test support and the
+  // tests) imports neither fixtures/ nor gallery/; the fixtures are the runtime the gallery and the preview share.
+  ...DEPTHS.map((depth) => ({
+    files: [below("*", depth)],
+    ignores: [...UI_TESTS, `${UI_SRC}/{shell,app,gallery,fixtures,website-preview,test}/**`],
+    rules: { "no-restricted-imports": uiImports([notInto(depth, ["shell"], SHELL_MESSAGE), notIntoApp(depth), notInto(depth, ["fixtures", "gallery"], PRODUCTION_MESSAGE)]) },
+  })),
+  ...DEPTHS.map((depth) => ({
+    files: [below("shell", depth)],
+    ignores: UI_TESTS,
+    rules: { "no-restricted-imports": uiImports([notIntoApp(depth), notInto(depth, ["fixtures", "gallery"], PRODUCTION_MESSAGE)]) },
+  })),
+  ...DEPTHS.map((depth) => ({
+    files: [below("app", depth)],
+    ignores: UI_TESTS,
+    rules: { "no-restricted-imports": uiImports([notInto(depth, ["fixtures", "gallery"], PRODUCTION_MESSAGE)]) },
+  })),
+  ...DEPTHS.map((depth) => ({
+    files: [below("{gallery,test}", depth)],
+    ignores: UI_TESTS,
+    rules: { "no-restricted-imports": uiImports([notIntoApp(depth)]) },
+  })),
+  // The fixtures and the preview do not depend on the dev-only gallery. The fixtures keep the window shell's rule.
+  ...DEPTHS.map((depth) => ({
+    files: [below("website-preview", depth)],
+    ignores: UI_TESTS,
+    rules: { "no-restricted-imports": uiImports([notIntoApp(depth), notInto(depth, ["gallery"], GALLERY_MESSAGE)]) },
+  })),
+  ...DEPTHS.map((depth) => ({
+    files: [below("fixtures", depth)],
+    ignores: UI_TESTS,
+    rules: { "no-restricted-imports": uiImports([notInto(depth, ["shell"], SHELL_MESSAGE), notIntoApp(depth), notInto(depth, ["gallery"], GALLERY_MESSAGE)]) },
+  })),
+  {
+    files: [`${UI_SRC}/*.{ts,tsx}`],
+    ignores: [...UI_TESTS, `${UI_SRC}/App.tsx`],
+    rules: { "no-restricted-imports": uiImports([APP_ROOT_IMPORT, ROOT_PRODUCTION_IMPORT]) },
   },
   {
-    // ErrorAlert composes HeroUI's Alert through AlertFrame, and its test compares it with the stock one.
-    files: [
-      "packages/ui/src/components/AlertFrame.tsx",
-      "packages/ui/src/components/ErrorAlert.tsx",
-      "packages/ui/src/components/ErrorAlert.test.tsx",
-    ],
+    // App.tsx is the one root file that may import app/, and is production code like the rest.
+    files: [`${UI_SRC}/App.tsx`],
+    rules: { "no-restricted-imports": uiImports([ROOT_PRODUCTION_IMPORT]) },
+  },
+  // Leaf layer: shared building blocks depend on no feature directory.
+  ...layer("components", LEAF, LEAF_MESSAGE),
+  // Domain layers: the session model and the shortcut registry sit below every feature.
+  ...["sessions", "shortcuts"].flatMap((dir) =>
+    layer(dir, ["i18n", "platform"], `${dir}/ imports, outside itself, only i18n/, platform/ and files at src/'s root.`)),
+  // Self-contained features: they use the leaf layer and import no other feature directory.
+  ...["viewer", "about", "updates", "quota"].flatMap((dir) =>
+    layer(dir, ["components", ...LEAF], `${dir}/ imports no other feature directory.`)),
+  // The project browser builds on the viewer and on no other feature.
+  ...layer("project-browser", ["components", "viewer", ...LEAF], "project-browser/ imports, of the feature directories, only viewer/."),
+  {
+    // ErrorAlert composes HeroUI's Alert through AlertFrame; both stay in the leaf layer.
+    files: [`${UI_SRC}/components/alerts/AlertFrame.tsx`, `${UI_SRC}/components/alerts/ErrorAlert.tsx`],
+    rules: { "no-restricted-imports": uiImports([onlyInto(2, LEAF, LEAF_MESSAGE)], { alerts: false }) },
+  },
+  {
+    // Its test compares ErrorAlert with the stock Alert.
+    files: [`${UI_SRC}/components/alerts/ErrorAlert.test.tsx`],
     rules: { "no-restricted-imports": "off" },
   },
   {

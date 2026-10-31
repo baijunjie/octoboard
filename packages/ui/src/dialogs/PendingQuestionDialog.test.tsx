@@ -2,15 +2,15 @@
 import { act } from "react";
 import { afterEach, describe, expect, it, onTestFinished } from "vitest";
 
-import { focusAfterLoss, setFocusAfterModalLoss } from "../components/regionFocus";
+import { focusAfterLoss, setFocusAfterModalLoss } from "../components/focus/regionFocus";
 import { errorAlerts } from "../errorAlerts";
 import type { SessionRequest, State, TrustPrompt } from "../store";
-import { Dialog } from "./Dialog";
-import { framesAsTimers, openable, settleFrames } from "./dialogTestSupport";
-import { ErrorAlerts } from "./ErrorAlerts";
-import { OpensAnotherDialog } from "./nestedDialogTestSupport";
+import { Dialog } from "../components/dialog/Dialog";
+import { framesAsTimers, openable, settleFrames } from "../components/dialog/dialogTestSupport";
+import { ErrorAlerts } from "../shell/ErrorAlerts";
+import { OpensAnotherDialog } from "../components/dialog/nestedDialogTestSupport";
 import { mountPendingQuestionDialog } from "./pendingQuestionTestSupport";
-import { TextInput } from "./TextInput";
+import { TextInput } from "../components/form/TextInput";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

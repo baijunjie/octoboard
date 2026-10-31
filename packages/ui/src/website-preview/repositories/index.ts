@@ -2,8 +2,8 @@ import {
   addition,
   textChange,
   type FixtureGit,
-} from "../../gallery/fixtures/changeFixtures";
-import type { FixtureFiles } from "../../gallery/fixtures/projectFiles";
+} from "../../fixtures/changeFixtures";
+import type { FixtureFiles } from "../../fixtures/sampleFiles";
 import { admin } from "./admin";
 import { merchant } from "./merchant";
 import { customer } from "./customer";

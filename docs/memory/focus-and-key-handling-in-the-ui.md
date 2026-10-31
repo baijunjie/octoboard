@@ -11,7 +11,7 @@ falls to `<body>` and the terminal silently stops receiving keystrokes.
 So give `preventFocusOnPress` to every pressable control in the sidebar, the toasts, the banners and the terminal's
 surroundings, unless its handler puts focus back on the terminal itself. A menu also needs it on its trigger, and on
 top of that react-aria moves focus back to the trigger when the menu closes. Build every "⋯"-style menu on
-`packages/ui/src/components/ActionMenu.tsx`, which handles both, rather than on a bare `Dropdown`.
+`packages/ui/src/components/menus/ActionMenu.tsx`, which handles both, rather than on a bare `Dropdown`.
 
 Nothing in the markup gives this away — a plain `<button>` never takes focus on click in WKWebView — so the defect
 only appears in the running page.
@@ -35,19 +35,23 @@ Render any list whose order can change while one of its rows may hold focus thro
 A wrapper that renders nothing once its last child is gone takes focus down with it, and a library's own rescue does
 not reach that case: react-aria's `useTagGroup` focuses its list element when the last tag is removed, but a list
 that unmounts in the same commit is gone before the effect runs, and one laid out with `display: contents` (as
-`TagsInput`'s is, in `packages/ui/src/dialogs/TagsInput.tsx`, to flow its tags into the field's row) cannot be counted
+`TagsInput`'s is, in `packages/ui/src/components/form/TagsInput.tsx`, to flow its tags into the field's row) cannot be counted
 on to take focus. So move focus to a named element yourself, in the removal handler, rather than leave it to the
 library — `TagsInput` hands it to its text input on every removal, a dialog being where focus on `<body>` costs Escape
 and Tab as well — and for any control a handler of its own takes away, call `handFocusOff`
-(`packages/ui/src/components/handFocusOff.ts`) before the removal, as `PinButton` in
+(`packages/ui/src/components/focus/handFocusOff.ts`) before the removal, as `PinButton` in
 `packages/ui/src/sidebar/rows.tsx` and `AvatarField` in `packages/ui/src/dialogs/AvatarField.tsx` do. Where the
 element goes away from a state change rather than from a handler of its own — a region closed by a toggle pressed
 with `preventFocusOnPress`, a control removed or disabled by the answer it was waiting for — there is no removal
-handler to put focus back from, so wrap it in `useFocusHandoff` (`packages/ui/src/components/useFocusHandoff.ts`),
+handler to put focus back from, so wrap it in `useFocusHandoff` (`packages/ui/src/components/focus/useFocusHandoff.ts`),
 which after each render notices that the element focus was on has left the document or turned disabled. Use it rather
 than a check of your own: the browser blurs a control as it is disabled, before the render's effect runs, so a
 hand-rolled "forget the element on blur" has already forgotten it by then. Its caller has to stay mounted and render
-nothing for that check to run in, rather than unmount with the element.
+nothing for that check to run in, rather than unmount with the element. The check runs only in its caller's own
+renders, so the caller must render on the change that takes the element away: select that value in the caller
+itself, never count on a parent rendering it again. A change that makes a component render less can stop its
+hand-off with nothing failing; `packages/ui/src/App.focusHandoff.test.tsx` drives the removals only for the terminal
+pane, the update notice and the connection banner.
 
 ## A modal raised over another dialog mounts a commit after it as a top layer for that commit, and focuses itself one render after mounting
 
@@ -61,11 +65,11 @@ focus call does nothing, and focus falls to `<body>`. Such a modal needs both of
 case where it mounts with another modal:
 
 - Show it from the commit after the one that raised it: copy the raised value into state from a `useLayoutEffect` and
-  render from that state, as `ErrorAlertHost` in `packages/ui/src/dialogs/ErrorAlerts.tsx` and
+  render from that state, as `ErrorAlertHost` in `packages/ui/src/shell/ErrorAlerts.tsx` and
   `packages/ui/src/dialogs/PendingQuestionDialog.tsx` do. Not from a passive effect: that render lands in a later task,
   by which time the dialog's hider has noticed the insertion and hides the new modal; the layout effect's synchronous
   render stays in the same task, after the dialog's hider has run and before its observer reports.
-- Pass `topLayerAtMount` to its `Dialog` / `ConfirmDialog` (`packages/ui/src/dialogs/useTopLayerAtMount.ts`). The
+- Pass `topLayerAtMount` to its `Dialog` / `ConfirmDialog` (`packages/ui/src/components/dialog/useTopLayerAtMount.ts`). The
   delay moves it out of the press's commit but into the next one, where a dialog that the press's dialog opens in turn
   from a mount effect also mounts (Settings opening the account settings dialog; an alert's Add agent), and where an
   alert and a question raised in the same task meet. The flag keeps the modal out of every hider of its mount commit,
@@ -78,7 +82,7 @@ tooltips close on turning inert, and a covered alert stays exposed to screen rea
 
 A modal of this kind also hands focus on when its last one closes with nowhere to return focus to — a control gone
 with the dialog that closed before it, or no focus ever given: call `focusAfterModalCloses` from
-`packages/ui/src/components/regionFocus.ts` as the last one closes and `cancelFocusAfterModalCloses` as one comes up,
+`packages/ui/src/components/focus/regionFocus.ts` as the last one closes and `cancelFocusAfterModalCloses` as one comes up,
 as `packages/ui/src/errorAlerts.ts` and `PendingQuestionDialog` do, rather than a fallback of its own. Any other modal
 that can close with nowhere to return focus to does the same after trying the destinations of its own, as Settings
 closing with no dialog under it does (`packages/ui/src/settings/useSettingsDialog.ts`).
@@ -86,7 +90,7 @@ closing with no dialog under it does (`packages/ui/src/settings/useSettingsDialo
 Code that moves focus into such a modal by hand as it mounts (`dialogAround(ref)?.focus()` and the like), where the
 modal can open over another dialog — an alert or a question raised while one is open — focuses it from a layout
 effect of the render after the mount: a mount `useLayoutEffect` sets a state value, and a second
-`useLayoutEffect` keyed on that state does the focusing, as `ErrorAlertHost` in `packages/ui/src/dialogs/ErrorAlerts.tsx`
+`useLayoutEffect` keyed on that state does the focusing, as `ErrorAlertHost` in `packages/ui/src/shell/ErrorAlerts.tsx`
 does. The trouble is a dialog underneath with no focused element of its own yet — one opened by a press without a
 pointer (assistive technology, a script), whose opening focus react-aria defers to a frame. Both obvious timings lose to
 it:
@@ -105,22 +109,22 @@ mount effect, which React flushes before that render, whether focus is inside it
 off the dialog half a second later and gives it back only once no transition is running anywhere on the page — never,
 while one that never reports its end is running (in Chrome, one still running inside a disclosure as it folds away).
 So whenever the caller focuses the modal itself, pass `focusesItselfOnOpen` to `Dialog` / `DialogFrame`
-(`packages/ui/src/dialogs/Dialog.tsx`), with or without a `resetKey`, as `ErrorAlertHost` and an `unprompted`
+(`packages/ui/src/components/dialog/Dialog.tsx`), with or without a `resetKey`, as `ErrorAlertHost` and an `unprompted`
 `ConfirmDialog` do; a caller with a `resetKey` then refocuses itself for each new subject. The flag keeps the frame's
 own `useRefocusIfLost` from putting focus found on `<body>` back on the dialog when `resetKey` changes, and holds focus
 on an empty element inside the modal from the mount until the caller's focus lands.
 
 A mouse never shows it, and a jsdom test reaches it only with `framesAsTimers()` from
-`packages/ui/src/dialogs/dialogTestSupport.ts` (virtual modality, and each animation frame a 0 ms timer that runs ahead
+`packages/ui/src/components/dialog/dialogTestSupport.ts` (virtual modality, and each animation frame a 0 ms timer that runs ahead
 of any timer set after it), focus on an opener outside (a test starting from `<body>` passes either way), a `Dialog`
 mounted first (`openable` in the same file), the modal raised in an `act` of its own, and `settleFrames()` rather than a
 fixed wait. The half-second take-back needs on top of that a `transitionrun` that never ends, dispatched on an element
 of the dialog underneath, and a real wait past 500 ms. Cover the replacing cases too — a queued modal shown once the
 first is acknowledged, and one put in front of it — and the meeting ones: a dialog that opens another from a mount
-effect (`OpensAnotherDialog` in `packages/ui/src/dialogs/nestedDialogTestSupport.tsx`), an alert and a question raised
+effect (`OpensAnotherDialog` in `packages/ui/src/components/dialog/nestedDialogTestSupport.tsx`), an alert and a question raised
 in one task, and a dialog opened later, which must cover the modal (assert the modal hidden then); run them under
 `StrictMode` as well, as the app does. Copy the "over a dialog opened without a pointer" cases in
-`packages/ui/src/dialogs/ErrorAlerts.test.tsx`. A test without
+`packages/ui/src/shell/ErrorAlerts.test.tsx`. A test without
 `framesAsTimers()` passes against the timer version. jsdom has no `inert`, so react-aria hides with `aria-hidden` there,
 which does not stop focus: a test that asserts only where focus is passes against two modals mounted in one commit. Also
 raise the modal in the same `act` as opening the dialog underneath (`openable(dialog, true)`), and assert that it is not
@@ -135,7 +139,7 @@ to a frame, and drops it if focus has moved by then. So:
 
 - Focus nothing at mount but the control the dialog opens on. A "put focus back if it fell to `<body>`" check that runs
   at mount, even one that only focuses the dialog element, silently cancels the first field's opening focus. That is why
-  `useRefocusIfLost` (`packages/ui/src/dialogs/Dialog.tsx`) acts only when its dependencies change; a hook of your own
+  `useRefocusIfLost` (`packages/ui/src/components/dialog/Dialog.tsx`) acts only when its dependencies change; a hook of your own
   of that kind compares its dependencies with the last ones it saw, never a "skip the first run" flag, which
   StrictMode's second mount run (the app runs in `StrictMode`) gets past.
 - Give the opening focus through react-aria's `autoFocus` (`Button`, `TextInput`, a react-aria field's own prop). A
@@ -146,7 +150,7 @@ to a frame, and drops it if focus has moved by then. So:
   control is also marked as `docs/ui-accessibility.md`, "The error alert dialog", sets out.
 
 The two failures show under opposite presses, so test both: the mount refocus only after a press without a pointer
-(`framesAsTimers()` from `packages/ui/src/dialogs/dialogTestSupport.ts`, under `StrictMode` as well), the DOM
+(`framesAsTimers()` from `packages/ui/src/components/dialog/dialogTestSupport.ts`, under `StrictMode` as well), the DOM
 `autoFocus` only after a keyboard or mouse press, since under a press without a pointer the outer dialog's pull-back is
 put off until it is already inert (the "opens the directory browser on its path field" cases in
 `packages/ui/src/dialogs/ProjectDialog.test.tsx`).
@@ -163,17 +167,17 @@ waits out the restore and acts only on focus left on `<body>` (how the other clo
 
 So such a dialog's close handler names the destination itself — the control that opens the dialog, else a control of
 the outer dialog that is always there, such as its section's tab — and focuses it as `handFocusOnceClosed` in
-`packages/ui/src/settings/AgentAccountsSection.tsx` does:
+`packages/ui/src/settings/accounts/AgentAccountsSection.tsx` does:
 
 - Retry every animation frame, up to a cap, until the target can take focus (`canTakeFocus` in
-  `packages/ui/src/components/regionFocus.ts`), rather than focus once a frame later. A close that comes from a passive
+  `packages/ui/src/components/focus/regionFocus.ts`), rather than focus once a frame later. A close that comes from a passive
   effect (the account removed by another window, a login settled) renders at default priority, so the first frame can
   arrive while the inner dialog is still mounted and the outer one still `inert`.
 - Landing as the dialog goes puts the move ahead of React Aria's restore, which then finds focus off `<body>` and
   leaves it. Focus the target once more a turn later if focus has left it: `Dialog`'s give-back to a menu's chosen
-  control (`packages/ui/src/dialogs/Dialog.tsx`) runs from a `setTimeout(0)` on unmount and can land after the move.
+  control (`packages/ui/src/components/dialog/Dialog.tsx`) runs from a `setTimeout(0)` on unmount and can land after the move.
 
-Test it under all three press modalities (`framesAsTimers(modality)` from `packages/ui/src/dialogs/dialogTestSupport.ts`),
+Test it under all three press modalities (`framesAsTimers(modality)` from `packages/ui/src/components/dialog/dialogTestSupport.ts`),
 since each leaves the restore somewhere else, and the effect-driven close with the store notified outside `act`, which
 is what makes React render it in a task of its own (`notifyLater` in
 `packages/ui/src/settings/SettingsDialog.dialogsInFront.test.tsx`).
@@ -194,7 +198,7 @@ element is what it shows then.
 jsdom (30) has no window focus to report: its `hasFocus()` answers whether anything in the document has been focused,
 so it is `false` in a test that never focuses anything and `true` from the first focus on, whatever the test means the
 window to be doing. A test of a rule gated on it therefore sets the answer itself through `windowAttention()` in
-`packages/ui/src/components/windowTestSupport.ts`, which starts the window attended and returns a setter that moves
+`packages/ui/src/components/announce/windowTestSupport.ts`, which starts the window attended and returns a setter that moves
 `hasFocus()` and dispatches the window's `focus` / `blur` together — not a hand-rolled spy — or a gated rule looks dead
 in a test that focuses nothing. Only such a test of the window-left case catches the ungated rule; no gallery scenario
 leaves the window for another application.
@@ -204,7 +208,7 @@ leaves the window for another application.
 When the focused element is removed, WebKit and Chrome fire no `focusout` and focus falls to `<body>`. A dialog's
 Escape handling and Tab containment hang off focus being inside it, so both stop working. Whenever a dialog replaces
 content that can hold focus — a listing swapped for the next one, a queue moving on to its next item — put focus back
-with `useRefocusIfLost` from `packages/ui/src/dialogs/Dialog.tsx`, or pass the shared `Dialog` a `resetKey` naming the
+with `useRefocusIfLost` from `packages/ui/src/components/dialog/Dialog.tsx`, or pass the shared `Dialog` a `resetKey` naming the
 current item, which does it for you.
 
 No `blur` fires on that removal either, and closing a dialog unmounts the control holding focus, so a field that sends
@@ -223,7 +227,7 @@ the duration of its own action — the obvious way to keep a slow request from b
 press and hover, keeps the control focusable, and announces the pending state. Keep `isDisabled` for a control
 that is unavailable for a reason outside the action itself (a field not filled in yet), where focus is not on it.
 When such an outside change can still land while focus is on a button (a quota reading arriving under an open
-dialog), hand focus on with `useFocusLeavingWhenDisabled` from `packages/ui/src/dialogs/Dialog.tsx`, as the shared
+dialog), hand focus on with `useFocusLeavingWhenDisabled` from `packages/ui/src/components/dialog/Dialog.tsx`, as the shared
 dialog footer and `ConfirmDialog` do, rather than testing `document.activeElement` against the control in an effect:
 WebKit has already blurred it to `<body>` by then. jsdom never blurs a disabled element, so the suite passes that
 test; a test reaches the WebKit case only by dispatching the `focusout` and reporting `<body>` as the active element
@@ -260,14 +264,14 @@ control here carries a tooltip through `TitledControl`, and such a tooltip opens
 hover, so one Tab inside any dialog or view reaches that state — when Escape does nothing somewhere, what predicts it
 is "a tooltip with a trigger is open", not which control holds focus. A surface that dismisses itself from a React
 `onKeyDown` loses the key, and a `window` capture-phase listener is the only way out — which is what
-`useEscapeWhileTooltipOpen` (`packages/ui/src/dialogs/`) is: it closes whatever surface it is handed, dialog or not,
+`useEscapeWhileTooltipOpen` (`packages/ui/src/components/dialog/`) is: it closes whatever surface it is handed, dialog or not,
 and only while such a tooltip is open. Call it rather than writing your own, and add nothing of your own to a
 surface that already calls it, every dialog included. Such a handler can only choose whether to act, never
 route the key onwards: once react-aria has swallowed it nothing can hand it back to the control that wanted it, which
 is why a combo box's suggestion list inside a dialog does not withdraw on Escape while a tooltip is open.
 
 A tooltip anchored to an element that is not its trigger (`AnchoredHint` in
-`packages/ui/src/components/hintTooltips.tsx`, a clipped label's tooltip) gets no such listener from react-aria and
+`packages/ui/src/components/hint/hintTooltips.tsx`, a clipped label's tooltip) gets no such listener from react-aria and
 stops the key itself in one case only: while it is shown and focus is inside the react-aria popover its anchor sits in
 (a menu, a submenu, a select's list), as `docs/ui-accessibility.md`'s "A tooltip is the application's own, never the
 browser's `title`" sets out. Anywhere else — a dialog, a view, the terminal — it lets Escape through, which is why
@@ -319,7 +323,7 @@ a row of some other section, and the list scrolls to it.
 
 So a control that has to keep focus across such a change takes it back only once both of those renders have gone by —
 from a `requestAnimationFrame` nested in a `requestAnimationFrame`, guarded on focus still being inside the list so
-that a Tab or a press in between stands, the way `packages/ui/src/browser/focusRow.ts` does it. The library's pull
+that a Tab or a press in between stands, the way `packages/ui/src/project-browser/focusRow.ts` does it. The library's pull
 runs only while the collection itself holds focus, so a control outside the list, such as a filter field above it,
 needs none of this.
 

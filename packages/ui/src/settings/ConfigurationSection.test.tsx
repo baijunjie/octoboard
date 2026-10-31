@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { consoleOf } from "../gallery/fixtures/builders";
+import { consoleOf } from "../fixtures/builders";
 import type { PlatformAdapter } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";

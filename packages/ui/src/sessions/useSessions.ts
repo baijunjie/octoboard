@@ -2,7 +2,7 @@ import { useShallow } from "zustand/react/shallow";
 
 import type { Session } from "../protocol";
 import { useDaemonStore } from "../store";
-import { consoleStatus } from "../sidebar/order";
+import { consoleStatus } from "./order";
 import type { ShownStatusKind } from "../sessionLabel";
 import { countWaitingInTree } from "../waiting";
 import { indexSessions, sessionsOf } from "./sessionIndex";

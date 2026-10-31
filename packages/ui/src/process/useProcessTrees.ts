@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { useLatest } from "../components/useLatest";
+import { useLatest } from "../components/hooks/useLatest";
 import { DaemonRequestError } from "../daemon-client";
 import { errorPresentation, type ErrorPresentation } from "../errorPresentation";
 import { unexpectedFailureDiagnostic } from "../errorText";

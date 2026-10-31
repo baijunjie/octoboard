@@ -8,7 +8,7 @@ import { listPages } from "./listPages";
 /**
  * The project session whose Report panel the right pane carries while a project owns it: the
  * selected one, when it belongs to that project and has pages; otherwise none, and the pane has no
- * Report panel and its toggle is not offered (`unavailableKinds` in `App.tsx`).
+ * Report panel and its toggle is not offered (`unavailableKinds` in `app/usePaneLayout.ts`).
  *
  * Pages are not in the daemon's snapshot, so whether the session has any is found by listing them,
  * when the session comes into question and again after every reconnect or `snapshot`, as the panel

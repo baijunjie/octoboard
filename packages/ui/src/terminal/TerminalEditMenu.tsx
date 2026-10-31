@@ -1,9 +1,9 @@
 import { ClipboardPaste, Copy, TextSelect } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
-import { ActionMenu } from "../components/ActionMenu";
-import { copyText } from "../components/copyText";
-import { useLatest } from "../components/useLatest";
+import { ActionMenu } from "../components/menus/ActionMenu";
+import { copyText } from "../components/host/copyText";
+import { useLatest } from "../components/hooks/useLatest";
 import { ActionableError } from "../actionableError";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";

@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, vi } from "vitest";
 
-import { accountOf, type ConsoleExtra, consoleOf, projectOf } from "../gallery/fixtures/builders";
+import { accountOf, type ConsoleExtra, consoleOf, projectOf } from "../fixtures/builders";
 import type { Account, Agent, AgentAvailability, Event, Project, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { ProjectDialog } from "./ProjectDialog";

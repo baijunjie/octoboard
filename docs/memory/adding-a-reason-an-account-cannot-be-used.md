@@ -24,7 +24,7 @@ or starts the work anyway where nothing refuses it.
   (`packages/ui/src/dialogs/openSessionRequest.ts`), the switch-account dialog and menu, and the default-account
   pickers of the console dialog (`ConsoleAccountsField.tsx`) and the project dialog. The last two were missed at
   first. Each picker marks the account as its product doc says: unavailable, or still pickable with a note.
-- The gallery's fixture daemon (`packages/ui/src/gallery/fixtureDaemon.ts`), so the gallery shows the new reason
+- The gallery's fixture daemon (`packages/ui/src/fixtures/fixtureDaemon.ts`), so the gallery shows the new reason
   being refused.
 
 ## Before a reading of an account refuses work, re-measure it against every way the agent can be signed in

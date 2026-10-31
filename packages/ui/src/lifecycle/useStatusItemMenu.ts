@@ -1,11 +1,11 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 
-import { useLatest } from "../components/useLatest";
+import { useLatest } from "../components/hooks/useLatest";
 import type { Appearance } from "../cssColour";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import type { Session } from "../protocol";
-import { ordersByStatus } from "../sidebar/order";
+import { ordersByStatus } from "../sessions/order";
 import { useDaemon } from "../store";
 import { withIcons } from "./statusItemIcons";
 import { buildStatusItemMenu } from "./statusItemMenu";

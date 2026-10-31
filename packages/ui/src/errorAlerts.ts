@@ -1,6 +1,6 @@
 import type { ReactElement, ReactNode } from "react";
 
-import { cancelFocusAfterModalCloses, focusAfterModalCloses } from "./components/regionFocus";
+import { cancelFocusAfterModalCloses, focusAfterModalCloses } from "./components/focus/regionFocus";
 import { DaemonRequestError } from "./daemon-client";
 import { errorPresentation } from "./errorPresentation";
 import { errorText } from "./errorText";

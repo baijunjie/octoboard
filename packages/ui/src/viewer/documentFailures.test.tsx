@@ -6,7 +6,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
 import { errorAlerts } from "../errorAlerts";
-import { press, tap } from "../components/tooltipTestSupport";
+import { press, tap } from "../components/hint/tooltipTestSupport";
 import { DocumentImage } from "./DocumentImage";
 import { FormulaView } from "./FormulaView";
 import { MarkdownDocument } from "./MarkdownDocument";

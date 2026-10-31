@@ -5,7 +5,7 @@ import { setInteractionModality } from "react-aria";
 import { expect, it } from "vitest";
 
 import { Plus } from "lucide-react";
-import { InlineReference } from "../components/InlineReference";
+import { InlineReference } from "../components/text/InlineReference";
 import { RowIconButton, TreeRow } from "./rows";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

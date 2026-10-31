@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { accountOf, consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { accountOf, consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import { format } from "../i18n/catalog";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";

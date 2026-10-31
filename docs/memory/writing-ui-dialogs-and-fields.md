@@ -3,14 +3,14 @@
 ## A confirmation is `ConfirmDialog`, never a dialog assembled for the occasion
 
 Any confirmation in `packages/ui` — including one where the user has to type a word to confirm a deletion — is
-`ConfirmDialog` (`packages/ui/src/dialogs/ConfirmDialog.tsx`, whose `typeToConfirm` asks for that word), never a
+`ConfirmDialog` (`packages/ui/src/components/dialog/ConfirmDialog.tsx`, whose `typeToConfirm` asks for that word), never a
 dialog of its own.
 
 ## Raw error text is `DiagnosticBlock`, never a container written for the occasion
 
 Wherever `packages/ui` shows raw error text as a block of its own — a message passed through from the system, Git or
 an agent, a diagnostic — in an error alert, an Alert's Details popover, an "Error details" disclosure or an error
-screen, render it with `DiagnosticBlock` (`packages/ui/src/components/DiagnosticBlock.tsx`). Never put it in a
+screen, render it with `DiagnosticBlock` (`packages/ui/src/components/alerts/DiagnosticBlock.tsx`). Never put it in a
 `<p className="font-mono">`, a bare `CodeBlock` or a copy of the block's markup. It is the user's design rule that raw
 text sits on a surface of its own, never straight on the dialog, Alert or popover around it, and the component also
 carries that text's accessibility (a named horizontal scroll region reachable by keyboard, the focus ring drawn on the
@@ -76,7 +76,7 @@ in the same JSX position, a ternary rather than two `&&` slots, so the focused p
 ## A single-line field hands its form the trimmed value
 
 Leading and trailing whitespace is never meant, so a form never holds it: every single-line text field in
-`packages/ui` goes through `useTrimmedField` (`packages/ui/src/dialogs/useTrimmedField.ts`), which `TextInput` already
+`packages/ui` goes through `useTrimmedField` (`packages/ui/src/components/form/useTrimmedField.ts`), which `TextInput` already
 does. The form's state, its validation, its submit (Enter included) and any request fired from it see the trimmed value
 at once, while the field keeps what was typed until it loses focus, so a space between two words is not stripped on its
 way to the next one. A new field that is not a `TextInput` takes the hook's result as its `value`, `onChange` and
@@ -86,13 +86,13 @@ alone on purpose: a free-text area and the tags field's input, which trims what 
 ## What is wrong with one field shows under that field, from the first submit on
 
 In a `packages/ui` dialog, a message about one field's value — empty, malformed, not allowed — belongs to that
-field: `TextInput` (`packages/ui/src/dialogs/TextInput.tsx`) takes it as `errorMessage`, which marks the field
+field: `TextInput` (`packages/ui/src/components/form/TextInput.tsx`) takes it as `errorMessage`, which marks the field
 invalid and renders the message right under it. Only the form's own check at submit goes there: anything that fails
 once the submit has passed it — a daemon refusal about that same field's value included — opens the error alert
 instead, as the "Where an error is shown" section of `docs/ui-accessibility.md` sets out.
 
 Compute each field's message on every render from the current value and pass it through `useSubmitValidation`
-(`packages/ui/src/dialogs/Dialog.tsx`): `shown(message)` holds it back until `attempt(...messages)` has gated a
+(`packages/ui/src/components/dialog/Dialog.tsx`): `shown(message)` holds it back until `attempt(...messages)` has gated a
 submit, so no field is marked before the user has tried to submit, and from then on the message follows what is
 typed. Gate the submit on what `attempt` answers rather than re-checking the values there.
 
@@ -139,7 +139,7 @@ that checkbox fills the row, so the mark lands at the row's far end. Make the ch
 in an `items-start` row of their own, the mark in `MarkLineBox` (never a hand-picked `min-h`: the checkbox's content
 box is taller than its label's line, which sits at its top), and move the note under that row as a `Description` with
 its own `useId`, set in the checkbox's `aria-describedby` and indented under the label by hand. A dialog option gets
-all of this from `ConfirmOption`'s `mark` (`packages/ui/src/dialogs/ConfirmOption.tsx`).
+all of this from `ConfirmOption`'s `mark` (`packages/ui/src/components/form/ConfirmOption.tsx`).
 
 ## An option's note never changes with an option below it
 
@@ -151,7 +151,7 @@ because of one above it is fine.
 
 ## A modal whose content is one body is a `Dialog`; one made of panels keeps its own frame
 
-`Dialog` (`packages/ui/src/dialogs/Dialog.tsx`) is a titled frame around a single scrolling body, plus an optional
+`Dialog` (`packages/ui/src/components/dialog/Dialog.tsx`) is a titled frame around a single scrolling body, plus an optional
 footer, and every modal in `packages/ui` whose content is one body is built on it. A modal whose content is a set of
 panels that each scroll on their own is the other shape: it keeps a frame of its own, assembled from HeroUI's
 `Modal.*` parts, and takes the fade inside each panel. The settings dialog
@@ -163,7 +163,7 @@ or a size of its own in order to take such a modal in.
 
 A dialog whose content outgrows the window has to say so: when the body overflows, the edge it can still be scrolled
 towards fades out, so the user sees there is more below (or above) without having to find a scrollbar. Nobody adding a
-dialog thinks to ask for this, so `Dialog` (`packages/ui/src/dialogs/Dialog.tsx`) does it for every dialog built on
+dialog thinks to ask for this, so `Dialog` (`packages/ui/src/components/dialog/Dialog.tsx`) does it for every dialog built on
 it, around the body's own content.
 
 - Put the content in `Dialog`'s children and nothing else. Do not give the dialog a scroll container of your own
@@ -175,4 +175,4 @@ it, around the body's own content.
   start adds no scrollable area. Such a row still renders right while the strip that is cut holds nothing but space,
   and the first background, border, focus ring, icon or taller text in it loses its top silently.
 - Where something inside a dialog must scroll on its own, apart from the body, it takes the project's fade itself,
-  from `packages/ui/src/components/scrollFade.tsx`, as `DirectoryPicker`'s list does.
+  from `packages/ui/src/components/scroll/scrollFade.tsx`, as `DirectoryPicker`'s list does.

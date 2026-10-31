@@ -1,5 +1,5 @@
 // Loads every UI state gallery scenario in a real browser, lets the scenario's own steps run, and reads
-// the red `[data-gallery-failure]` overlay (`src/gallery/banner.ts`) the page raises when a step threw, a
+// the red `[data-gallery-failure]` overlay (`src/fixtures/banner.ts`) the page raises when a step threw, a
 // fixture could not be answered as the real daemon would answer, or an exit transition never ended. It is
 // the one check that sees a step that no longer runs or a state that no longer renders: neither the type
 // checker nor the unit tests load a scenario. A scenario's live changes (its "Live changes" buttons) are

@@ -3,8 +3,8 @@ import { act } from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { App } from "./App";
-import { mountForTooltip } from "./components/tooltipTestSupport";
-import { consoleOf, snapshotState } from "./gallery/fixtures/builders";
+import { mountForTooltip } from "./components/hint/tooltipTestSupport";
+import { consoleOf, snapshotState } from "./fixtures/builders";
 import { PlatformProvider } from "./platform/react";
 import { createStateStore, DaemonProvider, type Daemon } from "./store";
 import { ThemeProvider } from "./theme";

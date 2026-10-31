@@ -1,33 +1,33 @@
 import { Tabs } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
-import { FadeOverflow } from "../components/FadeOverflow";
-import { useTabScrollLabels } from "../components/tabScrollLabels";
+import { FadeOverflow } from "../components/text/FadeOverflow";
+import { useTabScrollLabels } from "../components/tabs/tabScrollLabels";
 import { DaemonRequestError } from "../daemon-client";
 import { errorPresentation } from "../errorPresentation";
 import { ActionableError } from "../actionableError";
 import { isolate } from "../i18n/isolate";
 import type { MessageKey } from "../i18n/catalog";
-import { InlineReference } from "../components/InlineReference";
+import { InlineReference } from "../components/text/InlineReference";
 import { Message, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
 import { sessionChoiceTitle, sessionDisplayTitle } from "../sessionLabel";
-import { BindingBadge } from "../sidebar/BindingBadge";
-import { liveConsoleSessions } from "../sidebar/order";
+import { BindingBadge } from "../components/status/BindingBadge";
+import { liveConsoleSessions } from "../sessions/order";
 import { useDaemon, useDaemonStore } from "../store";
 import { useOctoboardTheme } from "../theme";
 import { AgentAccountField } from "./AgentAccountField";
-import { Dialog, useDialogAction, useSubmitValidation } from "./Dialog";
+import { Dialog, useDialogAction, useSubmitValidation } from "../components/dialog/Dialog";
 import type { NewSessionBinding } from "./dialogRequest";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
 import { ResumeConversationFields } from "./ResumeConversationFields";
-import { useFailureWhenBlocked } from "./useFailureWhenBlocked";
+import { useFailureWhenBlocked } from "../components/dialog/useFailureWhenBlocked";
 import { useConfirmIncompleteLaunch } from "./useConfirmIncompleteLaunch";
 import { useLaunchChoice } from "./useLaunchChoice";
 import { useResumeTarget, type ResumeTarget } from "./useResumeTarget";
 import { openSessionRequest } from "./openSessionRequest";
-import { OptionSelect } from "./OptionSelect";
-import { TextInput } from "./TextInput";
+import { OptionSelect } from "../components/form/OptionSelect";
+import { TextInput } from "../components/form/TextInput";
 
 type Conversation = "new" | "resume";
 

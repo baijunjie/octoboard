@@ -3,9 +3,9 @@ import { KeyRound, SquareActivity, SquareTerminal, Terminal } from "lucide-react
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { ActionMenuEntry, ActionMenuItem, ActionMenuSubmenu } from "../components/ActionMenu";
-import { SessionRelativeTime } from "../components/SessionMetadata";
-import { accountOf, consoleOf, sessionOf } from "../gallery/fixtures/builders";
+import type { ActionMenuEntry, ActionMenuItem, ActionMenuSubmenu } from "../components/menus/ActionMenu";
+import { SessionRelativeTime } from "../components/status/SessionMetadata";
+import { accountOf, consoleOf, sessionOf } from "../fixtures/builders";
 import { format } from "../i18n/catalog";
 import type { Translate } from "../i18n/catalog";
 import type { Account, Project, Session } from "../protocol";

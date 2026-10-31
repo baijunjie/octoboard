@@ -5,9 +5,9 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { onTestFinished, vi } from "vitest";
 
-import { ErrorAlerts } from "../dialogs/ErrorAlerts";
+import { ErrorAlerts } from "../shell/ErrorAlerts";
 import { errorAlerts } from "../errorAlerts";
-import { trackMountRefocus } from "../dialogs/dialogTestSupport";
+import { trackMountRefocus } from "../components/dialog/dialogTestSupport";
 import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
 import type { ConfigurationFileCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";

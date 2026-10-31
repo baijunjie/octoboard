@@ -3,9 +3,9 @@ import { act, StrictMode } from "react";
 import { setInteractionModality } from "react-aria";
 import { expect, it, vi } from "vitest";
 
-import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
-import { enter, leave, mountForTooltip, openTooltip, withFakeTimers } from "../components/tooltipTestSupport";
-import { accountOf, consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
+import { enter, leave, mountForTooltip, openTooltip, withFakeTimers } from "../components/hint/tooltipTestSupport";
+import { accountOf, consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import { errorAlerts } from "../errorAlerts";
 import { isolate } from "../i18n/isolate";
 import type { Account, Project, Session, SessionBranchItem } from "../protocol";

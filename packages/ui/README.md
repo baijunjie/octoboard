@@ -50,10 +50,13 @@ the daemon.
 ### The UI state gallery
 
 A dev-only page, needing no daemon, that shows UI states hard to reach against a live daemon: the real `App` over a
-fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on port 5175; under `pnpm dev` it is at
+fixture daemon (`src/fixtures/fixtureDaemon.ts`). `pnpm gallery` serves it on port 5175; under `pnpm dev` it is at
 `http://localhost:5174/gallery.html` (which resets the dev app's `octoboard.*` preferences, hence port 5175 for
-`pnpm gallery`). `pnpm build` does not bundle it, and its type check (`typecheck:app`) leaves `src/gallery/` out except for
-`src/gallery/fixtures/builders.ts`, which the dialogs' `*TestSupport.tsx` helpers pull in; `pnpm typecheck` covers all of it.
+`pnpm gallery`). `pnpm build` does not bundle it, and its type check (`typecheck:app`) leaves `src/gallery/` and `src/fixtures/` out except for
+`src/fixtures/builders.ts`, which the dialogs' `*TestSupport.tsx` helpers and the agent accounts section's test state pull
+in; `pnpm typecheck` covers all of it. The runtime the gallery runs on, the fixture daemon with its fake terminal, builders,
+sample files and git and step driver, lives in `src/fixtures/` and is shared with the website preview; `src/gallery/` holds
+the pages, the scenario type and the scenarios themselves, and nothing in `src/fixtures/` or `src/website-preview/` imports it.
 
 - Scenarios are listed by functional area, Normal previews first and Exceptional second. Theme, language, window
   width and height, and whether the shortcut modifier is held are controls above the window, all kept in the URL. The
@@ -61,7 +64,7 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
 - A scenario's page sets `data-gallery-ready` on `<html>` once its steps have run, its own toasts have been raised and
   finite animations ended; automation waits on it before capturing. A failure of the gallery's own machinery (a step
   that threw, a fixture that cannot be answered as the real daemon would, an exit transition that never ends) is painted
-  over the page as a `[data-gallery-failure]` overlay (`src/gallery/banner.ts`); check a capture for it.
+  over the page as a `[data-gallery-failure]` overlay (`src/fixtures/banner.ts`); check a capture for it.
 - A frame URL with `chrome=1` gives the page the desktop window's `windowChrome` capability (`src/gallery/frame.tsx`),
   so what only the desktop app offers can be driven in a browser.
   A scenario's `desktopApp` gives it that and the native menu bar as well, for a view that exists only in the app (the
@@ -77,9 +80,9 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   `src/gallery/reportPageFixture.ts`, applying fixture pages through the store's `applyDaemonEvent`.
   `node scripts/gallery-report-focus.mjs <gallery-origin>` drives report replacement and focus checks against a served gallery.
 - `src/gallery/preview/` is git-ignored, so it exists per checkout: every `.ts` / `.tsx` file directly in it (not in
-  subdirectories) must default-export a `Scenario[]`, which `fixtures/index.ts` appends to `SCENARIOS`; anything else
+  subdirectories) must default-export a `Scenario[]`, which `src/gallery/fixtures/index.ts` appends to `SCENARIOS`; anything else
   goes in a subdirectory. Those scenarios are therefore listed, swept and held by the gallery's tests in that checkout
-  only. Such files import fixtures from their own modules, never from `fixtures/index.ts` (an import cycle).
+  only. Such files import fixtures from their own modules, never from `src/gallery/fixtures/index.ts` (an import cycle).
 
 **Conventions for writing scenarios**
 
@@ -88,7 +91,7 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   is `"normal"` (expected UI, including empty, loading and platform-limited views) or `"exceptional"` (deliberate
   failures, validation errors, refusals, conflicts), chosen by the view being confirmed rather than the component or
   file name. Keep failed subjects out of normal navigation.
-- `state` is built with `snapshotState` from `builders.ts`. Build consoles and projects with `consoleWith` and
+- `state` is built with `snapshotState` from `src/fixtures/builders.ts`. Build consoles and projects with `consoleWith` and
   `projectWith` from the same file, or give the `Map` its type (`new Map<string, Console>(...)`): an object built by
   spreading into an un-annotated `new Map([...])`, `.map(([id, x]) => [id, { ...x, … }])` included, is not checked for
   leftover keys, so a renamed or removed protocol field survives in the fixture and the scenario silently shows the
@@ -129,7 +132,7 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   `agentModels` (what the fixture daemon lists per agent, default `SAMPLE_CLAUDE_MODELS`), `files` / `filesByProject` /
   `git` (replace the project browser's fixtures; a `null` `git` is no repository) and `viewer` (renders the file
   viewer alone, in the "File viewer" group).
-- Sessions switching their account: `switchingAccount(state, ids)` (`fixtures/builders.ts`) lays the daemon's
+- Sessions switching their account: `switchingAccount(state, ids)` (`src/fixtures/builders.ts`) lays the daemon's
   `Session.switching_account` over the named sessions of a state, so they open straight in the "Switching account…"
   view. `sessionAccountSwitches` stages what the daemon answers to a switch the steps start: a refusal, or `"pending"`;
   the fixture daemon broadcasts the session as switching while the request is held, as the real one does.
@@ -141,7 +144,7 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   recorded.
 - Account sign-in in Settings → Agent accounts: `state.accountLogins` holds the logins the daemon already reports when
   the window opens (waiting with its page or device code, signed in, failed, timed out), so a login in progress is
-  shown straight away; build them with the `loginOf` helper in `fixtures/settings.ts`. `loginOutcome`
+  shown straight away; build them with the `loginOf` helper in `src/gallery/fixtures/settings.ts`. `loginOutcome`
   (`"succeeded"`, `"failed"`, `"timed_out"`) is how a login the steps start ends, a moment after it reaches waiting;
   left out, it stays waiting until cancelled. `loginStartError` makes `start_account_login` refuse with that error.
   `resetCreditUse` is how `use_codex_reset_credit` ends for a Codex account: an outcome, a refusal error, or
@@ -155,7 +158,7 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   `resetCreditReading` is the quota reading the fixture daemon takes then, as the real one does: `{ after }`
   milliseconds later (default 100; a delay shows the confirmation waiting and its meters filling), `{ unavailable }`
   for a read that fails and keeps the windows and credits, or `"never"` to leave the confirmation waiting. Build a
-  reading's `reset_credits` with `resetCreditOf` and `resetCreditsOf` (`fixtures/quotas.ts`).
+  reading's `reset_credits` with `resetCreditOf` and `resetCreditsOf` (`src/fixtures/quotas.ts`).
   `agentListError` makes `add_agent`, `remove_agent` and `reorder_agents` refuse with that error, for what the window
   could not have seen coming; left out, they follow the added list's own rules. `trustParentDirError` makes a
   `confirm_trust` that ticks the parent folder (`trust_parent_dir`) refuse with that error; a go-ahead for the project
@@ -163,10 +166,10 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   `claudeCompatibilityError` makes an `update_settings` carrying `claude_compatibility` (an agent's Claude compatibility
   switch) refuse with that error.
   A scenario's `state.settings.claude_compatibility` holds the user's explicit choices, as the daemon stores them; the
-  window is told the value in effect (`effectiveClaudeCompatibility`, `builders.ts`), so Codex reads on only while Claude
+  window is told the value in effect (`effectiveClaudeCompatibility`, `src/fixtures/builders.ts`), so Codex reads on only while Claude
   Code is among `added_agents` unless chosen, and follows the added list when a step changes it.
 - Account sharing in Settings → Agent accounts and in the account pickers: `state.accountSharing` holds the sharing
-  states the daemon reports when the window opens, by account; build it with `accountSharingOf` (`builders.ts`, taken
+  states the daemon reports when the window opens, by account; build it with `accountSharingOf` (`src/fixtures/builders.ts`, taken
   by `snapshotState` as `accountSharing`). An entry with `in_use` makes the account's switch unusable, and one with
   `progress` is a change running (its switch, its pickers' entries and the session operations on it unavailable). An
   account left out is free. The fixture daemon, like the real one, turns away `set_account_sharing` for an account marked
@@ -191,11 +194,11 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   the sessions already on the account alone. The pickers hide a turned-off account, apart from the one a console,
   project or session holds.
 - `configuration` sets what the platform and daemon answer to configuration export and import
-  (`src/gallery/fixtureConfiguration.ts`): `file` (`"dismissed"`, `"pending"`), `readError`, `saveError`, `downloads`,
+  (`src/fixtures/fixtureConfiguration.ts`): `file` (`"dismissed"`, `"pending"`), `readError`, `saveError`, `downloads`,
   `unavailable`. Exporting needs nothing; an inspection and an import result are written out per scenario, and the
   fixture daemon refuses an import result that does not follow from what the steps asked for. Like the real daemon, it echoes the document's `keyboard_shortcuts` in a result's `settings_applied` (the client applies them
   itself), so a result is written without them.
-  `fixtures/configuration.test.ts` holds the written results to the daemon's rules.
+  `src/gallery/fixtures/configuration.test.ts` holds the written results to the daemon's rules.
 - Write no `width` unless the window itself is part of the scenario (the page opens at 1440). A copy of a scenario made
   to open the drawer first, or because its layout differs at a width, earns nothing: choose the width with the control,
   and write the pointer ("choose 560px to see the rows stack") in the description of the scenario that shows the state.
@@ -215,13 +218,13 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   modifier is pressed after the steps, so they find those buttons by their plain names; `ui.pressWithModifier`
   presses a control with the modifier down for that press alone, for what a press does when the page has not seen
   the modifier held.
-- Live changes are written with the builders in `fixtures/liveChanges.ts` (`accountAdded`, `accountRemoved`,
+- Live changes are written with the builders in `src/gallery/fixtures/liveChanges.ts` (`accountAdded`, `accountRemoved`,
   `agentAvailability`, `terminalOpened`, `terminalClosed`, `pagePushed`, `latestPageDeleted`, `allPagesDeleted`), not raw `daemonEvents` steps; add a builder there for another
   kind of collection.
 - Steps name a control in the language the window is in, so copy is never written out: controls through `ui.t`, a
   session row through `ui.session`, a change row through `ui.changeRow`. A name that is not copy (a branch, a file, a
   title the fixture sets) is a plain string or a test of the name; a matcher is never a regular expression.
-  `fixtures.test.ts` fails a step that names a control by the English text of a message another language's catalog
+  `src/gallery/fixtures/fixtures.test.ts` fails a step that names a control by the English text of a message another language's catalog
   translates, bare or filled, and a test of the name that takes a name followed by the English catalog's separator
   and refuses the language's own (a literal comma and space, where `zh-Hans` writes `，`); a custom test of the name
   that stands for copy must be built from the helpers, and may be given a description with `describing(...)` (what a
@@ -229,23 +232,23 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
 - The fixture daemon refuses a reply it cannot fill faithfully rather than sending a field unfilled: where the real
   daemon counts a change side's `lines`, the fixture carries the text to count it from (`FixtureChange.whole`), or the
   request rejects with `FixtureUnfillableError`. Change fixtures are therefore written through the factories in
-  `fixtures/changeFixtures.ts` (`textChange`, `deletion`, `untracked`, ...), never as literals. A rule over a whole
+  `src/fixtures/changeFixtures.ts` (`textChange`, `deletion`, `untracked`, ...), never as literals. A rule over a whole
   repository that no single change shows is held by a test over the sample repository (`objectIdCheck` in
-  `fixtures/invariants.ts`); add such a rule there.
+  `src/fixtures/invariants.ts`); add such a rule there.
 - A reply that gains a field the UI draws from is taught to the fixture daemon together with the condition the real
   daemon fills the field under, and every scenario's fixture is given what that condition needs, those that answer
   with an error included (they answer the reply too, and an unfilled field there is a state the real daemon never
   sends). Take the condition from the daemon's own code and tests, never from a list of cases in a doc or a plan,
   which can lag the rule; and never import a UI helper that happens to compute the same thing: the fixture stands on
-  the daemon's side of the protocol, so repeat the rule inside `src/gallery/` (as `lineCount` in `fixtureGit.ts`
+  the daemon's side of the protocol, so repeat the rule inside `src/fixtures/` (as `lineCount` in `fixtureGit.ts`
   repeats the daemon's count), since UI code is free to change for the UI's reasons.
 - Hold the condition in a signature before holding it at run time: a field the reply gains goes first into the
   parameters of the `changeFixtures.ts` factories whose kind of change the real daemon fills it for, because an
   unfilled field is a legal value of the reply and only a parameter that has to be passed stops a fixture that cannot
   be answered faithfully being written. Leave to the run-time refusal only a condition that depends on the data rather
-  than on the kind of change. Extend `refuseUnfillable` (`banner.ts`) to each new field of this kind, and have the
+  than on the kind of change. Extend `refuseUnfillable` (`src/fixtures/banner.ts`) to each new field of this kind, and have the
   guard test over the fixture daemon's replies read every scenario's reply, those carrying no such field included, so
-  a refusal fails the test run and not only the scenario someone opens. That test (`fixtures/projectGit.test.ts`,
+  a refusal fails the test run and not only the scenario someone opens. That test (`src/gallery/fixtures/projectGit.test.ts`,
   "answer every read a scenario's repository offers without a refusal") takes the repositories from `SCENARIOS` (the
   sample one every scenario without a `git` is answered from included), so a new fixture is read without being named.
   It lets a daemon error through only where the fixture stages that very error for the change, and checks that each
@@ -292,9 +295,22 @@ waiting lines up behind it.
 
 ## Layout
 
-Imports run one way between the feature directories: `src/panels/` imports `src/browser/`, `src/browser/` imports
-`src/viewer/`, and `src/viewer/` imports neither `src/browser/` nor anything that does. Code they share lives in
-`src/components/`, which imports none of them. Nothing enforces this.
+The directories under `src/` sit in layers, and `no-restricted-imports` blocks in the root
+[`eslint.config.mjs`](../../eslint.config.mjs) enforce the direction of imports between them (tests and test-support
+files are exempt):
+
+- `src/components/` is the leaf layer: outside itself it imports only `i18n/`, `platform/`, `sessions/`, the `store/`
+  barrel and the files at the root of `src/`.
+- `src/sessions/` and `src/shortcuts/` sit under every feature and import only `i18n/`, `platform/` and root files.
+- `src/viewer/`, `src/about/`, `src/updates/` and `src/quota/` import the leaf layer and no other feature directory.
+  `src/project-browser/` imports `src/viewer/` and no other feature directory.
+- `src/shell/` (the window chrome) is imported only by the root files, `src/app/`, the gallery and the website
+  preview; `src/app/` (the hooks `App.tsx` is composed of) is imported only by `App.tsx`.
+- Production code imports neither `src/fixtures/` nor `src/gallery/`. `src/fixtures/` and `src/website-preview/` never
+  import `src/gallery/`.
+
+Four directory cycles remain, accepted for now: `components/` and `i18n/`, `configuration/` and `settings/`,
+`layout/` and `panels/`, and `panels/` to `terminal/` to `sidebar/` back to `panels/`.
 
 ### Build, entries and scripts
 
@@ -302,9 +318,10 @@ Imports run one way between the feature directories: `src/panels/` imports `src/
 |---|---|
 | `vite.config.ts`, `typography.mjs` | The Vite and Vitest configuration (React Compiler, Tailwind, the plugins serving the app name, the gallery frame's Content Security Policy and the viewer theme shim, and the failed-test-files reporter `pnpm verify` asks for) and the Tailwind typography plugin wrapper |
 | `index.html` | The window's entry page: its Content Security Policy and the script that applies the theme class before first paint |
-| `website-preview.html`, `vite.preview.config.ts`, `src/website-preview/` | The fixture-backed build embedded by the public website: mounts the real `App` over `createPreviewDaemon` with sample repositories, three scenes and simulated agent terminals, and relays scrolling, input modality and report injection to the embedding page while keeping keyboard focus on the homepage until the visitor moves into the frame and letting Tab leave it again; the iframe and scene buttons belong to [`apps/web/`](../../apps/web/README.md) |
-| `feature-preview.html`, `src/website-preview/features/` | The focused static application views built by `vite.preview.config.ts` alongside the full preview: `FeatureView` selects account, quota, session-status, file-tree or diff components over local fixtures, and `main.tsx` initializes isolated preferences and reports readiness or failure to the website's feature-card host |
-| `gallery.html`, `gallery-frame.html`, `src/gallery/` | The dev-only UI state gallery (see "The UI state gallery"): the shell and frame pages, the scenario type and step helpers, the fixture daemon, and `fixtures/` (the scenarios and their builders and groups); `preview/` is per-checkout and untracked |
+| `website-preview.html`, `vite.preview.config.ts`, `src/website-preview/` | The fixture-backed build embedded by the public website: mounts the real `App` over `createPreviewDaemon` (on the fixture daemon of `src/fixtures/`) with sample repositories, three scenes and simulated agent terminals, and relays scrolling, input modality and report injection to the embedding page while keeping keyboard focus on the homepage until the visitor moves into the frame and letting Tab leave it again; the iframe and scene buttons belong to [`apps/web/`](../../apps/web/README.md) |
+| `feature-preview.html`, `src/website-preview/features/` | The focused static application views built by `vite.preview.config.ts` alongside the full preview: `FeatureView` selects account, quota, session-status, file-tree or diff components over local fixtures from `src/fixtures/`, and `main.tsx` initializes isolated preferences and reports readiness or failure to the website's feature-card host |
+| `gallery.html`, `gallery-frame.html`, `src/gallery/` | The dev-only UI state gallery (see "The UI state gallery"): the shell and frame pages, the `Scenario` type, and `fixtures/` (the scenarios and their groups); `preview/` is per-checkout and untracked |
+| `src/fixtures/` | The fixtures runtime shared by the gallery and the website preview, excluded from the production type check and from release verification like `src/gallery/`: the fixture daemon (`createFixtureDaemon`) with its git and configuration answers, the fake terminal, state builders, sample files and repository, the step driver (`interact.ts`), the `Fixture` type and the stored preferences; imports nothing from `src/gallery/` |
 | `scripts/gallery-sweep.mjs` | `pnpm gallery:sweep`, with its tests and `test-fixtures/` (see "Sweeping the gallery"); `gallery-chip-geometry.mjs` and `gallery-report-focus.mjs` are standalone Playwright checks run by hand against a served gallery |
 | `scripts/generate-licenses.mjs` | `pnpm licenses:generate` (also the first step of `pnpm build`): writes the gitignored `src/about/licenses.generated.json` from this package's production dependencies and the Cargo workspace's |
 | `scripts/wkbench/` | `pnpm bench:wkwebview`, the WKWebView latency benchmark (see [its README](scripts/wkbench/README.md)) |
@@ -314,12 +331,14 @@ Imports run one way between the feature directories: `src/panels/` imports `src/
 
 | Path | Role |
 |---|---|
-| `src/main.tsx`, `src/App.tsx` | Startup (platform, daemon location, connection, theme, native window reveal, global error handlers) and the screen: window chrome, the content panel, session selection and resume, toasts, connection banner and the dialog layer |
+| `src/main.tsx`, `src/App.tsx` | Startup (platform, daemon location, connection, theme, native window reveal, global error handlers) and the screen: `App` puts the window chrome, the content panel, toasts, connection banner and the dialog layer together from the hooks in `src/app/` |
+| `src/shell/` | The window chrome and what it hosts: `TitleBar`, `Rail` with `RailQuotaEntry` and `ConsoleAvatar`, `NotificationsBell`, `ContentPanel`, `Toasts`, `ConnectionBanner`, `Scrim`, `ErrorAlerts` (the error acknowledgement host) and `useFirstConsoleHandoff` |
+| `src/app/` | The hooks `App.tsx` is composed of, one concern each: dialog routing, console switching, session selection, actions and requests, focus mode, the archive view, pane layout, widths and swipes, project panels, the linked file and terminal focus, and announcements |
 | `src/StartupScreen.tsx`, `src/ErrorBoundary.tsx`, `src/WelcomeScreen.tsx` | The screens for no daemon connection, a UI crash, and a daemon with no console; `StartupFailure` is the page the first two share, with the Report issue guidance on it |
 | `src/platform/` | `PlatformAdapter`, the interface to everything native, made of optional capabilities; implemented by `tauri.ts` (the only importer of `@tauri-apps/*`) and `browser.ts`, exposed by `react.tsx` |
 | `src/daemon.ts`, `src/daemon-client.ts`, `src/protocol.ts` | Locating the daemon (`resolveDaemonAddress`: its origin and the key it requires, from the page's address; `resolveRecovered`: whether the shell restarted it), its WebSocket client for `GET /ws/control` (request correlation, reconnect, event dispatch), and the hand-written TypeScript mirror of the wire protocol, checked against the daemon's types by `src/protocol.contract.ts` (`tsc` fails on a difference) over `src/protocol.generated.ts`, the file the daemon's `protocol/bindings.rs` test writes and `src/protocol.contract.test.ts` requires an assertion for every generated type |
-| `src/store.ts` | The Zustand store of the connection and the state derived from daemon events: `createDaemon`, `useDaemon`, `useDaemonStore`, `useDaemonStoreEqual`, `useErrorRecords` and the `onToast` stream |
-| `src/sessions/`, `src/sameValue.ts`, `src/waiting.ts` | `indexSessions` and the hooks reading session groups, deep equality, and the sessions waiting for the user in sidebar order |
+| `src/store/` | The Zustand store of the connection and the state derived from daemon events, split into state, reducer, actions, session requests, toasts, connection and the React bindings, re-exported by `index.ts`: `createDaemon`, `useDaemon`, `useDaemonStore`, `useDaemonStoreEqual`, `useErrorRecords` and the `onToast` stream |
+| `src/sessions/`, `src/currentConsole.ts`, `src/sameValue.ts`, `src/waiting.ts` | `indexSessions` and the hooks reading session groups, and `order.ts` (status rank, sorting and nesting of sessions and projects); `useCurrentConsole`, the current console and its persisted choice; deep equality; and the sessions waiting for the user in sidebar order |
 | `src/accountSwitchBatch.tsx`, `src/accountSwitchFailureAlert.tsx` | `runAccountSwitchBatch`, the app-level runner of a batch of session account switches that outlives the dialog starting it, and the error alert for its failures |
 | `src/preferenceKeys.ts`, `src/persistedPreference.ts` | The `localStorage` key of every persisted preference and `createPersistedPreference`, the guarded store behind them |
 | `src/gitWorkflow.ts`, `src/defaultSettings.ts` | The git workflow settings' defaults, choices and change detection, and `DEFAULT_SETTINGS`, the settings a store starts from before the first snapshot |
@@ -340,21 +359,21 @@ Imports run one way between the feature directories: `src/panels/` imports `src/
 
 | Path | Role |
 |---|---|
-| `src/components/` | Shared building blocks: window chrome (`TitleBar`, `Rail`, `ContentPanel`, `Toasts`), panel headers, `PaneToolbar` (the strip under a panel header that holds a field) and resize handles, menus (`ActionMenu`) and `Hint`, the one component behind every tooltip and floating popover, `Tag` (shared removable tags for inputs and read-only tags for summaries), status and error presentations (`StatusMark`, `DotStatusBadge`, `MarkLineBox`, `ErrorAlert`, `ChoiceWarning`, `FailureAlert`, `PaneFailure`, `DaemonErrorMessage`, `DiagnosticBlock`), scroll-fade and list-motion helpers, focus-handoff hooks, `useAccessibilityHidden` (whether a container or its ancestors hide it from assistive technology), `useBottomStrip` (the bottom strips' shared behavior), `AttendedStatusAnnouncer` (announcing a status that can arrive while the user is out of the window) and `ExternalLink`. Alerts go through `ErrorAlert` (and `FailureAlert` and `ChoiceWarning`, built on it); `ErrorAlert` and `AlertFrame` are the only importers of HeroUI's `Alert` parts (enforced by `eslint.config.mjs`) |
-| `src/layout/` | Pane layout: the `docked` and `phone` breakpoints, pane widths, the sidebar drawer and the aside's frame (`AsidePane`), whose content the aside shows (`asideOwner.ts`), pane toggles, F6 region cycling, and the touch swipe that opens and closes the drawer and the floating panels below `phone` (`useSwipe`, `paneSwipe`) |
+| `src/components/` | The leaf layer of shared building blocks, in subdirectories by kind: `alerts/` (`ErrorAlert`, `FailureAlert`, `ChoiceWarning`, `PaneFailure`, `DaemonErrorMessage`, `DiagnosticBlock`; alerts go through `ErrorAlert` and the two built on it, and `ErrorAlert` and `AlertFrame` are the only importers of HeroUI's `Alert` parts, enforced by `eslint.config.mjs`), `hint/` (`Hint`, the one component behind every tooltip and floating popover), `controls/`, `menus/` (`ActionMenu`), `text/` (`ExternalLink`, path and code text), `status/` (`StatusMark`, `DotStatusBadge`, `MarkLineBox`, `ProcessTreeDetails`), `icons/`, `tabs/`, `motion/` (list-motion helpers), `scroll/` (scroll-fade), `focus/` (focus-handoff hooks and `useAccessibilityHidden`, whether a container or its ancestors hide it from assistive technology), `announce/` (`AttendedStatusAnnouncer`, announcing a status that can arrive while the user is out of the window), `panel/` (panel headers, `PaneToolbar`, the strip under a panel header that holds a field, `ResizeSeparator` and `useBottomStrip`, the bottom strips' shared behavior), `host/` (copying text and paths, and the actions on a path on the daemon's host), `hooks/`, `dialog/` (the shared `Dialog` frame and its toolkit: `ConfirmDialog`, `RenameDialog`, `DirectoryPicker`, `ConfirmConsequences` for what a confirmation says it takes along, `useAfterErrorAlert` and `useFailureWhenBlocked`) and `form/` (`TextInput`, `TagsInput`, `Tag`, `OptionSelect`, `OptionDetails` and the other form controls) |
+| `src/layout/` | Pane layout: the `docked` and `phone` breakpoints, pane widths and their resize handle (`PaneResizeHandle`), the sidebar drawer and the aside's frame (`AsidePane`), whose content the aside shows (`asideOwner.ts`), pane toggles, F6 region cycling, and the touch swipe that opens and closes the drawer and the floating panels below `phone` (`useSwipe`, `paneSwipe`) |
 | `src/shortcuts/` | The central registry of keyboard shortcuts: command definitions, the portable `Binding`, validation, the persisted per-client overrides and the key recorder `recordKeys`; the Settings section is `src/settings/ShortcutsSection.tsx` |
 | `src/navigation/` | Back and Forward through the locations the content area has shown |
 | `src/lifecycle/` | Hooks tying the UI to the platform: the exit flow (`useAppExit`), notifications, the native menu and menu bar icon, native window theme, run in background, the git status schedule and reporting the interface language to the daemon |
 | `src/sidebar/` | The sidebar: one console's sessions and projects, the focus modes, rows and action menus, the project filter and new-session controls |
 | `src/archive/` | `ArchiveLayer` and `ArchiveView`: archived sessions listed over the terminal area, with deletion |
-| `src/terminal/` | The xterm.js terminal: `TerminalController`, `TerminalPane`, an archived session's history view, the project's shell terminals (`ShellTerminalPanel`) and terminal path links |
+| `src/terminal/` | The xterm.js terminal: at the root `TerminalController`, `TerminalPane`, the edit menu and link tooltip, themes, key handling and the reconnect policy; `links/` (terminal path links: detection, pointer handling and `openPathTarget`), `shell/` (the project's shell terminals, `ShellTerminalPanel`) and `history/` (an archived session's history view) |
 | `src/report/` | A session's report: `ReportPanel` and the sandboxed page frame, `listPages` (one page listing per session shared between the panel and the window's check) and `useProjectReportSession` (the project session whose Report panel a project's right pane carries) |
 | `src/panels/` | The right pane, a stack of inset panel cards: `RightPane`, `PanelStack`, the registry of panel kinds (stacked and toggled in the order Report, Terminal, Files, Processes), `panelMeta.ts` (each kind's name and icon, which the sidebar's menus use without importing the panels) and the persisted per-owner stack state, with a project's Report open or closed per session |
-| `src/browser/` | The project browser, the Files panel's content: `ProjectBrowser` with its Files tree and search, and the Git mode's Changes view over uncommitted changes, branch comparison and commits; also the viewer over a file a terminal path link named |
-| `src/viewer/` | The read-only file viewer modal: `FileViewer` over the application-owned `ViewerSubject` model, with code, diff and Markdown surfaces; `renderer.tsx` is the only importer of `@pierre/diffs` |
-| `src/quota/` | Agent account plan quota: wording and used-up judgement, the meters and usage bars, `RailQuotaEntry`, the rail's quota entry and panel, and `ResetCredits.tsx`, a Codex account's usage limit reset credits (`ResetCreditsLine`, `UseResetCreditDialog`) shown in that panel and in the account details dialog |
-| `src/settings/` | The settings modal: `SettingsDialog` and its sections (general, git, agent accounts and the added agents, where an account opens a read-only details dialog (`AccountDetailsDialog.tsx`, with the account's email) or a settings dialog for sharing and turning it off (`AccountSettingsDialog.tsx`), and removal's confirmation with its option to move the account's directory to the Trash (`RemoveAccountDialog.tsx`), with each agent's Claude compatibility switch in `AgentClaudeCompatibilitySetting.tsx` and `hasClaudeCompatibility` (`claudeCompatibility.ts`) saying which agents have it, agent behavior, trusted folders, macOS permissions, notifications, shortcuts, configuration, About) |
-| `src/dialogs/` | The console, project, session, rename, confirmation, directory-picker and daemon-question dialogs on the shared `Dialog` frame, `ErrorAlerts` (the acknowledgement host), `ConfirmConsequences` (what a confirmation says it takes along: sessions and lines), `useAfterErrorAlert` (runs something once a failure's alert has closed), `useFailureWhenBlocked` (turns a dialog unusable as it stands into a failure modal) and the shared form controls; `SessionModelDialog.tsx` changes a session's model and effort, using the `LaunchPickers` and `useLaunchModels` shared with the Advanced sections in `LaunchSettingsFields.tsx`, and `sessionModelLauncher.ts` connects the window to controls opening that dialog from outside it; `RequestedDialog` also confirms an archive or removal with its branch and process choices, on `useSessionBranches` (the archive and removal inspections), `BranchCleanupOptions`, `ProcessStopOptions` (`StoppedRow`, `useProcessStopping`) and `OptionDetails` (the collapsed details of an option) |
+| `src/project-browser/` | The project browser, the Files panel's content: at the root the shared frame and parts (`ProjectBrowser`, the view controls, filter field, tree rows, row actions, `autoRefresh.ts`), `files/` (Files mode: the tree, directory listings and search, and `TerminalFileViewer`, the viewer over a file a terminal path link named) and `git/` (Git mode: the Changes view over uncommitted changes, branch comparison and commits) |
+| `src/viewer/` | The read-only file viewer modal: `FileViewer` over the application-owned `ViewerSubject` model, with its header parts, content, body and change views and navigation focus in files of their own, and code, diff and Markdown surfaces; `renderer.tsx` is the only importer of `@pierre/diffs` |
+| `src/quota/` | Agent account plan quota: wording and used-up judgement, the meters and usage bars, and `ResetCredits.tsx`, a Codex account's usage limit reset credits (`ResetCreditsLine`, `UseResetCreditDialog`) shown in the rail's quota panel (`src/shell/RailQuotaEntry.tsx`) and in the account details dialog |
+| `src/settings/` | The settings modal: `SettingsDialog` and its sections (general, git, agent behavior, trusted folders, macOS permissions, notifications, shortcuts, configuration, About), with `accounts/` holding the Agent accounts section: the accounts table and the added agents, a read-only details dialog (`AccountDetailsDialog.tsx`, with the account's email), a settings dialog for sharing and turning an account off (`AccountSettingsDialog.tsx`), removal's confirmation with its option to move the account's directory to the Trash (`RemoveAccountDialog.tsx`), sign-in, and each agent's Claude compatibility switch (`AgentClaudeCompatibilitySetting.tsx`; `hasClaudeCompatibility` in `claudeCompatibility.ts` says which agents have it) |
+| `src/dialogs/` | The feature dialogs, on the `Dialog` frame and toolkit of `src/components/dialog/`: console, project, session, session request, handoff, switch account, trust prompt and daemon-question dialogs, and `RequestedDialog`, which also confirms an archive or removal with its branch and process choices on `useSessionBranches` (the archive and removal inspections), `BranchCleanupOptions` and `ProcessStopOptions` (`StoppedRow`, `useProcessStopping`); `SessionModelDialog.tsx` changes a session's model and effort, using the `LaunchPickers` and `useLaunchModels` shared with the Advanced sections in `LaunchSettingsFields.tsx`, and `sessionModelLauncher.ts` connects the window to controls opening that dialog from outside it. The acknowledgement host `ErrorAlerts` lives in `src/shell/` |
 | `src/process/` | The Processes panel and what feeds it: `ProcessesPanel` (a session's or project's process trees, each with Stop and Keep), `ProcessSessionSelect`, `useProcessPanel` (the panel's data, given to it through `ProcessPanelProvider`), `useProcessTrees` (one target's listings, polled) and `useProjectProcesses` (the project processes a project removal lists) |
 | `src/configuration/` | Configuration export and import: `ExportConfigurationDialog` (chooses the regions to export independently) and `ImportConfigurationDialog`, which shows the review (`ImportReview` as the frame with its "What to import" region checkboxes, `RegionTabs`, and one panel per region: `ImportConsoles`, `ImportAccounts`, `ImportSettings`) and then the result (`ImportResult` with `ResultCards`); `importParts.tsx` holds the pieces they share and `importPlan.ts` the pure plan (regions, account review state, fallbacks) |
 | `src/about/`, `src/updates/` | The third-party licenses dialog and its data (the generated `licenses.generated.json`, with the committed `licenses.fallback.json` standing in until the generator has run; `src/cssDependencies.test.ts` checks that every package a stylesheet names is a production dependency, so it reaches that list); the self-update on the UI side: `createUpdateStore`, `UpdatesProvider`, the persisted channel and `UpdateNotice` |
@@ -364,8 +383,8 @@ Imports run one way between the feature directories: `src/panels/` imports `src/
 | Path | Role |
 |---|---|
 | `src/agents.ts`, `src/agentLaunchSettings.ts`, `src/agentFields.ts`, `src/accountChoices.ts` | The agents' names, listed agents and install pages, model and effort picker rules, the per-agent settings of a console or project as a dialog holds and diffs them (`PerAgent` values) and the pure account-picker rules |
-| `src/accountOrder.ts` | `orderedAccounts`: the shared saved display order of an agent's accounts for settings, pickers and quota surfaces |
-| `src/processes.ts`, `src/processFacts.ts`, `src/components/ProcessTreeDetails.tsx` | `listProcesses`, `stopProcesses` and `keepProcesses`, the client-side process requests; `processFacts`, `ProcessCommand`, `ProcessTreeDetails` and the `StopGlyph` icon, the process wording shared by the Processes panel and the archive and removal choices |
+| `src/accountOrder.ts`, `src/accountQuotaOf.ts` | `orderedAccounts`: the shared saved display order of an agent's accounts for settings, pickers and quota surfaces; `accountQuotaOf`, the quota reading held for an account |
+| `src/processes.ts`, `src/processFacts.ts`, `src/components/status/ProcessTreeDetails.tsx` | `listProcesses`, `stopProcesses` and `keepProcesses`, the client-side process requests; `processFacts`, `ProcessCommand`, `ProcessTreeDetails` and the `StopGlyph` icon, the process wording shared by the Processes panel and the archive and removal choices |
 | `src/sessionLabel.ts`, `src/sessionColours.ts`, `src/gitStatusLabel.ts`, `src/projectFiltering.ts`, `src/sessionCopy.tsx`, `src/gitStatusCopy.tsx`, `src/sessionModel.ts`, `src/repositoryLink.ts` | Plain and rich session and git-badge wording, session colours, the sidebar filter's rules, a session's model and effort for display, and the repository host link |
 | `src/useWindowShortcut.ts`, `src/useQuickCreateModifier.ts`, `src/useNow.ts`, `src/focusGuard.ts`, `src/contextMenuGuard.ts`, `src/touchInput.ts` | Window-wide shortcut and modifier hooks, a shared clock, a react-aria focus workaround, native context menu suppression and touch-input queries |
 | `src/pathDisplay.ts`, `src/wirePath.ts`, `src/relativeTime.ts`, `src/conversationId.ts`, `src/reducedMotion.ts`, `src/imeKey.ts`, `src/avatarImage.ts`, `src/cssColour.ts` | Small pure helpers for path display, wire paths, relative time, conversation ids, motion preference, input-method keys, avatar images and resolving a CSS colour |

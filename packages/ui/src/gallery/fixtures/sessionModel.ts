@@ -1,9 +1,9 @@
 import { AGENT_LABEL } from "../../agents";
 import type { Session } from "../../protocol";
-import { describing, type Ui } from "../interact";
+import { describing, type Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
-import { accountOf, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState, switchingAccount } from "./builders";
-import type { FixtureError } from "./projectFiles";
+import { accountOf, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState, switchingAccount } from "../../fixtures/builders";
+import type { FixtureError } from "../../fixtures/sampleFiles";
 
 const GROUP = "Sidebar sessions";
 

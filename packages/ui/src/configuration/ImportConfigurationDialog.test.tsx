@@ -5,8 +5,8 @@ import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
 import { MIXED_RESULT, REVIEW } from "../gallery/fixtures/configuration";
-import { press as pressElement } from "../components/detailsTestSupport";
-import { accessibleName } from "../dialogs/dialogTestSupport";
+import { press as pressElement } from "../components/alerts/detailsTestSupport";
+import { accessibleName } from "../components/dialog/dialogTestSupport";
 import { isolate } from "../i18n/isolate";
 import { ConfigurationFileError } from "../platform";
 import type { Event, GitWorkflowSettings, RequestBody } from "../protocol";

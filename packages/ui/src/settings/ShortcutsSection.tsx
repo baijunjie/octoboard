@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 
-import { Button } from "../components/Button";
-import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/StatusAnnouncer";
+import { Button } from "../components/controls/Button";
+import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import { bindingOf, bindingsEqual, describeBinding, isModifierCode, type Binding } from "../shortcuts/binding";

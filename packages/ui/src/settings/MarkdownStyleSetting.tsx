@@ -1,6 +1,6 @@
 import React from "react";
 
-import { OptionSelect } from "../dialogs/OptionSelect";
+import { OptionSelect } from "../components/form/OptionSelect";
 import { useT } from "../i18n/react";
 import { MARKDOWN_STYLES, markdownStyle, type MarkdownStyle } from "../viewer/markdownStyle";
 import { SettingRow } from "./SettingRow";

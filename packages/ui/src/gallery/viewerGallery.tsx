@@ -4,7 +4,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 
-import { Button } from "../components/Button";
+import { Button } from "../components/controls/Button";
 import type { ViewerSubject } from "../viewer/content";
 import { FileViewer } from "../viewer/FileViewer";
 import { displayWirePath } from "../wirePath";

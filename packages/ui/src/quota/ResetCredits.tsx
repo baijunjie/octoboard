@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
 
-import { Button } from "../components/Button";
-import { InlineReference } from "../components/InlineReference";
-import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/StatusAnnouncer";
-import { focusFellToPage } from "../components/regionFocus";
-import { ConfirmDialog } from "../dialogs/ConfirmDialog";
-import { ConfirmConsequences } from "../dialogs/ConfirmConsequences";
+import { Button } from "../components/controls/Button";
+import { InlineReference } from "../components/text/InlineReference";
+import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
+import { focusFellToPage } from "../components/focus/regionFocus";
+import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
+import { ConfirmConsequences } from "../components/dialog/ConfirmConsequences";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { AccountQuota, ResetCreditOutcome } from "../protocol";
@@ -13,7 +13,7 @@ import { useDaemon } from "../store";
 import { ringForAutomaticFocus } from "../touchInput";
 import { useNow } from "../useNow";
 import { AccountQuotaSummary, QuotaStaleMark } from "./AccountQuotaSummary";
-import { accountQuotaOf } from "./accountQuotaOf";
+import { accountQuotaOf } from "../accountQuotaOf";
 import { expiryLine, nextResetCredit, resetCreditsSummary, usageBarSummary, usageBarWindows } from "./quotaFormat";
 import { useAccountQuota, type QuotaReading } from "./useAccountQuota";
 

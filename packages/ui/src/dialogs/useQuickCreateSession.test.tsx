@@ -5,7 +5,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { AGENT_OPTIONS } from "../agents";
 import { DaemonRequestError } from "../daemon-client";
-import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import type { Account, Session } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
 import type { NewSessionRequest } from "./dialogRequest";

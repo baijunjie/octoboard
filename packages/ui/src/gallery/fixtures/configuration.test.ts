@@ -4,7 +4,7 @@ import type { Imported } from "../../configuration/ImportResult";
 import type { Inspection } from "../../configuration/importPlan";
 import { DEFAULT_ACCOUNT_NAME, type AccountFallback } from "../../protocol";
 import { SCENARIOS } from ".";
-import { effectiveClaudeCompatibility } from "./builders";
+import { effectiveClaudeCompatibility } from "../../fixtures/builders";
 import { carriedSettings, DEFAULT_CLONE_DIR, resolvedAccountDirectory } from "./configuration";
 
 type Shown<T> = { id: string; machine: NonNullable<NonNullable<(typeof SCENARIOS)[number]["state"]>["settings"]> | undefined } & T;

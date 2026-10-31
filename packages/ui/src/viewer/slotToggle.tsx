@@ -1,7 +1,7 @@
 import React, { useContext } from "react";
 import { createPortal } from "react-dom";
 
-import { IconToggle } from "../components/IconToggle";
+import { IconToggle } from "../components/controls/IconToggle";
 import { ControlsSlot, type Controls } from "./controlsSlot";
 
 /** A two-state choice drawn as an `IconToggle` into one of the header's slots (`ControlsSlot`): the

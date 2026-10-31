@@ -4,8 +4,8 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished } from "vitest";
 
 import { AGENT_OPTIONS } from "./agents";
-import { SessionAgentTooltip } from "./components/SessionAgentIcon";
-import { accountOf, consoleOf, gitStatusOf, projectOf, sessionOf } from "./gallery/fixtures/builders";
+import { SessionAgentTooltip } from "./components/icons/SessionAgentIcon";
+import { accountOf, consoleOf, gitStatusOf, projectOf, sessionOf } from "./fixtures/builders";
 import { gitBadgeContent } from "./gitStatusCopy";
 import { gitBadgeAriaLabel } from "./gitStatusLabel";
 import { currentLanguage, setLanguage, t } from "./i18n/language";

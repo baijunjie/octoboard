@@ -3,29 +3,29 @@ import { Bot, BotOff, FolderPlus, MessageSquarePlus, Plus, SquareTerminal, Unplu
 import React, { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 
 import "@xterm/xterm/css/xterm.css";
-import { Button } from "../components/Button";
+import { Button } from "../components/controls/Button";
 import type { NoAgentReason } from "../agents";
-import { reportExternalLinkFailure } from "../components/ExternalLink";
-import { EmptyPanel } from "../components/EmptyPanel";
-import { PATH_VAR_PARAMS } from "../components/literalParams";
-import { focusTopBar } from "../components/regionFocus";
-import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/StatusAnnouncer";
-import { useFocusHandoff } from "../components/useFocusHandoff";
-import { useLatest } from "../components/useLatest";
+import { reportExternalLinkFailure } from "../components/text/ExternalLink";
+import { EmptyPanel } from "../components/panel/EmptyPanel";
+import { PATH_VAR_PARAMS } from "../components/text/literalParams";
+import { focusTopBar } from "../components/focus/regionFocus";
+import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
+import { useFocusHandoff } from "../components/focus/useFocusHandoff";
+import { useLatest } from "../components/hooks/useLatest";
 import { Message, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import { isDormant as isDormantStatus, isLive, type Session } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { useOctoboardTheme } from "../theme";
-import type { ViewedFile } from "../browser/TerminalFileViewer";
+import type { ViewedFile } from "../project-browser/files/TerminalFileViewer";
 import { TerminalController, type TermStatus } from "./TerminalController";
-import { openPathTarget } from "./openPathTarget";
+import { openPathTarget } from "./links/openPathTarget";
 import { programCopyHandler } from "./osc52";
-import { SessionHistoryView } from "./SessionHistoryView";
+import { SessionHistoryView } from "./history/SessionHistoryView";
 import { TerminalEditMenu } from "./TerminalEditMenu";
 import { TerminalLinkTooltip } from "./TerminalLinkTooltip";
 import { MAX_AUTO_RECONNECT_ATTEMPTS, reconnectDelay, STABLE_CONNECTION_MS } from "./reconnectPolicy";
-import type { HoveredTerminalLink } from "./terminalLinks";
+import type { HoveredTerminalLink } from "./links/terminalLinks";
 import { XTERM_THEMES } from "./xtermThemes";
 
 /** The longest the loading state covers a connected terminal still waiting for its first output. */

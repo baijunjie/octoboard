@@ -2,13 +2,13 @@ import { Spinner } from "@heroui/react";
 import React, { useId } from "react";
 
 import { AGENT_LABEL } from "../agents";
-import { agentIconPickerOptions } from "../components/AgentIcon";
-import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
-import { errorDetails, errorRemedy } from "../components/errorParts";
-import { ErrorAlert } from "../components/ErrorAlert";
-import { InlineReference } from "../components/InlineReference";
-import { StatusAnnouncer } from "../components/StatusAnnouncer";
-import { useFocusHandoff } from "../components/useFocusHandoff";
+import { agentIconPickerOptions } from "../components/icons/AgentIcon";
+import { DaemonErrorMessage } from "../components/alerts/DaemonErrorMessage";
+import { errorDetails, errorRemedy } from "../components/alerts/errorParts";
+import { ErrorAlert } from "../components/alerts/ErrorAlert";
+import { InlineReference } from "../components/text/InlineReference";
+import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
+import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { EXAMPLE_CONVERSATION_ID } from "../conversationId";
 import { Message, useT } from "../i18n/react";
 import type { Agent } from "../protocol";
@@ -18,7 +18,7 @@ import { AgentAccountField } from "./AgentAccountField";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
 import type { useLaunchChoice } from "./useLaunchChoice";
 import type { useResumeTarget } from "./useResumeTarget";
-import { TextInput } from "./TextInput";
+import { TextInput } from "../components/form/TextInput";
 
 /** An agent and account fixed by what holds the conversation, shown as the picker pair a new session
  * has, disabled (and marked invalid with `errorMessage`, when the account cannot run a session). Each is a single option, so the field reads as the enabled one does; the account

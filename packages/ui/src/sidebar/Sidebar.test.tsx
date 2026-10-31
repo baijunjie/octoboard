@@ -3,9 +3,9 @@ import React, { act, type ComponentProps } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { ChromeButton } from "../components/ChromeButton";
-import { Rail } from "../components/Rail";
-import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { ChromeButton } from "../shell/ChromeButton";
+import { Rail } from "../shell/Rail";
+import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import { PANE_ID } from "../layout/paneOverlay";
 import type { PanePeek } from "../layout/usePaneToggles";

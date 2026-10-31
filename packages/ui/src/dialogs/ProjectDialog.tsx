@@ -1,7 +1,7 @@
 import React, { useId, useMemo, useState } from "react";
 
 import { orderedAccounts } from "../accountOrder";
-import { Button } from "../components/Button";
+import { Button } from "../components/controls/Button";
 import { accountDisabled, consoleAccount, resolveProjectAccount, settledProjectAccount } from "../accountChoices";
 import { changedLaunch, changedProjectAccounts, readLaunch, readProjectAccounts } from "../agentFields";
 import {
@@ -10,11 +10,11 @@ import {
   defaultAccountName,
   projectSessionAgent,
 } from "../agents";
-import { agentIconPickerOptions, AgentIcon } from "../components/AgentIcon";
-import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
-import { FailureAlert } from "../components/FailureAlert";
-import { HelpTip } from "../components/HelpTip";
-import { InlineReference } from "../components/InlineReference";
+import { agentIconPickerOptions, AgentIcon } from "../components/icons/AgentIcon";
+import { DaemonErrorMessage } from "../components/alerts/DaemonErrorMessage";
+import { FailureAlert } from "../components/alerts/FailureAlert";
+import { HelpTip } from "../components/hint/HelpTip";
+import { InlineReference } from "../components/text/InlineReference";
 import { changedGitWorkflowItems, FOLLOWING_GIT_WORKFLOW } from "../gitWorkflow";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
@@ -22,19 +22,19 @@ import { tagVocabulary } from "../projectFiltering";
 import type { Agent, Project, ProjectAccount, ProjectSource } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { markDisabledPickable } from "./accountOptions";
-import { AdvancedSection, AdvancedTabs } from "./AdvancedSection";
+import { AdvancedSection, AdvancedTabs } from "../components/form/AdvancedSection";
 import { AgentAccountField } from "./AgentAccountField";
-import { Dialog, useDialogAction, useSubmitValidation } from "./Dialog";
-import { DirectoryPicker } from "./DirectoryPicker";
+import { Dialog, useDialogAction, useSubmitValidation } from "../components/dialog/Dialog";
+import { DirectoryPicker } from "../components/dialog/DirectoryPicker";
 import { GitWorkflowField } from "./GitWorkflowField";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
-import { OptionSelect, type Option } from "./OptionSelect";
-import { TagsInput } from "./TagsInput";
-import { TextAreaInput } from "./TextAreaInput";
-import { TextInput } from "./TextInput";
+import { OptionSelect, type Option } from "../components/form/OptionSelect";
+import { TagsInput } from "../components/form/TagsInput";
+import { TextAreaInput } from "../components/form/TextAreaInput";
+import { TextInput } from "../components/form/TextInput";
 import { useDetectedAgent } from "./useDetectedAgent";
 import { projectNameDefault } from "./projectNameDefault";
-import { exceedsTextLimit, PROJECT_DESCRIPTION_LIMIT, PROJECT_NAME_LIMIT } from "./textLength";
+import { exceedsTextLimit, PROJECT_DESCRIPTION_LIMIT, PROJECT_NAME_LIMIT } from "../components/form/textLength";
 
 const SOURCE_OPTIONS: { value: ProjectSource; label: PlainMessageKey }[] = [
   { value: "local", label: "dialog.project.source.local" },

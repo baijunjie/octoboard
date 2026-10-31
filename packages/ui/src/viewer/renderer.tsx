@@ -22,7 +22,7 @@ import DiffsWorker from "@pierre/diffs/worker/worker.js?worker";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { FadeOverflow } from "../components/FadeOverflow";
+import { FadeOverflow } from "../components/text/FadeOverflow";
 import { RENDER_BUDGETS } from "./budgets";
 import { CODE_THEMES } from "./codeTheme";
 import type { ChangeBodies } from "./content";

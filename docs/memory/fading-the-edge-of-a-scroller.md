@@ -3,7 +3,7 @@
 ## Every faded scroller takes the fade from one module
 
 A surface in `packages/ui` that hides content behind its own edge fades that edge, and no site works out how: the fade
-comes from `packages/ui/src/components/scrollFade.tsx`, which supplies the fade's size and the matching scroll padding
+comes from `packages/ui/src/components/scroll/scrollFade.tsx`, which supplies the fade's size and the matching scroll padding
 (the "Focus scrolled to the edge of a scroller that fades there" section of `docs/ui-accessibility.md`), so no site
 states either. Never reach for HeroUI's `ScrollShadow` directly and never hand-build a fade: HeroUI's own default size
 is a larger one (40px) that nothing here uses, and a bare `ScrollShadow` carries no scroll padding at all. The library
@@ -13,7 +13,7 @@ left as it is; every other faded surface here is the project's own and goes thro
 Both halves of that are enforced by `pnpm --filter ui test`, which fails on a scroll container in `packages/ui/src`
 that does not take its fade from the module and on `ScrollShadow` named anywhere outside it. A surface that genuinely
 cannot take the fade is declared, with its reason, in the `EXEMPTIONS` list of
-`packages/ui/src/components/scrollFadeCoverage.test.ts` — that list is the whole account of what the rule leaves
+`packages/ui/src/components/scroll/scrollFadeCoverage.test.ts` — that list is the whole account of what the rule leaves
 alone, so a scroller the check cannot see (one whose overflow comes from a library's stylesheet or another package's
 DOM) is declared there as well, rather than passing unmentioned. Declaring it is the only way out: never slip past the
 check instead, by assembling the overflow class from pieces or moving the scroller out of this package's source.
@@ -40,7 +40,7 @@ Which API a site takes follows from its scroller:
   pinned element can be absent, pass 0 while it is — a fixed height leaves an opaque band over the top rows.
   That padding covers the pinned element too, so focus landing on it, or on a control inside it, scrolls the list on
   every focus move unless exempted: under either API, the sticky element spreads the props of
-  `useStickyHeadingFocus` (`packages/ui/src/components/stickyHeadingFocus.ts`). Under `FadedScroller` they also mark
+  `useStickyHeadingFocus` (`packages/ui/src/components/scroll/stickyHeadingFocus.ts`). Under `FadedScroller` they also mark
   it `data-sticky-heading`, which is how that scroller finds the heading to place its top fade by, so a sticky element
   built without them leaves that fade in the wrong place as well. `StickySectionHeading` in
   `packages/ui/src/sidebar/rows.tsx` already does, so a heading built from it needs nothing more. The overlay fades

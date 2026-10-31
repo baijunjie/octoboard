@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { press } from "../components/detailsTestSupport";
+import { press } from "../components/alerts/detailsTestSupport";
 import { DaemonRequestError } from "../daemon-client";
 import { isolate } from "../i18n/isolate";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";

@@ -6,7 +6,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { isolate } from "../i18n/isolate";
 import type { Agent, AgentAvailability, Session } from "../protocol";
 import type { NewSessionBinding } from "./dialogRequest";
-import { accountOf, type ProjectExtra, sessionOf } from "../gallery/fixtures/builders";
+import { accountOf, type ProjectExtra, sessionOf } from "../fixtures/builders";
 import { DaemonProvider } from "../store";
 import { SessionDialog } from "./SessionDialog";
 import { parentConsole, project, renderDialog, hub1, buttons, optionElements, choose, pickerNamed } from "./sessionDialogTestSupport";

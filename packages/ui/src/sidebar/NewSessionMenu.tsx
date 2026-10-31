@@ -4,7 +4,7 @@ import { flushSync } from "react-dom";
 import { setInteractionModality } from "react-aria";
 import { useShallow } from "zustand/react/shallow";
 
-import { ActionMenu } from "../components/ActionMenu";
+import { ActionMenu } from "../components/menus/ActionMenu";
 import type { NewSessionRequest } from "../dialogs/dialogRequest";
 import { quickCreateUnavailable } from "../dialogs/openSessionRequest";
 import { useT } from "../i18n/react";
@@ -12,7 +12,7 @@ import type { Project } from "../protocol";
 import { useDaemonStore } from "../store";
 import { matchCreateShortcut, ShortcutTooltip } from "./sessionShortcuts";
 import { useWindowShortcut } from "../useWindowShortcut";
-import { sortProjects } from "./order";
+import { sortProjects } from "../sessions/order";
 import { RowIconButton } from "./rows";
 import { useNewSessionMode } from "./useNewSessionMode";
 

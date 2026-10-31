@@ -104,7 +104,7 @@ catalog's (`textDirection` in `packages/ui/src/i18n/languages.ts`), so `ar` stil
 ## A fixture daemon answers as fully as the real one, or the gallery shows a state no daemon sends
 
 Applies whenever a daemon reply gains a field the UI draws from, and whenever a gallery scenario still shows the old
-behaviour after a fix. The fixture daemon (`packages/ui/src/gallery/fixtureDaemon.ts`, and `fixtureGit.ts` for a
+behaviour after a fix. The fixture daemon (`packages/ui/src/fixtures/fixtureDaemon.ts`, and `fixtureGit.ts` for a
 project's Git mode) answers every scenario from what that scenario's fixture happens to hold, so a field the fixture
 cannot supply goes out as the real daemon's "not known" value and the UI draws the fallback for it. A complete fix can
 therefore leave every scenario showing what it showed before, with nothing in the type checker or the unit tests to say
@@ -187,7 +187,7 @@ setting.
 ## Settle a touch gesture through the browser's own touch input, not jsdom or dispatched events
 
 A jsdom test and a gallery step dispatch touch or pointer events straight at an element (`ui.swipe` in
-`packages/ui/src/gallery/interact.ts` sends plain `Event`s). Neither goes through the browser's gesture handling,
+`packages/ui/src/fixtures/interact.ts` sends plain `Event`s). Neither goes through the browser's gesture handling,
 which is where a gesture breaks. Pointer events are the case in point. Once Chromium starts treating a sideways touch
 as a pan, it sends `pointercancel` after the first `pointermove`, even on a page with nothing to scroll sideways, so a
 pointer-event swipe never reaches its threshold while the tests pass. `touchmove` keeps coming, so detect a finger

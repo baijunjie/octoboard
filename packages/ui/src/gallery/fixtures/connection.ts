@@ -1,5 +1,6 @@
-import type { Scenario, Step } from "../scenario";
-import { consoleOf, projectOf, sessionOf, snapshotState, switchingAccount } from "./builders";
+import type { Step } from "../../fixtures/interact";
+import type { Scenario } from "../scenario";
+import { consoleOf, projectOf, sessionOf, snapshotState, switchingAccount } from "../../fixtures/builders";
 import { PATH_LINK_FILES, PATH_LINK_WORKTREE_FILES } from "./pathLinkFiles";
 
 const console_ = consoleOf("c-1", "Main");

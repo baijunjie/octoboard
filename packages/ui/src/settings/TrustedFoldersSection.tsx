@@ -1,13 +1,13 @@
 import { FolderOpen } from "lucide-react";
 import React, { useState } from "react";
 
-import { Button } from "../components/Button";
-import { EmptyPanel } from "../components/EmptyPanel";
-import { InlineReference } from "../components/InlineReference";
-import { MarkedPath } from "../components/MarkedPath";
-import { useListMotion } from "../components/useListMotion";
-import { TitledControl } from "../components/TitledControl";
-import { ConfirmDialog } from "../dialogs/ConfirmDialog";
+import { Button } from "../components/controls/Button";
+import { EmptyPanel } from "../components/panel/EmptyPanel";
+import { InlineReference } from "../components/text/InlineReference";
+import { MarkedPath } from "../components/text/MarkedPath";
+import { useListMotion } from "../components/motion/useListMotion";
+import { TitledControl } from "../components/hint/TitledControl";
+import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import { abbreviateHome } from "../pathDisplay";

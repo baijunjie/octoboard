@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-import { useLatest } from "../components/useLatest";
+import { useLatest } from "../components/hooks/useLatest";
 import { t } from "../i18n/language";
 import { usePlatform } from "../platform/react";
 import type { Console, Project } from "../protocol";

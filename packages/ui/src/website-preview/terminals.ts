@@ -1,5 +1,5 @@
 import type { Agent } from "../protocol";
-import { cells, isWide, type TerminalScript } from "../gallery/fakeTerminal";
+import { cells, isWide, type TerminalScript } from "../fixtures/fakeTerminal";
 
 /** One line of an edit's diff: a removed or an added line of code. */
 export type TerminalDiffLine = { removed: string } | { added: string };

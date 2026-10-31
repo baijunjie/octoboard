@@ -1,4 +1,4 @@
-import type { Reason } from "../components/ReasonText";
+import type { Reason } from "../components/text/ReasonText";
 import type { Translate } from "../i18n/catalog";
 import type { AccountQuota, Agent, QuotaWindow } from "../protocol";
 import { AccountUsageBar } from "./AccountUsageBar";

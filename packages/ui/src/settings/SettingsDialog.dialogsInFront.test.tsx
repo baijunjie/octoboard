@@ -4,15 +4,15 @@ import { createRoot } from "react-dom/client";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
-import { framesAsTimers, settleFrames } from "../dialogs/dialogTestSupport";
-import { account, accountLogins, bus, settings } from "./agentAccountsSectionTestState";
+import { framesAsTimers, settleFrames } from "../components/dialog/dialogTestSupport";
+import { account, accountLogins, bus, settings } from "./accounts/agentAccountsSectionTestState";
 import { SettingsDialog, type SettingsSectionId } from "./SettingsDialog";
 
-vi.mock("../store", async (importOriginal) => (await import("./agentAccountsSectionTestState")).storeStandIn(await importOriginal()));
-vi.mock("../components/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
-vi.mock("../components/FadeOverflow", async () => ({ FadeOverflow: (await import("./agentAccountsSectionTestState")).FadeOverflowStandIn }));
-vi.mock("../components/MarkedPath", async () => ({ MarkedPath: (await import("./agentAccountsSectionTestState")).MarkedPathStandIn }));
-vi.mock("../dialogs/OptionSelect", async () => ({ OptionSelect: (await import("./agentAccountsSectionTestState")).OptionSelectStandIn }));
+vi.mock("../store", async (importOriginal) => (await import("./accounts/agentAccountsSectionTestState")).storeStandIn(await importOriginal()));
+vi.mock("../components/icons/AgentIcon", async (importOriginal) => (await import("./accounts/agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
+vi.mock("../components/text/FadeOverflow", async () => ({ FadeOverflow: (await import("./accounts/agentAccountsSectionTestState")).FadeOverflowStandIn }));
+vi.mock("../components/text/MarkedPath", async () => ({ MarkedPath: (await import("./accounts/agentAccountsSectionTestState")).MarkedPathStandIn }));
+vi.mock("../components/form/OptionSelect", async () => ({ OptionSelect: (await import("./accounts/agentAccountsSectionTestState")).OptionSelectStandIn }));
 
 // The dialogs the Agent accounts section opens in front of Settings by itself as Settings opens — an account's settings
 // dialog for View in Settings, the Add agent dialog, the login dialog of a login found running — mount a commit after

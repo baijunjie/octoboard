@@ -3,14 +3,14 @@ import { CircleAlert, Info, Sparkles } from "lucide-react";
 import React, { useEffect, useRef } from "react";
 import { setInteractionModality } from "react-aria";
 
-import { ActivityMarker } from "../components/ActivityMarker";
-import { Button } from "../components/Button";
-import { ErrorAlert } from "../components/ErrorAlert";
-import { ExternalLink } from "../components/ExternalLink";
-import { StatusMark } from "../components/StatusMark";
-import { InlineReference } from "../components/InlineReference";
-import { StatusBadge, type StatusBadgeColor } from "../components/StatusBadge";
-import { FadedScroller, useFadeRegion } from "../components/scrollFade";
+import { ActivityMarker } from "../components/status/ActivityMarker";
+import { Button } from "../components/controls/Button";
+import { ErrorAlert } from "../components/alerts/ErrorAlert";
+import { ExternalLink } from "../components/text/ExternalLink";
+import { StatusMark } from "../components/status/StatusMark";
+import { InlineReference } from "../components/text/InlineReference";
+import { StatusBadge, type StatusBadgeColor } from "../components/status/StatusBadge";
+import { FadedScroller, useFadeRegion } from "../components/scroll/scrollFade";
 
 /** One semantic meaning and how the application draws it. The role tokens follow docs/ui-accessibility.md's "One
  * definition per semantic colour"; the purple help colour has no HeroUI token, so its icon colour is its text tint

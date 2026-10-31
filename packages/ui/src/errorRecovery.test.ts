@@ -6,7 +6,7 @@ import { errorAlerts } from "./errorAlerts";
 import { errorPresentation } from "./errorPresentation";
 import { classifyError, modelChangeRecovery, pathLinkRecovery } from "./errorRecovery";
 import { ActionableError } from "./actionableError";
-import { hasErrorRemedy } from "./components/errorPartPresence";
+import { hasErrorRemedy } from "./components/alerts/errorPartPresence";
 
 it.each([
   ["path_not_found", "path"], ["source_unavailable", "sourceGone"], ["path_already_exists", "pathExists"], ["session_locked", "unlock"],

@@ -11,12 +11,12 @@ export interface SessionIndex {
   boundOwnerIds: ReadonlySet<string>;
 }
 
-/** Shared and never changed: the arrays an index holds are read, not edited. */
-const EMPTY_SESSIONS: Session[] = [];
+/** No sessions, as one shared array that is never edited. */
+export const NO_SESSIONS: Session[] = [];
 
 /** A group of an index that is not there: one array for all of them, so it is never a new value. */
 export function sessionsOf(group: ReadonlyMap<string, Session[]>, id: string): Session[] {
-  return group.get(id) ?? EMPTY_SESSIONS;
+  return group.get(id) ?? NO_SESSIONS;
 }
 
 const indexes = new WeakMap<ReadonlyMap<string, Session>, SessionIndex>();

@@ -273,12 +273,12 @@ mapping.
   Codex account and a supported non-default console effort, then Codex removed from the added agents, then the editor
   reopened. The stored selection stays visible and is badged "Not added".
 - **Mechanism.** The accessible name and description of the trigger, read when it takes focus. No live region and no
-  write delay. `packages/ui/src/dialogs/OptionSelect.tsx` (`OptionSelect`: the select's `aria-label`, optional
+  write delay. `packages/ui/src/components/form/OptionSelect.tsx` (`OptionSelect`: the select's `aria-label`, optional
   `aria-labelledby` and descriptions, and the selected value rendered with `StatusBadge`), fed by
   `packages/ui/src/dialogs/ConsoleDialog.tsx` (label "Console sessions", hidden label, stored default agent) and the
   agent option list in `packages/ui/src/agents.ts` (held agents are retained and badged "Not added").
-  `packages/ui/src/components/StatusBadge.tsx` adds an `sr-only` comma and space before the visible "Not added" text; it
-  has no role, live attribute or explicit label. The agent icon is `aria-hidden`.
+  `packages/ui/src/components/status/StatusBadge.tsx` adds an `sr-only` comma and space before the visible "Not added"
+  text; it has no role, live attribute or explicit label. The agent icon is `aria-hidden`.
 - **ARIA wiring as rendered.** Native tree: a pop-up button with has-popup set, enabled; title and description `Codex ,
   Not added Console sessions`; no live, atomic or relevant attributes. The source select label "Console sessions" is
   distinct from the computed trigger content.
@@ -296,9 +296,9 @@ mapping.
 
 - **Location and state change.** The same picker, opened after removal. Down arrow twice moved Claude Code, Grok Build,
   then the retained Codex. The retained choice stayed selected and was not reselected.
-- **Mechanism.** Option name read on navigation. `packages/ui/src/dialogs/OptionSelect.tsx` (the list item with its
-  `textValue` set to the option label, followed by ", " and the badge text when it has one, `isDisabled` from the agent
-  option, a child name and `StatusBadge`; the select's `disabledBehavior` of selection, so a removed option can be
+- **Mechanism.** Option name read on navigation. `packages/ui/src/components/form/OptionSelect.tsx` (the list item with
+  its `textValue` set to the option label, followed by ", " and the badge text when it has one, `isDisabled` from the
+  agent option, a child name and `StatusBadge`; the select's `disabledBehavior` of selection, so a removed option can be
   navigated to but not chosen). No explicit option `aria-label` and no live region. That the child badge contributes to
   speech is a verified runtime outcome, not something `textValue` alone implies.
 - **ARIA wiring as rendered.** Native tree: the container is a list described "Console sessions"; the retained item is
@@ -319,7 +319,7 @@ mapping.
 - **Mechanism.** `aria-describedby` from the account picker to a hidden name-plus-badge subtree. No live region and no
   write delay. `packages/ui/src/dialogs/ConsoleAccountsField.tsx` (the visible agent name and badge wrapper is
   `aria-hidden`; its inner span carries a generated ID that the account `OptionSelect` receives as `describedBy` when
-  the agent is marked "Not added"), and `packages/ui/src/dialogs/OptionSelect.tsx` (`describedBy` becomes
+  the agent is marked "Not added"), and `packages/ui/src/components/form/OptionSelect.tsx` (`describedBy` becomes
   `aria-describedby`). The agent name and state are therefore the picker's description, separate from its selected
   value; an explicitly referenced hidden subtree supplies the description.
 - **ARIA wiring as rendered.** Native tree: a pop-up button with has-popup set, enabled; title and description `Speech
@@ -343,7 +343,7 @@ mapping.
 - **Mechanism.** Tab name read on focus. `packages/ui/src/dialogs/ConsoleLaunchFields.tsx` (retains any agent with a
   non-empty saved model or effort; the tab list is labelled "Agent"; each tab holds a decorative icon, the agent name,
   `StatusBadge` and an indicator, with no explicit `aria-label`, `aria-labelledby`, `aria-describedby` or live region).
-  This is not `packages/ui/src/components/AgentTabList.tsx`.
+  This is not `packages/ui/src/components/tabs/AgentTabList.tsx`.
 - **ARIA wiring as rendered.** Native tree: a radio-button role described as tab, titled `Codex , Not added`, selected,
   enabled, no live attributes; the parent is a tab group named "Agent"; the panel's title is also `Codex , Not added`.
 - **Result.** Spoken on focus: `Codex , Not added 已选择 tab，第3项（共3项） Agent tab group`. Name and state together.
@@ -402,11 +402,11 @@ mapping.
 - **Location and state change.** The connection banner: the control connection drops, retries are refused, retries are
   spent.
 - **Mechanism.** A `StatusAnnouncer` mounted for the life of the banner, fed through the banner's own gate.
-  `packages/ui/src/components/ConnectionBanner.tsx` (`ConnectionBanner`: `ANNOUNCEMENT_DELAY_MS`, 100 ms, withholds the
-  text from the announcer for that long after the banner becomes visible, re-armed per outage; the announcer sits in an
-  element marked `data-react-aria-top-layer`), and `packages/ui/src/components/StatusAnnouncer.tsx` (`StatusAnnouncer`,
-  whose own first write delay applies once per mount). The visible strip text and icons are `aria-hidden`; no nested
-  status or alert.
+  `packages/ui/src/shell/ConnectionBanner.tsx` (`ConnectionBanner`: `ANNOUNCEMENT_DELAY_MS`, 100 ms, withholds the text
+  from the announcer for that long after the banner becomes visible, re-armed per outage; the announcer sits in an
+  element marked `data-react-aria-top-layer`), and `packages/ui/src/components/announce/StatusAnnouncer.tsx`
+  (`StatusAnnouncer`, whose own first write delay applies once per mount). The visible strip text and icons are
+  `aria-hidden`; no nested status or alert.
 - **ARIA wiring as rendered.** The common mapping; the region is empty before the outage and populated unnamed during
   it. Focus stayed on an unrelated button in every sample.
 - **Result.** Spoken automatically, once each: `Disconnected from the daemon. Reconnecting…` about 0.3 s after the
@@ -431,11 +431,12 @@ mapping.
 - **Location and state change.** Settings, Agent accounts, a named account, Log in: the nested login dialog opens and
   moves focus to Cancel login; the text goes starting, then browser-waiting, then device-code waiting.
 - **Mechanism.** A `StatusAnnouncer` mounted with the dialog, with `firstWriteDelayMs` set to
-  `AFTER_FOCUS_MOVE_DELAY_MS` (1500 ms). `packages/ui/src/settings/AccountLoginDialog.tsx` (`AccountLoginDialog`: the
-  visible spinner and the visible progress or code line are `aria-hidden`; the sibling announcer receives the plain
-  translated text, the code inside isolation marks, and `undefined` while the login is not active), and
-  `packages/ui/src/components/StatusAnnouncer.tsx`. The first text is written once after the delay; later changes are
-  written at once. No nested status or alert; focus rests on Cancel login (`autoFocus`) throughout.
+  `AFTER_FOCUS_MOVE_DELAY_MS` (1500 ms). `packages/ui/src/settings/accounts/AccountLoginDialog.tsx`
+  (`AccountLoginDialog`: the visible spinner and the visible progress or code line are `aria-hidden`; the sibling
+  announcer receives the plain translated text, the code inside isolation marks, and `undefined` while the login is not
+  active), and `packages/ui/src/components/announce/StatusAnnouncer.tsx`. The first text is written once after the
+  delay; later changes are written at once. No nested status or alert; focus rests on Cancel login (`autoFocus`)
+  throughout.
 - **ARIA wiring as rendered.** The common mapping inside the modal web dialog named "Log in to Grok Build account
   VoiceOver fixture". The visible progress text is absent from the native tree because of `aria-hidden`; the hidden
   status text is present, so the text exists once.
@@ -459,14 +460,15 @@ mapping.
   account is logged in. Three paths: Log in from the account's Actions menu, Log in from the row's own direct button,
   and success while the window is minimized followed by return. E10 also exercises the Log in button in the account
   details dialog, which remains open under the login dialog.
-- **Mechanism.** A row-lifetime `StatusAnnouncer` written by a caller timer. `packages/ui/src/settings/AccountLogin.tsx`
-  (`AccountLoginAnnouncer`: on a success that was not already there at mount it waits `AFTER_FOCUS_MOVE_DELAY_MS` and
-  only while the window is attended, restarting the wait on each return, then gives the announcer the account-named
-  text; `useClearSucceededLogin` dismisses the success after `SUCCESS_SHOWN_MS`, 6000 ms of attended time without a
-  break), `packages/ui/src/components/useWindowAttended.ts` (`useWindowAttended`: document visible and window focused),
-  `packages/ui/src/settings/AccountsTable.tsx` (`AccountTableRow` mounts the announcer and `useClearSucceededLogin`),
-  and `StatusAnnouncer` with its default 100 ms already elapsed (the timer is the caller's, not `firstWriteDelayMs`).
-  The dialog closes on success, hiding its own progress status.
+- **Mechanism.** A row-lifetime `StatusAnnouncer` written by a caller timer.
+  `packages/ui/src/settings/accounts/AccountLogin.tsx` (`AccountLoginAnnouncer`: on a success that was not already there
+  at mount it waits `AFTER_FOCUS_MOVE_DELAY_MS` and only while the window is attended, restarting the wait on each
+  return, then gives the announcer the account-named text; `useClearSucceededLogin` dismisses the success after
+  `SUCCESS_SHOWN_MS`, 6000 ms of attended time without a break),
+  `packages/ui/src/components/announce/useWindowAttended.ts` (`useWindowAttended`: document visible and window focused),
+  `packages/ui/src/settings/accounts/AccountsTable.tsx` (`AccountTableRow` mounts the announcer and
+  `useClearSucceededLogin`), and `StatusAnnouncer` with its default 100 ms already elapsed (the timer is the caller's,
+  not `firstWriteDelayMs`). The dialog closes on success, hiding its own progress status.
 - **ARIA wiring as rendered.** The common mapping; empty before success, populated with the account text in descendants
   after. The text is `⁨VoiceOver fixture⁩: logged in.` with isolation marks around the account name.
 - **Earlier result (E4).** Spoken automatically, once, in all three paths. After the Settings and Actions-button focus
@@ -512,8 +514,8 @@ mapping.
 
 - **Earlier location and state change (E4).** After a success, Settings General then Agent accounts then the Claude Code
   tab then the Grok Build tab are shown within six seconds, remounting the account row.
-- **Mechanism.** `AccountLoginAnnouncer` in `packages/ui/src/settings/AccountLogin.tsx` initializes from the success
-  present when the row mounts and does not write it; it clears that hold when the state next leaves success.
+- **Mechanism.** `AccountLoginAnnouncer` in `packages/ui/src/settings/accounts/AccountLogin.tsx` initializes from the
+  success present when the row mounts and does not write it; it clears that hold when the state next leaves success.
 - **ARIA wiring as rendered.** The common mapping, empty after the remount.
 - **Earlier result (E4).** Not spoken, as intended: only the tab-selection phrases were captured; no second logged-in
   phrase through 10 s or more after the success. The original announcement count stayed one.
@@ -553,10 +555,11 @@ mapping.
   copies the path, the button's name and tooltip change to "Copied", and the confirmation clears when the tooltip
   closes.
 - **Mechanism.** A `StatusAnnouncer` with `element="span"`, mounted empty with the button.
-  `packages/ui/src/components/CopyButton.tsx` (`CopyButton`: the confirmation text defaults to "Copied"; the clear is
-  driven by the tooltip lifecycle, `COPIED_HOLD_MS` of 2000 ms applying only while no tooltip is open, and 150 ms after
-  the tooltip closes), reached through `packages/ui/src/browser/GitView.tsx` (`Notice`). The default 100 ms first write
-  delay had long elapsed, so the write is immediate. Main window, no modal; the check icon is `aria-hidden`.
+  `packages/ui/src/components/controls/CopyButton.tsx` (`CopyButton`: the confirmation text defaults to "Copied"; the
+  clear is driven by the tooltip lifecycle, `COPIED_HOLD_MS` of 2000 ms applying only while no tooltip is open, and 150
+  ms after the tooltip closes), reached through `packages/ui/src/project-browser/git/GitView.tsx` (`Notice`). The
+  default 100 ms first write delay had long elapsed, so the write is immediate. Main window, no modal; the check icon is
+  `aria-hidden`.
 - **ARIA wiring as rendered.** The common mapping; the same button is natively a button named "Copy worktree path", then
   "Copied" while the status is populated.
 - **Result.** Spoken automatically, once: `Copied`. Focus stayed on the button. With the tooltip held open the text did
@@ -580,9 +583,10 @@ mapping.
 - **Location and state change.** Hiding and re-showing the Files panel, with focus left on the panel toggle, mounts the
   Changes view again: it loads (`Loading changes…`) and the loading clears.
 - **Mechanism.** A `StatusAnnouncer` mounted with the Changes view, its text present from the first render and written
-  after the default 100 ms first write delay. `packages/ui/src/browser/GitView.tsx` (`GitView`; the card and its content
-  are recreated by the panel stack when the panel is shown). The visible loading placeholder is `aria-hidden`. Main
-  window, no modal; focus stays on the toggle, which is renamed from "Show files panel" to "Hide files panel".
+  after the default 100 ms first write delay. `packages/ui/src/project-browser/git/GitView.tsx` (`GitView`; the card and
+  its content are recreated by the panel stack when the panel is shown). The visible loading placeholder is
+  `aria-hidden`. Main window, no modal; focus stays on the toggle, which is renamed from "Show files panel" to "Hide
+  files panel".
 - **ARIA wiring as rendered.** The common mapping; an empty region appeared with the toggle focused, then was populated
   about 100 ms later, then cleared about 0.2 s after that.
 - **Result.** Spoken automatically, once, after the toggle's own phrase (`Hide files panel 已展开 button`): `Loading
@@ -601,10 +605,10 @@ mapping.
 - **Location and state change.** The project menu, Git, Switch branch: the submenu opens and takes focus while its
   branch list loads.
 - **Mechanism.** A `StatusAnnouncer` mounted with the submenu items, holding "Loading…" at the default 100 ms delay.
-  `packages/ui/src/components/ActionMenu.tsx` (`LoadedMenuItems`); the caller is the project menu's async branch list in
-  `packages/ui/src/sidebar/menus.tsx`. The visible disabled "Loading…" menu item is not `aria-hidden`. The popover
-  contains the region, so it is exposed. The git request was stretched to 2 s by a clone-only wrapper to make the load
-  observable; this is not natural latency.
+  `packages/ui/src/components/menus/ActionMenu.tsx` (`LoadedMenuItems`); the caller is the project menu's async branch
+  list in `packages/ui/src/sidebar/menus.tsx`. The visible disabled "Loading…" menu item is not `aria-hidden`. The
+  popover contains the region, so it is exposed. The git request was stretched to 2 s by a clone-only wrapper to make
+  the load observable; this is not natural latency.
 - **ARIA wiring as rendered.** The common mapping; a populated status with the submenu named "Switch branch" focused.
 - **Result.** Spoken: `Switch branch 已展开 子菜单 （3/5） menuGit`, then `Loading…` about 0.5 s later, then the status cleared
   at the end of the 2 s hold; focus stayed in the submenu. Because the visible disabled item says the same word,
@@ -621,10 +625,10 @@ mapping.
 
 - **Location and state change.** In the open file viewer, pressing Next file moves from one unchanged staged rename to
   the next. The content view says `Loading…` at once; the new unchanged view says its outcome 1500 ms later.
-- **Mechanism.** Two `StatusAnnouncer`s. `packages/ui/src/viewer/FileViewer.tsx` (`ViewerContentView`: mounted with the
-  dialog, its 1500 ms first delay long elapsed, so the navigation text is written at once) and (`UnchangedView`: mounted
-  with the new child, `firstWriteDelayMs` of 1500). The visible final notice is `aria-hidden`. The Next file button
-  keeps focus; no dialog opens.
+- **Mechanism.** Two `StatusAnnouncer`s. `packages/ui/src/viewer/ViewerContentView.tsx` (`ViewerContentView`: mounted
+  with the dialog, its 1500 ms first delay long elapsed, so the navigation text is written at once) and
+  `packages/ui/src/viewer/ChangeView.tsx` (`UnchangedView`: mounted with the new child, `firstWriteDelayMs` of 1500).
+  The visible final notice is `aria-hidden`. The Next file button keeps focus; no dialog opens.
 - **ARIA wiring as rendered.** The common mapping for both regions; focus on the Next file button at every sample.
 - **Result.** Spoken automatically: `Loading…`, then `Renamed without changes to its content.` about 1.5 s after the new
   child started. The same sentence also arrived just before, for the previous file, which is not a duplicate of the
@@ -668,13 +672,13 @@ mapping.
 - **Mechanism.** A section-level `StatusAnnouncer`, mounted with the section and writing every text, the first included,
   after a caller wait. `packages/ui/src/settings/PermissionsSection.tsx` (`PermissionsSection`: the rows show each state
   as ordinary visible copy, not `aria-hidden` and with no `role="status"`, and the permission names with their states go
-  to the announcer as one text), `packages/ui/src/components/AttendedStatusAnnouncer.tsx` (writes each text after
-  `AFTER_FOCUS_MOVE_DELAY_MS` of attended time, restarting the wait on each return to the window, and writes nothing
-  again while the text has not changed; heard as a local `PermissionsAnnouncer` holding the same code),
-  `packages/ui/src/components/useWindowAttended.ts` and `StatusAnnouncer` with its default 100 ms long elapsed (the wait
-  is the caller's, not `firstWriteDelayMs`). Inside Settings' own dialog; the Permissions tab keeps focus. The wording
-  heard below predates the current catalog sentences (one message of whole sentences per permission and state, such
-  as "Screen Recording is not granted."): the same composition, a name and a state per permission in one text, with
+  to the announcer as one text), `packages/ui/src/components/announce/AttendedStatusAnnouncer.tsx` (writes each text
+  after `AFTER_FOCUS_MOVE_DELAY_MS` of attended time, restarting the wait on each return to the window, and writes
+  nothing again while the text has not changed; heard as a local `PermissionsAnnouncer` holding the same code),
+  `packages/ui/src/components/announce/useWindowAttended.ts` and `StatusAnnouncer` with its default 100 ms long elapsed
+  (the wait is the caller's, not `firstWriteDelayMs`). Inside Settings' own dialog; the Permissions tab keeps focus. The
+  wording heard below predates the current catalog sentences (one message of whole sentences per permission and state,
+  such as "Screen Recording is not granted."): the same composition, a name and a state per permission in one text, with
   the timing mechanism unchanged.
 - **ARIA wiring as rendered.** The common mapping; empty when the tab was focused, populated 1.5 s later with the
   sentence in a descendant. A single status holds both permissions; the visible row copy stays separately readable, so
@@ -701,7 +705,7 @@ mapping.
   fixture whose model listing fails after 3 s): expanding the section starts the model request and its failure is
   announced; collapsing and reopening the section keeps the answer and requests again.
 - **Mechanism.** A `StatusAnnouncer` mounted outside the folded body and only while the section is expanded.
-  `packages/ui/src/dialogs/AdvancedSection.tsx` (`AdvancedSection`) with
+  `packages/ui/src/components/form/AdvancedSection.tsx` (`AdvancedSection`) with
   `packages/ui/src/dialogs/useAgentModels.ts` (keeps the earlier answer and asks again on each expansion). Every opening
   gets a fresh region and a fresh default 100 ms first write delay, even with the earlier failure text kept. The trigger
   keeps focus; inside the launch dialog.
@@ -726,7 +730,7 @@ mapping.
 - **Location and state change.** In the real file viewer, navigate from a large text file to `broken.svg`, an SVG that
   cannot decode and falls back to its text. Separately, navigate back to `large.txt`, now above the highlighting budget,
   whose plain-text notice is present with its first content paint.
-- **Mechanism.** `packages/ui/src/viewer/FileViewer.tsx` (`ImageView`) raises a failed `FileNotice` with `speak` when
+- **Mechanism.** `packages/ui/src/viewer/BodyView.tsx` (`ImageView`) raises a failed `FileNotice` with `speak` when
   image decoding fails. `packages/ui/src/viewer/notices.tsx` (`FileNotice`, `SpokenSentence`) portals the mark to the
   header and mounts a `StatusAnnouncer` beside the content, inside the open viewer dialog. The region starts empty, has
   `firstWriteDelayMs` of 1500 and `clearAfterRead`; source `READ_TIME_MS` is 5000 after writing.
@@ -774,14 +778,15 @@ mapping.
   The current table's Status-cell button is shown only while the account reads as signed out, stays focusable and is
   `aria-disabled` while a login runs; the menu path opens from a menu item instead. Account details offers a second
   direct button, with the details modal remaining open beneath the login dialog.
-- **Mechanism.** `useLoginFocusReturn` in `packages/ui/src/settings/AccountLoginButton.tsx` (`AccountLoginButton`),
-  driven by the button's `onPress`; `AccountTableRow` passes the row's actions button as the fallback, and
-  `AccountDetailsDialog` passes its first `input[role="switch"]`. After success focus goes to the row's actions button
-  or the details dialog's first switch, as applicable. After a cancel it goes to the Log in button once the daemon has
-  answered and the button is available again, otherwise to the configured fallback. The move waits one animation frame
-  past React Aria's restore (two after the unmount), acts only when focus is on `<body>` or inside the original button,
-  sets the keyboard modality, and leaves a restore that landed correctly alone. The current menu path supplies an
-  explicit two-frame hand-off to the row's Actions button (`AgentAccountsSection.tsx`, `returnToRowActions`).
+- **Mechanism.** `useLoginFocusReturn` in `packages/ui/src/settings/accounts/AccountLoginButton.tsx`
+  (`AccountLoginButton`), driven by the button's `onPress`; `AccountTableRow` passes the row's actions button as the
+  fallback, and `AccountDetailsDialog` passes its first `input[role="switch"]`. After success focus goes to the row's
+  actions button or the details dialog's first switch, as applicable. After a cancel it goes to the Log in button once
+  the daemon has answered and the button is available again, otherwise to the configured fallback. The move waits one
+  animation frame past React Aria's restore (two after the unmount), acts only when focus is on `<body>` or inside the
+  original button, sets the keyboard modality, and leaves a restore that landed correctly alone. The current menu path
+  supplies an explicit two-frame hand-off to the row's Actions button (`AgentAccountsSection.tsx`,
+  `returnToRowActions`).
 - **Earlier ARIA wiring as rendered (E4).** The row's Actions control is a pop-up button named `Actions for ⁨VoiceOver
   fixture⁩ (Grok Build)` with has-popup set; the direct button is a button named "Log in". Final screenshots show the
   keyboard focus ring on the correct control.
@@ -854,9 +859,9 @@ mapping.
   and the rail's Account quota button with no agent available. Rest the real mouse on the mark or quota button;
   separately open with Enter and close with Escape. The viewer's outer dialog is already open for the mark checks; quota
   is in the main window.
-- **Mechanism.** `packages/ui/src/components/StatusMark.tsx` (`StatusMark`, `PopoverMark`, `MarkButton`) and
-  `packages/ui/src/quota/RailQuotaEntry.tsx` (`RailQuotaEntry`, `QuotaPanel`) share
-  `packages/ui/src/components/hintPopover.tsx` (`PopoverHint`, `useHoverPopover`). E6 source wiring opens hover
+- **Mechanism.** `packages/ui/src/components/status/StatusMark.tsx` (`StatusMark`, `PopoverMark`, `MarkButton`) and
+  `packages/ui/src/shell/RailQuotaEntry.tsx` (`RailQuotaEntry`, `QuotaPanel`) share
+  `packages/ui/src/components/hint/hintPopover.tsx` (`PopoverHint`, `useHoverPopover`). E6 source wiring opens hover
   non-modally without a focus move, using a focusable `div` with `role="dialog"`, `aria-modal="false"` and
   `tabIndex={-1}`. A keyboard press mounts react-aria's modal `Dialog` and its focus scope; quota explicitly focuses the
   first control when there is no agent tab. Closing the pressed form restores the surviving trigger. The mark's button
@@ -914,12 +919,12 @@ mapping.
   and press Enter on its bare Note mark. Close with Escape. Navigate to a malformed `broken.svg` that falls back to its
   text, let the temporary fallback announcement end, then press Enter on its bare Error mark and close with Escape.
   These are the two representative tones heard; no warning or touch interaction was exercised.
-- **Mechanism.** `packages/ui/src/components/StatusMark.tsx` (`PopoverMark`) gives a bare mark's `Hint` the
+- **Mechanism.** `packages/ui/src/components/status/StatusMark.tsx` (`PopoverMark`) gives a bare mark's `Hint` the
   localized tone label, while `MarkButton` retains the notice sentence as its `aria-label`.
-  `packages/ui/src/components/hintPopover.tsx` (`PopoverHint`) names its pressed react-aria `Dialog` with `aria-label`,
-  independently of the body text, and moves focus inside. Escape restores the existing trigger.
+  `packages/ui/src/components/hint/hintPopover.tsx` (`PopoverHint`) names its pressed react-aria `Dialog` with
+  `aria-label`, independently of the body text, and moves focus inside. Escape restores the existing trigger.
   `packages/ui/src/viewer/notices.tsx` (`FileNotice`) supplies the whole-file mark after the path.
-  `packages/ui/src/viewer/FileViewer.tsx` (`ImageView`) and `packages/ui/src/viewer/CodeSurface.tsx` (`CodeSurface`)
+  `packages/ui/src/viewer/BodyView.tsx` (`ImageView`) and `packages/ui/src/viewer/CodeSurface.tsx` (`CodeSurface`)
   supplied the SVG fallback and large-file notice. This replaces the E6 body-text naming that failed in FOCUS-3; it is
   on-demand dialog speech, not a live-region repetition test.
 - **ARIA wiring as rendered.** For each Enter, the focused native `AXGroup` had subrole `AXApplicationDialog`, role
@@ -965,9 +970,9 @@ mapping.
   device-code waiting after the code.
 - **Mechanism.** Text replaced in place in a `role="status"` div mounted with the dialog (E1), with no
   `StatusAnnouncer`, no delay and no nested alert; focus rested on Cancel login.
-  `packages/ui/src/settings/AccountLoginDialog.tsx` in that build; the code chip rendered through
-  `packages/ui/src/components/InlineReference.tsx`. Superseded in the product by SA-C's mechanism; the result remains
-  evidence for this kind.
+  `packages/ui/src/settings/accounts/AccountLoginDialog.tsx` in that build; the code chip rendered through
+  `packages/ui/src/components/text/InlineReference.tsx`. Superseded in the product by SA-C's mechanism; the result
+  remains evidence for this kind.
 - **ARIA wiring as rendered.** The region held a spinner (`aria-hidden`) and a text span. Natively a group with the
   application-status subrole, empty own name, live polite, atomic, relevant additions and text, with the text in
   descendants.
@@ -984,8 +989,8 @@ mapping.
 - **Location and state change.** A plain shell terminal's process exits (Ctrl-D): the terminal shows a status with a
   Close terminal button.
 - **Mechanism.** A hand-built `role="status"` `div` that persists empty until the terminal is shown and not running,
-  with no first write delay. `packages/ui/src/terminal/ShellTerminalView.tsx` (`ShellTerminalView`: the visible lower
-  status holds the sentence and the Close terminal button). Main window, no modal; terminal input keeps focus. The
+  with no first write delay. `packages/ui/src/terminal/shell/ShellTerminalView.tsx` (`ShellTerminalView`: the visible
+  lower status holds the sentence and the Close terminal button). Main window, no modal; terminal input keeps focus. The
   separate `sr-only` trouble status stayed empty.
 - **ARIA wiring as rendered.** Natively a group with the application-status subrole, atomic, with the button inside the
   status as a descendant (the full tree shows it; the compact observer lists only static text).
@@ -1003,12 +1008,13 @@ mapping.
 
 - **Location and state change.** After reading the real `merge.md` conflict in NAME-5, close the viewer, remove that
   throwaway file from disk without resolving its index conflict, and reopen its row in Changes.
-- **Mechanism.** `packages/ui/src/viewer/FileViewer.tsx` (`ViewerContentBody`, conflict branch) renders only the read
-  `Failure` when no conflict body is available. `packages/ui/src/viewer/viewerStates.tsx` (`Failure`) passes the
-  first-paint delay and announcement flag to `packages/ui/src/components/PaneFailure.tsx` (`PaneFailure`), then
-  `packages/ui/src/components/EmptyPanel.tsx` (`EmptyPanel`) and `packages/ui/src/components/useAnnouncement.ts`
-  (`useAnnouncement`). After the viewer delay, the heading and reason are in a keyed `role="alert"` wrapper. The
-  conflict kind remains in the viewer heading; no separate conflict notice announces it.
+- **Mechanism.** `packages/ui/src/viewer/ViewerContentView.tsx` (`ViewerContentBody`, conflict branch) renders only the
+  read `Failure` when no conflict body is available. `packages/ui/src/viewer/viewerStates.tsx` (`Failure`) passes the
+  first-paint delay and announcement flag to `packages/ui/src/components/alerts/PaneFailure.tsx` (`PaneFailure`), then
+  `packages/ui/src/components/panel/EmptyPanel.tsx` (`EmptyPanel`) and
+  `packages/ui/src/components/announce/useAnnouncement.ts` (`useAnnouncement`). After the viewer delay, the heading and
+  reason are in a keyed `role="alert"` wrapper. The conflict kind remains in the viewer heading; no separate conflict
+  notice announces it.
 - **ARIA wiring as rendered.** Native `AXGroup` with subrole `AXApplicationAlert`, containing the level-2 heading `Could
   not open this file` and the static reason `This file does not exist any more.`. The viewer dialog still had the name
   `merge.md: Conflicted. Both modified.`. The native tree did not sample live politeness, atomicity or relevance, and
@@ -1035,9 +1041,9 @@ mapping.
 - **Mechanism.** `packages/ui/src/dialogs/RequestedDialog.tsx` (`DeleteSessionDialog`; `ConfirmWarning` no longer
   exists) put the warning title, the bound-session list and then the consequence lines inside
   `packages/ui/src/components/TintedAlert.tsx` (`TintedAlert`), under `Alert.Content`. The indicator is `aria-hidden`.
-  `packages/ui/src/dialogs/ConfirmDialog.tsx` (`ConfirmDialog`) keeps the options before that warning.
-  `packages/ui/src/dialogs/ConfirmOption.tsx` (`ConfirmOption`) uses HeroUI `Label` and `Description` for the name and
-  hint, plus an optional `aria-describedby` reference supplied by its caller;
+  `packages/ui/src/components/dialog/ConfirmDialog.tsx` (`ConfirmDialog`) keeps the options before that warning.
+  `packages/ui/src/components/form/ConfirmOption.tsx` (`ConfirmOption`) uses HeroUI `Label` and `Description` for the
+  name and hint, plus an optional `aria-describedby` reference supplied by its caller;
   `packages/ui/src/dialogs/BranchCleanupOptions.tsx` (`BranchOption`) is one such caller. This case reads the resulting
   checkboxes and durable warning; it is not a `StatusAnnouncer` case.
 - **ARIA wiring as rendered.** The outer native `AXApplicationAlertDialog` had the deletion question as title and
@@ -1144,13 +1150,13 @@ mapping.
   agent-record options, let the update settle, focus each checkbox anew, then read from Close through the body, the
   list and the consequences. No deletion was confirmed.
 - **Mechanism.** `packages/ui/src/dialogs/RequestedDialog.tsx` (`DeleteSessionDialog`, `ConfirmConsequences`),
-  `packages/ui/src/dialogs/ConfirmDialog.tsx` (`ConfirmDialog`) and `packages/ui/src/dialogs/Dialog.tsx` (`Dialog`): a
-  warning modal, the warning icon in its header, a plain title, the subject in the body's first sentence, and the
-  session list and consequence paragraphs as plain body text with no `TintedAlert`.
-  `packages/ui/src/dialogs/ConfirmOption.tsx` (`ConfirmOption`) keeps the `Label` inside the `Checkbox` and renders the
-  note as a `Description` outside it, linked by an explicit `aria-describedby` to its `useId`;
-  `packages/ui/src/dialogs/BranchCleanupOptions.tsx` (`BranchOption`) is one such caller. Durable reading and focus; no
-  `StatusAnnouncer`.
+  `packages/ui/src/components/dialog/ConfirmDialog.tsx` (`ConfirmDialog`) and
+  `packages/ui/src/components/dialog/Dialog.tsx` (`Dialog`): a warning modal, the warning icon in its header, a plain
+  title, the subject in the body's first sentence, and the session list and consequence paragraphs as plain body text
+  with no `TintedAlert`. `packages/ui/src/components/form/ConfirmOption.tsx` (`ConfirmOption`) keeps the `Label` inside
+  the `Checkbox` and renders the note as a `Description` outside it, linked by an explicit `aria-describedby` to its
+  `useId`; `packages/ui/src/dialogs/BranchCleanupOptions.tsx` (`BranchOption`) is one such caller. Durable reading and
+  focus; no `StatusAnnouncer`.
 - **ARIA wiring as rendered.** Native `AXApplicationAlertDialog`, title and description `Delete session`,
   `AXARIALive=assertive`, `AXARIAAtomic=0`, `AXARIARelevant=additions text`. The scrolling body is an
   `AXLandmarkRegion` named `Delete session` holding the plain paragraphs and list; the heading is level 2; no named
@@ -1230,11 +1236,11 @@ mapping.
   successful lookup and is not evidence of the failure), read the settled ticked checkbox and the separate mark, and
   press the mark. Cancel the removal; the configuration and path were restored before cleanup.
 - **Mechanism.** `packages/ui/src/dialogs/RequestedDialog.tsx` (`DeleteProjectDialog`, `ConfirmConsequences`),
-  `packages/ui/src/dialogs/ConfirmDialog.tsx`, `packages/ui/src/dialogs/Dialog.tsx`,
-  `packages/ui/src/dialogs/ConfirmOption.tsx`, `packages/ui/src/dialogs/BranchCleanupOptions.tsx`
-  (`useProjectRemovalCleanup`) and `packages/ui/src/components/StatusMark.tsx` (`StatusMark`): the warning mark is a 24
-  px button after the checkbox, outside its label; the failure adds no description to the checkbox. The note is linked
-  as in WARN-3.
+  `packages/ui/src/components/dialog/ConfirmDialog.tsx`, `packages/ui/src/components/dialog/Dialog.tsx`,
+  `packages/ui/src/components/form/ConfirmOption.tsx`, `packages/ui/src/dialogs/BranchCleanupOptions.tsx`
+  (`useProjectRemovalCleanup`) and `packages/ui/src/components/status/StatusMark.tsx` (`StatusMark`): the warning mark
+  is a 24 px button after the checkbox, outside its label; the failure adds no description to the checkbox. The note is
+  linked as in WARN-3.
 - **ARIA wiring as rendered.** Native `AXApplicationAlertDialog`, title and description `Remove project`, live
   assertive, atomic 0, relevant additions text; a plain level-2 heading, the subject and body as static text, the
   sessions as an `AXList` with each working status a named image and each agent name static text. The checkbox's title
@@ -1309,9 +1315,9 @@ mapping.
   real daemon emitted `trust_prompt` for that session and project and offered the parent folder. Read from Close through
   the body, the caution and the folder-wide checkbox; finish with Not now, never Trust and continue.
 - **Mechanism.** `packages/ui/src/dialogs/TrustPromptDialog.tsx` (`useTrustPromptDialogProps`, `TrustPromptMessage`,
-  `Caution`), `packages/ui/src/dialogs/ConfirmDialog.tsx` and `packages/ui/src/dialogs/Dialog.tsx`: the caution is the
-  agent-specific sentence in one plain `p` after the prompt's other paragraphs, with no hidden prefix, no title of its
-  own, no `TintedAlert` and no `StatusAnnouncer`.
+  `Caution`), `packages/ui/src/components/dialog/ConfirmDialog.tsx` and `packages/ui/src/components/dialog/Dialog.tsx`:
+  the caution is the agent-specific sentence in one plain `p` after the prompt's other paragraphs, with no hidden
+  prefix, no title of its own, no `TintedAlert` and no `StatusAnnouncer`.
 - **ARIA wiring as rendered.** Native `AXApplicationAlertDialog`, title and description `Trust this folder?`, live
   assertive, atomic 0, relevant additions text; a plain level-2 heading. The caution paragraph's static-text children
   run from `Trusting lets ` through the two inline `Codex` references to its end. Neither `Caution:` nor `The project's
@@ -1369,8 +1375,9 @@ the bare-mark Enter naming of the recording behind FOCUS-3, whose other results 
 
 - **What and where.** E1: the account row's `sr-only` wrapper with an inner `role="status"`, empty until success, was
   filled at the moment the state became succeeded, while the login dialog was closing and focus was being returned.
-  `AccountLoginAnnouncement` in `packages/ui/src/settings/AccountLogin.tsx` in that build, mounted by the account row
-  (`AccountRow` in `packages/ui/src/settings/AgentAccountsSection.tsx` then; `AccountTableRow` now).
+  `AccountLoginAnnouncement` in `packages/ui/src/settings/accounts/AccountLogin.tsx` in that build, mounted by the
+  account row (`AccountRow` in `packages/ui/src/settings/accounts/AgentAccountsSection.tsx` then; `AccountTableRow`
+  now).
 - **Result.** Not spoken, in two completed runs, with capture running at least 12 s past the success (longer than the
   6000 ms the text was held). The expected phrase `VoiceOver fixture: logged in.` was never captured; what was spoken
   after success was the Settings dialog and the focused control. The native tree did contain the text, which is
@@ -1414,7 +1421,7 @@ the bare-mark Enter naming of the recording behind FOCUS-3, whose other results 
   is collapsed (the disclosure panel keeps its children mounted, hidden), so its default 100 ms delay runs collapsed and
   later writes are immediate. Collapsing resets the model query to idle, so the region stays empty while collapsed; on
   reopening the kept answer comes back in the same render that removes the panel's hidden state, so the write coincides
-  with the re-exposure. `packages/ui/src/dialogs/AdvancedSection.tsx` (`AdvancedSection`) with
+  with the re-exposure. `packages/ui/src/components/form/AdvancedSection.tsx` (`AdvancedSection`) with
   `packages/ui/src/dialogs/useAgentModels.ts`. After a model-list failure, the section was collapsed and reopened with
   focus on the Advanced button throughout.
 - **Result.** Not spoken. The failure text (`⁨Grok Build⁩ could not list its models: ⁨exit status: 1: Fixture has no
@@ -1471,10 +1478,10 @@ the bare-mark Enter naming of the recording behind FOCUS-3, whose other results 
   fallback after the application crashed) with no dialog over it and no focus move. On the crash page focus has fallen
   to the document, as what held it went with the crashed view.
 - **Mechanism.** `packages/ui/src/StartupScreen.tsx` (`StartupFailure`) passes `announce` and `announceDelayMs={0}` to
-  `packages/ui/src/components/EmptyPanel.tsx` (`EmptyPanel`), through `packages/ui/src/components/useAnnouncement.ts`
-  (`useAnnouncement`): the heading and the first line are inserted in a keyed `role="alert"` wrapper from a timer
-  after the first paint, so the alert is a change to the page, as in ALERT-1's remount, rather than part of its first
-  render.
+  `packages/ui/src/components/panel/EmptyPanel.tsx` (`EmptyPanel`), through
+  `packages/ui/src/components/announce/useAnnouncement.ts` (`useAnnouncement`): the heading and the first line are
+  inserted in a keyed `role="alert"` wrapper from a timer after the first paint, so the alert is a change to the page,
+  as in ALERT-1's remount, rather than part of its first render.
 - **ARIA wiring, capture, environment, date.** Not recorded: this case has not been listened to.
 - **Result.** Unconfirmed. That VoiceOver speaks the heading and the first line once when the window opens on this page,
   and whether the alert is spoken at all for a page with no focus move, has not been listened to yet.
@@ -1492,32 +1499,32 @@ items, and was not itself heard. A candidate still has to pass the checks under 
 | Caller (file, symbol) | Announces | Case | Basis | Why |
 |---|---|---|---|---|
 | `sidebar/Sidebar.tsx` | filter no-match | SA-A for a change while the section is mounted; no match for the rest | Heard | The section is kept per console, so it can mount with the no-match text already present (switching back to a console, leaving a focus view). SA-H does not cover that: SA-H was heard for a panel toggle with focus left on the toggle, while these mounts come with a console or view switch whose focus relation was not recorded. |
-| `components/ConnectionBanner.tsx` | outage | SA-B | Heard | Matches in full. |
-| `settings/AccountLoginDialog.tsx` | login progress | SA-C for the dialog opening; no match for the rest | Heard | After Log in again the announcer remounts with a footer focus move, not a dialog opening, which was not heard. |
-| `settings/AccountLogin.tsx`, `AccountLoginAnnouncer` | login success | SA-D on the current table and the second mount in `settings/AccountDetailsDialog.tsx` (E10) | Heard | Current table direct/menu/return paths and the owned-account details path were heard in E10; SA-E heard the table remount. |
+| `shell/ConnectionBanner.tsx` | outage | SA-B | Heard | Matches in full. |
+| `settings/accounts/AccountLoginDialog.tsx` | login progress | SA-C for the dialog opening; no match for the rest | Heard | After Log in again the announcer remounts with a footer focus move, not a dialog opening, which was not heard. |
+| `settings/accounts/AccountLogin.tsx`, `AccountLoginAnnouncer` | login success | SA-D on the current table and the second mount in `settings/accounts/AccountDetailsDialog.tsx` (E10) | Heard | Current table direct/menu/return paths and the owned-account details path were heard in E10; SA-E heard the table remount. |
 | `settings/PermissionsSection.tsx`, through `AttendedStatusAnnouncer` | permission states | SA-L for the section opening and a return with the states unchanged; no match for a change while Settings is open | Heard | A grant made in System Settings was not heard, and Settings opened directly onto Permissions is unreachable from production controls and untested. |
 | `configuration/ImportReview.tsx` | "apply to all" applied | SA-A | Candidate | Mounted empty in the review step, text written after a press while focus rests, inside the modal's own subtree, default delay. Writing the identical sentence again does not rewrite it. |
-| `browser/ChangeList.tsx` | filter no-match | SA-A for typing; no match for a first render holding the text | Candidate | Typing in the filter writes in place at rest. The text can also be present at the first render (a persisted filter, a branch change that closes a popover and returns focus), a mount SA-H does not clearly cover. |
-| `viewer/FileViewer.tsx`, `ViewerContentView` | loading, disconnected | SA-J for navigation loading; SA-C for the dialog opening as a candidate; no match for disconnected | Heard for SA-J, candidate for SA-C | The navigation text is written at once with focus on Next file (SA-J). The region is mounted with the dialog with a 1500 ms first delay as focus moves, the shape of SA-C, but the opening was heard on the login dialog only. The disconnected text was not exercised. |
-| `viewer/FileViewer.tsx`, `UnchangedView` | loading, read outcome | SA-J for the outcome after navigating; no match for its own loading text or other outcomes | Heard | 1500 ms first delay on a new child inside the open dialog with focus kept, heard for the unchanged outcome only. Its own "Loading…" (written when the read takes longer than the first delay), the failure and other outcomes, and a dialog that opens straight onto the view, were not heard; the `Loading…` heard came from the parent. Each text is emptied `READ_TIME_MS` after it was written (`clearAfterRead`), which was not heard either. |
-| `components/CopyButton.tsx` | "Copied" | SA-G for the confirmation and the tooltip-driven clear, for a press made while the button has focus; no match for the 2 s automatic clear | Heard | Heard in the main window with focus kept. The 2000 ms branch without a tooltip, a repeat press and a failure were not heard. The copy button in the viewer dialog sets `preventFocusOnPress` (a pointer press does not move focus to it), carries its own "Path copied" text and sits in a dialog, so it is a candidate only for a keyboard press made while it has focus. |
-| `browser/GitView.tsx` | git loading, comparing, listing, spoken failures | SA-H for the first mount with focus kept; no match for the Changes-tab mount, replacement sequences or the failure sentences | Heard | Heard for the Changes loading at mount with focus on the panel toggle. The tab variant, which moves focus into the pane, captured no sentence, and the comparing and listing texts replacing one another in place were not heard. The failure sentences (`useSpokenFailures`) were not exercised. |
-| `browser/ProjectBrowser.tsx` | files loading | SA-H for the load when the Files panel is shown with focus kept; no match for the Files-tab mount or search loading | Candidate | Same hidden `div`, default delay and main window as the representative, but its own Files load finished too fast to sample, switching to the Files tab is the untested focus-move variant, and search-triggered loading was not recorded. |
-| `components/ActionMenu.tsx`, `LoadedMenuItems` | menu loading, load failed | SA-I for the loading text; no match for load failed | Heard | Heard with the submenu focused and the git list stretched to 2 s; a visible "Loading…" item says the same word, so attribution is shared. The failure update was masked by an error alert. |
+| `project-browser/git/ChangeList.tsx` | filter no-match | SA-A for typing; no match for a first render holding the text | Candidate | Typing in the filter writes in place at rest. The text can also be present at the first render (a persisted filter, a branch change that closes a popover and returns focus), a mount SA-H does not clearly cover. |
+| `viewer/ViewerContentView.tsx`, `ViewerContentView` | loading, disconnected | SA-J for navigation loading; SA-C for the dialog opening as a candidate; no match for disconnected | Heard for SA-J, candidate for SA-C | The navigation text is written at once with focus on Next file (SA-J). The region is mounted with the dialog with a 1500 ms first delay as focus moves, the shape of SA-C, but the opening was heard on the login dialog only. The disconnected text was not exercised. |
+| `viewer/ChangeView.tsx`, `UnchangedView` | loading, read outcome | SA-J for the outcome after navigating; no match for its own loading text or other outcomes | Heard | 1500 ms first delay on a new child inside the open dialog with focus kept, heard for the unchanged outcome only. Its own "Loading…" (written when the read takes longer than the first delay), the failure and other outcomes, and a dialog that opens straight onto the view, were not heard; the `Loading…` heard came from the parent. Each text is emptied `READ_TIME_MS` after it was written (`clearAfterRead`), which was not heard either. |
+| `components/controls/CopyButton.tsx` | "Copied" | SA-G for the confirmation and the tooltip-driven clear, for a press made while the button has focus; no match for the 2 s automatic clear | Heard | Heard in the main window with focus kept. The 2000 ms branch without a tooltip, a repeat press and a failure were not heard. The copy button in the viewer dialog sets `preventFocusOnPress` (a pointer press does not move focus to it), carries its own "Path copied" text and sits in a dialog, so it is a candidate only for a keyboard press made while it has focus. |
+| `project-browser/git/GitView.tsx` | git loading, comparing, listing, spoken failures | SA-H for the first mount with focus kept; no match for the Changes-tab mount, replacement sequences or the failure sentences | Heard | Heard for the Changes loading at mount with focus on the panel toggle. The tab variant, which moves focus into the pane, captured no sentence, and the comparing and listing texts replacing one another in place were not heard. The failure sentences (`useSpokenFailures`) were not exercised. |
+| `project-browser/ProjectBrowser.tsx` | files loading | SA-H for the load when the Files panel is shown with focus kept; no match for the Files-tab mount or search loading | Candidate | Same hidden `div`, default delay and main window as the representative, but its own Files load finished too fast to sample, switching to the Files tab is the untested focus-move variant, and search-triggered loading was not recorded. |
+| `components/menus/ActionMenu.tsx`, `LoadedMenuItems` | menu loading, load failed | SA-I for the loading text; no match for load failed | Heard | Heard with the submenu focused and the git list stretched to 2 s; a visible "Loading…" item says the same word, so attribution is shared. The failure update was masked by an error alert. |
 | `viewer/CodeSurface.tsx` | expansion loading and note | SA-K and FOCUS-2 for the loading text and the focus after an expansion; no match for the outcome notes | Heard | Loading heard while the pressed button had focus, and focus restored to the surviving control or the code frame on E5. Notes, failure and capped outcomes were not exercised, nor the emptying of each text `READ_TIME_MS` after it was written (`clearAfterRead`). |
-| `dialogs/AdvancedSection.tsx`, `AdvancedSection` | models loading, unavailable, failed | SA-M for loading and failed; no match for the unavailable text | Heard | Region mounted with each opening outside the folded body, heard for a fresh opening and two reopenings. The unavailable text was not heard separately. |
-| `terminal/ShellTerminalPanel.tsx` | shell starting | none | none | Text can be present at the first render at default delay and clears as a terminal appears and takes focus, a write at a focus move; the starting status was not observed populated. |
+| `components/form/AdvancedSection.tsx`, `AdvancedSection` | models loading, unavailable, failed | SA-M for loading and failed; no match for the unavailable text | Heard | Region mounted with each opening outside the folded body, heard for a fresh opening and two reopenings. The unavailable text was not heard separately. |
+| `terminal/shell/ShellTerminalPanel.tsx` | shell starting | none | none | Text can be present at the first render at default delay and clears as a terminal appears and takes focus, a write at a focus move; the starting status was not observed populated. |
 | `terminal/TerminalPane.tsx`, cover and dormant status | loading, starting, resuming, reconnecting, disconnected and switching covers; the dormant bar's "Not running" or "This session is archived" | SA-A for the writes into the mounted regions (the pane always mounts with no session, so SA-H applies only to test and gallery mounts); no match for a write made as selecting a session moves focus into the terminal, and none for the dormant bar's button | Candidate | Two `StatusAnnouncer` regions mounted with the pane, default delay (browser-observed: regions inserted empty, text written 100 to 250 ms later). The bar's sentence is `aria-hidden` and its button stays reachable, so only the sentence is spoken, not sentence and button as PLAIN-2 heard. The bar's sentence is held while a modal is open (selecting an interrupted session on an incomplete account asks first) and written `AFTER_FOCUS_MOVE_DELAY_MS` after the close, so it is not written under the modal (KNW-2). A sentence already spoken stays in the region unchanged through a modal, so closing it says nothing. Nothing was heard on the pane itself. An archived bar and `SessionHistoryView`'s own region can both hold text while the history loads (different sentences, no duplicate). |
-| `terminal/ShellTerminalView.tsx`, trouble and exited status | disconnected, reconnecting and exited, for the shown tab only | close to SA-H for the first write after a keyboard tab switch (focus stays on the tab; the regions are mounted with each showing, but with the longer `AFTER_FOCUS_MOVE_DELAY_MS`), a candidate only; no case matches a pointer switch or a new terminal, where focus moves into the view (open item); SA-A for trouble changes; PLAIN-2 for the exit filling in place while the terminal input keeps focus, with the sentence only | Candidate | Two `StatusAnnouncer` regions per shown tab, empty when mounted (browser-observed); a hidden tab has none, so switching to an exited or troubled tab writes its text after the delay rather than with the region. PLAIN-2 heard the earlier hand-built region holding the sentence and the Close terminal button, spoken as `The shell has exited Close terminal`; the button is now outside the region, so the match is for the sentence only, by decision, and it has to be listened to again before it is claimed. The write after a tab switch made with the pointer comes with a focus move into the view, which no case covers. |
+| `terminal/shell/ShellTerminalView.tsx`, trouble and exited status | disconnected, reconnecting and exited, for the shown tab only | close to SA-H for the first write after a keyboard tab switch (focus stays on the tab; the regions are mounted with each showing, but with the longer `AFTER_FOCUS_MOVE_DELAY_MS`), a candidate only; no case matches a pointer switch or a new terminal, where focus moves into the view (open item); SA-A for trouble changes; PLAIN-2 for the exit filling in place while the terminal input keeps focus, with the sentence only | Candidate | Two `StatusAnnouncer` regions per shown tab, empty when mounted (browser-observed); a hidden tab has none, so switching to an exited or troubled tab writes its text after the delay rather than with the region. PLAIN-2 heard the earlier hand-built region holding the sentence and the Close terminal button, spoken as `The shell has exited Close terminal`; the button is now outside the region, so the match is for the sentence only, by decision, and it has to be listened to again before it is claimed. The write after a tab switch made with the pointer comes with a focus move into the view, which no case covers. |
 | `viewer/notices.tsx`, `FileNotice` | the notice's sentence, for a notice that arrives after the viewer has painted | SA-N for SVG fallback, clear and later reading; the first-paint large-file notice has no announcement region (no `speak`) and stayed silent, as context | Heard for these branches | 1500 ms first delay and `clearAfterRead`; SVG sentence present at about 2 s and empty by about 7 s, with focus handed from the now-unavailable Previous file to Next file. E6 did not sample native live attributes. Other image failures, patch fallbacks and replacement sequences remain unheard; SA-J is still the retained-focus representative. |
 | `viewer/notices.tsx`, `BlockFallback` | the fallback sentence, for a block (a Mermaid diagram or a formula) that fails after paint, when `speak` is set | none | none | Uses `SpokenSentence` as `FileNotice`; `MermaidBlock` and `FormulaView` pass `speak`. Not heard; focus relation, exposure and native live attributes are unmatched. |
 | `viewer/notices.tsx`, `SpotNotice` | the notice's sentence, for a spot in a document that fails or falls back after paint | SA-N is the nearest recorded mechanism; no complete match established | none | Uses `SpokenSentence` as `FileNotice`, rendered as a `span` inside a paragraph, but this caller was not heard. Focus relation, exposure and native live attributes still need matching evidence; SA-N does not establish them for a document spot. |
-| `App.tsx`, account switch outcome | a batch of account switches finished | none | none | Written seconds after the switch dialog has closed, once the batch finishes without failures, and cleared after 10 s. The credential-free fixture does not produce conversation records to switch, so it was not recorded. |
+| `app/useSessionRequests.ts`, account switch outcome | a batch of account switches finished | none | none | Written seconds after the switch dialog has closed, once the batch finishes without failures, and cleared after 10 s. The credential-free fixture does not produce conversation records to switch, so it was not recorded. |
 | `settings/UpdatesSetting.tsx` | update check outcome and failure, once the user has engaged the row | none | none | Region mounted with the Updates row in Settings; the buttons go pending rather than disabled so they keep focus. Not heard, and no case records a write after a press in Settings. |
 | `settings/ShortcutsSection.tsx` | shortcut rebind, conflict and reset sentences | none | none | Region mounted with the section; an identical consecutive sentence is made distinct by alternating a trailing no-break space so it is written again. Not heard. |
-| `settings/AccountSharingSwitch.tsx` | sharing change failure (`clearAfterRead`); direction and phase of a running change | none | none | Two regions, one beside the switch and one in `SharingProgress`. Not heard. |
+| `settings/accounts/AccountSharingSwitch.tsx` | sharing change failure (`clearAfterRead`); direction and phase of a running change | none | none | Two regions, one beside the switch and one in `SharingProgress`. Not heard. |
 | `updates/UpdateNotice.tsx`, through `AttendedStatusAnnouncer` | update available, installed and similar notice | SA-L is the nearest recorded mechanism (the same attended wait); no complete match established | none | The wait is the one `PermissionsSection` uses, but the region sits beside a bottom strip in the main window, not in a section shown by a tab focus move, and the strip can arrive while the user is elsewhere. Not heard. |
-| `terminal/SessionHistoryView.tsx` | history loading, unavailable, empty | none | none | Region mounted with the view, which comes with a focus move into the history region. Not heard. |
+| `terminal/history/SessionHistoryView.tsx` | history loading, unavailable, empty | none | none | Region mounted with the view, which comes with a focus move into the history region. Not heard. |
 | `about/ThirdPartyLicensesDialog.tsx` | search result count or none, typed in the search field; loading line at the dialog opening | none | none | Two regions in an open dialog: the count region writes in place while focus rests in the field (the shape of SA-A, inside a dialog), the loading region has `firstWriteDelayMs` of `AFTER_FOCUS_MOVE_DELAY_MS` as the dialog opens (the shape of SA-C). Neither was heard. |
 | `dialogs/ResumeConversationFields.tsx` | resume lookup outcome | none | none | Always-mounted region in the new-session dialog's Resume tab; text arrives after typing in the Session ID field while focus stays there. Not heard. |
 | `dialogs/SessionRequestForms.tsx`, `IncompleteSharingAnnouncer` | an account's unfinished sharing change marked after the dialog opened | none | none | Mounted with the request dialog; text appears after the opening. Not heard. |
@@ -1528,11 +1535,11 @@ Totals: of 32 callers, 13 were heard for the writes named (`Sidebar`, `Connectio
 `AccountLoginAnnouncer`, `PermissionsSection`, `ViewerContentView`, `UnchangedView`, `CopyButton`, `GitView`,
 `ActionMenu`, `CodeSurface`, `AdvancedSection`, `FileNotice`), 5 are candidates (`ImportReview`, `ChangeList`,
 `ProjectBrowser`, `TerminalPane`, `ShellTerminalView`) and 14 have no complete match (`ShellTerminalPanel`,
-`SpotNotice`, `BlockFallback`, the account switch outcome in `App`, and the ten callers listed after it). Of the heard
-callers, `ConnectionBanner` matches for every write it makes, and `AccountLoginAnnouncer` matches the E10 table and
-owned-account details paths recorded in SA-D; the other eleven match for some writes only, with SA-N's native-capture
-limits stated in that case. Of the candidates, `ImportReview` matches for every write it makes; `ChangeList`,
-`ProjectBrowser`, `TerminalPane` and `ShellTerminalView` for some.
+`SpotNotice`, `BlockFallback`, the account switch outcome in `app/useSessionRequests.ts`, and the ten callers listed
+after it). Of the heard callers, `ConnectionBanner` matches for every write it makes, and `AccountLoginAnnouncer`
+matches the E10 table and owned-account details paths recorded in SA-D; the other eleven match for some writes only,
+with SA-N's native-capture limits stated in that case. Of the candidates, `ImportReview` matches for every write it
+makes; `ChangeList`, `ProjectBrowser`, `TerminalPane` and `ShellTerminalView` for some.
 
 Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
 
@@ -1582,10 +1589,10 @@ Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
   `ViewerContentView`'s disconnected text (not exercised); `AdvancedSection`'s unavailable text (not separately
   recorded); `PermissionsSection`'s change while Settings is open (no permission was granted or revoked) and Settings
   opened directly onto Permissions (no production control opens it there, so it is untested); `GitView`'s replacement
-  sequences and failure sentences (not exercised); `ProjectBrowser`'s search loading (not recorded);
-  the account switch outcome in `App` (the credential-free fixture does not produce conversation records to
-  switch); `ShellTerminalPanel`'s starting status (not observed populated); the terminal statuses of
-  `TerminalPane` and `ShellTerminalView` (see the open items below).
+  sequences and failure sentences (not exercised); `ProjectBrowser`'s search loading (not recorded); the account switch
+  outcome in `app/useSessionRequests.ts` (the credential-free fixture does not produce conversation records to switch);
+  `ShellTerminalPanel`'s starting status (not observed populated); the terminal statuses of `TerminalPane` and
+  `ShellTerminalView` (see the open items below).
 - Terminal statuses, written through `StatusAnnouncer`, not yet listened to: the agent cover texts (loading, starting,
   resuming, reconnecting, disconnected, switching account) and the dormant bar's sentences; the shell tab's trouble and
   exited sentences. Open questions: whether the exited sentence alone, with the Close terminal button outside the

@@ -1,8 +1,9 @@
-import type { FixtureError } from "./projectFiles";
-import type { Ui } from "../interact";
+import type { FixtureError } from "../../fixtures/sampleFiles";
+import type { Preferences } from "../../fixtures/preferences";
+import type { Ui, Step } from "../../fixtures/interact";
 import type { ProcessTree } from "../../protocol";
-import type { Preferences, Scenario, Step } from "../scenario";
-import { SAMPLE, keptOf, leftoverOf, processTreeOf, sessionOf, snapshotState } from "./builders";
+import type { Scenario } from "../scenario";
+import { SAMPLE, keptOf, leftoverOf, processTreeOf, sessionOf, snapshotState } from "../../fixtures/builders";
 
 const { console: console_, web } = SAMPLE;
 const GROUP = "Processes";

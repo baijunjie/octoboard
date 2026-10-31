@@ -11,7 +11,7 @@ sent it cancels nothing; only a newer request in the same `slot`, or the connect
 a component that is gone, or stuck behind a volume that stopped answering, still holds its requests against the bound.
 
 Keep the concurrency limit for a kind of browse request in a count shared across the window at module level, as the
-listings' `MAX_WINDOW_IN_FLIGHT` in `packages/ui/src/browser/useDirectoryListings.ts` is, and size it together with the
+listings' `MAX_WINDOW_IN_FLIGHT` in `packages/ui/src/project-browser/files/useDirectoryListings.ts` is, and size it together with the
 limits already there, the viewer's slots included, so that their sum stays under the daemon's bound. A limit per
 mounted component looks safe for one component and lets a few of them together run into `limit_exceeded`.
 

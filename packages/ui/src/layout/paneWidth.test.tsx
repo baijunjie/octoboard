@@ -5,7 +5,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, onTestFinished } from "vitest";
 
-import { PaneResizeHandle } from "../components/PaneResizeHandle";
+import { PaneResizeHandle } from "./PaneResizeHandle";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
 import { NARROW_TERMINAL_FLOOR, NARROW_TERMINAL_PANEL_ASIDE_MIN, usePaneWidth, type DockedPanes, type PaneWidth } from "./paneWidth";
 

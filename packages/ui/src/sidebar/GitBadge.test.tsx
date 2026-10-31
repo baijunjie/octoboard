@@ -3,9 +3,9 @@ import React, { act } from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { appConfig } from "../appConfig";
-import { expectIndependentMarquees, stubMarquee } from "../components/marqueeTestSupport";
-import { enter, leave, mountForTooltip, openPopover, openTooltip, press, tap, withFakeTimers } from "../components/tooltipTestSupport";
-import { consoleOf, gitStatusOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { expectIndependentMarquees, stubMarquee } from "../components/motion/marqueeTestSupport";
+import { enter, leave, mountForTooltip, openPopover, openTooltip, press, tap, withFakeTimers } from "../components/hint/tooltipTestSupport";
+import { consoleOf, gitStatusOf, projectOf, sessionOf } from "../fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import { PlatformProvider } from "../platform/react";
 import type { GitStatus } from "../protocol";

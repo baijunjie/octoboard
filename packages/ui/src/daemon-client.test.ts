@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import { sessionOf } from "./gallery/fixtures/builders";
+import { sessionOf } from "./fixtures/builders";
 import type { Event } from "./protocol";
 import { DaemonClient, DaemonRequestError } from "./daemon-client";
 import { setLanguage } from "./i18n/language";

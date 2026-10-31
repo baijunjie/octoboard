@@ -1,13 +1,13 @@
 import { CircleCheck } from "lucide-react";
 import React from "react";
 
-import { CodeBlock } from "../components/CodeBlock";
-import { ErrorAlert } from "../components/ErrorAlert";
-import { StatusMark } from "../components/StatusMark";
-import { InlineReference, type InlineReferenceSize } from "../components/InlineReference";
-import { StatusBadge, type StatusBadgeColor, type StatusBadgeSize, type StatusBadgeVariant } from "../components/StatusBadge";
-import { CodeToneContext, type CodeColor } from "../components/codeTone";
-import { FadedScroller, useFadeRegion } from "../components/scrollFade";
+import { CodeBlock } from "../components/text/CodeBlock";
+import { ErrorAlert } from "../components/alerts/ErrorAlert";
+import { StatusMark } from "../components/status/StatusMark";
+import { InlineReference, type InlineReferenceSize } from "../components/text/InlineReference";
+import { StatusBadge, type StatusBadgeColor, type StatusBadgeSize, type StatusBadgeVariant } from "../components/status/StatusBadge";
+import { CodeToneContext, type CodeColor } from "../components/text/codeTone";
+import { FadedScroller, useFadeRegion } from "../components/scroll/scrollFade";
 
 const COLORS: CodeColor[] = ["default", "accent", "help", "success", "warning", "danger"];
 const ALERT_STATUSES = ["warning", "danger"] as const;

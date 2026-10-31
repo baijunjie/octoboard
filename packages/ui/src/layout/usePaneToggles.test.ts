@@ -4,40 +4,11 @@ import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { holdsText, keepsEscape, usePaneToggles, type PaneToggles } from "./usePaneToggles";
+import { usePaneToggles, type PaneToggles } from "./usePaneToggles";
 
 afterEach(() => {
   document.body.replaceChildren();
   vi.unstubAllGlobals();
-});
-
-function field(html: string): Element {
-  document.body.innerHTML = html;
-  return document.body.firstElementChild!;
-}
-
-it("leaves Escape to a text field while it holds text, and to the pane once it is empty", () => {
-  const input = field('<input type="search" value="abc">') as HTMLInputElement;
-  expect(holdsText(input)).toBe(true);
-  input.value = "";
-  expect(holdsText(input)).toBe(false);
-});
-
-it("leaves Escape to the pane for xterm's hidden textarea, even with text in it", () => {
-  expect(holdsText(field('<textarea class="xterm-helper-textarea">x</textarea>'))).toBe(false);
-});
-
-it("keeps Escape for a shell terminal of the right pane, and leaves it to the pane for the agent terminal", () => {
-  expect(keepsEscape(field('<div data-shell-terminal><textarea class="xterm-helper-textarea"></textarea></div>').querySelector("textarea"))).toBe(true);
-  expect(keepsEscape(field('<div data-region="terminal"><textarea class="xterm-helper-textarea"></textarea></div>').querySelector("textarea"))).toBe(false);
-});
-
-it.each([
-  ['<input type="checkbox">', "a checkbox, whose value is always 'on'"],
-  ['<input type="range" value="5">', "a range"],
-  ['<input type="text" value="abc" readonly>', "a read-only field"],
-])("leaves Escape to the pane for %s (%s)", (html) => {
-  expect(holdsText(field(html))).toBe(false);
 });
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

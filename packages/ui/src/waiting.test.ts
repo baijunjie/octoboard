@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 
-import { consoleOf, projectOf, sessionOf } from "./gallery/fixtures/builders";
+import { consoleOf, projectOf, sessionOf } from "./fixtures/builders";
 import { countWaitingInTree, waitingSessionsInTreeOrder } from "./waiting";
 
 it("counts the waiting sessions the tree lists, and leaves out those of a console or project that is not held", () => {

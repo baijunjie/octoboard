@@ -2,7 +2,7 @@
 import { act } from "react";
 import { expect, it } from "vitest";
 
-import { projectOf } from "../gallery/fixtures/builders";
+import { projectOf } from "../fixtures/builders";
 import { answer, chooseSource, click, fillDirectory, input, pickerNamed, render, sentOf, settle, stored, type } from "./projectDialogTestSupport";
 
 const tabs = () => Array.from(document.body.querySelectorAll<HTMLElement>('[role="tab"]'));

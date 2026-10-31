@@ -5,7 +5,7 @@ import { getInteractionModality } from "react-aria/private/interactions/useFocus
 import { expect, it } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
-import { projectOf } from "../gallery/fixtures/builders";
+import { projectOf } from "../fixtures/builders";
 import type { Agent } from "../protocol";
 import { roots, work, personal, render, input, type, settle, click, answer, chooseSource, buttonText, accountPicker, pickerNamed, sentOf, fillDirectory, stored } from "./projectDialogTestSupport";
 

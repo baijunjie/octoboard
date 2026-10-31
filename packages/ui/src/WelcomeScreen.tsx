@@ -2,12 +2,12 @@ import { Card } from "@heroui/react";
 import { Check, CircleDashed, FileUp, LayoutDashboard, Minus, Plus } from "lucide-react";
 import React, { useId, useImperativeHandle, useRef } from "react";
 
-import { StatusBadge } from "./components/StatusBadge";
+import { StatusBadge } from "./components/status/StatusBadge";
 import { AGENT_OPTIONS } from "./agents";
-import { AgentIcon } from "./components/AgentIcon";
-import { EmptyPanel } from "./components/EmptyPanel";
-import { PATH_VAR_PARAMS } from "./components/literalParams";
-import { useFadeRegion, useScrollFade } from "./components/scrollFade";
+import { AgentIcon } from "./components/icons/AgentIcon";
+import { EmptyPanel } from "./components/panel/EmptyPanel";
+import { PATH_VAR_PARAMS } from "./components/text/literalParams";
+import { useFadeRegion, useScrollFade } from "./components/scroll/scrollFade";
 import type { DialogRequest } from "./dialogs/dialogRequest";
 import { Message, useT } from "./i18n/react";
 import { usePlatform } from "./platform/react";

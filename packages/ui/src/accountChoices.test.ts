@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { agentOpeningChoice, avoidUnavailableAccount, choiceSignedOut, choiceChangingSharing, switchEntryBlock, choiceDisabled, choiceExhaustion, choiceGroups, choiceKey, consoleAccount, currentChoice, expiringWeekly, handoffBlock, incompleteAccount, inheritedAccount, preferExpiringWeekly, projectAccount, settledInitialChoice, switchEntries, type QuotaReadings } from "./accountChoices";
-import { accountOf, consoleOf, projectOf, sessionOf } from "./gallery/fixtures/builders";
+import { accountOf, consoleOf, projectOf, sessionOf } from "./fixtures/builders";
 import { format } from "./i18n/catalog";
 import type { Translate } from "./i18n/catalog";
 import type { Account, AccountQuota, AccountSharing, Agent, AgentAvailability, Console, Project, QuotaWindow } from "./protocol";

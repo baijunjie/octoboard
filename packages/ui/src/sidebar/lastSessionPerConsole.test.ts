@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 
-import { sessionOf } from "../gallery/fixtures/builders";
+import { sessionOf } from "../fixtures/builders";
 import { sessionToRestore } from "./lastSessionPerConsole";
 
 const s1 = sessionOf("s1", "c1", "p1", "One", "idle");

@@ -4,9 +4,9 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { AGENT_OPTIONS } from "../agents";
-import { expectIndependentMarquees, stubMarquee } from "../components/marqueeTestSupport";
+import { expectIndependentMarquees, stubMarquee } from "../components/motion/marqueeTestSupport";
 import { isolate } from "../i18n/isolate";
-import { accountOf, consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { accountOf, consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import type { Agent, AgentAvailability, Session } from "../protocol";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
 import { sessionColourHex } from "../sessionColours";

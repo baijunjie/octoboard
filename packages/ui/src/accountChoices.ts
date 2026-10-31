@@ -2,10 +2,10 @@ import { orderedAccounts } from "./accountOrder";
 import { accountsByAgent, agentsInListingOrder, defaultAccountName, isAgentPickable, projectSessionAgent, selectableAgent } from "./agents";
 import type { Translate } from "./i18n/catalog";
 import type { Account, AccountQuota, AccountSharing, Agent, AgentAvailability, Console, Project, ProjectAccount, QuotaWindow, Session, Settings } from "./protocol";
-import { accountQuotaOf } from "./quota/accountQuotaOf";
+import { accountQuotaOf } from "./accountQuotaOf";
 import { exhaustedQuotaWindow, isNotLoggedIn } from "./quota/quotaFormat";
 import { sessionAccountName } from "./sessionLabel";
-import type { Reason } from "./components/ReasonText";
+import type { Reason } from "./components/text/ReasonText";
 
 /** An account of one agent as a picker settles it; `null` is the agent's default account, the
  * state of pinning nothing. */

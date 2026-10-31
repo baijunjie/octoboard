@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import { belongsToFocus, cycleConsoleSession, focusAfterSelect, focusFor, focusKey, focusTargetId, resolveFocus, shortcutOutcome } from "./focus";
 import type { FocusTarget } from "./types";
 

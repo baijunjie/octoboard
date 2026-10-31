@@ -1,6 +1,6 @@
 import React from "react";
 
-import { InlineReference } from "./components/InlineReference";
+import { InlineReference } from "./components/text/InlineReference";
 import type { Translate } from "./i18n/catalog";
 import { joinNodes } from "./i18n/joinPhrases";
 import type { Language } from "./i18n/languages";

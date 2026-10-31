@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { useLatest } from "../components/useLatest";
+import { useLatest } from "../components/hooks/useLatest";
 
 /** How long a mouse pointer has to rest on a console's avatar before a hidden sidebar floats in, so
  * that one merely crossing the rail on its way elsewhere does not make it flash. Moving on to

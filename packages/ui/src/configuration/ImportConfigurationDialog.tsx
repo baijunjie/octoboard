@@ -1,12 +1,12 @@
-import { Button } from "../components/Button";
+import { Button } from "../components/controls/Button";
 import { reportError } from "../reportError";
 
 import React, { useEffect, useRef, useState } from "react";
 
 import { errorAlerts } from "../errorAlerts";
-import { InlineReference } from "../components/InlineReference";
-import { Dialog, useDialogAction, useSubmitValidation } from "../dialogs/Dialog";
-import { dialogAround } from "../dialogs/dialogElement";
+import { InlineReference } from "../components/text/InlineReference";
+import { Dialog, useDialogAction, useSubmitValidation } from "../components/dialog/Dialog";
+import { dialogAround } from "../components/dialog/dialogElement";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";

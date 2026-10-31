@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { expect, it } from "vitest";
-import { createFixtureDaemon } from "./fixtureDaemon";
+import { createFixtureDaemon } from "../fixtures/fixtureDaemon";
 import { reportScenarios } from "./fixtures/report";
 import { installReportPageFixture } from "./reportPageFixture";
 

@@ -2,14 +2,14 @@ import { SearchField, Surface } from "@heroui/react";
 import { ChevronDown, ChevronRight, ScrollText, SearchX } from "lucide-react";
 import React, { useDeferredValue, useEffect, useId, useState } from "react";
 
-import { FieldClearButton } from "../components/FieldClearButton";
-import { CodeBlock } from "../components/CodeBlock";
-import { DiagnosticBlock } from "../components/DiagnosticBlock";
-import { EmptyPanel } from "../components/EmptyPanel";
-import { PaneFailure } from "../components/PaneFailure";
-import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/StatusAnnouncer";
-import { Dialog } from "../dialogs/Dialog";
-import { useTrimmedField } from "../dialogs/useTrimmedField";
+import { FieldClearButton } from "../components/controls/FieldClearButton";
+import { CodeBlock } from "../components/text/CodeBlock";
+import { DiagnosticBlock } from "../components/alerts/DiagnosticBlock";
+import { EmptyPanel } from "../components/panel/EmptyPanel";
+import { PaneFailure } from "../components/alerts/PaneFailure";
+import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
+import { Dialog } from "../components/dialog/Dialog";
+import { useTrimmedField } from "../components/form/useTrimmedField";
 import { useT } from "../i18n/react";
 import { filterPackages, loadThirdPartyLicenses, type LicensedPackage, type ThirdPartyLicenses } from "./thirdPartyLicenses";
 

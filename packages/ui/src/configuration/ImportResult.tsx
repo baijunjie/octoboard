@@ -2,9 +2,9 @@ import { Info } from "lucide-react";
 import React, { useId, useState } from "react";
 
 import { AGENT_LABEL } from "../agents";
-import { ErrorAlert } from "../components/ErrorAlert";
-import { InlineReference } from "../components/InlineReference";
-import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
+import { ErrorAlert } from "../components/alerts/ErrorAlert";
+import { InlineReference } from "../components/text/InlineReference";
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
 import type { Event, ImportChoiceKind } from "../protocol";

@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 
-import { accountOf, consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { accountOf, consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import type { Account, AccountQuota, Agent, AgentAvailability, Console, Project } from "../protocol";
 import { format, type Translate } from "../i18n/catalog";
 import type { NewSessionBinding } from "./dialogRequest";

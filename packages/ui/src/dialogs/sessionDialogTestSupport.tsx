@@ -5,9 +5,9 @@ import { vi } from "vitest";
 
 import type { Session } from "../protocol";
 import type { NewSessionBinding } from "./dialogRequest";
-import { type ConsoleExtra, consoleOf, type ProjectExtra, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { type ConsoleExtra, consoleOf, type ProjectExtra, projectOf, sessionOf } from "../fixtures/builders";
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
-import { trackMountRefocus } from "./dialogTestSupport";
+import { trackMountRefocus } from "../components/dialog/dialogTestSupport";
 import { SessionDialog } from "./SessionDialog";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

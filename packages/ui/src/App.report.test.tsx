@@ -5,9 +5,9 @@ import { getInteractionModality } from "react-aria/private/interactions/useFocus
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { App } from "./App";
-import { PanelHeader } from "./components/PanelHeader";
-import { mountForTooltip } from "./components/tooltipTestSupport";
-import { consoleOf, pageOf, projectOf, sessionOf, snapshotState } from "./gallery/fixtures/builders";
+import { PanelHeader } from "./components/panel/PanelHeader";
+import { mountForTooltip } from "./components/hint/tooltipTestSupport";
+import { consoleOf, pageOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
 import { defaultStack } from "./panels/stackState";
 import { usePanelStacks } from "./panels/usePanelStacks";
 import { PlatformProvider } from "./platform/react";
@@ -17,12 +17,12 @@ import { ThemeProvider } from "./theme";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-vi.mock("./browser/LazyProjectBrowser", () => ({
+vi.mock("./project-browser/LazyProjectBrowser", () => ({
   LazyProjectBrowser: ({ project }: { project: Project }) => <PanelHeader title={project.name} />,
 }));
-vi.mock("./terminal/ShellTerminalPanel", () => ({ ShellTerminalPanel: () => <PanelHeader title="Terminal" /> }));
-vi.mock("./terminal/shellTerminals", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./terminal/shellTerminals")>();
+vi.mock("./terminal/shell/ShellTerminalPanel", () => ({ ShellTerminalPanel: () => <PanelHeader title="Terminal" /> }));
+vi.mock("./terminal/shell/shellTerminals", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./terminal/shell/shellTerminals")>();
   return { ...actual, startShellTerminal: vi.fn(async () => undefined) };
 });
 // The panel states whose pages it is given, which is what a project session's Report panel is about.

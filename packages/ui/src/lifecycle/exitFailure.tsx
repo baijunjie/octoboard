@@ -1,4 +1,4 @@
-import { DiagnosticBlock } from "../components/DiagnosticBlock";
+import { DiagnosticBlock } from "../components/alerts/DiagnosticBlock";
 import { errorAlerts } from "../errorAlerts";
 import { t } from "../i18n/language";
 import { Message } from "../i18n/react";

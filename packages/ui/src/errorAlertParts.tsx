@@ -1,8 +1,8 @@
 import type React from "react";
 
-import { DaemonErrorMessage } from "./components/DaemonErrorMessage";
-import { remedyInBody } from "./components/errorPartPresence";
-import { rawErrorDetails } from "./components/errorParts";
+import { DaemonErrorMessage } from "./components/alerts/DaemonErrorMessage";
+import { remedyInBody } from "./components/alerts/errorPartPresence";
+import { rawErrorDetails } from "./components/alerts/errorParts";
 import { isStructuredFailure } from "./errorPresentation";
 import { isMessageKey, type MessageKey } from "./i18n/catalog";
 import { t } from "./i18n/language";

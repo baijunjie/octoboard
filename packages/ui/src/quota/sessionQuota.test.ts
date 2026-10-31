@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 
-import { accountOf, sessionOf } from "../gallery/fixtures/builders";
+import { accountOf, sessionOf } from "../fixtures/builders";
 import type { Account, AccountQuota, Agent, AgentAvailability, QuotaWindow } from "../protocol";
 import { sessionQuotaBarOf, type SessionQuotaSource } from "./sessionQuota";
 

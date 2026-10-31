@@ -1,9 +1,9 @@
 import { Checkbox, Label } from "@heroui/react";
 import React, { useState } from "react";
 
-import { InlineReference } from "../components/InlineReference";
-import { StatusAnnouncer } from "../components/StatusAnnouncer";
-import { LabelledGroup } from "../dialogs/LabelledGroup";
+import { InlineReference } from "../components/text/InlineReference";
+import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
+import { LabelledGroup } from "../components/form/LabelledGroup";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
 import {

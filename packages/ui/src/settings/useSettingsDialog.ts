@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 
-import { isActionMenuOpen } from "../components/ActionMenu";
-import { useLatest } from "../components/useLatest";
-import { canTakeFocus, focusAfterModalCloses, focusOpenDialog } from "../components/regionFocus";
-import { usePressedControl } from "../components/usePressedControl";
+import { isActionMenuOpen } from "../components/menus/ActionMenu";
+import { useLatest } from "../components/hooks/useLatest";
+import { canTakeFocus, focusAfterModalCloses, focusOpenDialog } from "../components/focus/regionFocus";
+import { usePressedControl } from "../components/controls/usePressedControl";
 import { usePlatform } from "../platform/react";
 import type { SettingsSectionId } from "./SettingsDialog";
 

@@ -1,9 +1,9 @@
 import { DEFAULT_SETTINGS } from "../../defaultSettings";
 import { AGENT_LABEL } from "../../agents";
 import type { Session, SessionContext } from "../../protocol";
-import type { Ui } from "../interact";
+import type { Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
-import { accountOf, ALL_AGENTS, consoleOf, contextOf, gitStatusOf, minutesAgo, projectOf, projectWith, sessionOf, snapshotState, switchingAccount } from "./builders";
+import { accountOf, ALL_AGENTS, consoleOf, contextOf, gitStatusOf, minutesAgo, projectOf, projectWith, sessionOf, snapshotState, switchingAccount } from "../../fixtures/builders";
 
 const GROUP = "Focus mode";
 

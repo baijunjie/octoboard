@@ -1,12 +1,12 @@
 import { ArrowDown, ArrowUp, GitBranch, GitCommitHorizontal, RefreshCw } from "lucide-react";
 import React, { type RefObject } from "react";
 
-import { DiagnosticBlock } from "../components/DiagnosticBlock";
-import { FadeOverflow } from "../components/FadeOverflow";
-import { IndicatorTooltip } from "../components/IndicatorTooltip";
-import { focusHolderOrButton } from "../components/handFocusOff";
-import { StatusMark } from "../components/StatusMark";
-import { useFocusHandoff } from "../components/useFocusHandoff";
+import { DiagnosticBlock } from "../components/alerts/DiagnosticBlock";
+import { FadeOverflow } from "../components/text/FadeOverflow";
+import { IndicatorTooltip } from "../components/hint/IndicatorTooltip";
+import { focusHolderOrButton } from "../components/focus/handFocusOff";
+import { StatusMark } from "../components/status/StatusMark";
+import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { gitBadgeContent } from "../gitStatusCopy";
 import { gitBadgeAriaLabel, gitFailureLabel, gitFailureShown } from "../gitStatusLabel";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";

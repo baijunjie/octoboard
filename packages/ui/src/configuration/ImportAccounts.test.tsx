@@ -4,7 +4,7 @@ import { setInteractionModality } from "react-aria";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { DEFAULT_ACCOUNT_NAME, type Event, type InspectedAccount, type InspectedAccounts, type RequestBody } from "../protocol";
-import { press as pressElement } from "../components/detailsTestSupport";
+import { press as pressElement } from "../components/alerts/detailsTestSupport";
 import { setLanguage } from "../i18n/language";
 import { ImportConfigurationDialog } from "./ImportConfigurationDialog";
 import type { Inspection } from "./importPlan";

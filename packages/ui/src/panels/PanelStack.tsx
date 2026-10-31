@@ -1,14 +1,14 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
 
-import { HandOffOnUnmount } from "../components/HandOffOnUnmount";
-import { focusLanding } from "../components/regionFocus";
-import { ResizeSeparator } from "../components/ResizeSeparator";
+import { HandOffOnUnmount } from "../components/focus/HandOffOnUnmount";
+import { focusLanding } from "../components/focus/regionFocus";
+import { ResizeSeparator } from "../components/panel/ResizeSeparator";
 import { useT } from "../i18n/react";
 import { PANEL_CARD_CLASS } from "../layout/paneOverlay";
 import { ownerKey, type AsideOwner } from "../layout/asideOwner";
 import type { PanePeek } from "../layout/usePaneToggles";
 import type { Project } from "../protocol";
-import { PanelFrameProvider } from "../components/PanelHeader";
+import { PanelFrameProvider } from "../components/panel/PanelHeader";
 import { PANEL_ENTRIES, type PanelContentProps } from "./panelRegistry";
 import {
   closePanel,

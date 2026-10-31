@@ -2,8 +2,8 @@ import { DEFAULT_SETTINGS } from "../../defaultSettings";
 import { DEFAULT_ACCOUNT_NAME, type Account, type AccountQuota, type AccountSharing, type Settings } from "../../protocol";
 import type { SessionRequest } from "../../store";
 import type { Scenario } from "../scenario";
-import { accountOf, ALL_AGENTS, SAMPLE, consoleOf, failureTitle, projectOf, sessionOf, snapshotState } from "./builders";
-import { quotaFailure, quotaOf, quotaWindow } from "./quotas";
+import { accountOf, ALL_AGENTS, SAMPLE, consoleOf, failureTitle, projectOf, sessionOf, snapshotState } from "../../fixtures/builders";
+import { quotaFailure, quotaOf, quotaWindow } from "../../fixtures/quotas";
 import { SHELL_TIMEOUT } from "./shellTimeout";
 
 const TRUST = "Trust prompts and toasts";

@@ -2,11 +2,11 @@ import { Label, Radio, RadioGroup } from "@heroui/react";
 import React, { useId, useState } from "react";
 
 import { appConfig } from "../appConfig";
-import { ChoiceWarning } from "../components/ChoiceWarning";
-import { InlineReference } from "../components/InlineReference";
-import { ConfirmOption } from "../dialogs/ConfirmOption";
-import { Dialog, useDialogAction } from "../dialogs/Dialog";
-import { LabelledGroup } from "../dialogs/LabelledGroup";
+import { ChoiceWarning } from "../components/alerts/ChoiceWarning";
+import { InlineReference } from "../components/text/InlineReference";
+import { ConfirmOption } from "../components/form/ConfirmOption";
+import { Dialog, useDialogAction } from "../components/dialog/Dialog";
+import { LabelledGroup } from "../components/form/LabelledGroup";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";

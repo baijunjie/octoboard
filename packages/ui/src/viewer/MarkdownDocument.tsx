@@ -9,8 +9,8 @@ import Markdown, { type Components, type ExtraProps, type Options } from "react-
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 
-import { ExternalLink } from "../components/ExternalLink";
-import { useFocusVisibleProps } from "../components/useFocusVisibleProps";
+import { ExternalLink } from "../components/text/ExternalLink";
+import { useFocusVisibleProps } from "../components/focus/useFocusVisibleProps";
 import { textDirection } from "../i18n/languages";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { type Direction, type DirectionNode, firstStrongDirection } from "./blockDirection";

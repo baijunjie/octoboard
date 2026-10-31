@@ -7,8 +7,8 @@ import { Spinner } from "@heroui/react";
 import { Equal, FileQuestion, FolderGit2, Link, Unplug } from "lucide-react";
 import React, { createContext, useContext } from "react";
 
-import { CenteredEmptyPanel } from "../components/EmptyPanel";
-import { PaneFailure } from "../components/PaneFailure";
+import { CenteredEmptyPanel } from "../components/panel/EmptyPanel";
+import { PaneFailure } from "../components/alerts/PaneFailure";
 import type { ErrorPresentation } from "../errorPresentation";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useCurrentLanguage, useT } from "../i18n/react";

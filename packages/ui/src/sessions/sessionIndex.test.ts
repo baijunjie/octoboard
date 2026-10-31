@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 
-import { sessionOf } from "../gallery/fixtures/builders";
+import { sessionOf } from "../fixtures/builders";
 import { indexSessions, sessionsOf } from "./sessionIndex";
 
 const hub = sessionOf("hub", "c1", undefined, "Hub", "idle");

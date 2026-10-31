@@ -1,6 +1,6 @@
 import { DaemonRequestError } from "../daemon-client";
-import { createFixtureDaemon } from "../gallery/fixtureDaemon";
-import type { Scenario } from "../gallery/scenario";
+import { createFixtureDaemon } from "../fixtures/fixtureDaemon";
+import type { Fixture } from "../fixtures/fixture";
 import type { Daemon } from "../store";
 import { previewRepositories } from "./repositories";
 
@@ -20,9 +20,9 @@ const browseRequests = new Set([
   "read_project_commit_change_bodies",
 ]);
 
-/** The gallery's single repository fixtures are reused behind a project router; app state and
+/** The shared single-repository fixtures are reused behind a project router; app state and
  * terminals still belong to one shared daemon. Every request stays inside these in-memory fakes. */
-export function createPreviewDaemon(scenario: Scenario): Daemon {
+export function createPreviewDaemon(scenario: Fixture): Daemon {
   const daemon = createFixtureDaemon({ ...scenario, files: {}, git: null });
   const projects = new Map(
     [...previewRepositories].map(([id, repository]) => [

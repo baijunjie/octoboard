@@ -1,5 +1,5 @@
 import type { Scenario } from "../scenario";
-import { consoleOf, minutesAgo, projectOf, sessionOf, snapshotState } from "./builders";
+import { consoleOf, minutesAgo, projectOf, sessionOf, snapshotState } from "../../fixtures/builders";
 
 const GROUP = "Sidebar sessions";
 

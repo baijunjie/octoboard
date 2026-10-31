@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { consoleOf, sessionOf } from "../gallery/fixtures/builders";
+import { consoleOf, sessionOf } from "../fixtures/builders";
 import type { PlatformAdapter } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import type { Session } from "../protocol";

@@ -24,7 +24,7 @@ const RUST_STEPS = [
 export function checkSteps(scope) {
   if (scope.mode === "release") {
     return lightFirst([
-      lint("application lint", ["packages/ui", "apps/desktop/scripts", "scripts/env.mjs"], ["**/src/gallery/**", "**/src/website-preview/**", "**/scripts/gallery*", "**/scripts/wkbench/**"]),
+      lint("application lint", ["packages/ui", "apps/desktop/scripts", "scripts/env.mjs"], ["**/src/gallery/**", "**/src/fixtures/**", "**/src/website-preview/**", "**/scripts/gallery*", "**/scripts/wkbench/**"]),
       pnpm("application type check", ["--filter", "@octoboard/ui", "typecheck:app"]),
       pnpm("desktop script tests", ["--filter", "@octoboard/desktop", "test"]),
       RUST_STEPS[0],

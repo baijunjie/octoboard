@@ -2,7 +2,7 @@
 import { act } from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { accountOf } from "../gallery/fixtures/builders";
+import { accountOf } from "../fixtures/builders";
 import type { Daemon } from "../store";
 import { parentConsole, renderDialog, hub1, buttons, optionElements, pickerNamed } from "./sessionDialogTestSupport";
 import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";

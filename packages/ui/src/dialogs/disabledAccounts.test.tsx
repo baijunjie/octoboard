@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "../errorAlerts";
-import { accountOf, sessionOf } from "../gallery/fixtures/builders";
+import { accountOf, sessionOf } from "../fixtures/builders";
 import type { Account, AccountQuota, Settings } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { ConsoleAccountsField } from "./ConsoleAccountsField";

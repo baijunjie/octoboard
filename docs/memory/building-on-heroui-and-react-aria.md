@@ -88,7 +88,7 @@ is inherited, so anything hover-driven placed inside one never fires: a tooltip 
 `FadeOverflow` marquee, a `hover:` style. A click still reaches the item, which is why the part looks fine.
 
 Where such a part has to hold something that answers the pointer, put `pointer-events-auto` on that element itself,
-as the path under each directory in `packages/ui/src/dialogs/DirectoryPicker.tsx` does; a press on it still bubbles to
+as the path under each directory in `packages/ui/src/components/dialog/DirectoryPicker.tsx` does; a press on it still bubbles to
 the item. Text outside those two parts, a direct child of the item, is unaffected. Before relying on hover inside any
 other HeroUI part, search its stylesheet in that directory for `pointer-events-none`. The jsdom tests and the
 gallery's hover steps dispatch events to an element rather than hit-testing, so they pass either way; only a real
@@ -115,7 +115,7 @@ A react-aria-components element merges a context value over the props it was giv
 that treats one as a known part supplies that value per slot, so a default written in the element's own file can be
 replaced from above with nothing at the call site to show it: react-aria's `Heading` defaults to `level = 3`, but a
 `Dialog` sets its `title` slot to `level: 2`, so HeroUI's `Modal.Heading` and `AlertDialog.Heading` — each a `Heading
-slot="title"`, and rendered in this project as `Frame.Heading` (`packages/ui/src/dialogs/Dialog.tsx`, where `Frame` is
+slot="title"`, and rendered in this project as `Frame.Heading` (`packages/ui/src/components/dialog/Dialog.tsx`, where `Frame` is
 one of those two) — render `h2`, and a heading inside a panel that can appear in a dialog is pitched against that
 rather than against `h3`.
 
@@ -153,7 +153,7 @@ grant it had watched arrive, and died on the first click to another section.
 
 `shouldForceMount` keeps the unselected panels mounted, but it is not the way to keep a panel's state. Pass it only
 where the hidden panels must go on taking up layout, as the rail's quota panel
-(`packages/ui/src/quota/RailQuotaEntry.tsx`) is the one place that does: it stacks every agent's panel in one grid cell
+(`packages/ui/src/shell/RailQuotaEntry.tsx`) is the one place that does: it stacks every agent's panel in one grid cell
 so that, anchored by its bottom edge, it keeps the tallest tab's height and its tab strip does not move out from under
 the pointer. A force-mounted unselected panel is rendered `inert` with `data-inert="true"` and without its `role`, `id`
 or `tabIndex`, but it is still shown, so hide it yourself (`data-[inert=true]:invisible`). HeroUI's `.tabs__panel` gives
@@ -171,12 +171,12 @@ follow in `packages/ui`, and none shows in a jsdom test that only asserts the DO
   react-aria renders the panel from the collection when the selection changes. So a hook whose owner renders
   the `Tabs` and hands a ref to an element inside a panel never sees that element arrive or go from its own effects —
   they run only on the owner's next render, which already carries that render's change. A hook that watches such an
-  element attaches and detaches in a ref callback, as `useListMotion` (`packages/ui/src/components/useListMotion.ts`)
+  element attaches and detaches in a ref callback, as `useListMotion` (`packages/ui/src/components/motion/useListMotion.ts`)
   does.
 - What sits inside `<Tabs>` is rendered twice, except a `Tabs.Panel`'s content and a `Tabs.Tab`'s children, which
   react-aria's `TabPanel` and `Tab` do not render in the copy. A component of yours anywhere else inside — directly,
   inside a plain wrapper, or wrapping a `Tabs.Panel` (its own hooks, not the panel's content) — mounts in the copy
-  too and runs its hooks and effects there, as `AgentTabList` (`packages/ui/src/components/AgentTabList.tsx`) does.
+  too and runs its hooks and effects there, as `AgentTabList` (`packages/ui/src/components/tabs/AgentTabList.tsx`) does.
   So anything whose effect must happen once — a connection or socket, a subscription, timers, document listeners —
   goes outside `<Tabs>`'s children or inside a `Tabs.Panel`'s content, never elsewhere within `<Tabs>`: each shell
   terminal view placed there opened a second emulator and connection to the same terminal. A jsdom test that counts
@@ -211,7 +211,7 @@ transition is left stuck part-way, and a tab created and selected in one go alwa
 `packages/ui`, use `Tabs.Indicator` only where the set of tabs does not change while the strip is shown; a strip that
 adds a tab and selects it at once draws the selected tab's fill on the tab itself (`data-[selected=true]:` classes
 carrying the indicator's fill and shadow), as the Terminal panel's strip in
-`packages/ui/src/terminal/ShellTerminalPanel.tsx` does.
+`packages/ui/src/terminal/shell/ShellTerminalPanel.tsx` does.
 
 ## Wiring a tooltip: what `TitledControl` and the other wrappers silently fail on
 

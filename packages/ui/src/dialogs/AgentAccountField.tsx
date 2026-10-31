@@ -1,9 +1,9 @@
 import React, { useId, useRef } from "react";
 
-import { useFocusHandoff } from "../components/useFocusHandoff";
+import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 
-import { LabelledGroup } from "./LabelledGroup";
-import { OptionSelect, type Option } from "./OptionSelect";
+import { LabelledGroup } from "../components/form/LabelledGroup";
+import { OptionSelect, type Option } from "../components/form/OptionSelect";
 
 /** An agent picker, joined to an account picker with it when `account` is given. The agent and its
  * account read as one setting, so they are one input group under one label: the agent at the start

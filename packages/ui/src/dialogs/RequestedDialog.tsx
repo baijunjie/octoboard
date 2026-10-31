@@ -1,12 +1,12 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 
-import { ErrorAlert } from "../components/ErrorAlert";
-import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
-import { errorDetails } from "../components/errorParts";
-import { useStableHandler } from "../components/useLatest";
+import { ErrorAlert } from "../components/alerts/ErrorAlert";
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
+import { errorDetails } from "../components/alerts/errorParts";
+import { useStableHandler } from "../components/hooks/useLatest";
 import { DaemonRequestError } from "../daemon-client";
 import { errorPresentation } from "../errorPresentation";
-import { InlineReference } from "../components/InlineReference";
+import { InlineReference } from "../components/text/InlineReference";
 import { ImportConfigurationDialog } from "../configuration/ImportConfigurationDialog";
 import { Message, useT } from "../i18n/react";
 import { isLive, SESSION_BINDING_CHANGED, SESSION_NOT_BOUND, type Console as ConsoleRecord, type Project, type Session } from "../protocol";
@@ -18,26 +18,26 @@ import {
   hasBoundSessions,
   isUnusedSession,
   ordersByStatus,
-} from "../sidebar/order";
+} from "../sessions/order";
 import { useProjectProcesses } from "../process/useProjectProcesses";
 import { useDaemon, useDaemonStore } from "../store";
-import { ConfirmConsequences, ConsequenceLines, SessionList } from "./ConfirmConsequences";
-import { ConfirmDialog } from "./ConfirmDialog";
+import { ConfirmConsequences, ConsequenceLines, SessionList } from "../components/dialog/ConfirmConsequences";
+import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
 import { ConsoleDialog } from "./ConsoleDialog";
 import { HandoffDialog } from "./HandoffDialog";
 import type { DialogRequest } from "./dialogRequest";
 import { ProjectDialog } from "./ProjectDialog";
-import { RenameDialog } from "./RenameDialog";
+import { RenameDialog } from "../components/dialog/RenameDialog";
 import { SessionDialog } from "./SessionDialog";
 import { SessionModelDialog, type ModelEdits } from "./SessionModelDialog";
 import { SwitchAccountDialog } from "./SwitchAccountDialog";
 import { useBranchCleanup, useProjectRemovalCleanup } from "./BranchCleanupOptions";
-import { ConfirmOption } from "./ConfirmOption";
-import { KeepFocusInDialog } from "./KeepFocusInDialog";
+import { ConfirmOption } from "../components/form/ConfirmOption";
+import { KeepFocusInDialog } from "../components/dialog/KeepFocusInDialog";
 import { useSessionRecords } from "./useSessionRecords";
 import { StoppedRow, useProcessStopping } from "./ProcessStopOptions";
 import { isRemovalRefusal, useArchiveInspection, useSessionBranches, type SessionInspection } from "./useSessionBranches";
-import { PROJECT_NAME_LIMIT } from "./textLength";
+import { PROJECT_NAME_LIMIT } from "../components/form/textLength";
 
 /** One topic of a sectioned confirmation (the archive's, the project removal's): a labelled group whose `<h3>` heading names it (the
  * dialog's own title is the `<h2>`), under a groove divider when `divided`, i.e. when another section is

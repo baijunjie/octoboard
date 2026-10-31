@@ -1,13 +1,13 @@
 import React, { useRef } from "react";
 
-import { useFocusHandoff } from "../components/useFocusHandoff";
+import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { DELIVERY_CHOICES, DEVELOPMENT_CHOICES } from "../gitWorkflow";
 import { useT } from "../i18n/react";
 import type { GitDelivery, GitDevelopment, GitWorkflowOverride } from "../protocol";
 import { useDaemonStore } from "../store";
-import { GroupRow, GroupRows } from "./GroupRows";
-import { LabelledGroup } from "./LabelledGroup";
-import { OptionSelect, type Option } from "./OptionSelect";
+import { GroupRow, GroupRows } from "../components/form/GroupRows";
+import { LabelledGroup } from "../components/form/LabelledGroup";
+import { OptionSelect, type Option } from "../components/form/OptionSelect";
 
 /** What a picker holds for an item that follows the application-wide value; an own value is its own wire value. */
 const FOLLOW = "follow";

@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { CircleCheck } from "lucide-react";
 
-import { AttendedStatusAnnouncer } from "../components/AttendedStatusAnnouncer";
-import { Button } from "../components/Button";
-import { ErrorAlert } from "../components/ErrorAlert";
-import { InlineReference } from "../components/InlineReference";
-import { StatusBadge } from "../components/StatusBadge";
+import { AttendedStatusAnnouncer } from "../components/announce/AttendedStatusAnnouncer";
+import { Button } from "../components/controls/Button";
+import { ErrorAlert } from "../components/alerts/ErrorAlert";
+import { InlineReference } from "../components/text/InlineReference";
+import { StatusBadge } from "../components/status/StatusBadge";
 import { ActionableError } from "../actionableError";
 import { Message, useT } from "../i18n/react";
 import type { PlainMessageKey } from "../i18n/catalog";

@@ -58,6 +58,8 @@ const CASES = [
   ["AGENTS.md", []],
   ["packages/ui/src/i18n/matchLanguage.ts", ["verify", "ui", "web"]],
   ["packages/ui/src/website-preview/main.tsx", ["verify", "ui", "web"]],
+  ["packages/ui/src/fixtures/fixtureDaemon.ts", ["verify", "ui", "web"]],
+  ["packages/ui/src/gallery/scenario.ts", ["ui"]],
   ["apps/daemon/PROTOCOL.md", ["verify", "ui", "daemon", "native"]],
   ["packages/ui/src/platform/tauri.ts", ["verify", "ui", "native"]],
   ["scripts/verify/lock.mjs", ["verify", "ui"]],

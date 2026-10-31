@@ -1,4 +1,4 @@
-import type { Reason } from "../components/ReasonText";
+import type { Reason } from "../components/text/ReasonText";
 import { isolate } from "../i18n/isolate";
 import type { Translate } from "../i18n/catalog";
 import type { AccountQuota, Agent, QuotaUnavailable, QuotaWindow, ResetCredit, ResetCredits } from "../protocol";

@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 /* eslint-disable no-control-regex -- the tests read escape sequences. */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cells } from "../gallery/fakeTerminal";
+import { cells } from "../fixtures/fakeTerminal";
 import { createPreviewScenario } from "./scenarios";
 import { previewCopy as english } from "./locales/en";
 import { previewCopy as chinese } from "./locales/zh-Hans";
 import { createTerminalScript, liveSchedule, type TerminalSession } from "./terminals";
 import { terminalScripts } from "./terminalScripts";
 import { previewRepositories } from "./repositories";
-import { sessionOf } from "../gallery/fixtures/builders";
+import { sessionOf } from "../fixtures/builders";
 
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(1_000_000); });
 afterEach(() => vi.useRealTimers());

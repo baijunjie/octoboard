@@ -2,9 +2,9 @@ import { Description } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
 import { effortLevels, launchSettingOptions } from "../agentLaunchSettings";
-import { FailureBody } from "../components/errorParts";
-import { StatusMark } from "../components/StatusMark";
-import { useFocusHandoff } from "../components/useFocusHandoff";
+import { FailureBody } from "../components/alerts/errorParts";
+import { StatusMark } from "../components/status/StatusMark";
+import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { daemonMessage } from "../daemonMessage";
 import { DaemonRequestError } from "../daemon-client";
 import { failureSummaryText } from "../errorText";
@@ -12,8 +12,8 @@ import type { Translate } from "../i18n/catalog";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Agent, AgentModel, Launch } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
-import { AdvancedSection, type AdvancedTab, AdvancedTabs } from "./AdvancedSection";
-import { OptionSelect } from "./OptionSelect";
+import { AdvancedSection, type AdvancedTab, AdvancedTabs } from "../components/form/AdvancedSection";
+import { OptionSelect } from "../components/form/OptionSelect";
 import { useAgentModels } from "./useAgentModels";
 
 /** The name a listed model is shown under. Claude Code's `best` alias is named in Octoboard's own

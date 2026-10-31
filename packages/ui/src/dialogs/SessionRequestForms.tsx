@@ -2,10 +2,10 @@ import React, { useLayoutEffect, useState } from "react";
 
 import { accountDisabledUnavailable, handoffBlock, incompleteAccount, sharingChangeRuns, switchEntries, switchEntryBlock } from "../accountChoices";
 import { inheritedSessionLaunch, launchWithOverrides } from "../agents";
-import { ErrorAlert } from "../components/ErrorAlert";
-import { PathText } from "../components/PathText";
-import { StatusAnnouncer } from "../components/StatusAnnouncer";
-import { StatusMark } from "../components/StatusMark";
+import { ErrorAlert } from "../components/alerts/ErrorAlert";
+import { PathText } from "../components/text/PathText";
+import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
+import { StatusMark } from "../components/status/StatusMark";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { Account, Agent, Console, Project, Session } from "../protocol";
@@ -17,7 +17,7 @@ import { useNow } from "../useNow";
 import { AgentAccountField } from "./AgentAccountField";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
 import { accountRefusalMessage } from "./accountRefusalMessage";
-import { OptionSelect, type Option } from "./OptionSelect";
+import { OptionSelect, type Option } from "../components/form/OptionSelect";
 import { useLaunchChoice } from "./useLaunchChoice";
 
 /** What the user changed in the form of a switch or a handoff, as `answer_session_request` carries

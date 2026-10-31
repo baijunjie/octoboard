@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { accountOf } from "./gallery/fixtures/builders";
+import { accountOf } from "./fixtures/builders";
 import { accountsByAgent, agentChoiceBadge, agentPickerOptions, defaultAccountName, listedPickerAgents, noAgentState, projectSessionAgent, selectableAgent } from "./agents";
 import { format } from "./i18n/catalog";
 import type { Translate } from "./i18n/catalog";

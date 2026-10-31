@@ -1,6 +1,6 @@
-import { describing, type Matcher } from "../interact";
+import { describing, type Matcher } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
-import { consoleOf, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState } from "./builders";
+import { consoleOf, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState } from "../../fixtures/builders";
 
 const GROUP = "Window layout";
 

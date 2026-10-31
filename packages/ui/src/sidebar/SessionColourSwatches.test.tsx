@@ -3,7 +3,7 @@ import { act } from "react";
 import { setInteractionModality } from "react-aria";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { mountForTooltip } from "../components/tooltipTestSupport";
+import { mountForTooltip } from "../components/hint/tooltipTestSupport";
 import { CONSOLE_SESSION_COLOURS, type ConsoleSessionColour } from "../protocol";
 import { ThemeProvider } from "../theme";
 import { SessionColourSwatches } from "./SessionColourSwatches";

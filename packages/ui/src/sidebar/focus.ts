@@ -1,5 +1,5 @@
 import type { Project, Session } from "../protocol";
-import { consoleSessionAbove } from "./order";
+import { consoleSessionAbove } from "../sessions/order";
 import type { FocusTarget } from "./types";
 
 /** The id of the project or console session in focus. */

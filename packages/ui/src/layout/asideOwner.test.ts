@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import { liveOwner, ownerAfterConsoleSwitch, ownerAfterMove, ownerForSession, type AsideOwner } from "./asideOwner";
 
 const main = consoleOf("c-1", "Main");

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { setInteractionModality } from "react-aria";
 import { flushSync } from "react-dom";
 
-import { refocusIfLost } from "../components/refocusIfLost";
+import { refocusIfLost } from "../components/focus/refocusIfLost";
 import { MODAL_OPEN } from "../layout/useRegionCycle";
 import { usePlatform } from "../platform/react";
 import type { Session } from "../protocol";

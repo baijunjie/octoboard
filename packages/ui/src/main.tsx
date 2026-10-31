@@ -6,7 +6,7 @@ import { suppressNativeContextMenu } from "./contextMenuGuard";
 import { resolveDaemonAddress, resolveRecovered, resolveStartupError } from "./daemon";
 import { runtimeError } from "./runtimeError";
 import { reportError } from "./reportError";
-import { ErrorAlerts } from "./dialogs/ErrorAlerts";
+import { ErrorAlerts } from "./shell/ErrorAlerts";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { LanguageProvider } from "./i18n/react";
 import { useBackgroundRunSync } from "./lifecycle/useBackgroundRunSync";

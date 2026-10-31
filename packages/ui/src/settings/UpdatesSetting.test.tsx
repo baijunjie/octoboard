@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { press } from "../components/detailsTestSupport";
+import { press } from "../components/alerts/detailsTestSupport";
 import { LanguageProvider } from "../i18n/react";
 import type { AvailableUpdate, PlatformAdapter, UpdaterCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";

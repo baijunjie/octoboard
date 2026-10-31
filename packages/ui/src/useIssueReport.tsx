@@ -2,9 +2,9 @@ import React, { useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { appConfig } from "./appConfig";
-import { DiagnosticBlock } from "./components/DiagnosticBlock";
-import { ExternalLink } from "./components/ExternalLink";
-import { InlineReference } from "./components/InlineReference";
+import { DiagnosticBlock } from "./components/alerts/DiagnosticBlock";
+import { ExternalLink } from "./components/text/ExternalLink";
+import { InlineReference } from "./components/text/InlineReference";
 import { errorAlerts, type ReportableFailure } from "./errorAlerts";
 import { diagnosticText } from "./errorText";
 import { Message, useCurrentLanguage, useT } from "./i18n/react";

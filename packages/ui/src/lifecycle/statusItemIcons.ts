@@ -1,4 +1,4 @@
-import { AGENT_MARKS } from "../components/agentMarks";
+import { AGENT_MARKS } from "../components/icons/agentMarks";
 import { resolveCssColour, type Appearance } from "../cssColour";
 import type { StatusItemIcon, StatusItemMenu } from "../platform";
 import type { Agent } from "../protocol";

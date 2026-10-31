@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
 
 import { incompleteAccount } from "../accountChoices";
-import { InlineReference } from "../components/InlineReference";
+import { InlineReference } from "../components/text/InlineReference";
 import { Message, useT } from "../i18n/react";
 import { openSettingsFromAnywhere } from "../settings/settingsLauncher";
 import { useDaemon } from "../store";
-import { ConfirmDialog } from "./ConfirmDialog";
+import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
 
 export type ConfirmLaunch = (account: string | null | undefined, launch: () => void | Promise<void>) => Promise<void>;
 

@@ -3,21 +3,21 @@ import React, { useRef, useState } from "react";
 
 import { ActionableError } from "../actionableError";
 import { inheritedSessionLaunch, launchWithOverrides } from "../agents";
-import { ErrorAlert } from "../components/ErrorAlert";
-import { InlineReference } from "../components/InlineReference";
-import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/StatusAnnouncer";
-import { useHasPainted } from "../components/useHasPainted";
-import { useFocusHandoff } from "../components/useFocusHandoff";
+import { ErrorAlert } from "../components/alerts/ErrorAlert";
+import { InlineReference } from "../components/text/InlineReference";
+import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
+import { useHasPainted } from "../components/motion/useHasPainted";
+import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { Launch, Session } from "../protocol";
 import type { AcknowledgementView } from "../errorAlerts";
 import { sessionDisplayTitle } from "../sessionLabel";
 import { useDaemonStore } from "../store";
-import { Dialog } from "./Dialog";
-import { dialogAround } from "./dialogElement";
+import { Dialog } from "../components/dialog/Dialog";
+import { dialogAround } from "../components/dialog/dialogElement";
 import { LaunchPickers, useLaunchModels } from "./LaunchSettingsFields";
-import { useFailureWhenBlocked } from "./useFailureWhenBlocked";
+import { useFailureWhenBlocked } from "../components/dialog/useFailureWhenBlocked";
 
 /** What the dialog sends: each value the user moved off what the session runs with, `null` for the
  * agent's own default. */

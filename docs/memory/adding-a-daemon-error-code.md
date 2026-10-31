@@ -66,6 +66,6 @@ when daemon code starts sending a new code, the same change:
   remedy. Keep the summary where the code is also shown with no title, in a pane's failure, a mark's popover or
   beside a field, as `models_command_failed` and `quota_command_failed` are.
 - Where the remedy is done in Settings' Agent accounts section, a case in `recoveryAction`
-  (`packages/ui/src/components/ErrorGuidance.tsx`). The alert then offers the button, and the recovery text says only
+  (`packages/ui/src/components/alerts/ErrorGuidance.tsx`). The alert then offers the button, and the recovery text says only
   what to do there, without naming the path to it. See `docs/product/error-alerts.md`, section "Recovery and unexpected
   errors".

@@ -1,7 +1,7 @@
 import { Switch } from "@heroui/react";
 import React, { useEffect, useRef } from "react";
 
-import { MarkLineBox } from "../components/MarkLineBox";
+import { MarkLineBox } from "../components/status/MarkLineBox";
 
 /** One setting: its name and, when it has one, a line saying what it does at the start, its control
  * at the end, with a thin divider under every row but the last (the copy of a row a list motion is

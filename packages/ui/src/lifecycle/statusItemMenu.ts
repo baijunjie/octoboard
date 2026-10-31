@@ -4,7 +4,7 @@ import type { Console, Project, Session } from "../protocol";
 import { remainingPercentAt } from "../quota/quotaFormat";
 import { accountInUse, accountQuotaLabel, sessionQuotaBarOf } from "../quota/sessionQuota";
 import { sessionStatusKind, sessionWithLocation, statusLabel, type StatusKind } from "../sessionLabel";
-import { sessionsInTreeOrder, STATUS_RANK } from "../sidebar/order";
+import { sessionsInTreeOrder, STATUS_RANK } from "../sessions/order";
 import { agentIconKey, statusIconKey } from "./statusItemIconKeys";
 import { buildQuotaSubmenus, type StatusItemQuotaSource } from "./statusItemQuota";
 

@@ -1,6 +1,6 @@
 import React from "react";
 
-import { StatusBadge } from "../components/StatusBadge";
+import { StatusBadge } from "../components/status/StatusBadge";
 import { STATUS_MARKS, type StatusKey } from "./statusMarks";
 
 /** A soft badge in the colour a change's status is marked with, for the list's letter and the

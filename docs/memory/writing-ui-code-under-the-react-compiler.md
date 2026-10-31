@@ -24,7 +24,7 @@ When the compiler cannot compile a component or hook it skips the whole function
 parent render as before, and for most causes the lint reports nothing. In this codebase these were the causes:
 
 - A ref written or read during render (the one cause the lint does flag, as `react-hooks/refs`). Keep the latest value
-  with `useLatest`, or a handler with `useStableHandler`, both in `packages/ui/src/components/useLatest.ts`; the value
+  with `useLatest`, or a handler with `useStableHandler`, both in `packages/ui/src/components/hooks/useLatest.ts`; the value
   is set in a layout effect, so a reader during render or in a descendant's layout effect in the same commit still
   sees the previous one.
 - A `try` with a `finally`, or with no `catch`, anywhere in the function, nested callbacks included. Move the helper
@@ -34,6 +34,11 @@ parent render as before, and for most causes the lint reports nothing. In this c
   preserved"): resolve the values into locals above it and read only those inside.
 - An `eslint-disable` comment for `react-hooks/exhaustive-deps` or `react-hooks/rules-of-hooks` anywhere in the
   function. Never add one; `exhaustive-deps` is off for this reason (`eslint.config.mjs`).
+- A `use*` function that calls no React hook and builds no JSX: the compiler does not take it for a hook, leaves it
+  as written, and logs nothing about it, so everything it returns is new on every call and whatever its caller
+  passes on from it re-renders the children it reaches. Moving code out of a component into such a function
+  un-memoizes it. A hook extracted from a component calls at least one React hook; code that needs none goes into a
+  plain function without the `use` prefix, whose call the compiled caller memoizes on its arguments.
 
 To see what did not compile, give the compiler a `logger` — temporarily as
 `reactCompilerPreset({ logger: { logEvent(filename, event) { … } } })` in `packages/ui/vite.config.ts`, then build —

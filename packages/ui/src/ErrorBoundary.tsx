@@ -1,7 +1,7 @@
 import React from "react";
 
 import { errorDiagnostic } from "./errorText";
-import { DiagnosticBlock } from "./components/DiagnosticBlock";
+import { DiagnosticBlock } from "./components/alerts/DiagnosticBlock";
 import { useT } from "./i18n/react";
 import { useAppExit } from "./lifecycle/useAppExit";
 import { StartupFailure, StartupScreen } from "./StartupScreen";

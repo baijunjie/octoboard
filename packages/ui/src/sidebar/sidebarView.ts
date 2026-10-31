@@ -1,6 +1,7 @@
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { useShallow } from "zustand/react/shallow";
 
+import { consolePreference, currentConsoleOf } from "../currentConsole";
 import { createPersistedPreference } from "../persistedPreference";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
 import type { Console } from "../protocol";
@@ -8,33 +9,13 @@ import { useDaemonStore } from "../store";
 import { focusKey, resolveFocus } from "./focus";
 import type { FocusTarget } from "./types";
 
-/** The current console, which the sidebar shows, and what is in focus mode, if anything. Kept per window profile in
- * `localStorage`, like the panes' visibility: a convenience, so a stored id that no longer names a
- * record is simply ignored. */
-const consolePreference = createPersistedPreference<string | undefined>(
-  PREFERENCE_KEYS.sidebarConsole,
-  (raw) => raw ?? undefined,
-  (value) => value ?? null,
-);
-/** The focused thing as `project:<id>` or `consoleSession:<id>`. */
+/** What is in focus mode, if anything, as `project:<id>` or `consoleSession:<id>`; kept like the current
+ * console (`currentConsole.ts`). */
 const focusPreference = createPersistedPreference<string | undefined>(
   PREFERENCE_KEYS.sidebarFocus,
   (raw) => raw ?? undefined,
   (value) => value ?? null,
 );
-
-/** The console shown: the chosen one while it exists, otherwise the first. */
-function currentConsoleOf(consoles: Console[], chosenId: string | undefined): Console | undefined {
-  return consoles.find((c) => c.id === chosenId) ?? consoles[0];
-}
-
-/** The console the sidebar shows, for what acts on "the console in hand" from outside it. The
- * daemon's consoles in the order the store holds them, which is the order the sidebar is given. */
-export function useCurrentConsole(): Console | undefined {
-  const consoles = useDaemonStore((s) => s.consoles);
-  const chosenId = consolePreference.useValue();
-  return useMemo(() => currentConsoleOf(Array.from(consoles.values()), chosenId), [consoles, chosenId]);
-}
 
 export interface SidebarView {
   /** The console shown: the chosen one while it exists, otherwise the first. */

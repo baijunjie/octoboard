@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useState } from "react";
 
-import { useFadeRegion, useScrollFade } from "../components/scrollFade";
+import { useFadeRegion, useScrollFade } from "../components/scroll/scrollFade";
 import { diagramReading, renderDiagram } from "./diagramConfig";
 import { useT } from "../i18n/react";
 import { BlockFallback } from "./notices";

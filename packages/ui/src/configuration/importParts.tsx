@@ -1,16 +1,16 @@
 import React, { useState } from "react";
 
 import { AGENT_LABEL } from "../agents";
-import { Button } from "../components/Button";
-import { DetailsButton } from "../components/DetailsButton";
-import { InlineReference } from "../components/InlineReference";
-import { TILDE_PARAMS } from "../components/literalParams";
-import { MarkLineBox } from "../components/MarkLineBox";
-import { StatusMark } from "../components/StatusMark";
-import { StatusBadge, type StatusBadgeColor } from "../components/StatusBadge";
-import { useSubmitValidation } from "../dialogs/Dialog";
-import { DirectoryPicker } from "../dialogs/DirectoryPicker";
-import { TextInput } from "../dialogs/TextInput";
+import { Button } from "../components/controls/Button";
+import { DetailsButton } from "../components/alerts/DetailsButton";
+import { InlineReference } from "../components/text/InlineReference";
+import { TILDE_PARAMS } from "../components/text/literalParams";
+import { MarkLineBox } from "../components/status/MarkLineBox";
+import { StatusMark } from "../components/status/StatusMark";
+import { StatusBadge, type StatusBadgeColor } from "../components/status/StatusBadge";
+import { useSubmitValidation } from "../components/dialog/Dialog";
+import { DirectoryPicker } from "../components/dialog/DirectoryPicker";
+import { TextInput } from "../components/form/TextInput";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import { joinNodes } from "../i18n/joinPhrases";

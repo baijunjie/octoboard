@@ -4,19 +4,20 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { DaemonRequestError } from "../../daemon-client";
 import type { ChangeEntry, ChangeSide, Event, RequestBody, SideRead, SideVersion } from "../../protocol";
 import { hasHunks, joinedPatch, linesAfterLastHunk } from "../../viewer/patch";
-import { FixtureUnfillableError } from "../banner";
-import { createFixtureDaemon } from "../fixtureDaemon";
-import { EMPTY_TREE, listedCommits, type FixtureChange, type FixtureGit } from "./changeFixtures";
-import { objectIdCheck } from "./invariants";
+import { FixtureUnfillableError } from "../../fixtures/banner";
+import { createFixtureDaemon } from "../../fixtures/fixtureDaemon";
+import { EMPTY_TREE, listedCommits, type FixtureChange, type FixtureGit } from "../../fixtures/changeFixtures";
+import { objectIdCheck } from "../../fixtures/invariants";
 import { SCENARIOS } from ".";
-import { FORKED_GIT, LONG_HISTORY_GIT, NEVER_PUSHED_GIT, projectGitScenarios, SAMPLE_GIT, UNPUSHED_GIT } from "./projectGit";
+import { SAMPLE_GIT } from "../../fixtures/sampleGit";
+import { FORKED_GIT, LONG_HISTORY_GIT, NEVER_PUSHED_GIT, projectGitScenarios, UNPUSHED_GIT } from "./projectGit";
 
 describe("the sample repository's changes", () => {
   const fileSide = (side: ChangeSide) => side.state === "present" && side.kind === "file";
   const pathOf = (side: ChangeSide) => (side.state === "present" ? side.path : "");
   const lines = (side: SideRead) => (side.state === "present" ? side.lines : null);
   /** The daemon only the `git` of a scenario is read from; the rest of the scenario is unused. */
-  const sampleDaemon = (git?: FixtureGit) => createFixtureDaemon({ id: "sample-git", group: "Project pane: Git", category: "normal", title: "", git });
+  const sampleDaemon = (git?: FixtureGit) => createFixtureDaemon({ git });
   /** The version a request names a side at, which the daemon compares the side it finds against
    * before it reads any body: the one the diff reply reported, as the window names it back. */
   const versionOf = (side: ChangeSide): SideVersion => (side.state === "present" ? { state: "present", source: side.source } : { state: "absent" });

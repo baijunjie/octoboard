@@ -1,13 +1,14 @@
 import { DEFAULT_SETTINGS } from "../../defaultSettings";
 import { AGENT_LABEL } from "../../agents";
-import { describing, type Ui } from "../interact";
+import { describing, type Ui, type Step } from "../../fixtures/interact";
 import type { AccountLogin, AccountSharing, AccountTrashOutcome, Agent, AgentAvailability } from "../../protocol";
-import type { AccountTrashAnswer, Scenario, Step } from "../scenario";
-import { accountOf, ALL_AGENTS, SAMPLE, accountSharingOf, minutesAgo, sessionOf, snapshotState } from "./builders";
+import type { AccountTrashAnswer } from "../../fixtures/fixture";
+import type { FixtureError } from "../../fixtures/sampleFiles";
+import type { Scenario } from "../scenario";
+import { accountOf, ALL_AGENTS, SAMPLE, accountSharingOf, minutesAgo, sessionOf, snapshotState } from "../../fixtures/builders";
 import { noneAddedState } from "./empty";
 import { agentAvailability } from "./liveChanges";
-import type { FixtureError } from "./projectFiles";
-import { USED_UP_MIX, manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow, PERSONAL_RESET_CREDITS, resetCreditOf, resetCreditsOf } from "./quotas";
+import { USED_UP_MIX, manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow, PERSONAL_RESET_CREDITS, resetCreditOf, resetCreditsOf } from "../../fixtures/quotas";
 
 const GROUP = "Settings";
 

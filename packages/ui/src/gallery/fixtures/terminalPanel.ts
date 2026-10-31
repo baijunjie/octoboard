@@ -1,6 +1,7 @@
-import type { Preferences, Scenario } from "../scenario";
-import type { Ui } from "../interact";
-import { SAMPLE, shellTerminalOf, snapshotState } from "./builders";
+import type { Preferences } from "../../fixtures/preferences";
+import type { Scenario } from "../scenario";
+import type { Ui } from "../../fixtures/interact";
+import { SAMPLE, shellTerminalOf, snapshotState } from "../../fixtures/builders";
 import { terminalClosed, terminalOpened } from "./liveChanges";
 
 const GROUP = "Terminal panel";

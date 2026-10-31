@@ -3,5 +3,5 @@
   "compilerOptions": {
     "tsBuildInfoFile": "node_modules/.cache/tsc/app.tsbuildinfo"
   },
-  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/test", "src/gallery", "src/website-preview"]
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/test", "src/gallery", "src/fixtures", "src/website-preview"]
 }

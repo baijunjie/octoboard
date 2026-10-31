@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { sessionOf } from "../gallery/fixtures/builders";
+import { sessionOf } from "../fixtures/builders";
 import type { Session } from "../protocol";
 import { IS_MAC } from "../useWindowShortcut";
 import { useSessionActionShortcuts } from "./useSessionActionShortcuts";

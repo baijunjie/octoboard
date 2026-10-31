@@ -1,7 +1,7 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { StatusAnnouncer } from "../components/StatusAnnouncer";
-import { useFadeRegion, useScrollFade, type FadeRegion } from "../components/scrollFade";
+import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
+import { useFadeRegion, useScrollFade, type FadeRegion } from "../components/scroll/scrollFade";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";

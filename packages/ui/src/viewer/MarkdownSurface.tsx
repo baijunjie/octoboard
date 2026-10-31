@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useCallback, useRef, useState } from "react";
 
-import { useFadeRegion, useScrollFade } from "../components/scrollFade";
+import { useFadeRegion, useScrollFade } from "../components/scroll/scrollFade";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";

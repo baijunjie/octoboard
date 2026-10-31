@@ -4,14 +4,14 @@ import { errorPresentation } from "../errorPresentation";
 import React, { useId, useState } from "react";
 
 import { AGENT_LABEL } from "../agents";
-import { ChoiceWarning } from "../components/ChoiceWarning";
-import { InlineReference } from "../components/InlineReference";
+import { ChoiceWarning } from "../components/alerts/ChoiceWarning";
+import { InlineReference } from "../components/text/InlineReference";
 import { DaemonRequestError } from "../daemon-client";
 import { Message, useT } from "../i18n/react";
 import { TRUST_NOT_WAITING, TRUST_REFUSED_CODES, type Agent } from "../protocol";
 import { abbreviateHome } from "../pathDisplay";
 import { useDaemon, useDaemonStore, type TrustPrompt } from "../store";
-import type { ConfirmDialogProps } from "./ConfirmDialog";
+import type { ConfirmDialogProps } from "../components/dialog/ConfirmDialog";
 
 function Path({ children }: { children: string }): React.ReactElement {
   return <InlineReference monospace wrap>{children}</InlineReference>;

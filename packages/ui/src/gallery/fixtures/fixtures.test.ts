@@ -5,11 +5,12 @@ import { DEFAULT_SCENARIO, GROUPS, SCENARIOS } from ".";
 import { CATALOGS, format, messageText, splitPlaceholders, type Message, type MessageKey } from "../../i18n/catalog";
 import type { Language } from "../../i18n/languages";
 import { en } from "../../i18n/messages/en";
-import { createUi, type Matcher, type Ui } from "../interact";
-import { changeRowText } from "../../browser/changeRow";
-import { changeItems } from "../../browser/changes";
-import { listedCommits } from "./changeFixtures";
-import { NEVER_PUSHED_GIT, RANKING_TASK, SAMPLE_GIT, UNPUSHED_GIT } from "./projectGit";
+import { createUi, type Matcher, type Ui } from "../../fixtures/interact";
+import { changeRowText } from "../../project-browser/git/changeRow";
+import { changeItems } from "../../project-browser/git/changes";
+import { listedCommits } from "../../fixtures/changeFixtures";
+import { SAMPLE_GIT } from "../../fixtures/sampleGit";
+import { NEVER_PUSHED_GIT, RANKING_TASK, UNPUSHED_GIT } from "./projectGit";
 import { viewerScenarios } from "./viewer";
 import { DEFAULT_WIDTH, MIN_HEIGHT } from "../scenario";
 

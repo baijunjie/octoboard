@@ -5,8 +5,8 @@ import { incompleteAccount } from "../accountChoices";
 import { AGENT_LABEL, defaultAccountName } from "../agents";
 import { DaemonRequestError } from "../daemon-client";
 import { errorPresentation } from "../errorPresentation";
-import { HandOffOnUnmount } from "../components/HandOffOnUnmount";
-import { InlineReference } from "../components/InlineReference";
+import { HandOffOnUnmount } from "../components/focus/HandOffOnUnmount";
+import { InlineReference } from "../components/text/InlineReference";
 import { joinNodes } from "../i18n/joinPhrases";
 import type { Language } from "../i18n/languages";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
@@ -15,9 +15,9 @@ import { SESSION_REQUEST_ANSWERED, SESSION_REQUEST_NOT_WAITING, type Account, ty
 import { sessionAccount, sessionDisplayTitle } from "../sessionLabel";
 import { useDaemon, useDaemonStore, type SessionRequest } from "../store";
 import { displayWirePath } from "../wirePath";
-import type { ConfirmDialogProps } from "./ConfirmDialog";
-import { dialogAround } from "./dialogElement";
-import { useFailureWhenBlocked } from "./useFailureWhenBlocked";
+import type { ConfirmDialogProps } from "../components/dialog/ConfirmDialog";
+import { dialogAround } from "../components/dialog/dialogElement";
+import { useFailureWhenBlocked } from "../components/dialog/useFailureWhenBlocked";
 import { HandoffRequestForm, IncompleteSharingAnnouncer, IncompleteSharingMark, isChangeRequest, SwitchRequestForm, type RequestFormState } from "./SessionRequestForms";
 
 /** The branches an approval would hand over, each as code, joined as the language joins a list.

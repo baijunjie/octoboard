@@ -3,9 +3,9 @@ import { TriangleAlert } from "lucide-react";
 import React, { useRef, useState } from "react";
 import { useFocusVisible } from "react-aria";
 
-import { AnchoredTooltip } from "../components/AnchoredTooltip";
-import { useTabScrollLabels } from "../components/tabScrollLabels";
-import { useListMotion } from "../components/useListMotion";
+import { AnchoredTooltip } from "../components/hint/AnchoredTooltip";
+import { useTabScrollLabels } from "../components/tabs/tabScrollLabels";
+import { useListMotion } from "../components/motion/useListMotion";
 import { useT } from "../i18n/react";
 
 export type Region = "consoles" | "accounts" | "settings";

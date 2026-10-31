@@ -1,19 +1,19 @@
 import React, { Suspense, useEffect, useRef } from "react";
 
-import { AgentIcon } from "../../components/AgentIcon";
-import { PanelHeader } from "../../components/PanelHeader";
-import { SessionAgentIcon } from "../../components/SessionAgentIcon";
-import { StatusIcon } from "../../components/StatusIcon";
-import { FileTree } from "../../browser/FileTree";
-import { buildTree, rowKey, type DirListing } from "../../browser/tree";
-import { createFixtureDaemon } from "../../gallery/fixtureDaemon";
-import { consoleOf, sessionOf, snapshotState } from "../../gallery/fixtures/builders";
-import { quotaOf, quotaWindow } from "../../gallery/fixtures/quotas";
+import { AgentIcon } from "../../components/icons/AgentIcon";
+import { PanelHeader } from "../../components/panel/PanelHeader";
+import { SessionAgentIcon } from "../../components/icons/SessionAgentIcon";
+import { StatusIcon } from "../../components/status/StatusIcon";
+import { FileTree } from "../../project-browser/files/FileTree";
+import { buildTree, rowKey, type DirListing } from "../../project-browser/tree";
+import { createFixtureDaemon } from "../../fixtures/fixtureDaemon";
+import { consoleOf, sessionOf, snapshotState } from "../../fixtures/builders";
+import { quotaOf, quotaWindow } from "../../fixtures/quotas";
 import { useCurrentLanguage, useT } from "../../i18n/react";
 import { AccountNameLine, AccountQuotaSummary, LoginStateBadge } from "../../quota/AccountQuotaSummary";
 import { AccountUsageBar } from "../../quota/AccountUsageBar";
 import { statusLabel, sessionShownStatusKind } from "../../sessionLabel";
-import { liveSessions } from "../../sidebar/order";
+import { liveSessions } from "../../sessions/order";
 import { DaemonProvider } from "../../store";
 import { useNow } from "../../useNow";
 import { RenderedDiff, useRendererScope } from "../../viewer/codeRenderer";
@@ -25,7 +25,6 @@ import { ready } from "./main";
 const noop = () => {};
 const workspace = consoleOf("feature-workspace", "Bistro");
 const daemon = createFixtureDaemon({
-  id: "feature-view", group: "Sidebar sessions", category: "normal", title: "Feature view", description: "Static product components.",
   state: snapshotState({ consoles: [workspace] }),
 });
 const readings = [

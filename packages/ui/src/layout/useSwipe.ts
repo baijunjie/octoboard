@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-import { useLatest } from "../components/useLatest";
+import { useLatest } from "../components/hooks/useLatest";
 import { MODAL_OPEN } from "./useRegionCycle";
 import type { SwipeToward } from "./paneSwipe";
 

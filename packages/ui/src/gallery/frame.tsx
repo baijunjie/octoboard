@@ -11,11 +11,11 @@ import ReactDOM from "react-dom/client";
 
 import { isLanguage, type Language } from "../i18n/languages";
 import { ConfigurationFileError } from "../platform/configurationFileError";
-import { galleryFailure } from "./banner";
+import { galleryFailure } from "../fixtures/banner";
 import { SCENARIOS } from "./fixtures";
-import { installFakeTerminal } from "./fakeTerminal";
+import { installFakeTerminal } from "../fixtures/fakeTerminal";
 import { holdPrimaryModifier } from "./heldModifier";
-import { createUi, settleMotion, stuckExit } from "./interact";
+import { createUi, settleMotion, stuckExit } from "../fixtures/interact";
 import { prepareStorage } from "./prepare";
 import { LIVE_CHANGE_EVENT } from "./scenario";
 import { fixtureUpdater } from "./updaterFixture";
@@ -46,8 +46,8 @@ const heldModifier = (params.get("held") ?? (scenario?.held ? "1" : "0")) === "1
 const [{ App }, { Toasts }, { ErrorAlerts }, { ErrorBoundary }, { LanguageProvider }, { selectPlatform }, { PlatformProvider }, startup, store, { ThemeProvider }, { UpdatesProvider, useUpdates }] =
   await Promise.all([
     import("../App"),
-    import("../components/Toasts"),
-    import("../dialogs/ErrorAlerts"),
+    import("../shell/Toasts"),
+    import("../shell/ErrorAlerts"),
     import("../ErrorBoundary"),
     import("../i18n/react"),
     import("../platform"),
@@ -60,7 +60,7 @@ const [{ App }, { Toasts }, { ErrorAlerts }, { ErrorBoundary }, { LanguageProvid
 // After react-aria's own listeners are registered, as in `main.tsx` (see `focusGuard.ts`).
 await import("../focusGuard");
 await import("../style.css");
-const { createFixtureDaemon } = await import("./fixtureDaemon");
+const { createFixtureDaemon } = await import("../fixtures/fixtureDaemon");
 const { installReportPageFixture } = await import("./reportPageFixture");
 
 const { DaemonFailedScreen, NoAddressMessage, StartupScreen } = startup;

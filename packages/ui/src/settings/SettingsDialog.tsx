@@ -2,18 +2,18 @@ import { Modal, Tabs } from "@heroui/react";
 import { Bell, FileCog, FolderCheck, GitBranch, Info, Keyboard, KeyRound, Settings2, ShieldCheck, ShieldUser, type LucideIcon } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { TitledControl } from "../components/TitledControl";
-import { openingFocus } from "../components/regionFocus";
-import { FadedScroller } from "../components/scrollFade";
-import { useTabScrollLabels } from "../components/tabScrollLabels";
-import { dialogAround } from "../dialogs/dialogElement";
-import { useEscapeWhileTooltipOpen } from "../dialogs/useEscapeWhileTooltipOpen";
+import { TitledControl } from "../components/hint/TitledControl";
+import { openingFocus } from "../components/focus/regionFocus";
+import { FadedScroller } from "../components/scroll/scrollFade";
+import { useTabScrollLabels } from "../components/tabs/tabScrollLabels";
+import { dialogAround } from "../components/dialog/dialogElement";
+import { useEscapeWhileTooltipOpen } from "../components/dialog/useEscapeWhileTooltipOpen";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useT } from "../i18n/react";
 import { useIsNarrow } from "../layout/breakpoint";
 import { AboutSection } from "./AboutSection";
-import { AccountsNavigationContext } from "./AccountsNavigationContext";
-import { AgentAccountsSection, AGENT_STRIP_HEIGHT } from "./AgentAccountsSection";
+import { AccountsNavigationContext } from "./accounts/AccountsNavigationContext";
+import { AgentAccountsSection, AGENT_STRIP_HEIGHT } from "./accounts/AgentAccountsSection";
 import { AgentBehaviorSection } from "./AgentBehaviorSection";
 import { ConfigurationSection } from "./ConfigurationSection";
 import { GeneralSection } from "./GeneralSection";
@@ -170,7 +170,7 @@ export function SettingsDialog({
           16px margin on every side instead, so the padding stays 16px until `docked`. It is a
           `max-docked:` utility because a `docked:` one loses to an `sm:` twin on the same property.
           The height also gives way to the connection banner's strip, which the container ends above.
-          Narrow, these are the same rules `dialogs/Dialog.tsx` states for a dialog that fills the
+          Narrow, these are the same rules `components/dialog/Dialog.tsx` states for a dialog that fills the
           window, down to the numbers, so the two move together. */}
       <Modal.Container className="max-docked:p-4">
         <Modal.Dialog

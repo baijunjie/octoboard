@@ -1,4 +1,4 @@
-import { isTabbable, TABBABLE } from "../components/tabbable";
+import { isTabbable, TABBABLE } from "../components/focus/tabbable";
 
 // Whether the browser's own Tab order has another stop in this document beyond `from`. Outside an
 // open modal everything is `inert`, so the modal's ends are the document's.

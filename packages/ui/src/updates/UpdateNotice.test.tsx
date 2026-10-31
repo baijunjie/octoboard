@@ -3,8 +3,8 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
-import { windowAttention } from "../components/windowTestSupport";
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
+import { windowAttention } from "../components/announce/windowTestSupport";
 import { LanguageProvider } from "../i18n/react";
 import type { AvailableUpdate, PlatformAdapter, UpdaterCapability, UpdateProgress } from "../platform";
 import { PlatformProvider } from "../platform/react";

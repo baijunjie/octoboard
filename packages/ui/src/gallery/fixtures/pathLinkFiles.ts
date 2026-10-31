@@ -1,6 +1,6 @@
 // The files behind the path links of the terminal scenarios: what the fixture daemon reads when a
 // link opens in the file viewer, in the project's folder and in a worktree's.
-import type { FixtureFiles } from "./projectFiles";
+import type { FixtureFiles } from "../../fixtures/sampleFiles";
 
 const SUMMARY = `import type { ReactElement } from "react";
 

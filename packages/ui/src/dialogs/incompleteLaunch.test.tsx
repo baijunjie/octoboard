@@ -3,11 +3,11 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import type { Account, Agent, Session } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { registerSettingsLauncher } from "../settings/settingsLauncher";
-import { trackMountRefocus } from "./dialogTestSupport";
+import { trackMountRefocus } from "../components/dialog/dialogTestSupport";
 import { HandoffDialog } from "./HandoffDialog";
 import { SessionDialog } from "./SessionDialog";
 import { SwitchAccountDialog } from "./SwitchAccountDialog";

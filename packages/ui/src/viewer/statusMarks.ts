@@ -1,4 +1,4 @@
-import type { StatusBadgeColor } from "../components/StatusBadge";
+import type { StatusBadgeColor } from "../components/status/StatusBadge";
 import type { PlainMessageKey } from "../i18n/catalog";
 import type { ChangeStatus } from "./content";
 

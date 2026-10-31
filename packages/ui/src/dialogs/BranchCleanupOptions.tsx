@@ -1,20 +1,17 @@
 import React, { useId, useState } from "react";
 
-import { BranchGroups, type BranchGroup, type BranchRow } from "../components/BranchGroups";
-import { StatusMark } from "../components/StatusMark";
+import { BranchGroups, type BranchGroup, type BranchRow } from "../components/alerts/BranchGroups";
+import { StatusMark } from "../components/status/StatusMark";
 import { Message, useT } from "../i18n/react";
 import { abbreviateHome } from "../pathDisplay";
 import { isProjectFolderUnknown, type SessionBranchItem } from "../protocol";
 import { useDaemonStore } from "../store";
 import { displayWirePath } from "../wirePath";
-import { ConfirmOption } from "./ConfirmOption";
-import { KeepFocusInDialog } from "./KeepFocusInDialog";
-import { OptionDetails } from "./OptionDetails";
+import type { ConsequenceLine } from "../components/dialog/ConfirmConsequences";
+import { ConfirmOption } from "../components/form/ConfirmOption";
+import { KeepFocusInDialog } from "../components/dialog/KeepFocusInDialog";
+import { OptionDetails } from "../components/form/OptionDetails";
 import { branchChoices, forcibleBranches, lockedWorktrees, useProjectRemovalBranches, type Inspected } from "./useSessionBranches";
-
-/** A line the dialog's consequences add while an option is ticked: `key` names its kind, so a line
- * whose count changes stays the same line. */
-export type ConsequenceLine = { key: string; text: React.ReactNode };
 
 /** `items` as rows of a cleanup list, in display form; `tagChanges` marks a worktree with
  * uncommitted changes where the group it is in does not say so already. */

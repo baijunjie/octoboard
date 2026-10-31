@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { useLatest } from "../components/useLatest";
+import { useLatest } from "../components/hooks/useLatest";
 import { usePlatform } from "../platform/react";
 import type { Session, ShellTerminal } from "../protocol";
 import { type StatusKind, sessionStatusKind } from "../sessionLabel";

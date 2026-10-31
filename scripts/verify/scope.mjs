@@ -19,6 +19,7 @@ export const WEB_PREVIEW_INPUTS = [
   "packages/ui/vite.preview.config.ts",
   "packages/ui/website-preview.html",
   "packages/ui/src/website-preview/",
+  "packages/ui/src/fixtures/",
 ];
 
 // The UI side of the desktop contract: the Tauri bridge, the window URL's parameters, the native

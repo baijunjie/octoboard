@@ -29,12 +29,12 @@ export const UI_UNTRACEABLE = [
 // fails when a UI test reads files and is named in neither this list nor `UI_DISK_TESTS_COVERED`.
 export const UI_DISK_TESTS = [
   "src/style.test.ts",
-  "src/components/scrollFadeCoverage.test.ts",
+  "src/components/scroll/scrollFadeCoverage.test.ts",
   "src/errorModulesCycle.test.ts",
   "src/cssDependencies.test.ts",
   "src/layout/paneWidth.test.tsx",
-  "src/components/InlineReference.test.tsx",
-  "src/dialogs/AdvancedSection.test.tsx",
+  "src/components/text/InlineReference.test.tsx",
+  "src/components/form/AdvancedSection.test.tsx",
   "src/protocol.contract.test.ts",
   "scripts/gallery-sweep.test.mjs",
 ];

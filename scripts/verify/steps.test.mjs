@@ -54,6 +54,7 @@ test("UI reruns remain narrowed and release checks exclude website and gallery s
   const release = checkSteps({ mode: "release" });
   assert.deepEqual(release.map((step) => step.label), ["application lint", "application type check", "desktop script tests", "rustfmt check", "application UI tests", "rust clippy", "rust tests"]);
   assert.ok(release[0].cmd.includes("**/src/gallery/**"));
+  assert.ok(release[0].cmd.includes("**/src/fixtures/**"));
   assert.ok(release[1].cmd.includes("typecheck:app"));
   assert.ok(release[4].cmd.includes("test:app"));
   assert.ok(release.slice(4).every((step) => step.heavy));

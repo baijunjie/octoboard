@@ -1,6 +1,6 @@
 import type { Scenario } from "../scenario";
-import type { Ui } from "../interact";
-import { consoleOf, pageOf, projectOf, processTreeOf, sessionOf, shellTerminalOf, snapshotState } from "./builders";
+import type { Ui } from "../../fixtures/interact";
+import { consoleOf, pageOf, projectOf, processTreeOf, sessionOf, shellTerminalOf, snapshotState } from "../../fixtures/builders";
 import { allPagesDeleted, latestPageDeleted, pagePushed } from "./liveChanges";
 
 const GROUP = "Report panel";

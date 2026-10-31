@@ -2,12 +2,12 @@
 import { posix } from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
-import { objectIdCheck } from "../gallery/fixtures/invariants";
+import { objectIdCheck } from "../fixtures/invariants";
 import { sessionStatusKind } from "../sessionLabel";
 import { previewRepositories } from "./repositories";
 import { createPreviewDaemon } from "./daemon";
 import { createPreviewScenario } from "./scenarios";
-import type { TerminalScript } from "../gallery/fakeTerminal";
+import type { TerminalScript } from "../fixtures/fakeTerminal";
 
 /** What a terminal output draws first, at the classic width. */
 const screenOf = (output: string | TerminalScript | undefined) =>

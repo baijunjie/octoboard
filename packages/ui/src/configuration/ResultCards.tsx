@@ -1,7 +1,7 @@
 import { CircleAlert, CircleCheck, CircleDot, CircleMinus, CircleSlash, TriangleAlert, type LucideIcon } from "lucide-react";
 import React, { useId } from "react";
 
-import { AlertStatusContext } from "../components/AlertButton";
+import { AlertStatusContext } from "../components/alerts/AlertButton";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useT } from "../i18n/react";
 import type { AccountFallback, AccountOutcome, ImportFailure, ImportStatus } from "../protocol";

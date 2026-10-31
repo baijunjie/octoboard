@@ -1,6 +1,6 @@
-import type { Ui } from "../interact";
+import type { Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
-import { consoleOf, projectOf, sessionOf, snapshotState } from "./builders";
+import { consoleOf, projectOf, sessionOf, snapshotState } from "../../fixtures/builders";
 
 const GROUP = "Project filter";
 

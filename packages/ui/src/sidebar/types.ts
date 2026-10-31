@@ -1,4 +1,4 @@
-import type { ActionMenuEntry } from "../components/ActionMenu";
+import type { ActionMenuEntry } from "../components/menus/ActionMenu";
 import type { DialogRequest, NewSessionRequest } from "../dialogs/dialogRequest";
 import type { PanelKind } from "../panels/stackState";
 import type { Console, ConsoleSessionColour, Project, Session } from "../protocol";

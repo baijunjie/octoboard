@@ -1,11 +1,11 @@
 import React, { useId, useRef, useState } from "react";
 
-import { Button } from "../components/Button";
-import { HandOffOnUnmount } from "../components/HandOffOnUnmount";
-import { InlineReference } from "../components/InlineReference";
-import { StatusAnnouncer } from "../components/StatusAnnouncer";
-import { StatusMark } from "../components/StatusMark";
-import { OptionSelect } from "../dialogs/OptionSelect";
+import { Button } from "../components/controls/Button";
+import { HandOffOnUnmount } from "../components/focus/HandOffOnUnmount";
+import { InlineReference } from "../components/text/InlineReference";
+import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
+import { StatusMark } from "../components/status/StatusMark";
+import { OptionSelect } from "../components/form/OptionSelect";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { UpdateChannel } from "../platform";

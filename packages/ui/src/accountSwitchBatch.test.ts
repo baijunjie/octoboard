@@ -4,9 +4,9 @@ import { afterEach, expect, it, vi } from "vitest";
 import { ACCOUNT_SWITCH_CONCURRENCY, runAccountSwitchBatch } from "./accountSwitchBatch";
 import { DaemonRequestError } from "./daemon-client";
 import { errorAlerts } from "./errorAlerts";
-import { consoleOf, projectOf, sessionOf } from "./gallery/fixtures/builders";
+import { consoleOf, projectOf, sessionOf } from "./fixtures/builders";
 import type { Session } from "./protocol";
-import { sessionWithDescendants } from "./sidebar/order";
+import { sessionWithDescendants } from "./sessions/order";
 import { applyDaemonEvent, createStateStore, setAccountSwitchesQueued } from "./store";
 
 const console_ = consoleOf("c-1", "Main");

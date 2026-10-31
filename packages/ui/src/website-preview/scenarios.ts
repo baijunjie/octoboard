@@ -1,8 +1,10 @@
 import type { Language } from "../i18n/languages";
 import type { Agent, AgentAvailability, Session } from "../protocol";
 import { type State } from "../store";
-import type { Scenario } from "../gallery/scenario";
-import { quotaOf, quotaWindow } from "../gallery/fixtures/quotas";
+import type { Fixture } from "../fixtures/fixture";
+import type { Step } from "../fixtures/interact";
+import type { Preferences } from "../fixtures/preferences";
+import { quotaOf, quotaWindow } from "../fixtures/quotas";
 import {
   ALL_AGENTS,
   consoleOf,
@@ -12,13 +14,13 @@ import {
   sessionOf,
   shellTerminalOf,
   snapshotState,
-} from "../gallery/fixtures/builders";
+} from "../fixtures/builders";
 import { previewRepositories } from "./repositories";
 import { previewCopy as english } from "./locales/en";
 import { previewCopy as chinese } from "./locales/zh-Hans";
 import { createIdleScript, createTerminalScript } from "./terminals";
 import { terminalCopy } from "./terminalScripts";
-import type { TerminalScript } from "../gallery/fakeTerminal";
+import type { TerminalScript } from "../fixtures/fakeTerminal";
 import { DEFAULT_SETTINGS } from "../defaultSettings";
 
 export type PreviewScene = "overview" | "focus" | "changes";
@@ -80,6 +82,10 @@ function report(copy: typeof english): string {
   </body></html>`;
 }
 
+/** What the preview mounts: the daemon's fixture, the preferences the app starts from and the steps that
+ * walk it into its scene. */
+export type PreviewScenario = Fixture & { preferences: Preferences; steps: Step[] };
+
 /** Scenes select a view of one ongoing workspace, so its sessions and progress stay shared. */
 export function createPreviewScenario(
   scene: PreviewScene,
@@ -87,7 +93,7 @@ export function createPreviewScenario(
   /** Whether a working session's terminal moves; false for a visitor who asks for reduced motion. */
   animate = true,
 ): {
-  scenario: Scenario;
+  scenario: PreviewScenario;
   /** A terminal's output, given what the preview's daemon holds now: the visitor can open sessions,
    * and add projects, that the scenario does not know. */
   output: (session: string, held?: Pick<State, "sessions" | "projects" | "consoles">) => string | TerminalScript | undefined;
@@ -208,11 +214,7 @@ export function createPreviewScenario(
       { agent: "claude", bound_to: coordinator.id },
     ),
   ];
-  const scenario: Scenario = {
-    id: `website-${scene}`,
-    group: "Focus mode",
-    category: "normal",
-    title: copy.demo,
+  const scenario: PreviewScenario = {
     state: {
       ...snapshotState({
         consoles: [workspace],
@@ -255,7 +257,6 @@ export function createPreviewScenario(
       changeLayout: "tree",
     },
     configuration: { unavailable: true },
-    clipboard: "unavailable",
     steps: [
       async (ui) => {
         // Match the application's CSS breakpoint: the standalone demo also runs on phones, where
@@ -292,7 +293,7 @@ export function createPreviewScenario(
     ],
   };
   if (scene === "changes")
-    scenario.steps!.push(
+    scenario.steps.push(
       (ui) => ui.press(ui.t("git.view.changes")),
       (ui) => ui.press(ui.changeRow("meal-deal-orders.ts", "modified")),
       (ui) => ui.wait(600),

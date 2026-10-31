@@ -3,10 +3,10 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import type { Session } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
-import { framesAsTimers, trackMountRefocus } from "./dialogTestSupport";
+import { framesAsTimers, trackMountRefocus } from "../components/dialog/dialogTestSupport";
 import { SessionModelDialog } from "./SessionModelDialog";
 
 vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));

@@ -2,12 +2,12 @@ import { ActionableError } from "../actionableError";
 import { useRef } from "react";
 
 import { noAgentState } from "../agents";
-import { useLatest } from "../components/useLatest";
+import { useLatest } from "../components/hooks/useLatest";
 import { errorPresentation } from "../errorPresentation";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import { sessionDisplayTitle } from "../sessionLabel";
-import { liveConsoleSessions } from "../sidebar/order";
+import { liveConsoleSessions } from "../sessions/order";
 import { useDaemon } from "../store";
 import { useOctoboardTheme } from "../theme";
 import type { NewSessionRequest } from "./dialogRequest";

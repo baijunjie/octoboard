@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 
 import { AGENT_OPTIONS } from "../agents";
-import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import type { Agent, AgentAvailability } from "../protocol";
 import { terminalEmptyState } from "./emptyState";
 

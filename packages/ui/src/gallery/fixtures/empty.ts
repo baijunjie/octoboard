@@ -1,7 +1,7 @@
 import { DEFAULT_SETTINGS } from "../../defaultSettings";
 import type { Agent, AgentAvailability } from "../../protocol";
 import type { Scenario } from "../scenario";
-import { consoleOf, projectOf, sessionOf, snapshotState } from "./builders";
+import { consoleOf, projectOf, sessionOf, snapshotState } from "../../fixtures/builders";
 
 const GROUP = "Welcome";
 

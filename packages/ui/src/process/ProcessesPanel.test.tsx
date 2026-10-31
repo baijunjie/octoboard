@@ -3,12 +3,12 @@ import { act, useState } from "react";
 import { getInteractionModality, setInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { windowAttention } from "../components/windowTestSupport";
-import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
-import { mountForTooltip } from "../components/tooltipTestSupport";
+import { windowAttention } from "../components/announce/windowTestSupport";
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
+import { mountForTooltip } from "../components/hint/tooltipTestSupport";
 import { DaemonRequestError } from "../daemon-client";
 import { errorAlerts } from "../errorAlerts";
-import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import type { Event, ProcessTree, RequestBody, Session } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { ProcessesPanel } from "./ProcessesPanel";

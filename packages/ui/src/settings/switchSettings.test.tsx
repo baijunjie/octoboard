@@ -10,10 +10,10 @@ import { AutoApproveAccountSwitchesSetting } from "./AutoApproveAccountSwitchesS
 import { AskQuestionsAsChoicesSetting } from "./AskQuestionsAsChoicesSetting";
 import { AutoApproveHandoffsSetting } from "./AutoApproveHandoffsSetting";
 import { AutoApproveSessionRequestsSetting } from "./AutoApproveSessionRequestsSetting";
-import { AutoSelectAccountSetting } from "./AutoSelectAccountSetting";
-import { AutoSwitchOnUsageLimitSetting } from "./AutoSwitchOnUsageLimitSetting";
+import { AutoSelectAccountSetting } from "./accounts/AutoSelectAccountSetting";
+import { AutoSwitchOnUsageLimitSetting } from "./accounts/AutoSwitchOnUsageLimitSetting";
 import { SidebarOrderSetting } from "./SidebarOrderSetting";
-import { StartQuotaWindowsSetting } from "./StartQuotaWindowsSetting";
+import { StartQuotaWindowsSetting } from "./accounts/StartQuotaWindowsSetting";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

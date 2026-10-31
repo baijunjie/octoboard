@@ -3,8 +3,8 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { enter, openTooltip, press, withFakeTimers } from "../components/tooltipTestSupport";
-import { sessionOf } from "../gallery/fixtures/builders";
+import { enter, openTooltip, press, withFakeTimers } from "../components/hint/tooltipTestSupport";
+import { sessionOf } from "../fixtures/builders";
 import type { Session } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { SessionActions } from "./SessionActions";

@@ -4,8 +4,8 @@ import { useFadeUp, usePaneDockMotion } from "./paneDockMotion";
 import { PANE_ID, usePanePeekPointer } from "./paneOverlay";
 import type { PanePeek } from "./usePaneToggles";
 
-/** Where and how the aside is on screen right now; `App.tsx` builds it from `usePaneToggles` and
- * `usePaneWidth` and hands it to the pane. */
+/** Where and how the aside is on screen right now; `App` builds it from `usePaneToggles` and
+ * `usePaneWidth` (`app/usePaneWidths.ts`) and hands it to the pane. */
 export interface AsideLayout {
   /** The user's chosen width (`usePaneWidth`), for the docked column and the floating cards alike. */
   width: number;

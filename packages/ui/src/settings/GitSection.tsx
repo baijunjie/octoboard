@@ -1,10 +1,10 @@
 import React from "react";
 
-import { HelpTip } from "../components/HelpTip";
-import { InlineReference } from "../components/InlineReference";
-import { useFocusHandoff } from "../components/useFocusHandoff";
-import { useListMotion } from "../components/useListMotion";
-import { OptionSelect } from "../dialogs/OptionSelect";
+import { HelpTip } from "../components/hint/HelpTip";
+import { InlineReference } from "../components/text/InlineReference";
+import { useFocusHandoff } from "../components/focus/useFocusHandoff";
+import { useListMotion } from "../components/motion/useListMotion";
+import { OptionSelect } from "../components/form/OptionSelect";
 import { errorPresentation } from "../errorPresentation";
 import { DELIVERY_CHOICES, DEVELOPMENT_CHOICES } from "../gitWorkflow";
 import { Message, useT } from "../i18n/react";

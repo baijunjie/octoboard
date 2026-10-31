@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { AccountsNavigationContext } from "./AccountsNavigationContext";
+import { AccountsNavigationContext } from "./accounts/AccountsNavigationContext";
 import { SettingsDialog, type SettingsSectionId } from "./SettingsDialog";
 
 beforeEach(() => {
@@ -18,7 +18,7 @@ beforeEach(() => {
 });
 
 const taken = vi.hoisted(() => ({ count: 0, dismiss: 0 }));
-vi.mock("./AgentAccountsSection", () => ({
+vi.mock("./accounts/AgentAccountsSection", () => ({
   AGENT_STRIP_HEIGHT: 45,
   AgentAccountsSection: () => {
     const accountsNavigation = useContext(AccountsNavigationContext);

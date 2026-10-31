@@ -1,13 +1,13 @@
 import { DEFAULT_SETTINGS } from "../../defaultSettings";
 import { FOLLOWING_GIT_WORKFLOW } from "../../gitWorkflow";
 import type { Agent, AgentAvailability, Console, RelocationCause, Settings } from "../../protocol";
-import { describing, type Ui } from "../interact";
-import type { Scenario, Step } from "../scenario";
-import type { FixtureError } from "./projectFiles";
-import { accountOf, ALL_AGENTS, SAMPLE, branchItemOf, consoleOf, consoleWith, keptOf, leftoverOf, minutesAgo, processTreeOf, projectOf, projectWith, sessionOf, snapshotState, switchingAccount, unknownFolderWorktreeOf, worktreeItemOf } from "./builders";
+import { describing, type Ui, type Step } from "../../fixtures/interact";
+import type { FixtureError } from "../../fixtures/sampleFiles";
+import type { Scenario } from "../scenario";
+import { accountOf, ALL_AGENTS, SAMPLE, branchItemOf, consoleOf, consoleWith, keptOf, leftoverOf, minutesAgo, processTreeOf, projectOf, projectWith, sessionOf, snapshotState, switchingAccount, unknownFolderWorktreeOf, worktreeItemOf } from "../../fixtures/builders";
 import { agentAvailability } from "./liveChanges";
-import { SAMPLE_CODEX_MODELS } from "./agentModels";
-import { IMAGES } from "./viewerImages";
+import { SAMPLE_CODEX_MODELS } from "../../fixtures/agentModels";
+import { IMAGES } from "../../fixtures/viewerImages";
 
 const { console: console_, web, api, sessions } = SAMPLE;
 

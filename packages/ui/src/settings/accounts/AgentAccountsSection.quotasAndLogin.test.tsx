@@ -1,0 +1,393 @@
+// @vitest-environment jsdom
+import { act } from "react";
+import { expect, it, vi } from "vitest";
+
+import type { Account, AccountQuota, AgentAvailability } from "../../protocol";
+import { press } from "../../components/hint/tooltipTestSupport";
+import { trackMountRefocus } from "../../components/dialog/dialogTestSupport";
+import { accountLogins, accountQuotas, availability, request, settings, toastError } from "./agentAccountsSectionTestState";
+import { buttonNamed, mount, openDetailsOf, rowLogin, rowOf } from "./agentAccountsSectionTestSupport";
+
+vi.mock("../../store", async (importOriginal) => (await import("./agentAccountsSectionTestState")).storeStandIn(await importOriginal()));
+vi.mock("../../components/icons/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
+vi.mock("../../components/text/FadeOverflow", async () => ({ FadeOverflow: (await import("./agentAccountsSectionTestState")).FadeOverflowStandIn }));
+vi.mock("../../components/text/MarkedPath", async () => ({ MarkedPath: (await import("./agentAccountsSectionTestState")).MarkedPathStandIn }));
+vi.mock("../useSectionRefocus", async (importOriginal) => (await import("./agentAccountsSectionTestState")).sectionRefocusStandIn(await importOriginal()));
+vi.mock("../../components/form/OptionSelect", async () => ({ OptionSelect: (await import("./agentAccountsSectionTestState")).OptionSelectStandIn }));
+
+/** Waits out React Aria's focus restore after a dialog closes and what runs in the frames after it. */
+const frames = () => act(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 0)))));
+
+const quotaOf = (agent: Account["agent"], account: string | null, patch: Partial<AccountQuota> = {}): AccountQuota => ({
+  agent,
+  account,
+  fetched_at: Date.now(),
+  plan: "plus",
+  windows: [{ kind: "session", label: null, used_percent: 18, resets_at: null, window_minutes: 300 }],
+  unavailable: null,
+  email: null, ...patch,
+});
+
+it("asks the daemon to refresh the quotas when the section opens", () => {
+  expect(mount().opening).toEqual([[{ type: "refresh_account_quotas" }]]);
+});
+
+it("still opens when the refresh request fails", async () => {
+  request.mockRejectedValueOnce(new Error("not connected"));
+  mount();
+  await act(async () => {});
+  expect(toastError).not.toHaveBeenCalled();
+});
+
+it("shows the plan and the usage of the default account and of an owned one, each in its own row", () => {
+  accountQuotas.push(quotaOf("codex", null, { plan: "plus" }), quotaOf("codex", "codex-work", { plan: "pro_lite" }));
+  const { container } = mount("Codex");
+  expect(rowOf(container, "default:codex").textContent).toContain("Plus");
+  expect(rowOf(container, "codex-work").textContent).toContain("Pro Lite");
+  expect(rowOf(container, "codex-work").textContent).toContain("5h");
+  expect(rowOf(container, "codex-work").textContent).toContain("82%");
+});
+
+it("explains the default account in a help tip after its path in the details header, once, and not in its row", async () => {
+  availability.set("claude", { availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+  accountQuotas.push(quotaOf("claude", null, { plan: "plus" }));
+  const { container } = mount();
+  expect(rowOf(container, "default:claude").querySelector('button[aria-label="About the default account"]')).toBeNull();
+  const dialog = await openDetailsOf(container, "default:claude");
+  const tip = dialog.querySelector<HTMLButtonElement>('button[aria-label="About the default account"]')!;
+  expect(dialog.textContent).not.toContain("The agent's own default configuration directory");
+  expect(dialog.textContent).toContain("/home/dev/.claude");
+  // It follows the path, in the body below the account's name and its badges; the title is a plain name.
+  expect(tip.previousElementSibling!.textContent).toContain("/home/dev/.claude");
+  expect(dialog.textContent).not.toContain("Claude Code account");
+  expect(dialog.querySelector("h2, [role=heading]")!.textContent).toBe("Account details");
+  // The first line of the body is the name, then its badges, and the path comes after them.
+  const text = dialog.textContent!;
+  expect(text).toContain("Default");
+  expect(text.indexOf("Default")).toBeLessThan(text.indexOf("Plus"));
+  expect(text.indexOf("Plus")).toBeLessThan(text.indexOf("Logged in"));
+  expect(text.indexOf("Logged in")).toBeLessThan(text.indexOf("/home/dev/.claude"));
+  press(tip);
+  expect(document.querySelector('[role="dialog"][aria-label="About the default account"]')?.textContent).toBe("The agent's own default configuration directory. New sessions use it when no account is chosen, and other accounts can share its configuration.");
+});
+
+it("shows the login state of each account: logged in once read, not logged in as the reading says, nothing while unknown", () => {
+  availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+  accountQuotas.push(quotaOf("claude", null));
+  accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }));
+  const { container } = mount();
+  const badge = (id: string) => [...rowOf(container, id).querySelectorAll("span[data-variant]")].map((chip) => chip.textContent);
+  expect(badge("default:claude")).toContain("Logged in");
+  expect(badge("claude-work")).toContain("Not logged in");
+  expect(badge("claude-work")).not.toContain("Logged in");
+  expect(container.textContent).not.toContain("Not logged in yet");
+  accountQuotas.length = 0;
+  accountQuotas.push(quotaOf("claude", null, { windows: [], unavailable: { code: "quota_timed_out", params: {}, message: "x" } }));
+  const failed = mount();
+  expect([...rowOf(failed.container, "default:claude").querySelectorAll("span[data-variant]")].map((chip) => chip.textContent)).not.toContain("Logged in");
+  expect([...rowOf(failed.container, "default:claude").querySelectorAll("span[data-variant]")].map((chip) => chip.textContent)).not.toContain("Not logged in");
+});
+
+it("keeps the Log in icon for a signed-out account only, in its Status cell and not in its details", async () => {
+  availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+  accountQuotas.push(quotaOf("claude", null));
+  accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }));
+  const { container } = mount();
+  expect(rowLogin(rowOf(container, "default:claude"))).toBeUndefined();
+  expect(rowLogin(await openDetailsOf(container, "default:claude"))).toBeUndefined();
+  const dialog = await openDetailsOf(container, "claude-work");
+  expect(dialog.textContent).toContain("Not logged in");
+  expect(rowLogin(dialog)).toBeUndefined();
+  await act(async () => rowLogin(rowOf(container, "claude-work"))!.click());
+  expect(request).toHaveBeenLastCalledWith({ type: "start_account_login", agent: "claude", account: "claude-work" });
+});
+
+it("shows the full quota, the model windows and when it was read in the details, and the compact bars only in the row", async () => {
+  accountQuotas.push(quotaOf("claude", "claude-work", { windows: [
+    { kind: "session", label: null, used_percent: 18, resets_at: Date.now() + 60 * 60_000, window_minutes: 300 },
+    { kind: "weekly", label: null, used_percent: 5, resets_at: Date.now() + 3 * 24 * 60 * 60_000, window_minutes: 10_080 },
+    { kind: "weekly_model", label: "Fable", used_percent: 0, resets_at: null, window_minutes: 10_080 },
+  ] }));
+  const { container } = mount();
+  expect(rowOf(container, "claude-work").querySelectorAll(".quota-bar-track")).toHaveLength(2);
+  expect(rowOf(container, "claude-work").querySelector('[data-slot="meter"]')).toBeNull();
+  const dialog = await openDetailsOf(container, "claude-work");
+  expect(dialog.querySelectorAll('[data-slot="meter"]')).toHaveLength(3);
+  expect(dialog.textContent).toContain("Updated just now");
+  expect(dialog.textContent).toContain("resets in");
+});
+
+it("marks a failed reading on the account's name line instead of writing the failure into the row", () => {
+  availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+  accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_timed_out", params: { agent: "Claude Code" }, message: "x" } }));
+  const { container } = mount();
+  const mark = container.querySelector<HTMLElement>('tr button[aria-label="Usage unavailable"]')!;
+  expect(mark).not.toBeNull();
+  expect(mark.parentElement?.textContent).not.toContain("took too long");
+  expect(container.textContent).not.toContain("took too long");
+});
+
+it("logs in a signed-out account from the icon button after its badge in the Status cell, named for the account, and offers Log in in the menu whatever the state", async () => {
+  availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+  accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }));
+  const { container } = mount();
+  const row = rowOf(container, "claude-work");
+  expect([...row.querySelectorAll("span[data-variant]")].map((chip) => chip.textContent)).toContain("Not logged in");
+  const login = rowLogin(row)!;
+  expect(login.textContent).toBe("");
+  expect(login.getAttribute("aria-label")?.replace(/[\u2068\u2069]/g, "")).toBe("Log in to claude-work");
+  // It follows the badge, in the Status cell.
+  expect(login.closest("td")).toBe(rowOf(container, "claude-work").querySelectorAll("td")[2]);
+  expect(login.previousElementSibling?.textContent).toBe("Not logged in");
+  await act(async () => login.click());
+  expect(request).toHaveBeenLastCalledWith({ type: "start_account_login", agent: "claude", account: "claude-work" });
+});
+
+it.each([
+  ["before", true], ["after", false],
+] as const)("puts focus on the row's actions button once a login from its own button succeeds, the button going %s the dialog closes", async (_when, quotaFirst) => {
+  availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+  const signedOut = quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } });
+  accountQuotas.push(signedOut);
+  const { container, render } = mount();
+  const row = rowOf(container, "claude-work");
+  const login = rowLogin(row)!;
+  act(() => login.focus());
+  await act(async () => login.click());
+  const settled = trackMountRefocus();
+  accountLogins.push({ agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+  render();
+  await settled();
+  expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  const signIn = () => accountQuotas.splice(accountQuotas.indexOf(signedOut), 1, quotaOf("claude", "claude-work"));
+  if (quotaFirst) signIn();
+  accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "succeeded", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+  render();
+  // While the button is still there, React Aria's restore may put focus back on it before the hand-off runs.
+  if (!quotaFirst) act(() => login.focus());
+  await frames();
+  if (!quotaFirst) {
+    signIn();
+    render();
+    await frames();
+  }
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(rowLogin(row)).toBeUndefined();
+  expect(document.activeElement?.getAttribute("aria-label")?.replace(/[\u2068\u2069]/g, "")).toBe("Actions for claude-work (Claude Code)");
+  // The success is said after that focus move, not with it.
+  expect(row.querySelector('[role="status"]')!.textContent).toBe("");
+});
+
+it("leaves focus where React Aria puts it back after a login its own button opened by a press that did not focus it", async () => {
+  availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+  const signedOut = quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } });
+  accountQuotas.push(signedOut);
+  const { container, render } = mount();
+  const before = buttonNamed(container, "Add account")!;
+  act(() => before.focus());
+  await act(async () => rowLogin(rowOf(container, "claude-work"))!.click());
+  const settled = trackMountRefocus();
+  accountLogins.push({ agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+  render();
+  await settled();
+  accountQuotas.splice(accountQuotas.indexOf(signedOut), 1, quotaOf("claude", "claude-work"));
+  accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "succeeded", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+  render();
+  await frames();
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.activeElement).toBe(before);
+});
+
+it.each([
+  ["its own Log in button", false], ["the row's Details button, the button having gone", true],
+] as const)("puts focus on %s once a login the button opened has been cancelled", async (_where, buttonGoes) => {
+  availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+  const signedOut = quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } });
+  accountQuotas.push(signedOut);
+  const { container, render } = mount();
+  const row = rowOf(container, "claude-work");
+  const login = rowLogin(row)!;
+  act(() => login.focus());
+  await act(async () => login.click());
+  const settled = trackMountRefocus();
+  accountLogins.push({ agent: "claude", account: "claude-work", status: "starting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+  render();
+  await settled();
+  // The button stays disabled until the daemon reports the login cancelled, after the dialog has gone.
+  await act(async () => buttonNamed(document.querySelector('[role="dialog"]')!, "Cancel login")!.click());
+  await frames();
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(login.getAttribute("aria-disabled")).toBe("true");
+  if (buttonGoes) accountQuotas.splice(accountQuotas.indexOf(signedOut), 1, quotaOf("claude", "claude-work", { unavailable: { code: "quota_timed_out", params: {}, message: "x" } }));
+  accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "cancelled", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+  render();
+  await frames();
+  if (buttonGoes) expect(document.activeElement?.getAttribute("aria-label")?.replace(/[\u2068\u2069]/g, "")).toBe("Actions for claude-work (Claude Code)");
+  else expect(document.activeElement).toBe(login);
+});
+
+it("gives focus back to the row's own Log in button once a login cancelled before the daemon had it has ended", async () => {
+  availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+  accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }));
+  let registered!: () => void;
+  request.mockImplementation(((message: { type: string }) => message.type === "start_account_login"
+    ? new Promise((resolve) => { registered = () => resolve({}); })
+    : Promise.resolve({})) as never);
+  const { container, render } = mount();
+  const login = rowLogin(rowOf(container, "claude-work"))!;
+  act(() => login.focus());
+  await act(async () => login.click());
+  const settled = trackMountRefocus();
+  await settled();
+  await act(async () => buttonNamed(document.querySelector('[role="dialog"]')!, "Cancel login")!.click());
+  await frames();
+  expect(document.activeElement).toBe(login);
+  // The daemon registers the login after the dialog has gone, and only then is it cancelled. The button turns disabled
+  // meanwhile, which in a browser takes focus off it; jsdom leaves it there, so the test takes it off first.
+  act(() => login.blur());
+  accountLogins.push({ agent: "claude", account: "claude-work", status: "starting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+  render();
+  expect(login.getAttribute("aria-disabled")).toBe("true");
+  await act(async () => registered());
+  expect(request).toHaveBeenLastCalledWith({ type: "cancel_account_login", agent: "claude", account: "claude-work" });
+  accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "cancelled", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+  render();
+  await frames();
+  expect(document.activeElement).toBe(login);
+});
+
+it("puts focus on the row's actions button when a login its own button opened succeeds after all once cancelled", async () => {
+  availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+  accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }));
+  const { container, render } = mount();
+  const login = rowLogin(rowOf(container, "claude-work"))!;
+  act(() => login.focus());
+  await act(async () => login.click());
+  const settled = trackMountRefocus();
+  accountLogins.push({ agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+  render();
+  await settled();
+  await act(async () => buttonNamed(document.querySelector('[role="dialog"]')!, "Cancel login")!.click());
+  // The login had already succeeded when the cancel reached the daemon; the button stays until the quota is read again.
+  accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "succeeded", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+  render();
+  await frames();
+  expect(document.activeElement?.getAttribute("aria-label")?.replace(/[\u2068\u2069]/g, "")).toBe("Actions for claude-work (Claude Code)");
+});
+
+it("gives focus back to the row's own Log in button when the login it opened is closed without success", async () => {
+  availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+  accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }));
+  const { container, render } = mount();
+  const login = rowLogin(rowOf(container, "claude-work"))!;
+  act(() => login.focus());
+  await act(async () => login.click());
+  const settled = trackMountRefocus();
+  accountLogins.push({ agent: "claude", account: "claude-work", status: "failed", authorization_url: null, device_code: null, opened_by_agent: false,
+    failure: { code: "login_failed", params: { agent: "Claude Code", detail: "Login failed: 400" }, message: "x" } });
+  render();
+  await settled();
+  expect(document.activeElement).toBe(buttonNamed(document.querySelector('[role="alertdialog"]')!, "Log in again"));
+  await act(async () => buttonNamed(document.querySelector('[role="alertdialog"]')!, "Close")!.click());
+  await frames();
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  expect(document.activeElement).toBe(login);
+});
+
+it("puts focus on the row's actions button when the account is turned off while the login its own button opened is up", async () => {
+  availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+  accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }));
+  const { container, render } = mount();
+  const login = rowLogin(rowOf(container, "claude-work"))!;
+  act(() => login.focus());
+  await act(async () => login.click());
+  const settled = trackMountRefocus();
+  accountLogins.push({ agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+  render();
+  await settled();
+  settings.accounts.find((account) => account.id === "claude-work")!.disabled = true;
+  render();
+  expect(rowLogin(rowOf(container, "claude-work"))).toBeUndefined();
+  await act(async () => buttonNamed(document.querySelector('[role="dialog"]')!, "Cancel login")!.click());
+  accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "cancelled", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+  render();
+  await frames();
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.activeElement?.getAttribute("aria-label")?.replace(/[\u2068\u2069]/g, "")).toBe("Actions for claude-work (Claude Code)");
+});
+
+async function failedLoginDialog(failure: { code: string; params: Record<string, string>; message: string }): Promise<Element> {
+  availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+  accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }));
+  const { container, render } = mount();
+  await act(async () => rowLogin(rowOf(container, "claude-work"))!.click());
+  accountLogins.push({ agent: "claude", account: "claude-work", status: "failed", authorization_url: null, device_code: null, opened_by_agent: false, failure });
+  render();
+  await frames();
+  return document.querySelector('[role="alertdialog"]')!;
+}
+
+it("words a login failure the system's text names as its cause, with that cause's remedy", async () => {
+  const dialog = await failedLoginDialog({ code: "future_code", params: {}, message: "No space left on device (os error 28)" });
+  expect(dialog.textContent).toContain("failed. The disk is full.");
+  expect(dialog.textContent).toContain("then retry the operation.");
+  expect(dialog.textContent).not.toContain("Report issue");
+});
+
+it("asks for a login failure nothing can be said of to be reported", async () => {
+  const dialog = await failedLoginDialog({ code: "future_code", params: {}, message: "a newer daemon's reason" });
+  expect(dialog.textContent).toContain("failed. Something unexpected went wrong.");
+  expect(dialog.textContent).toContain("file an Issue with the steps that led to it.");
+  expect(dialog.textContent).toContain("Report issue");
+});
+
+it("reports a login failure by its code, parameter names and the daemon's own text, never the values or the wording shown", async () => {
+  const dialog = await failedLoginDialog({ code: "future_code", params: { detail: "private-value" }, message: "raw daemon text" });
+  const prefilled = new URL(dialog.querySelector<HTMLAnchorElement>("a[href*='title=']")!.href).searchParams;
+  expect(prefilled.get("title")).toBe("Unexpected error: future_code");
+  const body = prefilled.get("body")!;
+  expect(body).toContain("- Code: `future_code`");
+  expect(body).toContain("- Parameters: `detail`");
+  expect(body).toContain("```\nraw daemon text\n```");
+  expect(body).not.toContain("private-value");
+  expect(body).not.toContain("Something unexpected went wrong");
+});
+
+it("waits for the first reading of an account of an available agent that has no entry yet", () => {
+  availability.set("codex", { agent: "codex", availability: "available", default_account_dir: null });
+  const { container } = mount("Codex");
+  expect(container.textContent?.match(/Reading usage/g)).toHaveLength(2);
+});
+
+it("leaves an account whose agent is not available without a quota block", () => {
+  availability.set("codex", { agent: "codex", availability: "unavailable", default_account_dir: null });
+  const { container } = mount("Codex");
+  expect(container.querySelector('[data-slot="meter"]')).toBeNull();
+  expect(container.textContent).not.toContain("Reading usage");
+});
+
+it("offers a Codex account's reset credit in its details, and asks for the confirmation over them", async () => {
+  const day = 24 * 60 * 60_000;
+  accountQuotas.push(quotaOf("codex", "codex-work", { reset_credits: { available_count: 1, credits: [{ id: "credit-1", title: "Full reset (Weekly + 5 hr)", description: null, granted_at: Date.now(), expires_at: Date.now() + 6 * day + 60_000 }] } }));
+  const { container } = mount("Codex");
+  expect(rowOf(container, "codex-work").textContent).not.toContain("usage limit reset available");
+  const dialog = await openDetailsOf(container, "codex-work");
+  expect(dialog.textContent).toContain("1 usage limit reset available · expires in 6d");
+  const use = dialog.querySelector<HTMLButtonElement>("button[aria-label^='Redeem reset for']");
+  expect(use).not.toBeNull();
+  await act(async () => use!.click());
+  const confirmation = document.querySelector('[role="alertdialog"]')!;
+  expect(confirmation.textContent).toContain("Full reset (Weekly + 5 hr)");
+  request.mockClear();
+  request.mockResolvedValueOnce({ type: "reset_credit_used", id: null, outcome: "reset" } as never);
+  await act(async () => confirmation.querySelector<HTMLButtonElement>("button[type=submit]")!.click());
+  expect(request).toHaveBeenCalledWith({ type: "use_codex_reset_credit", account: "codex-work" });
+  expect(confirmation.textContent).toContain("Usage of");
+  await act(async () => [...confirmation.querySelectorAll("button")].find((button) => button.textContent === "Done")!.click());
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  expect(dialog.isConnected).toBe(true);
+  // Focus that fell to the page (a press that took none opened the confirmation) goes back to the button.
+  (document.activeElement as HTMLElement | null)?.blur();
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
+  expect(document.activeElement).toBe(use);
+});

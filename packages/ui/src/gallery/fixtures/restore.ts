@@ -1,6 +1,6 @@
-import type { FixtureGit } from "./changeFixtures";
-import { addition, textChange, untracked } from "./changeFixtures";
-import type { FixtureFiles } from "./projectFiles";
+import type { FixtureGit } from "../../fixtures/changeFixtures";
+import { addition, textChange, untracked } from "../../fixtures/changeFixtures";
+import type { FixtureFiles } from "../../fixtures/sampleFiles";
 
 const head = "4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39";
 const worktrees: FixtureGit["worktrees"] = [{ id: "restore-main", root: "/Users/dev/code/search-api", main: true, head, branch: "main", scope_present: true }];

@@ -5,10 +5,10 @@ import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { pageOf } from "../gallery/fixtures/builders";
-import { press } from "../components/detailsTestSupport";
-import { PanelFrameProvider } from "../components/PanelHeader";
-import { focusLanding, focusLandingWithoutText } from "../components/regionFocus";
+import { pageOf } from "../fixtures/builders";
+import { press } from "../components/alerts/detailsTestSupport";
+import { PanelFrameProvider } from "../components/panel/PanelHeader";
+import { focusLanding, focusLandingWithoutText } from "../components/focus/regionFocus";
 import { PlatformProvider } from "../platform/react";
 import { applyDaemonEvent, createStateStore, DaemonProvider, type Daemon } from "../store";
 import { withReportScrollBridge } from "../website-preview/scrollBridge";

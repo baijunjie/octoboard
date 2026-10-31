@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import { useLatest } from "../components/useLatest";
+import { useLatest } from "../components/hooks/useLatest";
 import { prefersReducedMotion } from "../reducedMotion";
 
 /** Matches the column's CSS width ease and the drawer's `duration-200`. */

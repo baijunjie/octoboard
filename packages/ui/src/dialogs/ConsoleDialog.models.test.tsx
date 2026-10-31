@@ -2,11 +2,11 @@
 import { act } from "react";
 import { expect, it } from "vitest";
 
-import { consoleOf } from "../gallery/fixtures/builders";
+import { consoleOf } from "../fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import type { Event, RequestBody } from "../protocol";
-import { press } from "../components/detailsTestSupport";
-import { accessibleName } from "./dialogTestSupport";
+import { press } from "../components/alerts/detailsTestSupport";
+import { accessibleName } from "../components/dialog/dialogTestSupport";
 import { work, personal, MODELS, listing, render, click, clickButton, choose, sent, asked, openAdvanced, clickTab, groupPicker, pickerNamed, clearButton, stored, optionTexts } from "./consoleDialogTestSupport";
 
 const locked = (name: string) => (pickerNamed(name) as HTMLButtonElement).disabled;

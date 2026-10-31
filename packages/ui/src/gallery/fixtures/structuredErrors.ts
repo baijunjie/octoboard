@@ -1,7 +1,7 @@
 import { DEFAULT_SETTINGS } from "../../defaultSettings";
 import type { Scenario } from "../scenario";
 import type { PlainMessageKey } from "../../i18n/catalog";
-import { accountOf, consoleOf, failureTitle, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState } from "./builders";
+import { accountOf, consoleOf, failureTitle, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState } from "../../fixtures/builders";
 
 const console_ = consoleOf("c-errors", "الإصدار Release coordination");
 const project = projectOf("p-errors", console_.id, "البحث Search API");

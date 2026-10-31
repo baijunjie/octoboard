@@ -6,10 +6,10 @@ import { type IBuffer, type IBufferRange, Terminal } from "@xterm/xterm";
 import type { TermControl, TermEvent } from "../protocol";
 import { interactionIsTouch } from "../touchInput";
 import { IS_MAC, isSecondaryPress } from "../useWindowShortcut";
-import { TerminalLinkColors } from "./linkColors";
+import { TerminalLinkColors } from "./links/linkColors";
 import { OSC_52, osc52ClipboardText } from "./osc52";
-import { installPathLinks, type PathAnswer, type PathLinkCache, type PathLinkTarget } from "./pathLinks";
-import { watchPointerForLinks } from "./pointerLinks";
+import { installPathLinks, type PathAnswer, type PathLinkCache, type PathLinkTarget } from "./links/pathLinks";
+import { watchPointerForLinks } from "./links/pointerLinks";
 import { macEditingSequence } from "./terminalKeys";
 import {
   brokenUrlLinkProvider,
@@ -17,7 +17,7 @@ import {
   linkBox,
   TERMINAL_URL_REGEX,
   terminalLinkHandler,
-} from "./terminalLinks";
+} from "./links/terminalLinks";
 import { XTERM_THEMES } from "./xtermThemes";
 
 /** Shift, Ctrl, Alt: the keys xterm itself treats as modifier-only. */

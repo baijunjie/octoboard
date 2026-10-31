@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { accountOf, projectOf, sessionOf } from "./gallery/fixtures/builders";
+import { accountOf, projectOf, sessionOf } from "./fixtures/builders";
 import { format } from "./i18n/catalog";
 import { displayColumns } from "./i18n/displayColumns";
 import type { Translate } from "./i18n/catalog";

@@ -3,7 +3,7 @@ import { AGENT_LABEL, defaultAccountName } from "../agents";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import { isLive, type Account, type AccountQuota, type Agent, type AgentAvailability, type Session, type Settings } from "../protocol";
-import { accountQuotaOf } from "./accountQuotaOf";
+import { accountQuotaOf } from "../accountQuotaOf";
 import { usageBarSummary, usageBarWindows, type QuotaBar } from "./quotaFormat";
 
 export interface SessionQuotaSource {

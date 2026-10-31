@@ -1,12 +1,12 @@
 import { Checkbox, Label } from "@heroui/react";
 import React, { useId, useState } from "react";
 
-import { ProcessCommand, ProcessTreeDetails, StopGlyph } from "../components/ProcessTreeDetails";
+import { ProcessCommand, ProcessTreeDetails, StopGlyph } from "../components/status/ProcessTreeDetails";
 import { useT } from "../i18n/react";
 import type { ProcessTree } from "../protocol";
 import { useDaemonStore } from "../store";
-import type { ConsequenceLine } from "./BranchCleanupOptions";
-import { OptionDetails } from "./OptionDetails";
+import type { ConsequenceLine } from "../components/dialog/ConfirmConsequences";
+import { OptionDetails } from "../components/form/OptionDetails";
 
 /** One process tree an archive stops while selected: the command on one line is the checkbox's
  * label, with the whole command as its tooltip when the line cuts it, and under it a disclosure of

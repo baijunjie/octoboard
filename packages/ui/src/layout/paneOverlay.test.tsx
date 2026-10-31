@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { ChromeButton } from "../components/ChromeButton";
+import { ChromeButton } from "../shell/ChromeButton";
 import { AsidePane } from "./AsidePane";
 import { PANE_ID } from "./paneOverlay";
 import type { PanePeek } from "./usePaneToggles";

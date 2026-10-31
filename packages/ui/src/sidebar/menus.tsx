@@ -1,21 +1,21 @@
 import { Archive, ArrowLeftRight, Copy, Cpu, Download, Focus, Forward, Folder, FolderPlus, GitBranch, KeyRound, List, Lock, LockOpen, Palette, PanelRight, Pencil, Pin, PinOff, RotateCcw, Settings2, Terminal, Trash2, Undo2, Unlink, Upload, SquareArrowOutUpRight } from "lucide-react";
 
 import { handoffBlock, switchEntries, switchEntryBlock, type QuotaReadings } from "../accountChoices";
-import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanel, ActionMenuSubmenu } from "../components/ActionMenu";
-import { ExternalLinkIcon } from "../components/ExternalLinkIcon";
-import { RepositoryIcon } from "../components/RepositoryIcon";
+import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanel, ActionMenuSubmenu } from "../components/menus/ActionMenu";
+import { ExternalLinkIcon } from "../components/text/ExternalLinkIcon";
+import { RepositoryIcon } from "../components/icons/RepositoryIcon";
 import { repositoryLink } from "../repositoryLink";
-import { FadeOverflow } from "../components/FadeOverflow";
-import { SessionRelativeTime } from "../components/SessionMetadata";
-import { AgentIcon } from "../components/AgentIcon";
-import { PathText } from "../components/PathText";
+import { FadeOverflow } from "../components/text/FadeOverflow";
+import { SessionRelativeTime } from "../components/status/SessionMetadata";
+import { AgentIcon } from "../components/icons/AgentIcon";
+import { PathText } from "../components/text/PathText";
 import type { Translate } from "../i18n/catalog";
 import type { Account, AccountSharing, Agent, Console, Project, Session, Settings } from "../protocol";
 import { PANEL_META } from "../panels/panelMeta";
 import { accountUsage } from "../quota/accountUsage";
 import { sessionChoiceTitle, sessionDisplayTitle } from "../sessionLabel";
 import { ShortcutKbd } from "../shortcuts/ShortcutKbd";
-import { archivePreviewSessions, isUnusedSession } from "./order";
+import { archivePreviewSessions, isUnusedSession } from "../sessions/order";
 import { SessionColourSwatches } from "./SessionColourSwatches";
 import type { ArchiveScope, ProjectPanelKind, SidebarHandlers } from "./types";
 

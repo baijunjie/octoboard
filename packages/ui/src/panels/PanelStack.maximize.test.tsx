@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { PanelHeader } from "../components/PanelHeader";
+import { PanelHeader } from "../components/panel/PanelHeader";
 import type { PanePeek } from "../layout/usePaneToggles";
 import type { Project } from "../protocol";
 import { PanelStack } from "./PanelStack";

@@ -12,9 +12,9 @@ import type { FileContent, LineStats } from "../../protocol";
 import { RENDER_BUDGETS } from "../../viewer/budgets";
 import { bodyFromFileContent, type ChangeBodies, ChangeBodiesError, type ViewerBody, type ViewerChangeSide, type ViewerSubject } from "../../viewer/content";
 import { formatFileSize } from "../../viewer/format";
-import { describing, type Ui } from "../interact";
+import { describing, type Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
-import { IMAGES } from "./viewerImages";
+import { IMAGES } from "../../fixtures/viewerImages";
 
 const GROUP = "File viewer";
 
@@ -22,7 +22,7 @@ const GROUP = "File viewer";
 // frame reads the window's language from storage when `i18n/react` is first evaluated, which has to
 // follow the preparation of that storage, and this module is loaded before it.
 async function loadLiveParts() {
-  return { Message: (await import("../../i18n/react")).Message, InlineReference: (await import("../../components/InlineReference")).InlineReference };
+  return { Message: (await import("../../i18n/react")).Message, InlineReference: (await import("../../components/text/InlineReference")).InlineReference };
 }
 type LiveParts = Awaited<ReturnType<typeof loadLiveParts>>;
 

@@ -13,7 +13,7 @@ import {
   unboundArchived,
   underArchivedLead,
 } from "../gallery/fixtures/archive";
-import { expectIndependentMarquees, stubMarquee } from "../components/marqueeTestSupport";
+import { expectIndependentMarquees, stubMarquee } from "../components/motion/marqueeTestSupport";
 import { isolate } from "../i18n/isolate";
 import type { DialogRequest } from "../dialogs/dialogRequest";
 import type { Session } from "../protocol";

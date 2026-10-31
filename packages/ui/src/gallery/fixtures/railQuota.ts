@@ -1,12 +1,12 @@
 import { AGENT_LABEL } from "../../agents";
 import { DEFAULT_SETTINGS } from "../../defaultSettings";
 import type { Account, Agent, AgentAvailability, AccountQuota, Settings } from "../../protocol";
-import { describing } from "../interact";
-import type { Scenario, Step } from "../scenario";
-import { accountOf, ALL_AGENTS, SAMPLE, minutesAgo, sessionOf, snapshotState } from "./builders";
+import { describing, type Step } from "../../fixtures/interact";
+import type { FixtureError } from "../../fixtures/sampleFiles";
+import type { Scenario } from "../scenario";
+import { accountOf, ALL_AGENTS, SAMPLE, minutesAgo, sessionOf, snapshotState } from "../../fixtures/builders";
 import { accountAdded, accountRemoved, agentAvailability } from "./liveChanges";
-import type { FixtureError } from "./projectFiles";
-import { USED_UP_MIX, manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow, PERSONAL_RESET_CREDITS, resetCreditOf, resetCreditsOf } from "./quotas";
+import { USED_UP_MIX, manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow, PERSONAL_RESET_CREDITS, resetCreditOf, resetCreditsOf } from "../../fixtures/quotas";
 
 const GROUP = "Window layout";
 

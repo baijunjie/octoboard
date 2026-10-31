@@ -3,9 +3,9 @@ import { act } from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { App } from "./App";
-import { PanelHeader } from "./components/PanelHeader";
-import { mountForTooltip } from "./components/tooltipTestSupport";
-import { consoleOf, projectOf, sessionOf, snapshotState } from "./gallery/fixtures/builders";
+import { PanelHeader } from "./components/panel/PanelHeader";
+import { mountForTooltip } from "./components/hint/tooltipTestSupport";
+import { consoleOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
 import { isolate } from "./i18n/isolate";
 import { defaultStack } from "./panels/stackState";
 import { usePanelStacks } from "./panels/usePanelStacks";
@@ -16,7 +16,7 @@ import { ThemeProvider } from "./theme";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-vi.mock("./browser/LazyProjectBrowser", () => ({
+vi.mock("./project-browser/LazyProjectBrowser", () => ({
   LazyProjectBrowser: ({ project }: { project: Project }) => (
     <>
       <PanelHeader title={project.name} />
@@ -25,7 +25,7 @@ vi.mock("./browser/LazyProjectBrowser", () => ({
   ),
 }));
 // The shell's input stands in for a terminal view: where F6 lands in the panel.
-vi.mock("./terminal/ShellTerminalPanel", () => ({
+vi.mock("./terminal/shell/ShellTerminalPanel", () => ({
   ShellTerminalPanel: () => (
     <>
       <PanelHeader title="Terminal" />
@@ -33,8 +33,8 @@ vi.mock("./terminal/ShellTerminalPanel", () => ({
     </>
   ),
 }));
-vi.mock("./terminal/shellTerminals", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./terminal/shellTerminals")>();
+vi.mock("./terminal/shell/shellTerminals", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./terminal/shell/shellTerminals")>();
   return { ...actual, startShellTerminal: vi.fn(async () => undefined) };
 });
 vi.mock("./report/ReportPanel", () => ({ ReportPanel: () => <PanelHeader title="Report" /> }));

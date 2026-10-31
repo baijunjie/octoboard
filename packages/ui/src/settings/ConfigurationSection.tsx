@@ -1,11 +1,11 @@
 import React, { useState } from "react";
 
-import { Button } from "../components/Button";
+import { Button } from "../components/controls/Button";
 import { ExportConfigurationDialog } from "../configuration/ExportConfigurationDialog";
 import { ImportConfigurationDialog } from "../configuration/ImportConfigurationDialog";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
-import { useCurrentConsole } from "../sidebar/sidebarView";
+import { useCurrentConsole } from "../currentConsole";
 import { SettingRow } from "./SettingRow";
 
 /** Moving configuration between computers: exporting consoles and projects, the application settings

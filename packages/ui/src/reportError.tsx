@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 
-import { DaemonErrorMessage } from "./components/DaemonErrorMessage";
-import { remedyInBody } from "./components/errorPartPresence";
-import { rawErrorDetails } from "./components/errorParts";
+import { DaemonErrorMessage } from "./components/alerts/DaemonErrorMessage";
+import { remedyInBody } from "./components/alerts/errorPartPresence";
+import { rawErrorDetails } from "./components/alerts/errorParts";
 import type { ErrorRecovery } from "./errorRecovery";
 import { errorAlerts } from "./errorAlerts";
 import { errorPresentation } from "./errorPresentation";

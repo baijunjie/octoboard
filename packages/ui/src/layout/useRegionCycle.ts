@@ -1,8 +1,8 @@
 import { setInteractionModality } from "react-aria";
 import { useCallback, useEffect, useRef } from "react";
 
-import { focusOpenDialog, focusRegion, regionElements, type Region } from "../components/regionFocus";
-import { useLatest } from "../components/useLatest";
+import { focusOpenDialog, focusRegion, regionElements, type Region } from "../components/focus/regionFocus";
+import { useLatest } from "../components/hooks/useLatest";
 
 /** The window's regions in visual order, each an element (or several) marked `data-region`. The
  * panels of the right pane, each a stop of its own, come after the terminal: the caller names

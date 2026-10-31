@@ -1,9 +1,9 @@
 import { DEFAULT_SETTINGS } from "../../defaultSettings";
 import type { Account, AccountQuota, Agent, AgentAvailability, Console, Project, Settings } from "../../protocol";
 import type { Scenario } from "../scenario";
-import type { Ui } from "../interact";
-import { accountOf, ALL_AGENTS, SAMPLE, accountSharingOf, minutesAgo, minutesFromNow, projectOf, projectWith, sessionOf, snapshotState, switchingAccount } from "./builders";
-import { quotaFailure, quotaOf, quotaWindow } from "./quotas";
+import type { Ui } from "../../fixtures/interact";
+import { accountOf, ALL_AGENTS, SAMPLE, accountSharingOf, minutesAgo, minutesFromNow, projectOf, projectWith, sessionOf, snapshotState, switchingAccount } from "../../fixtures/builders";
+import { quotaFailure, quotaOf, quotaWindow } from "../../fixtures/quotas";
 
 const GROUP = "Sidebar sessions";
 const FOCUS_GROUP = "Focus mode";

@@ -2,7 +2,7 @@ import type { Event, RequestBody } from "../protocol";
 
 /** How many image reads are out at once in the window, whatever document they are for. Sized under
  * the daemon's bound of outstanding requests a connection together with the other browse requests
- * (see `MAX_WINDOW_IN_FLIGHT` in `browser/useDirectoryListings.ts`), with a unit beside it for the
+ * (see `MAX_WINDOW_IN_FLIGHT` in `project-browser/files/useDirectoryListings.ts`), with a unit beside it for the
  * read a newer one replaces in the slot. */
 const MAX_WINDOW_IMAGE_READS = 1;
 /** The slot of the lane's place. A read let go of while it is out keeps its place in the daemon

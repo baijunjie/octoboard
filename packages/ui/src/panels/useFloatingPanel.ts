@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { focusLanding, focusLandingWithoutText, focusTopBar } from "../components/regionFocus";
+import { focusLanding, focusLandingWithoutText, focusTopBar } from "../components/focus/regionFocus";
 import { interactionIsTouch } from "../touchInput";
 import { OWNER_KINDS, panelId, shownKinds, type OwnerKind, type PanelKind, type PanelStacks } from "./stackState";
 

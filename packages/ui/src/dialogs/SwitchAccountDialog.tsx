@@ -4,19 +4,19 @@ import React, { useState } from "react";
 import { accountDisabled, quotaSignedOut } from "../accountChoices";
 import { canSwitchTo } from "../accountSwitchBatch";
 import { AGENT_LABEL } from "../agents";
-import { InlineReference } from "../components/InlineReference";
+import { InlineReference } from "../components/text/InlineReference";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { Session } from "../protocol";
-import { accountQuotaOf } from "../quota/accountQuotaOf";
+import { accountQuotaOf } from "../accountQuotaOf";
 import { quotaUsedUpMessage } from "../quota/quotaCopy";
 import { exhaustedQuotaWindow, quotaUsedUpSentence } from "../quota/quotaFormat";
 import { errorAlerts } from "../errorAlerts";
 import { sessionDisplayTitle } from "../sessionLabel";
-import { sessionWithDescendants } from "../sidebar/order";
+import { sessionWithDescendants } from "../sessions/order";
 import { useDaemon, useDaemonStore } from "../store";
 import { useNow } from "../useNow";
-import { ConfirmDialog } from "./ConfirmDialog";
+import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
 import { useConfirmIncompleteLaunch } from "./useConfirmIncompleteLaunch";
 
 /** Which sessions Confirm switches: the session with everything bound under it, or every session

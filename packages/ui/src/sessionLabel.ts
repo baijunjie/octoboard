@@ -5,7 +5,7 @@ import { isolate } from "./i18n/isolate";
 import { joinPhrases } from "./i18n/joinPhrases";
 import type { Language } from "./i18n/languages";
 import type { Account, Console, Project, Session, SessionStatus, Settings } from "./protocol";
-import type { Activity } from "./sidebar/order";
+import type { Activity } from "./sessions/order";
 
 /** Keeps the agent's current task beside the session name the user created. Each name is
  * isolated separately so mixed reading directions cannot reorder them across the separator.

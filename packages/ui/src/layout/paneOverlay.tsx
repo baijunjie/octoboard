@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 
-import { useLatest } from "../components/useLatest";
+import { useLatest } from "../components/hooks/useLatest";
 import type { PanePeek } from "./usePaneToggles";
 
 /** How a pane that is a row sibling at and above the `docked` breakpoint is laid out:

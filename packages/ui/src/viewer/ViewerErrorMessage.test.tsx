@@ -3,7 +3,7 @@ import { act, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, onTestFinished } from "vitest";
 
-import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
+import { DaemonErrorMessage } from "../components/alerts/DaemonErrorMessage";
 import { DaemonRequestError } from "../daemon-client";
 import type { ErrorPresentation } from "../errorPresentation";
 import { format, globalParam, type Translate } from "../i18n/catalog";

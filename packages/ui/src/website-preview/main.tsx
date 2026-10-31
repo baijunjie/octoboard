@@ -5,7 +5,7 @@ import { installPreviewInteractionBridge, withReportInteractionBridge } from "./
 import { installPreviewScrollBridge, withReportScrollBridge } from "./scrollBridge";
 import { isLanguage, type Language } from "../i18n/languages";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
-import { storedPreference } from "../gallery/prepare";
+import { storedPreference } from "../fixtures/preferences";
 import { copyFor, createPreviewScenario, type PreviewScene } from "./scenarios";
 
 // No application modules may evaluate before this: preferences must never touch the host origin.
@@ -46,7 +46,7 @@ const { scenario, output } = createPreviewScenario(
 );
 localStorage.setItem(PREFERENCE_KEYS.language, language);
 localStorage.setItem("heroui-theme", theme);
-for (const [key, value] of Object.entries(scenario.preferences ?? {})) {
+for (const [key, value] of Object.entries(scenario.preferences)) {
   localStorage.setItem(
     PREFERENCE_KEYS[key as keyof typeof scenario.preferences],
     storedPreference(value),
@@ -56,7 +56,7 @@ document.documentElement.className = theme;
 document.documentElement.dataset.theme = theme;
 
 async function start(): Promise<void> {
-  const { installFakeTerminal } = await import("../gallery/fakeTerminal");
+  const { installFakeTerminal } = await import("../fixtures/fakeTerminal");
   // A terminal opens only once the app runs, by which time the daemon below exists.
   installFakeTerminal({
     output: (session) => output(session, daemon.store.getState()),
@@ -86,7 +86,7 @@ async function start(): Promise<void> {
     import("../store"),
     import("../theme"),
     import("./daemon"),
-    import("../gallery/interact"),
+    import("../fixtures/interact"),
     import("react-aria"),
   ]);
   await import("../focusGuard");
@@ -116,7 +116,7 @@ async function start(): Promise<void> {
     </React.StrictMode>,
   );
   const ui = createUi(document, language, daemon);
-  for (const step of scenario.steps ?? []) await step(ui);
+  for (const step of scenario.steps) await step(ui);
   // The steps' scripted clicks read as an assistive technology's, which shows the focused control's
   // ring and tooltip. They stand in for a visitor's presses, so focus where they left it is put
   // there again as a pointer's: a phone's visitor would otherwise find a tooltip up on load.

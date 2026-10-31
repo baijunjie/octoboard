@@ -1,12 +1,7 @@
 import type { Language } from "../i18n/languages";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
-import type { Preferences, Scenario } from "./scenario";
-
-/** A scenario's preference as its owner stores it: a structured one (the panel stacks) as the JSON
- * its owner parses, anything else as its string. */
-export function storedPreference(value: NonNullable<Preferences[keyof Preferences]>): string {
-  return typeof value === "object" ? JSON.stringify(value) : String(value);
-}
+import { storedPreference, type Preferences } from "../fixtures/preferences";
+import type { Scenario } from "./scenario";
 
 /**
  * Sets what the app reads from `localStorage` when its modules load to the scenario's starting

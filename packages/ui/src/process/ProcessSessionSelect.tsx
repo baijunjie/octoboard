@@ -1,8 +1,8 @@
 import React, { useEffect, useLayoutEffect, useRef } from "react";
 
-import { useFocusHandoff } from "../components/useFocusHandoff";
-import { PaneToolbar } from "../components/PaneToolbar";
-import { OptionSelect, type Option } from "../dialogs/OptionSelect";
+import { useFocusHandoff } from "../components/focus/useFocusHandoff";
+import { PaneToolbar } from "../components/panel/PaneToolbar";
+import { OptionSelect, type Option } from "../components/form/OptionSelect";
 import { useT } from "../i18n/react";
 import { sessionDisplayTitle } from "../sessionLabel";
 import { useProjectSessions } from "../sessions/useSessions";

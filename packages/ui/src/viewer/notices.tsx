@@ -4,8 +4,8 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/StatusAnnouncer";
-import { StatusMark } from "../components/StatusMark";
+import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
+import { StatusMark } from "../components/status/StatusMark";
 import { useMarkBesideLink } from "./linkMarks";
 
 /** How long any of the viewer's announcements (its loading, a `Failure`, a notice) wait before their first

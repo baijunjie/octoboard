@@ -4,8 +4,8 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { App } from "./App";
-import { PanelHeader } from "./components/PanelHeader";
-import { consoleOf, projectOf, sessionOf, snapshotState } from "./gallery/fixtures/builders";
+import { PanelHeader } from "./components/panel/PanelHeader";
+import { consoleOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
 import { touchEvent } from "./layout/touchTestSupport";
 import { defaultStack } from "./panels/stackState";
 import { usePanelStacks } from "./panels/usePanelStacks";
@@ -32,7 +32,7 @@ vi.mock("./i18n/react", async (importOriginal) => {
     return actual.useT();
   } };
 });
-vi.mock("./browser/LazyProjectBrowser", () => ({ LazyProjectBrowser: ({ project }: { project: Project }) => <PanelHeader title={project.name} /> }));
+vi.mock("./project-browser/LazyProjectBrowser", () => ({ LazyProjectBrowser: ({ project }: { project: Project }) => <PanelHeader title={project.name} /> }));
 vi.mock("./report/ReportPanel", () => ({ ReportPanel: () => <PanelHeader title="Report" /> }));
 vi.mock("./terminal/TerminalController", () => ({ TerminalController: class {
   constructor() { return new Proxy(this, { get: (target, key) => key === "then" ? undefined : key in target ? Reflect.get(target, key) : () => {} }); }

@@ -2,7 +2,7 @@ import { ToggleButton, ToggleButtonGroup } from "@heroui/react";
 import { Monitor, Moon, Sun } from "lucide-react";
 import React from "react";
 
-import { TitledControl } from "../components/TitledControl";
+import { TitledControl } from "../components/hint/TitledControl";
 import { useT } from "../i18n/react";
 import { useOctoboardTheme } from "../theme";
 import { SettingRow } from "./SettingRow";

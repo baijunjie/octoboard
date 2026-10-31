@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "typecheck:app": "tsc --noEmit -p tsconfig.app.json",
-    "test:app": "vitest run --exclude 'src/gallery/**' --exclude 'src/website-preview/**' --exclude 'scripts/gallery*' --exclude 'scripts/wkbench/**'"
+    "test:app": "vitest run --exclude 'src/gallery/**' --exclude 'src/fixtures/**' --exclude 'src/website-preview/**' --exclude 'scripts/gallery*' --exclude 'scripts/wkbench/**'"
   },
   "dependencies": {
     "@heroui/react": "^3.2.6",

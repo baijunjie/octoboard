@@ -1,9 +1,9 @@
 import React from "react";
 
-import { DotStatusBadge } from "../components/DotStatusBadge";
-import { StatusBadge } from "../components/StatusBadge";
-import { codedMessageNode, CodedFailureBody } from "../components/errorParts";
-import { StatusMark } from "../components/StatusMark";
+import { DotStatusBadge } from "../components/status/DotStatusBadge";
+import { StatusBadge } from "../components/status/StatusBadge";
+import { codedMessageNode, CodedFailureBody } from "../components/alerts/errorParts";
+import { StatusMark } from "../components/status/StatusMark";
 import { daemonMessage } from "../daemonMessage";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { QuotaUnavailable } from "../protocol";

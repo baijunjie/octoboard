@@ -40,7 +40,7 @@ A jsdom lookup that finds nothing does not fail either: `find(...)!` checks noth
 assertion on what it returned holds whatever the markup — `parent.contains(undefined)` is `false`, so "the email is not
 inside the name's element" passed with the email anywhere. Such a lookup comes back empty unnoticed under a stand-in
 that renders its children as bare text, as the `AgentAccountsSection` tests' `FadeOverflow` and `MarkedPath` stand-ins
-(`packages/ui/src/settings/agentAccountsSectionTestState.tsx`) do: the text they draw has no element of its own.
+(`packages/ui/src/settings/accounts/agentAccountsSectionTestState.tsx`) do: the text they draw has no element of its own.
 Assert that the lookup found something before asserting about it, or assert on the text of an element the markup
 still has (the row, the name line) rather than on a leaf found by its text.
 
@@ -208,10 +208,17 @@ positive tests".
   whole window, and closing it leaves the flag set for 500 ms (`TOOLTIP_COOLDOWN` in react-stately 3.50.0's
   `useTooltipTriggerState`), during which the next tooltip opens with no delay. So a test that counts on a tooltip
   still waiting out its delay starts cold itself — waits 600 ms of real time first, before faking any timers, as the
-  "still waiting to show" case in `packages/ui/src/components/ActionMenu.test.tsx` does — or it passes alone and fails
+  "still waiting to show" case in `packages/ui/src/components/menus/ActionMenu.test.tsx` does — or it passes alone and fails
   after any test that closed a tooltip. A test that fakes timers and shows a tooltip runs them out before restoring
-  real ones, as `finish` in `packages/ui/src/components/AnchoredTooltip.test.tsx` does, or the flag stays set for the
+  real ones, as `finish` in `packages/ui/src/components/hint/AnchoredTooltip.test.tsx` does, or the flag stays set for the
   rest of the file.
+- A timer armed before `vi.useFakeTimers()` stays on the real clock, and advancing the fake one never fires it. The
+  window's status region (`StatusAnnouncer`) arms its first-write delay (`FIRST_WRITE_DELAY_MS`) when it mounts and
+  writes nothing until it has passed, so a test that mounts `App`, or any component holding a status region, and only
+  then fakes timers to drive an announcement sees the region stay empty whenever less than that delay passed in real
+  time: it passes under the full suite's load and fails alone. Fake the clock before mounting, or wait the delay out
+  on the real clock inside `act` before faking, as `firstWriteDelayPassed` in
+  `packages/ui/src/App.projectActions.test.tsx` does.
 - Settling HeroUI's toast queue in a test that has queued a toast: fake the timers for that test (restored with
   `onTestFinished`), run `toast.clear()` and `vi.runOnlyPendingTimers()` together inside one `act`, and assert after
   the unmount that `toast.getQueue().visibleToasts` is empty. The assertion is the load-bearing half rather than the
@@ -261,7 +268,7 @@ through `<body>` whenever a select's list closes on its way back to the trigger,
 its focus to the dialog, and whether a step meets it depends only on how fast the test ran up to it: the test passes
 alone and fails under the full suite's load.
 
-Call `trackMountRefocus()` (`packages/ui/src/dialogs/dialogTestSupport.ts`) right after the mount, and await what it
+Call `trackMountRefocus()` (`packages/ui/src/components/dialog/dialogTestSupport.ts`) right after the mount, and await what it
 returns before the first step whose focus the test asserts — immediately after the mount is simplest. Skip the await
 in a test on `vi.useFakeTimers()`, where it would never resolve.
 

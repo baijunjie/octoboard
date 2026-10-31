@@ -6,9 +6,10 @@
 import type { Binding } from "../../shortcuts/binding";
 import type { Overrides } from "../../shortcuts/store";
 import { IS_MAC } from "../../useWindowShortcut";
-import type { Ui } from "../interact";
-import type { Preferences, Scenario, Step } from "../scenario";
-import { SAMPLE, snapshotState } from "./builders";
+import type { Ui, Step } from "../../fixtures/interact";
+import type { Preferences } from "../../fixtures/preferences";
+import type { Scenario } from "../scenario";
+import { SAMPLE, snapshotState } from "../../fixtures/builders";
 
 const GROUP = "Settings";
 

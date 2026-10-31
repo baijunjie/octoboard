@@ -1,6 +1,7 @@
 import type { AvailableUpdate } from "../../platform";
-import type { Scenario, Step } from "../scenario";
-import { SAMPLE, shellTerminalOf, snapshotState } from "./builders";
+import type { Step } from "../../fixtures/interact";
+import type { Scenario } from "../scenario";
+import { SAMPLE, shellTerminalOf, snapshotState } from "../../fixtures/builders";
 
 const GROUP = "Updates";
 

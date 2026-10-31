@@ -1,0 +1,866 @@
+// @vitest-environment jsdom
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
+
+import type { AccountLogin, AccountTrashOutcome, Session } from "../../protocol";
+import { DaemonRequestError } from "../../daemon-client";
+import { errorAlerts } from "../../errorAlerts";
+import { ErrorAlerts } from "../../shell/ErrorAlerts";
+import { framesAsTimers, settleFrames, trackMountRefocus } from "../../components/dialog/dialogTestSupport";
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../../components/announce/StatusAnnouncer";
+import { windowAttention } from "../../components/announce/windowTestSupport";
+import { SettingsDialog } from "../SettingsDialog";
+import { registerSettingsLauncher } from "../settingsLauncher";
+import { accountLogins, bus, dismissAccountLogin, request, sessions, settings, toastError, trackAccountLogin } from "./agentAccountsSectionTestState";
+import { buttonNamed, chooseItem, mount, openDetailsOf, openSettingsOf, openTabMenu, rowOf } from "./agentAccountsSectionTestSupport";
+
+vi.mock("../../store", async (importOriginal) => (await import("./agentAccountsSectionTestState")).storeStandIn(await importOriginal()));
+vi.mock("../../components/icons/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
+vi.mock("../../components/text/FadeOverflow", async () => ({ FadeOverflow: (await import("./agentAccountsSectionTestState")).FadeOverflowStandIn }));
+vi.mock("../../components/text/MarkedPath", async () => ({ MarkedPath: (await import("./agentAccountsSectionTestState")).MarkedPathStandIn }));
+vi.mock("../useSectionRefocus", async (importOriginal) => (await import("./agentAccountsSectionTestState")).sectionRefocusStandIn(await importOriginal()));
+vi.mock("../../components/form/OptionSelect", async () => ({ OptionSelect: (await import("./agentAccountsSectionTestState")).OptionSelectStandIn }));
+
+/** Fakes the timers for one test, checking once its root is unmounted that it left none running. Call it before
+ * `mount`, so that its check runs after the unmount. */
+function fakeTimers() {
+  vi.useFakeTimers();
+  onTestFinished(() => {
+    try {
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+}
+
+describe("an account's actions menu", () => {
+  // The account's name is isolated in the label, and the tabs' own hidden menus are named alike.
+  const triggers = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>('button[aria-label^="Actions for"]:not([hidden])')].filter((button) => button.getAttribute("aria-label")!.includes("("));
+  async function openAccountMenu(container: HTMLElement, at = 1) {
+    const trigger = triggers(container)[at]!;
+    await act(async () => {
+      trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse", button: 0 }));
+      trigger.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "mouse", button: 0 }));
+      trigger.click();
+    });
+  }
+
+  const items = () => [...document.querySelectorAll("[role=menuitem]")].map((entry) => entry.textContent);
+
+  it("holds Details, Settings, Edit, Log in and Remove for an owned account, in place of buttons of their own", async () => {
+    const { container } = mount();
+    expect(buttonNamed(container, "Edit")).toBeUndefined();
+    await openAccountMenu(container, 1);
+    expect(items()).toEqual(["Details", "Settings", "Edit", "Log in", "Move earlier", "Move later", "Remove"]);
+  });
+
+  it("holds Details, Settings, Rename and Log in for the default account, which has no directory or removal to offer", async () => {
+    const { container } = mount();
+    await openAccountMenu(container, 0);
+    expect(items()).toEqual(["Details", "Settings", "Rename", "Log in", "Move earlier", "Move later"]);
+  });
+
+  it("is offered by the default account and each owned account", () => {
+    const { container } = mount();
+    expect(triggers(container)).toHaveLength(2);
+    expect(triggers(container)[0]!.getAttribute("aria-label")).toContain("Default");
+    expect(triggers(container)[1]!.getAttribute("aria-label")).toContain("claude-work");
+  });
+
+  it("starts the login of the account it was chosen on in a modal, the default account's with no account", async () => {
+    const { container } = mount();
+    await openAccountMenu(container, 1);
+    await chooseItem("Log in");
+    expect(request).toHaveBeenLastCalledWith({ type: "start_account_login", agent: "claude", account: "claude-work" });
+    const dialog = document.querySelector('[role="dialog"]')!;
+    const plain = (node: Element | null | undefined) => node?.textContent?.replace(/[\u2068\u2069]/g, "");
+    expect(plain(dialog.querySelector("h2"))).toBe("Log in");
+    expect(plain(dialog.querySelector("p"))).toBe("Logging in to Claude Code account claude-work…");
+    await act(async () => buttonNamed(dialog, "Cancel login")!.click());
+    expect(request).toHaveBeenLastCalledWith({ type: "cancel_account_login", agent: "claude", account: "claude-work" });
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    await openAccountMenu(container, 0);
+    await chooseItem("Log in");
+    expect(request).toHaveBeenLastCalledWith({ type: "start_account_login", agent: "claude", account: null });
+  });
+
+  it("shows the default account under the name the user gave it, and renames it from its menu", async () => {
+    settings.default_account_names = { claude: "Personal" };
+    const { container } = mount();
+    expect(container.textContent).toContain("Personal");
+    expect(triggers(container)[0]!.getAttribute("aria-label")).toContain("Personal");
+    await openAccountMenu(container, 0);
+    await chooseItem("Rename");
+    const dialog = document.querySelector('[role="dialog"]')!;
+    expect(dialog.textContent).toContain("Rename the default Claude Code account");
+    // Only the name is edited: the default account's directory is not.
+    expect(dialog.querySelectorAll("input")).toHaveLength(1);
+    expect((dialog.querySelector("input") as HTMLInputElement).value).toBe("Personal");
+  });
+
+  it("refuses, in place, a default name an account of the agent has", async () => {
+    const { container } = mount();
+    await openAccountMenu(container, 0);
+    await chooseItem("Rename");
+    const input = document.querySelector('[role="dialog"] input') as HTMLInputElement;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      setter.call(input, "Claude-Work");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => buttonNamed(document.querySelector('[role="dialog"]')!, "Save")!.click());
+    expect(request).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("already has an account named");
+  });
+
+  it("takes up a login found running when the section opens, with the page link, the device code and Cancel login", async () => {
+    accountLogins.push({ agent: "claude", account: "claude-work", status: "waiting", authorization_url: "https://claude.test/authorize", device_code: null, opened_by_agent: false, failure: null });
+    const { container } = mount();
+    const dialog = () => document.querySelector('[role="dialog"]')!;
+    expect(request).not.toHaveBeenCalled();
+    expect(dialog().textContent).toContain("Waiting for you to authorize in your browser");
+    expect(dialog().querySelector('a[href="https://claude.test/authorize"]')?.textContent).toContain("Open the page again");
+    expect([...dialog().querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent?.replace(/[\u2068\u2069]/g, ""))).toEqual(["Claude Code", "claude-work"]);
+    await act(async () => buttonNamed(dialog(), "Cancel login")!.click());
+    expect(request).toHaveBeenLastCalledWith({ type: "cancel_account_login", agent: "claude", account: "claude-work" });
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it("shows the device code in the modal", () => {
+    accountLogins.push({ agent: "claude", account: null, status: "waiting", authorization_url: null, device_code: "ABCD-1234", opened_by_agent: true, failure: null });
+    mount();
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Confirm this code in your browser: ABCD-1234");
+  });
+
+  it("announces the login's progress from one region whose first text waits for the modal's own focus move", () => {
+    vi.useFakeTimers();
+    onTestFinished(() => void vi.useRealTimers());
+    accountLogins.push({ agent: "claude", account: "claude-work", status: "starting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+    const { render } = mount();
+    const dialog = document.querySelector('[role="dialog"]')!;
+    expect(document.activeElement).toBe(buttonNamed(dialog, "Cancel login"));
+    // The spinner carries a role of its own, hidden.
+    const region = dialog.querySelector<HTMLElement>('[role="status"]:not([aria-hidden])')!;
+    const said = () => region.textContent?.replace(/[\u2068\u2069]/g, "");
+    // Seen only: the visible line is not a second voice.
+    expect(dialog.textContent).toContain("Logging in to Claude Code account claude-work…");
+    expect(region.previousElementSibling?.getAttribute("aria-hidden")).toBe("true");
+    expect(said()).toBe("");
+    act(() => vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS - 1));
+    expect(said()).toBe("");
+    act(() => vi.advanceTimersByTime(1));
+    expect(said()).toBe("Logging in…");
+    accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+    render();
+    expect(said()).toBe("Waiting for you to authorize in your browser…");
+    accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: "ABCD-1234", opened_by_agent: false, failure: null });
+    render();
+    expect(said()).toBe("Confirm this code in your browser: ABCD-1234");
+    expect([...dialog.querySelectorAll('[role="status"]:not([aria-hidden])')]).toEqual([region]);
+  });
+
+  it("closes the modal when the login succeeds", async () => {
+    accountLogins.push({ agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+    const { render } = mount();
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "succeeded", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+    render();
+    await act(async () => {});
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it("turns the modal into a failure alert dialog for a failed login, worded from the catalog, the agent's own text only behind Error details, and logs in again from it", async () => {
+    accountLogins.push({ agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+    const { render } = mount();
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "failed", authorization_url: null, device_code: null, opened_by_agent: false,
+      failure: { code: "login_failed", params: { agent: "Claude Code", detail: "Login failed: 400" }, message: "x" } });
+    render();
+    await act(async () => {});
+    expect(document.querySelectorAll('[role="dialog"], [role="alertdialog"]')).toHaveLength(1);
+    const dialog = document.querySelector('[role="alertdialog"]')!;
+    const plain = (node: Element | null | undefined) => node?.textContent?.replace(/[\u2068\u2069]/g, "");
+    expect(plain(dialog.querySelector("h2, [data-slot='alert-dialog-heading']"))).toBe("Could not log in");
+    expect(dialog.querySelector('[data-slot="alert-root"]')).toBeNull();
+    // A login that failed with no cause named says it once: the summary that only restates it is left out.
+    expect(plain(dialog.querySelector("p"))).toBe("Logging in to Claude Code account claude-work failed.");
+    expect(plain(dialog)).not.toContain("could not log in.");
+    // The raw text is only in the disclosure, closed until opened.
+    const disclosure = dialog.querySelector("details")!;
+    expect(disclosure.querySelector("summary")?.textContent).toBe("Error details");
+    expect(disclosure.textContent).toContain("Login failed: 400");
+    expect(dialog.textContent!.replace(disclosure.textContent!, "")).not.toContain("Login failed: 400");
+    expect(buttonNamed(dialog, "Cancel login")).toBeUndefined();
+    const names = [...dialog.querySelectorAll("button")].map((button) => button.textContent).filter((text) => text === "Close" || text === "Log in again");
+    expect(names).toEqual(["Close", "Log in again"]);
+    // A failure form like the error alert dialog: no close button of its own and no Escape.
+    expect(dialog.querySelector('[aria-label="Close"]')).toBeNull();
+    act(() => void dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(document.querySelector('[role="alertdialog"]')).toBe(dialog);
+    expect(dismissAccountLogin).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(buttonNamed(dialog, "Log in again"));
+    await act(async () => buttonNamed(dialog, "Log in again")!.click());
+    expect(dismissAccountLogin).toHaveBeenCalledOnce();
+    expect(request).toHaveBeenLastCalledWith({ type: "start_account_login", agent: "claude", account: "claude-work" });
+    // Starting again brings back the running form of the dialog.
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Logging in to Claude Code account claude-work…");
+    expect(buttonNamed(document.querySelector('[role="dialog"]')!, "Cancel login")).toBeDefined();
+    await act(async () => buttonNamed(document.querySelector('[role="dialog"]')!, "Cancel login")?.click());
+  });
+
+  it("keeps focus on Log in again when a login opened from the account's menu fails, the menu's focus not coming back over it", async () => {
+    const { container, render } = mount();
+    await openAccountMenu(container, 1);
+    await chooseItem("Log in");
+    accountLogins.push({ agent: "claude", account: "claude-work", status: "failed", authorization_url: null, device_code: null, opened_by_agent: false,
+      failure: { code: "login_failed", params: { agent: "Claude Code", detail: "Login failed: 400" }, message: "x" } });
+    render();
+    await act(async () => {});
+    // The running form's unmounting would hand the menu's focus back a turn later, were the swap not seen.
+    await act(async () => void (await new Promise((resolve) => setTimeout(resolve, 20))));
+    const dialog = document.querySelector('[role="alertdialog"]')!;
+    expect(document.activeElement).toBe(buttonNamed(dialog, "Log in again"));
+  });
+
+  it("says a failure's cause in the lead sentence, with its remedy under it, and leaves the announcement to the alert dialog opening", async () => {
+    accountLogins.push({ agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+    const { render } = mount();
+    accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "failed", authorization_url: null, device_code: null, opened_by_agent: false,
+      failure: { code: "login_not_confirmed", params: { agent: "Claude Code" }, message: "x" } });
+    render();
+    await act(async () => {});
+    const dialog = document.querySelector('[role="alertdialog"]')!;
+    const plain = (node: Element | null | undefined) => node?.textContent?.replace(/[\u2068\u2069]/g, "");
+    expect(plain(dialog.querySelector("p"))).toBe("Logging in to Claude Code account claude-work failed. Claude Code finished, but this account is still not logged in.");
+    // No live region of its own: the dialog mounting, with focus moving into it, is what is announced.
+    expect(dialog.querySelector('[role="status"]')).toBeNull();
+    expect(dialog.querySelector("details")).toBeNull();
+  });
+
+  it("leaves no line in the row for a login that ended without success", () => {
+    accountLogins.push({ agent: "claude", account: "claude-work", status: "failed", authorization_url: null, device_code: null, opened_by_agent: false,
+      failure: { code: "login_failed", params: { agent: "Claude Code", detail: "Login failed: 400" }, message: "x" } });
+    const { container } = mount();
+    expect([...container.querySelectorAll('[role="status"]')].map((el) => el.textContent).join("")).toBe("");
+    expect(buttonNamed(container, "Dismiss")).toBeUndefined();
+    expect(container.textContent).not.toContain("Login failed: 400");
+  });
+
+  it("leaves no visible line for a login that succeeded, and keeps one already there when the row mounts unsaid", () => {
+    fakeTimers();
+    accountLogins.push({ agent: "claude", account: "claude-work", status: "succeeded", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+    const { container } = mount();
+    act(() => vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
+    expect([...container.querySelectorAll('[role="status"]')].map((el) => el.textContent).join("")).toBe("");
+    expect(buttonNamed(container, "Dismiss")).toBeUndefined();
+    expect(buttonNamed(container, "Cancel login")).toBeUndefined();
+  });
+
+  it("announces a login that succeeded only once the modal has closed and given focus back, and clears it after", () => {
+    fakeTimers();
+    windowAttention();
+    accountLogins.push({ agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+    const { container, render } = mount();
+    const row = rowOf(container, "claude-work");
+    const region = row.querySelector<HTMLElement>('[role="status"]')!;
+    // The open modal hides the row from assistive technology.
+    expect(region.closest('[aria-hidden="true"], [inert]')).not.toBeNull();
+    accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "succeeded", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+    render();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(region.closest('[aria-hidden="true"], [inert]')).toBeNull();
+    expect(region.textContent).toBe("");
+    act(() => vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
+    expect(row.querySelector('[role="status"]')).toBe(region);
+    expect(region.classList.contains("sr-only")).toBe(true);
+    expect(region.textContent?.replace(/[\u2068\u2069]/g, "")).toBe("claude-work: logged in.");
+    expect([...container.querySelectorAll('[role="status"]:not(:empty)')]).toEqual([region]);
+    act(() => vi.advanceTimersByTime(6000));
+    expect(dismissAccountLogin).toHaveBeenCalledOnce();
+    render();
+    expect(region.textContent).toBe("");
+  });
+
+  it.each([["details", openDetailsOf], ["settings", openSettingsOf]] as const)("announces a login that succeeded from inside the %s dialog", async (_, open) => {
+    fakeTimers();
+    windowAttention();
+    const { container, render } = mount();
+    const dialog = await open(container, "claude-work");
+    const said = () => [...dialog.querySelectorAll('[role="status"]')].map((region) => region.textContent).join("").replace(/[\u2068\u2069]/g, "");
+    expect(said()).toBe("");
+    accountLogins.push({ agent: "claude", account: "claude-work", status: "succeeded", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+    render();
+    act(() => vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
+    expect(said()).toBe("claude-work: logged in.");
+    // The row clears the shown login after a while; closing the dialog and running out what is pending ends the test
+    // clean.
+    act(() => vi.advanceTimersByTime(6000));
+    expect(dismissAccountLogin).toHaveBeenCalledOnce();
+    act(() => buttonNamed(dialog, "Close")!.click());
+    act(() => vi.runOnlyPendingTimers());
+  });
+
+  it("holds the announcement and the clearing of a login that succeeded while the window was not attended until the user is back", () => {
+    fakeTimers();
+    const attend = windowAttention();
+    accountLogins.push({ agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+    const { container, render } = mount();
+    const region = rowOf(container, "claude-work").querySelector('[role="status"]')!;
+    attend(false);
+    accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "succeeded", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+    render();
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(region.textContent).toBe("");
+    expect(dismissAccountLogin).not.toHaveBeenCalled();
+    attend(true);
+    act(() => vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS - 1));
+    expect(region.textContent).toBe("");
+    act(() => vi.advanceTimersByTime(1));
+    expect(region.textContent?.replace(/[\u2068\u2069]/g, "")).toBe("claude-work: logged in.");
+    act(() => vi.advanceTimersByTime(6000));
+    expect(dismissAccountLogin).toHaveBeenCalledOnce();
+  });
+
+  it("starts the login once under StrictMode, and shows how the login really ended, not a refusal of a second start", async () => {
+    // The daemon refuses a second start of a login that is running.
+    let starts = 0;
+    request.mockImplementation(((message: { type: string }) => {
+      if (message.type !== "start_account_login") return Promise.resolve({});
+      starts += 1;
+      return starts === 1 ? Promise.resolve({}) : Promise.reject(Object.assign(new Error("running"), { code: "login_already_running", params: { agent: "Claude Code" } }));
+    }) as never);
+    const { container, render } = mount(undefined, true);
+    await openAccountMenu(container, 1);
+    await chooseItem("Log in");
+    await act(async () => {});
+    expect(starts).toBe(1);
+    accountLogins.push({ agent: "claude", account: "claude-work", status: "failed", authorization_url: null, device_code: null, opened_by_agent: false,
+      failure: { code: "login_failed", params: { agent: "Claude Code", detail: "Login failed: 400" }, message: "x" } });
+    render();
+    await act(async () => {});
+    const dialog = document.querySelector('[role="alertdialog"]')!;
+    const text = dialog.textContent!.replace(/[\u2068\u2069]/g, "");
+    expect(text).toContain("Logging in to Claude Code account claude-work failed.");
+    expect(dialog.querySelector("details")?.textContent).toContain("Login failed: 400");
+    expect(text).not.toContain("already running");
+  });
+
+  it("keeps the modal open for a login started on an account whose earlier login ended in a record the store still holds", async () => {
+    accountLogins.push({ agent: "claude", account: "claude-work", status: "cancelled", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+    const { container } = mount();
+    await openAccountMenu(container, 1);
+    await chooseItem("Log in");
+    await act(async () => {});
+    expect(dismissAccountLogin).toHaveBeenCalledOnce();
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Logging in to Claude Code account claude-work…");
+  });
+
+  it("cancels a login that was still being started when the modal was closed, once the daemon has it", async () => {
+    let registered!: () => void;
+    request.mockImplementation(((message: { type: string }) => message.type === "start_account_login"
+      ? new Promise((resolve) => { registered = () => resolve({}); })
+      : Promise.resolve({})) as never);
+    const { container } = mount();
+    await openAccountMenu(container, 1);
+    await chooseItem("Log in");
+    await act(async () => buttonNamed(document.querySelector('[role="dialog"]')!, "Cancel login")!.click());
+    expect(trackAccountLogin).toHaveBeenLastCalledWith(expect.anything(), "claude", "claude-work", false);
+    expect(request).not.toHaveBeenCalledWith({ type: "cancel_account_login", agent: "claude", account: "claude-work" });
+    await act(async () => registered());
+    expect(request).toHaveBeenLastCalledWith({ type: "cancel_account_login", agent: "claude", account: "claude-work" });
+  });
+
+  it("closes the modal when the login's record is gone after it was seen, and attaches to a login already running", async () => {
+    request.mockRejectedValueOnce(Object.assign(new Error("running"), { code: "login_already_running", params: {} }));
+    const { container, render } = mount();
+    await openAccountMenu(container, 1);
+    await chooseItem("Log in");
+    await act(async () => {});
+    expect(document.querySelector('[role="dialog"]')?.textContent).not.toContain("already running");
+    accountLogins.push({ agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+    render();
+    await act(async () => {});
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Waiting for you to authorize");
+    accountLogins.length = 0;
+    render();
+    await act(async () => {});
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it("keeps a failed login in the modal when a snapshot drops its record", async () => {
+    accountLogins.push({ agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+    const { render } = mount();
+    accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "failed", authorization_url: null, device_code: null, opened_by_agent: false,
+      failure: { code: "login_failed", params: { agent: "Claude Code", detail: "Login failed: 400" }, message: "x" } });
+    render();
+    await act(async () => {});
+    accountLogins.length = 0;
+    render();
+    await act(async () => {});
+    const dialog = document.querySelector('[role="alertdialog"]')!;
+    expect(dialog.textContent).toContain("Logging in to Claude Code account claude-work failed.");
+    expect(buttonNamed(dialog, "Log in again")).toBeDefined();
+  });
+
+  it("says a login refused because the account is being removed with a pronoun, not the account's name again", async () => {
+    const { container } = mount();
+    request.mockRejectedValueOnce(Object.assign(new Error("removing"), { code: "account_being_removed", params: { account: "claude", name: "Default" } }));
+    await openAccountMenu(container, 0);
+    await chooseItem("Log in");
+    await act(async () => {});
+    const dialog = document.querySelector('[role="alertdialog"]')!;
+    const text = dialog.querySelector("p")?.textContent?.replace(/[\u2068\u2069]/g, "");
+    expect(text).toBe("Logging in to Claude Code account Default failed. The account is being removed.");
+    expect(dialog.textContent).not.toContain("is being removed.It");
+    expect(dialog.querySelectorAll("p")).toHaveLength(1);
+    expect(buttonNamed(dialog, "Log in again")).toBeDefined();
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it("notes that this window started the login it asked for, and shows a refusal in the modal", async () => {
+    const { container } = mount();
+    request.mockRejectedValueOnce(Object.assign(new Error("busy"), { code: "login_codex_busy", params: {} }));
+    await openAccountMenu(container, 0);
+    await chooseItem("Log in");
+    await act(async () => {});
+    expect(trackAccountLogin).toHaveBeenLastCalledWith(expect.anything(), "claude", null, false);
+    const dialog = document.querySelector('[role="alertdialog"]')!;
+    expect(dialog.textContent).toContain("Another Codex account is logging in");
+    expect(buttonNamed(dialog, "Log in again")).toBeDefined();
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it("keeps the login status region out of display:none while it is empty, so its first text is announced", () => {
+    const { container } = mount();
+    const status = container.querySelector<HTMLElement>('[role="status"]')!;
+    expect(status.textContent).toBe("");
+    expect(status.closest(".hidden")).toBeNull();
+    // Out of the grid's flow, so it takes no row of its own.
+    expect(status.classList.contains("sr-only")).toBe(true);
+  });
+
+  it("opens the account form from Edit and the confirmation from Remove", async () => {
+    const { container } = mount();
+    await openAccountMenu(container);
+    await chooseItem("Edit");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Edit account");
+    expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe("Edit account");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("of the Claude Code account claude-work.");
+    act(() => buttonNamed(document, "Cancel")!.click());
+    await openAccountMenu(container);
+    await chooseItem("Remove");
+    expect(document.querySelector('[role="alertdialog"], [role="dialog"]')?.textContent).toContain("Remove account");
+    expect(document.querySelector('[role="alertdialog"], [role="dialog"]')?.textContent).toContain("The account claude-work will be removed.");
+    await act(async () => buttonNamed(document.querySelector('[role="alertdialog"], [role="dialog"]')!, "Remove")!.click());
+    expect(request).toHaveBeenCalledExactlyOnceWith({ type: "delete_account", account: "claude-work", trash_directory: false });
+  });
+
+  /** Answers the daemon's inspection of the account's directory with `outcome`, or holds it until the returned function is
+   * called with one; every other request is answered with nothing. */
+  function inspectionAnswers(outcome?: AccountTrashOutcome) {
+    const waiting: ((outcome: AccountTrashOutcome) => void)[] = [];
+    request.mockImplementation(((body: { type: string }) => body.type === "inspect_account_trash"
+      ? outcome ? Promise.resolve({ type: "account_trash_inspected", id: null, outcome }) : new Promise((resolve) => waiting.push((answer) => resolve({ type: "account_trash_inspected", id: null, outcome: answer })))
+      : Promise.resolve({})) as never);
+    return (answer: AccountTrashOutcome) => waiting.shift()!(answer);
+  }
+  const inspections = () => (request.mock.calls as unknown as [{ type: string }][]).filter(([body]) => body.type === "inspect_account_trash").length;
+  const removeDialog = () => document.querySelector('[role="alertdialog"], [role="dialog"]')!;
+  const trashOption = () => [...removeDialog().querySelectorAll<HTMLInputElement>("input[type=checkbox]")][0]!;
+  /** Disabled, or pending: a button held while an operation runs is `aria-disabled`, so it keeps focus. */
+  const removeHeld = () => {
+    const button = buttonNamed(removeDialog(), "Remove")!;
+    return button.disabled || button.getAttribute("aria-disabled") === "true";
+  };
+  async function openRemoval(container: HTMLElement) {
+    await openAccountMenu(container);
+    await chooseItem("Remove");
+  }
+
+  it("offers to move the account directory to the Trash, unticked, and sends the choice with the removal", async () => {
+    inspectionAnswers({ status: "ok" });
+    const { container } = mount();
+    await openAccountMenu(container);
+    await chooseItem("Remove");
+    const dialog = document.querySelector('[role="alertdialog"], [role="dialog"]')!;
+    const option = () => [...dialog.querySelectorAll<HTMLInputElement>("input[type=checkbox]")].find((box) => box.closest("label")?.textContent?.includes("Also move the account directory to the Trash"))!;
+    expect(option().checked).toBe(false);
+    expect(dialog.textContent).toContain("including its login, settings and conversation history");
+    expect(dialog.textContent).toContain("recover it from the Trash");
+    expect(dialog.textContent).not.toContain("archived sessions can no longer be resumed");
+    await act(async () => option().click());
+    expect(option().checked).toBe(true);
+    expect(dialog.textContent).toContain("Its directory is moved to the Trash, so its archived sessions can no longer be resumed");
+    // The confirm button keeps its label: the message says the directory goes.
+    await act(async () => buttonNamed(dialog, "Remove")!.click());
+    expect(request).toHaveBeenCalledWith({ type: "inspect_account_trash", account: "claude-work" });
+    expect(request).toHaveBeenLastCalledWith({ type: "delete_account", account: "claude-work", trash_directory: true });
+  });
+
+  it("holds Remove, quietly, while the daemon is asked whether the directory may go, and frees it on ok", async () => {
+    const answer = inspectionAnswers();
+    const { container } = mount();
+    await openRemoval(container);
+    expect(inspections()).toBe(0);
+    await act(async () => trashOption().click());
+    expect(inspections()).toBe(1);
+    expect(removeHeld()).toBe(true);
+    expect(removeDialog().querySelector('[role="alert"]')).toBeNull();
+    await act(async () => answer({ status: "ok" }));
+    expect(removeHeld()).toBe(false);
+    expect(removeDialog().textContent).toContain("including its login, settings and conversation history");
+  });
+
+  it("says there is nothing to move for a missing directory and leaves Remove enabled", async () => {
+    inspectionAnswers({ status: "missing" });
+    const { container } = mount();
+    await openRemoval(container);
+    await act(async () => trashOption().click());
+    expect(removeDialog().textContent).toContain("The account’s directory does not exist, so there is nothing to move.");
+    expect(removeDialog().textContent).not.toContain("moved to the Trash, so");
+    expect(removeDialog().querySelector('[role="alert"]')).toBeNull();
+    expect(removeHeld()).toBe(false);
+  });
+
+  it.each([
+    [{ status: "protected" }, "The directory is your home folder, the root of a disk, or holds Octoboard"],
+    [{ status: "shared", kind: "account", name: "codex-work", agent: "Codex" }, "The directory overlaps the directory of the Codex account codex-work, so it cannot be moved to the Trash."],
+    [{ status: "shared", kind: "default_account", agent: "Claude Code" }, "The directory is, holds or lies inside the default Claude Code account’s directory, so it cannot be moved to the Trash."],
+    [{ status: "shared", kind: "project", name: "Site" }, "The directory holds the folder of project Site, so it cannot be moved to the Trash."],
+    [{ status: "unlookable", cause: "unreadable" }, "The directory could not be read"],
+    [{ status: "unlookable" }, "The directory could not be accessed, so it cannot be moved to the Trash."],
+    [{ status: "unlookable", cause: "other_unlooked" }, "Whether the directory holds or overlaps another account’s or a project’s directory could not be checked, so it cannot be moved to the Trash."],
+  ] as [AccountTrashOutcome, string][])("shows %j under the ticked option as its cause alone, disables Remove, and clears both on unticking", async (outcome, cause) => {
+    inspectionAnswers(outcome);
+    const { container } = mount();
+    await openRemoval(container);
+    await act(async () => trashOption().click());
+    const text = () => removeDialog().textContent!.replace(/[\u2066-\u2069]/g, "");
+    expect(text()).toContain(cause);
+    // Only the cause: no remedy, and nothing says the account was kept, as nothing has happened.
+    expect(text()).not.toContain("was kept");
+    expect(text()).not.toMatch(/Try again|Check the|instead/);
+    expect(removeHeld()).toBe(true);
+    // The option is described by the alert, after its own note.
+    const described = trashOption().getAttribute("aria-describedby")!.split(" ");
+    expect(described).toHaveLength(2);
+    expect(document.getElementById(described[1]!)?.textContent).toContain(cause);
+    await act(async () => trashOption().click());
+    expect(text()).not.toContain(cause);
+    expect(removeHeld()).toBe(false);
+    expect(trashOption().getAttribute("aria-describedby")!.split(" ")).toHaveLength(1);
+  });
+
+  it("shows nothing and leaves Remove enabled when the daemon could not decide in time", async () => {
+    inspectionAnswers({ status: "undecided" });
+    const { container } = mount();
+    await openRemoval(container);
+    await act(async () => trashOption().click());
+    expect(removeDialog().querySelector('[role="alert"]')).toBeNull();
+    expect(removeDialog().textContent).not.toContain("cannot be moved to the Trash");
+    expect(removeHeld()).toBe(false);
+    expect(trashOption().getAttribute("aria-describedby")!.split(" ")).toHaveLength(1);
+  });
+
+  it("shows an alert and disables Remove when the inspection itself fails, and asks again from Try again", async () => {
+    let failing = true;
+    request.mockImplementation(((body: { type: string }) => body.type === "inspect_account_trash"
+      ? failing ? Promise.reject(new Error("connection lost")) : Promise.resolve({ type: "account_trash_inspected", id: null, outcome: { status: "ok" } })
+      : Promise.resolve({})) as never);
+    const { container } = mount();
+    await openRemoval(container);
+    await act(async () => trashOption().click());
+    expect(removeDialog().textContent).toContain("Could not check whether the directory can be moved to the Trash");
+    expect(removeHeld()).toBe(true);
+    // The option is described by what the alert says, not by its Details and Try again buttons.
+    const described = trashOption().getAttribute("aria-describedby")!.split(" ");
+    expect(document.getElementById(described[1]!)?.textContent).toContain("Could not check whether");
+    expect(document.getElementById(described[1]!)?.textContent).not.toContain("Try again");
+    failing = false;
+    await act(async () => buttonNamed(removeDialog(), "Try again")!.click());
+    expect(removeDialog().textContent).not.toContain("Could not check whether");
+    expect(removeHeld()).toBe(false);
+  });
+
+  it("keeps the failure and Try again, focus on it, while the retry is out, and keeps focus in the dialog when it succeeds", async () => {
+    const waiting: ((reply: () => Promise<unknown>) => void)[] = [];
+    let first = true;
+    request.mockImplementation(((body: { type: string }) => {
+      if (body.type !== "inspect_account_trash") return Promise.resolve({});
+      if (first) {
+        first = false;
+        return Promise.reject(new Error("connection lost"));
+      }
+      return new Promise((resolve, reject) => waiting.push((reply) => reply().then(resolve, reject)));
+    }) as never);
+    const { container } = mount();
+    await openRemoval(container);
+    await act(async () => trashOption().click());
+    const retry = () => buttonNamed(removeDialog(), "Try again")!;
+    await act(async () => retry().focus());
+    await act(async () => retry().click());
+    // The failure is still shown, held (not removed), and focus is still on the button that asked again.
+    expect(removeDialog().textContent).toContain("Could not check whether the directory can be moved to the Trash");
+    expect(document.activeElement).toBe(retry());
+    expect(retry().getAttribute("aria-disabled") === "true" || retry().disabled).toBe(true);
+    expect(removeHeld()).toBe(true);
+    await act(async () => waiting.shift()!(() => Promise.resolve({ type: "account_trash_inspected", id: null, outcome: { status: "ok" } })));
+    expect(removeDialog().textContent).not.toContain("Could not check whether");
+    expect(removeDialog().contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it.each(["account_directory_shared", "account_directory_protected", "account_directory_trash_failed"])("asks about the directory again once the alert for %s has closed, so its reason stands, is announced and takes focus off Remove", async (code) => {
+    framesAsTimers();
+    const alerts = document.body.appendChild(document.createElement("div"));
+    const alertsRoot = createRoot(alerts);
+    onTestFinished(() => act(() => alertsRoot.unmount()));
+    act(() => alertsRoot.render(<ErrorAlerts />));
+    let refusing = false;
+    let hold = false;
+    let release = () => {};
+    let inspected: AccountTrashOutcome = { status: "ok" };
+    request.mockImplementation(((body: { type: string }) => {
+      if (body.type === "inspect_account_trash") return hold ? new Promise((resolve) => { release = () => resolve({ type: "account_trash_inspected", id: null, outcome: inspected }); }) : Promise.resolve({ type: "account_trash_inspected", id: null, outcome: inspected });
+      if (body.type === "delete_account" && refusing) return Promise.reject(new DaemonRequestError("refused", code, { path: "/a", detail: "x" }));
+      return Promise.resolve({});
+    }) as never);
+    const { container } = mount();
+    await openRemoval(container);
+    await trackMountRefocus()();
+    await act(async () => trashOption().click());
+    expect(inspections()).toBe(1);
+    expect(removeHeld()).toBe(false);
+    refusing = true;
+    inspected = { status: "protected" };
+    const remove = buttonNamed(removeDialog(), "Remove")!;
+    await act(async () => remove.focus());
+    await act(async () => remove.click());
+    // Not while the alert is open: the dialog is hidden behind it, so the change would be neither seen nor announced.
+    expect(inspections()).toBe(1);
+    const failure = [...document.querySelectorAll('[role="alertdialog"]')].find((dialog) => buttonNamed(dialog, "OK"))!;
+    hold = true;
+    await act(async () => buttonNamed(failure, "OK")!.click());
+    expect(inspections()).toBe(2);
+    // Focus goes back to Remove, which is still held (not disabled) while the question is out.
+    await settleFrames();
+    expect(document.activeElement).toBe(remove);
+    vi.useFakeTimers();
+    onTestFinished(() => { vi.useRealTimers(); });
+    await act(async () => release());
+    expect(removeDialog().textContent).toContain("The directory is your home folder");
+    expect(removeHeld()).toBe(true);
+    // Remove is disabled now, so focus is handed to Cancel rather than left on <body>.
+    expect(document.activeElement).toBe(buttonNamed(removeDialog(), "Cancel"));
+    await act(async () => { vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS + 1); });
+    expect(removeDialog().querySelector('[role="alert"]')?.textContent).toContain("The directory is your home folder");
+  });
+
+  it("does not ask about the directory again when removing is refused for running sessions", async () => {
+    inspectionAnswers({ status: "ok" });
+    const { container } = mount();
+    await openRemoval(container);
+    await act(async () => trashOption().click());
+    request.mockImplementation(((body: { type: string }) => body.type === "delete_account"
+      ? Promise.reject(new DaemonRequestError("refused", "account_has_running_sessions", { name: "Work", sessions: "1" }))
+      : Promise.resolve({ type: "account_trash_inspected", id: null, outcome: { status: "ok" } })) as never);
+    await act(async () => buttonNamed(removeDialog(), "Remove")!.click());
+    expect(inspections()).toBe(1);
+  });
+
+  it("asks again each time the option is ticked, and ignores an answer that arrives after unticking", async () => {
+    const answer = inspectionAnswers();
+    const { container } = mount();
+    await openRemoval(container);
+    await act(async () => trashOption().click());
+    await act(async () => trashOption().click());
+    expect(inspections()).toBe(1);
+    await act(async () => trashOption().click());
+    expect(inspections()).toBe(2);
+    // The first question's answer, a refusal, comes after the second was asked: it is not the second's.
+    await act(async () => answer({ status: "protected" }));
+    expect(removeDialog().textContent).not.toContain("holds Octoboard");
+    expect(removeHeld()).toBe(true);
+    await act(async () => answer({ status: "ok" }));
+    expect(removeDialog().textContent).not.toContain("holds Octoboard");
+    expect(removeHeld()).toBe(false);
+  });
+
+  it("does not ask about the directory when the option is not ticked", async () => {
+    inspectionAnswers({ status: "protected" });
+    const { container } = mount();
+    await openRemoval(container);
+    await act(async () => buttonNamed(removeDialog(), "Remove")!.click());
+    expect(inspections()).toBe(0);
+    expect(request).toHaveBeenCalledExactlyOnceWith({ type: "delete_account", account: "claude-work", trash_directory: false });
+  });
+
+  it("lists the account's open sessions under the ticked option and holds Remove while any is open", async () => {
+    const open = { id: "open", title: "Fix build", agent: "claude", status: "idle", account_id: "claude-work" } as Session;
+    inspectionAnswers({ status: "ok" });
+    sessions.set("open", open);
+    sessions.set("archived", { ...open, id: "archived", title: "Old", status: "archived" });
+    sessions.set("elsewhere", { ...open, id: "elsewhere", title: "Other", account_id: "other" });
+    const { container } = mount();
+    await openAccountMenu(container);
+    await chooseItem("Remove");
+    const dialog = document.querySelector('[role="alertdialog"], [role="dialog"]')!;
+    expect(dialog.textContent).not.toContain("Fix build");
+    expect(buttonNamed(dialog, "Remove")!.disabled).toBe(false);
+    await act(async () => [...dialog.querySelectorAll<HTMLInputElement>("input[type=checkbox]")][0]!.click());
+    const text = dialog.textContent!.replace(/[\u2066-\u2069]/g, "");
+    expect(text).toContain("The account still has 1 session that is running or starting. End it, or switch it to another account, first.");
+    expect(text).toContain("Fix build");
+    expect(text).not.toContain("Old");
+    expect(text).not.toContain("Other");
+    expect(buttonNamed(dialog, "Remove")!.disabled).toBe(true);
+    // The option is described by the reason's title, which is the alert that announces it, and by nothing of a button.
+    const box = [...dialog.querySelectorAll<HTMLInputElement>("input[type=checkbox]")][0]!;
+    const described = box.getAttribute("aria-describedby")!.split(" ");
+    expect(described).toHaveLength(2);
+    expect(document.getElementById(described[1]!)?.textContent).toContain("The account still has 1 session");
+    // Unticked, the sessions block nothing: open sessions are left as they are.
+    await act(async () => [...dialog.querySelectorAll<HTMLInputElement>("input[type=checkbox]")][0]!.click());
+    expect(buttonNamed(dialog, "Remove")!.disabled).toBe(false);
+    expect(dialog.textContent).not.toContain("Fix build");
+  });
+
+  it.each(["account_still_sharing", "account_sharing_failed"] as const)("reports %s when removing the account is refused", async (code) => {
+    const alerts = document.body.appendChild(document.createElement("div"));
+    const alertsRoot = createRoot(alerts);
+    onTestFinished(() => act(() => alertsRoot.unmount()));
+    act(() => alertsRoot.render(<ErrorAlerts />));
+    const { container } = mount();
+    request.mockRejectedValueOnce(new DaemonRequestError("busy", code, { account: "claude-work", name: "claude-work" }));
+    await openAccountMenu(container);
+    await chooseItem("Remove");
+    await act(async () => buttonNamed(document.querySelector('[role="alertdialog"], [role="dialog"]')!, "Remove")!.click());
+    const shown = [...document.querySelectorAll('[role="alertdialog"]')].map((alert) => alert.textContent ?? "").join("\n");
+    expect(shown).toContain("claude-work");
+    expect(shown).toContain(code === "account_still_sharing" ? "cannot be turned off while" : "Nothing was rolled back");
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it("reports a refusal to point a sharing account at another directory", async () => {
+    const alerts = document.body.appendChild(document.createElement("div"));
+    const alertsRoot = createRoot(alerts);
+    onTestFinished(() => act(() => alertsRoot.unmount()));
+    act(() => alertsRoot.render(<ErrorAlerts />));
+    const { container } = mount();
+    await openAccountMenu(container);
+    await chooseItem("Edit");
+    const dialog = document.querySelector('[role="dialog"]')!;
+    const directory = [...dialog.querySelectorAll("input")].at(-1)!;
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(directory, "/home/dev/.claude-elsewhere");
+      directory.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    request.mockRejectedValueOnce(new DaemonRequestError("busy", "account_still_sharing", { account: "claude-work", name: "claude-work" }));
+    await act(async () => buttonNamed(dialog, "Save")!.click());
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ type: "update_account", account: "claude-work", config_dir: "/home/dev/.claude-elsewhere" }));
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("cannot be turned off while");
+  });
+});
+
+it.each([
+  ["edit", false], ["edit", true],
+  ["add", false], ["add", true],
+  ["rename", false], ["rename", true],
+  ["remove account", false], ["remove account", true],
+  ["remove agent", false], ["remove agent", true],
+] as const)("dismisses the %s form for navigation requesting Add agent=%s", async (form, addAgent) => {
+  const { container, navigate } = mount();
+  if (form === "add") {
+    act(() => buttonNamed(container, "Add account")!.click());
+  } else if (form === "remove agent") {
+    await openTabMenu(container, "Claude Code");
+    await chooseItem("Remove agent");
+  } else {
+    const row = rowOf(container, form === "rename" ? "default:claude" : "claude-work");
+    const trigger = row.querySelector<HTMLButtonElement>('button[aria-label^="Actions"]')!;
+    await act(async () => {
+      trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse", button: 0 }));
+      trigger.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "mouse", button: 0 }));
+      trigger.click();
+    });
+    await chooseItem(form === "edit" ? "Edit" : form === "rename" ? "Rename" : "Remove");
+  }
+  expect(document.querySelector('[role="dialog"], [role="alertdialog"]')).not.toBeNull();
+  navigate(addAgent);
+  await act(async () => {});
+  const dialogs = [...document.querySelectorAll('[role="dialog"], [role="alertdialog"]')];
+  if (addAgent) {
+    expect(dialogs).toHaveLength(1);
+    expect(dialogs[0]!.textContent).toContain("Only an agent installed on this machine can be added.");
+  } else {
+    expect(dialogs).toHaveLength(0);
+  }
+});
+
+it.each([false, true])("keeps an active login for navigation requesting Add agent=%s", async (addAgent) => {
+  const login: AccountLogin = {
+    agent: "claude", account: "claude-work", status: "waiting", authorization_url: null,
+    device_code: null, opened_by_agent: false, failure: null,
+  };
+  accountLogins.push(login);
+  const { navigate } = mount();
+  await act(async () => {});
+  const dialog = document.querySelector('[role="dialog"]')!;
+  expect(dialog.textContent).toContain("Waiting for you to authorize");
+  navigate(addAgent);
+  await act(async () => {});
+  expect(dialog.isConnected).toBe(true);
+  expect(dialog.textContent).toContain("Waiting for you to authorize");
+  expect(accountLogins).toEqual([login]);
+  expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ type: "cancel_account_login" }));
+});
+
+it("lets Manage accounts recovery dismiss a stale editor and focus the real Settings section", async () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
+  onTestFinished(() => { document.documentElement.style.removeProperty("--breakpoint-docked"); });
+  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: media.startsWith("(min-width:"), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+  onTestFinished(() => { vi.unstubAllGlobals(); });
+  let nonce = 1;
+  const render = () => act(() => root.render(<><SettingsDialog navigation={{ nonce, section: "accounts", addAgent: false }} onClose={() => {}} /><ErrorAlerts /></>));
+  const unregister = registerSettingsLauncher(() => { nonce += 1; render(); });
+  onTestFinished(() => {
+    unregister();
+    act(() => {
+      root.unmount();
+      while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
+    });
+    container.remove();
+  });
+  render();
+  await trackMountRefocus()();
+  const row = rowOf(document, "claude-work");
+  await act(async () => {
+    const trigger = row.querySelector<HTMLButtonElement>('button[aria-label^="Actions"]')!;
+    trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse", button: 0 }));
+    trigger.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "mouse", button: 0 }));
+    trigger.click();
+  });
+  await chooseItem("Edit");
+  await trackMountRefocus()();
+  act(() => {
+    settings.accounts = settings.accounts.filter((account) => account.id !== "claude-work");
+    bus.notify();
+  });
+  request.mockRejectedValueOnce(new DaemonRequestError("Account no longer exists.", "unknown_account", {}));
+  await act(async () => buttonNamed(document, "Save")!.click());
+  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Manage accounts");
+  act(() => buttonNamed(document, "Manage accounts")!.click());
+  await act(async () => {
+    for (let frame = 0; frame < 4; frame++) await new Promise((resolve) => requestAnimationFrame(resolve));
+  });
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+  const selected = document.querySelector('[role="tab"][aria-selected="true"]');
+  expect(selected?.textContent).toContain("Agent accounts");
+  expect(document.activeElement).toBe(selected);
+});

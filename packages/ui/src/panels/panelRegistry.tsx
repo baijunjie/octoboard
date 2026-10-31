@@ -1,8 +1,8 @@
 import type { LucideIcon } from "lucide-react";
 import type React from "react";
 
-import { LazyProjectBrowser } from "../browser/LazyProjectBrowser";
-import type { ViewedFile } from "../browser/TerminalFileViewer";
+import { LazyProjectBrowser } from "../project-browser/LazyProjectBrowser";
+import type { ViewedFile } from "../project-browser/files/TerminalFileViewer";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { AsideOwner } from "../layout/asideOwner";
@@ -10,7 +10,7 @@ import type { PanePeek } from "../layout/usePaneToggles";
 import { ProcessesPanel } from "../process/ProcessesPanel";
 import type { Project } from "../protocol";
 import { ReportPanel } from "../report/ReportPanel";
-import { ShellTerminalPanel } from "../terminal/ShellTerminalPanel";
+import { ShellTerminalPanel } from "../terminal/shell/ShellTerminalPanel";
 import { PANEL_META } from "./panelMeta";
 import type { PanelKind } from "./stackState";
 

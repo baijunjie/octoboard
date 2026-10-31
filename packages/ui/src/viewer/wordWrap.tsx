@@ -1,7 +1,7 @@
 import { TextAlignStart, WrapText } from "lucide-react";
 import React, { useCallback, useContext, useEffect, useState } from "react";
 
-import { IconToggle } from "../components/IconToggle";
+import { IconToggle } from "../components/controls/IconToggle";
 import { useT } from "../i18n/react";
 import { createPersistedPreference } from "../persistedPreference";
 import { PREFERENCE_KEYS } from "../preferenceKeys";

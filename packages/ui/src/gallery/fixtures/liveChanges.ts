@@ -1,7 +1,8 @@
 import type { Account, AccountQuota, Agent, AgentAvailability, Event as DaemonEvent, Page, ShellTerminal } from "../../protocol";
-import { accountQuotaOf } from "../../quota/accountQuotaOf";
-import type { LiveChange, Step } from "../scenario";
-import { ALL_AGENTS } from "./builders";
+import { accountQuotaOf } from "../../accountQuotaOf";
+import type { Step } from "../../fixtures/interact";
+import type { LiveChange } from "../scenario";
+import { ALL_AGENTS } from "../../fixtures/builders";
 
 // The changes a scenario's "Live changes" buttons make, written as the daemon's own events so the app takes them
 // the way it takes another window's or the machine's. Each is meant to be paired with a change that undoes it (the

@@ -7,16 +7,16 @@ import {
   agentChoiceBadge,
   listedPickerAgents,
 } from "../agents";
-import { AgentIcon } from "../components/AgentIcon";
-import { HandOffOnUnmount } from "../components/HandOffOnUnmount";
-import { StatusBadge } from "../components/StatusBadge";
-import { useTabScrollLabels } from "../components/tabScrollLabels";
-import { useFocusHandoff } from "../components/useFocusHandoff";
-import { useListMotion } from "../components/useListMotion";
+import { AgentIcon } from "../components/icons/AgentIcon";
+import { HandOffOnUnmount } from "../components/focus/HandOffOnUnmount";
+import { StatusBadge } from "../components/status/StatusBadge";
+import { useTabScrollLabels } from "../components/tabs/tabScrollLabels";
+import { useFocusHandoff } from "../components/focus/useFocusHandoff";
+import { useListMotion } from "../components/motion/useListMotion";
 import { useT } from "../i18n/react";
 import type { Agent, Launch, PerAgent } from "../protocol";
 import { useDaemonStore } from "../store";
-import { AdvancedSection } from "./AdvancedSection";
+import { AdvancedSection } from "../components/form/AdvancedSection";
 import { EffortPicker, type LaunchModels, ModelPicker, ModelsFailureMark, useLaunchModels } from "./LaunchSettingsFields";
 
 /** What the section holds for each agent, the way the console dialog does: its account, and what its console

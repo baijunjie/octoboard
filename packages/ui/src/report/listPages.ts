@@ -6,7 +6,7 @@ const listings = new WeakMap<Daemon["request"], Map<string, Promise<void>>>();
 
 /**
  * Asks the daemon to list `session`'s pages, which arrive through the store (`page_list` in
- * `store.ts`), unless a listing for this `epoch` is already out or has answered: the window's
+ * `store/reducer.ts`), unless a listing for this `epoch` is already out or has answered: the window's
  * check for a project session's Report panel (`useProjectReportSession.ts`) and the panel's own
  * (`ReportPanel.tsx`) then cost one reply between them. A page pushed or deleted since reaches the
  * store as an event, so a held answer is current until the next `snapshot`, which bumps `epoch`.

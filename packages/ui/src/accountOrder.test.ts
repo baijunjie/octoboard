@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { accountOf } from "./gallery/fixtures/builders";
+import { accountOf } from "./fixtures/builders";
 import { orderedAccounts } from "./accountOrder";
 import type { Account } from "./protocol";
 

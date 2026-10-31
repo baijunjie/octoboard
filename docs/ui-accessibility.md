@@ -51,11 +51,11 @@ than written down separately. The terminal's ANSI palette, syntax highlighting, 
 colours (avatars, session dots) are not semantic and keep their own palettes.
 
 Secondary text is a choice made where the text is written, never a default inherited from a container. A modal's body
-text — the message of a plain confirmation, a confirmation's consequences, an error alert's description, a form
-dialog's explanatory sentence — is what the user reads to decide, so it is in the foreground colour, in every modal
-alike. HeroUI gives its modal and alert-dialog bodies `text-muted`; the shared modal frame (`Dialog` in
-`packages/ui/src/dialogs/Dialog.tsx`) sets its body back to the foreground, so nothing in a modal turns grey by
-inheritance (the user's decision). Text inside a modal that is secondary — a field's note, an eligibility hint, a
+text — the message of a plain confirmation, a confirmation's consequences, an error alert's description, a form dialog's
+explanatory sentence — is what the user reads to decide, so it is in the foreground colour, in every modal alike. HeroUI
+gives its modal and alert-dialog bodies `text-muted`; the shared modal frame (`Dialog` in
+`packages/ui/src/components/dialog/Dialog.tsx`) sets its body back to the foreground, so nothing in a modal turns grey
+by inheritance (the user's decision). Text inside a modal that is secondary — a field's note, an eligibility hint, a
 line saying what an option leaves out — takes the secondary text colour above, `--app-muted` (`text-app-muted`),
 explicitly on its own element; a HeroUI part that colours itself (`Description`, `Alert.Description`) keeps its own.
 
@@ -158,9 +158,9 @@ badge opens the cell, so it has no screen-reader comma before it.
 
 A kept shortfall of that panel: while the mouse is on the rail's **Account quota** button, every account row but the
 button's own is covered by the sidebar's inactive-project veil (`INACTIVE_VEIL_CLASS` in
-`packages/ui/src/components/inactiveVeil.ts`), until the mouse enters the panel or the panel closes. The veiled text
-falls below AA by the user's decision, as a passing cue that is mouse-only and visual only; it looks unlike the used-up
-state, which recedes without a veil.
+`packages/ui/src/components/status/inactiveVeil.ts`), until the mouse enters the panel or the panel closes. The veiled
+text falls below AA by the user's decision, as a passing cue that is mouse-only and visual only; it looks unlike the
+used-up state, which recedes without a veil.
 
 A notice toast (HeroUI's accent variant) tints its indicator with the title's `--accent-soft-foreground`, as HeroUI
 does itself for its success, warning and danger toasts, instead of leaving it in the plain foreground under an accent
@@ -201,9 +201,10 @@ dark it takes the floating fills like every floating surface: the secondary sear
 `--default` family there, `--field-border` is transparent and `--field-focus` shows only on an invalid field.
 
 A dialog's Advanced section opens from a small ghost button (`AdvancedSection` in
-`packages/ui/src/dialogs/AdvancedSection.tsx`) whose label is in `--app-muted` at rest and the foreground on hover and
-keyboard focus, instead of the ghost variant's `--default-foreground`, by the user's decision: its box lines up with
-the fields above, so its label sits in from theirs, and in their colour it would read as a field label out of line.
+`packages/ui/src/components/form/AdvancedSection.tsx`) whose label is in `--app-muted` at rest and the foreground on
+hover and keyboard focus, instead of the ghost variant's `--default-foreground`, by the user's decision: its box lines
+up with the fields above, so its label sits in from theirs, and in their colour it would read as a field label out of
+line.
 
 ## Keyboard
 
@@ -251,7 +252,7 @@ and the Files tree's folder icons, all rely on it, so do not give such a control
 WebKit's Option+Tab (and Option+Shift+Tab) reaches every control while macOS's Keyboard navigation setting is off,
 which is the default, and react-aria leaves a collection in one step on Tab and Shift+Tab only, matching the modifiers
 exactly. So a collection whose rows hold tabbable controls also takes `useCollectionOptionTab`
-(`packages/ui/src/components/collectionOptionTab.ts`) on its element, which makes the same moves for the Option
+(`packages/ui/src/components/focus/collectionOptionTab.ts`) on its element, which makes the same moves for the Option
 variants; the Files tree and the change list do.
 
 A picked tag's remove button (`Tag`) is out of the tab order (`excludeFromTabOrder`), so a tag group is one tab
@@ -261,10 +262,10 @@ keyboard removes a tag with Delete or Backspace on the tag, which react-aria des
 `preventFocusOnPress` only keeps a *mouse* press from taking focus; the control still has to be reachable.
 
 A control revealed only on hover or focus has to be reachable by touch too. `RowControls`
-(`packages/ui/src/components/RowControls.tsx`), which holds the hover-revealed actions of sidebar and Files rows, shows
-them at all times on a device whose primary input cannot hover (`CANNOT_HOVER` in `packages/ui/src/touchInput.ts`,
-written `[@media(hover:none)]:` in classes); the archive rows' Reopen and Delete and the avatar field's remove button
-carry the same rule, and so does any new hover-revealed control.
+(`packages/ui/src/components/controls/RowControls.tsx`), which holds the hover-revealed actions of sidebar and Files
+rows, shows them at all times on a device whose primary input cannot hover (`CANNOT_HOVER` in
+`packages/ui/src/touchInput.ts`, written `[@media(hover:none)]:` in classes); the archive rows' Reopen and Delete and
+the avatar field's remove button carry the same rule, and so does any new hover-revealed control.
 
 **A table of fields is tabbed down its columns when a column is one unit.** In the console dialog's Advanced table each
 column is one session kind's pair, and its reasoning effort depends on its model, so Tab runs down a column before
@@ -282,12 +283,12 @@ A control inside a collection's **section header** is reached by neither of thos
 the collection's items alone, so the arrow keys never land on a header, Tab inside the collection jumps to the last
 tabbable element and leaves, and focus arriving anywhere in the collection that is not a row is moved to its first row.
 The change list's section heading — the band that folds the section away
-(`packages/ui/src/browser/changeSectionHeading.tsx`) — its view controls and the mark it can carry are such controls,
-and they are reached by this application extending the collection's own walk: Up and Down step through the rows **and
-the headings between them**, Right moves from the band through its controls in their displayed order and Left moves back
-(mirrored in a right-to-left reading direction), while Home and End still move between rows alone. Such a control takes
-no tab stop of its own and must not take focus on a press (`preventFocusOnPress`), or a mouse press on it sends focus to
-the list's first row; a popover opened from it hands focus back to its heading when it closes.
+(`packages/ui/src/project-browser/git/changeSectionHeading.tsx`) — its view controls and the mark it can carry are such
+controls, and they are reached by this application extending the collection's own walk: Up and Down step through the
+rows **and the headings between them**, Right moves from the band through its controls in their displayed order and Left
+moves back (mirrored in a right-to-left reading direction), while Home and End still move between rows alone. Such a
+control takes no tab stop of its own and must not take focus on a press (`preventFocusOnPress`), or a mouse press on it
+sends focus to the list's first row; a popover opened from it hands focus back to its heading when it closes.
 
 The band is react-aria's `rowheader` inside a `role="row"`, not an `<h1>`-`<h6>`, so the rule under "A visual heading
 is a heading element" does not reach it: it is a row of the change list's treegrid, where that markup is what the
@@ -506,7 +507,7 @@ overrides WebKit's native inset without changing the component's colours or ring
 ### A hand-built focusable element
 
 An element that removes the outline puts a ring back, never `outline-none` alone, and takes it from
-`useFocusVisibleProps` (`packages/ui/src/components/useFocusVisibleProps.ts`): spread its props on the element and
+`useFocusVisibleProps` (`packages/ui/src/components/focus/useFocusVisibleProps.ts`): spread its props on the element and
 style with `data-focus-visible:ring-2 data-focus-visible:ring-focus` (`group-data-focus-visible:` from a child).
 The application's custom ring uses HeroUI's `--focus`, the same token HeroUI controls use.
 
@@ -570,18 +571,18 @@ focus back to it: React Aria restores focus to what held it when the dialog open
 accessibility activation or a `preventFocusOnPress` press, and finds nothing that takes it when the control is disabled
 or gone, so focus ends on `<body>`, where VoiceOver reads the whole web area instead of the control the user was on.
 Three hand-offs repair it. The login hand-off (`useLoginFocusReturn` in
-`packages/ui/src/settings/AccountLoginButton.tsx`): the row's own Log in button is shown only while the account reads as
-signed out and is not turned off, and is disabled while a login runs, so after a success focus goes to the row's
-actions, and after a cancel to the Log in button once it is enabled again, else to the actions. The console dialog's
-Settings (`packages/ui/src/dialogs/ConsoleDialog.tsx`) is handed the exact opener that opened it, so closing Settings by
-its backdrop returns focus there even when Manage accounts was activated without taking focus. A Shell terminal closed
-through its busy confirmation is repaired once the confirmation goes (`focusAfterConfirmedClose` in
-`packages/ui/src/terminal/ShellTerminalPanel.tsx`): when the terminal's tab or view that the dialog gave focus back to
-has gone with it, focus goes to the shown tab after a close asked from a menu, or to the shown terminal after one asked
-from the terminal itself; the ring is turned on only as it moves focus, so a close the daemon refuses leaves focus where
-the dialog put it back, ringed or not as the press was. All three wait at least a frame past React Aria's restore and
-leave a restore that landed right alone; they act where focus is on `<body>`, and the login hand-off also where it is on
-its going button.
+`packages/ui/src/settings/accounts/AccountLoginButton.tsx`): the row's own Log in button is shown only while the account
+reads as signed out and is not turned off, and is disabled while a login runs, so after a success focus goes to the
+row's actions, and after a cancel to the Log in button once it is enabled again, else to the actions. The console
+dialog's Settings (`packages/ui/src/dialogs/ConsoleDialog.tsx`) is handed the exact opener that opened it, so closing
+Settings by its backdrop returns focus there even when Manage accounts was activated without taking focus. A Shell
+terminal closed through its busy confirmation is repaired once the confirmation goes (`focusAfterConfirmedClose` in
+`packages/ui/src/terminal/shell/ShellTerminalPanel.tsx`): when the terminal's tab or view that the dialog gave focus
+back to has gone with it, focus goes to the shown tab after a close asked from a menu, or to the shown terminal after
+one asked from the terminal itself; the ring is turned on only as it moves focus, so a close the daemon refuses leaves
+focus where the dialog put it back, ringed or not as the press was. All three wait at least a frame past React Aria's
+restore and leave a restore that landed right alone; they act where focus is on `<body>`, and the login hand-off also
+where it is on its going button.
 
 A dialog that the Agent accounts section opens by itself as Settings opens (the account settings dialog for View in
 Settings, a login found running, Add agent) saves its restore target before Settings' tabs exist, so on closing it hands
@@ -589,13 +590,13 @@ focus on itself rather than leave it to React Aria: to the section's tab, or for
 button, else the empty panel's own. A row's account dialog goes back to the row's actions button, else the section's
 tab. These run ahead of React Aria's restore, wait until the target can take focus (the dialog has gone and nothing
 covers Settings), ring it as focus the user did not aim, and take it back once if a give-back lands after them
-(`handFocusOnceClosed` in `packages/ui/src/settings/AgentAccountsSection.tsx`). Settings itself, closing with no dialog
-under it, goes to the selected session's terminal, else to the control that opened it while that is still there, even
-one that never took focus (the press it ended on is recorded by `usePressedControl` in `packages/ui/src/components/`),
-else to the window's fallback (`focusAfterModalCloses` in `packages/ui/src/components/regionFocus.ts`). Closing over
-another dialog, focus the restore left on `<body>` goes to the control in that dialog that opened Settings, else the
-control that dialog opens on. A return to the
-control that opened a dialog is a restore, not a hand-off: its ring follows the input that closed the dialog.
+(`handFocusOnceClosed` in `packages/ui/src/settings/accounts/AgentAccountsSection.tsx`). Settings itself, closing with
+no dialog under it, goes to the selected session's terminal, else to the control that opened it while that is still
+there, even one that never took focus (the press it ended on is recorded by `usePressedControl` in
+`packages/ui/src/components/`), else to the window's fallback (`focusAfterModalCloses` in
+`packages/ui/src/components/focus/regionFocus.ts`). Closing over another dialog, focus the restore left on `<body>` goes
+to the control in that dialog that opened Settings, else the control that dialog opens on. A return to the control that
+opened a dialog is a restore, not a hand-off: its ring follows the input that closed the dialog.
 
 A dialog opened by a press inside the sidebar's drawer is a third such case: the drawer is not modal and a tap does not
 move focus, so React Aria would restore focus to whatever held it behind the drawer. The window remembers the drawer
@@ -764,7 +765,7 @@ keyboard focus as well. So whatever a tooltip says must reach a screen reader by
 label's full text is in the document whether it fits or not, a row or a tab carries its own accessible name, and an
 indicator that means something on its own is a named `role="img"`.
 
-**One component, one look.** Every floating hint of the application is `Hint` (`components/Hint.tsx`), whatever it
+**One component, one look.** Every floating hint of the application is `Hint` (`components/hint/Hint.tsx`), whatever it
 carries: a plain tooltip, the touch popover, a status mark's popover with or without a body, the rail's quota panel.
 `kind` says what carries the trigger — `control` (a react-aria control as the child), `indicator` (a non-control mark),
 `anchored` (the caller's hover) or `popover` (the caller draws the trigger from the wiring `Hint` hands it) — and all
@@ -836,8 +837,8 @@ A tooltip of any shape closes once what it belongs to turns inert: a dialog or a
 region the window makes inert itself. An overlay that covers the control under a resting pointer sends no
 `pointerleave`, so without this the tooltip would stay drawn over the overlay, naming a control that can no longer be
 reached, until the pointer next moved. A tooltip of a control inside the overlay is unaffected. The surface every
-tooltip shape draws on does this (`hintTooltips.tsx` in `packages/ui/src/components/`), so a new tooltip needs nothing
-of its own.
+tooltip shape draws on does this (`hintTooltips.tsx` in `packages/ui/src/components/hint/`), so a new tooltip needs
+nothing of its own.
 
 Escape dismisses a shown tooltip without the pointer or focus moving (WCAG 2.2 SC 1.4.13). Inside a popup that holds
 focus — a menu, a submenu, a select's list — that Escape closes the tooltip alone, leaving the popup open with focus
@@ -851,7 +852,7 @@ of its options carries one.
 
 ### A help tip: an explanation behind a "?"
 
-An explanation moved off the screen into a "?" uses `HelpTip` (`packages/ui/src/components/HelpTip.tsx`), never a
+An explanation moved off the screen into a "?" uses `HelpTip` (`packages/ui/src/components/hint/HelpTip.tsx`), never a
 tooltip on a bare glyph: it is the one control whose only job is what it says, so it has to be reachable every way the
 text it replaced was.
 
@@ -1123,19 +1124,19 @@ Every asynchronous refusal or failure reported in reply to an operation the user
 dialog and remains there until the user presses its acknowledgement button. Errors never use toasts, timeouts, an
 outside press, Escape or a close button for dismissal. Use HeroUI's `AlertDialog` with its `Icon` set to
 `status="danger"` and a danger acknowledgement button, retaining the library's default visual treatment. The alert takes
-focus and announces its title and body through `role="alertdialog"`, without a second live announcement inside
-it; the body's opening sentence is optional, never restating the title, so an alert without one announces its title and
-remedy; focus lands on the alert itself, not on its first control, also when it opens over a dialog that a press without a
+focus and announces its title and body through `role="alertdialog"`, without a second live announcement inside it; the
+body's opening sentence is optional, never restating the title, so an alert without one announces its title and remedy;
+focus lands on the alert itself, not on its first control, also when it opens over a dialog that a press without a
 pointer opened (an assistive technology's press), where Enter on a first control such as Manage accounts would act.
 Distinct failures wait in a queue; repeated copies of a pending failure do not multiply it. An error above a form leaves
 that form available after acknowledgement, with its values and retry action intact. Acknowledging it returns focus to
 where it was; where that is gone, or the dialog under the alert never had focus (the alert came in the same moment as
 the press that opened it), focus goes where that dialog's own opening focus goes — never to the page (see "The error
-alert" in `docs/product/error-alerts.md` for the full order). The control a dialog opens
-on is marked for this with `openingFocus` (`packages/ui/src/components/regionFocus.ts`), which `Button` and `TextInput`
-set from their `autoFocus`; a dialog that puts its opening focus anywhere else by hand marks that control itself. A
-pending question (a trust prompt, a session request) that closes with nowhere to return focus to lands the same way, and
-so does Settings closing with no opener left to return to.
+alert" in `docs/product/error-alerts.md` for the full order). The control a dialog opens on is marked for this with
+`openingFocus` (`packages/ui/src/components/focus/regionFocus.ts`), which `Button` and `TextInput` set from their
+`autoFocus`; a dialog that puts its opening focus anywhere else by hand marks that control itself. A pending question (a
+trust prompt, a session request) that closes with nowhere to return focus to lands the same way, and so does Settings
+closing with no opener left to return to.
 
 The alert, and a pending question, stay usable whatever comes up with them. One that comes up in the same moment as
 another modal — a dialog that a dialog opens as it mounts, or the alert and a question together — is on top and holds
@@ -1584,11 +1585,11 @@ level below that view's, and it sets no heading ids, since several such document
 ### An empty state is a glyph, a heading, and what fills it
 
 Every place that has nothing to show takes one shape, through `EmptyPanel`
-(`packages/ui/src/components/EmptyPanel.tsx`): a glyph, a heading naming what is missing, optionally a line under it,
-optionally a failure's details on a surface under that line, and optionally a centred row of at most two buttons that
-wraps — the action that fills it, then a second way out of the state (on a startup failure, Report issue as a link in the
-shape of a button, in place of a secondary action) — putting its primary first, as "Button order follows the group's
-alignment" under "Buttons" has it. The whole shape, and which state takes which part, is
+(`packages/ui/src/components/panel/EmptyPanel.tsx`): a glyph, a heading naming what is missing, optionally a line under
+it, optionally a failure's details on a surface under that line, and optionally a centred row of at most two buttons
+that wraps — the action that fills it, then a second way out of the state (on a startup failure, Report issue as a link
+in the shape of a button, in place of a secondary action) — putting its primary first, as "Button order follows the
+group's alignment" under "Buttons" has it. The whole shape, and which state takes which part, is
 `docs/product/empty-states.md`. Nothing builds a second one out of centred text, and a state with no glyph is not one of
 these — HeroUI's bare `EmptyState` is reached only through this component.
 
@@ -1668,7 +1669,7 @@ element, an error from `role="alert"`.
   never spoken. A record that clears itself counts only unbroken attended time toward its lifetime, restarted on each
   return, so it is not gone before the user is back to hear it. A success already present when the row mounts is not
   said. The instance is `AccountLoginAnnouncer` with `useClearSucceededLogin` in
-  `packages/ui/src/settings/AccountLogin.tsx`.
+  `packages/ui/src/settings/accounts/AccountLogin.tsx`.
 - A state whose visible form is durable copy rather than a placeholder — the sentence saying where a macOS permission
   stands, in `packages/ui/src/settings/PermissionsSection.tsx` — stays readable in place, not `aria-hidden`, and is
   announced from a `StatusAnnouncer` the section mounts itself, through `AttendedStatusAnnouncer`, `sr-only`, beside the
@@ -1691,7 +1692,7 @@ element, an error from `role="alert"`.
   when the disclosure opens again, and the text kept from before would be written in the very render that shows the
   body: text that appears with its region, which VoiceOver does not say. Mounted with each opening, the region writes
   after its delay with the trigger still focused. The instance is `AdvancedSection` in
-  `packages/ui/src/dialogs/AdvancedSection.tsx`.
+  `packages/ui/src/components/form/AdvancedSection.tsx`.
 - A dialog step whose title says what happened announces it by moving focus to the dialog, wherever focus was, so the
   dialog is read out by its new name; it adds no `StatusAnnouncer`, which would say the same thing again. The import's
   result step is the instance: its title becomes "Import finished" and the step focuses the dialog itself
@@ -1700,16 +1701,16 @@ element, an error from `role="alert"`.
 - A status region inside a laid-out row (a grid or flex row) stays mounted while empty by being `sr-only`, never
   `display:none` or `hidden`, which takes it out of the accessibility tree and so loses the first text it receives. An
   account row's login announcement is the instance (`AccountLoginAnnouncer` in
-  `packages/ui/src/settings/AccountLogin.tsx`, mounted by `AccountTableRow` in
-  `packages/ui/src/settings/AccountsTable.tsx`): a `StatusAnnouncer` that lives as long as the row and says once that
-  the account is logged in, while the row shows the same result visibly in its "Logged in" badge; it names the account,
-  since nothing around it does. It follows the modal rule and the unattended-window rule above: it is written
+  `packages/ui/src/settings/accounts/AccountLogin.tsx`, mounted by `AccountTableRow` in
+  `packages/ui/src/settings/accounts/AccountsTable.tsx`): a `StatusAnnouncer` that lives as long as the row and says
+  once that the account is logged in, while the row shows the same result visibly in its "Logged in" badge; it names the
+  account, since nothing around it does. It follows the modal rule and the unattended-window rule above: it is written
   `AFTER_FOCUS_MOVE_DELAY_MS` after the success, a wait that outlasts the dialog closing and focus returning to the row,
   and only while the window is attended. A region written under the closing modal, or while the window is unattended, is
   not spoken; see the failing patterns in [VoiceOver verification cases](voiceover-cases.md).
 - A dialog whose footer changes with its state puts focus on the state's main action each time the state changes. The
-  login dialog is the instance (`packages/ui/src/settings/AccountLoginDialog.tsx`): focus is on Cancel login while the
-  login runs and on Log in again once it ends or is refused. Its progress text is a `StatusAnnouncer` with
+  login dialog is the instance (`packages/ui/src/settings/accounts/AccountLoginDialog.tsx`): focus is on Cancel login
+  while the login runs and on Log in again once it ends or is refused. Its progress text is a `StatusAnnouncer` with
   `firstWriteDelayMs` set to `AFTER_FOCUS_MOVE_DELAY_MS`, mounted with the dialog, while the visible line is
   `aria-hidden`, so the text is spoken once and not twice. The rule is about a state the user waits on, not a footer
   button relabelled by what the user is typing: there focus stays in the field, and a `StatusAnnouncer` says what the
@@ -1907,7 +1908,7 @@ dark material is a grey far lighter than dark `--chrome`.
 ## Pointer target size
 
 A control's pointer target is at least 24 by 24 CSS pixels (WCAG 2.2 AA 2.5.8). HeroUI's own sizes already clear it —
-its smallest icon-only button is 32. The application uses `components/Button.tsx` for every Button, extending
+its smallest icon-only button is 32. The application uses `components/controls/Button.tsx` for every Button, extending
 HeroUI with `size="xs"`: 24px height, a 24px square for icon-only buttons, 12px text and 14px icons.
 Compact actions use that size rather than per-call sizing styles.
 
@@ -2013,7 +2014,7 @@ cannot be opened at all fills the body with the danger empty-state (`Failure` in
 by the title's status chip, not by a mark: what kind of conflict it is is the chip's tooltip, which a tap opens too, and
 part of the heading's name, built from the catalog with the rest of it, since the drawn chip is hidden from assistive
 technology. A viewer with nothing to draw takes neither: it fills the body with a centred empty state
-(`CenteredEmptyPanel` in `packages/ui/src/components/EmptyPanel.tsx`).
+(`CenteredEmptyPanel` in `packages/ui/src/components/panel/EmptyPanel.tsx`).
 
 **One shortfall is kept, and it is a single control**: the settings dialog's three-way appearance choice, which
 is a toggle group where the selected button differs by fill colour only. Which button is selected is also carried by
@@ -2077,10 +2078,10 @@ Two cases take no isolate, and putting one there breaks something:
   content, so only a value going into a *string* needs `isolate`. A string wholly wrapped in an isolate also has no
   strong character left for `dir="auto"` to read, which can lay the element out left to right.
 
-`packages/ui/src/browser/BranchSelect.tsx` keeps the branch name plain for `textValue` and lays it out LTR on the trigger and in every option alike.
-Gone status is a separate badge; the clipped tooltip uses a technical chip in its sentence.
-`packages/ui/src/browser/GitView.tsx` likewise uses a technical chip in the visible comparing notice, while its
-plain announcement isolates the branch name where it enters the sentence.
+`packages/ui/src/project-browser/git/BranchSelect.tsx` keeps the branch name plain for `textValue` and lays it out LTR
+on the trigger and in every option alike. Gone status is a separate badge; the clipped tooltip uses a technical chip in
+its sentence. `packages/ui/src/project-browser/git/GitView.tsx` likewise uses a technical chip in the visible comparing
+notice, while its plain announcement isolates the branch name where it enters the sentence.
 
 **An icon mirrors only when its meaning is a direction.** Back and Forward, a disclosure or submenu chevron, a pane
 toggle, a glyph whose rows hang off the leading side (the fold control, the list and folder-tree layout toggles):
@@ -2092,7 +2093,7 @@ indicator is a fixed right-pointing chevron, while react-aria opens the submenu 
 
 **A badge or overlay placed with physical offsets needs an `rtl:` twin.** Tailwind's logical utilities mirror
 themselves, but a hand-placed decoration — and any mask cut for it — does not: give each one its mirrored counterpart,
-as `packages/ui/src/components/Rail.tsx` does for the waiting count and its hole. Where a library offers only physical
+as `packages/ui/src/shell/Rail.tsx` does for the waiting count and its hole. Where a library offers only physical
 placements, pick the placement from the language (`textDirection(useCurrentLanguage())`).
 
 Verify a direction change by rendering it, not by reading it: the gallery serves every scenario under `ar`, and a
@@ -2155,8 +2156,8 @@ Collections whose component already provides the same behavior, such as the toas
 reduced motion requested, update positions immediately, cancel any entry or movement already running and remove exit
 copies.
 
-Use `useListMotion` from `packages/ui/src/components/useListMotion.ts`, marking items with `data-list-motion`. Its
-descendant mode supports semantic wrappers and `display: contents`; its virtualized mode follows rendered identities
+Use `useListMotion` from `packages/ui/src/components/motion/useListMotion.ts`, marking items with `data-list-motion`.
+Its descendant mode supports semantic wrappers and `display: contents`; its virtualized mode follows rendered identities
 without replacing the collection's layout transforms or focus management. Browser collections use `useBrowserListMotion`
 to preserve their existing scroll and focus refs. Keep animation timing and preference handling in the shared
 implementation rather than writing a separate transition at each caller. A content-width, start-aligned tab strip passes
@@ -2172,8 +2173,8 @@ collection passes `fitHeight` to `useListMotion` (a virtualized or content-width
 follows the change with the position-change easing, clipped at its top and bottom edges, so the content below glides
 with it. Enclosing collections follow height-only changes through natural layout instead of adding another
 position-change animation, while real item reorders keep their own movement. Such a collection is a positioned
-(`relative`) container, so that its clip reaches the absolutely placed exit
-copies, and sizes by its border box (`box-sizing: border-box`, as Tailwind's base styles give). For a lazily mounted
-choice popup, use `MotionListBox` inside the popup so the observer mounts with the list and captures its initial
-positions before the first live choice update. Apply the same motion rule to choices that refresh while the popup
-remains open; a static choice list simply has no movement to animate.
+(`relative`) container, so that its clip reaches the absolutely placed exit copies, and sizes by its border box
+(`box-sizing: border-box`, as Tailwind's base styles give). For a lazily mounted choice popup, use `MotionListBox`
+inside the popup so the observer mounts with the list and captures its initial positions before the first live choice
+update. Apply the same motion rule to choices that refresh while the popup remains open; a static choice list simply has
+no movement to animate.

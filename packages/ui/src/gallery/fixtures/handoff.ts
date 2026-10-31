@@ -1,8 +1,8 @@
 import { DEFAULT_SETTINGS } from "../../defaultSettings";
 import type { Agent, AgentAvailability } from "../../protocol";
-import type { Ui } from "../interact";
+import type { Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
-import { accountOf, ALL_AGENTS, SAMPLE, branchItemOf, minutesAgo, sessionOf, snapshotState, worktreeItemOf } from "./builders";
+import { accountOf, ALL_AGENTS, SAMPLE, branchItemOf, minutesAgo, sessionOf, snapshotState, worktreeItemOf } from "../../fixtures/builders";
 
 const { console: console_, web, api, consoleSession: hub } = SAMPLE;
 

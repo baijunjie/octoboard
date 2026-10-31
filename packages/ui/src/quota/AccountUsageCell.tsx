@@ -1,6 +1,6 @@
 import React from "react";
 
-import { StatusBadge } from "../components/StatusBadge";
+import { StatusBadge } from "../components/status/StatusBadge";
 import { useT } from "../i18n/react";
 import type { QuotaWindow } from "../protocol";
 import { useNow } from "../useNow";

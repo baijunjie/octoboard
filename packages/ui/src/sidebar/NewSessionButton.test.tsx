@@ -5,7 +5,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { AGENT_OPTIONS } from "../agents";
 import type { NewSessionRequest } from "../dialogs/dialogRequest";
-import { consoleOf } from "../gallery/fixtures/builders";
+import { consoleOf } from "../fixtures/builders";
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
 import { IS_MAC } from "../useWindowShortcut";
 import { NewSessionButton } from "./NewSessionButton";

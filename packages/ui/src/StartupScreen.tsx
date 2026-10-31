@@ -1,13 +1,13 @@
 import { CircleAlert } from "lucide-react";
 import React from "react";
 
-import { ContentPanel } from "./components/ContentPanel";
-import { EmptyPanel } from "./components/EmptyPanel";
-import { ErrorAlert } from "./components/ErrorAlert";
-import { DiagnosticBlock } from "./components/DiagnosticBlock";
-import { InlineReference } from "./components/InlineReference";
-import { BareTitleBar } from "./components/TitleBar";
-import { FadedScroller, useFadeRegion } from "./components/scrollFade";
+import { ContentPanel } from "./shell/ContentPanel";
+import { EmptyPanel } from "./components/panel/EmptyPanel";
+import { ErrorAlert } from "./components/alerts/ErrorAlert";
+import { DiagnosticBlock } from "./components/alerts/DiagnosticBlock";
+import { InlineReference } from "./components/text/InlineReference";
+import { BareTitleBar } from "./shell/TitleBar";
+import { FadedScroller, useFadeRegion } from "./components/scroll/scrollFade";
 import { Message, useT } from "./i18n/react";
 import { useIssueReport } from "./useIssueReport";
 

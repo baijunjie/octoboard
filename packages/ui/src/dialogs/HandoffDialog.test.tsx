@@ -3,9 +3,9 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { press } from "../components/detailsTestSupport";
-import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
-import { accountOf, consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { press } from "../components/alerts/detailsTestSupport";
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
+import { accountOf, consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import { currentLanguage, setLanguage } from "../i18n/language";
 import type { AccountQuota, Agent, AgentAvailability, Session, SessionBranchItem, Settings } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";

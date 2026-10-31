@@ -2,9 +2,9 @@
 import { act } from "react";
 import { expect, it } from "vitest";
 
-import { consoleOf } from "../gallery/fixtures/builders";
+import { consoleOf } from "../fixtures/builders";
 import type { Agent, AgentAvailability } from "../protocol";
-import { presence, stubListMotion } from "../components/listMotionTestSupport";
+import { presence, stubListMotion } from "../components/motion/listMotionTestSupport";
 import { listing, lastStore, render, buttons, click, clickButton, choose, sent, type, openAdvanced, clickTab, nameOf, groupPicker, picker, tabNames } from "./consoleDialogTestSupport";
 
 const selectedTab = () => document.body.querySelector('[role="tab"][aria-selected="true"]')?.textContent;

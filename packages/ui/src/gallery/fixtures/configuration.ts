@@ -19,10 +19,11 @@ import {
   type InspectedProject,
   type InspectedSettings,
 } from "../../protocol";
-import type { Ui } from "../interact";
-import type { ConfigurationFixture, Scenario, Step } from "../scenario";
-import { accountOf, ALL_AGENTS, SAMPLE, consoleOf, effectiveClaudeCompatibility, projectOf, snapshotState } from "./builders";
-import type { FixtureError } from "./projectFiles";
+import type { Ui, Step } from "../../fixtures/interact";
+import type { ConfigurationFixture } from "../../fixtures/fixture";
+import type { FixtureError } from "../../fixtures/sampleFiles";
+import type { Scenario } from "../scenario";
+import { accountOf, ALL_AGENTS, SAMPLE, consoleOf, effectiveClaudeCompatibility, projectOf, snapshotState } from "../../fixtures/builders";
 
 const GROUP = "Configuration";
 

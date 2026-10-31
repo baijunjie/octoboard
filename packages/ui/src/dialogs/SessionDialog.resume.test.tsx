@@ -7,7 +7,7 @@ import { DaemonRequestError } from "../daemon-client";
 import { errorAlerts } from "../errorAlerts";
 import { isolate } from "../i18n/isolate";
 import type { Session } from "../protocol";
-import { accountOf, type ProjectExtra, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { accountOf, type ProjectExtra, projectOf, sessionOf } from "../fixtures/builders";
 import type { Daemon, State } from "../store";
 import { parentConsole, project, renderDialog, hub1, buttons, optionElements, choose } from "./sessionDialogTestSupport";
 import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";

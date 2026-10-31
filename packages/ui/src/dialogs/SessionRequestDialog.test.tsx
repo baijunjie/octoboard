@@ -4,10 +4,10 @@ import { expect, it, onTestFinished } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
 import { setLanguage } from "../i18n/language";
-import { accountOf, consoleOf, projectOf, sessionOf, snapshotState } from "../gallery/fixtures/builders";
+import { accountOf, consoleOf, projectOf, sessionOf, snapshotState } from "../fixtures/builders";
 import { SESSION_REQUEST_NOT_WAITING } from "../protocol";
 import type { SessionRequest, TrustPrompt } from "../store";
-import { press } from "../components/detailsTestSupport";
+import { press } from "../components/alerts/detailsTestSupport";
 import { findButton, mountPendingQuestionDialog, pressButton } from "./pendingQuestionTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

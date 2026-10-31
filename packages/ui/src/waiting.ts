@@ -1,5 +1,5 @@
 import type { Console, Project, Session } from "./protocol";
-import { sessionsInTreeOrder } from "./sidebar/order";
+import { sessionsInTreeOrder } from "./sessions/order";
 
 /** The sessions waiting for the user, in the order of `sessionsInTreeOrder`. */
 export function waitingSessionsInTreeOrder(consoles: Console[], projects: Project[], sessions: Session[], byStatus: boolean): Session[] {

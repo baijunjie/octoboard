@@ -14,17 +14,17 @@ import React, { memo, useEffect, useId, useLayoutEffect, useRef, useState } from
 import { useShallow } from "zustand/react/shallow";
 
 import { noAgentState } from "../agents";
-import { ActionMenu } from "../components/ActionMenu";
-import { ActivityMarker } from "../components/ActivityMarker";
-import { SessionAgentIcon } from "../components/SessionAgentIcon";
-import { EmptyPanel } from "../components/EmptyPanel";
-import { handFocusOff } from "../components/handFocusOff";
-import { PATH_VAR_PARAMS } from "../components/literalParams";
-import { RowControls, RowIconGroup, RowIconSlot } from "../components/RowControls";
-import { FadedScroller } from "../components/scrollFade";
-import { hasVisibleContext, SessionContextLabel } from "../components/SessionMetadata";
-import { StatusAnnouncer } from "../components/StatusAnnouncer";
-import { StatusIcon } from "../components/StatusIcon";
+import { ActionMenu } from "../components/menus/ActionMenu";
+import { ActivityMarker } from "../components/status/ActivityMarker";
+import { SessionAgentIcon } from "../components/icons/SessionAgentIcon";
+import { EmptyPanel } from "../components/panel/EmptyPanel";
+import { handFocusOff } from "../components/focus/handFocusOff";
+import { PATH_VAR_PARAMS } from "../components/text/literalParams";
+import { RowControls, RowIconGroup, RowIconSlot } from "../components/controls/RowControls";
+import { FadedScroller } from "../components/scroll/scrollFade";
+import { hasVisibleContext, SessionContextLabel } from "../components/status/SessionMetadata";
+import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
+import { StatusIcon } from "../components/status/StatusIcon";
 import type { NewSessionRequest } from "../dialogs/dialogRequest";
 import { withGitBadge } from "../gitStatusLabel";
 import { isolate } from "../i18n/isolate";
@@ -41,22 +41,22 @@ import { activityLabelKey, sessionAriaLabel, sessionDisplayTitle, sessionShownSt
 import { inheritedLaunch, sessionModelEffort, sessionModelLabel } from "../sessionModel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 import { useDaemonStore, useDaemonStoreEqual } from "../store";
-import { BindingBadge } from "./BindingBadge";
+import { BindingBadge } from "../components/status/BindingBadge";
 import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { GitBadge } from "./GitBadge";
 import { consoleMenu, projectMenu } from "./menus";
 import { NewSessionButton } from "./NewSessionButton";
 import { useNoAgentToStart } from "./useNewSessionMode";
 import { SessionActions } from "./SessionActions";
-import { archivedSessions, consoleActivity, INACTIVE_PROJECT_RANK, liveSessionRows, liveSessions, ordersByStatus, projectRank, sortProjectsByRank } from "./order";
+import { archivedSessions, consoleActivity, INACTIVE_PROJECT_RANK, liveSessionRows, liveSessions, ordersByStatus, projectRank, sortProjectsByRank } from "../sessions/order";
 import { type FilterUpdate, isFiltering, NO_FILTER, type ProjectFilter, ProjectFilterButton, ProjectFilterSummary } from "./ProjectFilter";
 import { pinAfterFoldAction, projectFoldControl, reconcileExpandPins, type ProjectFoldControl } from "./projectFold";
 import { NESTED_RAIL_CLASS, NESTED_ROW_CLASS, NestedBranch, LockButton, PinButton, RowIconButton, RowLabel, STICKY_HEADING_HEIGHT, StickySectionHeading, TreeRow } from "./rows";
 import { focusTargetId } from "./focus";
 import type { FocusTarget, SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
-import { useListMotion } from "../components/useListMotion";
-import { INACTIVE_VEIL_CLASS } from "../components/inactiveVeil";
+import { useListMotion } from "../components/motion/useListMotion";
+import { INACTIVE_VEIL_CLASS } from "../components/status/inactiveVeil";
 import { useArchivedOwnerSessions, useConsoleSessions, useHasBoundSessions, useOwnerSessions, useProjectSessions, useSession, useSessionProjectId } from "../sessions/useSessions";
 
 /** The clip the docked column sits in. `min-w-0` lets the flex item reach 0 while the sidebar
@@ -100,7 +100,7 @@ interface SidebarProps extends SidebarHandlers {
    * whatever was pressed acts: where the console it is showing, if that is not the current one,
    * becomes the current one. */
   onPeekPress?: () => void;
-  /** The docked-mode width and its setters; `App.tsx` owns it (`usePaneWidth`) so it can also
+  /** The docked-mode width and its setters; `App` owns it (`app/usePaneWidths.ts`) so it can also
    * be read from outside the sidebar. */
   sidebarWidth: PaneWidth;
 }

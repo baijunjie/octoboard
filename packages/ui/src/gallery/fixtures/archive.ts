@@ -1,7 +1,7 @@
 import { DEFAULT_SETTINGS } from "../../defaultSettings";
 import type { Agent } from "../../protocol";
 import type { Scenario } from "../scenario";
-import { accountOf, branchItemOf, consoleOf, contextOf, minutesAgo, projectOf, sessionOf, snapshotState, worktreeItemOf } from "./builders";
+import { accountOf, branchItemOf, consoleOf, contextOf, minutesAgo, projectOf, sessionOf, snapshotState, worktreeItemOf } from "../../fixtures/builders";
 
 const GROUP = "Archive view";
 

@@ -1,6 +1,6 @@
 import React from "react";
 
-import { OptionSelect } from "../dialogs/OptionSelect";
+import { OptionSelect } from "../components/form/OptionSelect";
 import { errorPresentation } from "../errorPresentation";
 import { setLanguage } from "../i18n/language";
 import { LANGUAGE_NAMES, LANGUAGES, type Language } from "../i18n/languages";

@@ -2,17 +2,17 @@ import { Popover, SearchField, Tag as HeroUITag, TagGroup } from "@heroui/react"
 import { Check, Funnel, FunnelX, Tags } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
-import { Button } from "../components/Button";
-import { EmptyPanel } from "../components/EmptyPanel";
-import { FadeOverflow } from "../components/FadeOverflow";
-import { FieldClearButton } from "../components/FieldClearButton";
-import { openingFocus } from "../components/regionFocus";
-import { Tag } from "../components/Tag";
-import { TitledControl } from "../components/TitledControl";
-import { useListMotion } from "../components/useListMotion";
-import { usePointerFocusReturn } from "../components/usePointerFocusReturn";
-import { useScrollFade } from "../components/scrollFade";
-import { useTrimmedField } from "../dialogs/useTrimmedField";
+import { Button } from "../components/controls/Button";
+import { EmptyPanel } from "../components/panel/EmptyPanel";
+import { FadeOverflow } from "../components/text/FadeOverflow";
+import { FieldClearButton } from "../components/controls/FieldClearButton";
+import { openingFocus } from "../components/focus/regionFocus";
+import { Tag } from "../components/form/Tag";
+import { TitledControl } from "../components/hint/TitledControl";
+import { useListMotion } from "../components/motion/useListMotion";
+import { usePointerFocusReturn } from "../components/menus/usePointerFocusReturn";
+import { useScrollFade } from "../components/scroll/scrollFade";
+import { useTrimmedField } from "../components/form/useTrimmedField";
 import { useT } from "../i18n/react";
 import { withoutTags, withTag } from "../projectFiltering";
 

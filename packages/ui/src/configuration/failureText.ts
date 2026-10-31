@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
-import type { DaemonErrorPart } from "../components/DaemonErrorMessage";
-import { codedMessageNode } from "../components/errorParts";
+import type { DaemonErrorPart } from "../components/alerts/DaemonErrorMessage";
+import { codedMessageNode } from "../components/alerts/errorParts";
 import { daemonMessage } from "../daemonMessage";
 import { ActionableError } from "../actionableError";
 import type { Translate } from "../i18n/catalog";
