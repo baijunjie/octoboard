@@ -92,6 +92,7 @@ pnpm format:staged          # The same staged formatter the commit hook runs.
 pnpm verify --dry-run      # Show checks for changes from the freshly fetched upstream/remote target.
 pnpm verify                # Run those checks without rewriting files.
 pnpm verify --base <ref>   # Use an explicit remote baseline, including non-ancestor force-push tips.
+pnpm verify --quick        # Before a local merge: no builds, only the UI and Rust tests related to the changes.
 pnpm verify --full         # Check every package.
 pnpm verify --release      # Check the shipping application, without website or gallery-only suites.
 ```

@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 // Read-only push verification. --base names the live destination tip, --head pins the pushed commit;
-// --full checks every consumer, --release checks the shipping app only, --dry-run prints the plan,
-// and --fresh ignores earlier passes. Formatting belongs to the pre-commit hook.
+// --full checks every consumer, --release checks the shipping app only, --quick runs the affected
+// consumers' checks without builds and with the UI and Rust tests narrowed to the changed files (the
+// check before a local merge; the push still verifies in full), --dry-run prints the plan, and --fresh
+// ignores earlier passes. Formatting belongs to the pre-commit hook.
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { changedFiles, requirePushedTree, resolveBase } from "./verify/changes.mjs";
+import { changedFiles, requirePushedTree, resolveBase, resolveRemoteTargetBase } from "./verify/changes.mjs";
 import { acquireSlot, describeWait } from "./verify/lock.mjs";
 import { clearFailure, failedFiles, narrowedFiles, readFailure, recordFailure, REPORT_ENV } from "./verify/rerun.mjs";
+import { quickSteps } from "./verify/quick.mjs";
 import { MENU_KEYS_FILE, planScope } from "./verify/scope.mjs";
 import { contentKey, readStamp, recordPass, stampDirectory, stepKey } from "./verify/stamp.mjs";
 import { checkSteps } from "./verify/steps.mjs";
@@ -18,10 +21,15 @@ const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
 const baseArg = args.includes("--base") ? args[args.indexOf("--base") + 1] : undefined;
 const headArg = args.includes("--head") ? args[args.indexOf("--head") + 1] : undefined;
-const known = new Set(["--full", "--release", "--fresh", "--dry-run", "--base", "--head", baseArg, headArg]);
+const known = new Set(["--full", "--release", "--quick", "--fresh", "--dry-run", "--base", "--head", baseArg, headArg]);
 const unknown = args.filter((arg) => !known.has(arg));
 if (unknown.length > 0 || (flag("--base") && (!baseArg || baseArg.startsWith("--"))) || (flag("--head") && (!headArg || headArg.startsWith("--")))) {
   console.error(`verify: unknown or incomplete argument: ${unknown.join(" ") || "--base / --head needs a ref"}`);
+  process.exit(2);
+}
+
+if (flag("--quick") && (flag("--full") || flag("--release"))) {
+  console.error("verify: --quick cannot be combined with --full or --release");
   process.exit(2);
 }
 
@@ -56,6 +64,7 @@ function plan(base) {
   if (!tree) throw new Error("could not take the tree of the working copy");
   if (headArg) requirePushedTree(git, headArg, tree);
   let scope;
+  let files = null;
   if (flag("--release")) {
     scope = { mode: "release", reason: "shipping application", packages: [] };
   } else if (flag("--full")) {
@@ -65,12 +74,14 @@ function plan(base) {
     const reason = base.noTarget ? `${base.reason} (pass --base <ref>)` : base.reason;
     scope = { mode: "full", reason, packages: [] };
   } else {
-    const files = changedFiles(git, base.commit, tree);
+    files = changedFiles(git, base.commit, tree);
     if (!files) throw new Error("could not read changed files; refusing to skip checks");
     const fullFiles = files.includes(MENU_KEYS_FILE) && changesMenuKeys(base.commit, tree) ? [MENU_KEYS_FILE] : [];
     scope = planScope(files, { fullFiles });
   }
-  return { tree, scope, checks: checkSteps(scope) };
+  if (!flag("--quick")) return { tree, scope, checks: checkSteps(scope), notes: [] };
+  const quick = quickSteps(scope, files, (file) => existsSync(path.join(root, file)));
+  return { tree, scope, checks: quick.steps, notes: quick.notes };
 }
 
 function exec(cmd, env = process.env) {
@@ -130,15 +141,19 @@ async function runStep(step, key, tree) {
   }
   // A pass is recorded only for the content it ran on: a step that rewrote files, or an edit made
   // meanwhile, leaves the content different from the one the stamp is keyed by.
-  if (workingTree(root) === tree) recordPass(stampDir, key, step);
-  else {
-    recorded = false;
-    console.log(`verify: the content changed while "${step.label}" ran; its pass is not recorded`);
+  if (step.stamp !== false) {
+    if (workingTree(root) === tree) recordPass(stampDir, key, step);
+    else {
+      recorded = false;
+      console.log(`verify: the content changed while "${step.label}" ran; its pass is not recorded`);
+    }
   }
   console.log(`verify: passed ${step.label} in ${Math.round((Date.now() - started) / 1000)}s`);
 }
 
-const base = flag("--full") || flag("--release") ? {} : resolveBase(git, baseArg);
+let base = flag("--full") || flag("--release") ? {} : resolveBase(git, baseArg);
+// A quick run on a branch with no upstream or target branch measures from where it forked from the remote.
+if (flag("--quick") && base.noTarget) base = resolveRemoteTargetBase(git);
 const current = plan(base);
 const describe = (scope) => `verify: scope ${scope.mode} (${scope.reason})`;
 console.log(describe(current.scope));
@@ -146,12 +161,14 @@ if (current.scope.mode === "unread") {
   console.log("verify: nothing to run: no format check or lint covers these files");
   process.exit(0);
 }
+for (const note of current.notes) console.log(`verify: quick: ${note}`);
 if (flag("--dry-run")) {
   for (const step of current.checks) console.log(`verify: would run${step.heavy ? " (heavy)" : ""}: ${step.cmd.join(" ")}`);
   process.exit(0);
 }
 
-const passedOn = (tree, step) => !flag("--fresh") && stepKey(step) in readStamp(stampDir, contentKey(tree, toolchain));
+// A narrowed test step proves nothing about the content as a whole, so it is neither skipped nor recorded.
+const passedOn = (tree, step) => !flag("--fresh") && step.stamp !== false && stepKey(step) in readStamp(stampDir, contentKey(tree, toolchain));
 if (current.checks.every((step) => passedOn(current.tree, step))) {
   console.log("verify: this content already passed these checks with this toolchain; nothing to run (--fresh forces a run)");
   process.exit(0);

@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { changedFiles, requirePushedTree, resolveBase } from "./changes.mjs";
+import { changedFiles, requirePushedTree, resolveBase, resolveRemoteTargetBase } from "./changes.mjs";
 import { workingTree } from "./tree.mjs";
 
 function repository(run) {
@@ -86,5 +86,25 @@ test("push verification rejects another commit and dirty content, even when its 
     assert.throws(() => requirePushedTree(git, original, workingTree(root)), /clean working tree/);
     commit(root, git, "a.txt", "new commit");
     assert.throws(() => requirePushedTree(git, original, workingTree(root)), /pushed commit/);
+  });
+});
+
+test("a branch with no upstream is measured from its merge base with the remote's target", () => {
+  repository((root, git) => {
+    const remote = mkdtempSync(path.join(os.tmpdir(), "changes-remote-"));
+    try {
+      git("clone", "-q", "--bare", ".", remote);
+      git("remote", "add", "origin", remote);
+      git("switch", "-q", "-c", "topic");
+      const forked = git("rev-parse", "HEAD");
+      commit(root, git, "b.txt", "b");
+      assert.equal(resolveRemoteTargetBase(git).commit, forked);
+      git("config", "branch.topic.targetBranch", "missing");
+      assert.match(resolveRemoteTargetBase(git).reason, /cannot fetch origin refs\/heads\/missing/);
+      git("remote", "remove", "origin");
+      assert.match(resolveRemoteTargetBase(git).reason, /no remote/);
+    } finally {
+      rmSync(remote, { recursive: true, force: true });
+    }
   });
 });

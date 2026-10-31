@@ -21,6 +21,23 @@ export function resolveBase(git, baseArg) {
   return commit ? { commit } : { reason: "cannot read fetched remote tip" };
 }
 
+// Where a branch with no upstream and no target branch forked from the remote's target, as the
+// pre-push hook measures a new branch: the merge base of HEAD and the live tip of the branch's target
+// branch (`branch.<name>.targetBranch`) or else the remote's HEAD. Only `--quick` uses this, in place
+// of measuring everything.
+export function resolveRemoteTargetBase(git) {
+  const remotes = (git("remote") ?? "").split("\n").filter(Boolean);
+  const remote = remotes.includes("origin") ? "origin" : remotes[0];
+  if (!remote) return { reason: "no remote to measure a new branch from", noTarget: true };
+  const branch = git("symbolic-ref", "--quiet", "--short", "HEAD");
+  const target = branch && git("config", "--get", `branch.${branch}.targetBranch`);
+  const ref = target ? `refs/heads/${target}` : "HEAD";
+  if (git("fetch", "--no-tags", remote, ref) == null) return { reason: `cannot fetch ${remote} ${ref}`, noTarget: true };
+  const tip = git("rev-parse", "--verify", "FETCH_HEAD^{commit}");
+  const commit = tip && git("merge-base", "HEAD", tip);
+  return commit ? { commit } : { reason: `no common commit with ${remote} ${ref}`, noTarget: true };
+}
+
 // The paths that differ between `base` and `tree` (a tree object, such as `workingTree`'s), or null
 // when git cannot say.
 export function changedFiles(git, base, tree) {

@@ -167,8 +167,12 @@ the earlier steps do not run them separately (the related tests a step runs to c
   belonging to it. Skip it when this round's changes touch nothing it states.
 - Timing override for "Formatting and checks", including the pre-merge flow and other skills' verification
   baselines: by the user's explicit workflow choice, routine development completion and local merges do not run
-  format checks, lint, type checks, builds or test suites. Checks used specifically to establish a changed rule
-  while implementing it remain appropriate; they do not replace push verification.
+  the full checks. Before a local merge only, once the branch is aligned with its target branch and right before
+  merging, run the quick check, `pnpm verify --quick`, and do not merge until it passes; it runs at no other point,
+  neither at commits nor at development completion. Skip it when the branch's changes are only files that the
+  build, type checking, and tests never read. The full checks, builds and full test suites included, run only before
+  pushing. Checks used specifically to establish a changed rule while implementing it remain appropriate; neither
+  they nor the quick check replace push verification.
 - Before committing, the `pre-commit` hook runs `scripts/format-staged.mjs` (the same as `pnpm format:staged`):
   format only staged supported source files, preserving unstaged edits. A partial commit (`git commit <paths>`) is
   refused; stage the files and commit without paths. A checkout without the script (a branch older than the hook)
@@ -187,7 +191,10 @@ the earlier steps do not run them separately (the related tests a step runs to c
   always run the Rust checks of both crates together. Checks are read-only and require the pushed commit in a clean
   checkout. `scripts/verify/` owns the scope and commands. `pnpm verify --dry-run` prints the plan; `--base <ref>`
   selects an explicit baseline; `--full` checks all packages; `--fresh` ignores earlier successful results for
-  identical content.
+  identical content. `pnpm verify --quick` runs the same scope without builds or the tests that need them, and runs
+  only the UI and Rust tests related to the changed files in place of the full suites, falling back to a full suite
+  where a change's reach cannot be traced; a branch without an upstream is measured from its merge base with the
+  remote target branch (or remote HEAD), as a new branch is at push.
 - Within "Gallery" and "UI preview": continue gallery maintenance and previews at their existing steps, but defer
   the automated gallery quick check and sweep to before pushing, when the UI changes call for them; do not run
   them again at routine development completion or local merge. The agent runs them via the `agent-gallery` skill

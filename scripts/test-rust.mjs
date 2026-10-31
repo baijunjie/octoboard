@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Runs the Rust tests of both crates of the root Cargo workspace in one `cargo test` invocation, so
 // the dependencies they share build once with one feature set. Extra arguments go to `cargo test`
-// (`pnpm test:rust some_test_name` filters by test name).
+// (`pnpm test:rust some_test_name` filters by test name). With `-p <crate>` or `--package <crate>` among
+// them (the `--package=<crate>` form is not recognised) only that crate is tested; `pnpm verify --quick`
+// uses this for a change to one crate.
 //
 // The desktop crate's `build.rs` makes `tauri-build` refuse to build when the sidecar named by
 // `bundle.externalBin` in `tauri.conf.json` has not been built, which is what a real build wants.
@@ -14,7 +16,9 @@ import path from "node:path";
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
-const result = spawnSync("cargo", ["test", "--workspace", ...process.argv.slice(2)], {
+const extra = process.argv.slice(2);
+const scope = extra.some((arg) => arg === "-p" || arg === "--package") ? [] : ["--workspace"];
+const result = spawnSync("cargo", ["test", ...scope, ...extra], {
   cwd: repoRoot,
   stdio: "inherit",
   env: { ...process.env, TAURI_CONFIG: JSON.stringify({ bundle: { externalBin: [] } }) },
