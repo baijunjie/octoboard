@@ -783,6 +783,76 @@ fn a_creation_point_ahead_of_the_local_branch_but_on_its_remote_is_a_fork_point(
     );
 }
 
+/// `main` moves on from `daemon` with three commits; `tags`, at `main`'s tip, records the second
+/// as its fork point. Returns the repository, `daemon`'s tip, the second commit (after
+/// `daemon`'s tip) and `main`'s tip.
+fn fork_after_old() -> (ScratchDir, String, String, String) {
+    let repo = base_repo();
+    let old = rev(&repo, "HEAD");
+    git(&repo, &["branch", "-q", "daemon"]);
+    commit(&repo, "a.txt", &numbered("alpha", 1..=9), "trim a.txt");
+    let fork = commit(
+        &repo,
+        "other.txt",
+        &numbered("other", 1..=4),
+        "trim other.txt",
+    );
+    let tip = commit(&repo, "tags.txt", &numbered("tags", 1..=4), "add tags.txt");
+    git(&repo, &["branch", "-q", "tags"]);
+    (repo, old, fork, tip)
+}
+
+#[test]
+fn a_fast_forward_to_a_branch_whose_fork_point_lies_after_the_old_value_is_allowed() {
+    let (repo, old, fork, tip) = fork_after_old();
+    let forks = [("tags", fork.as_str())];
+    assert_eq!(
+        gate(&repo, &["main"], &forks, "prepared", "daemon", &old, &tip),
+        None
+    );
+}
+
+#[test]
+fn a_fork_point_at_the_old_value_does_not_hide_a_changed_base_of_another_merged_branch() {
+    let repo = base_repo();
+    let fork = rev(&repo, "HEAD");
+    git(&repo, &["switch", "-q", "-c", "feature"]);
+    commit(
+        &repo,
+        "feature.txt",
+        &numbered("feature", 1..=4),
+        "add the feature",
+    );
+    git(&repo, &["switch", "-q", "-c", "topic", &fork]);
+    let old = commit(
+        &repo,
+        "added.txt",
+        &numbered("added", 1..=8),
+        "add added.txt",
+    );
+    // `feature` squashed onto `topic` after `git reset --soft topic`: `added.txt` is wiped out.
+    git(&repo, &["switch", "-q", "feature"]);
+    git(&repo, &["reset", "-q", "--soft", "topic"]);
+    git(&repo, &["commit", "-q", "-m", "add the feature, squashed"]);
+    let new = rev(&repo, "HEAD");
+    git(&repo, &["branch", "-q", "tags"]);
+    git(&repo, &["switch", "-q", "topic"]);
+    let found = gate(
+        &repo,
+        &[],
+        &[("feature", &fork), ("tags", &old)],
+        "prepared",
+        "topic",
+        &old,
+        &new,
+    )
+    .expect("added.txt is wiped out");
+    assert!(
+        found.contains("added.txt: this file was deleted wholesale"),
+        "{found}"
+    );
+}
+
 #[test]
 fn a_fast_forward_to_a_remote_tracking_branch_of_someone_else_is_checked() {
     let (repo, old) = topic_with_a_change();
@@ -1687,4 +1757,145 @@ fn the_guarded_branch_pushed_is_not_checked_against_itself_as_a_fallback_target(
     let stdin = format!("refs/heads/main {new} refs/heads/other {remote}\n");
     let verdict = decide_push(&git, &inputs, stdin.as_bytes()).expect("nothing to check");
     assert!(!verdict.rejected && verdict.text.is_empty());
+}
+
+#[test]
+fn a_branch_cut_from_a_local_target_ahead_of_its_remote_is_pushed() {
+    let (local, fork) = feature_cut_from_a_local_main_ahead(|origin| rev(origin, "HEAD"));
+    let new = rev(&local, "feature");
+    let targets = [("feature", "main")];
+    let forks = [("feature", fork.as_str())];
+    let nothing = "0".repeat(40);
+    let verdict = push(&local, &[], &targets, &forks, "feature", &new, &nothing);
+    assert!(!verdict.rejected, "{}", verdict.text);
+}
+
+/// A clone whose local `main` is two commits ahead of `origin/main` when `feature` is cut from it;
+/// `remote_change` then runs in the origin, and the clone fetches from it. Returns the clone and
+/// `main`'s tip, the fork point to record for `feature`.
+fn feature_cut_from_a_local_main_ahead(
+    remote_change: impl FnOnce(&Path) -> String,
+) -> (ScratchDir, String) {
+    let origin = base_repo();
+    let local = clone_of(&origin);
+    commit(&local, "a.txt", &numbered("alpha", 1..=9), "trim a.txt");
+    let fork = commit(
+        &local,
+        "other.txt",
+        &numbered("other", 1..=4),
+        "trim other.txt",
+    );
+    git(&local, &["switch", "-q", "-c", "feature"]);
+    commit(
+        &local,
+        "feature.txt",
+        &numbered("feature", 1..=4),
+        "add the feature",
+    );
+    remote_change(&origin);
+    git(&local, &["fetch", "-q"]);
+    (local, fork)
+}
+
+#[test]
+fn a_branch_cut_from_a_local_target_ahead_of_its_remote_is_pushed_after_the_remote_moves_on() {
+    let (local, fork) = feature_cut_from_a_local_main_ahead(|origin| {
+        commit(origin, "r.txt", &numbered("remote", 1..=4), "add r.txt")
+    });
+    // The faithful rebase replays the unpushed commits of `main` along with the feature's.
+    let new = rebase_onto_origin_main(&local);
+    let targets = [("feature", "main")];
+    let forks = [("feature", fork.as_str())];
+    let nothing = "0".repeat(40);
+    let verdict = push(&local, &[], &targets, &forks, "feature", &new, &nothing);
+    assert!(!verdict.rejected, "{}", verdict.text);
+}
+
+#[test]
+fn a_changed_base_against_a_target_rebased_onto_its_remote_is_still_rejected() {
+    let (local, fork) = feature_cut_from_a_local_main_ahead(|origin| {
+        commit(
+            origin,
+            "added.txt",
+            &numbered("added", 1..=8),
+            "add added.txt",
+        )
+    });
+    // `main` aligns with its remote, so the fork point is no longer its ancestor; `feature` is
+    // then squashed onto it after `git reset --soft main`, which wipes out `added.txt`.
+    git(&local, &["switch", "-q", "main"]);
+    git(&local, &["rebase", "-q", "origin/main"]);
+    let old = rev(&local, "main");
+    git(&local, &["switch", "-q", "feature"]);
+    git(&local, &["reset", "-q", "--soft", "main"]);
+    git(&local, &["commit", "-q", "-m", "add the feature, squashed"]);
+    let new = rev(&local, "HEAD");
+    git(&local, &["switch", "-q", "main"]);
+    let found =
+        main_move(&local, &[("feature", &fork)], &old, &new).expect("added.txt is wiped out");
+    assert!(
+        found.contains("added.txt: this file was deleted wholesale"),
+        "{found}"
+    );
+}
+
+#[test]
+fn a_pushed_squash_onto_a_newer_remote_is_rejected_for_the_remotes_file_only() {
+    let (local, fork) = feature_cut_from_a_local_main_ahead(|origin| {
+        commit(
+            origin,
+            "added.txt",
+            &numbered("added", 1..=8),
+            "add added.txt",
+        )
+    });
+    let squashed = squash_onto_origin_main(&local);
+    let targets = [("feature", "main")];
+    let forks = [("feature", fork.as_str())];
+    let nothing = "0".repeat(40);
+    let verdict = push(
+        &local,
+        &[],
+        &targets,
+        &forks,
+        "feature",
+        &squashed,
+        &nothing,
+    );
+    assert!(verdict.rejected, "{}", verdict.text);
+    assert!(
+        verdict
+            .text
+            .contains("added.txt: this file was deleted wholesale"),
+        "{}",
+        verdict.text
+    );
+    // The unpushed commits of `main` the branch carries are not held against it.
+    assert!(!verdict.text.contains("a.txt:"), "{}", verdict.text);
+    assert!(!verdict.text.contains("other.txt:"), "{}", verdict.text);
+}
+
+#[test]
+fn a_mode_change_on_the_remote_lost_by_a_pushed_squash_is_rejected() {
+    let (local, fork) = feature_cut_from_a_local_main_ahead(|origin| {
+        git(origin, &["update-index", "--chmod=+x", "other.txt"]);
+        git(origin, &["commit", "-q", "-m", "make other.txt executable"]);
+        rev(origin, "HEAD")
+    });
+    // The squash keeps the fork point's `other.txt`, which drops the remote's mode change.
+    let squashed = squash_onto_origin_main(&local);
+    let targets = [("feature", "main")];
+    let forks = [("feature", fork.as_str())];
+    let nothing = "0".repeat(40);
+    let verdict = push(
+        &local,
+        &[],
+        &targets,
+        &forks,
+        "feature",
+        &squashed,
+        &nothing,
+    );
+    assert!(verdict.rejected, "{}", verdict.text);
+    assert!(verdict.text.contains("other.txt:"), "{}", verdict.text);
 }

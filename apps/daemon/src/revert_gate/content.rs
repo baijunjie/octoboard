@@ -8,7 +8,7 @@ use std::os::unix::ffi::OsStringExt;
 
 use anyhow::{Context, Result};
 
-use super::git::{is_null, is_oid, is_space, lossy, Git};
+use super::git::{is_ancestor, is_null, is_oid, is_space, lossy, Git};
 
 /// How many commits to look back. A revert usually comes from a branch developed in parallel in
 /// the same period, so its base is not far behind; too large a value reads many more blobs on
@@ -473,9 +473,12 @@ fn read_blobs(git: &Git, oids: &[String]) -> Result<HashMap<String, Vec<u8>>> {
 /// content that first appeared after the fork point being deleted counts — a deliberate deletion
 /// should still leave a `Reverts:`.
 /// Cannot check without a fork point (recorded, or the commit the branch's reflog says it was
-/// created at): a squash that changed the base is exactly one
-/// that rewrote the parent to the target branch's tip, so merge-base is no longer the fork
-/// point. Rename sources do not count; that content just moved elsewhere.
+/// created at): a squash that changed the base is exactly one that rewrote the parent to the
+/// target branch's tip, so merge-base is no longer the fork point. A fork point at or after
+/// `old` does not count either: the history up to it is inherited, not something the move
+/// dragged in. Nor does a file only a diverging fork point's side changed (see
+/// [`carried_from_the_fork_side`]). Rename sources do not count; that content just moved
+/// elsewhere.
 fn base_artifacts(
     git: &Git,
     old: &str,
@@ -487,12 +490,24 @@ fn base_artifacts(
     // A fork point equal to `new` does not count: that branch contributed no commit at all (most
     // likely it was just created and happens to point here); using it to compute the authored
     // files would give an empty set, making every file this move touched a suspect.
-    let bases: Vec<&String> = bases.iter().filter(|base| *base != new).collect();
+    // Nor does a fork point at or after `old` (a branch cut from a local main ahead of
+    // origin/main, say): a file this move changed that the branch did not change has the fork
+    // point's version, which the history from `old` to the fork point gave it, so holding it
+    // against the move would only blame that inherited history. A fork point diverging from
+    // `old` (the target's remote moved on without it, or the target was rebased while aligning
+    // with its remote) still counts, for the files the target side changed since they diverged.
+    let mut kept: Vec<&String> = Vec::new();
+    for base in bases.iter().filter(|base| *base != new) {
+        if !is_ancestor(git, old, base)? {
+            kept.push(base);
+        }
+    }
+    let bases = kept;
     if bases.is_empty() || touched.is_empty() {
         return Ok(Vec::new());
     }
     let mut authored: HashSet<Path> = HashSet::new();
-    for base in bases {
+    for base in &bases {
         // Rename-aware: when the branch renamed a file, only the new path counts as authored by
         // it; the old path remains a suspect — if the target branch rewrote the old path's
         // content after the fork point, that is exactly how such a rewrite gets lost.
@@ -504,7 +519,7 @@ fn base_artifacts(
             "--find-renames",
             "--name-only",
             "-z",
-            base,
+            base.as_str(),
             new,
         ])?;
         authored.extend(
@@ -522,6 +537,8 @@ fn base_artifacts(
     }
     let renamed = rename_sources(git, old, new)?;
     suspects.retain(|path| !renamed.contains(*path));
+    let carried = carried_from_the_fork_side(git, old, &bases, &suspects)?;
+    suspects.retain(|path| !carried.contains(*path));
     suspects.sort();
     let mut found: Vec<Finding> = Vec::new();
     for path in suspects {
@@ -567,6 +584,50 @@ fn base_artifacts(
         }
     }
     Ok(found)
+}
+
+/// The `suspects` whose difference came from the fork point's side rather than from the target's,
+/// when every fork point in `bases` diverges from `old`: the target side is then only what came
+/// after the merge base of the fork point and `old`, and a file whose path, content and mode
+/// `old` holds as at that merge base has no net change there. What the move does to it comes from
+/// the fork point's side and is carried forward (a branch cut from a local target ahead of its
+/// remote, rebased with the target's unpushed commits onto a newer remote tip), not a trace of a
+/// changed base. A file the target side did change since — the content a squash onto a changed
+/// base loses — stays a suspect. This also lets through what the fork point's side itself undid
+/// (unmerged work under a recorded fork point that wiped out a target commit's additions) and a
+/// commit the target dropped by rewriting its own history that the fork point's side still has:
+/// no commit on the target lost anything to them since the merge base. A fork point that is an
+/// ancestor of `old` is its own merge base with it, and nothing is cleared; with several fork
+/// points, a file is cleared only when every one of them clears it.
+fn carried_from_the_fork_side(
+    git: &Git,
+    old: &str,
+    bases: &[&String],
+    suspects: &[&Path],
+) -> Result<HashSet<Path>> {
+    if suspects.is_empty() {
+        return Ok(HashSet::new());
+    }
+    let mut carried: Option<HashSet<Path>> = None;
+    for base in bases {
+        let fork = git.line_lenient(["merge-base", base.as_str(), old])?;
+        if fork.is_empty() || fork == **base {
+            return Ok(HashSet::new());
+        }
+        // A whole diff rather than blob ids, so that a mode or type change on the target side
+        // keeps the file a suspect.
+        let changed = tree_diff(git, &fork, old)?;
+        let unchanged: HashSet<Path> = suspects
+            .iter()
+            .filter(|path| !changed.contains_key(**path))
+            .map(|path| (*path).clone())
+            .collect();
+        carried = Some(match carried {
+            None => unchanged,
+            Some(so_far) => so_far.intersection(&unchanged).cloned().collect(),
+        });
+    }
+    Ok(carried.unwrap_or_default())
 }
 
 /// The commits that the move `old` to `new` undid, newest first.

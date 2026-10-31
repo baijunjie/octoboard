@@ -91,7 +91,21 @@
 //!    since its fork point, that is exactly what a changed base drags in, whether the change was
 //!    an add, a delete, or a content edit. It requires a fork point; branches with none, neither
 //!    recorded (`--fork-point`) nor found in the reflog, are not protected against this kind of
-//!    accidental deletion.
+//!    accidental deletion. A fork point at or after the commit the move is judged against (the
+//!    position before the move, or a remote tip checked against instead: the remote-tracking tip
+//!    a local move lands above, or the remote tip on a push) does not count for this criterion:
+//!    the history up to it is inherited, not something the move dragged in. A fork point that
+//!    diverges from that commit (the target's remote moved on without it, or the target was
+//!    rebased while aligning with its remote) counts, but only for files the target side changed
+//!    after the merge base of the two: a file only the fork point's side changed, such as a file
+//!    changed by one of the target's unpushed commits, which a branch carries when rebased onto a
+//!    newer remote tip, is carried forward, not dragged in. A recorded fork point is taken as it
+//!    is: one recorded on a branch cut from unmerged work exempts that work from this criterion —
+//!    wholly when it lies at or after the commit judged against; when it diverges, for the files
+//!    the target side did not change since the merge base, including content the work wiped out
+//!    from an earlier target commit. Likewise a commit the target dropped by rewriting its own
+//!    history comes back unchecked when the fork point's side still has it. The content criteria
+//!    still apply to such changes, but a wipe-out of purely added lines is invisible to them.
 //! 3. When a commit message added by this move carries `Reverts: <sha>`, or git revert's default
 //!    `This reverts commit <sha>.`, the corresponding commit is allowed — a deliberate revert
 //!    must leave a record.

@@ -73,9 +73,10 @@ refused when:
   fast-forward merge of it, say), recorded or from the reflog (see "Target branches and fork points" above) — recent
   means the 50 most recent and every commit since that fork point as well, up to 1,000; where it has none, the 100
   most recent;
-- **it carries a changed base**: where the move has a fork point, it changes a file that the other branch itself
-  never touched since its fork point — what a squash onto a changed base drags in, an addition, a deletion or an edit
-  alike. A move with no fork point is not protected against this;
+- **it carries a changed base**: where the move has a fork point that counts, it changes a file that the other branch
+  itself never touched since its fork point — what a squash onto a changed base drags in, an addition, a deletion or an
+  edit alike. Which fork points count, and for which files, is set out below. A move with no fork point that counts is
+  not protected against this;
 - **it drops published commits**: a move that is not a fast-forward is refused when any commit it drops is already on
   a remote-tracking branch. A move to a tip of one of the branch's own remote-tracking branches that drops no unpushed
   local commit passes outright; one that only replays unpushed local commits onto the remote (`git pull --rebase`,
@@ -84,6 +85,33 @@ refused when:
 Where a move takes in a tip of one of the branch's own remote-tracking branches that the branch was not already at or
 above — a pull, a replay onto the remote — the commits that tip holds are judged against the tip: what is already
 undone on the remote does not count against the move, and commits just fetched from the remote count as well.
+
+For a changed base, each fork point is set against the commit the move is judged against — the branch's value before
+the move, or the remote-tracking tip it is judged against instead:
+
+- a fork point that is an ancestor of that commit counts for every file;
+- a fork point at or after that commit does not count: the history up to it is inherited, not dragged in by the move,
+  so a fast-forward to a branch whose fork point lies ahead of the branch moved is not refused for it;
+- a fork point that has diverged from that commit — the target's remote moved on without it, or the target was rebased
+  while aligning with its remote — counts only for the files the target side changed, in content, mode or type, since
+  the merge base of the fork point and that commit. A file only the fork point's side changed — by one of the target's
+  unpushed commits that a branch carries when rebased onto a newer remote tip, say — is carried forward, not dragged
+  in. A squash onto a changed base, a target rebased onto its remote with a squash that loses the remote's changes, or
+  a mode change on the remote that is lost, still takes back what the target side changed, and is refused.
+
+With several fork points, a file passes only when every one of them lets it through.
+
+A recorded fork point is taken as it stands, which lets two kinds of change through this criterion:
+
+- where the fork point lies on other work not yet merged — a branch stacked on another branch still in development,
+  say — that work: wholly when the fork point lies at or after the commit judged against; when it has diverged, in the
+  files the target side did not change since the merge base, including content that work wiped out from an earlier
+  target commit;
+- a commit the target dropped by rewriting its own history — an interactive rebase while aligning with its remote,
+  say — comes back unchecked where the fork point's side still has it.
+
+Both are still checked for undoing a recent commit, but that criterion does not see the lines of a commit that only
+added lines being wiped out whole.
 
 A reset to the merge base can undo recent commits even with `--soft`, which leaves the index and working tree intact:
 the guarded branch's committed content is removed by that update. An intention to recommit it as a squash does not
@@ -121,7 +149,10 @@ see the change.
 - **a branch with a target branch** — the one it records, or, for a branch that records none and is not guarded, the
   project's default branch — pushed once it has been rebased onto that target's remote-tracking tip (the target's
   upstream, or else its one remote-tracking branch of the same name), is refused when, against that tip, it undoes the
-  target's changes as above, counting back to its own fork point. A branch not yet rebased onto that tip is not
+  target's changes as above, counting back to its own fork point. For the changed base the fork point is set against
+  that tip as described under "A local update of a guarded branch" above, so a branch cut from a local target that is
+  ahead of its remote is not refused for the target's unpushed commits it carries, neither as cut nor once faithfully
+  rebased onto a newer remote tip that does not hold its fork point. A branch not yet rebased onto that tip is not
   checked, and a force-push after a squash is expected and allowed. A target branch with several remote-tracking
   branches of its name and no upstream cannot be pinned down: the push goes through unchecked, with a line saying so; a
   target on no remote is passed silently. The target's remote state is as of the last fetch;
