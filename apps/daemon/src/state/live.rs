@@ -152,9 +152,11 @@ impl AppState {
         session.observe_titles(self);
     }
 
-    /// Drops a session from the live map — but only if it is still *this* session. Comparing by id
-    /// would let a finished session's exit watcher evict the live successor that reused its id.
-    pub(crate) fn unregister_live(self: &Arc<Self>, session: &Arc<LiveSession>) {
+    /// Drops a session from the live map — but only if it is still *this* session, which is what
+    /// it returns. Comparing by id would let a finished session's exit watcher evict the live
+    /// successor that reused its id. What follows the removal is [`Self::after_live_removed`]'s;
+    /// `coordinator::exit_watch::unregister_live` runs the whole sequence.
+    pub(crate) fn remove_live(&self, session: &Arc<LiveSession>) -> bool {
         let mut live = self.live.write().expect("live sessions lock poisoned");
         let is_current = live
             .sessions
@@ -174,22 +176,17 @@ impl AppState {
                 tracing::warn!(session = %session.id, dropped, "the session ended with messages still queued");
             }
         }
-        drop(live);
-        if is_current {
-            // Its call has nobody left to return to.
-            crate::session_request::withdraw_for_session(self, &session.id);
-            self.publish_account_sharing();
-        }
-        self.forget_session_bookkeeping(&session.id);
+        is_current
     }
 
-    /// Ends the session's process the way its exit watcher does: it leaves the live map and its
-    /// queue goes with it.
-    #[cfg(test)]
-    pub fn end_process_for_test(self: &Arc<Self>, id: &str) {
-        if let Some(live) = self.live_session(id) {
-            self.unregister_live(&live);
+    /// What the daemon drops once session `id` has left the live map ([`Self::remove_live`]):
+    /// the sharing status is published again when it was the current session (`was_current`),
+    /// and its bookkeeping goes either way.
+    pub(crate) fn after_live_removed(&self, id: &str, was_current: bool) {
+        if was_current {
+            self.publish_account_sharing();
         }
+        self.forget_session_bookkeeping(id);
     }
 
     /// Whether a change of sharing has claimed `id` to restart it.

@@ -22,7 +22,8 @@
 //! - [`pages`], [`archive_cleanup`], [`exit_watch`]: not request handlers. `pages` withdraws a
 //!   worker's pages from the report panel, and sweeps at daemon start the pages left on workers;
 //!   `archive_cleanup` is the daemon task that deletes archived sessions whose conversation can no
-//!   longer be resumed; `exit_watch` is the exit watcher every launch starts.
+//!   longer be resumed; `exit_watch` is the exit watcher every launch starts, and the sequence
+//!   that drops a live session.
 //!
 //! Writing into a running session is `crate::messaging::delivery`'s, the notices an owner is sent
 //! are `crate::messaging::owner_notices`', and the console session's reports, synthesis and

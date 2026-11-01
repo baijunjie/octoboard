@@ -1507,7 +1507,9 @@ mod tests {
                         .set_auto_switch_on_usage_limit(false)
                         .unwrap();
                 }
-                "process" => fixture.state.end_process_for_test("w"),
+                "process" => {
+                    crate::coordinator::exit_watch::end_process_for_test(&fixture.state, "w")
+                }
                 "exit" => {
                     fixture.worker_process.terminate();
                     let registered = fixture.state.live_session("w").expect("still registered");

@@ -183,7 +183,8 @@ impl Watch {
         inner.projects.extend(added);
     }
 
-    fn untrack(&self, project_id: &str) {
+    /// Stops watching a project's repository. Called wherever a project is deleted.
+    pub fn untrack(&self, project_id: &str) {
         if let Some(inner) = self.lock().as_mut() {
             inner.untrack(project_id);
         }
@@ -287,11 +288,6 @@ pub fn add(state: &Arc<AppState>, project: &Project) {
 /// repository the watch does not know.
 pub fn watch_now(state: &AppState, project: &Project) {
     state.git_watch.track(state, std::slice::from_ref(project));
-}
-
-/// Stops watching a project's repository. Called wherever a project is deleted.
-pub fn remove(state: &AppState, project_id: &str) {
-    state.git_watch.untrack(project_id);
 }
 
 /// Turns the paths a watch reports into debounced re-reads: a project is read once its refs have

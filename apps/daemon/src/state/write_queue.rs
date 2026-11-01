@@ -126,7 +126,7 @@ impl Drop for OutboxHold {
         let Some(record) = writable else {
             // A successor being launched is no process yet but will be: a resume saves it running
             // and queues its instruction first. The launch flushes what is queued, and
-            // `unregister_live` forgets it if the launch fails.
+            // `AppState::remove_live` forgets it if the launch fails.
             if successor.is_some() && self.state.is_launching(target) {
                 return;
             }
@@ -970,7 +970,8 @@ mod tests {
         state.register_live(live.clone());
         let hold = state.hold_outbox("s");
         state.queue_message("s", "one");
-        state.unregister_live(&live);
+        let was_current = state.remove_live(&live);
+        state.after_live_removed("s", was_current);
         assert_eq!(state.outbox.len("s"), 1);
 
         // No runtime here, so the successor's queue is left for a flush to write.

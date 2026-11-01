@@ -346,14 +346,14 @@ async fn information_kept_for_an_interrupted_session_is_deleted_only_once_it_is_
 
     // The queue is lost before it drained, as when the daemon exits or the process ends: the
     // next resume queues each message once.
-    state.end_process_for_test("codex");
+    crate::coordinator::exit_watch::end_process_for_test(&state, "codex");
     interrupt(&state, "codex");
     assert_eq!(state.store.kept_messages("codex").unwrap().len(), 2);
     let (_, queued) = relaunch_stand_in(&state, "codex", false).await.unwrap();
     assert_eq!(queued.len(), 2, "{queued:?}");
 
     // Written into the session, the rows go.
-    state.end_process_for_test("codex");
+    crate::coordinator::exit_watch::end_process_for_test(&state, "codex");
     interrupt(&state, "codex");
     let started = Arc::new(std::sync::Mutex::new(Vec::new()));
     let launches = Arc::new(std::sync::Mutex::new(Vec::new()));

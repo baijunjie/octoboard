@@ -1,6 +1,7 @@
 //! The exit watcher: what follows when a session's process ends — the output it left saved, what
 //! it started outside its terminal session stopped, its exit recorded, and its owner told of an
-//! end nobody asked for.
+//! end nobody asked for. Also the sequence that drops a live session from the daemon
+//! ([`unregister_live`]), which the watcher ends with.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -13,6 +14,26 @@ use crate::state::AppState;
 /// typing `/exit`, a crash) has no other signal: `SessionEnd` hooks are not reliable for this,
 /// since a killed process fires nothing at all.
 const EXIT_POLL_INTERVAL: Duration = Duration::from_millis(500);
+
+/// Drops a session from the live map, if it is still *this* session, and what goes with it: its
+/// queue, a session request it has waiting (its call has nobody left to return to), its
+/// bookkeeping. Called wherever a live session is dropped.
+pub(crate) fn unregister_live(state: &Arc<AppState>, live: &Arc<LiveSession>) {
+    let was_current = state.remove_live(live);
+    if was_current {
+        crate::session_request::withdraw_for_session(state, &live.id);
+    }
+    state.after_live_removed(&live.id, was_current);
+}
+
+/// Ends the session's process the way its exit watcher does: it leaves the live map and its
+/// queue goes with it.
+#[cfg(test)]
+pub(crate) fn end_process_for_test(state: &Arc<AppState>, id: &str) {
+    if let Some(live) = state.live_session(id) {
+        unregister_live(state, &live);
+    }
+}
 
 /// Watches one session's process and records where it ended up. A session whose status was
 /// already set to archived was ended on purpose; anything else that stops is interrupted, which
@@ -57,7 +78,7 @@ pub fn watch_exit(state: &Arc<AppState>, live: Arc<LiveSession>) {
             .live_session(&live.id)
             .is_some_and(|current| Arc::ptr_eq(&current, &live))
             .then(|| state.store.record_session_exit(&live.id, now_millis()));
-        state.unregister_live(&live);
+        unregister_live(&state, &live);
         match exit {
             Some(Ok(Some((before, session)))) => {
                 state.publish_session(&session);

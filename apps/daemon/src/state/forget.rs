@@ -31,7 +31,7 @@ impl AppState {
             self.remove_git_status(id);
             self.unresolved_removals.forget(id);
             self.path_link_roots.forget(id);
-            crate::project_git::watch::remove(self, id);
+            self.git_watch.untrack(id);
         }
     }
 
