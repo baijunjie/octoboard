@@ -11,7 +11,7 @@ import { DEFAULT_WIDTH, LIVE_CHANGE_EVENT, MIN_HEIGHT, type Scenario } from "./s
 
 const WIDTHS = [
   { label: "Wide", width: DEFAULT_WIDTH },
-  { label: "Docked", width: 1168 },
+  { label: "Docked", width: 1394 },
   { label: "Narrow", width: 800 },
   { label: "Phone", width: 420 },
 ];

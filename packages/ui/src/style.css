@@ -528,7 +528,7 @@ html {
      (`--window-background` below); in a browser it is `--chrome`. Glyphs on it use the theme's
      `--foreground`, secondary text on it `--chrome-muted`, and `--chrome-hover` / `--chrome-active`
      / `--chrome-current` are the tints a control, a pressed control and the current console's tile
-     take on it: translucent, so they read on the material and on `--chrome`. Below 782 px (the
+     take on it: translucent, so they read on the material and on `--chrome`. Below 594 px (the
      `phone` breakpoint) the rail is inside the sidebar drawer's card and sits on `--panel-sidebar`
      instead, where the current tile is 1.60:1 in light and 2.05:1 in dark. The current tile is
      the one that has to be found at a glance, so it is the strongest: 1.59:1 on the light material

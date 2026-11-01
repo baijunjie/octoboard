@@ -160,7 +160,7 @@ export const layoutScenarios: Scenario[] = [
     title: "No report panel open",
     state: railState,
     preferences: { panelStacks: { report: { open: [], shares: {} } } },
-    description: "With the report closed there is no pane: the terminal takes the window's full width and the top bar's Report toggle is not pressed. Hover the toggle to float the report in, fading in as the card rises by 4% of its own height like the hidden sidebar's preview, while the pointer rests on it, and press it to dock the report, which appears at once.",
+    description: "With the report closed there is no pane: the terminal takes the window's full width and the top bar's Report toggle is not pressed. From 594px up, hover the toggle to float the report in, fading in as the card rises by 4% of its own height like the hidden sidebar's preview, while the pointer rests on it. Pressing the toggle opens the report: at 1394px and wider it docks and appears at once, from 594px to 1393px it opens in the floating group, and below 594px (where there is no hover preview) it floats alone as one card.",
     steps: [
       (ui) => ui.press(ui.session("Hub")),
     ],
@@ -214,6 +214,8 @@ export const layoutScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Docked report",
+    // The pane docks only from 1394px; below it the group floats hidden, and below 594px a panel is closed until its toggle is pressed.
+    minWidth: 1394,
     state: railState,
     description: "A console session's report is a panel of the right pane: one card filling the pane's height, with the Report name, the page arrows and count, and Close panel in its 40px header, rounded corners, a hairline edge and the shadow of the sidebar's floating card. A gap showing the terminal's own background surrounds it: 8px at the window's end, the bottom and below the top bar, and 16px on the terminal side, which holds the width handle; no sidebar-coloured column sits behind it. The top bar has the Report toggle, pressed, and the Processes toggle, closed: a console session has no Files or shell Terminal toggle, a terminal needing a project's folder, and none for the pane itself. Press Close panel to close the pane, which goes at once.",
     steps: [

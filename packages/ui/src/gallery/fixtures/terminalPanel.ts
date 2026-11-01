@@ -18,7 +18,8 @@ const TERMINAL_ONLY: Preferences = { panelStacks: { project: { open: ["terminal"
 const WIDE_TERMINAL: Preferences = { ...TERMINAL_ONLY, asideWidth: 560 };
 
 const openWebsite = (ui: Ui) => ui.press(ui.session("Fix the summary layout"));
-/** Brings the Terminal panel in where it is closed, below 782px, as it is open already in a docked window. */
+/** Brings the Terminal panel in where it is not shown yet, as it is open already in a docked window: from 594px to
+ * 1394px its floating group is hidden, and below 594px the panel is closed until its toggle is pressed. */
 const showTerminal = (ui: Ui) => ui.showPanel("terminal");
 /** Opens the session, then lets the Files panel read its folder, which draws nothing until it has. */
 const openWebsiteWithFiles = [openWebsite, (ui: Ui) => ui.wait(400)];
@@ -124,8 +125,8 @@ export const terminalPanelScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Terminal panel maximized",
-    // A floating card has no Maximize panel: it exists only where the right pane docks (from 782px).
-    minWidth: 782,
+    // A floating card has no Maximize panel: it exists only where the right pane docks (from 1394px).
+    minWidth: 1394,
     description:
       "Files and Terminal are both open and the Terminal is maximized: its card leaves the right pane's column and covers only the agent terminal's area, which is inert beneath it, while the sidebar stays as it was. Files stays docked in the column at its full height, with no separator above it, and both toggles in the top bar stay pressed. The Terminal header offers Restore panel size in place of Maximize; restoring returns the card ahead of Files, side by side when the pane is wide enough and stacked above Files otherwise.",
     state: stateOf(severalShells),
@@ -137,8 +138,8 @@ export const terminalPanelScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Terminal panel maximized with Files closed",
-    // A floating card has no Maximize panel: it exists only where the right pane docks (from 782px).
-    minWidth: 782,
+    // A floating card has no Maximize panel: it exists only where the right pane docks (from 1394px).
+    minWidth: 1394,
     description:
       "The Terminal panel is the only panel and is maximized: the right pane's column folds away, with its width handle, and the card spans over the agent terminal's area to the window's end. Its header offers Restore panel size, and the Files toggle in the top bar is not pressed.",
     state: stateOf(severalShells),
@@ -150,8 +151,8 @@ export const terminalPanelScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Files floated in beside a maximized Terminal",
-    // A floating card has no Maximize panel: it exists only where the right pane docks (from 782px).
-    minWidth: 782,
+    // A floating card has no Maximize panel: it exists only where the right pane docks (from 1394px).
+    minWidth: 1394,
     description:
       "With the Terminal panel maximized and Files closed, hovering the Files toggle floats the Files card in at the window's end, over the maximized card, the pointer resting on it. The Files toggle is not pressed; pressing it docks Files into the column, the Terminal staying maximized.",
     state: stateOf(severalShells),
@@ -186,10 +187,10 @@ export const terminalPanelScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Floating Terminal card",
-    // Hovering a toggle floats a panel in only where the right pane docks (from 782px); below it a press does.
-    minWidth: 782,
+    // Hover reveals a pane from 594px up; below that only a press opens a single mobile card.
+    minWidth: 594,
     description:
-      "The Terminal card floated in over the agent terminal by hovering the Terminal toggle with no panel open, the pointer now resting on the card. Only the Terminal card floats, with the same rounded corners, hairline edge and shadow as the floating Files card, over the agent terminal, which shows in the gaps around it. The Terminal toggle is not pressed: pressing it docks the pane.",
+      "The Terminal card floated in over the agent terminal by hovering the Terminal toggle with no panel open, the pointer now resting on the card. Only the Terminal card floats, with the same rounded corners, hairline edge and shadow as the floating Files card, over the agent terminal, which shows in the gaps around it. The Terminal toggle is not pressed: pressing it opens the panel, which docks on a wide screen or stays in the floating group below 1394px.",
     state: stateOf(oneShell),
     preferences: { panelStacks: { project: { open: [], shares: {} } } },
     steps: [openWebsite, (ui) => ui.floatPane(ui.t("titleBar.terminal.show"))],
