@@ -8,9 +8,9 @@ import { isolate } from "../../i18n/isolate";
 import { useT } from "../../i18n/react";
 import type { Agent } from "../../protocol";
 import type { QuotaReading } from "../../quota/useAccountQuota";
-import { loginStateOf } from "../../quota/quotaFormat";
+import { loginStateOf } from "../../accounts/quotaFormat";
 import { useDaemonStore } from "../../store";
-import { ringForAutomaticFocus } from "../../touchInput";
+import { ringForAutomaticFocus } from "../../input/touchInput";
 import { accountLoginOf, loginIsActive } from "./AccountLogin";
 
 /** Told, as the login dialog a Log in button opened closes, whether the login succeeded, and the cancel closing it

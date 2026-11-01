@@ -1,7 +1,7 @@
 import React, { useRef } from "react";
 
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
-import { DELIVERY_CHOICES, DEVELOPMENT_CHOICES } from "../gitWorkflow";
+import { DELIVERY_CHOICES, DEVELOPMENT_CHOICES } from "../git/gitWorkflow";
 import { useT } from "../i18n/react";
 import type { GitDelivery, GitDevelopment, GitWorkflowOverride } from "../protocol";
 import { useDaemonStore } from "../store";

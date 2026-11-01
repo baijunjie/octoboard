@@ -1,8 +1,8 @@
 import React, { useRef, useState } from "react";
 
-import { AGENT_LABEL, isAgentUnavailable } from "../../agents";
+import { AGENT_LABEL, isAgentUnavailable } from "../../agents/agents";
 import { HelpTip } from "../../components/hint/HelpTip";
-import { InlineReference } from "../../components/text/InlineReference";
+import { InlineReference } from "../../i18n/InlineReference";
 import { PATH_VAR_PARAMS } from "../../components/text/literalParams";
 import { MarkedPath } from "../../components/text/MarkedPath";
 import { focusOpenDialog } from "../../components/focus/regionFocus";
@@ -10,7 +10,7 @@ import { Dialog } from "../../components/dialog/Dialog";
 import { Message, useT } from "../../i18n/react";
 import type { Agent } from "../../protocol";
 import { AccountQuotaSummary, LoginStateBadge, NoUsageReading, QuotaFailureMark, QuotaPlan, QuotaUpdated } from "../../quota/AccountQuotaSummary";
-import { loginStateOf } from "../../quota/quotaFormat";
+import { loginStateOf } from "../../accounts/quotaFormat";
 import { ResetCreditsLine, UseResetCreditDialog, useResetFocusReturn } from "../../quota/ResetCredits";
 import { useAccountQuota } from "../../quota/useAccountQuota";
 import { useDaemonStore } from "../../store";

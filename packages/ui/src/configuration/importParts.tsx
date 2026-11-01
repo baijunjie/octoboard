@@ -1,23 +1,21 @@
-import React, { useState } from "react";
+import React from "react";
 
-import { AGENT_LABEL } from "../agents";
-import { Button } from "../components/controls/Button";
+import { AGENT_LABEL } from "../agents/agents";
 import { DetailsButton } from "../components/alerts/DetailsButton";
-import { InlineReference } from "../components/text/InlineReference";
+import { InlineReference } from "../i18n/InlineReference";
 import { TILDE_PARAMS } from "../components/text/literalParams";
 import { MarkLineBox } from "../components/status/MarkLineBox";
 import { StatusMark } from "../components/status/StatusMark";
 import { StatusBadge, type StatusBadgeColor } from "../components/status/StatusBadge";
 import { useSubmitValidation } from "../components/dialog/Dialog";
-import { DirectoryPicker } from "../components/dialog/DirectoryPicker";
+import { useDirectoryBrowse } from "../components/dialog/DirectoryPicker";
 import { TextInput } from "../components/form/TextInput";
-import type { PlainMessageKey } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import { joinNodes } from "../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
-import type { AccountFallback, Agent, DocumentSettings, ImportFailure } from "../protocol";
+import type { AccountFallback, Agent, ImportFailure } from "../protocol";
 import { useFailureNode } from "./failureText";
-import { isUsableDirectory, type DirectoryProblem } from "./importPlan";
+import { type DirectoryProblem } from "./importPlan";
 
 /**
  * The look of one card of the import dialog: a console's projects, an agent's accounts, the applied or applicable
@@ -71,7 +69,7 @@ export function DirectoryChoiceField({
   problem: DirectoryProblem | undefined;
 }): React.ReactElement {
   const t = useT();
-  const [picking, setPicking] = useState(false);
+  const directoryBrowse = useDirectoryBrowse(value, onChange);
   return (
     <>
       <TextInput
@@ -82,23 +80,9 @@ export function DirectoryChoiceField({
         dir="ltr"
         placeholder={placeholder}
         errorMessage={problem === "empty" ? requiredMessage : problem === "not_absolute" ? <Message id="configuration.import.directory.notAbsolute" params={TILDE_PARAMS} /> : undefined}
-        trailing={
-          <Button type="button" variant="secondary" onPress={() => setPicking(true)}>
-            {t("common.browse")}
-          </Button>
-        }
+        trailing={directoryBrowse.browseButton()}
       />
-      {picking && (
-        <DirectoryPicker
-          title={t("dialog.chooseDirectory")}
-          initialPath={isUsableDirectory(value) ? value : "~"}
-          onPick={(picked) => {
-            onChange(picked);
-            setPicking(false);
-          }}
-          onClose={() => setPicking(false)}
-        />
-      )}
+      {directoryBrowse.picker}
     </>
   );
 }
@@ -116,30 +100,6 @@ export function SettingLine({ label, badge, tone = "default", children }: { labe
     </li>
   );
 }
-
-/** The document's settings that are a switch, picked by their type so a setting of another kind
- * cannot be listed below. */
-type BooleanField = { [K in keyof DocumentSettings]-?: DocumentSettings[K] extends boolean ? K : never }[keyof DocumentSettings];
-
-/** The application settings that are a switch, in the order the cards list them: the name the
- * settings page gives each, its field in the document and what turning it on means. */
-export const BOOLEAN_SETTINGS: {
-  label: PlainMessageKey;
-  field: BooleanField;
-  consequence: PlainMessageKey;
-}[] = [
-  { label: "settings.git.autoPull.label", field: "auto_pull_repositories", consequence: "configuration.import.settings.consequence.autoPull" },
-  { label: "settings.archiveCleanup.label", field: "auto_delete_unresumable_archives", consequence: "configuration.import.settings.consequence.archiveCleanup" },
-  { label: "settings.autoSelect.label", field: "auto_select_account", consequence: "configuration.import.settings.consequence.autoSelectAccount" },
-  { label: "settings.autoSwitch.label", field: "auto_switch_on_usage_limit", consequence: "configuration.import.settings.consequence.autoSwitchOnUsageLimit" },
-  { label: "settings.sidebarOrder.label", field: "sidebar_order_by_status", consequence: "configuration.import.settings.consequence.sidebarOrder" },
-  { label: "settings.startQuotaWindows.label", field: "auto_start_quota_windows", consequence: "configuration.import.settings.consequence.autoStartQuotaWindows" },
-  { label: "settings.autoApproveSession.label", field: "auto_approve_session_requests", consequence: "configuration.import.settings.consequence.autoApproveSession" },
-  { label: "settings.autoApproveResume.label", field: "auto_approve_resume_requests", consequence: "configuration.import.settings.consequence.autoApproveResume" },
-  { label: "settings.autoApproveAccountSwitches.label", field: "auto_approve_account_switches", consequence: "configuration.import.settings.consequence.autoApproveAccountSwitches" },
-  { label: "settings.autoApproveHandoffs.label", field: "auto_approve_handoffs", consequence: "configuration.import.settings.consequence.autoApproveHandoffs" },
-  { label: "settings.askQuestionsAsChoices.label", field: "ask_questions_as_choices", consequence: "configuration.import.settings.consequence.askQuestionsAsChoices" },
-];
 
 /** One paragraph per account reference that names no account of this machine: the agent's default account
  * is used instead. */

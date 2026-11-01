@@ -3,9 +3,9 @@ import type React from "react";
 import { DiagnosticBlock } from "../alerts/DiagnosticBlock";
 import { DetailsDisclosure } from "../alerts/ErrorDetailsDisclosure";
 import { RecoveryGuidance } from "../alerts/ErrorGuidance";
-import type { ErrorAlertView } from "../../errorAlerts";
-import { additionalRecovery } from "../../errorRecovery";
-import { diagnosticText } from "../../errorText";
+import type { ErrorAlertView } from "../alerts/errorAlerts";
+import { additionalRecovery } from "../../errors/errorRecovery";
+import { diagnosticText } from "../../errors/errorText";
 import type { useT } from "../../i18n/react";
 
 /** The title an error alert carries: the one its request names, else the one for its kind of failure. */
@@ -23,7 +23,8 @@ export function ErrorAlertBody({ alert, issueGuidance }: { alert: ErrorAlertView
   const diagnostics = [alert.error, ...(alert.failures?.map((failure) => failure.error) ?? [])].map(diagnosticText).filter((detail): detail is string => !!detail && detail !== alert.message);
   return (
     <>
-      {/* Hidden when empty, as for a code with no opening sentence (`NO_SUMMARY_CODES`), so it adds no gap above the remedy. */}
+      {/* Hidden when empty, as for a code with no opening sentence (`noSummary` in `codes.ts`), so it adds no gap above
+        the remedy. */}
       <div className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere] empty:hidden">{alert.content ?? alert.message}</div>
       {alert.classification.kind === "unexpected"
         ? <>

@@ -10,7 +10,7 @@ import { recordKeys } from "../shortcuts/recording";
 import { BindingKbd } from "../shortcuts/ShortcutKbd";
 import { restoreAllBindings, restoreBinding, setBinding, shortcutOverrides, useBindings } from "../shortcuts/store";
 import type { ShortcutProblem } from "../shortcuts/validate";
-import { IS_MAC } from "../useWindowShortcut";
+import { IS_MAC } from "../input/keys";
 import { SettingRow } from "./SettingRow";
 import { SettingsGroup } from "./SettingsGroup";
 

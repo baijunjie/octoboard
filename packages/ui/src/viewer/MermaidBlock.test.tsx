@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { errorAlerts } from "../errorAlerts";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 import { MermaidBlock } from "./MermaidBlock";
 import { markNames } from "./viewerTestSupport";
 

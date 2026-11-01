@@ -358,7 +358,7 @@ function select(all, { patterns, group }) {
 async function checkArchivedReopen(page, language) {
   const labels = await page.evaluate(async (language) => {
     const { format } = await import("/src/i18n/catalog.ts");
-    const { sessionAriaLabel } = await import("/src/sessionLabel.ts");
+    const { sessionAriaLabel } = await import("/src/sessions/sessionLabel.ts");
     const { SCENARIOS } = await import("/src/gallery/fixtures/index.ts");
     const session = SCENARIOS.find((scenario) => scenario.id === "history-loaded").state.sessions.get("s-history");
     return {

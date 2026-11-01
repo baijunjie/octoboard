@@ -6,9 +6,9 @@ import { createRoot } from "react-dom/client";
 import { onTestFinished, vi } from "vitest";
 
 import { ErrorAlerts } from "../shell/ErrorAlerts";
-import { errorAlerts } from "../errorAlerts";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 import { trackMountRefocus } from "../components/dialog/dialogTestSupport";
-import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
+import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
 import type { ConfigurationFileCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import type { DocumentSettings, Event, RequestBody } from "../protocol";
@@ -56,7 +56,7 @@ export function mountDialog(
   const daemon: Daemon = {
     store: createStateStore(state),
     request: vi.fn(reply),
-    toastError: vi.fn(),
+    raiseError: vi.fn(),
     toastNotice: vi.fn(),
     onToast: () => () => {},
     dismissTrustPrompt: () => {},

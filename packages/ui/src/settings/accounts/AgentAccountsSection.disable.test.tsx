@@ -4,8 +4,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import { DaemonRequestError } from "../../daemon-client";
 import type { Account, AccountQuota } from "../../protocol";
-import { accountQuotas, request, settings, toastError } from "./agentAccountsSectionTestState";
+import { accountQuotas, request, settings } from "./agentAccountsSectionTestState";
 import { mount, mountSettings, openDetailsOf, openSettingsOf, rowOf } from "./agentAccountsSectionTestSupport";
+import { errorAlerts } from "../../components/alerts/errorAlerts";
 
 vi.mock("../../store", async (importOriginal) => (await import("./agentAccountsSectionTestState")).storeStandIn(await importOriginal()));
 vi.mock("../../components/icons/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
@@ -55,7 +56,8 @@ describe("turning an account off", () => {
     request.mockRejectedValueOnce(new DaemonRequestError("unknown", "unknown_account", { account: "codex-work" }));
     await act(async () => disableSwitch(rowOf(container, "codex-work")).click());
     await act(async () => {});
-    expect(toastError).toHaveBeenCalled();
+    expect(errorAlerts.getSnapshot()).toHaveLength(1);
+    errorAlerts.acknowledge();
     expect(disableSwitch(rowOf(container, "codex-work")).checked).toBe(false);
   });
 

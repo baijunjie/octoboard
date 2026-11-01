@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
 
-import { InlineReference } from "../components/text/InlineReference";
+import { InlineReference } from "../i18n/InlineReference";
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { MessageParams } from "../protocol";
-import { displayWirePath } from "../wirePath";
+import { displayWirePath } from "../format/wirePath";
 import { BodyView } from "./BodyView";
 import { DiffSurface } from "./CodeSurface";
 import {

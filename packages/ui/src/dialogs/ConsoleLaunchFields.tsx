@@ -1,12 +1,12 @@
 import { Description, Tabs } from "@heroui/react";
 import React, { useId, useRef, useState } from "react";
 
-import { storedAccount } from "../accountChoices";
+import { storedAccount } from "../accounts/accountChoices";
 import {
   AGENT_LABEL,
   agentChoiceBadge,
   listedPickerAgents,
-} from "../agents";
+} from "../agents/agents";
 import { AgentIcon } from "../components/icons/AgentIcon";
 import { HandOffOnUnmount } from "../components/focus/HandOffOnUnmount";
 import { StatusBadge } from "../components/status/StatusBadge";

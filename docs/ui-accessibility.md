@@ -264,7 +264,7 @@ keyboard removes a tag with Delete or Backspace on the tag, which react-aria des
 A control revealed only on hover or focus has to be reachable by touch too. `RowControls`
 (`packages/ui/src/components/controls/RowControls.tsx`), which holds the hover-revealed actions of sidebar and Files
 rows, shows them at all times on a device whose primary input cannot hover (`CANNOT_HOVER` in
-`packages/ui/src/touchInput.ts`, written `[@media(hover:none)]:` in classes); the archive rows' Reopen and Delete and
+`packages/ui/src/input/touchInput.ts`, written `[@media(hover:none)]:` in classes); the archive rows' Reopen and Delete and
 the avatar field's remove button carry the same rule, and so does any new hover-revealed control.
 
 **A table of fields is tabbed down its columns when a column is one unit.** In the console dialog's Advanced table each
@@ -542,7 +542,7 @@ after a tap) without setting the modality, so the ring follows the input that se
 shown after a key. A switch from the history to a live session, or to none, still goes through `useFocusHandoff` with
 the ring on.
 
-After a tap (`interactionIsTouch` in `packages/ui/src/touchInput.ts`: the last press was a finger; a mouse, a trackpad
+After a tap (`interactionIsTouch` in `packages/ui/src/input/touchInput.ts`: the last press was a finger; a mouse, a trackpad
 or any key counts as not, so an iPad with a keyboard keeps the desktop rules) two things change. An automatic move does
 not turn the ring on — every such move asks `ringForAutomaticFocus`, F6 being the one exception, as a key — since there
 is no keyboard to follow it with, and a ring left on a top-bar control would also open its tooltip and leave it
@@ -1822,7 +1822,7 @@ The mismatch is accepted rather than fought: overriding the trigger's popup type
 submenu handling. Each swatch is named by the colour description react-aria generates in the window's language, so
 the palette is tuned to keep those names distinct in every offered language and both appearances, with the exceptions
 the hues cannot reach: react-aria's Arabic names give violet and fuchsia one name, and its Korean names give one word
-to green-cyan, cyan and cyan-blue (teal and cyan collide in light, teal and sky in dark). `sessionColours.test.ts`
+to green-cyan, cyan and cyan-blue (teal and cyan collide in light, teal and sky in dark). `sessions/sessionColours.test.ts`
 lists them and fails on any other.
 
 A usage bar — the compact one in front of an account option and in the accounts table, and the meters of the rail
@@ -2104,7 +2104,7 @@ should not (see "The UI state gallery" in `packages/ui/README.md`).
 
 An animation or transition that is not essential stops under `prefers-reduced-motion: reduce` (Tailwind's `motion-safe:`
 / `motion-reduce:` variants). Motion driven from script reads `prefersReducedMotion()` before it starts and subscribes
-with `onReducedMotion()` (`packages/ui/src/reducedMotion.ts`) to cut a running effect short, leaving it at its end
+with `onReducedMotion()` (`packages/ui/src/components/motion/reducedMotion.ts`) to cut a running effect short, leaving it at its end
 state, when the preference turns on. Overlays that react-aria opens and closes (menus, popovers, tooltips, select and
 combo box lists, dialogs, toasts) appear and go at once: one rule in `packages/ui/src/style.css` stops the enter and
 exit animation of every element marked `data-entering` / `data-exiting`, which HeroUI leaves running for its

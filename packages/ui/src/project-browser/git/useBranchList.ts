@@ -1,14 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import type { ErrorPresentation } from "../../errorPresentation";
+import type { ErrorPresentation } from "../../errors/errorPresentation";
 import { useCurrentLanguage, useT } from "../../i18n/react";
-import { abbreviateHome } from "../../pathDisplay";
 import type { BranchInfo, UpstreamInfo } from "../../protocol";
 import { useDaemon, useDaemonStore } from "../../store";
-import { browseFailure } from "../browseError";
+import { projectBrowseFailure } from "../browseError";
 import { gitMoment } from "./gitRequests";
 import { sendBrowseListRequest } from "../browseListRequests";
-import { AUTO_REFRESH_MS } from "../autoRefresh";
+import { useAutoRefresh } from "../autoRefresh";
 
 /** A repository's local branches as the client holds them. `upstreamsComplete` is false when the
  * daemon could not list the remote-tracking branches, so that no branch carries an upstream (nor the
@@ -62,9 +61,7 @@ export function useBranchList(project: string, active: boolean): { branches: Bra
       })
       .catch((err: unknown) => {
         if (!current()) return;
-        const state = store.getState();
-        const root = state.projects.get(project)?.path;
-        const failure = browseFailure(t, language, err, state, root && abbreviateHome(root, state.homeDir));
+        const failure = projectBrowseFailure(t, language, err, store.getState(), project);
         // A list held stays through a lost or superseded request; the reconnect asks again.
         if (failure.kind !== "failed") return;
         const message = failure.message;
@@ -76,25 +73,12 @@ export function useBranchList(project: string, active: boolean): { branches: Bra
   };
 
   useEffect(() => {
-    if (!active) return;
-    const tick = () => {
-      if (document.visibilityState !== "visible" || live.current.inFlight) return;
-      send();
-    };
-    if (!live.current.asked) send();
-    const timer = setInterval(tick, AUTO_REFRESH_MS);
-    const onVisible = () => {
-      if (Date.now() - live.current.lastRefresh > AUTO_REFRESH_MS / 2) tick();
-    };
-    onVisible();
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", onVisible);
-    return () => {
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", onVisible);
-    };
+    if (active && !live.current.asked) send();
   }, [active]);
+
+  // The periodic refresh, and one on coming back to the window, or to a pane that was hidden,
+  // after a while.
+  useAutoRefresh(active, undefined, { busy: () => live.current.inFlight, lastAt: () => live.current.lastRefresh, run: () => void send() });
 
   const firstEpoch = useRef(snapshotEpoch);
   useEffect(() => {

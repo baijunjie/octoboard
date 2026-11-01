@@ -1,5 +1,5 @@
-import { errorPresentation, type ErrorPresentation } from "../errorPresentation";
-import { retryCanHelp } from "../errorRecovery";
+import { errorPresentation, type ErrorPresentation } from "../errors/errorPresentation";
+import { retryCanHelp } from "../errors/errorRecovery";
 import { ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import React, { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 
@@ -71,7 +71,7 @@ export function ReportPanel({
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
-  const { request, toastError } = useDaemon();
+  const { request, raiseError } = useDaemon();
   const sessionPages = useDaemonStore((s) => s.pages.get(sessionId));
   const connectionState = useDaemonStore((s) => s.connectionState);
   const snapshotEpoch = useDaemonStore((s) => s.snapshotEpoch);
@@ -144,10 +144,10 @@ export function ReportPanel({
       // "This session is waiting for you."): naming it keeps the user from reading the message as being
       // about whatever session they are looking at.
       request({ type: "submit_page", page: page.id, data }).catch((err) => {
-        toastError(errorPresentation(err as Error), sessionId, t("report.submitFailedTitle"));
+        raiseError(err, { title: t("report.submitFailedTitle"), session: sessionId });
       });
     },
-    [request, toastError, sessionId, t],
+    [request, raiseError, sessionId, t],
   );
 
   // Pages already here stay usable, so the failure to refresh them is a warning at the title, not an

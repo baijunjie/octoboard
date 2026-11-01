@@ -3,7 +3,8 @@ import React from "react";
 
 import { useT } from "../i18n/react";
 import type { NewSessionRequest } from "../dialogs/dialogRequest";
-import { isPrimaryModifier, useWindowShortcut } from "../useWindowShortcut";
+import { isPrimaryModifier } from "../input/keys";
+import { useWindowShortcut } from "../shortcuts/useWindowShortcut";
 import { matchCreateShortcut, ShortcutTooltip } from "./sessionShortcuts";
 import { RowIconButton } from "./rows";
 import { useNewSessionMode } from "./useNewSessionMode";

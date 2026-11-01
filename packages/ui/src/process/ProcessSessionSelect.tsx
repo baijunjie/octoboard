@@ -4,8 +4,8 @@ import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { PaneToolbar } from "../components/panel/PaneToolbar";
 import { OptionSelect, type Option } from "../components/form/OptionSelect";
 import { useT } from "../i18n/react";
-import { sessionDisplayTitle } from "../sessionLabel";
-import { useProjectSessions } from "../sessions/useSessions";
+import { sessionDisplayTitle } from "../sessions/sessionLabel";
+import { useProjectSessions } from "../store";
 
 /** The session filter of a project's Processes panel. Empty means every session's processes, shown as the
  * placeholder rather than as a choice; picking a session narrows the list, and the clear button goes back

@@ -1,5 +1,5 @@
-import { DEFAULT_SETTINGS } from "../../defaultSettings";
-import { AGENT_LABEL } from "../../agents";
+import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
+import { AGENT_LABEL } from "../../agents/agents";
 import { describing, type Ui, type Step } from "../../fixtures/interact";
 import type { AccountLogin, AccountSharing, AccountTrashOutcome, Agent, AgentAvailability } from "../../protocol";
 import type { AccountTrashAnswer } from "../../fixtures/fixture";

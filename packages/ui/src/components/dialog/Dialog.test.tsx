@@ -4,8 +4,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { createStateStore, DaemonProvider, type Daemon } from "../../store";
-import { errorAlerts, type AcknowledgementView } from "../../errorAlerts";
-import { ActionableError } from "../../actionableError";
+import { errorAlerts, type AcknowledgementView } from "../alerts/errorAlerts";
+import { ActionableError } from "../../errors/actionableError";
+import { DaemonRequestError } from "../../daemon-client";
 import { Dialog, useDialogAction } from "./Dialog";
 import { framesAsTimers, settleFrames } from "./dialogTestSupport";
 import { TextInput } from "../form/TextInput";
@@ -16,7 +17,7 @@ function fakeDaemon(): Daemon {
   return {
     store: createStateStore({}),
     request: vi.fn(),
-    toastError: vi.fn(),
+    raiseError: vi.fn(),
     toastNotice: vi.fn(),
     onToast: () => () => {},
     dismissTrustPrompt: () => {},
@@ -692,6 +693,25 @@ it("reports a failed dialog action to the acknowledgement queue, with no inline 
     expect(errorAlerts.getSnapshot().some((error) => error.message === "Something failed" && error.title === "Could not save")).toBe(true);
     expect(action.busy).toBe(false);
     expect(container.querySelector('[role="alert"]')).toBeNull();
+  } finally {
+    act(() => root.unmount());
+    container.remove();
+    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
+  }
+});
+
+it("titles a failed dialog action with the dialog's title even where the failure's code has a title of its own", async () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  let action!: ReturnType<typeof useDialogAction>;
+  function Subject() {
+    action = useDialogAction(undefined, "Could not remove the branches");
+    return null;
+  }
+  try {
+    act(() => root.render(<Subject />));
+    await act(() => action.run(() => Promise.reject(new DaemonRequestError("Not removed.", "session_branches_not_removed", {}))));
+    expect(errorAlerts.getSnapshot()[0].title).toBe("Could not remove the branches");
   } finally {
     act(() => root.unmount());
     container.remove();

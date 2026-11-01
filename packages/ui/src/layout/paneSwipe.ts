@@ -1,4 +1,4 @@
-import type { PanelKind } from "../panels/stackState";
+import type { PanelKind } from "./panelKind";
 
 /** The side of the window a swipe moves towards, in the reading direction: `end` is rightwards in
  * left-to-right text and leftwards in right-to-left. */

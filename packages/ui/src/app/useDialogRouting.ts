@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-import { noAgentState, pickableAgents } from "../agents";
+import { noAgentState, pickableAgents } from "../agents/agents";
 import { FOCUSABLE } from "../components/focus/regionFocus";
 import { useStableHandler } from "../components/hooks/useLatest";
 import type { DialogRequest } from "../dialogs/dialogRequest";

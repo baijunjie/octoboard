@@ -1,5 +1,5 @@
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
-import { IS_MAC } from "../useWindowShortcut";
+import { IS_MAC } from "../input/keys";
 
 /**
  * A key combination in the form it is stored and exported in. `code` is the physical key

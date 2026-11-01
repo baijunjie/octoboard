@@ -4,7 +4,7 @@ import { setInteractionModality } from "react-aria";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
-import { MIXED_RESULT, REVIEW } from "../gallery/fixtures/configuration";
+import { MIXED_RESULT, REVIEW } from "../fixtures/configurationReview";
 import { press as pressElement } from "../components/alerts/detailsTestSupport";
 import { accessibleName } from "../components/dialog/dialogTestSupport";
 import { isolate } from "../i18n/isolate";

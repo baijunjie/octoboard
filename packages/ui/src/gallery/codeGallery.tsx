@@ -4,9 +4,9 @@ import React from "react";
 import { CodeBlock } from "../components/text/CodeBlock";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
 import { StatusMark } from "../components/status/StatusMark";
-import { InlineReference, type InlineReferenceSize } from "../components/text/InlineReference";
+import { InlineReference, type InlineReferenceSize } from "../i18n/InlineReference";
 import { StatusBadge, type StatusBadgeColor, type StatusBadgeSize, type StatusBadgeVariant } from "../components/status/StatusBadge";
-import { CodeToneContext, type CodeColor } from "../components/text/codeTone";
+import { CodeToneContext, type CodeColor } from "../i18n/codeTone";
 import { FadedScroller, useFadeRegion } from "../components/scroll/scrollFade";
 
 const COLORS: CodeColor[] = ["default", "accent", "help", "success", "warning", "danger"];

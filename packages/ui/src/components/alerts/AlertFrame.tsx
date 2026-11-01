@@ -1,7 +1,7 @@
 import { Alert } from "@heroui/react";
 import React from "react";
 
-import { CodeToneContext } from "../text/codeTone";
+import { CodeToneContext } from "../../i18n/codeTone";
 
 export type AlertStatus = "warning" | "danger";
 

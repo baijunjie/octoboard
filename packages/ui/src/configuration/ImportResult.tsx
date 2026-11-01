@@ -1,16 +1,17 @@
 import { Info } from "lucide-react";
 import React, { useId, useState } from "react";
 
-import { AGENT_LABEL } from "../agents";
+import { AGENT_LABEL } from "../agents/agents";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
-import { InlineReference } from "../components/text/InlineReference";
+import { InlineReference } from "../i18n/InlineReference";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
 import type { Event, ImportChoiceKind } from "../protocol";
+import { BOOLEAN_SETTINGS } from "./booleanSettings";
 import { useFailureNode } from "./failureText";
 import { accountsOutcomeOf, hasClaudeCompatibilityChoices, outcomeOf } from "./importPlan";
-import { AgentList, BOOLEAN_SETTINGS, CARD_CLASS, CARD_HEADER_CLASS, SettingLine } from "./importParts";
+import { AgentList, CARD_CLASS, CARD_HEADER_CLASS, SettingLine } from "./importParts";
 import { RegionTabs, type Region, type RegionPanel } from "./RegionTabs";
 import { ResultCard, ResultRow, ResultRows } from "./ResultCards";
 

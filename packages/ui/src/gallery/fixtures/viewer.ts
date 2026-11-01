@@ -11,7 +11,7 @@ import type { Language } from "../../i18n/languages";
 import type { FileContent, LineStats } from "../../protocol";
 import { RENDER_BUDGETS } from "../../viewer/budgets";
 import { bodyFromFileContent, type ChangeBodies, ChangeBodiesError, type ViewerBody, type ViewerChangeSide, type ViewerSubject } from "../../viewer/content";
-import { formatFileSize } from "../../viewer/format";
+import { formatFileSize } from "../../format/fileSize";
 import { describing, type Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
 import { IMAGES } from "../../fixtures/viewerImages";
@@ -22,7 +22,7 @@ const GROUP = "File viewer";
 // frame reads the window's language from storage when `i18n/react` is first evaluated, which has to
 // follow the preparation of that storage, and this module is loaded before it.
 async function loadLiveParts() {
-  return { Message: (await import("../../i18n/react")).Message, InlineReference: (await import("../../components/text/InlineReference")).InlineReference };
+  return { Message: (await import("../../i18n/react")).Message, InlineReference: (await import("../../i18n/InlineReference")).InlineReference };
 }
 type LiveParts = Awaited<ReturnType<typeof loadLiveParts>>;
 
@@ -1095,7 +1095,7 @@ function failure(id: string, title: string, description: string, slot: "file" | 
     viewer: {
       subjects: async (language) => {
         const { DaemonRequestError } = await import("../../daemon-client");
-        const { displayWirePath } = await import("../../wirePath");
+        const { displayWirePath } = await import("../../format/wirePath");
         const t: Translate = (key, ...args) => format(language, key, ...args);
         const message = typeof refusal === "function" ? refusal(t, language) : new DaemonRequestError(refusal.message, refusal.code, { path: displayWirePath(path), ...refusal.params });
         switch (slot) {

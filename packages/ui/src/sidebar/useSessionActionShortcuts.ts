@@ -1,5 +1,5 @@
 import type { Session } from "../protocol";
-import { useWindowShortcut } from "../useWindowShortcut";
+import { useWindowShortcut } from "../shortcuts/useWindowShortcut";
 import { matchSessionActionShortcut } from "./sessionShortcuts";
 import type { SidebarHandlers } from "./types";
 

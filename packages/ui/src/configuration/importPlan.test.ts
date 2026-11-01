@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { REVIEW } from "../gallery/fixtures/configuration";
+import { REVIEW } from "../fixtures/configurationReview";
 import type { ImportedConsole, InspectedAccount, InspectedAccounts, InspectedConsole } from "../protocol";
-import { hasClaudeCompatibility } from "../settings/claudeCompatibility";
+import { hasClaudeCompatibility } from "../agents/claudeCompatibility";
 import {
   accountChoicesFor,
   accountResolutionsOf,

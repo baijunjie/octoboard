@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
 import type { NotificationCapability, PlatformAdapter } from "../platform";
-import { errorAlerts } from "../errorAlerts";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 import { PlatformProvider } from "../platform/react";
 import { NotificationsSection } from "./NotificationsSection";
 

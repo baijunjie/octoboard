@@ -2,7 +2,7 @@ import { useRef } from "react";
 
 import { focusLanding, focusLandingWithoutText, focusTopBar } from "../components/focus/regionFocus";
 import type { TerminalPaneHandle } from "../terminal/TerminalPane";
-import { interactionIsTouch } from "../touchInput";
+import { interactionIsTouch } from "../input/touchInput";
 import type { WelcomeScreenHandle } from "../WelcomeScreen";
 
 /**

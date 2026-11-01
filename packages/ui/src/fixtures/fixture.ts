@@ -1,33 +1,51 @@
-import type { ErrorRecovery } from "../errorRecovery";
+import type { ErrorRecovery } from "../errors/errorRecovery";
 import type { Translate } from "../i18n/catalog";
 import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/importPlan";
 import type { AccountTrashOutcome, Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, MessageParams, ModelsUnavailable, PathLinkKind, PathLinkRefusedCause, PathLinkView, ProcessTree, QuotaUnavailable, ResetCreditOutcome, SessionBranchItem, SessionRecordsPresence } from "../protocol";
-import type { State, ToastRequest } from "../store";
+import type { State } from "../store";
+import type { BroadcastToastEvent } from "../store/toasts";
 import type { FixtureGit } from "./changeFixtures";
 import type { TerminalBehaviour } from "./fakeTerminal";
 import type { FixtureError, FixtureFiles } from "./sampleFiles";
 
-/** Feedback the scenario raises once the app is mounted: errors enter the required-acknowledgement
- * alert queue, while notices remain toasts. With a `code` the text is worded from the
- * catalog as the daemon's own errors and notices are, with `message` as the fallback for a code the
- * catalog lacks; without one `message` is shown as is, like a client-side error. A `message` given as a function is
- * worded from the catalog in the viewing language when the toast is raised, for a failure the client words itself. */
-export interface ToastFixture {
-  /** `"session_notice"` is a notice the daemon sends about a session (needs a `code`): the app routes it as it does
-   * the real one (`noticeKind`), a failure or a notice carrying raw text to an error alert and any other to a toast. */
-  kind: ToastRequest["kind"] | "session_notice";
+/** Feedback the scenario raises once the app is mounted, by the route the real feedback takes to the stack: a
+ * broadcast of the daemon, a failure an action raised itself, or a notice the UI words itself. Errors enter the
+ * required-acknowledgement alert queue, while notices remain toasts. */
+export type ToastFixture =
+  | BroadcastToastFixture
+  | RaisedToastFixture
+  | NoticeToastFixture;
+
+/** An event the daemon sends unasked, shown as the app shows it (`broadcastToast`): a failure or a notice carrying raw
+ * text becomes an error alert and any other notice a toast. `event.message` is the daemon's English fallback for a code
+ * the catalog lacks, as in the real event; the text shown is worded from the catalog. */
+export interface BroadcastToastFixture {
+  kind: "broadcast";
+  event: BroadcastToastEvent;
+}
+
+/** An error alert an action of the app raises for a failure of its own request (`Daemon.raiseError`). `title` is the
+ * plain name of what failed that the action gives it, worded in the viewing language when a function; a code's own
+ * `alertTitle` still wins over it, as it does there. `message` is the fallback for a `code` the catalog lacks; without
+ * a `code` the failure is an unexpected one, shown as the unexpected-failure sentence with `message` under its error
+ * details. A function words it from the catalog in the viewing language, for a failure the client words itself. */
+export interface RaisedToastFixture {
+  kind: "raised";
+  title: string | ((t: Translate) => string);
   message: string | ((t: Translate) => string);
-  /** The plain name of what failed that the action raising the real error gives it (`ToastRequest.title`), worded in
-   * the viewing language when a function; a code's own `alertTitle` still wins over it, as it does there. Left out for
-   * an error the daemon broadcasts, which no action names. */
-  title?: string | ((t: Translate) => string);
-  /** The remedy a call site gives its error alert in place of its failure's own (`ToastRequest.recovery`), as the
-   * action that raises the real error passes it. */
-  recovery?: ErrorRecovery;
   code?: string;
   params?: MessageParams;
+  /** The session the call site knows the failure is about. */
   session?: string;
+  /** The remedy the call site gives its error alert in place of its failure's own (`ToastRequest.recovery`). */
+  recovery?: ErrorRecovery;
+}
+
+/** A timed notice the UI words itself (`Daemon.toastNotice`), worded in the viewing language when a function. */
+export interface NoticeToastFixture {
+  kind: "notice";
+  message: string | ((t: Translate) => string);
 }
 
 /** One answer of `inspect_account_trash`: an outcome, a failure of the request, or `"pending"` for one never answered. */
@@ -284,6 +302,8 @@ export interface Fixture {
   /** The files every project's browser shows (`list_project_dir`, `read_project_file`); without it,
    * `SAMPLE_FILES`. */
   files?: FixtureFiles;
+  /** What a file search of the project browser (`search_project_files`) is refused with, in place of its matches. */
+  searchError?: FixtureError;
   /** Per-project file trees for comparing project switches; entries fall back to `files`. */
   filesByProject?: Record<string, FixtureFiles>;
   /** The repository every project's Git mode shows (`get_project_source`, `list_project_changes`,

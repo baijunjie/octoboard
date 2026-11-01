@@ -4,17 +4,17 @@ import { setInteractionModality } from "react-aria";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
-import { errorAlerts } from "../errorAlerts";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 import { isolate } from "../i18n/isolate";
 import type { Session } from "../protocol";
 import { accountOf, type ProjectExtra, projectOf, sessionOf } from "../fixtures/builders";
 import type { Daemon, State } from "../store";
 import { parentConsole, project, renderDialog, hub1, buttons, optionElements, choose } from "./sessionDialogTestSupport";
-import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
-import { DEFAULT_SETTINGS } from "../defaultSettings";
+import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
+import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 
 
-vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
+vi.mock("../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
 
 const UUID = "11111111-2222-3333-4444-555555555555";
 
@@ -499,7 +499,7 @@ it("toasts a rename that fails after the reopen, and still selects the session a
   typeName("Renamed");
   await submit("Reopen");
   expect(onResume).toHaveBeenCalledWith("s-old");
-  expect(daemon.toastError).toHaveBeenCalledTimes(1);
+  expect(errorAlerts.getSnapshot().filter((alert) => alert.title === "Could not rename the session")).toHaveLength(1);
   expect(onOpened).toHaveBeenCalledWith("s-old");
   expect(onClose).toHaveBeenCalled();
 });

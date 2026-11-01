@@ -3,7 +3,7 @@ import { Check, CircleDashed, FileUp, LayoutDashboard, Minus, Plus } from "lucid
 import React, { useId, useImperativeHandle, useRef } from "react";
 
 import { StatusBadge } from "./components/status/StatusBadge";
-import { AGENT_OPTIONS } from "./agents";
+import { AGENT_OPTIONS } from "./agents/agents";
 import { AgentIcon } from "./components/icons/AgentIcon";
 import { EmptyPanel } from "./components/panel/EmptyPanel";
 import { PATH_VAR_PARAMS } from "./components/text/literalParams";

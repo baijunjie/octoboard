@@ -5,10 +5,10 @@ import { setInteractionModality } from "react-aria";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { createStateStore, DaemonProvider, type Daemon } from "../../store";
-import { errorAlerts } from "../../errorAlerts";
+import { errorAlerts } from "../alerts/errorAlerts";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../announce/StatusAnnouncer";
 import { ErrorAlerts } from "../../shell/ErrorAlerts";
-import { DirectoryPicker } from "./DirectoryPicker";
+import { DirectoryPicker, pickerStart } from "./DirectoryPicker";
 import { DaemonRequestError } from "../../daemon-client";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -19,7 +19,7 @@ it("opens with focus in the path field", async () => {
   const daemon: Daemon = {
     store: createStateStore(),
     request: vi.fn(async () => ({ type: "dir_listing", id: null, path: "/home", entries: [] })) as Daemon["request"],
-    toastError: vi.fn(),
+    raiseError: vi.fn(),
     toastNotice: vi.fn(),
     onToast: () => () => {},
     dismissTrustPrompt: () => {},
@@ -301,4 +301,16 @@ it("keeps the user's navigation when the opening listing's walk up to an ancesto
   expect(request).toHaveBeenCalledTimes(3);
   await act(async () => answerGo({ type: "dir_listing", id: null, path: "/later", entries: [] }));
   expect((document.querySelector('[aria-label="Directory path"]') as HTMLInputElement).value).toBe("/later");
+});
+
+it.each([
+  { typed: "/srv/code", start: "/srv/code" },
+  { typed: " /srv/code ", start: "/srv/code" },
+  { typed: "~", start: "~" },
+  { typed: "~/code", start: "~/code" },
+  { typed: "", start: "~" },
+  { typed: "code/a", start: "~" },
+  { typed: "~other", start: "~" },
+])("starts the picker at $start for the typed '$typed'", ({ typed, start }) => {
+  expect(pickerStart(typed)).toBe(start);
 });

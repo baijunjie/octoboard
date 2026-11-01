@@ -1,13 +1,13 @@
 import { Description } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
-import { effortLevels, launchSettingOptions } from "../agentLaunchSettings";
+import { effortLevels, launchSettingOptions } from "../agents/agentLaunchSettings";
 import { FailureBody } from "../components/alerts/errorParts";
 import { StatusMark } from "../components/status/StatusMark";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
-import { daemonMessage } from "../daemonMessage";
+import { daemonMessage } from "../errors/daemonMessage";
 import { DaemonRequestError } from "../daemon-client";
-import { failureSummaryText } from "../errorText";
+import { failureSummaryText } from "../errors/errorText";
 import type { Translate } from "../i18n/catalog";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Agent, AgentModel, Launch } from "../protocol";

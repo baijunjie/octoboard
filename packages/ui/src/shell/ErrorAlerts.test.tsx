@@ -3,29 +3,29 @@ import { act, StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
-import { reportError } from "../reportError";
+import { raiseError } from "../components/alerts/raiseError";
 import { appConfig } from "../appConfig";
 import { DaemonRequestError } from "../daemon-client";
-import { ActionableError } from "../actionableError";
+import { ActionableError } from "../errors/actionableError";
 import { PlatformProvider } from "../platform/react";
 import type { PlatformAdapter } from "../platform";
 import { focusAfterLoss, setFocusAfterModalLoss } from "../components/focus/regionFocus";
-import { errorAlerts } from "../errorAlerts";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
 import { Dialog } from "../components/dialog/Dialog";
 import { framesAsTimers, openable, settleFrames } from "../components/dialog/dialogTestSupport";
 import { OpensAnotherDialog } from "../components/dialog/nestedDialogTestSupport";
 import { ErrorAlerts } from "./ErrorAlerts";
-import { issueUrl } from "../useIssueReport";
+import { issueUrl } from "../components/alerts/useIssueReport";
 import { TextInput } from "../components/form/TextInput";
 import { createStateStore, type Daemon } from "../store";
 import { reportDaemonExit } from "../lifecycle/exitFailure";
-import { issueReportUrl, recordNames } from "../issueReport";
+import { issueReportUrl, recordNames } from "../errors/issueReport";
 import { registerSettingsLauncher } from "../settings/settingsLauncher";
 import { registerSessionModelLauncher } from "../dialogs/sessionModelLauncher";
 
-vi.mock("../issueReport", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../issueReport")>();
+vi.mock("../errors/issueReport", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../errors/issueReport")>();
   return { ...actual, issueReportUrl: vi.fn(actual.issueReportUrl), recordNames: vi.fn(actual.recordNames) };
 });
 
@@ -467,14 +467,14 @@ it.each(["Module load reason", { message: "Module load reason" }])("shows origin
 
 it("preserves an unhandled foreign rejection's message and stack through the reporting normalizer", () => {
   mount();
-  act(() => reportError({ message: "Foreign rejection", stack: "Foreign rejection stack" }));
+  act(() => raiseError({ message: "Foreign rejection", stack: "Foreign rejection stack" }, { title: undefined }));
   const alert = document.querySelector('[role="alertdialog"]')!;
   expect(alert.textContent).toContain("Foreign rejection");
   expect(alert.querySelector("details")?.textContent).toContain("Foreign rejection stack");
 });
 
 it("shows a failed account-switch batch as prose: the target once, a short reason per session, the remedy once, and the raw text only in Error details", async () => {
-  const { runAccountSwitchBatch } = await import("../accountSwitchBatch");
+  const { runAccountSwitchBatch } = await import("../dialogs/accountSwitchBatch");
   const { createStateStore } = await import("../store");
   const { sessionOf } = await import("../fixtures/builders");
   const sessions = ["one", "two"].map((id) => sessionOf(id, "c-1", "p-1", `Session ${id}`, "idle"));
@@ -500,7 +500,7 @@ it("shows a failed account-switch batch as prose: the target once, a short reaso
 });
 
 async function failedBatch(failures: Record<string, Error>, accountName = "Work") {
-  const { runAccountSwitchBatch } = await import("../accountSwitchBatch");
+  const { runAccountSwitchBatch } = await import("../dialogs/accountSwitchBatch");
   const { createStateStore } = await import("../store");
   const { sessionOf } = await import("../fixtures/builders");
   const sessions = Object.keys(failures).map((id) => sessionOf(id, "c-1", "p-1", `Session ${id}`, "idle"));
@@ -639,7 +639,7 @@ it.each([
   { case: "a code whose sentence leaves its detail out", error: new DaemonRequestError("fallback", "git_failed", { detail: "fatal: bad object" }), sentence: "Git could not read this.", raw: "fatal: bad object" },
 ])("says $case in the application's own words, the daemon's own text, not this window's stack, behind Error details", ({ error, sentence, raw }) => {
   mount();
-  act(() => reportError(error));
+  act(() => raiseError(error, { title: undefined }));
   const alert = document.querySelector('[role="alertdialog"]')!;
   const details = alert.querySelectorAll("details");
   expect(details).toHaveLength(1);
@@ -654,7 +654,7 @@ it.each([
 
 it("keeps the sentence of a failure the client raises itself, which is already the application's own words", () => {
   mount();
-  act(() => reportError(new DaemonRequestError("The request timed out.", "request_timed_out", {})));
+  act(() => raiseError(new DaemonRequestError("The request timed out.", "request_timed_out", {}), { title: undefined }));
   const alert = document.querySelector('[role="alertdialog"]')!;
   expect(alert.textContent).toContain("The request timed out.");
   expect(alert.textContent).not.toContain("Something unexpected went wrong.");
@@ -662,13 +662,13 @@ it("keeps the sentence of a failure the client raises itself, which is already t
 
 it("adds no remedy line of the failure's kind after a daemon message that says what to do itself", () => {
   mount();
-  act(() => reportError(new DaemonRequestError("archived", "session_archived", { session: "s1" })));
+  act(() => raiseError(new DaemonRequestError("archived", "session_archived", { session: "s1" }), { title: undefined }));
   const text = document.querySelector('[role="alertdialog"]')?.textContent;
   expect(text).toContain("Reopen it first.");
   expect(text).not.toContain("Select the current session in the sidebar");
   act(() => errorAlerts.acknowledge());
   // A body of the caller's own says nothing of the daemon's remedy, so the kind's line stays.
-  act(() => reportError(new DaemonRequestError("archived", "session_archived", { session: "s1" }), undefined, undefined, <p>Archived.</p>));
+  act(() => raiseError(new DaemonRequestError("archived", "session_archived", { session: "s1" }), { title: undefined, content: <p>Archived.</p> }));
   expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Select the current session in the sidebar");
 });
 

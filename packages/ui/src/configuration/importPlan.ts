@@ -12,7 +12,7 @@ import type {
   InspectedProject,
   ProjectResolution,
 } from "../protocol";
-import { hasClaudeCompatibility } from "../settings/claudeCompatibility";
+import { hasClaudeCompatibility } from "../agents/claudeCompatibility";
 import { overridesEqual, sanitizeOverrides, type Overrides } from "../shortcuts/store";
 import type { Region } from "./RegionTabs";
 

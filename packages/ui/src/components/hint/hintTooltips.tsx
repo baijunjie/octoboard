@@ -4,8 +4,8 @@ import { mergeProps, useFocusable } from "react-aria";
 import { Popover as SurfacePopover, TooltipContext, TooltipTriggerStateContext, useSlottedContext } from "react-aria-components";
 
 import { useT } from "../../i18n/react";
-import { isImeKey } from "../../imeKey";
-import { interactionIsTouch } from "../../touchInput";
+import { isImeKey } from "../../input/imeKey";
+import { interactionIsTouch } from "../../input/touchInput";
 import { useLatest } from "../hooks/useLatest";
 import { OFFSET, PLACEMENT, TOOLTIP_SURFACE } from "./hintSurface";
 

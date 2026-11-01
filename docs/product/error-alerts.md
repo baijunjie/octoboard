@@ -79,9 +79,14 @@ user's action, and every one a daemon broadcast raises, has such a title: the ac
 setting", "Could not hand off the session", "Could not switch branches", "Could not copy", or, for a session's
 **Resume**, "Could not reopen the session" when it is archived and "Could not resume the session" otherwise — or the
 daemon code's own, as "Branches and worktrees not removed" (`session_branches_not_removed`) and "Branches and worktrees
-left in place" (`project_branches_not_determined`) are. A daemon code's own title wins over the action's only for an
-alert a daemon broadcast raises and for some actions' failures outside a dialog; an alert raised by a dialog's submit or
-confirmation always takes that dialog's title for its action, whatever code the failure carries.
+left in place" (`project_branches_not_determined`) are. A daemon code's own title wins over the action's wherever the
+failure carries a code that has one — for an alert a daemon broadcast raises and for the failure of any action — with one
+exception: a form dialog's submit or a confirmation's confirm that fails while the dialog waits on it, the dialog
+staying open under the alert, takes that dialog's title for its action, whatever code the failure carries. What a
+dialog hands on as it closes, such as a trust dialog go-ahead (see "The trust dialog" in
+`docs/product/folder-trust.md`) or a change of model, fails as any other action does. An approval or a refusal of
+another session's request that fails is not covered by the exception either, and takes a code's own title (see "The
+confirmation dialog" in `docs/product/session-requests.md`).
 A failure of the application's own lifecycle has its own title too — "The daemon exited unexpectedly", "Could not
 quit", "Could not restart" (see "Starting up", "Quitting" and "Restarting" in `docs/product/application-lifecycle.md`). Only a failure nothing titles — an error nothing caught — is titled
 "Unexpected error" when it is unexpected, and "Error" when its cause is a known one. A title of its own does not change

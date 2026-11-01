@@ -1,5 +1,5 @@
-import { createPersistedPreference } from "../../persistedPreference";
-import { PREFERENCE_KEYS } from "../../preferenceKeys";
+import { createPersistedPreference } from "../../preferences/persistedPreference";
+import { PREFERENCE_KEYS } from "../../preferences/preferenceKeys";
 
 /** One row per file (`flat`), or files grouped by directory (`tree`). */
 export type ChangeLayout = "flat" | "tree";

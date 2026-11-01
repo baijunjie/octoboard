@@ -6,19 +6,21 @@ import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 import { currentLanguage, setLanguage } from "../i18n/language";
 import { LanguageProvider } from "../i18n/react";
 import { LanguageSetting } from "./LanguageSetting";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const request = vi.fn(() => Promise.resolve({}) as Promise<never>);
-const toastError = vi.fn();
+const raiseError = vi.spyOn(errorAlerts, "report").mockImplementation(() => {});
 
-vi.mock("../store", () => ({
-  useDaemon: () => ({ request, toastError }),
+vi.mock("../store", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../store")>()),
+  useDaemon: () => ({ request, raiseError }),
 }));
 
 beforeEach(() => {
   request.mockClear();
-  toastError.mockClear();
+  raiseError.mockClear();
   setLanguage("en");
 });
 
@@ -58,5 +60,5 @@ it("tells the user when the daemon refuses the language", async () => {
   const select = mount();
   await act(async () => pick(select, "ja"));
   expect(currentLanguage()).toBe("ja");
-  expect(toastError).toHaveBeenCalledOnce();
+  expect(raiseError).toHaveBeenCalledOnce();
 });

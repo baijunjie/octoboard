@@ -2,9 +2,10 @@ import React from "react";
 
 import type { PlainMessageKey } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
-import { sameValue } from "../sameValue";
+import { BOOLEAN_SETTINGS } from "./booleanSettings";
+import { sameValue } from "../store";
 import { claudeCompatibilityChanges, hasClaudeCompatibilityChoices, type Inspection, type shortcutsReview } from "./importPlan";
-import { BOOLEAN_SETTINGS, CARD_CLASS, SettingLine } from "./importParts";
+import { CARD_CLASS, SettingLine } from "./importParts";
 
 /** A boolean application setting: whether applying turns it on, off, or leaves it as it is. */
 function BooleanSettingLine({ label, wanted, current, consequence }: { label: string; wanted: boolean; current: boolean; consequence: PlainMessageKey }): React.ReactElement {

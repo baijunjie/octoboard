@@ -1,13 +1,12 @@
-import { ActionableError } from "../actionableError";
-import { reportError } from "../reportError";
+import { ActionableError } from "../errors/actionableError";
 import React, { useEffect, useRef, useState } from "react";
 
-import { changedAccounts, changedLaunch, readAccounts, readLaunch } from "../agentFields";
+import { changedAccounts, changedLaunch, readAccounts, readLaunch } from "../agents/agentFields";
 import {
   AGENT_LABEL,
   selectableAgent,
-} from "../agents";
-import { imageToAvatar } from "../avatarImage";
+} from "../agents/agents";
+import { imageToAvatar } from "./avatarImage";
 import { focusOpenDialog } from "../components/focus/regionFocus";
 import { AgentIcon, agentIconPickerOptions } from "../components/icons/AgentIcon";
 import { useT } from "../i18n/react";
@@ -23,6 +22,7 @@ import { LabelledGroup } from "../components/form/LabelledGroup";
 import { OptionSelect } from "../components/form/OptionSelect";
 import { TextAreaInput } from "../components/form/TextAreaInput";
 import { TextInput } from "../components/form/TextInput";
+import { raiseError } from "../components/alerts/raiseError";
 
 export function ConsoleDialog({
   console: editing,
@@ -84,7 +84,7 @@ export function ConsoleDialog({
       setIcon(await imageToAvatar(file));
     } catch {
       // The avatar's own failure is not a field's: it opens the error alert dialog, as a failed submit does.
-      reportError(new ActionableError(t("dialog.console.avatarUnreadable"), "image"), undefined, undefined, undefined, t("dialog.console.avatarFailedTitle"));
+      raiseError(new ActionableError(t("dialog.console.avatarUnreadable"), "image"), { title: t("dialog.console.avatarFailedTitle") });
     } finally {
       setDecoding(false);
     }

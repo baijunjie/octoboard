@@ -1,9 +1,9 @@
 import type { Translate } from "../i18n/catalog";
 import type { StatusItemEntry, StatusItemMenu, StatusItemSection } from "../platform";
 import type { Console, Project, Session } from "../protocol";
-import { remainingPercentAt } from "../quota/quotaFormat";
+import { remainingPercentAt } from "../accounts/quotaFormat";
 import { accountInUse, accountQuotaLabel, sessionQuotaBarOf } from "../quota/sessionQuota";
-import { sessionStatusKind, sessionWithLocation, statusLabel, type StatusKind } from "../sessionLabel";
+import { sessionStatusKind, sessionWithLocation, statusLabel, type StatusKind } from "../sessions/sessionLabel";
 import { sessionsInTreeOrder, STATUS_RANK } from "../sessions/order";
 import { agentIconKey, statusIconKey } from "./statusItemIconKeys";
 import { buildQuotaSubmenus, type StatusItemQuotaSource } from "./statusItemQuota";

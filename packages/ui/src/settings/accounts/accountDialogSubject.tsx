@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 
-import { defaultAccountName } from "../../agents";
+import { defaultAccountName } from "../../agents/agents";
 import { useT } from "../../i18n/react";
 import type { Account, Agent } from "../../protocol";
 import type { QuotaReading } from "../../quota/useAccountQuota";

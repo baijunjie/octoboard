@@ -1,15 +1,14 @@
-import { ActionableError } from "../actionableError";
+import { ActionableError } from "../errors/actionableError";
 import { Checkbox, Description, Label } from "@heroui/react";
-import { errorPresentation } from "../errorPresentation";
 import React, { useId, useState } from "react";
 
-import { AGENT_LABEL } from "../agents";
+import { AGENT_LABEL } from "../agents/agents";
 import { ChoiceWarning } from "../components/alerts/ChoiceWarning";
-import { InlineReference } from "../components/text/InlineReference";
+import { InlineReference } from "../i18n/InlineReference";
 import { DaemonRequestError } from "../daemon-client";
 import { Message, useT } from "../i18n/react";
 import { TRUST_NOT_WAITING, TRUST_REFUSED_CODES, type Agent } from "../protocol";
-import { abbreviateHome } from "../pathDisplay";
+import { abbreviateHome } from "../format/pathDisplay";
 import { useDaemon, useDaemonStore, type TrustPrompt } from "../store";
 import type { ConfirmDialogProps } from "../components/dialog/ConfirmDialog";
 
@@ -122,7 +121,7 @@ export function useTrustPromptDialogProps(
   sessionTitle: string | undefined,
 ): ConfirmDialogProps | undefined {
   const t = useT();
-  const { request, toastError, dismissTrustPrompt } = useDaemon();
+  const { request, raiseError, dismissTrustPrompt } = useDaemon();
   // Written as Settings lists trusted folders, with the home directory as `~`, so the folder the
   // checkbox names reads the same as the row it adds there.
   const home = useDaemonStore((s) => s.homeDir);
@@ -153,10 +152,10 @@ export function useTrustPromptDialogProps(
       if (err instanceof DaemonRequestError && err.code === TRUST_NOT_WAITING) {
         // Nothing to tell for the plain go-ahead; but a folder the user asked to trust was not.
         if (trustParentDir) {
-          toastError(new ActionableError(t("dialog.trust.alreadyAnswered"), "session"), prompt.session, t("dialog.trust.failedTitle"));
+          raiseError(new ActionableError(t("dialog.trust.alreadyAnswered"), "session"), { title: t("dialog.trust.failedTitle"), session: prompt.session });
         }
       } else {
-        toastError(errorPresentation(err as Error), prompt.session, t("dialog.trust.failedTitle"));
+        raiseError(err, { title: t("dialog.trust.failedTitle"), session: prompt.session });
       }
     }
     setTrustDirFor(undefined);

@@ -8,7 +8,7 @@ import { PanelHeader } from "../components/panel/PanelHeader";
 import type { PanePeek } from "../layout/usePaneToggles";
 import type { Project } from "../protocol";
 import { PanelStack } from "./PanelStack";
-import type { PanelKind } from "./stackState";
+import type { PanelKind } from "../layout/panelKind";
 import { usePanelStacks } from "./usePanelStacks";
 
 // A second kind of panel, the maximizable one, stands in for the Terminal panel.

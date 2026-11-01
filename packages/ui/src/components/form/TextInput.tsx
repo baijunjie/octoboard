@@ -1,7 +1,7 @@
 import { FieldError, Input, InputGroup, Label, TextField } from "@heroui/react";
 import React from "react";
 
-import { CodeToneContext } from "../text/codeTone";
+import { CodeToneContext } from "../../i18n/codeTone";
 import { openingFocus } from "../focus/regionFocus";
 import { useTrimmedField } from "./useTrimmedField";
 import { TextFieldDescription, TextLengthHint } from "./TextFieldDescription";

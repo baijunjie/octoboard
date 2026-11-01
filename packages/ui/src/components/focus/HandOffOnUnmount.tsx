@@ -1,6 +1,6 @@
 import { useLayoutEffect } from "react";
 
-import { ringForAutomaticFocus } from "../../touchInput";
+import { ringForAutomaticFocus } from "../../input/touchInput";
 import { useLatest } from "../hooks/useLatest";
 
 /** Renders nothing; when it unmounts while focus is inside `from` (a selector, or a function finding the

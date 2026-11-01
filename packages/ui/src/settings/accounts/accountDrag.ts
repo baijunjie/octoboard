@@ -1,6 +1,6 @@
 import { DRAG_THRESHOLD } from "../../components/tabs/tabDrag";
 import { releaseListMotion } from "../../components/motion/useListMotion";
-import { onReducedMotion, prefersReducedMotion } from "../../reducedMotion";
+import { onReducedMotion, prefersReducedMotion } from "../../components/motion/reducedMotion";
 
 /** A grip moves the table rows visually until drop. Touch keeps its native scrolling; Escape, pointer cancellation,
  * blur and teardown restore the rows without writing an order. */

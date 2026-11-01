@@ -1,5 +1,5 @@
-import { createPersistedPreference } from "../persistedPreference";
-import { PREFERENCE_KEYS } from "../preferenceKeys";
+import { createPersistedPreference } from "../preferences/persistedPreference";
+import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import { format, type MessageArgs, type MessageKey } from "./catalog";
 import { isLanguage, type Language, textDirection } from "./languages";
 import { matchLanguage } from "./matchLanguage";

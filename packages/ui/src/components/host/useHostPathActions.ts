@@ -1,6 +1,7 @@
-import { hostPathRecovery } from "../../errorRecovery";
+import { hostPathRecovery } from "../../errors/errorRecovery";
 import { useT } from "../../i18n/react";
 import { useDaemon } from "../../store";
+import { raiseError } from "../alerts/raiseError";
 
 /** Where a file or folder lives on the daemon's host: in a project's directory, or in one of its
  * worktrees. `path` is a wire path below that directory. */
@@ -16,10 +17,10 @@ export interface HostPath {
  * refuses. A worktree's path is sent with the worktree's id. */
 export function useHostPathActions(): (type: "open_project_path" | "reveal_project_path", host: HostPath) => void {
   const t = useT();
-  const { request, toastError } = useDaemon();
+  const { request } = useDaemon();
   return (type, { project, worktree, path }) => {
     void request({ type, project, ...(worktree !== undefined && { worktree }), path }).catch((error: Error) => {
-      toastError(error, undefined, t(type === "open_project_path" ? "common.openDefaultApplicationFailedTitle" : "common.revealFailedTitle"), hostPathRecovery(error));
+      raiseError(error, { title: t(type === "open_project_path" ? "common.openDefaultApplicationFailedTitle" : "common.revealFailedTitle"), recovery: hostPathRecovery(error) });
     });
   };
 }

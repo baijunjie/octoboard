@@ -5,22 +5,15 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { accountOf } from "../../fixtures/builders";
 import { DaemonRequestError } from "../../daemon-client";
-import { errorAlerts } from "../../errorAlerts";
+import { errorAlerts } from "../../components/alerts/errorAlerts";
 import type { Account, Agent, AgentAvailability, RequestBody } from "../../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../../store";
 import { AccountDialog } from "./AccountDialog";
-import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
-import { DEFAULT_SETTINGS } from "../../defaultSettings";
+import { DEFAULT_GIT_WORKFLOW } from "../../git/gitWorkflow";
+import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { trackMountRefocus } from "../../components/dialog/dialogTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
-// The picker's own listing is not under test; a button stands in for choosing a directory in it.
-vi.mock("../../components/dialog/DirectoryPicker", () => ({
-  DirectoryPicker: ({ onPick }: { onPick: (path: string) => void }) => (
-    <button type="button" onClick={() => onPick("/home/dev/.claude-picked")}>Pick</button>
-  ),
-}));
 
 const work: Account = accountOf("a-work", "claude", "Work", "/home/dev/.claude-work");
 
@@ -37,7 +30,7 @@ function render(
     request: vi.fn((body: RequestBody) => body.type === "list_dir"
       ? options.listDirectory?.() ?? Promise.resolve({ type: "dir_listing", path: "/home/dev", entries: [] })
       : request(body)) as Daemon["request"],
-    toastError: vi.fn(),
+    raiseError: vi.fn(),
     toastNotice: vi.fn(),
     onToast: () => () => {},
     dismissTrustPrompt: () => {},
@@ -110,16 +103,28 @@ it("reports a refused directory in the error alert dialog, leaving the field and
 
 it("keeps a directory picked after a refusal and the dialog open for another try", async () => {
   const request = vi.fn(() => Promise.reject(taken()));
-  render(work, request);
+  render(work, request, new Map(), null, false, { listDirectory: () => Promise.resolve({ type: "dir_listing", path: "/home/dev/.claude-picked", entries: [] }) });
   onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   type("Config directory", "/home/dev/.claude-other");
   await submit();
   const press = (text: string) => act(async () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === text)!.click());
   await press("Browse");
-  await press("Pick");
+  await press("Select this directory");
   expect(input("Config directory").value).toBe("/home/dev/.claude-picked");
   await submit();
   expect(request).toHaveBeenCalledTimes(2);
+});
+
+it.each([
+  { name: "the absolute directory it holds", typed: "/home/dev/.claude-other", opensAt: "/home/dev/.claude-other" },
+  { name: "a home directory", typed: "~/.claude-other", opensAt: "~/.claude-other" },
+  { name: "the home directory itself", typed: "~", opensAt: "~" },
+  { name: "the home directory for a relative one", typed: "other", opensAt: "~" },
+])("opens the directory browser at $name", async ({ typed, opensAt }) => {
+  const daemon = render(work, () => Promise.resolve());
+  type("Config directory", typed);
+  await act(async () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Browse")!.click());
+  expect(daemon.request).toHaveBeenCalledExactlyOnceWith({ type: "list_dir", path: opensAt });
 });
 
 it("shows the config directory hint as a visible description", () => {

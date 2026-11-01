@@ -3,10 +3,9 @@ import { useShallow } from "zustand/react/shallow";
 
 import { gitModeWorktree } from "../../project-browser/browserState";
 import { t } from "../../i18n/language";
-import { errorPresentation } from "../../errorPresentation";
-import { hostPathRecovery } from "../../errorRecovery";
-import { createPersistedPreference } from "../../persistedPreference";
-import { PREFERENCE_KEYS } from "../../preferenceKeys";
+import { hostPathRecovery } from "../../errors/errorRecovery";
+import { createPersistedPreference } from "../../preferences/persistedPreference";
+import { PREFERENCE_KEYS } from "../../preferences/preferenceKeys";
 import type { ShellTerminal } from "../../protocol";
 import { seedShellTerminal, useDaemonStore, type Daemon, type State } from "../../store";
 
@@ -129,7 +128,7 @@ export function takeShellTerminalFocus(terminal: string): boolean {
  * id, or nothing when none was started.
  */
 export function startShellTerminal(
-  daemon: Pick<Daemon, "request" | "store" | "toastError">,
+  daemon: Pick<Daemon, "request" | "store" | "raiseError">,
   project: string,
   { ifNone = false, place, focus = false }: { ifNone?: boolean; place?: ShellTerminalPlace; focus?: boolean } = {},
 ): Promise<string | undefined> {
@@ -148,7 +147,7 @@ export function startShellTerminal(
   return started;
 }
 
-async function createShellTerminal(daemon: Pick<Daemon, "request" | "store" | "toastError">, project: string, place: ShellTerminalPlace | undefined, focus: boolean): Promise<string | undefined> {
+async function createShellTerminal(daemon: Pick<Daemon, "request" | "store" | "raiseError">, project: string, place: ShellTerminalPlace | undefined, focus: boolean): Promise<string | undefined> {
   setStarting(project, true);
   try {
     const { worktree, path } = place ?? { worktree: gitModeWorktree(project) };
@@ -161,7 +160,7 @@ async function createShellTerminal(daemon: Pick<Daemon, "request" | "store" | "t
     setActiveShellTerminal(project, reply.shell_terminal.id);
     return reply.shell_terminal.id;
   } catch (err) {
-    daemon.toastError(errorPresentation(err), undefined, t("shellTerminal.newFailedTitle"), place?.path ? hostPathRecovery(err) : undefined);
+    daemon.raiseError(err, { title: t("shellTerminal.newFailedTitle"), recovery: place?.path ? hostPathRecovery(err) : undefined });
     return undefined;
   } finally {
     setStarting(project, false);

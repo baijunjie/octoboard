@@ -1,8 +1,8 @@
-import type { Reason } from "../components/text/ReasonText";
+import type { Reason } from "../format/reason";
 import type { Translate } from "../i18n/catalog";
 import type { AccountQuota, Agent, QuotaWindow } from "../protocol";
 import { AccountUsageBar } from "./AccountUsageBar";
-import { quotaUsedUpDetail, quotaUsedUpShort, usageBarSummary, usageBarWindows } from "./quotaFormat";
+import { quotaUsedUpDetail, quotaUsedUpShort, usageBarSummary, usageBarWindows } from "../accounts/quotaFormat";
 
 /** How a list of accounts shows one: its usage bar as the `icon`, and in words what the bar only
  * shows to the eye, for assistive technology. For an account whose quota is used up (`exhaustedBy`)

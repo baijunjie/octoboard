@@ -1,9 +1,9 @@
 // The project browser's tree rules: which entries it lists and in what order, the rows that make
 // up what is on screen, and how the viewer moves through the files among them. Pure, so the tree's
 // rendering and the viewer's navigation are two readings of one structure and can never disagree.
-import type { ErrorPresentation } from "../errorPresentation";
+import type { ErrorPresentation } from "../errors/errorPresentation";
 import type { BrowseEntry } from "../protocol";
-import { displayWirePath } from "../wirePath";
+import { displayWirePath } from "../format/wirePath";
 
 /** One directory of the project as the client holds it. `loaded` keeps its entries while a newer
  * listing of it is on the way (`refreshing`), so a refresh never blanks the tree. */

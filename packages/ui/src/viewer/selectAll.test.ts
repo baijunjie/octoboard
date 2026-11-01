@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, expect, it } from "vitest";
 
-import { IS_MAC } from "../useWindowShortcut";
+import { IS_MAC } from "../input/keys";
 import { copyDocument, isSelectAll, selectCode, selectDocument } from "./selectAll";
 
 const command = IS_MAC ? { metaKey: true, ctrlKey: false } : { metaKey: false, ctrlKey: true };

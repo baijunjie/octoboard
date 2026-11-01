@@ -2,7 +2,7 @@ import { Archive, LoaderCircle, MessageCircleMore, Pause } from "lucide-react";
 import React from "react";
 
 import { useT } from "../../i18n/react";
-import { type ShownStatusKind, statusLabel } from "../../sessionLabel";
+import { type ShownStatusKind, statusLabel } from "../../sessions/sessionLabel";
 import { IndicatorTooltip } from "../hint/IndicatorTooltip";
 import { WavingHand, WorkingDot } from "./statusGlyphs";
 

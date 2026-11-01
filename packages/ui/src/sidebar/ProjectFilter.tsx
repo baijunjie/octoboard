@@ -14,7 +14,7 @@ import { usePointerFocusReturn } from "../components/menus/usePointerFocusReturn
 import { useScrollFade } from "../components/scroll/scrollFade";
 import { useTrimmedField } from "../components/form/useTrimmedField";
 import { useT } from "../i18n/react";
-import { withoutTags, withTag } from "../projectFiltering";
+import { withoutTags, withTag } from "../sessions/projectFiltering";
 
 /** A console's project filter: the keyword a project's name must contain and the tags it must all
  * carry. */

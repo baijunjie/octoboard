@@ -3,137 +3,52 @@
 // bare language or a BCP-47 script tag such as zh-Hans, so each language is pinned
 // to its primary market.
 
+import {
+  LANGUAGES,
+  LANGUAGE_NAMES,
+  textDirection,
+  type Language,
+} from "../../../packages/ui/src/i18n/languages.ts";
+
 export type SiteLocale = {
   code: string;
-  language: string;
+  language: Language;
   file: string;
   name: string;
   ogLocale: string;
   dir?: "rtl";
 };
 
-export const locales: readonly SiteLocale[] = [
-  {
-    code: "ar",
-    language: "ar",
-    file: "ar.json",
-    name: "العربية",
-    ogLocale: "ar_AR",
-    dir: "rtl",
-  },
-  {
-    code: "de",
-    language: "de",
-    file: "de.json",
-    name: "Deutsch",
-    ogLocale: "de_DE",
-  },
-  {
-    code: "en",
-    language: "en",
-    file: "en.json",
-    name: "English",
-    ogLocale: "en_US",
-  },
-  {
-    code: "es",
-    language: "es",
-    file: "es.json",
-    name: "Español",
-    ogLocale: "es_ES",
-  },
-  {
-    code: "fr",
-    language: "fr",
-    file: "fr.json",
-    name: "Français",
-    ogLocale: "fr_FR",
-  },
-  {
-    code: "hi",
-    language: "hi",
-    file: "hi.json",
-    name: "हिन्दी",
-    ogLocale: "hi_IN",
-  },
-  {
-    code: "id",
-    language: "id",
-    file: "id.json",
-    name: "Bahasa Indonesia",
-    ogLocale: "id_ID",
-  },
-  {
-    code: "it",
-    language: "it",
-    file: "it.json",
-    name: "Italiano",
-    ogLocale: "it_IT",
-  },
-  {
-    code: "ja",
-    language: "ja",
-    file: "ja.json",
-    name: "日本語",
-    ogLocale: "ja_JP",
-  },
-  {
-    code: "ko",
-    language: "ko",
-    file: "ko.json",
-    name: "한국어",
-    ogLocale: "ko_KR",
-  },
-  {
-    code: "pt-BR",
-    language: "pt-BR",
-    file: "pt-BR.json",
-    name: "Português (Brasil)",
-    ogLocale: "pt_BR",
-  },
-  {
-    code: "ru",
-    language: "ru",
-    file: "ru.json",
-    name: "Русский",
-    ogLocale: "ru_RU",
-  },
-  {
-    code: "th",
-    language: "th",
-    file: "th.json",
-    name: "ไทย",
-    ogLocale: "th_TH",
-  },
-  {
-    code: "tr",
-    language: "tr",
-    file: "tr.json",
-    name: "Türkçe",
-    ogLocale: "tr_TR",
-  },
-  {
-    code: "vi",
-    language: "vi",
-    file: "vi.json",
-    name: "Tiếng Việt",
-    ogLocale: "vi_VN",
-  },
-  {
-    code: "zh",
-    language: "zh-Hans",
-    file: "zh-Hans.json",
-    name: "简体中文",
-    ogLocale: "zh_CN",
-  },
-  {
-    code: "zh-Hant",
-    language: "zh-Hant",
-    file: "zh-Hant.json",
-    name: "繁體中文",
-    ogLocale: "zh_TW",
-  },
-];
+// The languages, their order, names and direction are the application's own list; the site adds
+// only its URL code and Open Graph locale. Exhaustive by type, so a new application language
+// fails here until the site gives it a code.
+const SITE_LOCALES: Record<Language, { code: string; ogLocale: string }> = {
+  ar: { code: "ar", ogLocale: "ar_AR" },
+  de: { code: "de", ogLocale: "de_DE" },
+  en: { code: "en", ogLocale: "en_US" },
+  es: { code: "es", ogLocale: "es_ES" },
+  fr: { code: "fr", ogLocale: "fr_FR" },
+  hi: { code: "hi", ogLocale: "hi_IN" },
+  id: { code: "id", ogLocale: "id_ID" },
+  it: { code: "it", ogLocale: "it_IT" },
+  ja: { code: "ja", ogLocale: "ja_JP" },
+  ko: { code: "ko", ogLocale: "ko_KR" },
+  "pt-BR": { code: "pt-BR", ogLocale: "pt_BR" },
+  ru: { code: "ru", ogLocale: "ru_RU" },
+  th: { code: "th", ogLocale: "th_TH" },
+  tr: { code: "tr", ogLocale: "tr_TR" },
+  vi: { code: "vi", ogLocale: "vi_VN" },
+  "zh-Hans": { code: "zh", ogLocale: "zh_CN" },
+  "zh-Hant": { code: "zh-Hant", ogLocale: "zh_TW" },
+};
+
+export const locales: readonly SiteLocale[] = LANGUAGES.map((language) => ({
+  ...SITE_LOCALES[language],
+  language,
+  file: `${language}.json`,
+  name: LANGUAGE_NAMES[language],
+  ...(textDirection(language) === "rtl" ? { dir: "rtl" as const } : {}),
+}));
 
 export const pagePaths = ["", "privacy/"] as const;
 export type PageKind = "home" | "privacy" | "other";

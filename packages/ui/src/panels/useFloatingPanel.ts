@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 
 import { focusLanding, focusLandingWithoutText, focusTopBar } from "../components/focus/regionFocus";
-import { interactionIsTouch } from "../touchInput";
-import { OWNER_KINDS, panelId, shownKinds, type OwnerKind, type PanelKind, type PanelStacks } from "./stackState";
+import { interactionIsTouch } from "../input/touchInput";
+import { OWNER_KINDS, panelId, shownKinds, type OwnerKind, type PanelStacks } from "./stackState";
+import type { PanelKind } from "../layout/panelKind";
 
 type Kinds = Partial<Record<OwnerKind, PanelKind>>;
 

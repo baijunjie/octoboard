@@ -3,7 +3,7 @@ import React, { useId, useState } from "react";
 
 import { appConfig } from "../appConfig";
 import { ChoiceWarning } from "../components/alerts/ChoiceWarning";
-import { InlineReference } from "../components/text/InlineReference";
+import { InlineReference } from "../i18n/InlineReference";
 import { ConfirmOption } from "../components/form/ConfirmOption";
 import { Dialog, useDialogAction } from "../components/dialog/Dialog";
 import { LabelledGroup } from "../components/form/LabelledGroup";

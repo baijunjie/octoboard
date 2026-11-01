@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import type { ErrorPresentation } from "../../errorPresentation";
+import type { ErrorPresentation } from "../../errors/errorPresentation";
 import { useCurrentLanguage, useT } from "../../i18n/react";
 import { useDaemon, useDaemonStore } from "../../store";
-import { browseFailure } from "../browseError";
+import { projectBrowseFailure } from "../browseError";
 import { sendBrowseListRequest } from "../browseListRequests";
 
 export type FileSearch =
@@ -49,7 +49,7 @@ export function useFileSearch(project: string, query: string, active: boolean, i
       })
       .catch((err: unknown) => {
         if (!current()) return;
-        const failure = browseFailure(t, language, err, store.getState());
+        const failure = projectBrowseFailure(t, language, err, store.getState(), project);
         if (failure.kind === "superseded" || failure.kind === "disconnected") return;
         setHeld({ query, includeIgnored, result: { state: "error", message: failure.kind === "failed" ? failure.message : t("browser.error.folderChanged") } });
       })

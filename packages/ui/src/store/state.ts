@@ -1,7 +1,7 @@
 import { createStore, type StoreApi } from "zustand";
 
 import type { ConnectionState } from "../daemon-client";
-import { DEFAULT_SETTINGS } from "../defaultSettings";
+import { DEFAULT_SETTINGS } from "./defaultSettings";
 import type {
   AccountLogin,
   AccountQuota,

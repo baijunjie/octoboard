@@ -11,7 +11,7 @@ import type { AccountQuota, Agent, AgentAvailability, Session, SessionBranchItem
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
 import { HandoffDialog } from "./HandoffDialog";
 
-vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
+vi.mock("../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -44,7 +44,7 @@ function mount(session: Session, others: Session[] = [], branches: SessionBranch
     if (body.type === "hand_off_session") return { type: "session_opened", id: null, session: sessionOf("s-new", parentConsole.id, session.project_id ?? undefined, session.title, "working", { agent: "codex" }) };
     return { type: "ack", id: null };
   });
-  const daemon = { store, request, toastError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "" } as unknown as Daemon;
+  const daemon = { store, request, raiseError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "" } as unknown as Daemon;
   const onClose = vi.fn();
   const onHandedOff = vi.fn();
   const container = document.body.appendChild(document.createElement("div"));
@@ -54,7 +54,7 @@ function mount(session: Session, others: Session[] = [], branches: SessionBranch
     act(() => root.unmount());
     container.remove();
   });
-  return { request, onClose, onHandedOff, toastError: daemon.toastError };
+  return { request, onClose, onHandedOff, raiseError: daemon.raiseError };
 }
 
 const buttons = () => Array.from(document.body.querySelectorAll("button"));
@@ -176,7 +176,7 @@ it("keeps focus inside the dialog when a retry of the check succeeds and takes t
 });
 
 it("turns into an acknowledgement-only failure modal when no other agent can be picked", async () => {
-  const { request, onClose, toastError } = mount(hub, [], [], { codex: "unavailable", grok: "unavailable" });
+  const { request, onClose, raiseError } = mount(hub, [], [], { codex: "unavailable", grok: "unavailable" });
   await settle();
   const dialog = document.body.querySelector('[role="alertdialog"]');
   expect(dialog?.textContent).toContain("No other agent is available to take this session over.");
@@ -185,18 +185,18 @@ it("turns into an acknowledgement-only failure modal when no other agent can be 
   // Only the acknowledgement is offered, and it is the one thing that closes the dialog.
   expect(Array.from(dialog?.querySelectorAll("button") ?? []).map((button) => button.textContent)).toEqual(["OK"]);
   expect(onClose).not.toHaveBeenCalled();
-  expect(toastError).not.toHaveBeenCalled();
+  expect(raiseError).not.toHaveBeenCalled();
   expect(request.mock.calls.some(([body]) => body.type === "hand_off_session")).toBe(false);
   await act(async () => buttons().find((b) => b.textContent === "OK")?.click());
   expect(onClose).toHaveBeenCalledOnce();
 });
 
 it("also turns into the failure modal when the only other agents are not added", async () => {
-  const { onClose, toastError } = mount(hub, [], [], { claude: "available", codex: "available", grok: "available" }, ["claude"]);
+  const { onClose, raiseError } = mount(hub, [], [], { claude: "available", codex: "available", grok: "available" }, ["claude"]);
   await settle();
   expect(document.body.querySelector('[role="alertdialog"]')?.textContent).toContain("No other agent is available");
   expect(onClose).not.toHaveBeenCalled();
-  expect(toastError).not.toHaveBeenCalled();
+  expect(raiseError).not.toHaveBeenCalled();
 });
 
 it("shows the receiving agent's only account in an account picker, its usage drawn in the option", async () => {

@@ -1,9 +1,9 @@
 import type { ReactElement } from "react";
 
-import { classifyError, type ErrorRecovery } from "../../errorRecovery";
+import { classifyError, type ErrorRecovery } from "../../errors/errorRecovery";
 import { globalParam, type Translate } from "../../i18n/catalog";
 import { Message, useT } from "../../i18n/react";
-import { InlineReference } from "../text/InlineReference";
+import { InlineReference } from "../../i18n/InlineReference";
 
 /** The button a recovery offers besides its words: it opens Settings on Agent accounts, with the Add agent
  * dialog in front when `addAgent` is set, or, when `sessionModel` is set, Change model for the session the alert is

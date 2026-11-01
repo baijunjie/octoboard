@@ -1,13 +1,13 @@
 import { Archive, Trash2 } from "lucide-react";
 import React, { type RefObject } from "react";
 
-import { pickableAgents } from "../agents";
+import { pickableAgents } from "../agents/agents";
 import { ActionMenu } from "../components/menus/ActionMenu";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { Account, Session } from "../protocol";
-import { sessionDisplayTitle } from "../sessionLabel";
+import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 import { useDaemon, useDaemonStore } from "../store";
 import { type MenuPlacement, offersDelete, sessionMenu } from "./menus";

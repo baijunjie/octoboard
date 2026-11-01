@@ -13,7 +13,7 @@ import { usePanelStacks } from "./panels/usePanelStacks";
 import { PlatformProvider } from "./platform/react";
 import type { Event, Project } from "./protocol";
 import { applyDaemonEvent, createStateStore, DaemonProvider, type Daemon } from "./store";
-import { ThemeProvider } from "./theme";
+import { ThemeProvider } from "./preferences/theme";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -83,7 +83,7 @@ function mountApp(narrow = false) {
   const daemon: Daemon = {
     store: createStateStore(snapshotState({ consoles: [console_], projects: [project], sessions })),
     request,
-    toastError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
+    raiseError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
     dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
   };
   mountForTooltip(

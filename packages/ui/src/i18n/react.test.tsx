@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished } from "vitest";
 
-import { InlineReference } from "../components/text/InlineReference";
+import { InlineReference } from "./InlineReference";
 import { format, globalParam } from "./catalog";
 import { currentLanguage, setLanguage } from "./language";
 import { Message } from "./react";

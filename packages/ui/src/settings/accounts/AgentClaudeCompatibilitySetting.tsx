@@ -1,14 +1,14 @@
 import React, { useState } from "react";
 
-import { AGENT_LABEL } from "../../agents";
+import { AGENT_LABEL } from "../../agents/agents";
 import { HelpTip } from "../../components/hint/HelpTip";
-import { InlineReference } from "../../components/text/InlineReference";
+import { InlineReference } from "../../i18n/InlineReference";
 import { Message, useT } from "../../i18n/react";
-import { reportError } from "../../reportError";
 import type { Agent } from "../../protocol";
 import { useDaemon, useDaemonStore } from "../../store";
-import { hasClaudeCompatibility } from "../claudeCompatibility";
+import { hasClaudeCompatibility } from "../../agents/claudeCompatibility";
 import { SettingRow, SettingSwitch } from "../SettingRow";
+import { alertFailure } from "../../components/alerts/raiseError";
 
 /** An agent's Claude compatibility row, above its accounts table: one switch that applies to every account of the
  * agent (see "Claude compatibility" in `docs/product/per-agent-settings.md`). Nothing for Claude Code, which has no
@@ -25,13 +25,7 @@ export function AgentClaudeCompatibilitySetting({ agent }: { agent: Agent }): Re
   const change = (value: boolean) => {
     setBusy(true);
     void request({ type: "update_settings", claude_compatibility: { [agent]: value } })
-      .catch((err) => reportError(
-        err,
-        undefined,
-        undefined,
-        undefined,
-        t("settings.accounts.claudeCompat.saveFailedTitle"),
-      ))
+      .catch(alertFailure({ title: t("settings.accounts.claudeCompat.saveFailedTitle") }))
       .finally(() => setBusy(false));
   };
   return (

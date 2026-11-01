@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from "react";
 
 import { useLatest } from "../components/hooks/useLatest";
 import { DaemonRequestError } from "../daemon-client";
-import { errorPresentation, type ErrorPresentation } from "../errorPresentation";
-import { unexpectedFailureDiagnostic } from "../errorText";
-import { listProcesses, type ProcessTarget } from "../processes";
+import { errorPresentation, type ErrorPresentation } from "../errors/errorPresentation";
+import { unexpectedFailureDiagnostic } from "../errors/errorText";
+import { listProcesses, type ProcessTarget } from "./processes";
 import { SESSION_NOT_RUNNING, type ProcessTree } from "../protocol";
-import { sameValue } from "../sameValue";
+import { sameValue } from "../store";
 import { useDaemon, type Daemon } from "../store";
 
 /** How long the list waits after an answer before it asks again: `live` while the panel is on screen,

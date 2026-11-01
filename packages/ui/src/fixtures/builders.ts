@@ -1,9 +1,10 @@
-import { DEFAULT_SETTINGS } from "../defaultSettings";
-import { FOLLOWING_GIT_WORKFLOW } from "../gitWorkflow";
+import { DEFAULT_SETTINGS } from "../store/defaultSettings";
+import { FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
-import { hasClaudeCompatibility } from "../settings/claudeCompatibility";
-import type { Account, AccountQuota, AccountSharing, Agent, Console, FileContent, Launch, GitStatus, Host, Page, PerAgent, ProcessTree, Project, Session, SessionBranchItem, SessionBranchState, SessionContext, SessionStatus, Settings, ShellTerminal } from "../protocol";
+import { hasClaudeCompatibility } from "../agents/claudeCompatibility";
+import type { Account, AccountQuota, MessageParams, AccountSharing, Agent, Console, FileContent, Launch, GitStatus, Host, Page, PerAgent, ProcessTree, Project, Session, SessionBranchItem, SessionBranchState, SessionContext, SessionStatus, Settings, ShellTerminal } from "../protocol";
 import type { SessionRequest, State, TrustPrompt } from "../store";
+import type { ToastFixture } from "./fixture";
 
 /** Every agent, as the list of added agents of a user who has added them all (in the default order). */
 export const ALL_AGENTS: Agent[] = ["claude", "codex", "grok"];
@@ -321,6 +322,16 @@ export const SAMPLE = (() => {
   ];
   return { console: console_, web, api, consoleSession, sessions };
 })();
+
+/** A notice the daemon sends about a session (`session_notice`), shown as the app shows the real one: a failure, or a
+ * notice carrying raw text, is an error alert and any other a toast. `message` is the daemon's English fallback for a
+ * code the catalog lacks. */
+export const sessionNoticeToast = (session: string, code: string, params: MessageParams = {}, message = ""): ToastFixture =>
+  ({ kind: "broadcast", event: { type: "session_notice", session, code, params, message } });
+
+/** An error the daemon sends that answers no request and names no session, shown as the app shows the real one. */
+export const broadcastErrorToast = (code: string, params: MessageParams = {}, message = ""): ToastFixture =>
+  ({ kind: "broadcast", event: { type: "error", id: null, code, params, message } });
 
 /** The title the action that raises an error gives its alert (`ToastFixture.title`), for a scenario that raises the
  * error itself rather than through the action: the message at `key`, worded in the viewing language, so a title the

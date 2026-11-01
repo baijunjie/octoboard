@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 
 import { useLatest } from "../hooks/useLatest";
-import { isImeKey } from "../../imeKey";
+import { isImeKey } from "../../input/imeKey";
 
 /**
  * Closes the surface `surface` returns on Escape while a tooltip is open — the one state in which

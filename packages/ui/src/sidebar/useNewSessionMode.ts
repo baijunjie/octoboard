@@ -1,8 +1,8 @@
-import { noAgentState } from "../agents";
+import { noAgentState } from "../agents/agents";
 import type { NewSessionRequest } from "../dialogs/dialogRequest";
 import { quickCreateUnavailable } from "../dialogs/openSessionRequest";
 import { useDaemonStore } from "../store";
-import { useQuickCreateModifier } from "../useQuickCreateModifier";
+import { useQuickCreateModifier } from "./useQuickCreateModifier";
 
 /**
  * How a session-creating control behaves right now. `quick` is whether it shows and takes its quick

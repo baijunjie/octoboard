@@ -11,7 +11,7 @@ export interface MountedDialog {
   store: Daemon["store"];
   /** The bodies of the requests sent to the daemon, in order. */
   sent: () => unknown[];
-  /** The arguments of each `toastError` call. */
+  /** The arguments of each `raiseError` call. */
   toasts: () => unknown[][];
   /** Whether a dialog is on screen. */
   onScreen: () => boolean;
@@ -32,7 +32,7 @@ export function mountPendingQuestionDialog(
   const daemon: Daemon = {
     store: createStateStore(state),
     request: vi.fn(reply) as never,
-    toastError: vi.fn(),
+    raiseError: vi.fn(),
     toastNotice: vi.fn(),
     onToast: () => () => {},
     // What the real one does, so a prompt answered from the dialog leaves the queue and the next
@@ -61,7 +61,7 @@ export function mountPendingQuestionDialog(
   return {
     store: daemon.store,
     sent: () => vi.mocked(daemon.request).mock.calls.map(([body]) => body),
-    toasts: () => vi.mocked(daemon.toastError).mock.calls,
+    toasts: () => vi.mocked(daemon.raiseError).mock.calls,
     onScreen: () => document.body.querySelector("[role=alertdialog]") !== null,
   };
 }

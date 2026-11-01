@@ -7,7 +7,7 @@ import { windowAttention } from "../components/announce/windowTestSupport";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { mountForTooltip } from "../components/hint/tooltipTestSupport";
 import { DaemonRequestError } from "../daemon-client";
-import { errorAlerts } from "../errorAlerts";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import type { Event, ProcessTree, RequestBody, Session } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
@@ -40,7 +40,7 @@ async function mount(scope: ProcessesScope, request: (body: RequestBody) => Prom
   const daemon: Daemon = {
     store: createStateStore({ sessions: new Map(sessions.map((s) => [s.id, s])), projects: new Map([[project.id, project]]) }),
     request: vi.fn(request) as never,
-    toastError: vi.fn(),
+    raiseError: vi.fn(),
     toastNotice: vi.fn(),
     onToast: () => () => {},
     dismissTrustPrompt: () => {},

@@ -7,7 +7,7 @@ import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { afterEach, beforeEach, onTestFinished, vi } from "vitest";
 
-import { errorAlerts } from "../../errorAlerts";
+import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { AgentAccountsSection } from "./AgentAccountsSection";
 import {
@@ -24,7 +24,7 @@ import {
   sectionEntry,
   sessions,
   settings,
-  toastError,
+  raiseError,
   trackAccountLogin,
 } from "./agentAccountsSectionTestState";
 import { SettingsFocusContext } from "../useSectionRefocus";
@@ -46,7 +46,7 @@ beforeEach(() => {
   HTMLElement.prototype.animate = animate as unknown as typeof HTMLElement.prototype.animate;
   animate.mockClear();
   request.mockReset().mockResolvedValue({});
-  toastError.mockClear();
+  raiseError.mockClear();
   dismissAccountLogin.mockClear();
   trackAccountLogin.mockClear();
   settings.added_agents = ["claude", "codex", "grok"];

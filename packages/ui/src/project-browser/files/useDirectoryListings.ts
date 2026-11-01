@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useCurrentLanguage, useT } from "../../i18n/react";
-import { abbreviateHome } from "../../pathDisplay";
 import { useDaemon, useDaemonStore } from "../../store";
-import { AUTO_REFRESH_MS } from "../autoRefresh";
-import { browseFailure } from "../browseError";
+import { useAutoRefresh } from "../autoRefresh";
+import { projectBrowseFailure } from "../browseError";
 import { treeEntries, type DirListing } from "../tree";
 
 /** How many listings a browser has out at once: the daemon reads four at a time across all its
@@ -113,9 +112,7 @@ export function useDirectoryListings(project: string, active: boolean): Director
       })
       .catch((err: unknown) => {
         if (!current()) return;
-        const state = store.getState();
-        const root = state.projects.get(project)?.path;
-        const failure = browseFailure(t, language, err, state, root && abbreviateHome(root, state.homeDir));
+        const failure = projectBrowseFailure(t, language, err, store.getState(), project);
         if (failure.kind === "superseded") return;
         if (failure.kind === "changed" && attempt < CHANGED_RETRIES) {
           retried = true;
@@ -200,25 +197,7 @@ export function useDirectoryListings(project: string, active: boolean): Director
 
   // The periodic refresh, and one on coming back to the window, or to a pane that was hidden,
   // after a while.
-  useEffect(() => {
-    if (!active) return;
-    const tick = () => {
-      if (document.visibilityState !== "visible" || state.current.inFlight > 0) return;
-      refreshWanted(true);
-    };
-    const timer = setInterval(tick, AUTO_REFRESH_MS);
-    const onVisible = () => {
-      if (Date.now() - state.current.lastRefresh > AUTO_REFRESH_MS / 2) tick();
-    };
-    onVisible();
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", onVisible);
-    return () => {
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", onVisible);
-    };
-  }, [active]);
+  useAutoRefresh(active, undefined, { busy: () => state.current.inFlight > 0, lastAt: () => state.current.lastRefresh, run: () => void refreshWanted(true) });
 
   useEffect(() => {
     const s = state.current;

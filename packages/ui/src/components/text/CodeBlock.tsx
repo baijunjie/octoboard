@@ -2,7 +2,7 @@ import { Typography } from "@heroui/react";
 import React from "react";
 import { TextContext } from "react-aria-components";
 
-import { useCodeColor, type CodeColor } from "./codeTone";
+import { useCodeColor, type CodeColor } from "../../i18n/codeTone";
 
 /** Raw diagnostic text; long traces can leave wrapping to their surrounding horizontal scroller. */
 export function CodeBlock({

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-import { errorAlerts } from "../../errorAlerts";
+import { errorAlerts } from "../alerts/errorAlerts";
 
 /** Returns a function that runs `then` once the error alert about to be reported (or the ones open now) has been
  * acknowledged and none is left, for what a dialog should do only after its failure's alert has closed: while the alert

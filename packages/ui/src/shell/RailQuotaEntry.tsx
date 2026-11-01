@@ -3,11 +3,9 @@ import { Bot, Gauge, KeyRound } from "lucide-react";
 import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { mergeRefs } from "react-aria";
 
-import { orderedAccounts } from "../accountOrder";
-import { accountDisabled } from "../accountChoices";
 import { Button } from "../components/controls/Button";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
-import { accountsByAgent, defaultAccountName, noAgentState, pickableAgents } from "../agents";
+import { defaultAccountName, noAgentState, pickableAgents } from "../agents/agents";
 import { PATH_VAR_PARAMS } from "../components/text/literalParams";
 import { AgentTabList } from "../components/tabs/AgentTabList";
 import { ChromeButton } from "./ChromeButton";
@@ -17,16 +15,17 @@ import { EmptyPanel } from "../components/panel/EmptyPanel";
 import { FADE_SIZE, FadedScroller, type FadeRegion, useFadeRegion } from "../components/scroll/scrollFade";
 import { useListMotion } from "../components/motion/useListMotion";
 import { Message, useT } from "../i18n/react";
-import type { Account, Agent, QuotaWindow, Settings } from "../protocol";
+import type { Agent, QuotaWindow } from "../protocol";
 import type { SettingsSectionId } from "../settings/SettingsDialog";
 import { INACTIVE_VEIL_CLASS } from "../components/status/inactiveVeil";
 import { useDaemon, useDaemonStore } from "../store";
-import { useNow } from "../useNow";
+import { useNow } from "../format/useNow";
 import { AccountNameLine, AccountQuotaSummary } from "../quota/AccountQuotaSummary";
 import { ResetCreditsLine, UseResetCreditDialog, useResetFocusReturn } from "../quota/ResetCredits";
-import { MODAL_OPEN } from "../layout/useRegionCycle";
+import { MODAL_OPEN } from "../components/focus/regionFocus";
 import { useAccountQuota } from "../quota/useAccountQuota";
-import { exhaustedQuotaWindow, remainingPercentAt, type QuotaBar } from "../quota/quotaFormat";
+import { exhaustedQuotaWindow, remainingPercentAt, type QuotaBar } from "../accounts/quotaFormat";
+import { listedQuotaAccounts, type QuotaRow } from "../quota/quotaListing";
 import { accountInUse, accountQuotaLabel, sessionQuotaBarOf } from "../quota/sessionQuota";
 
 /** Asks to use a reset credit of an account (its id, null for the default account) under the name the panel shows it by. */
@@ -105,19 +104,6 @@ function QuotaCapsule({ window, height, now }: { window: QuotaWindow; height: nu
       <rect x={0.5} y={0.5} width={CAPSULE_WIDTH - 1} height={height - 1} rx={radius - 0.5} fill="none" stroke="currentColor" />
     </svg>
   );
-}
-
-/** One row of an agent's panel: an account of the agent (`null`, the default account) and whether the user turned it off. */
-interface QuotaRow {
-  account: Account | null;
-  disabled: boolean;
-}
-
-/** The rows the panel lists for `agent`, in the saved account order: not an account the user turned off, unless it is
- * `inUse`, the account the selected running session is still on (`null` for the default account, `undefined` for none). */
-function listedRows(owned: Account[], disabledDefaults: readonly Agent[] | undefined, agent: Agent, inUse: string | null | undefined, order: Settings["account_order"]): QuotaRow[] {
-  return orderedAccounts(agent, owned, order).map((account) => ({ account, disabled: accountDisabled(owned, disabledDefaults, agent, account?.id ?? null) }))
-    .filter(({ account, disabled }) => !disabled || (account?.id ?? null) === inUse);
 }
 
 /** The rail's quota button and the floating panel it anchors, which lists each added and installed agent's accounts
@@ -277,9 +263,7 @@ function QuotaPanel({ shownAgent, shownAccount, inUse, focusSelectedTab, emphasi
   const focused = useRef(false);
   const disabledDefaults = useDaemonStore((s) => s.settings.disabled_default_accounts);
   // An agent whose accounts are all turned off has no tab, as it has no submenu in the menu bar, unless the selected running session is on one.
-  const listed = accountsByAgent(accounts, pickableAgents(availability, addedAgents))
-    .map(({ agent, accounts: owned }) => ({ agent, rows: listedRows(owned, disabledDefaults, agent, inUse?.agent === agent ? inUse.account : undefined, accountOrder) }))
-    .filter(({ rows }) => rows.length > 0);
+  const listed = listedQuotaAccounts(pickableAgents(availability, addedAgents), { accounts, accountOrder, disabledDefaultAccounts: disabledDefaults }, inUse);
   const selected = listed.find(({ agent }) => agent === chosen)?.agent ?? listed[0]?.agent;
   const focusOnce = (tab: HTMLElement | null) => {
     if (!tab || focused.current) return;
@@ -386,7 +370,7 @@ function AgentPanel({ agent, rows, currentAccount, dimOthers, onUseReset }: { ag
  * is in view, as the selected session's account is the one the user came to read. The row is not marked
  * in any other way, except that with `dimOthers` (from the mouse on the rail button until it enters the panel
  * or the panel closes) every row but that one, on every agent's panel, is dimmed. The `rows` are what the panel lists
- * (`listedRows`); accounts added or removed while it is open move with the shared list motion. */
+ * (`listedQuotaAccounts`); accounts added or removed while it is open move with the shared list motion. */
 function AgentAccountList({ agent, rows, currentAccount, dimOthers, region, onUseReset }: { agent: Agent; rows: QuotaRow[]; currentAccount?: string | null; dimOthers: boolean; region: FadeRegion; onUseReset: ResetRequest }): React.ReactElement {
   const t = useT();
   const defaultName = defaultAccountName(t, useDaemonStore((s) => s.settings.default_account_names), agent);

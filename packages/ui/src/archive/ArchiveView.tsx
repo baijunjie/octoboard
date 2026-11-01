@@ -6,7 +6,7 @@ import { Button } from "../components/controls/Button";
 import { SessionAgentIcon } from "../components/icons/SessionAgentIcon";
 import { EmptyPanel } from "../components/panel/EmptyPanel";
 import { FadeOverflow } from "../components/text/FadeOverflow";
-import { InlineReference } from "../components/text/InlineReference";
+import { InlineReference } from "../i18n/InlineReference";
 import { PaneTitle } from "../components/panel/PaneTitle";
 import { ArchivedSessionMetadata, hasVisibleContext, SessionContextLabel } from "../components/status/SessionMetadata";
 import { TitledControl } from "../components/hint/TitledControl";
@@ -15,11 +15,10 @@ import { useLatest } from "../components/hooks/useLatest";
 import type { DialogRequest } from "../dialogs/dialogRequest";
 import { useEscapeWhileTooltipOpen } from "../components/dialog/useEscapeWhileTooltipOpen";
 import { isolate } from "../i18n/isolate";
-import { joinPhrases } from "../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { Account, Console, Project, Session, Settings } from "../protocol";
-import { sessionAccountModelLine, sessionAriaLabel, sessionDisplayTitle } from "../sessionLabel";
-import { inheritedLaunch, sessionModelEffort, sessionModelLabel } from "../sessionModel";
+import { sessionAccountModelLine, sessionDisplayTitle, sessionRowName } from "../sessions/sessionLabel";
+import { inheritedLaunch, sessionModelEffort, sessionModelLabel } from "../sessions/sessionModel";
 import { archivedSessionRows, boundArchivedSessions } from "../sessions/order";
 import { NESTED_ROW_CLASS, TreeRow } from "../sidebar/rows";
 import { useFlip } from "../sidebar/useFlip";
@@ -230,7 +229,7 @@ export function ArchiveView({
 
 /** One row of the list: selects the session (`onSelect`), and holds the Reopen and Delete actions,
  * whose presses must not also select it. Its accessible name is the session's own
- * (`sessionAriaLabel`, which also says which lead session it was archived under, the inset alone
+ * (`sessionRowName`, which also says which lead session it was archived under, the inset alone
  * being no words), then its model and effort, which the agent line shows only visually; the
  * account is already in the first part. Its context size and dates are its description. */
 function ArchiveRow({
@@ -266,7 +265,7 @@ function ArchiveRow({
   const agentLine = sessionAccountModelLine(t, session, accounts, defaultNames, modelLabel);
   return (
     <TreeRow
-      ariaLabel={joinPhrases(language, [sessionAriaLabel(t, language, session, accounts, under, defaultNames), modelLabel])}
+      ariaLabel={sessionRowName(t, language, session, { accounts, defaultNames, owners: [under], modelLabel })}
       describedBy={context ? `${contextId} ${datesId}` : datesId}
       selected={selected}
       onActivate={() => onSelect(session)}

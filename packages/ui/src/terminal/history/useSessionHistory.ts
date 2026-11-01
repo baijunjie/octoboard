@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { errorPresentation, type ErrorPresentation } from "../../errorPresentation";
+import { errorPresentation, type ErrorPresentation } from "../../errors/errorPresentation";
 import { useT } from "../../i18n/react";
 import type { HistoryMessage } from "../../protocol";
 import { useDaemon, useDaemonStore } from "../../store";

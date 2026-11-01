@@ -1,7 +1,7 @@
 import React from "react";
 
 import type { AccountQuota, Agent } from "../protocol";
-import { remainingPercentAt, usageBarWindows } from "./quotaFormat";
+import { remainingPercentAt, usageBarWindows } from "../accounts/quotaFormat";
 
 /** A bar of what remains of a window, in the agent's colour, or in grey when the account is used up (the fill reads
  * `--meter-fill`, which the `quota-meter--<agent>` or `quota-meter--used-up` class sets). Plain spans rather than

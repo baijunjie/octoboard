@@ -4,7 +4,9 @@ import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { onTestFinished } from "vitest";
 
-import { errorText } from "../errorText";
+import { forwardAlerts } from "../components/alerts/alertTestSupport";
+import { errorText } from "../errors/errorText";
+import { errorPresentation } from "../errors/errorPresentation";
 import type { PlatformAdapter } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import { isolate } from "../i18n/isolate";
@@ -103,10 +105,12 @@ export function mountRows(children: React.ReactNode, { request = () => Promise.r
     act(() => root.unmount());
     container.remove();
   });
+  // The alerts raised without a daemon (`raiseError` from `components/alerts/raiseError`) go where the daemon's do.
+  onTestFinished(forwardAlerts(toasts.error));
   const daemon: Daemon = {
     store: createStateStore(state),
     request,
-    toastError: (message) => toasts.error(errorText(message)),
+    raiseError: (error) => toasts.error(errorText(errorPresentation(error))),
     toastNotice: toasts.notice,
     onToast: () => () => {},
     dismissTrustPrompt: () => {},

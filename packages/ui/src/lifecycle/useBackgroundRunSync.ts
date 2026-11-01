@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 
 import { usePlatform } from "../platform/react";
 import { runInBackground } from "./runInBackground";
+import { useSerialPush } from "./useSerialPush";
 
 /**
  * Pushes the run-in-background choice to the shell on mount, before the window can be closed, and
@@ -11,12 +12,11 @@ import { runInBackground } from "./runInBackground";
 export function useBackgroundRunSync(): void {
   const { backgroundRun } = usePlatform();
   const enabled = runInBackground.useValue();
-  // Chained for the same reason as in `useNativeWindowTheme`: two in-flight pushes must not settle
-  // out of order and leave the shell on the earlier choice.
-  const pendingRef = useRef<Promise<void>>(Promise.resolve());
+  // Serial, so two in-flight pushes cannot settle out of order and leave the shell on the earlier choice.
+  const push = useSerialPush();
 
   useEffect(() => {
     if (!backgroundRun) return;
-    pendingRef.current = pendingRef.current.then(() => backgroundRun.set(enabled).catch(() => {}));
-  }, [backgroundRun, enabled]);
+    push(() => backgroundRun.set(enabled));
+  }, [backgroundRun, enabled, push]);
 }

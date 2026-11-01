@@ -2,7 +2,7 @@
 import type { Terminal } from "@xterm/xterm";
 import { expect, it, vi } from "vitest";
 
-import { IS_MAC } from "../../useWindowShortcut";
+import { IS_MAC } from "../../input/keys";
 import type { TerminalRow } from "./terminalLines";
 import { brokenUrlsAt, linkBox, linkSegmentsIn, TERMINAL_URL_REGEX, terminalLinkHandler, visibleLinkSegments } from "./terminalLinks";
 

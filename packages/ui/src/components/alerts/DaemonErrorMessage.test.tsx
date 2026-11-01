@@ -5,14 +5,15 @@ import { createRoot } from "react-dom/client";
 import { describe, expect, it, onTestFinished } from "vitest";
 
 import { ErrorAlerts } from "../../shell/ErrorAlerts";
-import { errorAlerts } from "../../errorAlerts";
-import { reportError } from "../../reportError";
-import { daemonMessage, NO_SUMMARY_CODES } from "../../daemonMessage";
+import { errorAlerts } from "./errorAlerts";
+import { raiseError } from "./raiseError";
+import { CODES } from "../../errors/codes";
+import { daemonMessage } from "../../errors/daemonMessage";
 import { DaemonRequestError } from "../../daemon-client";
 import { format, isMessageKey } from "../../i18n/catalog";
 import { RecoveryGuidance, recoveryParams } from "./ErrorGuidance";
-import { errorPresentation, hasCodeParams } from "../../errorPresentation";
-import { ActionableError } from "../../actionableError";
+import { errorPresentation, hasCodeParams } from "../../errors/errorPresentation";
+import { ActionableError } from "../../errors/actionableError";
 import { useDialogAction } from "../dialog/Dialog";
 import { currentLanguage, setLanguage } from "../../i18n/language";
 import { createStateStore, DaemonProvider, type Daemon } from "../../store";
@@ -385,7 +386,7 @@ it.each([
   expect(body.textContent).toBe(words("zh-Hans"));
 });
 
-it.each([...NO_SUMMARY_CODES])("gives %s no first line, its title saying what failed, and keeps the system's text only in the raw part", (code) => {
+it.each(Object.entries(CODES).filter(([, record]) => "noSummary" in record).map(([code]) => code))("gives %s no first line, its title saying what failed, and keeps the system's text only in the raw part", (code) => {
   const detail = "Operation not permitted (os error 1)";
   const error = new DaemonRequestError("fallback", code, { detail });
   const { body, raw } = mountApart(error);
@@ -409,7 +410,7 @@ it.each(["git_restore_failed", "terminal_unavailable"])("shows %s with no detail
 
 it("raises git_switch_failed as an alert titled for what failed, its body starting with the remedy and the text only under Error details", () => {
   const detail = "error: Your local changes would be overwritten by checkout";
-  reportError(new DaemonRequestError("fallback", "git_switch_failed", { detail }), undefined, undefined, undefined, "Could not switch branches");
+  raiseError(new DaemonRequestError("fallback", "git_switch_failed", { detail }), { title: "Could not switch branches" });
   mount(<ErrorAlerts />);
   const alert = document.querySelector('[role="alertdialog"]')!;
   expect(alert.querySelector("h2")?.textContent).toBe("Could not switch branches");

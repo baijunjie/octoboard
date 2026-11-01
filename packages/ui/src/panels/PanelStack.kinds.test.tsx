@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { focusRegion } from "../components/focus/regionFocus";
-import { PREFERENCE_KEYS } from "../preferenceKeys";
+import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import { PanelHeader } from "../components/panel/PanelHeader";
 import type { PanePeek } from "../layout/usePaneToggles";
 import type { Project } from "../protocol";

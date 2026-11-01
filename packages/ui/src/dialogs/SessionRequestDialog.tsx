@@ -1,20 +1,19 @@
 import React, { useId, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
-import { incompleteAccount } from "../accountChoices";
-import { AGENT_LABEL, defaultAccountName } from "../agents";
+import { incompleteAccount } from "../accounts/accountChoices";
+import { AGENT_LABEL, defaultAccountName } from "../agents/agents";
 import { DaemonRequestError } from "../daemon-client";
-import { errorPresentation } from "../errorPresentation";
 import { HandOffOnUnmount } from "../components/focus/HandOffOnUnmount";
-import { InlineReference } from "../components/text/InlineReference";
+import { InlineReference } from "../i18n/InlineReference";
 import { joinNodes } from "../i18n/joinPhrases";
 import type { Language } from "../i18n/languages";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { MessageKey, Translate } from "../i18n/catalog";
 import { SESSION_REQUEST_ANSWERED, SESSION_REQUEST_NOT_WAITING, type Account, type Agent, type SessionRequestAction, type Settings } from "../protocol";
-import { sessionAccount, sessionDisplayTitle } from "../sessionLabel";
+import { sessionAccount, sessionDisplayTitle } from "../sessions/sessionLabel";
 import { useDaemon, useDaemonStore, type SessionRequest } from "../store";
-import { displayWirePath } from "../wirePath";
+import { displayWirePath } from "../format/wirePath";
 import type { ConfirmDialogProps } from "../components/dialog/ConfirmDialog";
 import { dialogAround } from "../components/dialog/dialogElement";
 import { useFailureWhenBlocked } from "../components/dialog/useFailureWhenBlocked";
@@ -228,7 +227,7 @@ const ACTION_TEXT = {
  * stays mounted between them. */
 export function useSessionRequestDialogProps(request: SessionRequest | undefined): ConfirmDialogProps | undefined {
   const t = useT();
-  const { request: send, toastError } = useDaemon();
+  const { request: send, raiseError } = useDaemon();
   // What the form of a switch or a handoff ended on, which the form reports.
   const [reported, setReported] = useState<RequestFormState>();
   // A switch of a session that has been archived cannot be carried out whatever the user changes: the dialog says
@@ -251,7 +250,7 @@ export function useSessionRequestDialogProps(request: SessionRequest | undefined
       if (err instanceof DaemonRequestError && err.code === SESSION_REQUEST_ANSWERED) return;
       // Nothing was going to start for a refusal, so the session no longer waiting is no news.
       if (!approve && err instanceof DaemonRequestError && err.code === SESSION_REQUEST_NOT_WAITING) return;
-      toastError(errorPresentation(err as Error), failureSubject(request, err), t(approve ? "dialog.sessionRequest.approveFailedTitle" : "dialog.sessionRequest.refuseFailedTitle"));
+      raiseError(err, { title: t(approve ? "dialog.sessionRequest.approveFailedTitle" : "dialog.sessionRequest.refuseFailedTitle"), session: failureSubject(request, err) });
     }
   };
 

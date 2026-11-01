@@ -2,8 +2,8 @@ import { CodeXml, FileText } from "lucide-react";
 import React from "react";
 
 import { useT } from "../i18n/react";
-import { createPersistedPreference } from "../persistedPreference";
-import { PREFERENCE_KEYS } from "../preferenceKeys";
+import { createPersistedPreference } from "../preferences/persistedPreference";
+import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import { SlotToggle } from "./slotToggle";
 
 export type MarkdownView = "document" | "source";

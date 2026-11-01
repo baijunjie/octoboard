@@ -6,7 +6,7 @@
     "dev": "node scripts/build-preview.mjs && nuxt dev",
     "build": "node scripts/build-preview.mjs && nuxt generate",
     "preview": "node scripts/preview.mjs",
-    "check:locales": "node scripts/check-locales.mjs",
+    "check:locales": "node --experimental-strip-types scripts/check-locales.mjs",
     "generate:og-images": "python3 scripts/generate-og-images.py",
     "test": "node --experimental-strip-types --test test/site-seo.test.ts",
     "typecheck": "nuxt prepare && nuxt typecheck",

@@ -5,12 +5,12 @@
 Every component and hook in `packages/ui` is compiled by the React Compiler, which caches each value on the inputs
 it can see. A value read during render from anywhere else is not such an input, so the compiled code keeps the first
 result until some visible input happens to change: the clock (`Date.now()`, including a helper that reads it by
-default, as `formatRelativeTime` does when given no `now`), `store.getState()`, a module-level `let` or `Map`, an
+default when given no `now`), `store.getState()`, a module-level `let` or `Map`, an
 object mutated in place. Before the compiler, every daemon event re-rendered the whole tree and hid this; no lint
 rule flags it, and the stale value shows only once the app has sat still for a while (a "2 minutes ago" that never
 moves, a selection that does not follow).
 
-So feed a render only from props, state, context and hooks: pass `useNow()` (`packages/ui/src/useNow.ts`) as the
+So feed a render only from props, state, context and hooks: pass `useNow()` (`packages/ui/src/format/useNow.ts`) as the
 `now` of anything that formats a time, read the daemon store through a `useDaemonStore` selector, and move state that
 changes in place behind a store or `useSyncExternalStore`. A value only a menu's items need (a row's menu judging
 quotas against the clock) is not worth a `useNow()` that re-renders every row: give `ActionMenu` its `items` as a
@@ -56,7 +56,7 @@ One prop that changes identity on every render re-renders every row again, with 
 - An object handed to every row is built from named members, never gathered with a rest pattern (`...rest`), which
   is a new object on every render.
 - A per-group array of sessions comes from the store's session index (`indexSessions` in
-  `packages/ui/src/sessions/sessionIndex.ts`, read through `packages/ui/src/sessions/useSessions.ts`), whose arrays
+  `packages/ui/src/sessions/sessionIndex.ts`, read through `packages/ui/src/store/useSessions.ts`), whose arrays
   keep their identity until a session in them changes; any other array filtered out of a store map is kept
   identity-stable while its records are the same, through `useShallow`.
 - Hooks come before the values derived from their inputs: the compiler keeps no value whose computation spans a hook

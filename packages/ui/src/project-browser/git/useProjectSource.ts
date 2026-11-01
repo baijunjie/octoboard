@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { ErrorPresentation } from "../../errorPresentation";
+import type { ErrorPresentation } from "../../errors/errorPresentation";
 import { useCurrentLanguage, useT } from "../../i18n/react";
-import { abbreviateHome } from "../../pathDisplay";
 import type { ProjectSourceInfo } from "../../protocol";
 import { useDaemon, useDaemonStore } from "../../store";
-import { browseFailure } from "../browseError";
+import { projectBrowseFailure } from "../browseError";
 import { gitMoment } from "./gitRequests";
 import { sendBrowseListRequest } from "../browseListRequests";
 
@@ -50,9 +49,7 @@ export function useProjectSource(project: string, wanted: boolean): { source: So
       })
       .catch((err: unknown) => {
         if (!current()) return;
-        const state = store.getState();
-        const root = state.projects.get(project)?.path;
-        const failure = browseFailure(t, language, err, state, root && abbreviateHome(root, state.homeDir));
+        const failure = projectBrowseFailure(t, language, err, store.getState(), project);
         if (failure.kind === "superseded" || failure.kind === "disconnected") return;
         const message = failure.kind === "failed" ? failure.message : t("browser.error.folderChanged");
         setSource({ state: "error", message });

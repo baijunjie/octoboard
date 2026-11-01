@@ -5,7 +5,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { DaemonRequestError } from "../daemon-client";
-import { errorAlerts } from "../errorAlerts";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 import { PlatformProvider } from "../platform/react";
 import { ErrorAlerts } from "../shell/ErrorAlerts";
 import { type TrustPrompt } from "../store";

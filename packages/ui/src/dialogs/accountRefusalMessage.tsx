@@ -1,6 +1,6 @@
 import React from "react";
 
-import { InlineReference } from "../components/text/InlineReference";
+import { InlineReference } from "../i18n/InlineReference";
 import { Message } from "../i18n/react";
 
 /** The account field's error for a chosen account that is turned off or not logged in, the account's name a chip. */

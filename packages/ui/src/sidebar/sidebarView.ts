@@ -1,9 +1,9 @@
 import { useEffect } from "react";
 import { useShallow } from "zustand/react/shallow";
 
-import { consolePreference, currentConsoleOf } from "../currentConsole";
-import { createPersistedPreference } from "../persistedPreference";
-import { PREFERENCE_KEYS } from "../preferenceKeys";
+import { consolePreference, currentConsoleOf } from "../store";
+import { createPersistedPreference } from "../preferences/persistedPreference";
+import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import type { Console } from "../protocol";
 import { useDaemonStore } from "../store";
 import { focusKey, resolveFocus } from "./focus";

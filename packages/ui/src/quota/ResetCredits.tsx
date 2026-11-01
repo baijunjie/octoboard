@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 
 import { Button } from "../components/controls/Button";
-import { InlineReference } from "../components/text/InlineReference";
+import { InlineReference } from "../i18n/InlineReference";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { focusFellToPage } from "../components/focus/regionFocus";
 import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
@@ -10,11 +10,11 @@ import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { AccountQuota, ResetCreditOutcome } from "../protocol";
 import { useDaemon } from "../store";
-import { ringForAutomaticFocus } from "../touchInput";
-import { useNow } from "../useNow";
+import { ringForAutomaticFocus } from "../input/touchInput";
+import { useNow } from "../format/useNow";
 import { AccountQuotaSummary, QuotaStaleMark } from "./AccountQuotaSummary";
-import { accountQuotaOf } from "../accountQuotaOf";
-import { expiryLine, nextResetCredit, resetCreditsSummary, usageBarSummary, usageBarWindows } from "./quotaFormat";
+import { accountQuotaOf } from "../accounts/accountQuotaOf";
+import { expiryLine, nextResetCredit, resetCreditsSummary, usageBarSummary, usageBarWindows } from "../accounts/quotaFormat";
 import { useAccountQuota, type QuotaReading } from "./useAccountQuota";
 
 /** An account's rate limit reset credits (Codex's "usage limit resets") in one line, with the action that redeems

@@ -3,14 +3,14 @@ import React, { useState } from "react";
 
 import { Button } from "../components/controls/Button";
 import { EmptyPanel } from "../components/panel/EmptyPanel";
-import { InlineReference } from "../components/text/InlineReference";
+import { InlineReference } from "../i18n/InlineReference";
 import { MarkedPath } from "../components/text/MarkedPath";
 import { useListMotion } from "../components/motion/useListMotion";
 import { TitledControl } from "../components/hint/TitledControl";
 import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
-import { abbreviateHome } from "../pathDisplay";
+import { abbreviateHome } from "../format/pathDisplay";
 import { useDaemon, useDaemonStore } from "../store";
 import { SettingRow } from "./SettingRow";
 import { useSectionRefocus } from "./useSectionRefocus";

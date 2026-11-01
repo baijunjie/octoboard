@@ -3,7 +3,7 @@ import { act, useState } from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { DaemonRequestError } from "../../daemon-client";
-import type { ErrorPresentation } from "../../errorPresentation";
+import type { ErrorPresentation } from "../../errors/errorPresentation";
 import { isolate } from "../../i18n/isolate";
 import type { PlatformAdapter } from "../../platform";
 import { FileTree } from "./FileTree";

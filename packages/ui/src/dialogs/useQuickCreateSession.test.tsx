@@ -3,16 +3,17 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { AGENT_OPTIONS } from "../agents";
+import { AGENT_OPTIONS } from "../agents/agents";
 import { DaemonRequestError } from "../daemon-client";
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 import type { Account, Session } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
 import type { NewSessionRequest } from "./dialogRequest";
 import { useConfirmIncompleteLaunch } from "./useConfirmIncompleteLaunch";
 import { useQuickCreateSession } from "./useQuickCreateSession";
 
-vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "light" }) }));
+vi.mock("../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "light" }) }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -20,11 +21,15 @@ const parent = consoleOf("c-1", "Main");
 const project = projectOf("p-1", parent.id, "Search API");
 const hub = sessionOf("s-hub", parent.id, undefined, "Hub", "idle");
 
+/** The error alerts raised so far, as the errors they were raised for. */
+const raised = () => errorAlerts.getSnapshot().map((alert) => alert.error);
+
 function mount(initial: Partial<State> = {}) {
+  onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   const daemon: Daemon = {
     store: createStateStore(initial),
     request: vi.fn(async () => ({ type: "session_opened", id: null, session: sessionOf("s-new", parent.id, project.id, "", "idle") })) as Daemon["request"],
-    toastError: vi.fn(),
+    raiseError: vi.fn(),
     toastNotice: vi.fn(),
     onToast: () => () => {},
     dismissTrustPrompt: () => {},
@@ -85,7 +90,7 @@ it("reports a refusal as a toast and selects nothing", async () => {
   const refusal = new DaemonRequestError("No such agent", "agent_unavailable", {});
   vi.mocked(daemon.request).mockRejectedValue(refusal);
   await run({ kind: "new-console-session", console: parent });
-  expect(daemon.toastError).toHaveBeenCalledTimes(1);
+  expect(raised()).toHaveLength(1);
   expect(onOpened).not.toHaveBeenCalled();
 });
 
@@ -97,9 +102,9 @@ it("explains that no account is available without adding recovery instructions",
   const { daemon, run } = mount({ accountQuotas: [spent] });
   await run({ kind: "new-console-session", console: parent });
   expect(daemon.request).not.toHaveBeenCalled();
-  const [error] = vi.mocked(daemon.toastError).mock.calls[0];
+  const [error] = raised();
   expect((error as Error).message).toBe("No account is currently available to open a session.");
-  expect((error as { recovery?: string }).recovery).toBe("none");
+  expect(errorAlerts.getSnapshot()[0].classification).toEqual({ kind: "actionable", recovery: "none" });
   expect(error).toMatchObject({ code: "quick_create_unavailable", params: {} });
 });
 
@@ -107,9 +112,10 @@ it("refuses a disabled account with the short unavailable message", async () => 
   const { daemon, run } = mount({ settings: { ...createStateStore({}).getState().settings, disabled_default_accounts: [parent.default_agent] } });
   await run({ kind: "new-console-session", console: parent });
   expect(daemon.request).not.toHaveBeenCalled();
-  expect(daemon.toastError).toHaveBeenCalledTimes(1);
-  const [error] = vi.mocked(daemon.toastError).mock.calls[0];
-  expect(error).toMatchObject({ code: "quick_create_unavailable", recovery: "none" });
+  expect(raised()).toHaveLength(1);
+  const [error] = raised();
+  expect(error).toMatchObject({ code: "quick_create_unavailable" });
+  expect(errorAlerts.getSnapshot()[0].classification).toEqual({ kind: "actionable", recovery: "none" });
 });
 
 it("refuses a signed-out account with the short unavailable message", async () => {
@@ -117,9 +123,10 @@ it("refuses a signed-out account with the short unavailable message", async () =
   const { daemon, run } = mount({ accountQuotas: [signedOut] });
   await run({ kind: "new-console-session", console: parent });
   expect(daemon.request).not.toHaveBeenCalled();
-  expect(daemon.toastError).toHaveBeenCalledTimes(1);
-  const [error] = vi.mocked(daemon.toastError).mock.calls[0];
-  expect(error).toMatchObject({ code: "quick_create_unavailable", recovery: "none" });
+  expect(raised()).toHaveLength(1);
+  const [error] = raised();
+  expect(error).toMatchObject({ code: "quick_create_unavailable" });
+  expect(errorAlerts.getSnapshot()[0].classification).toEqual({ kind: "actionable", recovery: "none" });
   expect((error as Error).message).toBe("No account is currently available to open a session.");
 });
 
@@ -127,7 +134,7 @@ it("refuses an owner that is no longer live, as the dialog does, and sends nothi
   const { daemon, run } = mount(stored({ ...hub, status: "archived" }));
   await run({ kind: "new-session", console: parent, project, binding: { kind: "bound", to: hub } });
   expect(daemon.request).not.toHaveBeenCalled();
-  expect(daemon.toastError).toHaveBeenCalledTimes(1);
+  expect(raised()).toHaveLength(1);
 });
 
 it("sends nothing with no agent available", async () => {
@@ -172,6 +179,6 @@ it("quick creates on another usable agent without showing an error when automati
   const { daemon, onOpened, run } = mount({ settings: { ...settings, added_agents: [...settings.added_agents] } });
   await run({ kind: "new-console-session", console: parent });
   expect(daemon.request).toHaveBeenCalledWith(expect.objectContaining({ agent: "codex", account: null }));
-  expect(daemon.toastError).not.toHaveBeenCalled();
+  expect(raised()).toHaveLength(0);
   expect(onOpened).toHaveBeenCalledWith("s-new");
 });

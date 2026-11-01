@@ -32,12 +32,13 @@ application setting that is not machine-local is added, in the same change, to:
   unreadable; otherwise raise `VERSION` and add the step that upgrades the previous version (its doc comment there);
 - the import inspection in `apps/daemon/src/config_document/import/mod.rs` (`InspectedSettings`), with the document's
   value and the current one, and the `coordinator::settings::update_settings` call that applies the document's settings;
-- the window: for a setting that is a switch, one entry in `BOOLEAN_SETTINGS` in
-  `packages/ui/src/configuration/importParts.tsx` (its settings-page label, its document field, and a
-  `configuration.import.settings.consequence.<name>` message saying what turning it on then does, added to
-  `packages/ui/src/i18n/messages/en.ts` and `zh-Hans.ts`), which both the review and the result render from; the field
-  and its `current_` counterpart must exist in `DocumentSettings` and `InspectedSettings` in
-  `packages/ui/src/protocol.ts`. A setting that is not a switch (like the git workflow settings or keyboard
+- the window: for a setting that is a switch, the field and its `current_` counterpart in `DocumentSettings` and
+  `InspectedSettings` in `packages/ui/src/protocol.ts`, and its entry in `COPY` in
+  `packages/ui/src/configuration/booleanSettings.ts` (which the type check then demands): its settings-page label and
+  on / off descriptions, an optional help tip, and a `configuration.import.settings.consequence.<name>` message saying
+  what turning it on then does, added to `packages/ui/src/i18n/messages/en.ts` and `zh-Hans.ts`. The import review, the
+  import result and the settings page all render from that entry; on the settings page the switch is
+  `<DaemonSwitchSetting field="…" />` (`packages/ui/src/settings/DaemonSwitchSetting.tsx`), not a component of its own. A setting that is not a switch (like the git workflow settings or keyboard
   shortcuts) instead gets its own line in both `packages/ui/src/configuration/ImportSettings.tsx` (the review's
   Application settings tab) and `ImportResult.tsx`: always shown for a required field (like the git workflow line),
   shown only when the document carries the setting for an optional one.

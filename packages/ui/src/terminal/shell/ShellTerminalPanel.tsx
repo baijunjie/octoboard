@@ -12,7 +12,7 @@ import { CenteredEmptyPanel } from "../../components/panel/EmptyPanel";
 import { FadeOverflow } from "../../components/text/FadeOverflow";
 import { handFocusOff } from "../../components/focus/handFocusOff";
 import { HandOffOnUnmount } from "../../components/focus/HandOffOnUnmount";
-import { InlineReference } from "../../components/text/InlineReference";
+import { InlineReference } from "../../i18n/InlineReference";
 import { PanelHeader } from "../../components/panel/PanelHeader";
 import { focusFellToPage } from "../../components/focus/regionFocus";
 import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../../components/controls/RowControls";
@@ -24,13 +24,12 @@ import { useListMotion } from "../../components/motion/useListMotion";
 import { ConfirmDialog } from "../../components/dialog/ConfirmDialog";
 import { dialogAround } from "../../components/dialog/dialogElement";
 import { RenameDialog } from "../../components/dialog/RenameDialog";
-import { errorPresentation } from "../../errorPresentation";
 import { isolate } from "../../i18n/isolate";
 import { t } from "../../i18n/language";
 import { Message, useT } from "../../i18n/react";
 import type { Project, ShellTerminal } from "../../protocol";
 import { useDaemon, type Daemon } from "../../store";
-import { ringForAutomaticFocus } from "../../touchInput";
+import { ringForAutomaticFocus } from "../../input/touchInput";
 import { shellTerminalTitle } from "./shellTerminalTitle";
 import { setActiveShellTerminal, startShellTerminal, takeShellTerminalFocus, useActiveShellTerminal, useProjectShellTerminals, useShellTerminalStarting } from "./shellTerminals";
 import { ShellTerminalView, type ShellTerminalViewHandle } from "./ShellTerminalView";
@@ -414,11 +413,11 @@ export function ShellTerminalPanel({
 type CloseOrigin = "menu" | "terminal";
 
 /** Asks the daemon to close `terminal`; a refusal is reported as an error. Settles once it has answered. */
-async function closeShellTerminal(daemon: Pick<Daemon, "request" | "toastError">, terminal: string): Promise<void> {
+async function closeShellTerminal(daemon: Pick<Daemon, "request" | "raiseError">, terminal: string): Promise<void> {
   try {
     await daemon.request({ type: "close_shell_terminal", shell_terminal: terminal });
   } catch (err) {
-    daemon.toastError(errorPresentation(err), undefined, t("shellTerminal.closeFailedTitle"));
+    daemon.raiseError(err, { title: t("shellTerminal.closeFailedTitle") });
   }
 }
 

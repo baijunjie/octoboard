@@ -2,9 +2,9 @@ import { AlertDialog, Input, Label, TextField } from "@heroui/react";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { Button } from "../controls/Button";
-import { InlineReference } from "../text/InlineReference";
+import { InlineReference } from "../../i18n/InlineReference";
 import { openingFocus } from "../focus/regionFocus";
-import type { AcknowledgementView } from "../../errorAlerts";
+import type { AcknowledgementView } from "../alerts/errorAlerts";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
 import { Dialog, useDialogAction, useFocusLeavingWhenDisabled } from "./Dialog";
 import { dialogAround } from "./dialogElement";

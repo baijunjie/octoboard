@@ -1,7 +1,7 @@
 import { createContext, useContext, useState } from "react";
 import { useStore } from "zustand/react";
 
-import { sameValue } from "../sameValue";
+import { sameValue } from "./sameValue";
 import type { Daemon } from "./connection";
 import { createStateStore, type State } from "./state";
 

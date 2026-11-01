@@ -4,12 +4,12 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { AFTER_FOCUS_MOVE_DELAY_MS, READ_TIME_MS } from "../components/announce/StatusAnnouncer";
-import { errorAlerts } from "../errorAlerts";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 import { DaemonRequestError } from "../daemon-client";
 import { isolate } from "../i18n/isolate";
 import { t } from "../i18n/language";
-import { PREFERENCE_KEYS } from "../preferenceKeys";
-import { ThemeProvider } from "../theme";
+import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
+import { ThemeProvider } from "../preferences/theme";
 import { ChangeBodiesError, type ViewerChangeSide, type ViewerContent, type ViewerSubject } from "./content";
 import { diffLayout } from "./diffLayout";
 import { FileViewer } from "./FileViewer";
@@ -17,7 +17,7 @@ import type { ViewerNavigation } from "./viewerNavigation";
 import { detailsButton } from "../components/alerts/detailsTestSupport";
 import { enter, leave, openTooltip, press, tap } from "../components/hint/tooltipTestSupport";
 import { markNames, ViewerHost } from "./viewerTestSupport";
-import { rawFailureText } from "../errorText";
+import { rawFailureText } from "../errors/errorText";
 import { viewerErrorText } from "./viewerError";
 import { wordWrap } from "./wordWrap";
 
@@ -929,7 +929,7 @@ it("reports a user-triggered external Markdown link failure", async () => {
   await act(async () => { await import("./MarkdownDocument"); });
   await act(async () => document.querySelector<HTMLAnchorElement>('a[href="https://example.com/docs"]')!.click());
   expect(links.open).toHaveBeenCalledExactlyOnceWith("https://example.com/docs");
-  expect(error).not.toHaveBeenCalled();
+  expect(error).toHaveBeenCalledExactlyOnceWith("The link did not open in a browser. Its address is shown below.");
   expect(errorAlerts.getSnapshot()).toEqual(expect.arrayContaining([expect.objectContaining({ message: "The link did not open in a browser. Its address is shown below.", error: expect.objectContaining({ cause }), classification: { kind: "actionable", recovery: "openExternal" } })]));
 });
 

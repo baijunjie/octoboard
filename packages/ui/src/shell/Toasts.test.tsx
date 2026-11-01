@@ -5,12 +5,12 @@ import { toast } from "@heroui/react";
 import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
-import { daemonMessage } from "../daemonMessage";
-import { noticeErrorPresentation, noticeKind } from "../errorPresentation";
+import { daemonMessage } from "../errors/daemonMessage";
+import { noticeErrorPresentation, noticeKind } from "../errors/errorPresentation";
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import { createStateStore, DaemonProvider, errorToast, type Daemon } from "../store";
 import { ErrorAlerts } from "./ErrorAlerts";
-import { errorAlerts } from "../errorAlerts";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 import { Toasts } from "./Toasts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -18,7 +18,7 @@ import { Toasts } from "./Toasts";
 const daemon: Daemon = {
   store: createStateStore({}),
   request: vi.fn(),
-  toastError: vi.fn(),
+  raiseError: vi.fn(),
   toastNotice: vi.fn(),
   onToast: () => () => {},
   dismissTrustPrompt: () => {},
@@ -59,7 +59,7 @@ it.each(["model_change_did_not_stop", "model_change_did_not_come_up"])("names th
     act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
     const params = { session: "s1" };
     const error = new DaemonRequestError(daemonMessage("en", code, params, "fallback", source.store.getState()), code, params);
-    act(() => deliver(errorToast(error, "s1", "Could not change the model")));
+    act(() => deliver(errorToast(error, { title: "Could not change the model", session: "s1" })));
     const alert = document.querySelector('[role="alertdialog"]')!;
     expect(alert.querySelector("h2")?.textContent).toBe("Could not change the model");
     expect(alert.textContent?.split("Fix login")).toHaveLength(2);
@@ -551,7 +551,7 @@ it("titles a failed launch's alert for the failure, never with the session's nam
     expect(gone?.textContent).toContain("Session: Fix login");
     expect(gone?.textContent).not.toMatch(/Project:|Console:/);
     act(() => errorAlerts.acknowledge());
-    act(() => deliver(errorToast(new DaemonRequestError("The session is gone.", "session_archived", {}), "unknown")));
+    act(() => deliver(errorToast(new DaemonRequestError("The session is gone.", "session_archived", {}), { title: undefined, session: "unknown" })));
     expect(document.querySelector('[role="alertdialog"]')?.textContent).not.toMatch(/Session:|Project:|Console:/);
   } finally {
     act(() => { toast.clear(); vi.runOnlyPendingTimers(); });

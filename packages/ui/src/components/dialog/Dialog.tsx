@@ -7,14 +7,14 @@ import { FadedScroller, useFadeRegion } from "../scroll/scrollFade";
 import { TitledControl } from "../hint/TitledControl";
 import { useLatest } from "../hooks/useLatest";
 import { useT } from "../../i18n/react";
-import type { AcknowledgementView } from "../../errorAlerts";
-import { reportError } from "../../reportError";
+import type { AcknowledgementView } from "../alerts/errorAlerts";
 import { dialogAround } from "./dialogElement";
 import { ErrorAlertBody, alertTitle } from "./ErrorAlertBody";
 import { useEscapeWhileTooltipOpen } from "./useEscapeWhileTooltipOpen";
 import { useHeightMotion } from "./useHeightMotion";
 import { useToastClearance } from "./useToastClearance";
 import { useTopLayerAtMount } from "./useTopLayerAtMount";
+import { raiseError } from "../alerts/raiseError";
 
 /** The busy state every dialog that talks to the daemon needs. Execution failures go to the
  * acknowledgement queue; what is wrong with a single field goes to
@@ -43,7 +43,7 @@ export function useDialogAction(resetKey: string | undefined, errorTitle: string
     try {
       await action();
     } catch (err) {
-      if (!stale()) reportError(err as Error, undefined, undefined, undefined, errorTitle);
+      if (!stale()) raiseError(err, { title: errorTitle, keepTitle: true });
     } finally {
       if (!stale()) setBusy(false);
     }

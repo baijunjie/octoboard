@@ -7,7 +7,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { detailsButton, openDetails, press } from "../components/alerts/detailsTestSupport";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { ErrorAlerts } from "../shell/ErrorAlerts";
-import { errorAlerts } from "../errorAlerts";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 import { setLanguage } from "../i18n/language";
 import type { Event, ImportedProject } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";

@@ -3,12 +3,12 @@ import { useEffect, useRef, useState } from "react";
 import { useLatest, useStableHandler } from "../components/hooks/useLatest";
 import type { DialogRequest } from "../dialogs/dialogRequest";
 import { forcibleBranches, inspectSessionBranches, lockedWorktrees } from "../dialogs/useSessionBranches";
-import { errorPresentation } from "../errorPresentation";
 import { useT } from "../i18n/react";
 import type { Session } from "../protocol";
 import { archiveNeedsConfirmation } from "../sessions/order";
 import { useDaemon, useDaemonStore } from "../store";
-import { ringForAutomaticFocus } from "../touchInput";
+import { ringForAutomaticFocus } from "../input/touchInput";
+import { raiseError } from "../components/alerts/raiseError";
 
 /**
  * Archiving a session from its row, its menu or a shortcut: at once when nothing would be lost, otherwise through the
@@ -30,7 +30,7 @@ export function useArchiveSession({
   focusTerminal: () => void;
 }) {
   const t = useT();
-  const { request, toastError, store } = useDaemon();
+  const { request, store } = useDaemon();
   // Archiving at once takes the row away from under a menu that returns focus to its trigger in
   // that row, so once the session reads archived focus is handed to the terminal, where the
   // keyboard user works next. The session's status is read here, as a value, because nothing else
@@ -75,7 +75,7 @@ export function useArchiveSession({
       setArchivingId(now.id);
       request({ type: "archive_session", session: now.id }).catch((err: unknown) => {
         setArchivingId(undefined);
-        toastError(errorPresentation(err as Error), undefined, t("dialog.archiveSession.failedTitle"));
+        raiseError(err, { title: t("dialog.archiveSession.failedTitle") });
       });
     });
   };

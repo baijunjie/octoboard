@@ -1,7 +1,7 @@
 import React from "react";
 
-import type { ErrorPresentation } from "../../errorPresentation";
-import { retryCanHelp } from "../../errorRecovery";
+import type { ErrorPresentation } from "../../errors/errorPresentation";
+import { retryCanHelp } from "../../errors/errorRecovery";
 import { useT } from "../../i18n/react";
 import { AlertButton } from "./AlertButton";
 import { DaemonErrorMessage } from "./DaemonErrorMessage";

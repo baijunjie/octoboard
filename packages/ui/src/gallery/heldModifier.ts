@@ -1,4 +1,4 @@
-import { IS_MAC } from "../useWindowShortcut";
+import { IS_MAC } from "../input/keys";
 
 /**
  * Holds the shortcut modifier (⌘ on an Apple keyboard, Ctrl elsewhere) down for the page, so that

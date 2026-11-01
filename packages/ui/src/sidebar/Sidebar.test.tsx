@@ -62,7 +62,7 @@ function mountSidebar(initial: SidebarTestProps, beside?: React.ReactNode) {
   const daemon: Daemon = {
     store: createStateStore({ sessions: sessionMap(sessions) }),
     request: vi.fn(),
-    toastError: vi.fn(),
+    raiseError: vi.fn(),
     toastNotice: vi.fn(),
     onToast: () => () => {},
     dismissTrustPrompt: () => {},

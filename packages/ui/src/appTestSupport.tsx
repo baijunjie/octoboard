@@ -6,7 +6,7 @@ import { expect, onTestFinished, vi } from "vitest";
 
 import { App } from "./App";
 import { mountForTooltip } from "./components/hint/tooltipTestSupport";
-import { consolePreference } from "./currentConsole";
+import { consolePreference } from "./store";
 import { isolate } from "./i18n/isolate";
 import { defaultStack } from "./panels/stackState";
 import { usePanelStacks } from "./panels/usePanelStacks";
@@ -14,7 +14,7 @@ import type { PlatformAdapter } from "./platform";
 import { PlatformProvider } from "./platform/react";
 import type { Event, RequestBody } from "./protocol";
 import { applyDaemonEvent, createStateStore, DaemonProvider, type Daemon, type State } from "./store";
-import { ThemeProvider } from "./theme";
+import { ThemeProvider } from "./preferences/theme";
 
 const CSS_VARS = { "--rail-width": "48px", "--breakpoint-docked": "1168px", "--breakpoint-phone": "782px" };
 
@@ -44,7 +44,7 @@ export function fakeDaemon(state: Partial<State>, answer: (body: RequestBody) =>
   return {
     store: createStateStore(state),
     request: vi.fn(async (body: RequestBody) => answer(body)) as Daemon["request"],
-    toastError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
+    raiseError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
     dismissTrustPrompt: () => {}, reconnect: vi.fn(), terminalUrl: () => "",
   };
 }

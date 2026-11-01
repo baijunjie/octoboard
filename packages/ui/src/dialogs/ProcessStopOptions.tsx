@@ -1,7 +1,7 @@
 import { Checkbox, Label } from "@heroui/react";
 import React, { useId, useState } from "react";
 
-import { ProcessCommand, ProcessTreeDetails, StopGlyph } from "../components/status/ProcessTreeDetails";
+import { ProcessCommand, ProcessTreeDetails, StopGlyph } from "../process/ProcessTreeDetails";
 import { useT } from "../i18n/react";
 import type { ProcessTree } from "../protocol";
 import { useDaemonStore } from "../store";

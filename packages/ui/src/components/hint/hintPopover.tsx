@@ -3,7 +3,7 @@ import React, { useEffect, useId, useRef, useState } from "react";
 import type { PressEvent } from "react-aria";
 import { Dialog, Popover as SurfacePopover } from "react-aria-components";
 
-import { isImeKey } from "../../imeKey";
+import { isImeKey } from "../../input/imeKey";
 import { keepsEscape } from "../focus/keepsEscape";
 import { OFFSET, PLACEMENT, TOOLTIP_SURFACE } from "./hintSurface";
 import { useStableHandler } from "../hooks/useLatest";

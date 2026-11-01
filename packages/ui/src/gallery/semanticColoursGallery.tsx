@@ -8,7 +8,7 @@ import { Button } from "../components/controls/Button";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
 import { ExternalLink } from "../components/text/ExternalLink";
 import { StatusMark } from "../components/status/StatusMark";
-import { InlineReference } from "../components/text/InlineReference";
+import { InlineReference } from "../i18n/InlineReference";
 import { StatusBadge, type StatusBadgeColor } from "../components/status/StatusBadge";
 import { FadedScroller, useFadeRegion } from "../components/scroll/scrollFade";
 

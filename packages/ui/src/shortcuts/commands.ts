@@ -1,5 +1,5 @@
 import type { PlainMessageKey } from "../i18n/catalog";
-import { IS_MAC } from "../useWindowShortcut";
+import { IS_MAC } from "../input/keys";
 import type { Binding } from "./binding";
 
 /** Where the shortcuts are listed under, in the order of the list. */

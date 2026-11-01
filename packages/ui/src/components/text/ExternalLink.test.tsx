@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { ErrorAlerts } from "../../shell/ErrorAlerts";
-import { errorAlerts } from "../../errorAlerts";
+import { errorAlerts } from "../alerts/errorAlerts";
 import type { PlatformAdapter } from "../../platform";
 import { PlatformProvider } from "../../platform/react";
 import { ExternalLink } from "./ExternalLink";

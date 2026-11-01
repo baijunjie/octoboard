@@ -1,16 +1,17 @@
 import { DaemonRequestError } from "../daemon-client";
-import { consoleAccount, inheritedAccount } from "../accountChoices";
-import { AGENT_LABEL, isAgentAdded, isAgentUnavailable, projectSessionAgent } from "../agents";
-import { daemonMessage } from "../daemonMessage";
-import { noticeErrorPresentation, noticeKind } from "../errorPresentation";
-import { FOLLOWING_GIT_WORKFLOW } from "../gitWorkflow";
+import { consoleAccount, inheritedAccount } from "../accounts/accountChoices";
+import { AGENT_LABEL, isAgentAdded, isAgentUnavailable, projectSessionAgent } from "../agents/agents";
+import { daemonMessage } from "../errors/daemonMessage";
+import { FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
+import type { Translate } from "../i18n/catalog";
 import { currentLanguage, t } from "../i18n/language";
 import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, scopeCause, type Account, type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type ConsoleSessionColour, type Launch, type LaunchChange, type PerAgent, type ResetCreditOutcome, type ProjectAccount, type BrowseEntry, type Console, type DirEntry, type Event, type PathLinkKind, type PathLinkView, type ProcessTree, type Project, type QuotaWindow, type RequestBody, type Session, type SharingCause, type SessionRecordsPresence, type ShellTerminal, type GitWorkflowOverride, type GitWorkflowOverrideChanges, type SourceUnavailableCause } from "../protocol";
-import { hasClaudeCompatibility } from "../settings/claudeCompatibility";
-import { accountQuotaOf } from "../accountQuotaOf";
-import { exhaustedQuotaWindow, isNotLoggedIn } from "../quota/quotaFormat";
-import { applyDaemonEvent, createStateStore, errorToast, type Daemon, type ToastRequest } from "../store";
-import type { Fixture } from "./fixture";
+import { hasClaudeCompatibility } from "../agents/claudeCompatibility";
+import { accountQuotaOf } from "../accounts/accountQuotaOf";
+import { exhaustedQuotaWindow, isNotLoggedIn } from "../accounts/quotaFormat";
+import { applyDaemonEvent, createStateStore, type Daemon, type ToastRequest } from "../store";
+import { broadcastToast, errorToast } from "../store/toasts";
+import type { Fixture, ToastFixture } from "./fixture";
 import { terminalFixtureUrl } from "./fakeTerminal";
 import { createConfigurationReplies } from "./fixtureConfiguration";
 import { createGitReplies } from "./fixtureGit";
@@ -328,28 +329,32 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
     return [id, Math.max(0, ...sessions.map((session, index) => session.ordinal ?? index + 1)) + 1];
   }));
 
+  /** The toast a fixture stands for, made by the code the real route uses. */
+  const scenarioToast = (fixture: ToastFixture): ToastRequest => {
+    const worded = (message: string | ((t: Translate) => string)) => (typeof message === "function" ? message(t) : message);
+    switch (fixture.kind) {
+      case "broadcast":
+        return broadcastToast(fixture.event, store.getState(), currentLanguage());
+      case "notice":
+        return { kind: "notice", message: worded(fixture.message) };
+      case "raised": {
+        // As `request()` rejects a failure: its message is worded already, which the alert's body and its dedup read.
+        const fallback = worded(fixture.message);
+        const { code, params = {} } = fixture;
+        const error = code
+          ? new DaemonRequestError(daemonMessage(currentLanguage(), code, params, fallback, store.getState()), code, params)
+          : new Error(fallback);
+        return errorToast(error, { title: worded(fixture.title), session: fixture.session, recovery: fixture.recovery });
+      }
+    }
+  };
+
   const raiseScenarioToasts = () => {
     if (toastsRaised) return;
     toastsRaised = true;
     // Settled even when a fixture throws, so the page reports that error and not a missing subscriber.
     try {
-      for (const { code, params, message: fixtureMessage, title: fixtureTitle, kind, ...toast } of scenario.toasts ?? []) {
-        const message = typeof fixtureMessage === "function" ? fixtureMessage(t) : fixtureMessage;
-        const title = typeof fixtureTitle === "function" ? fixtureTitle(t) : fixtureTitle;
-        const failure = code ? noticeErrorPresentation(code, params ?? {}, message) : undefined;
-        if (kind === "session_notice" && !code) throw new Error("A session_notice fixture needs a code to route by");
-        emitToast({
-          ...toast,
-          kind: kind === "session_notice" ? noticeKind(code!, params ?? {}) : kind,
-          title,
-          // Mirror the store: keep the full plain message and structured launch title separately.
-          ...(code && {
-            daemonTitle: failure ? new DaemonRequestError(message, `${code}.title`, params ?? {}) : undefined,
-            daemonError: failure ?? new DaemonRequestError(message, code, params ?? {}),
-          }),
-          message: code ? daemonMessage(currentLanguage(), code, params ?? {}, message, store.getState()) : message,
-        });
-      }
+      for (const fixture of scenario.toasts ?? []) emitToast(scenarioToast(fixture));
     } finally {
       markToastsRaised();
     }
@@ -1154,6 +1159,7 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
           return { type: "project_dir", id: null, project: body.project, worktree: null, path: body.path, root_id: "fixture", entries: entriesUnder(files, body.path), complete };
         }
         case "search_project_files": {
+          if (scenario.searchError) return fail(scenario.searchError);
           const query = body.query.trim().toLowerCase();
           const files = projectFiles(body.project);
           const paths = Object.entries(files)
@@ -1492,7 +1498,7 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
       }
     },
     // The request the real daemon raises, so the title and the raw text an action gives it reach the alert as they do there.
-    toastError: (message, session, title, recovery) => emitToast(errorToast(message, session, title, recovery)),
+    raiseError: (error, alert) => emitToast(errorToast(error, alert)),
     toastNotice: (message, content) => emitToast({ kind: "notice", message, content }),
     onToast: (listener) => {
       toastListeners.add(listener);

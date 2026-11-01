@@ -1,18 +1,19 @@
 import React from "react";
 
 import { HelpTip } from "../components/hint/HelpTip";
-import { InlineReference } from "../components/text/InlineReference";
+import { InlineReference } from "../i18n/InlineReference";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { useListMotion } from "../components/motion/useListMotion";
 import { OptionSelect } from "../components/form/OptionSelect";
-import { errorPresentation } from "../errorPresentation";
-import { DELIVERY_CHOICES, DEVELOPMENT_CHOICES } from "../gitWorkflow";
+import { DELIVERY_CHOICES, DEVELOPMENT_CHOICES } from "../git/gitWorkflow";
 import { Message, useT } from "../i18n/react";
 import type { GitDelivery, GitDevelopment, GitWorkflowSettingsChanges } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { CloneDirSetting } from "./CloneDirSetting";
+import { DaemonSwitchSetting } from "./DaemonSwitchSetting";
 import { SettingRow, SwitchSettingRow } from "./SettingRow";
 import { SettingsGroup } from "./SettingsGroup";
+import { alertFailure } from "../components/alerts/raiseError";
 
 /** The Git settings, in three groups: the repository (where clones go, whether branches are pulled), development (see
  * `Settings.git_workflow` in protocol.ts: where a project session develops, then how it merges and delivers finished
@@ -20,29 +21,20 @@ import { SettingsGroup } from "./SettingsGroup";
  * value for any of the workflow items, which the project dialog sets. */
 export function GitSection(): React.ReactElement {
   const t = useT();
-  const { request, toastError } = useDaemon();
+  const { request } = useDaemon();
   const listRef = useListMotion<HTMLDivElement>({ fitHeight: true });
-  const autoPull = useDaemonStore((s) => s.settings.auto_pull_repositories);
   const gitWorkflow = useDaemonStore((s) => s.settings.git_workflow);
   // Another window, or an agent's update, can put development on the current branch while focus is on a row it hides.
   const handoff = useFocusHandoff(() => listRef.current?.querySelector("button")?.focus());
 
-  const setAutoPull = (value: boolean) =>
-    void request({ type: "update_settings", auto_pull_repositories: value }).catch((err) => toastError(errorPresentation(err as Error), undefined, t("settings.saveFailedTitle")));
   const change = (changes: GitWorkflowSettingsChanges) =>
-    void request({ type: "update_settings", git_workflow: changes }).catch((err) => toastError(errorPresentation(err as Error), undefined, t("settings.saveFailedTitle")));
+    void request({ type: "update_settings", git_workflow: changes }).catch(alertFailure({ title: t("settings.saveFailedTitle") }));
 
   return (
     <>
       <SettingsGroup title={t("settings.git.group.repository")}>
         <CloneDirSetting />
-        <SwitchSettingRow
-          label={t("settings.git.autoPull.label")}
-          help={<HelpTip label={t("settings.git.autoPull.help")}>{t("settings.git.autoPull.remoteCheck")}</HelpTip>}
-          description={t(autoPull ? "settings.git.autoPull.description.on" : "settings.git.autoPull.description.off")}
-          isSelected={autoPull}
-          onChange={setAutoPull}
-        />
+        <DaemonSwitchSetting field="auto_pull_repositories" />
       </SettingsGroup>
       <SettingsGroup title={t("settings.git.group.development")}>
         <div ref={listRef} className="relative" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>

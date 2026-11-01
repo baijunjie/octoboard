@@ -1,10 +1,10 @@
 import React from "react";
 
-import { InlineReference } from "../components/text/InlineReference";
+import { InlineReference } from "../i18n/InlineReference";
 import type { Translate } from "../i18n/catalog";
 import { Message } from "../i18n/react";
 import type { QuotaWindow } from "../protocol";
-import { quotaResetsIn, quotaWindowLabel, quotaWindowPhrase, type QuotaNaming } from "./quotaFormat";
+import { quotaResetsIn, quotaWindowLabel, quotaWindowPhrase, type QuotaNaming } from "../accounts/quotaFormat";
 
 /** A quota window referenced in copy, keeping model values apart from its translated label. */
 export function QuotaWindowName({ naming, window, t }: { naming: QuotaNaming; window: QuotaWindow; t: Translate }): React.ReactElement {

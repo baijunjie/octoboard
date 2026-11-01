@@ -3,11 +3,11 @@ import React, { useLayoutEffect, useRef, useState, useSyncExternalStore } from "
 
 import { Button } from "../components/controls/Button";
 import { recoveryAction } from "../components/alerts/ErrorGuidance";
-import { alertFailures, errorAlerts } from "../errorAlerts";
+import { alertFailures, errorAlerts } from "../components/alerts/errorAlerts";
 import { useT } from "../i18n/react";
 import { openSettingsFromAnywhere } from "../settings/settingsLauncher";
 import { DaemonProvider, type Daemon } from "../store";
-import { useIssueReport } from "../useIssueReport";
+import { useIssueReport } from "../components/alerts/useIssueReport";
 import { dialogAround } from "../components/dialog/dialogElement";
 import { Dialog } from "../components/dialog/Dialog";
 import { openSessionModelFromAnywhere } from "../dialogs/sessionModelLauncher";

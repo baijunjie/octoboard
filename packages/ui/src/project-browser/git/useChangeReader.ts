@@ -1,13 +1,12 @@
 import type React from "react";
 import { createElement, useEffect, useRef, useState } from "react";
 
-import { InlineReference } from "../../components/text/InlineReference";
+import { InlineReference } from "../../i18n/InlineReference";
 import { useLatest } from "../../components/hooks/useLatest";
 import { DaemonRequestError } from "../../daemon-client";
 import type { Translate } from "../../i18n/catalog";
 import { isolate } from "../../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
-import { abbreviateHome } from "../../pathDisplay";
 import type {
   ChangeSide,
   ComparisonEndpoint,
@@ -29,8 +28,8 @@ import {
   type ViewerSubject,
 } from "../../viewer/content";
 import { changeBodiesFailure } from "../../viewer/viewerError";
-import { displayWirePath } from "../../wirePath";
-import { browseFailure } from "../browseError";
+import { displayWirePath } from "../../format/wirePath";
+import { projectBrowseFailure } from "../browseError";
 import { CONFLICT_LABELS, SECTION_LABELS, type ChangeItem, type CommitRef, type ShownChange } from "./changes";
 import { shortCommit } from "./shortCommit";
 
@@ -285,9 +284,8 @@ export function useChangeReader(project: string, onWorktreeGone?: () => void): C
           throw new ChangeBodiesError("unavailable");
         }
         const state = store.getState();
-        const root = state.projects.get(project)?.path;
         const { t, language } = wording.current;
-        const failure = browseFailure(t, language, err, state, root && abbreviateHome(root, state.homeDir));
+        const failure = projectBrowseFailure(t, language, err, state, project);
         switch (failure.kind) {
           case "superseded":
             throw new ChangeBodiesError("superseded");
@@ -327,9 +325,7 @@ export function useChangeReader(project: string, onWorktreeGone?: () => void): C
       .catch((err: unknown) => {
         if (!current()) return;
         if (isWorktreeGone(err, origin)) return closeGone(item, origin);
-        const state = store.getState();
-        const root = state.projects.get(project)?.path;
-        const failure = browseFailure(t, language, err, state, root && abbreviateHome(root, state.homeDir));
+        const failure = projectBrowseFailure(t, language, err, store.getState(), project);
         if (failure.kind === "superseded") return;
         if (failure.kind === "changed" && attempt < CHANGED_RETRIES) return read(item, origin, attempt + 1);
         if (failure.kind === "disconnected") {

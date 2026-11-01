@@ -3,14 +3,14 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { errorAlerts } from "../errorAlerts";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 import { accountOf, sessionOf } from "../fixtures/builders";
 import type { Account, AccountQuota, Settings } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { ConsoleAccountsField } from "./ConsoleAccountsField";
 import { SwitchAccountDialog } from "./SwitchAccountDialog";
 
-vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
+vi.mock("../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -21,7 +21,7 @@ const notLoggedIn: AccountQuota = { agent: "claude", account: "claude-work", fet
 function render(settings: Partial<Settings>, ui: React.ReactElement, accountQuotas: AccountQuota[] = []) {
   const store = createStateStore({ accountQuotas });
   store.setState({ settings: { ...store.getState().settings, ...settings } });
-  const daemon = { store, request: vi.fn(), toastError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "" } as unknown as Daemon;
+  const daemon = { store, request: vi.fn(), raiseError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "" } as unknown as Daemon;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   act(() => root.render(<DaemonProvider value={daemon}>{ui}</DaemonProvider>));

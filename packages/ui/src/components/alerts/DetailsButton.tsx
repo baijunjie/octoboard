@@ -3,7 +3,7 @@ import React from "react";
 
 import { useT } from "../../i18n/react";
 import { AlertButton } from "./AlertButton";
-import { CodeToneContext } from "../text/codeTone";
+import { CodeToneContext } from "../../i18n/codeTone";
 
 /** The Details button of a compact Alert and the popover it opens: a dialog the button names, that Escape
  * closes and gives focus back from. It holds the further explanation in the application's own words, then

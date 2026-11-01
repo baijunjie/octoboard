@@ -6,7 +6,7 @@ import { expect, it, onTestFinished } from "vitest";
 import { currentLanguage, setLanguage, t } from "../i18n/language";
 import type { QuotaWindow } from "../protocol";
 import { quotaUsedUpMessage, QuotaWindowName } from "./quotaCopy";
-import { quotaUsedUpSentence, quotaWindowLabel } from "./quotaFormat";
+import { quotaUsedUpSentence, quotaWindowLabel } from "../accounts/quotaFormat";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

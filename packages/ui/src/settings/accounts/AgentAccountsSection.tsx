@@ -3,24 +3,22 @@ import { Tabs } from "@heroui/react";
 import { ArrowUp, ArrowDown, Bot, Info, LogIn, Pencil, Settings, Trash2, UserPlus, type LucideIcon } from "lucide-react";
 import React, { useContext, useEffect, useRef, useState } from "react";
 
-import { AGENT_LABEL, defaultAccountName, isAgentUnavailable } from "../../agents";
+import { AGENT_LABEL, defaultAccountName, isAgentUnavailable } from "../../agents/agents";
 import { ICON_TRIGGER_CLASS, takeMenuFocusToRestore, type ActionMenuEntry } from "../../components/menus/ActionMenu";
 import { AgentTabList } from "../../components/tabs/AgentTabList";
 import { EmptyPanel } from "../../components/panel/EmptyPanel";
 import { TitledControl } from "../../components/hint/TitledControl";
-import { InlineReference } from "../../components/text/InlineReference";
+import { InlineReference } from "../../i18n/InlineReference";
 import { PATH_VAR_PARAMS } from "../../components/text/literalParams";
 import { canTakeFocus } from "../../components/focus/regionFocus";
 import { useStickyHeadingFocus } from "../../components/scroll/stickyHeadingFocus";
 import { Message, useT } from "../../i18n/react";
 import type { Account, Agent } from "../../protocol";
 import { useDaemon, useDaemonStore } from "../../store";
-import { ringForAutomaticFocus } from "../../touchInput";
+import { ringForAutomaticFocus } from "../../input/touchInput";
 import { AccountDetailsDialog } from "./AccountDetailsDialog";
 import { AccountDialog } from "./AccountDialog";
 import { AccountSettingsDialog } from "./AccountSettingsDialog";
-import { AutoSelectAccountSetting } from "./AutoSelectAccountSetting";
-import { AutoSwitchOnUsageLimitSetting } from "./AutoSwitchOnUsageLimitSetting";
 import { accountLoginOf, loginIsActive } from "./AccountLogin";
 import { type ReturnLoginFocus } from "./AccountLoginButton";
 import { AccountLoginDialog } from "./AccountLoginDialog";
@@ -32,7 +30,7 @@ import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { RemoveAccountDialog } from "./RemoveAccountDialog";
 import { AgentTabActions, AgentTabMenu, RemoveAgentDialog, useAgentList } from "./AgentListMenu";
 import { useAccountOrder } from "./useAccountOrder";
-import { StartQuotaWindowsSetting } from "./StartQuotaWindowsSetting";
+import { DaemonSwitchSetting } from "../DaemonSwitchSetting";
 import { SettingsFocusContext, useSectionRefocus } from "../useSectionRefocus";
 
 /** The agent strip's height, the `p-1.5` clearance around its tabs and its 1px rule included. The strip is given
@@ -228,9 +226,9 @@ export function AgentAccountsSection(): React.ReactElement {
       <p className="pb-2 text-sm text-app-muted">
         <Message id="settings.accounts.description" params={PATH_VAR_PARAMS} />
       </p>
-      <AutoSelectAccountSetting />
-      <AutoSwitchOnUsageLimitSetting />
-      <StartQuotaWindowsSetting />
+      <DaemonSwitchSetting field="auto_select_account" />
+      <DaemonSwitchSetting field="auto_switch_on_usage_limit" />
+      <DaemonSwitchSetting field="auto_start_quota_windows" />
       {selected === undefined ? (
         <EmptyPanel
           icon={Bot}

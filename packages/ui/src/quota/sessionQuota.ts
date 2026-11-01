@@ -1,10 +1,10 @@
-import { accountDisabled } from "../accountChoices";
-import { AGENT_LABEL, defaultAccountName } from "../agents";
+import { accountDisabled } from "../accounts/accountChoices";
+import { AGENT_LABEL, defaultAccountName } from "../agents/agents";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import { isLive, type Account, type AccountQuota, type Agent, type AgentAvailability, type Session, type Settings } from "../protocol";
-import { accountQuotaOf } from "../accountQuotaOf";
-import { usageBarSummary, usageBarWindows, type QuotaBar } from "./quotaFormat";
+import { accountQuotaOf } from "../accounts/accountQuotaOf";
+import { usageBarSummary, usageBarWindows, type QuotaBar } from "../accounts/quotaFormat";
 
 export interface SessionQuotaSource {
   accounts: Account[];

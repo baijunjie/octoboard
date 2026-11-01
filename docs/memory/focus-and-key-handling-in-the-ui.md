@@ -83,7 +83,7 @@ tooltips close on turning inert, and a covered alert stays exposed to screen rea
 A modal of this kind also hands focus on when its last one closes with nowhere to return focus to — a control gone
 with the dialog that closed before it, or no focus ever given: call `focusAfterModalCloses` from
 `packages/ui/src/components/focus/regionFocus.ts` as the last one closes and `cancelFocusAfterModalCloses` as one comes up,
-as `packages/ui/src/errorAlerts.ts` and `PendingQuestionDialog` do, rather than a fallback of its own. Any other modal
+as `packages/ui/src/components/alerts/errorAlerts.ts` and `PendingQuestionDialog` do, rather than a fallback of its own. Any other modal
 that can close with nowhere to return focus to does the same after trying the destinations of its own, as Settings
 closing with no dialog under it does (`packages/ui/src/settings/useSettingsDialog.ts`).
 
@@ -347,7 +347,7 @@ binding against, so the user can bind another command onto it. Matching is exact
 Cmd-on-Apple / Ctrl-elsewhere split of a binding is made in `packages/ui/src/shortcuts/binding.ts` alone.
 
 Any other Cmd / Ctrl test — a modifier+click, the held-modifier quick-create affordance, a widget's own key — goes
-through `isPrimaryModifier` (and, for showing the key, `IS_MAC`) from `packages/ui/src/useWindowShortcut.ts`. Do not
+through `isPrimaryModifier` (and, for showing the key, `IS_MAC`) from `packages/ui/src/input/keys.ts`. Do not
 derive the platform again (from `navigator.userAgent` or anything else) and do not accept `metaKey || ctrlKey`: the
 helper also requires the *other* modifier to be up, so every shortcut and click in the window agrees on which key it is.
 

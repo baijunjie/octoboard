@@ -1,9 +1,9 @@
 // What the Changes view says around its list, from the state of its parts: pure, so what is said
 // when is one place and tested on its own, and the component is left to lay it out.
-import type { ErrorPresentation } from "../../errorPresentation";
+import type { ErrorPresentation } from "../../errors/errorPresentation";
 import type { PlainMessageKey } from "../../i18n/catalog";
 import { scopeCause, type ScopeCause, type WorktreeInfo } from "../../protocol";
-import { displayWirePath, wireBaseName } from "../../wirePath";
+import { displayWirePath, wireBaseName } from "../../format/wirePath";
 import { comparisonNews } from "./comparisonNews";
 import { shortCommit } from "./shortCommit";
 import type { BranchList } from "./useBranchList";

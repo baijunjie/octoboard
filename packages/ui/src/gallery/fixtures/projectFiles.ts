@@ -401,6 +401,16 @@ export const projectFilesScenarios: Scenario[] = [
     steps: searchFor("no-such-file"),
   },
   {
+    id: "files-filter-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "A search that cannot be run",
+    description: "The search failed with the project's own folder gone, and the error names no path of its own, so the explanation names the project's folder, written from the home directory (~/code/website), as a chip. The system's reason sits on its own surface under the explanation.",
+    state,
+    searchError: sourceUnavailable("", "missing", "No such file or directory (os error 2)"),
+    steps: searchFor("server"),
+  },
+  {
     id: "files-empty",
     group: GROUP,
     category: "normal",

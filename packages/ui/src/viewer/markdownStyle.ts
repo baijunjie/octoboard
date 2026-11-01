@@ -1,5 +1,5 @@
-import { createPersistedPreference } from "../persistedPreference";
-import { PREFERENCE_KEYS } from "../preferenceKeys";
+import { createPersistedPreference } from "../preferences/persistedPreference";
+import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 
 export const MARKDOWN_STYLES = ["tailwind", "github", "newsprint", "latex"] as const;
 

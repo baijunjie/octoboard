@@ -5,9 +5,9 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, onTestFinished } from "vitest";
 
-import { MIN_PANEL_COLUMN_WIDTH } from "../panels/panelColumns";
+import { MIN_PANEL_COLUMN_WIDTH } from "./panelColumnWidth";
 import { PaneResizeHandle } from "./PaneResizeHandle";
-import { PREFERENCE_KEYS } from "../preferenceKeys";
+import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import { MOBILE_ASIDE_MIN, usePaneWidth, type DockedPanes, type PaneWidth } from "./paneWidth";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

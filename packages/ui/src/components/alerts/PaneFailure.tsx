@@ -1,8 +1,8 @@
 import { CircleAlert } from "lucide-react";
 import React, { useId, useRef } from "react";
 
-import type { ErrorPresentation } from "../../errorPresentation";
-import { retryCanHelp } from "../../errorRecovery";
+import type { ErrorPresentation } from "../../errors/errorPresentation";
+import { retryCanHelp } from "../../errors/errorRecovery";
 import { useT } from "../../i18n/react";
 import { DaemonErrorMessage } from "./DaemonErrorMessage";
 import { errorDetails, errorRemedy } from "./errorParts";

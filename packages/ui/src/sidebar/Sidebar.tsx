@@ -9,11 +9,11 @@ import {
   MessageSquarePlus,
   SearchX,
 } from "lucide-react";
-import { ringForAutomaticFocus } from "../touchInput";
+import { ringForAutomaticFocus } from "../input/touchInput";
 import React, { memo, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
-import { noAgentState } from "../agents";
+import { noAgentState } from "../agents/agents";
 import { ActionMenu } from "../components/menus/ActionMenu";
 import { ActivityMarker } from "../components/status/ActivityMarker";
 import { SessionAgentIcon } from "../components/icons/SessionAgentIcon";
@@ -26,21 +26,20 @@ import { hasVisibleContext, SessionContextLabel } from "../components/status/Ses
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { StatusIcon } from "../components/status/StatusIcon";
 import type { NewSessionRequest } from "../dialogs/dialogRequest";
-import { withGitBadge } from "../gitStatusLabel";
+import { withGitBadge } from "../git/gitStatusLabel";
 import { isolate } from "../i18n/isolate";
-import { joinPhrases } from "../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import { drawerClass, PANE_ID, RailClip, usePanePeekPointer } from "../layout/paneOverlay";
 import type { PaneWidth } from "../layout/paneWidth";
 import { COLUMN_EASE_CLASS, columnSpan, isDockEasing, usePaneDockMotion, type DockPhase } from "../layout/paneDockMotion";
 import type { PanePeek } from "../layout/usePaneToggles";
-import { onReducedMotion, prefersReducedMotion } from "../reducedMotion";
-import { effectiveTags, matchesFilter, tagVocabulary } from "../projectFiltering";
+import { onReducedMotion, prefersReducedMotion } from "../components/motion/reducedMotion";
+import { effectiveTags, matchesFilter, tagVocabulary } from "../sessions/projectFiltering";
 import type { Console, Project, Session } from "../protocol";
-import { activityLabelKey, sessionAriaLabel, sessionDisplayTitle, sessionShownStatusKind } from "../sessionLabel";
-import { inheritedLaunch, sessionModelEffort, sessionModelLabel } from "../sessionModel";
+import { activityLabelKey, sessionDisplayTitle, sessionRowName, sessionShownStatusKind } from "../sessions/sessionLabel";
+import { sessionModelLabel } from "../sessions/sessionModel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
-import { useDaemonStore, useDaemonStoreEqual } from "../store";
+import { useDaemonStore, useSessionLaunch } from "../store";
 import { BindingBadge } from "../components/status/BindingBadge";
 import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { GitBadge } from "./GitBadge";
@@ -57,7 +56,7 @@ import type { FocusTarget, SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
 import { useListMotion } from "../components/motion/useListMotion";
 import { INACTIVE_VEIL_CLASS } from "../components/status/inactiveVeil";
-import { useArchivedOwnerSessions, useConsoleSessions, useHasBoundSessions, useOwnerSessions, useProjectSessions, useSession, useSessionProjectId } from "../sessions/useSessions";
+import { useArchivedOwnerSessions, useConsoleSessions, useHasBoundSessions, useOwnerSessions, useProjectSessions, useSession, useSessionProjectId } from "../store";
 
 /** The clip the docked column sits in. `min-w-0` lets the flex item reach 0 while the sidebar
  * inside keeps its full width, so the list does not reflow.
@@ -895,14 +894,13 @@ const SessionRow = memo(function SessionRow({
   const owner = under ?? (bound?.role === "console" ? bound : undefined);
   const rowRef = useRef<HTMLDivElement>(null);
   const badgeOwner = session.role === "console" ? session : owner?.role === "console" ? owner : undefined;
-  const inherited = useDaemonStoreEqual((s) => inheritedLaunch(session, s.consoles, s.projects));
-  const launch = sessionModelEffort(session, inherited);
+  const launch = useSessionLaunch(session);
   return (
     <TreeRow
       ref={rowRef}
       describedBy={hasVisibleContext(session.context) ? metadataId : undefined}
       // The model and effort are in the agent mark's tooltip only, so the row's name carries them too.
-      ariaLabel={joinPhrases(language, [sessionAriaLabel(t, language, session, accounts, owner, defaultNames), sessionModelLabel(t, session.agent, launch)])}
+      ariaLabel={sessionRowName(t, language, session, { accounts, defaultNames, owners: [owner], modelLabel: sessionModelLabel(t, session.agent, launch) })}
       selected={selected}
       locked={session.locked}
       onActivate={() => handlers.onSelectSession(session)}

@@ -1,6 +1,6 @@
 import React from "react";
 
-import { agentPickerOptions, agentSetupOptions } from "../../agents";
+import { agentPickerOptions, agentSetupOptions } from "../../agents/agents";
 import type { Translate } from "../../i18n/catalog";
 import type { Agent, AgentAvailability } from "../../protocol";
 import { AGENT_MARKS } from "./agentMarks";

@@ -5,7 +5,7 @@
 // steps press combinations through `ui.chord`, which turns a portable binding into that platform's keys.
 import type { Binding } from "../../shortcuts/binding";
 import type { Overrides } from "../../shortcuts/store";
-import { IS_MAC } from "../../useWindowShortcut";
+import { IS_MAC } from "../../input/keys";
 import type { Ui, Step } from "../../fixtures/interact";
 import type { Preferences } from "../../fixtures/preferences";
 import type { Scenario } from "../scenario";

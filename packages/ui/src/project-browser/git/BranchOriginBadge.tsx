@@ -1,11 +1,11 @@
 import React from "react";
 
-import { InlineReference } from "../../components/text/InlineReference";
+import { InlineReference } from "../../i18n/InlineReference";
 import { IndicatorTooltip } from "../../components/hint/IndicatorTooltip";
 import { isolate } from "../../i18n/isolate";
 import { Message, useT } from "../../i18n/react";
 import type { BranchOrigin } from "../../protocol";
-import { sessionDisplayTitle } from "../../sessionLabel";
+import { sessionDisplayTitle } from "../../sessions/sessionLabel";
 import { useDaemonStore } from "../../store";
 
 /**

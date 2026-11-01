@@ -1,17 +1,17 @@
 import React, { useEffect, useId, useState } from "react";
 
-import { AGENT_LABEL } from "../../agents";
+import { AGENT_LABEL } from "../../agents/agents";
 import { DaemonRequestError } from "../../daemon-client";
 import { ErrorAlert } from "../../components/alerts/ErrorAlert";
 import { FailureAlert } from "../../components/alerts/FailureAlert";
-import { InlineReference } from "../../components/text/InlineReference";
+import { InlineReference } from "../../i18n/InlineReference";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../../components/announce/StatusAnnouncer";
 import { ConfirmConsequences } from "../../components/dialog/ConfirmConsequences";
 import { ConfirmDialog } from "../../components/dialog/ConfirmDialog";
 import { ConfirmOption } from "../../components/form/ConfirmOption";
 import { KeepFocusInDialog } from "../../components/dialog/KeepFocusInDialog";
 import { useAfterErrorAlert } from "../../components/dialog/useAfterErrorAlert";
-import { errorPresentation, type ErrorPresentation } from "../../errorPresentation";
+import { errorPresentation, type ErrorPresentation } from "../../errors/errorPresentation";
 import { Message, useT } from "../../i18n/react";
 import { isLive, type Account, type AccountTrashOutcome } from "../../protocol";
 import { compareSessions, ordersByStatus } from "../../sessions/order";

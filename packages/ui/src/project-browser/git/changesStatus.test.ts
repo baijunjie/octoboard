@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 
-import type { ErrorPresentation } from "../../errorPresentation";
+import type { ErrorPresentation } from "../../errors/errorPresentation";
 import type { WorktreeInfo } from "../../protocol";
 import { branchGone, changesStatus, partsLoading } from "./changesStatus";
 import type { Comparison } from "./useBranchComparison";

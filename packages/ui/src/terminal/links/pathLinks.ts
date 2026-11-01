@@ -1,7 +1,7 @@
 import type { IBufferRange, ILink, ILinkProvider, Terminal } from "@xterm/xterm";
 
 import type { PathLinkKind, PathLinkView } from "../../protocol";
-import { isPrimaryModifier } from "../../useWindowShortcut";
+import { isPrimaryModifier } from "../../input/keys";
 import {
   cachedRows,
   crossesJoin,

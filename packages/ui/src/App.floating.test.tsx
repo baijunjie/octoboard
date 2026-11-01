@@ -13,7 +13,7 @@ import { usePanelStacks } from "./panels/usePanelStacks";
 import { PlatformProvider } from "./platform/react";
 import type { Project, RequestBody } from "./protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "./store";
-import { ThemeProvider } from "./theme";
+import { ThemeProvider } from "./preferences/theme";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 // Each test mounts the whole App, which a machine under load can take longer than the default 5s for.
@@ -117,7 +117,7 @@ function mountApp(width: number, touch = false, agents = false, waiting = false)
       ...(agents ? { agentAvailability: new Map(ALL_AGENTS.map((agent) => [agent, { agent, availability: "available" as const, default_account_dir: `/Users/dev/.${agent}` }])) } : {}),
     }),
     request: vi.fn(async (body: RequestBody) => body.type === "list_processes" ? { type: "processes_listed", id: null, trees: [] } : { type: "ack", id: null }) as Daemon["request"],
-    toastError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
+    raiseError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
     dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
   };
   mountForTooltip(

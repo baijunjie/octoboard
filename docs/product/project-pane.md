@@ -256,7 +256,8 @@ restores the unfiltered tree.
   limits, or could not read some files or folders, so not every match may be listed, and it opens as a row's mark does
   (see "Failures, warnings and notes marked at their point" in `docs/product/error-alerts.md`). When a later search
   completes and the mark goes while it or its popover held keyboard focus, focus goes to the field's input. An
-  unreadable project root instead fails the search.
+  unreadable project root instead fails the search, its reason naming the project folder by its path, `~` standing for
+  the home directory.
 - Reading which entries are ignored takes at most **2 seconds** of a search's 5. Where it cannot be read in that time or
   within its size limits, or Git cannot be run or fails, the search goes on with nothing left out for that repository:
   it may then show ignored files, and it is not marked incomplete for that. A nested repository the search reaches only

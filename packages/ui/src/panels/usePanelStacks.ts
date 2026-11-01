@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 
-import { createPersistedPreference } from "../persistedPreference";
-import { PREFERENCE_KEYS } from "../preferenceKeys";
+import { createPersistedPreference } from "../preferences/persistedPreference";
+import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import { OWNER_KINDS, parseStacks, serializeStacks, shownKinds, type OwnerKind, type PanelStack, type PanelStacks } from "./stackState";
 
 /** The right pane's old visibility preference, which a pane the user had hidden carries over as no

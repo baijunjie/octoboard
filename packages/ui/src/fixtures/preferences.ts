@@ -1,4 +1,7 @@
-import type { PanelKind, OwnerKind } from "../panels/stackState";
+import type { Language } from "../i18n/languages";
+import type { PanelKind } from "../layout/panelKind";
+import type { OwnerKind } from "../panels/stackState";
+import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import type { UpdateChannel } from "../platform";
 import type { Overrides } from "../shortcuts/store";
 import type { MarkdownStyle } from "../viewer/markdownStyle";
@@ -43,4 +46,18 @@ export interface Preferences {
  * its owner parses, anything else as its string. */
 export function storedPreference(value: NonNullable<Preferences[keyof Preferences]>): string {
   return typeof value === "object" ? JSON.stringify(value) : String(value);
+}
+
+/** Sets what the app reads from `storage` as its modules load to a page's starting point: the theme the page was
+ * asked for, the language, and each preference of `preferences`. The page runs it before it loads the app, since the
+ * modules that own these read them as they are evaluated. Dropping what an earlier page left is the caller's. */
+export function writeStartingPreferences(
+  storage: Pick<Storage, "setItem">,
+  { language, theme, preferences = {} }: { language: Language; theme: "light" | "dark"; preferences?: Preferences },
+): void {
+  storage.setItem("heroui-theme", theme);
+  storage.setItem(PREFERENCE_KEYS.language, language);
+  for (const [name, value] of Object.entries(preferences)) {
+    if (value !== undefined) storage.setItem(PREFERENCE_KEYS[name as keyof Preferences], storedPreference(value));
+  }
 }

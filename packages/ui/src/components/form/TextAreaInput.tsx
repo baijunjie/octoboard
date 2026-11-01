@@ -1,7 +1,7 @@
 import { FieldError, Label, TextArea, TextField } from "@heroui/react";
 import React from "react";
 
-import { CodeToneContext } from "../text/codeTone";
+import { CodeToneContext } from "../../i18n/codeTone";
 import { TextFieldDescription, TextLengthHint } from "./TextFieldDescription";
 
 /** A labelled multi-line text field, in HeroUI's variant for a field on a surface, for free text

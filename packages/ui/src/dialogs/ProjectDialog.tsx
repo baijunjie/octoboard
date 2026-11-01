@@ -1,31 +1,30 @@
 import React, { useId, useMemo, useState } from "react";
 
-import { orderedAccounts } from "../accountOrder";
-import { Button } from "../components/controls/Button";
-import { accountDisabled, consoleAccount, resolveProjectAccount, settledProjectAccount } from "../accountChoices";
-import { changedLaunch, changedProjectAccounts, readLaunch, readProjectAccounts } from "../agentFields";
+import { orderedAccounts } from "../accounts/accountOrder";
+import { accountDisabled, consoleAccount, resolveProjectAccount, settledProjectAccount } from "../accounts/accountChoices";
+import { changedLaunch, changedProjectAccounts, readLaunch, readProjectAccounts } from "../agents/agentFields";
 import {
   AGENT_LABEL,
   consoleProjectLaunch,
   defaultAccountName,
   projectSessionAgent,
-} from "../agents";
+} from "../agents/agents";
 import { agentIconPickerOptions, AgentIcon } from "../components/icons/AgentIcon";
 import { DaemonErrorMessage } from "../components/alerts/DaemonErrorMessage";
 import { FailureAlert } from "../components/alerts/FailureAlert";
 import { HelpTip } from "../components/hint/HelpTip";
-import { InlineReference } from "../components/text/InlineReference";
-import { changedGitWorkflowItems, FOLLOWING_GIT_WORKFLOW } from "../gitWorkflow";
+import { InlineReference } from "../i18n/InlineReference";
+import { changedGitWorkflowItems, FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
-import { tagVocabulary } from "../projectFiltering";
+import { tagVocabulary } from "../sessions/projectFiltering";
 import type { Agent, Project, ProjectAccount, ProjectSource } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { markDisabledPickable } from "./accountOptions";
 import { AdvancedSection, AdvancedTabs } from "../components/form/AdvancedSection";
 import { AgentAccountField } from "./AgentAccountField";
 import { Dialog, useDialogAction, useSubmitValidation } from "../components/dialog/Dialog";
-import { DirectoryPicker } from "../components/dialog/DirectoryPicker";
+import { useDirectoryBrowse } from "../components/dialog/DirectoryPicker";
 import { GitWorkflowField } from "./GitWorkflowField";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
 import { OptionSelect, type Option } from "../components/form/OptionSelect";
@@ -122,7 +121,7 @@ export function ProjectDialog({
     () => tagVocabulary([...projects.values()].filter((p) => p.console_id === consoleId)),
     [projects, consoleId],
   );
-  const [pickingDirectory, setPickingDirectory] = useState(false);
+  const directoryBrowse = useDirectoryBrowse(path, setPath);
   const { busy, run } = useDialogAction(undefined, t(editing ? "dialog.project.saveFailedTitle" : "dialog.project.addFailedTitle"));
 
   // A single directory's agent is read as its path is entered, a git remote's by probing it, which
@@ -295,11 +294,7 @@ export function ProjectDialog({
               errorMessage={shown(pathError) ?? (locationProblem && <DaemonErrorMessage error={locationProblem} part="summary" />)}
               describedBy={source === "local" && !shown(pathError) && detectionAlert ? detectionAlertId : undefined}
               isDisabled={source === "git" && locked}
-              trailing={
-                <Button type="button" variant="secondary" isDisabled={source === "git" && locked} onPress={() => setPickingDirectory(true)}>
-                  {t("common.browse")}
-                </Button>
-              }
+              trailing={directoryBrowse.browseButton(source === "git" && locked)}
             />
             {source === "local" && !shown(pathError) && detectionAlert}
           </div>
@@ -410,17 +405,7 @@ export function ProjectDialog({
           </AdvancedSection>
         )}
       </Dialog>
-      {pickingDirectory && (
-        <DirectoryPicker
-          title={t("dialog.chooseDirectory")}
-          initialPath={path || "~"}
-          onPick={(picked) => {
-            setPath(picked);
-            setPickingDirectory(false);
-          }}
-          onClose={() => setPickingDirectory(false)}
-        />
-      )}
+      {directoryBrowse.picker}
     </>
   );
 }

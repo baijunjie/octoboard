@@ -2,7 +2,7 @@ import { FileSymlink, FolderGit2 } from "lucide-react";
 import React, { useRef, useState } from "react";
 
 import { ChangeLineCounts } from "../../components/status/ChangeLineCounts";
-import { InlineReference } from "../../components/text/InlineReference";
+import { InlineReference } from "../../i18n/InlineReference";
 import { AnchoredTooltip } from "../../components/hint/AnchoredTooltip";
 import { FadeOverflow } from "../../components/text/FadeOverflow";
 import { FileTypeIcon } from "../../components/icons/FileTypeIcon";
@@ -12,7 +12,7 @@ import { Message, useT } from "../../i18n/react";
 import type { LineStats } from "../../protocol";
 import { ChangeStatusBadge } from "../../viewer/ChangeStatusBadge";
 import { STATUS_LABELS, STATUS_MARKS, type StatusKey } from "../../viewer/statusMarks";
-import { displayWirePath, wireBaseName } from "../../wirePath";
+import { displayWirePath, wireBaseName } from "../../format/wirePath";
 import type { ChangeItem } from "./changes";
 import { RowActions } from "../RowActions";
 

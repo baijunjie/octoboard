@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { DiagnosticBlock } from "../components/alerts/DiagnosticBlock";
-import { ActionableError } from "../actionableError";
-import { errorAlerts } from "../errorAlerts";
+import { ActionableError } from "../errors/actionableError";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 import { t } from "../i18n/language";
 import { usePlatform } from "../platform/react";
 import { updateChannel } from "./updateChannel";

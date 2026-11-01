@@ -1,7 +1,7 @@
 import { useState } from "react";
 
-import { createPersistedPreference } from "../persistedPreference";
-import { PREFERENCE_KEYS } from "../preferenceKeys";
+import { createPersistedPreference } from "../preferences/persistedPreference";
+import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import { bindingsEqual, matches, parseBinding, type Binding } from "./binding";
 import { defaultBinding, isCommandId, REBINDABLE_COMMANDS, type CommandId } from "./commands";
 import { validateBinding, type ShortcutProblem } from "./validate";

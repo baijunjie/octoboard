@@ -4,8 +4,8 @@ import type { AsideLayout } from "../layout/AsidePane";
 import type { DockPhase } from "../layout/paneDockMotion";
 import { NARROW_TERMINAL_PANEL_ASIDE_MIN, usePaneWidth } from "../layout/paneWidth";
 import type { PaneToggles } from "../layout/usePaneToggles";
-import { MIN_TWO_COLUMN_ASIDE_WIDTH } from "../panels/panelColumns";
-import type { PanelKind } from "../panels/stackState";
+import { MIN_TWO_COLUMN_ASIDE_WIDTH } from "../layout/panelColumnWidth";
+import type { PanelKind } from "../layout/panelKind";
 
 /**
  * The widths of the sidebar's column and of the right pane, and how the right pane is laid out:

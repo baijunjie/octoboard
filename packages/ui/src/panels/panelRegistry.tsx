@@ -12,7 +12,7 @@ import type { Project } from "../protocol";
 import { ReportPanel } from "../report/ReportPanel";
 import { ShellTerminalPanel } from "../terminal/shell/ShellTerminalPanel";
 import { PANEL_META } from "./panelMeta";
-import type { PanelKind } from "./stackState";
+import type { PanelKind } from "../layout/panelKind";
 
 /** What a panel's content is given: who owns the pane, which the stack follows the way the file
  * browser follows a project, and the state the panes share. */

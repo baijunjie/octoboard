@@ -4,11 +4,11 @@ import React, { useEffect, useRef, useState } from "react";
 import { ActionMenu } from "../components/menus/ActionMenu";
 import { copyText } from "../components/host/copyText";
 import { useLatest } from "../components/hooks/useLatest";
-import { ActionableError } from "../actionableError";
+import { ActionableError } from "../errors/actionableError";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
-import { useDaemon } from "../store";
 import { OPTION_FORCES_SELECTION, type TerminalController } from "./TerminalController";
+import { raiseError } from "../components/alerts/raiseError";
 
 /** Editing works on xterm's buffer and input pipeline, never on its hidden textarea's value. */
 export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }: {
@@ -18,7 +18,6 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
 }): React.ReactElement {
   const t = useT();
   const { clipboard } = usePlatform();
-  const { toastError } = useDaemon();
   const currentSession = useLatest(sessionId);
   const mounted = useRef(true);
   useEffect(() => {
@@ -37,7 +36,7 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
         // A permission prompt may outlive the session that asked for it.
         if (mounted.current && currentSession.current === destination && controllerRef.current === controller) controller.paste(text, destination);
       },
-      (cause: unknown) => toastError(new ActionableError(t("terminal.pasteFailed"), "clipboard", { cause }), undefined, t("terminal.pasteFailedTitle")),
+      (cause: unknown) => raiseError(new ActionableError(t("terminal.pasteFailed"), "clipboard", { cause }), { title: t("terminal.pasteFailedTitle") }),
     );
   };
   return (
@@ -60,7 +59,7 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
         {
           label: t("terminal.copy"), icon: Copy, disabled: !selection,
           reason: !selection && mouseReporting ? { state: t(OPTION_FORCES_SELECTION ? "terminal.copyHint.mac" : "terminal.copyHint") } : undefined,
-          onClick: () => { void copyText(selection, { clipboard }).catch((cause: unknown) => toastError(new ActionableError(t("terminal.copyFailed"), "clipboard", { cause }), undefined, t("common.copyFailedTitle"))); },
+          onClick: () => { void copyText(selection, { clipboard }).catch((cause: unknown) => raiseError(new ActionableError(t("terminal.copyFailed"), "clipboard", { cause }), { title: t("common.copyFailedTitle") })); },
         },
         {
           label: t("terminal.paste"), icon: ClipboardPaste, disabled: !clipboard?.readText || inputSession !== sessionId,

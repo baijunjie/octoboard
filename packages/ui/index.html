@@ -79,7 +79,7 @@
     <title>%APP_NAME%</title>
     <script>
       // Avoids a light flash on load in dark mode. HeroUI's light variables are the `:root`
-      // default, and `useTheme` (src/theme.tsx) only applies the dark class from a React layout
+      // default, and `useTheme` (src/preferences/theme.tsx) only applies the dark class from a React layout
       // effect, after the module script below has loaded and run — too late to stop the first
       // paint from being light. This duplicates that hook's own resolution (same localStorage key,
       // same `matchMedia` fallback, same class + `data-theme` pair) deliberately, so it can run

@@ -1,8 +1,8 @@
 import { AGENT_MARKS } from "../components/icons/agentMarks";
-import { resolveCssColour, type Appearance } from "../cssColour";
+import { resolveCssColour, type Appearance } from "../preferences/cssColour";
 import type { StatusItemIcon, StatusItemMenu } from "../platform";
 import type { Agent } from "../protocol";
-import type { StatusKind } from "../sessionLabel";
+import type { StatusKind } from "../sessions/sessionLabel";
 import type { StatusItemMenuDraft } from "./statusItemMenu";
 
 /** What the shell's menu shows beside a line: the mark of a session's agent, and a heading's status

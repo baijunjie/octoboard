@@ -1,8 +1,8 @@
 import { useState } from "react";
 
-import { errorAlertParts } from "../../errorAlertParts";
-import { ActionableError } from "../../actionableError";
-import { errorAlerts, type AcknowledgementView } from "../../errorAlerts";
+import { errorAlertParts } from "../alerts/errorAlertParts";
+import { ActionableError } from "../../errors/actionableError";
+import { errorAlerts, type AcknowledgementView } from "../alerts/errorAlerts";
 import { errorToast } from "../../store";
 
 /** A dialog that cannot be used as it stands (what it would choose from has gone while it was open) turns into a
@@ -15,7 +15,7 @@ export function useFailureWhenBlocked(blocked: boolean, message: string | Action
   const [held, setHeld] = useState<{ key: string | undefined; failure: AcknowledgementView }>();
   let current = held?.key === resetKey ? held : undefined;
   if (blocked && !current) {
-    const request = errorToast(typeof message === "string" ? new ActionableError(message, "none") : message);
+    const request = errorToast(typeof message === "string" ? new ActionableError(message, "none") : message, { title: undefined });
     const { body, details, remedyInBody } = errorAlertParts(request);
     const view = errorAlerts.view({ message: request.message, error: request.error, title, content: body, details, remedyInBody });
     if (view.classification.kind !== "actionable") throw new Error("An ActionableError classified as unexpected");

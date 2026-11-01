@@ -1,5 +1,5 @@
 import { type Console, type Project, type Session, type Settings } from "../protocol";
-import { sessionShownStatusKind, sessionStatusKind, type ShownStatusKind, type StatusKind } from "../sessionLabel";
+import { sessionShownStatusKind, sessionStatusKind, type ShownStatusKind, type StatusKind } from "./sessionLabel";
 
 /** How urgently a session asks for attention: a raised hand, a prompt, background work,
  * foreground work, then no process. Archived sessions are listed separately. */

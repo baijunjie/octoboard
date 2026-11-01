@@ -1,8 +1,8 @@
 import type { Session } from "../protocol";
-import { MODAL_OPEN } from "../layout/useRegionCycle";
+import { MODAL_OPEN } from "../components/focus/regionFocus";
 import { usePlatform } from "../platform/react";
 import { matchesCommand } from "../shortcuts/store";
-import { useWindowShortcut } from "../useWindowShortcut";
+import { useWindowShortcut } from "../shortcuts/useWindowShortcut";
 import { cycleConsoleSession } from "./focus";
 import type { FocusTarget } from "./types";
 

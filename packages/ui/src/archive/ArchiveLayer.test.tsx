@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { console_ } from "../gallery/fixtures/archive";
+import { console_ } from "../fixtures/archiveSessions";
 import { ArchiveLayer } from "./ArchiveLayer";
 
 vi.mock("./ArchiveView", () => ({

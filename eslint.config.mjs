@@ -34,23 +34,31 @@ const UI_TESTS = ["**/*.test.{ts,tsx}", "**/*{TestSupport,testSupport,TestState}
 // below src/: there exactly `depth` steps of `../` reach src/, and the name after them is a top-level directory
 // (followed by `/`) or a file at src/'s root. A name after fewer steps is a sibling inside the same directory,
 // such as `../shell/` from `terminal/links/`, which a gitignore pattern like `**/shell/**` would also match.
-// src/store/ is a module with an index, so it counts as a root file.
 const DEPTHS = [1, 2, 3, 4];
 const below = (dir, depth) => `${UI_SRC}/${dir}/${"*/".repeat(depth - 1)}*.{ts,tsx}`;
 const onlyInto = (depth, allowed, message) =>
   ({ regex: `^(?:\\.\\./){${depth}}(?!(?:${allowed.join("|")})/)[^/]+/`, message });
 const notInto = (depth, denied, message) =>
   ({ regex: `^(?:\\.\\./){${depth}}(?:${denied.join("|")})(?:/|$)`, message });
-/** Outside itself, `dir` imports only the `allowed` top-level directories and files at src/'s root. */
-const layer = (dir, allowed, message) => DEPTHS.map((depth) => ({
+// What code below src/ may import from src/'s root: the daemon contract, the app's configuration mirror, and the
+// barrels of store/ and platform/ (a directory with an index, imported without a trailing slash). The rest of the root
+// (the entry, App, the screens, style.css) is imported by nothing below src/.
+const ROOT_SHARED = ["protocol", "daemon", "daemon-client", "appConfig", "store", "platform"];
+const ROOT_MESSAGE = "Below src/, only protocol, daemon, daemon-client, appConfig and the store and platform barrels are imported from src/'s root.";
+const onlyRoot = (depth, message, roots = ROOT_SHARED) =>
+  ({ regex: `^(?:\\.\\./){${depth}}(?!(?:${roots.join("|")})$)[^/]+$`, message });
+/** Outside itself, `dir` imports only the `allowed` top-level directories and the `roots` files at src/'s root. */
+const layer = (dir, allowed, message, roots = ROOT_SHARED) => DEPTHS.map((depth) => ({
   files: [below(dir, depth)],
   ignores: UI_TESTS,
-  rules: { "no-restricted-imports": uiImports([onlyInto(depth, allowed, message)]) },
+  rules: { "no-restricted-imports": uiImports([onlyInto(depth, allowed, message), onlyRoot(depth, message, roots)]) },
 }));
-const LEAF = ["i18n", "platform", "sessions"];
-const LEAF_MESSAGE = "components/ is the leaf layer: outside itself it imports only i18n/, platform/, sessions/ and files at src/'s root.";
+// The pure layers, which import no component, no store and no feature directory.
+const PURE_LAYERS = ["i18n", "platform", "preferences", "input", "format", "agents", "git", "sessions", "errors"];
+const PURE_MESSAGE = "the pure layers (i18n/, platform/, preferences/, input/, format/, agents/, git/, sessions/, errors/)";
+const LEAF_MESSAGE = `components/ imports, outside itself, only ${PURE_MESSAGE} and the shared root files.`;
 const SHELL_MESSAGE = "Only the files at src/'s root and App's hooks put the window shell together; nothing else below src/ imports shell/.";
-const APP_MESSAGE = "app/ holds App's own hooks: only App.tsx and the tests import it.";
+const APP_MESSAGE = "app/ holds App's own hooks and logic: only App.tsx and the tests import it.";
 // Case-sensitive, as the patterns match case-insensitively by default and `./App` is not app/.
 const APP_ROOT_IMPORT = { regex: "^\\./app(?:/|$)", message: APP_MESSAGE, caseSensitive: true };
 const PRODUCTION_MESSAGE = "Production code does not import fixtures/ or gallery/: they are the runtime of the gallery and the website preview.";
@@ -138,7 +146,7 @@ export default defineConfig(
   ...DEPTHS.map((depth) => ({
     files: [below("*", depth)],
     ignores: [...UI_TESTS, `${UI_SRC}/{shell,app,gallery,fixtures,website-preview,test}/**`],
-    rules: { "no-restricted-imports": uiImports([notInto(depth, ["shell"], SHELL_MESSAGE), notIntoApp(depth), notInto(depth, ["fixtures", "gallery"], PRODUCTION_MESSAGE)]) },
+    rules: { "no-restricted-imports": uiImports([notInto(depth, ["shell"], SHELL_MESSAGE), notIntoApp(depth), notInto(depth, ["fixtures", "gallery"], PRODUCTION_MESSAGE), onlyRoot(depth, ROOT_MESSAGE)]) },
   })),
   ...DEPTHS.map((depth) => ({
     files: [below("shell", depth)],
@@ -177,19 +185,32 @@ export default defineConfig(
     rules: { "no-restricted-imports": uiImports([ROOT_PRODUCTION_IMPORT]) },
   },
   // Leaf layer: shared building blocks depend on no feature directory.
-  ...layer("components", LEAF, LEAF_MESSAGE),
-  // Domain layers: the session model and the shortcut registry sit below every feature.
-  ...["sessions", "shortcuts"].flatMap((dir) =>
-    layer(dir, ["i18n", "platform"], `${dir}/ imports, outside itself, only i18n/, platform/ and files at src/'s root.`)),
+  ...layer("components", PURE_LAYERS, LEAF_MESSAGE),
+  // Domain layers: each sits below every feature, and imports only the layers beneath it, plus the root files it lists.
+  ...layer("platform", [], "platform/ imports nothing else below src/, apart from protocol.", ["protocol"]),
+  ...layer("preferences", [], "preferences/ imports nothing else below src/.", []),
+  ...layer("input", [], "input/ imports nothing else below src/, apart from the platform barrel.", ["platform"]),
+  ...layer("format", ["i18n"], "format/ imports, outside itself, only i18n/.", []),
+  ...layer("agents", ["i18n"], "agents/ imports, outside itself, only i18n/ and protocol.", ["protocol"]),
+  ...layer("git", ["i18n"], "git/ imports, outside itself, only i18n/ and protocol.", ["protocol"]),
+  ...layer("sessions", ["i18n", "agents"], "sessions/ imports, outside itself, only i18n/, agents/ and protocol.", ["protocol"]),
+  ...layer("accounts", ["i18n", "agents", "sessions", "format"], "accounts/ imports, outside itself, only i18n/, agents/, sessions/, format/ and protocol.", ["protocol"]),
+  ...layer("errors", ["i18n", "agents", "sessions", "accounts", "format"], "errors/ imports, outside itself, only i18n/, agents/, sessions/, accounts/, format/, protocol, appConfig and daemon-client.", ["protocol", "appConfig", "daemon-client"]),
+  ...layer("store", ["i18n", "errors", "accounts", "sessions", "preferences", "git"], "store/ imports, outside itself, only i18n/, errors/, accounts/, sessions/, preferences/, git/, protocol, daemon and daemon-client.", ["protocol", "daemon", "daemon-client"]),
+  ...layer("i18n", ["preferences"], "i18n/ imports, outside itself, only preferences/ and appConfig.", ["appConfig"]),
+  ...layer("shortcuts", ["i18n", "preferences", "input", "components"], "shortcuts/ imports, outside itself, only i18n/, preferences/, input/ and components/.", []),
   // Self-contained features: they use the leaf layer and import no other feature directory.
-  ...["viewer", "about", "updates", "quota"].flatMap((dir) =>
-    layer(dir, ["components", ...LEAF], `${dir}/ imports no other feature directory.`)),
+  ...layer("viewer", ["components", ...PURE_LAYERS], `viewer/ imports, outside itself, only components/, ${PURE_MESSAGE}, and the shared root files.`),
+  ...layer("about", ["components", ...PURE_LAYERS], `about/ imports, outside itself, only components/ and ${PURE_MESSAGE}.`, []),
+  ...layer("updates", ["components", ...PURE_LAYERS], `updates/ imports, outside itself, only components/ and ${PURE_MESSAGE}, apart from the platform barrel.`, ["platform"]),
+  ...layer("layout", ["components", ...PURE_LAYERS], `layout/ imports, outside itself, only components/ and ${PURE_MESSAGE}, apart from protocol.`, ["protocol"]),
+  ...layer("quota", ["components", "accounts", ...PURE_LAYERS], `quota/ imports, outside itself, only components/, accounts/, ${PURE_MESSAGE}, and the shared root files.`),
   // The project browser builds on the viewer and on no other feature.
-  ...layer("project-browser", ["components", "viewer", ...LEAF], "project-browser/ imports, of the feature directories, only viewer/."),
+  ...layer("project-browser", ["components", "viewer", ...PURE_LAYERS], `project-browser/ imports, outside itself, only components/, viewer/, ${PURE_MESSAGE}, and the shared root files.`),
   {
     // ErrorAlert composes HeroUI's Alert through AlertFrame; both stay in the leaf layer.
     files: [`${UI_SRC}/components/alerts/AlertFrame.tsx`, `${UI_SRC}/components/alerts/ErrorAlert.tsx`],
-    rules: { "no-restricted-imports": uiImports([onlyInto(2, LEAF, LEAF_MESSAGE)], { alerts: false }) },
+    rules: { "no-restricted-imports": uiImports([onlyInto(2, PURE_LAYERS, LEAF_MESSAGE), onlyRoot(2, LEAF_MESSAGE)], { alerts: false }) },
   },
   {
     // Its test compares ErrorAlert with the stock Alert.

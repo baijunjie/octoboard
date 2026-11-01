@@ -1,6 +1,6 @@
-import { createPersistedPreference } from "../persistedPreference";
+import { createPersistedPreference } from "../preferences/persistedPreference";
 import type { UpdateChannel } from "../platform";
-import { PREFERENCE_KEYS } from "../preferenceKeys";
+import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 
 /** The release stream the application updates from (the Settings choice the desktop app offers). Beta until the
  * first stable release is out: a stored value other than `stable` reads as the default. The update store (run by

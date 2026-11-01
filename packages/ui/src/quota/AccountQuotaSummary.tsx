@@ -4,13 +4,13 @@ import { DotStatusBadge } from "../components/status/DotStatusBadge";
 import { StatusBadge } from "../components/status/StatusBadge";
 import { codedMessageNode, CodedFailureBody } from "../components/alerts/errorParts";
 import { StatusMark } from "../components/status/StatusMark";
-import { daemonMessage } from "../daemonMessage";
+import { daemonMessage } from "../errors/daemonMessage";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { QuotaUnavailable } from "../protocol";
-import { formatRelativeTime, isJustNow } from "../relativeTime";
-import { useNow } from "../useNow";
+import { formatRelativeTime, isJustNow } from "../format/relativeTime";
+import { useNow } from "../format/useNow";
 import { QuotaMeter, QuotaMeterPair } from "./QuotaMeter";
-import { isNotLoggedIn, loginStateOf, orderedQuotaWindows, planLabel, twoLayerWindows } from "./quotaFormat";
+import { isNotLoggedIn, loginStateOf, orderedQuotaWindows, planLabel, twoLayerWindows } from "../accounts/quotaFormat";
 import type { QuotaReading } from "./useAccountQuota";
 
 const NO_RECORDS = { consoles: new Map(), projects: new Map(), sessions: new Map() };

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { DEFAULT_SETTINGS } from "../defaultSettings";
+import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { consoleOf } from "../fixtures/builders";
 import type { Project, Session, SessionStatus } from "../protocol";
 import { archiveNeedsConfirmation, countsAsWorking, isUnusedSession, consoleActivity, consoleStatus, INACTIVE_PROJECT_RANK, archivePreviewSessions, projectRank, liveConsoleSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, ordersByStatus, sessionsInTreeOrder, sortProjects, switchStrip } from "./order";
-import { FOLLOWING_GIT_WORKFLOW } from "../gitWorkflow";
+import { FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
 
 const session = (id: string, status: SessionStatus, started_at: number, pinned = false, bound_to: string | null = null): Session => ({
   id,

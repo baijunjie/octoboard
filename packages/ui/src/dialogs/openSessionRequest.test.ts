@@ -5,7 +5,7 @@ import type { Account, AccountQuota, Agent, AgentAvailability, Console, Project 
 import { format, type Translate } from "../i18n/catalog";
 import type { NewSessionBinding } from "./dialogRequest";
 import { defaultOpenSessionRequest, openSessionRequest, quickCreateUnavailable } from "./openSessionRequest";
-import { DEFAULT_SETTINGS } from "../defaultSettings";
+import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 
 
 const quick = (...[translate, parentConsole, project, binding, accounts, agentAvailability, added, accountQuotas = [], now = 0]: [

@@ -9,7 +9,7 @@
  * against it.
  */
 
-import { ringForAutomaticFocus } from "../touchInput";
+import { ringForAutomaticFocus } from "../input/touchInput";
 
 /** What a control of a separator expands: lines above its gap's hunk below it, below the hunk above
  * it, both, the whole of its gap, or the whole file. `gap` is the separator's own text, which is no

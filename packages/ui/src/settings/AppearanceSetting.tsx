@@ -4,7 +4,7 @@ import React from "react";
 
 import { TitledControl } from "../components/hint/TitledControl";
 import { useT } from "../i18n/react";
-import { useOctoboardTheme } from "../theme";
+import { useOctoboardTheme } from "../preferences/theme";
 import { SettingRow } from "./SettingRow";
 
 const OPTIONS = [

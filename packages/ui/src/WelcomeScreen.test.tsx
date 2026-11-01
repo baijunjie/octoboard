@@ -18,7 +18,7 @@ function mount(onOpenDialog = vi.fn(), state: Partial<State> = {}, platform: Pla
   const daemon: Daemon = {
     store: createStateStore(state),
     request: vi.fn(),
-    toastError: vi.fn(),
+    raiseError: vi.fn(),
     toastNotice: vi.fn(),
     onToast: () => () => {},
     dismissTrustPrompt: () => {},

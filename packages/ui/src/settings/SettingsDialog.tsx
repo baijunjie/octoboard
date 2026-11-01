@@ -10,7 +10,7 @@ import { dialogAround } from "../components/dialog/dialogElement";
 import { useEscapeWhileTooltipOpen } from "../components/dialog/useEscapeWhileTooltipOpen";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useT } from "../i18n/react";
-import { minWidthQuery, useIsNarrow, useMediaQuery } from "../breakpoint";
+import { minWidthQuery, useIsNarrow, useMediaQuery } from "../components/hooks/breakpoint";
 import { AboutSection } from "./AboutSection";
 import { AccountsNavigationContext } from "./accounts/AccountsNavigationContext";
 import { AgentAccountsSection, AGENT_STRIP_HEIGHT } from "./accounts/AgentAccountsSection";

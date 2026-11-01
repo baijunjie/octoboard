@@ -1,21 +1,21 @@
 import { Description, Label, Radio, RadioGroup } from "@heroui/react";
 import React, { useState } from "react";
 
-import { accountDisabled, quotaSignedOut } from "../accountChoices";
-import { canSwitchTo } from "../accountSwitchBatch";
-import { AGENT_LABEL } from "../agents";
-import { InlineReference } from "../components/text/InlineReference";
+import { accountDisabled, quotaSignedOut } from "../accounts/accountChoices";
+import { canSwitchTo } from "./accountSwitchBatch";
+import { AGENT_LABEL } from "../agents/agents";
+import { InlineReference } from "../i18n/InlineReference";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { Session } from "../protocol";
-import { accountQuotaOf } from "../accountQuotaOf";
+import { accountQuotaOf } from "../accounts/accountQuotaOf";
 import { quotaUsedUpMessage } from "../quota/quotaCopy";
-import { exhaustedQuotaWindow, quotaUsedUpSentence } from "../quota/quotaFormat";
-import { errorAlerts } from "../errorAlerts";
-import { sessionDisplayTitle } from "../sessionLabel";
+import { exhaustedQuotaWindow, quotaUsedUpSentence } from "../accounts/quotaFormat";
+import { errorAlerts } from "../components/alerts/errorAlerts";
+import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { sessionWithDescendants } from "../sessions/order";
 import { useDaemon, useDaemonStore } from "../store";
-import { useNow } from "../useNow";
+import { useNow } from "../format/useNow";
 import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
 import { useConfirmIncompleteLaunch } from "./useConfirmIncompleteLaunch";
 

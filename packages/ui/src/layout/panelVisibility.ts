@@ -1,5 +1,5 @@
-import { createPersistedPreference, type PersistedPreference } from "../persistedPreference";
-import { PREFERENCE_KEYS } from "../preferenceKeys";
+import { createPersistedPreference, type PersistedPreference } from "../preferences/persistedPreference";
+import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 
 /** Each side's remembered docking choice. Responsive floating does not rewrite it; the right
  * pane's open panel kinds are stored separately. */

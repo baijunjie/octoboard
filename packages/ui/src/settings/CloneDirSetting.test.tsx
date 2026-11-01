@@ -7,10 +7,10 @@ import { CloneDirSetting } from "./CloneDirSetting";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const request = vi.fn(() => Promise.resolve({}) as Promise<never>);
+const request = vi.fn((_body?: { type: string }) => Promise.resolve({}) as Promise<never>);
 
 vi.mock("../store", () => ({
-  useDaemon: () => ({ request, toastError: () => {} }),
+  useDaemon: () => ({ request, raiseError: () => {} }),
   useDaemonStore: (selector: (state: { settings: { default_clone_dir: string }; homeDir: string }) => unknown) =>
     selector({ settings: { default_clone_dir: "/home/dev/Projects" }, homeDir: "/home/dev" }),
 }));
@@ -71,4 +71,23 @@ it("does not send on the Enter that confirms a composition", () => {
     input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", isComposing: true, bubbles: true }));
   });
   expect(request).not.toHaveBeenCalled();
+});
+
+const browse = () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Browse")!;
+
+it("opens the directory browser at the stored directory", async () => {
+  request.mockClear();
+  mount();
+  await act(async () => browse().click());
+  expect(request).toHaveBeenCalledWith({ type: "list_dir", path: "/home/dev/Projects" });
+});
+
+it("sends the directory picked in the browser once", async () => {
+  request.mockClear();
+  request.mockImplementation((body) => Promise.resolve(body?.type === "list_dir" ? { type: "dir_listing", path: "/srv/new", entries: [] } : {}) as Promise<never>);
+  mount();
+  await act(async () => browse().click());
+  await act(async () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Select this directory")!.click());
+  expect(request.mock.calls.filter(([body]) => body?.type === "update_settings")).toEqual([[{ type: "update_settings", default_clone_dir: "/srv/new" }]]);
+  expect(document.body.querySelector('input[aria-label="Directory path"]')).toBeNull();
 });

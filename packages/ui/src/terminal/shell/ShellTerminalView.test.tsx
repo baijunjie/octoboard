@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { act, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
+import { currentLanguage, setLanguage } from "../../i18n/language";
 import type { ShellTerminal } from "../../protocol";
 import type { TermStatus } from "../TerminalController";
 import { MAX_AUTO_RECONNECT_ATTEMPTS } from "../reconnectPolicy";
@@ -15,37 +16,51 @@ const { FakeController } = vi.hoisted(() => {
   class FakeController {
     static last: FakeController;
     term = { textarea: document.createElement("textarea") };
+    currentSessionId: string | undefined;
+    currentStatus: TermStatus = "closed";
+    /** Whether each `attach` was the user's. */
+    attaches: boolean[] = [];
+    fits = 0;
+    inputLabel: string | undefined;
     constructor(private callbacks: { onStatusChange: (status: TermStatus) => void }) {
       FakeController.last = this;
     }
     mount(element: HTMLElement): void {
       element.append(this.term.textarea);
     }
-    setInputLabel(): void {}
-    fit(): void {}
+    setInputLabel(label: string): void {
+      this.inputLabel = label;
+    }
+    fit(): void {
+      this.fits += 1;
+    }
     syncSize(): void {}
     dispose(): void {}
     focus(): void {
       this.term.textarea.focus();
     }
-    attach(): void {
+    attach(sessionId: string, _url: string, userInitiated: boolean): void {
+      this.attaches.push(userInitiated);
+      this.currentSessionId = sessionId;
+      this.currentStatus = "connecting";
       this.callbacks.onStatusChange("connecting");
     }
     settle(status: TermStatus): void {
+      this.currentStatus = status;
       act(() => this.callbacks.onStatusChange(status));
     }
   }
   return { FakeController };
 });
 vi.mock("../TerminalController", () => ({ TerminalController: FakeController }));
-const daemon = vi.hoisted(() => ({ terminalUrl: () => "", terminalReconnectDelay: () => 0, request: vi.fn(), toastError: vi.fn() }));
+const daemon = vi.hoisted(() => ({ terminalUrl: () => "", terminalReconnectDelay: () => 0, request: vi.fn(), raiseError: vi.fn() }));
 const store = vi.hoisted(() => ({ snapshotEpoch: 0, connectionState: "open" }));
 vi.mock("../../store", () => ({
   useDaemon: () => daemon,
   useDaemonStore: (select: (state: typeof store) => unknown) => select(store),
 }));
 vi.mock("../../platform/react", () => ({ usePlatform: () => ({ links: undefined }) }));
-vi.mock("../../theme", () => ({ useOctoboardTheme: () => ({ resolved: "light" }) }));
+vi.mock("../../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "light" }) }));
 vi.mock("../TerminalEditMenu", () => ({ TerminalEditMenu: () => null }));
 
 const terminal: ShellTerminal = {
@@ -56,6 +71,7 @@ const roots: Root[] = [];
 beforeEach(() => {
   vi.useFakeTimers();
   store.connectionState = "open";
+  store.snapshotEpoch = 0;
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -199,4 +215,127 @@ it("mounts empty status regions as a troubled tab is shown", () => {
   expect(spoken(container)).toEqual([]);
   act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
   expect(spoken(container)).toEqual(["Reconnecting the terminal…"]);
+});
+
+// The delay the mocked daemon's `terminalReconnectDelay` gives every attempt.
+const RECONNECT_DELAY_MS = 0;
+const failAttempt = () => {
+  FakeController.last.settle("closed");
+  act(() => void vi.advanceTimersByTime(RECONNECT_DELAY_MS));
+};
+
+it("reconnects a running shell whose socket closed, without moving focus", () => {
+  const { container } = mount();
+  FakeController.last.settle("open");
+  act(() => FakeController.last.term.textarea.focus());
+  expect(FakeController.last.attaches).toEqual([false]);
+  failAttempt();
+  expect(FakeController.last.attaches).toEqual([false, false]);
+  FakeController.last.settle("open");
+  expect(document.activeElement).toBe(FakeController.last.term.textarea);
+  expect(reconnectOf(container)).toBeUndefined();
+});
+
+it("does not reconnect an exited shell", () => {
+  mount(true, { ...terminal, state: "exited" });
+  FakeController.last.settle("closed");
+  act(() => void vi.advanceTimersByTime(60_000));
+  expect(FakeController.last.attaches).toEqual([false]);
+});
+
+it("stops retrying after the automatic attempts, and the user's Reconnect starts the count again", () => {
+  const { container } = mount();
+  giveUp();
+  const attaches = FakeController.last.attaches.length;
+  expect(attaches).toBe(1 + MAX_AUTO_RECONNECT_ATTEMPTS);
+  act(() => void vi.advanceTimersByTime(60_000));
+  expect(FakeController.last.attaches.length).toBe(attaches);
+  expect(spoken(container)).toEqual(["Terminal disconnected"]);
+  act(() => reconnectOf(container)!.click());
+  expect(FakeController.last.attaches.at(-1)).toBe(true);
+  // The count is back to 0: a failure is retried automatically again.
+  failAttempt();
+  expect(FakeController.last.attaches.at(-1)).toBe(false);
+  expect(FakeController.last.attaches.length).toBe(attaches + 2);
+});
+
+it("does not offer Reconnect while the control connection is down", () => {
+  const { container, show } = mount();
+  giveUp();
+  expect(reconnectOf(container)).toBeDefined();
+  store.connectionState = "closed";
+  show(true);
+  expect(reconnectOf(container)).toBeUndefined();
+});
+
+it("recovers a shell that gave up when a fresh snapshot arrives, without taking focus", () => {
+  const { container, show } = mount();
+  giveUp();
+  const attaches = FakeController.last.attaches.length;
+  store.snapshotEpoch += 1;
+  show(true);
+  expect(FakeController.last.attaches.length).toBe(attaches + 1);
+  expect(FakeController.last.attaches.at(-1)).toBe(false);
+  expect(reconnectOf(container)).toBeUndefined();
+});
+
+it("leaves a snapshot alone while the automatic attempts are not spent", () => {
+  const { show } = mount();
+  FakeController.last.settle("closed");
+  const attaches = FakeController.last.attaches.length;
+  store.snapshotEpoch += 1;
+  show(true);
+  expect(FakeController.last.attaches.length).toBe(attaches);
+});
+
+/** Mounts with a ResizeObserver whose notifications the test sends. */
+function mountObserved(props: { shown: boolean; resizing: boolean }) {
+  const observers: (() => void)[] = [];
+  vi.stubGlobal("ResizeObserver", class {
+    constructor(callback: () => void) {
+      observers.push(callback);
+    }
+    observe(): void {}
+    disconnect(): void {}
+  });
+  onTestFinished(() => {
+    vi.unstubAllGlobals();
+  });
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  const show = (next: { shown: boolean; resizing: boolean }) => act(() => root.render(<ShellTerminalView terminal={terminal} {...next} onClose={() => {}} />));
+  show(props);
+  return { show, notify: () => observers.forEach((notify) => notify()) };
+}
+
+it("holds its size while the panel eases, then fits once", () => {
+  const { show, notify } = mountObserved({ shown: true, resizing: true });
+  const fits = FakeController.last.fits;
+  notify();
+  expect(FakeController.last.fits).toBe(fits);
+  show({ shown: true, resizing: false });
+  expect(FakeController.last.fits).toBe(fits + 1);
+  notify();
+  expect(FakeController.last.fits).toBe(fits + 2);
+});
+
+it("does not fit a hidden tab as the ease ends", () => {
+  const { show } = mountObserved({ shown: false, resizing: true });
+  const fits = FakeController.last.fits;
+  show({ shown: false, resizing: false });
+  expect(FakeController.last.fits).toBe(fits);
+});
+
+it("names the terminal's input in the UI language, and follows a language change", () => {
+  const language = currentLanguage();
+  try {
+    act(() => setLanguage("en"));
+    mount();
+    expect(FakeController.last.inputLabel).toBe("Terminal input");
+    act(() => setLanguage("zh-Hans"));
+    expect(FakeController.last.inputLabel).toBe("终端输入");
+  } finally {
+    act(() => setLanguage(language));
+  }
 });

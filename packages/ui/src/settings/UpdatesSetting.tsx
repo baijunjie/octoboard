@@ -2,7 +2,7 @@ import React, { useId, useRef, useState } from "react";
 
 import { Button } from "../components/controls/Button";
 import { HandOffOnUnmount } from "../components/focus/HandOffOnUnmount";
-import { InlineReference } from "../components/text/InlineReference";
+import { InlineReference } from "../i18n/InlineReference";
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { StatusMark } from "../components/status/StatusMark";
 import { OptionSelect } from "../components/form/OptionSelect";

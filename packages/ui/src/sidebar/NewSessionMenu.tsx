@@ -11,7 +11,7 @@ import { useT } from "../i18n/react";
 import type { Project } from "../protocol";
 import { useDaemonStore } from "../store";
 import { matchCreateShortcut, ShortcutTooltip } from "./sessionShortcuts";
-import { useWindowShortcut } from "../useWindowShortcut";
+import { useWindowShortcut } from "../shortcuts/useWindowShortcut";
 import { sortProjects } from "../sessions/order";
 import { RowIconButton } from "./rows";
 import { useNewSessionMode } from "./useNewSessionMode";

@@ -1,7 +1,7 @@
 import { Description, Label } from "@heroui/react";
 import React, { useId } from "react";
 
-import { CodeToneContext } from "../text/codeTone";
+import { CodeToneContext } from "../../i18n/codeTone";
 
 /** A label over a group of controls that read as one field, visible unless `hideLabel`, named for assistive technology
  * as the group, with an optional `description` under them that the group is described by and an optional `help` tip at

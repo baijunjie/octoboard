@@ -5,11 +5,11 @@ import { ContentPanel } from "./shell/ContentPanel";
 import { EmptyPanel } from "./components/panel/EmptyPanel";
 import { ErrorAlert } from "./components/alerts/ErrorAlert";
 import { DiagnosticBlock } from "./components/alerts/DiagnosticBlock";
-import { InlineReference } from "./components/text/InlineReference";
+import { InlineReference } from "./i18n/InlineReference";
 import { BareTitleBar } from "./shell/TitleBar";
 import { FadedScroller, useFadeRegion } from "./components/scroll/scrollFade";
 import { Message, useT } from "./i18n/react";
-import { useIssueReport } from "./useIssueReport";
+import { useIssueReport } from "./components/alerts/useIssueReport";
 
 /**
  * The window with no daemon connection behind it: no address known yet, the daemon failed to

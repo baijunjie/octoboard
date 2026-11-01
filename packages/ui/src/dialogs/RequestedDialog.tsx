@@ -5,12 +5,11 @@ import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnounce
 import { errorDetails } from "../components/alerts/errorParts";
 import { useStableHandler } from "../components/hooks/useLatest";
 import { DaemonRequestError } from "../daemon-client";
-import { errorPresentation } from "../errorPresentation";
-import { InlineReference } from "../components/text/InlineReference";
+import { InlineReference } from "../i18n/InlineReference";
 import { ImportConfigurationDialog } from "../configuration/ImportConfigurationDialog";
 import { Message, useT } from "../i18n/react";
 import { isLive, SESSION_BINDING_CHANGED, SESSION_NOT_BOUND, type Console as ConsoleRecord, type Project, type Session } from "../protocol";
-import { sessionDisplayTitle, sessionStatusKind } from "../sessionLabel";
+import { sessionDisplayTitle, sessionStatusKind } from "../sessions/sessionLabel";
 import {
   boundArchivedSessions,
   boundSessionsArchivedWith,
@@ -32,11 +31,10 @@ import { SessionDialog } from "./SessionDialog";
 import { SessionModelDialog, type ModelEdits } from "./SessionModelDialog";
 import { SwitchAccountDialog } from "./SwitchAccountDialog";
 import { useBranchCleanup, useProjectRemovalCleanup } from "./BranchCleanupOptions";
-import { ConfirmOption } from "../components/form/ConfirmOption";
 import { KeepFocusInDialog } from "../components/dialog/KeepFocusInDialog";
-import { useSessionRecords } from "./useSessionRecords";
+import { useSessionDeletionOptions } from "./useSessionDeletionOptions";
 import { StoppedRow, useProcessStopping } from "./ProcessStopOptions";
-import { isRemovalRefusal, useArchiveInspection, useSessionBranches, type SessionInspection } from "./useSessionBranches";
+import { isRemovalRefusal, useArchiveInspection, type SessionInspection } from "./useSessionBranches";
 import { PROJECT_NAME_LIMIT } from "../components/form/textLength";
 
 /** One topic of a sectioned confirmation (the archive's, the project removal's): a labelled group whose `<h3>` heading names it (the
@@ -170,12 +168,6 @@ function DeleteProjectDialog({ project, running, onClose }: { project: Project; 
   );
 }
 
-/** The option of also moving the agent's own records to the Trash, which a completed inspection
- * can take away. */
-function SessionRecordsTrashOption({ visible, ...props }: React.ComponentProps<typeof ConfirmOption> & { visible: boolean }): React.ReactElement {
-  return <KeepFocusInDialog>{visible && <ConfirmOption {...props} />}</KeepFocusInDialog>;
-}
-
 /** Confirms archiving a session and every unarchived session under it, listing the bound branches
  * and worktrees git refuses to remove with the choice of forcing them, and the processes the
  * archive stops with the choice of keeping any of them running, each as a section of its own with
@@ -282,7 +274,7 @@ function UnbindSessionDialog({ sessionId, onClose }: { sessionId: string; onClos
 /** The daemon checks the unused state atomically before deleting and cleaning up native records. */
 function DeleteUnusedSession({ sessionId, onClose }: { sessionId: string; onClose: () => void }): null {
   const t = useT();
-  const { request, toastError } = useDaemon();
+  const { request, raiseError } = useDaemon();
   const close = useStableHandler(onClose);
   const deletion = useRef<ReturnType<typeof request> | undefined>(undefined);
   useEffect(() => {
@@ -293,11 +285,11 @@ function DeleteUnusedSession({ sessionId, onClose }: { sessionId: string; onClos
       if (active) close();
     }, (err: unknown) => {
       if (!active) return;
-      toastError(errorPresentation(err as Error), sessionId, t("dialog.deleteSession.failedTitle"));
+      raiseError(err, { title: t("dialog.deleteSession.failedTitle"), session: sessionId });
       close();
     });
     return () => { active = false; };
-  }, [sessionId, request, toastError, close, t]);
+  }, [sessionId, request, raiseError, close, t]);
   return null;
 }
 
@@ -306,12 +298,7 @@ function DeleteUnusedSession({ sessionId, onClose }: { sessionId: string; onClos
 function DeleteSessionDialog({ session, withIt, onClose }: { session: Session; withIt: Session[]; onClose: () => void }): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
-  const [trash, setTrash] = useState(false);
-  const scope = [session.id, ...withIt.map((s) => s.id)];
-  const presence = useSessionRecords(scope);
-  const cleanup = useBranchCleanup(useSessionBranches(scope));
-  const canTrash = presence !== "absent";
-  const moveRecords = canTrash && trash;
+  const { moveRecords, cleanup, lines, extraControl } = useSessionDeletionOptions([session.id, ...withIt.map((s) => s.id)]);
   return (
     <ConfirmDialog
       title={t("dialog.deleteSession.title")}
@@ -322,25 +309,18 @@ function DeleteSessionDialog({ session, withIt, onClose }: { session: Session; w
         <ConfirmConsequences
           title={withIt.length > 0 ? t("dialog.deleteSession.bound", { count: withIt.length }) : undefined}
           sessions={withIt.length > 0 ? withIt : undefined}
-          lines={[...cleanup.consequences, ...(moveRecords ? [{ key: "records", text: t(withIt.length > 0 ? "dialog.deleteSession.trashRecordsLineBound" : "dialog.deleteSession.trashRecordsLine") }] : [])]}
+          lines={lines(t(withIt.length > 0 ? "dialog.deleteSession.trashRecordsLineBound" : "dialog.deleteSession.trashRecordsLine"))}
         />
       )}
       confirmLabel={t(moveRecords || cleanup.forcing ? "dialog.deleteSession.confirmAll" : "common.delete")}
       destructive
       waiting={cleanup.pending}
-      extraControl={(busy) => (
-        <>
-          {cleanup.extraControl(busy)}
-          <SessionRecordsTrashOption
-            visible={canTrash}
-            isSelected={trash}
-            onChange={setTrash}
-            isReadOnly={busy}
-            label={t("dialog.deleteSession.trashRecords")}
-            hint={t(withIt.length > 0 ? "dialog.deleteSession.trashRecordsNoteBound" : "dialog.deleteSession.trashRecordsNote")}
-          />
-        </>
-      )}
+      extraControl={(busy) =>
+        extraControl(busy, {
+          label: t("dialog.deleteSession.trashRecords"),
+          hint: t(withIt.length > 0 ? "dialog.deleteSession.trashRecordsNoteBound" : "dialog.deleteSession.trashRecordsNote"),
+        })
+      }
       onCancel={onClose}
       onConfirm={async () => {
         await request({ type: "delete_session", session: session.id, trash_agent_records: moveRecords, ...cleanup.choices });
@@ -365,11 +345,7 @@ function DeleteArchivedDialog({
 }): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
-  const [trash, setTrash] = useState(false);
-  const presence = useSessionRecords(targets.map((s) => s.id));
-  const cleanup = useBranchCleanup(useSessionBranches(targets.map((s) => s.id)));
-  const canTrash = presence !== "absent";
-  const moveRecords = canTrash && trash;
+  const { moveRecords, cleanup, lines, extraControl } = useSessionDeletionOptions(targets.map((s) => s.id));
   return (
     <ConfirmDialog
       title={t("dialog.deleteArchived.title")}
@@ -378,25 +354,13 @@ function DeleteArchivedDialog({
       consequences={(
         <ConfirmConsequences
           title={withThem > 0 ? t("dialog.deleteArchived.bound", { count: withThem }) : undefined}
-          lines={[...cleanup.consequences, ...(moveRecords ? [{ key: "records", text: t("dialog.deleteArchived.trashRecordsLine") }] : [])]}
+          lines={lines(t("dialog.deleteArchived.trashRecordsLine"))}
         />
       )}
       confirmLabel={t("dialog.deleteArchived.confirm")}
       destructive
       waiting={cleanup.pending}
-      extraControl={(busy) => (
-        <>
-          {cleanup.extraControl(busy)}
-          <SessionRecordsTrashOption
-            visible={canTrash}
-            isSelected={trash}
-            onChange={setTrash}
-            isReadOnly={busy}
-            label={t("dialog.deleteArchived.trashRecords")}
-            hint={t("dialog.deleteArchived.trashRecordsNote")}
-          />
-        </>
-      )}
+      extraControl={(busy) => extraControl(busy, { label: t("dialog.deleteArchived.trashRecords"), hint: t("dialog.deleteArchived.trashRecordsNote") })}
       onCancel={onClose}
       onConfirm={async () => {
         await request({

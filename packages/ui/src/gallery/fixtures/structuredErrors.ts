@@ -1,7 +1,8 @@
-import { DEFAULT_SETTINGS } from "../../defaultSettings";
+import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import type { Scenario } from "../scenario";
 import type { PlainMessageKey } from "../../i18n/catalog";
-import { accountOf, consoleOf, failureTitle, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState } from "../../fixtures/builders";
+import { accountOf, broadcastErrorToast, consoleOf, failureTitle, pageOf, projectOf, sessionNoticeToast, sessionOf, shellTerminalOf, snapshotState } from "../../fixtures/builders";
+import type { ToastFixture } from "../../fixtures/fixture";
 
 const console_ = consoleOf("c-errors", "الإصدار Release coordination");
 const project = projectOf("p-errors", console_.id, "البحث Search API");
@@ -42,10 +43,24 @@ const ACTION_TITLE: Record<string, PlainMessageKey> = {
   shell_environment_timeout: "dialog.session.failedTitle",
 };
 
-const error = (id: string, title: string, code: string, params: Record<string, string>, description: string, message = ""): Scenario => ({
-  id, title, description, group: "Trust prompts and toasts", category: "exceptional", state,
-  toasts: [{ kind: "error", code, params, message, ...(ACTION_TITLE[code] && { title: failureTitle(ACTION_TITLE[code]) }) }],
+const alert = (id: string, title: string, description: string, toast: ToastFixture): Scenario => ({
+  id, title, description, group: "Trust prompts and toasts", category: "exceptional", state, toasts: [toast],
 });
+
+/** A failure as the app shows it: one an action raised, under the title that action gives it, where the code has one
+ * (`ACTION_TITLE`), otherwise an error the daemon broadcasts, naming no session. */
+const error = (id: string, title: string, code: string, params: Record<string, string>, description: string, message = ""): Scenario =>
+  alert(id, title, description, ACTION_TITLE[code]
+    ? { kind: "raised", code, params, message, title: failureTitle(ACTION_TITLE[code]) }
+    : broadcastErrorToast(code, params, message));
+
+/** A session the daemon reports a failed launch of while the store holds no record of it, as when the record is gone:
+ * the alert takes the session's name from the failure itself and has no location to give. */
+export const GONE_SESSION = "s-launch-gone";
+
+/** A failed launch, which the daemon reports as a notice about its session. */
+const launchError = (id: string, title: string, params: Record<string, string>, description: string): Scenario =>
+  alert(id, title, description, sessionNoticeToast(GONE_SESSION, "launch_failed", params));
 
 /** An acknowledgement whose raw text is the target: the Error details disclosure it sits behind is open. */
 const withDiagnostics = (scenario: Scenario): Scenario => ({ ...scenario, steps: [(ui) => ui.press(ui.t("error.diagnostics"))] });
@@ -66,8 +81,8 @@ export const structuredErrorScenarios: Scenario[] = [
   error("error-schema-field-required", "Required schema field refusal", "field_required", { field: "console_id" }, "The schema field is a technical literal rather than a record name."),
   error("error-schema-conflicting-fields", "Conflicting schema field refusal", "conflicting_fields", { first: "project_id", second: "console_id" }, "Both conflicting schema identifiers use technical chips."),
   error("error-schema-launch-setting", "Invalid launch setting refusal", "invalid_launch_setting", { agent: "Claude Code", field: "reasoning_effort", value: "unsupported-effort" }, "Both the schema field and its rejected value use technical chips."),
-  error("error-nested-launch", "Nested launch failure with technical cause", "launch_failed", { title: session.title, reason_code: "invalid_launch_setting", agent: "Claude Code", field: "reasoning_effort", value: "unsupported-effort" }, "The launch title is a name chip and the nested failure keeps its field and rejected value as separate code chips."),
-  withDiagnostics(error("error-nested-launch-diagnostics", "Nested launch failure with raw diagnostics", "launch_failed", { title: session.title, reason_code: "codex_unarchive_failed", detail: "error: failed to restore archived rollout\n    /Users/dev/.codex/archived_sessions/مرحبا/rollout.jsonl: permission denied" }, "The alert is titled \"Could not start the session\", with the session's name a chip on the \"Session:\" line and the nested restore failure worded by the application alone; its raw multiline diagnostics are in the Error details disclosure, open here, and never in the explanation.")),
+  launchError("error-nested-launch", "Nested launch failure with technical cause", { title: session.title, reason_code: "invalid_launch_setting", agent: "Claude Code", field: "reasoning_effort", value: "unsupported-effort" }, "The launch title is a name chip and the nested failure keeps its field and rejected value as separate code chips."),
+  withDiagnostics(launchError("error-nested-launch-diagnostics", "Nested launch failure with raw diagnostics", { title: session.title, reason_code: "codex_unarchive_failed", detail: "error: failed to restore archived rollout\n    /Users/dev/.codex/archived_sessions/مرحبا/rollout.jsonl: permission denied" }, "The alert is titled \"Could not start the session\", with the session's name a chip on the \"Session:\" line and the nested restore failure worded by the application alone; its raw multiline diagnostics are in the Error details disclosure, open here, and never in the explanation.")),
   withDiagnostics(error("error-shell-timeout-diagnostics", "Shell timeout with only producer diagnostics", "shell_environment_timeout", { detail: "shell environment timed out while reading login profile\n    /Users/dev/.zprofile: waiting for credential helper" }, "This login producer supplies only raw diagnostics, with no shell, command or duration to put in a sentence. The alert says only that the shell environment could not be captured and what to do; the producer's multiline text is in the Error details disclosure, open here, in a block of its own.", "The shell environment could not be captured: shell environment timed out while reading login profile\n    /Users/dev/.zprofile: waiting for credential helper")),
   withDiagnostics(error("error-git-diagnostics", "Multiline Git stderr in an acknowledgement", "git_failed", { detail: GIT_STDERR }, "A short sentence of the application's own is followed by the Git recovery guidance (open the project's terminal, resolve the Git error, retry) and no Report issue, then the Error details disclosure, open here, which holds the raw Git stderr in a block of its own. Its indentation and mixed direction are kept and the long line wraps instead of scrolling sideways; the block is capped at 40vh and, when its content exceeds that cap, scrolls vertically as a region reachable by keyboard and named by the disclosure.")),
   error("error-terminal-input-lost", "Terminal input lost, a session's terminal", "terminal_input_lost", { session: session.id }, "A broadcast alert with no request behind it, titled \"Terminal input not accepted\": the summary says the terminal of the session, whose name is a chip, disconnected before it had taken everything typed into it, and the recovery step asks the person to check the terminal's input line. No Error details disclosure, since no write failed.", `The terminal ${session.id} disconnected before it had taken everything typed into it; check its input line before continuing.`),

@@ -1,7 +1,7 @@
 import React, { useLayoutEffect, useState } from "react";
 
-import { accountDisabledUnavailable, handoffBlock, incompleteAccount, sharingChangeRuns, switchEntries, switchEntryBlock } from "../accountChoices";
-import { inheritedSessionLaunch, launchWithOverrides } from "../agents";
+import { accountDisabledUnavailable, handoffBlock, incompleteAccount, sharingChangeRuns, switchEntries, switchEntryBlock } from "../accounts/accountChoices";
+import { inheritedSessionLaunch, launchWithOverrides } from "../agents/agents";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
 import { PathText } from "../components/text/PathText";
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
@@ -13,7 +13,7 @@ import { accountUsage } from "../quota/accountUsage";
 import { quotaUsedUpMessage } from "../quota/quotaCopy";
 import type { SessionRequest } from "../store";
 import { useDaemonStore } from "../store";
-import { useNow } from "../useNow";
+import { useNow } from "../format/useNow";
 import { AgentAccountField } from "./AgentAccountField";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
 import { accountRefusalMessage } from "./accountRefusalMessage";
@@ -155,7 +155,7 @@ export function SwitchRequestForm({ request, onReport, isDisabled }: { request: 
       value: entry.account ?? DEFAULT_ACCOUNT_KEY,
       label: entry.name,
       // A removed account is its directory, which reads left to right.
-      ...(entry.isPath ? { labelContent: <PathText path={entry.name} as="span" className="block" /> } : {}),
+      ...(entry.isPath ? { labelContent: <PathText path={entry.name} className="block" /> } : {}),
       icon: usage.icon,
       ...(entry.current ? { badge: t("dialog.sessionRequest.switch.current") } : {}),
       isDisabled: entry.current || entry.exhaustedBy !== undefined || block !== undefined,

@@ -1,7 +1,8 @@
 import { DaemonRequestError } from "../../daemon-client";
 import type { Event, RequestBody } from "../../protocol";
 import type { ViewedFile } from "../../project-browser/files/TerminalFileViewer";
-import { pathLinkRecovery, type ErrorRecovery } from "../../errorRecovery";
+import { pathLinkRecovery } from "../../errors/errorRecovery";
+import type { Daemon } from "../../store";
 import { t } from "../../i18n/language";
 import { bodyFromFileContent } from "../../viewer/content";
 import type { PathLinkTarget } from "./pathLinks";
@@ -23,7 +24,7 @@ export async function openPathTarget({
   project,
   request,
   viewFile,
-  toastError,
+  raiseError,
 }: {
   target: PathLinkTarget;
   /** The click asked for the path to be opened on the host; only a folder is moved by it. */
@@ -33,9 +34,9 @@ export async function openPathTarget({
   request: (body: RequestBody) => Promise<Event>;
   /** Shows a file in the viewer; absent where there is none. */
   viewFile: ((file: ViewedFile) => void) | undefined;
-  toastError: (error: Error | string, session?: string, title?: string, recovery?: ErrorRecovery) => void;
+  raiseError: Daemon["raiseError"];
 }): Promise<void> {
-  const report = (error: unknown) => toastError(error instanceof Error ? error : String(error), undefined, t("terminal.openPathFailedTitle"), pathLinkRecovery(error));
+  const report = (error: unknown) => raiseError(error, { title: t("terminal.openPathFailedTitle"), recovery: pathLinkRecovery(error) });
   const openOnHost = () =>
     request({ type: "open_path_link", project, path: target.path }).then(() => undefined, report);
   const { view } = target;

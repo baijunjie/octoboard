@@ -3,8 +3,8 @@ import React, { useCallback, useContext, useEffect, useState } from "react";
 
 import { IconToggle } from "../components/controls/IconToggle";
 import { useT } from "../i18n/react";
-import { createPersistedPreference } from "../persistedPreference";
-import { PREFERENCE_KEYS } from "../preferenceKeys";
+import { createPersistedPreference } from "../preferences/persistedPreference";
+import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import { ControlsSlot } from "./controlsSlot";
 
 /** Whether long lines wrap, in files and diffs alike: the user's last choice in the viewer's

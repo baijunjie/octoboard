@@ -13,7 +13,7 @@ import { SessionDialog } from "./SessionDialog";
 import { SwitchAccountDialog } from "./SwitchAccountDialog";
 import { useConfirmIncompleteLaunch, type ConfirmLaunch } from "./useConfirmIncompleteLaunch";
 
-vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
+vi.mock("../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -39,7 +39,7 @@ function render(accounts: Account[], ui: (daemon: Daemon) => React.ReactElement,
     if (body.type === "locate_conversation_to_resume") return { type: "conversation_located", id: null, location: { kind: "archived_session", session: "s-old" } };
     return body.type === "ack" ? { type: "ack", id: null } : { type: "session_opened", id: null, session: sessionOf("s-new", parent.id, undefined, "", "idle") };
   });
-  const daemon = { store, request, toastError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "" } as unknown as Daemon;
+  const daemon = { store, request, raiseError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "" } as unknown as Daemon;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   act(() => root.render(<DaemonProvider value={daemon}>{ui(daemon)}</DaemonProvider>));

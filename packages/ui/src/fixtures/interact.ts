@@ -1,16 +1,17 @@
-import { AGENT_OPTIONS } from "../agents";
-import { gitBadgeAriaLabel, gitFailureLabel, gitFailureShown } from "../gitStatusLabel";
+import { AGENT_OPTIONS } from "../agents/agents";
+import { gitBadgeAriaLabel, gitFailureLabel, gitFailureShown } from "../git/gitStatusLabel";
 import { format, type MessageArgs, type MessageKey } from "../i18n/catalog";
 import type { Language } from "../i18n/languages";
-import { minWidthQuery } from "../breakpoint";
-import { panelId, type PanelKind } from "../panels/stackState";
+import { minWidthQuery } from "../components/hooks/breakpoint";
+import { panelId } from "../panels/stackState";
+import type { PanelKind } from "../layout/panelKind";
 import { DORMANT_STATUSES, LIVE_STATUSES, type AccountQuota, type Agent, type AgentAvailability, type Event as DaemonEvent, type GitStatus } from "../protocol";
-import { activityLabel, statusLabel } from "../sessionLabel";
+import { activityLabel, statusLabel } from "../sessions/sessionLabel";
 import { eventKey, type Binding } from "../shortcuts/binding";
 import { ACTIVITIES } from "../sessions/order";
 import type { Daemon, State } from "../store";
 import type { TerminalElement } from "../terminal/TerminalController";
-import { IS_MAC } from "../useWindowShortcut";
+import { IS_MAC } from "../input/keys";
 import { STATUS_LABELS, type StatusKey } from "../viewer/statusMarks";
 
 /** Everything a pressable thing is looked up among. A hand-built row is a `role="button"`, a tag

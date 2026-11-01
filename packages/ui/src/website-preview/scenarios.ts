@@ -21,7 +21,7 @@ import { previewCopy as chinese } from "./locales/zh-Hans";
 import { createIdleScript, createTerminalScript } from "./terminals";
 import { terminalCopy } from "./terminalScripts";
 import type { TerminalScript } from "../fixtures/fakeTerminal";
-import { DEFAULT_SETTINGS } from "../defaultSettings";
+import { DEFAULT_SETTINGS } from "../store";
 
 export type PreviewScene = "overview" | "focus" | "changes";
 

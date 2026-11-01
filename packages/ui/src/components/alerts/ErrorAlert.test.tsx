@@ -4,13 +4,13 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished } from "vitest";
 
-import { errorAlerts } from "../../errorAlerts";
+import { errorAlerts } from "./errorAlerts";
 import { DaemonRequestError } from "../../daemon-client";
 import { detailsButton, openDetails } from "./detailsTestSupport";
 import { AlertButton } from "./AlertButton";
 import { ErrorAlert } from "./ErrorAlert";
 import { FailureAlert } from "./FailureAlert";
-import { InlineReference } from "../text/InlineReference";
+import { InlineReference } from "../../i18n/InlineReference";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

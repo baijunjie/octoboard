@@ -1,7 +1,7 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 
 import { useLatest } from "../components/hooks/useLatest";
-import type { Appearance } from "../cssColour";
+import type { Appearance } from "../preferences/cssColour";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import type { Session } from "../protocol";
@@ -10,6 +10,7 @@ import { useDaemon } from "../store";
 import { withIcons } from "./statusItemIcons";
 import { buildStatusItemMenu } from "./statusItemMenu";
 import { nextQuotaTick } from "./statusItemQuota";
+import { useSerialPush } from "./useSerialPush";
 
 /** The longest a timer may wait: `setTimeout` runs a longer delay at once. */
 const MAX_TIMER_MS = 2 ** 31 - 1;
@@ -62,7 +63,7 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
   const appearance = useSyncExternalStore(subscribeSystemAppearance, systemAppearance);
   // Status flips are frequent and most change nothing the menu shows.
   const lastSentRef = useRef<string | undefined>(undefined);
-  const pendingRef = useRef<Promise<void>>(Promise.resolve());
+  const pushSerially = useSerialPush();
 
   useEffect(() => {
     if (!statusItem || !ready) return;
@@ -90,13 +91,9 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
       const serialized = `${appearance}|${JSON.stringify(draft)}`;
       if (serialized === lastSentRef.current) return;
       lastSentRef.current = serialized;
-      // Chained so two pushes cannot settle out of order and leave the older menu up. The pictures are
+      // Serial, so two pushes cannot settle out of order and leave the older menu up. The pictures are
       // drawn once per key and appearance, so a menu that differs only in its text costs nothing more.
-      pendingRef.current = pendingRef.current.then(() =>
-        withIcons(draft, appearance)
-          .then((menu) => statusItem.setMenu(menu))
-          .catch(() => {}),
-      );
+      pushSerially(() => withIcons(draft, appearance).then((menu) => statusItem.setMenu(menu)));
     };
     push();
     const unsubscribe = store.subscribe((state, previous) => {
@@ -120,7 +117,7 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
       clearTimeout(tickTimer);
       unsubscribe();
     };
-  }, [statusItem, ready, selectedSessionId, currentConsoleId, t, language, appearance, store]);
+  }, [statusItem, ready, selectedSessionId, currentConsoleId, t, language, appearance, store, pushSerially]);
 
   // Read at call time: the subscription is made once.
   const chooseRef = useLatest(onSessionChosen);

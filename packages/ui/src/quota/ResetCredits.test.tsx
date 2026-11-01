@@ -49,7 +49,7 @@ function fakeDaemon(quota: AccountQuota, reply: (body: RequestBody) => Promise<E
   const request = vi.fn(reply);
   const toastNotice = vi.fn();
   const store = createStateStore({ accountQuotas: [quota] });
-  const daemon = { store, request, toastNotice, toastError: vi.fn(), onToast: () => () => {} } as unknown as Daemon;
+  const daemon = { store, request, toastNotice, raiseError: vi.fn(), onToast: () => () => {} } as unknown as Daemon;
   return { daemon, request, toastNotice, store };
 }
 

@@ -3,7 +3,8 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { defaultStack, type PanelKind, type PanelStacks } from "./stackState";
+import { defaultStack, type PanelStacks } from "./stackState";
+import type { PanelKind } from "../layout/panelKind";
 import { useFloatingPanel, type FloatingPanel } from "./useFloatingPanel";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

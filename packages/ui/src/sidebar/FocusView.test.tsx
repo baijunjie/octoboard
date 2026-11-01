@@ -3,25 +3,25 @@ import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { AGENT_OPTIONS } from "../agents";
+import { AGENT_OPTIONS } from "../agents/agents";
 import { expectIndependentMarquees, stubMarquee } from "../components/motion/marqueeTestSupport";
 import { isolate } from "../i18n/isolate";
 import { accountOf, consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import type { Agent, AgentAvailability, Session } from "../protocol";
-import { PREFERENCE_KEYS } from "../preferenceKeys";
-import { sessionColourHex } from "../sessionColours";
+import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
+import { sessionColourHex } from "../sessions/sessionColours";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
-import { IS_MAC } from "../useWindowShortcut";
+import { IS_MAC } from "../input/keys";
 import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { projectFocusIncludeConsoleSessions } from "./projectFocusPreference";
 import type { SidebarHandlers } from "./types";
-import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
-import { DEFAULT_SETTINGS } from "../defaultSettings";
+import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
+import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 // The clock's own timer would count as pending work in the marquee checks, which these tests do not use it for.
-vi.mock("../useNow", () => ({ useNow: () => 0 }));
+vi.mock("../format/useNow", () => ({ useNow: () => 0 }));
 
 // Nor `matchMedia`, which `useFlip` asks about reduced motion.
 window.matchMedia ??= ((query: string) => ({ matches: false, media: query })) as unknown as typeof window.matchMedia;
@@ -57,7 +57,7 @@ function mount(render: (handlers: SidebarHandlers) => React.ReactElement, stored
   const daemon: Daemon = {
     store: createStateStore({ ...(agentAvailability && { agentAvailability }), sessions: new Map(stored.map((session) => [session.id, session])), settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [accountOf("work", "claude", "Work", "/w")] } }),
     request: vi.fn(),
-    toastError: vi.fn(),
+    raiseError: vi.fn(),
     toastNotice: vi.fn(),
     onToast: () => () => {},
     dismissTrustPrompt: () => {},
@@ -498,6 +498,8 @@ it("combining project sessions replaces the console summary with cards carrying 
   expect(card(underLead.title).parentElement!.className).toContain("ms-[17px]");
   // A nested card bound to a console session names that owner, and the model line comes last.
   expect(card(underLead.title).getAttribute("aria-label")).toMatch(new RegExp(`${isolate(hub1.title)}[^]*, Default model$`));
+  // Under a lead session with a console session above it, the card names the lead first, then the console session.
+  expect(card(underLead.title).getAttribute("aria-label")).toMatch(new RegExp(`, Bound to ${isolate(lead.title)}, Bound to ${isolate(hub1.title)}, Default model$`));
   expect(card("Tidy the changelog").querySelector(".session-colour-dot")).toBeNull();
   expect(text()).toContain("An old bound spike");
   // Its lead is not archived, so it is listed on its own, as the full archive lists it.

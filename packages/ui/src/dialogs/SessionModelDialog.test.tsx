@@ -9,7 +9,7 @@ import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { framesAsTimers, trackMountRefocus } from "../components/dialog/dialogTestSupport";
 import { SessionModelDialog } from "./SessionModelDialog";
 
-vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
+vi.mock("../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -33,7 +33,7 @@ async function mount(session: Session, models: "pending" | "unavailable" | "empt
           { id: "sonnet", name: "Sonnet", efforts: ["low", "high"] },
         ], unavailable: null }) };
   });
-  const daemon = { store, request, toastError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "" } as unknown as Daemon;
+  const daemon = { store, request, raiseError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "" } as unknown as Daemon;
   const onClose = vi.fn();
   const onChangeModel = vi.fn();
   const container = document.body.appendChild(document.createElement("div"));

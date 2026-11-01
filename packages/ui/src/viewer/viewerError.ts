@@ -1,10 +1,10 @@
-import { hasCodeParams, uncataloguedSummaryKey, type ErrorPresentation } from "../errorPresentation";
-import { isUncataloguedFailure } from "../uncataloguedFailure";
-import { rawFailureText } from "../errorText";
-import { daemonMessage, messageCode } from "../daemonMessage";
+import { hasCodeParams, uncataloguedSummaryKey, type ErrorPresentation } from "../errors/errorPresentation";
+import { isUncataloguedFailure } from "../errors/uncataloguedFailure";
+import { rawFailureText } from "../errors/errorText";
+import { daemonMessage, messageCode } from "../errors/daemonMessage";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import type { Language } from "../i18n/languages";
-import { displayWirePath } from "../wirePath";
+import { displayWirePath } from "../format/wirePath";
 import { ChangeBodiesError } from "./content";
 
 const SUMMARIES = new Map<string, PlainMessageKey>([

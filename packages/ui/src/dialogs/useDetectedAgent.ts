@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { useLatest } from "../components/hooks/useLatest";
-import { errorPresentation, type ErrorPresentation } from "../errorPresentation";
+import { errorPresentation, type ErrorPresentation } from "../errors/errorPresentation";
 import { useT } from "../i18n/react";
 import type { Agent, Event, RequestBody } from "../protocol";
 

@@ -3,7 +3,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { useWindowAttended } from "../components/announce/useWindowAttended";
 import { useAccessibilityHidden } from "../components/focus/useAccessibilityHidden";
-import { errorAlerts } from "../errorAlerts";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 
 /** How long the result of a batch of account switches or of a model change stays in the status region once it can be
  * heard, after the focus-move wait that `AttendedStatusAnnouncer` adds. */

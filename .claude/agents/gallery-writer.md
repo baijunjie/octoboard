@@ -33,6 +33,8 @@ Do not guess at what you are unsure of: list it in the report for whoever dispat
   or write it into the report. What is in the "Preview scratch location" is not reviewed or deleted by you; when
   dispatched to turn a temporary scenario into a formal one, you may use it as reference and rewrite it to the formal
   standard.
+- In this project the mocks and helpers you own include `packages/ui/src/fixtures/`, the shared fixtures runtime that
+  both the gallery and the website preview use; no one else writes it.
 - Do the work yourself, without handing it on: only one writer should be active at a time.
 
 ## Hold both ends

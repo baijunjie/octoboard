@@ -1,21 +1,22 @@
 import React, { useId } from "react";
 
 import { DaemonRequestError } from "../../daemon-client";
-import { daemonParams, DETAIL_BLOCK_CODES, RECOVERY_CODES, hasTrustDiagnostic, leftBranchDetail, leftBranchGroups, leftBranchItems, leftBranchName, richMessageCode, lacksSummary, sharingFailureItems, sharingRawReason, hasSharingReason, runningSessionIds, hasRefusedQuotaWindow, messageCode, type LeftBranchItem } from "../../daemonMessage";
-import { hasCodeParams, hasShellTimeoutDetails, systemCauseKey, uncataloguedSummaryKey, unwordedReason, type ErrorPresentation } from "../../errorPresentation";
-import { isUncataloguedFailure } from "../../uncataloguedFailure";
-import { ActionableError } from "../../actionableError";
-import { errorText, unexpectedFailureDiagnostic } from "../../errorText";
+import { daemonParams, hasTrustDiagnostic, leftBranchDetail, leftBranchGroups, leftBranchItems, leftBranchName, richMessageCode, lacksSummary, sharingFailureItems, sharingRawReason, hasSharingReason, runningSessionIds, hasRefusedQuotaWindow, messageCode, type LeftBranchItem } from "../../errors/daemonMessage";
+import { hasCodeParams, hasShellTimeoutDetails, systemCauseKey, uncataloguedSummaryKey, unwordedReason, type ErrorPresentation } from "../../errors/errorPresentation";
+import { isUncataloguedFailure } from "../../errors/uncataloguedFailure";
+import { ActionableError } from "../../errors/actionableError";
+import { errorText, unexpectedFailureDiagnostic } from "../../errors/errorText";
 import { globalParam, isMessageKey, type MessageKey } from "../../i18n/catalog";
 import { joinNodes } from "../../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
-import { NESTED_FAILURE_CODES, NESTED_REMEDY_CODES, type MessageParams } from "../../protocol";
-import { sessionTask } from "../../sessionLabel";
+import type { MessageParams } from "../../protocol";
+import { codeRecord } from "../../errors/codes";
+import { sessionTask } from "../../sessions/sessionLabel";
 import { useErrorRecords } from "../../store";
 import { BranchGroups } from "./BranchGroups";
 import { DiagnosticBlock } from "./DiagnosticBlock";
 import { hasErrorDetails, hasErrorRemedy } from "./errorPartPresence";
-import { InlineReference } from "../text/InlineReference";
+import { InlineReference } from "../../i18n/InlineReference";
 import { SharingCauseSummary, SharingDetails, SharingFailureReason } from "./SharingFailure";
 
 export function DaemonErrorTitle(): React.ReactElement {
@@ -26,7 +27,7 @@ export function DaemonErrorTitle(): React.ReactElement {
 const NO_RECORDS = new Map<string, never>();
 
 /** The three layers of a failure: `summary` is what happened and `remedy` the one main thing to do about
- * it, both in the application's own words and always visible (a code in `NO_SUMMARY_CODES` has no summary, as its
+ * it, both in the application's own words and always visible (a code with `noSummary` has no summary, as its
  * alert's title says what happened); `details` is what the Details button
  * holds: first any further explanation in the application's own words (the catalog's `.details` line, a reason per cause with its
  * fix, the lead lines of several groups), then the raw text that was not written for the reader (a
@@ -119,7 +120,7 @@ function CodedDaemonMessage({ error, part }: { error: DaemonRequestError; part?:
   if (running) {
     params.sessions = joinNodes(language, running, (id, key) => <InlineReference key={key} dir={sessions.has(id) ? "auto" : "ltr"} monospace={!sessions.has(id)} wrap>{sessions.get(id)?.title ?? id}</InlineReference>);
   }
-  const nested = NESTED_FAILURE_CODES.has(error.code) && error.params.reason_code && error.params.reason_code !== error.code
+  const nested = codeRecord(error.code)?.nested && error.params.reason_code && error.params.reason_code !== error.code
     ? new DaemonRequestError(String(params.reason ?? ""), error.params.reason_code, error.params)
     : undefined;
   const structuredNested = nested && (hasCodeParams(nested) || hasShellTimeoutDetails(nested));
@@ -151,15 +152,15 @@ function CodedDaemonMessage({ error, part }: { error: DaemonRequestError; part?:
       : null;
   const sharingRaw = sharing || (sharingFailure && rawReason) ? <SharingDetails items={sharing ?? []} detail={rawReason} /> : null;
   // Verbatim diagnostic output (a push's hook checks) can run to hundreds of lines: it wraps and scrolls inside the block.
-  const diagnostic = !sharingFailure && (DETAIL_BLOCK_CODES.has(error.code) || trustDiagnostic) && error.params.detail ? <DiagnosticBlock wrap tall>{error.params.detail}</DiagnosticBlock> : null;
+  const diagnostic = !sharingFailure && (codeRecord(error.code)?.detailBlock || trustDiagnostic) && error.params.detail ? <DiagnosticBlock wrap tall>{error.params.detail}</DiagnosticBlock> : null;
   const unwordedRaw = unworded ? <DiagnosticBlock>{unworded}</DiagnosticBlock> : null;
   const recoveryId = `daemon.${messageCode(error.code, error.params)}.recovery`;
-  const recovery = RECOVERY_CODES.has(error.code) && isMessageKey(recoveryId) ? <span className="block"><Message id={recoveryId} params={params as never} /></span> : null;
+  const recovery = codeRecord(error.code)?.recoveryLine && isMessageKey(recoveryId) ? <span className="block"><Message id={recoveryId} params={params as never} /></span> : null;
   // The application's own further explanation, which leads Details, ahead of the raw text.
   const furtherId = `daemon.${error.code}.details`;
   const further = isMessageKey(furtherId) ? <span className="block"><Message id={furtherId} params={params as never} /></span> : null;
   // The nested cause's recovery is the failure's own, a launch failure having none of its own.
-  const remedy = recovery ?? (structuredNested && NESTED_REMEDY_CODES.has(error.code) && hasErrorRemedy(nested) ? <DaemonErrorMessage error={nested} part="remedy" /> : null);
+  const remedy = recovery ?? (structuredNested && codeRecord(error.code)?.nested === "failureAndRemedy" && hasErrorRemedy(nested) ? <DaemonErrorMessage error={nested} part="remedy" /> : null);
   const nestedFurther = structuredNested ? <DaemonErrorMessage error={nested} part="further" /> : null;
   const nestedRaw = structuredNested ? <DaemonErrorMessage error={nested} part="raw" /> : null;
   const explanation = <>{further}{reasonLines}{nestedFurther}</>;
@@ -170,7 +171,7 @@ function CodedDaemonMessage({ error, part }: { error: DaemonRequestError; part?:
   if (part === "remedy") return remedy;
   // One element, so a container that lays its children out as flex items (an alert's column) keeps
   // the sentence whole instead of making each run of text and each literal an item of its own.
-  // A code with no opening sentence (`NO_SUMMARY_CODES`) has no sentence: the body starts with the remedy.
+  // A code with no opening sentence (`noSummary`) has no sentence: the body starts with the remedy.
   // A failure that states only its cause says the cause the system's text names after its sentence.
   const systemCause = systemCauseKey(error);
   const sentence = summaryless ? null : <span><Message id={id as MessageKey} params={params as never} />{systemCause && `${t("common.sentenceSeparator")}${t(systemCause)}`}</span>;
@@ -204,12 +205,13 @@ export function ShellTimeoutCommand({ params: { shell, command, timeout } }: { p
   );
 }
 
-/** Structured failures retain their metadata; `summary` is inline-safe for Alert.Description (empty for a code in `NO_SUMMARY_CODES`), `remedy`
- * holds the one main thing to do (also inline-safe) and `details` the further explanation, then the raw blocks
- * (`further` and `raw` apart). Omitting `part` renders the complete message in the application's own words: the
- * sentence, the remedy and the further explanation, never the raw text; a code in `NO_SUMMARY_CODES` has no sentence, and
- * its whole message is empty where nothing else of the application's own remains. A failure the application has no words for
- * shows its generic sentence, and its raw message is its `details` and its `raw` (with a script error's stack). */
+/** Structured failures retain their metadata; `summary` is inline-safe for Alert.Description (empty for a code with
+ * `noSummary`), `remedy` holds the one main thing to do (also inline-safe) and `details` the further explanation, then
+ * the raw blocks (`further` and `raw` apart). Omitting `part` renders the complete message in the application's own
+ * words: the sentence, the remedy and the further explanation, never the raw text; a code with `noSummary` has no
+ * sentence, and its whole message is empty where nothing else of the application's own remains. A failure the
+ * application has no words for shows its generic sentence, and its raw message is its `details` and its `raw` (with a
+ * script error's stack). */
 export function DaemonErrorMessage({ error, showTitle = true, part }: { error: ErrorPresentation; showTitle?: boolean; part?: DaemonErrorPart }): React.ReactElement | null {
   const t = useT();
   if (typeof error !== "string" && isUncataloguedFailure(error)) {

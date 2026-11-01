@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { composePageDocument } from "../report/pageDocument";
+import { PREVIEW_MESSAGE } from "./messages";
 import {
   installInteractionRelay,
   installPreviewInteractionBridge,
-  PREVIEW_INTERACTION_MESSAGE,
   withReportInteractionBridge,
 } from "./interactionBridge";
 import { withReportScrollBridge } from "./scrollBridge";
@@ -107,7 +107,7 @@ describe("preview interaction relay", () => {
     message(report.contentWindow!, "pointer");
     message(report.contentWindow!, "keyboard");
     expect(send.mock.calls).toEqual(["pointer", "keyboard", "pointer", "keyboard"].map((modality) => [
-      { type: PREVIEW_INTERACTION_MESSAGE, modality }, "*",
+      { type: PREVIEW_MESSAGE.interaction, modality }, "*",
     ]));
     send.mockClear();
     message(window, "keyboard");

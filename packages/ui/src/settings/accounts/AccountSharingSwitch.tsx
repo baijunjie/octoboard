@@ -1,20 +1,20 @@
 import { Label, ProgressBar } from "@heroui/react";
 import React, { useId, useRef, useState } from "react";
 
-import { defaultAccountName } from "../../agents";
+import { defaultAccountName } from "../../agents/agents";
 import { SharingCauseLine, SharingCauseSummary, SharingDetails, SharingFailureReason } from "../../components/alerts/SharingFailure";
 import { HandOffOnUnmount } from "../../components/focus/HandOffOnUnmount";
 import { HelpTip } from "../../components/hint/HelpTip";
-import { InlineReference } from "../../components/text/InlineReference";
+import { InlineReference } from "../../i18n/InlineReference";
 import { StatusAnnouncer } from "../../components/announce/StatusAnnouncer";
 import { StatusMark } from "../../components/status/StatusMark";
-import { parseSharingItems, sharingCauseGroups, sharingFixKey, sharingReasonKey } from "../../daemonMessage";
+import { parseSharingItems, sharingCauseGroups, sharingFixKey, sharingReasonKey } from "../../errors/daemonMessage";
 import { isolate } from "../../i18n/isolate";
 import { Message, useT } from "../../i18n/react";
 import type { Account, AccountSharing } from "../../protocol";
-import { reportError } from "../../reportError";
 import { useDaemon, useDaemonStore } from "../../store";
 import { SettingRow, SettingSwitch } from "../SettingRow";
+import { alertFailure } from "../../components/alerts/raiseError";
 
 /** An account's Share default configuration switch (see "The sharing choice" in
  * `docs/product/sharing-the-default-configuration.md`), shown for every account but the agent's default one, in the
@@ -96,7 +96,7 @@ export function AccountSharingSwitch({ account, opensFocused }: { account: Accou
     setBusy(true);
     setAskedHere(true);
     void request({ type: "set_account_sharing", account: account.id, share })
-      .catch((err) => reportError(err, undefined, undefined, undefined, t("settings.accounts.sharing.failedTitle")))
+      .catch(alertFailure({ title: t("settings.accounts.sharing.failedTitle") }))
       .finally(() => setBusy(false));
   };
   // The only line kept under the switch: why it cannot be turned now. What it does is in the help tip.

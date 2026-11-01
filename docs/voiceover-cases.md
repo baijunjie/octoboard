@@ -276,7 +276,7 @@ mapping.
   write delay. `packages/ui/src/components/form/OptionSelect.tsx` (`OptionSelect`: the select's `aria-label`, optional
   `aria-labelledby` and descriptions, and the selected value rendered with `StatusBadge`), fed by
   `packages/ui/src/dialogs/ConsoleDialog.tsx` (label "Console sessions", hidden label, stored default agent) and the
-  agent option list in `packages/ui/src/agents.ts` (held agents are retained and badged "Not added").
+  agent option list in `packages/ui/src/agents/agents.ts` (held agents are retained and badged "Not added").
   `packages/ui/src/components/status/StatusBadge.tsx` adds an `sr-only` comma and space before the visible "Not added"
   text; it has no role, live attribute or explicit label. The agent icon is `aria-hidden`.
 - **ARIA wiring as rendered.** Native tree: a pop-up button with has-popup set, enabled; title and description `Codex ,
@@ -785,8 +785,8 @@ mapping.
   the daemon has answered and the button is available again, otherwise to the configured fallback. The move waits one
   animation frame past React Aria's restore (two after the unmount), acts only when focus is on `<body>` or inside the
   original button, sets the keyboard modality, and leaves a restore that landed correctly alone. The current menu path
-  supplies an explicit two-frame hand-off to the row's Actions button (`AgentAccountsSection.tsx`,
-  `returnToRowActions`).
+  supplies an explicit hand-off to the row's Actions button once the dialog has gone (`AgentAccountsSection.tsx`,
+  `handFocusOnceClosed` with `rowActionsTrigger`).
 - **Earlier ARIA wiring as rendered (E4).** The row's Actions control is a pop-up button named `Actions for ⁨VoiceOver
   fixture⁩ (Grok Build)` with has-popup set; the direct button is a button named "Log in". Final screenshots show the
   keyboard focus ring on the correct control.
@@ -971,8 +971,8 @@ mapping.
 - **Mechanism.** Text replaced in place in a `role="status"` div mounted with the dialog (E1), with no
   `StatusAnnouncer`, no delay and no nested alert; focus rested on Cancel login.
   `packages/ui/src/settings/accounts/AccountLoginDialog.tsx` in that build; the code chip rendered through
-  `packages/ui/src/components/text/InlineReference.tsx`. Superseded in the product by SA-C's mechanism; the result
-  remains evidence for this kind.
+  `packages/ui/src/components/text/InlineReference.tsx` then (now `packages/ui/src/i18n/InlineReference.tsx`).
+  Superseded in the product by SA-C's mechanism; the result remains evidence for this kind.
 - **ARIA wiring as rendered.** The region held a spinner (`aria-hidden`) and a text span. Natively a group with the
   application-status subrole, empty own name, live polite, atomic, relevant additions and text, with the text in
   descendants.
@@ -1040,7 +1040,7 @@ mapping.
   options, let the warning update settle, read each checkbox, then read through the warning.
 - **Mechanism.** `packages/ui/src/dialogs/RequestedDialog.tsx` (`DeleteSessionDialog`; `ConfirmWarning` no longer
   exists) put the warning title, the bound-session list and then the consequence lines inside
-  `packages/ui/src/components/TintedAlert.tsx` (`TintedAlert`), under `Alert.Content`. The indicator is `aria-hidden`.
+  `TintedAlert` (a component since removed), under `Alert.Content`. The indicator is `aria-hidden`.
   `packages/ui/src/components/dialog/ConfirmDialog.tsx` (`ConfirmDialog`) keeps the options before that warning.
   `packages/ui/src/components/form/ConfirmOption.tsx` (`ConfirmOption`) uses HeroUI `Label` and `Description` for the
   name and hint, plus an optional `aria-describedby` reference supplied by its caller;
@@ -1108,9 +1108,9 @@ mapping.
   Codex CLI writes its folder-trust question to its real PTY; the daemon's recognizer emits `trust_prompt`, and the
   packaged app opens the confirmation. Read its warning with VoiceOver.
 - **Mechanism.** `packages/ui/src/dialogs/TrustPromptDialog.tsx` (`useTrustPromptDialogProps`, `TrustPromptMessage`,
-  `Caution`) supplies the prompt to `ConfirmDialog`. `TintedAlert` holds an `Alert.Title` containing the `sr-only`
-  `Caution:` prefix followed by the visible title; `Alert.Description` holds the agent-specific caution. The warning
-  glyph is `aria-hidden`. This is durable dialog text read on demand; no `StatusAnnouncer` is involved.
+  `Caution`) supplies the prompt to `ConfirmDialog`. `TintedAlert` (a component since removed) held an `Alert.Title`
+  containing the `sr-only` `Caution:` prefix followed by the visible title; `Alert.Description` held the agent-specific
+  caution. The warning glyph is `aria-hidden`. This is durable dialog text read on demand; no `StatusAnnouncer` is involved.
 - **ARIA wiring as rendered.** Native `AXApplicationAlertDialog`, title and description `Trust this folder?`, with
   `AXARIALive=assertive`, `AXARIAAtomic=0` and `AXARIARelevant=additions text`. The inner warning title mapped to an
   unnamed native group with class `alert__title`; its two static-text children were `Caution:` and `The project's own
@@ -1375,9 +1375,8 @@ the bare-mark Enter naming of the recording behind FOCUS-3, whose other results 
 
 - **What and where.** E1: the account row's `sr-only` wrapper with an inner `role="status"`, empty until success, was
   filled at the moment the state became succeeded, while the login dialog was closing and focus was being returned.
-  `AccountLoginAnnouncement` in `packages/ui/src/settings/accounts/AccountLogin.tsx` in that build, mounted by the
-  account row (`AccountRow` in `packages/ui/src/settings/accounts/AgentAccountsSection.tsx` then; `AccountTableRow`
-  now).
+  `AccountLoginAnnouncement` in that build (a component since removed; SA-D's form replaced it), mounted by the
+  account row (`AccountRow` then; `AccountTableRow` now).
 - **Result.** Not spoken, in two completed runs, with capture running at least 12 s past the success (longer than the
   6000 ms the text was held). The expected phrase `VoiceOver fixture: logged in.` was never captured; what was spoken
   after success was the Settings dialog and the focused control. The native tree did contain the text, which is

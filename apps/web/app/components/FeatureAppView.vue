@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import {
+  FEATURE_MESSAGE,
+  readFeatureMessage,
+} from "../../../../packages/ui/src/website-preview/messages";
+import { localeByCode } from "../../seo/site-seo";
 const props = defineProps<{ feature: string }>();
 const { locale } = useI18n();
 const { t } = useSiteCopy();
@@ -13,17 +18,18 @@ const height = ref(240);
 const canvasWidth = computed(() => width.value < 350 ? 320 : 400);
 const canvasHeight = computed(() => width.value < 350 ? 300 : 260);
 const scale = computed(() => Math.min(1, width.value / canvasWidth.value, height.value / canvasHeight.value));
-const source = computed(() => `${config.app.baseURL}preview/feature-preview.html?feature=${props.feature}&lang=${locale.value === "zh" ? "zh-Hans" : locale.value}`);
+const source = computed(() => `${config.app.baseURL}preview/feature-preview.html?feature=${props.feature}&lang=${localeByCode(locale.value).language}`);
 let observer: IntersectionObserver | undefined;
 let dimensions: ResizeObserver | undefined;
 let timer: ReturnType<typeof setTimeout> | undefined;
 function receive(event: MessageEvent) {
   if (event.source !== frame.value?.contentWindow || event.origin !== window.location.origin) return;
-  if (event.data?.type === "octoboard-feature-ready" && event.data.feature === props.feature) {
+  const message = readFeatureMessage(event.data);
+  if (message?.type === FEATURE_MESSAGE.ready && message.feature === props.feature) {
     clearTimeout(timer);
     ready.value = true;
   }
-  if (event.data?.type === "octoboard-feature-error") failed.value = true;
+  if (message?.type === FEATURE_MESSAGE.error) failed.value = true;
 }
 watch(source, () => { ready.value = false; failed.value = false; });
 watch([visible, source], () => {

@@ -6,7 +6,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { DaemonRequestError } from "./daemon-client";
 import { ErrorAlerts } from "./shell/ErrorAlerts";
-import { errorAlerts } from "./errorAlerts";
+import { errorAlerts } from "./components/alerts/errorAlerts";
 import { App } from "./App";
 import { setProjectBrowserMode, useProjectBrowserState } from "./project-browser/browserState";
 import { AFTER_FOCUS_MOVE_DELAY_MS, FIRST_WRITE_DELAY_MS } from "./components/announce/StatusAnnouncer";
@@ -18,7 +18,7 @@ import { PlatformProvider } from "./platform/react";
 import type { PlatformAdapter } from "./platform";
 import type { Project } from "./protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "./store";
-import { ThemeProvider } from "./theme";
+import { ThemeProvider } from "./preferences/theme";
 import { FileViewer } from "./viewer/FileViewer";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -73,7 +73,7 @@ function mountApp(narrow = false, clipboard?: { writeText: (text: string) => Pro
   const daemon: Daemon = {
     store: createStateStore(snapshotState({ consoles: [console_], projects, sessions })),
     request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
-    toastError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
+    raiseError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
     dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
   };
   const container = mountForTooltip(
@@ -209,7 +209,7 @@ it("sends the project directory request and reports a failure through the shared
   await press("Open in");
   await press("File manager");
   expect(daemon.request).toHaveBeenCalledWith({ type: "open_project_directory", project: project.id });
-  expect(daemon.toastError).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ message: "The system file manager could not be opened." }), undefined, "Could not open in the file manager");
+  expect(errorAlerts.getSnapshot()).toEqual([expect.objectContaining({ message: "The system file manager could not be opened.", title: "Could not open in the file manager" })]);
 });
 
 it.each([false, true])("opens the project's Terminal panel from Open panel, starting a shell only while it has none; narrow=%s", async (narrow) => {
@@ -262,7 +262,7 @@ it("sends the system terminal request and reports a failure through the shared e
   await press("Open in");
   await press("System terminal");
   expect(daemon.request).toHaveBeenCalledWith({ type: "open_project_terminal", project: project.id });
-  expect(daemon.toastError).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ message: "The system terminal could not be opened." }), undefined, "Could not open in the system terminal");
+  expect(errorAlerts.getSnapshot()).toEqual([expect.objectContaining({ message: "The system terminal could not be opened.", title: "Could not open in the system terminal" })]);
 });
 
 it("copies the project name unchanged and reports success", async () => {
@@ -279,7 +279,7 @@ it("reports a clipboard failure", async () => {
   const { daemon, project } = mountApp(false, clipboard);
   await openProjectMenu(project.name);
   await press("Copy project name");
-  expect(daemon.toastError).toHaveBeenCalledWith(expect.objectContaining({ message: "Could not copy the project name", recovery: "clipboard" }), undefined, "Could not copy");
+  expect(errorAlerts.getSnapshot()).toEqual([expect.objectContaining({ message: "Could not copy the project name", title: "Could not copy", classification: expect.objectContaining({ kind: "actionable", recovery: "clipboard" }) })]);
   expect(daemon.toastNotice).not.toHaveBeenCalled();
 });
 
@@ -300,7 +300,7 @@ it("reports a session ID clipboard failure", async () => {
   const { daemon } = mountApp(false, clipboard, true);
   await press(`Actions for session ${isolate("Fix bug")}`);
   await press("Copy session ID");
-  expect(daemon.toastError).toHaveBeenCalledWith(expect.objectContaining({ message: "Could not copy the session ID", recovery: "clipboard" }), undefined, "Could not copy");
+  expect(errorAlerts.getSnapshot()).toEqual([expect.objectContaining({ message: "Could not copy the session ID", title: "Could not copy", classification: expect.objectContaining({ kind: "actionable", recovery: "clipboard" }) })]);
   expect(daemon.toastNotice).not.toHaveBeenCalled();
 });
 
@@ -366,7 +366,7 @@ it("keeps a native operation rejection string as the error diagnostic", async ()
   await openProjectMenu("Website");
   await press("Open in");
   await press("File manager");
-  expect(daemon.toastError).toHaveBeenCalledWith(expect.objectContaining({ message: "Native file manager rejected", cause: "Native file manager rejected" }), undefined, "Could not open in the file manager");
+  expect(errorAlerts.getSnapshot()).toEqual([expect.objectContaining({ message: "Native file manager rejected", title: "Could not open in the file manager", error: "Native file manager rejected" })]);
 });
 
 it("keeps the restore confirmation open and displays a refusal", async () => {
@@ -651,7 +651,7 @@ it("sends only the edited values when a model is changed, and announces the rest
   expect(said()).toBeUndefined();
   await passTime(AFTER_FOCUS_MOVE_DELAY_MS + 100);
   expect(said()).toContain("restarted with its new model settings");
-  expect(daemon.toastError).not.toHaveBeenCalled();
+  expect(daemon.raiseError).not.toHaveBeenCalled();
 });
 
 it("announces values recorded for the next resume after the focus move", async () => {
@@ -699,7 +699,7 @@ it("holds an announcement while a modal is open over the window", async () => {
   await act(async () => errorAlerts.acknowledge());
   await passTime(AFTER_FOCUS_MOVE_DELAY_MS + 100);
   expect(said()).toContain("will use its new model settings when it is resumed");
-  expect(daemon.toastError).not.toHaveBeenCalled();
+  expect(daemon.raiseError).not.toHaveBeenCalled();
 });
 
 it("announces a batch of account switches once its last switch is done", async () => {
@@ -729,7 +729,7 @@ it("announces nothing when the session had the model settings already", async ()
   const { daemon } = await pickSonnetInChangeModel(() => ({ type: "session_model_set", id: null, session: "s-archive", outcome: "unchanged" }));
   await passTime(AFTER_FOCUS_MOVE_DELAY_MS + 100);
   expect(document.querySelector('[role="status"]:not(:empty)')).toBeNull();
-  expect(daemon.toastError).not.toHaveBeenCalled();
+  expect(daemon.raiseError).not.toHaveBeenCalled();
 });
 
 it("points a launch setting the agent does not offer back to Change model", async () => {
@@ -738,7 +738,7 @@ it("points a launch setting the agent does not offer back to Change model", asyn
     if (body.type === "set_session_model") throw error;
     return { type: "ack", id: null };
   });
-  expect(daemon.toastError).toHaveBeenCalledExactlyOnceWith(error, "s-archive", "Could not change the model", "changeModelSetting");
+  expect(daemon.raiseError).toHaveBeenCalledExactlyOnceWith(error, { title: "Could not change the model", session: "s-archive", recovery: "changeModelSetting" });
 });
 
 it("opens Change model for the session from the alert of a launch setting the agent does not offer", async () => {
@@ -751,7 +751,7 @@ it("opens Change model for the session from the alert of a launch setting the ag
   expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Change model");
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain("The session Fix bug will run");
-  expect(daemon.toastError).not.toHaveBeenCalled();
+  expect(daemon.raiseError).not.toHaveBeenCalled();
 });
 
 it("reports a refused model change under its own title for the session", async () => {
@@ -760,7 +760,7 @@ it("reports a refused model change under its own title for the session", async (
     if (body.type === "set_session_model") throw error;
     return { type: "ack", id: null };
   });
-  expect(daemon.toastError).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ code: "model_change_did_not_stop" }), "s-archive", "Could not change the model", undefined);
+  expect(daemon.raiseError).toHaveBeenCalledExactlyOnceWith(error, { title: "Could not change the model", session: "s-archive", recovery: undefined });
   expect(document.querySelector('[role="status"]:not(:empty)')).toBeNull();
 });
 

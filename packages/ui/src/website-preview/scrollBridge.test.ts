@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { composePageDocument } from "../report/pageDocument";
+import { PREVIEW_MESSAGE } from "./messages";
 import {
   installBoundaryScrollRelay,
   installPreviewScrollBridge,
-  PREVIEW_SCROLL_MESSAGE,
   withReportScrollBridge,
 } from "./scrollBridge";
 
@@ -418,7 +418,7 @@ describe("sample report relay", () => {
     expect(send).not.toHaveBeenCalled();
     message(0, 0.5);
     expect(send).toHaveBeenCalledExactlyOnceWith(
-      { type: PREVIEW_SCROLL_MESSAGE, deltaY: 0, velocity: 0.5 },
+      { type: PREVIEW_MESSAGE.scroll, deltaY: 0, velocity: 0.5 },
       "*",
     );
     send.mockClear();
@@ -435,7 +435,7 @@ describe("sample report relay", () => {
     expect(send).not.toHaveBeenCalled();
     stopMessage(true);
     expect(send).toHaveBeenCalledExactlyOnceWith(
-      { type: PREVIEW_SCROLL_MESSAGE, deltaY: 0, stop: true },
+      { type: PREVIEW_MESSAGE.scroll, deltaY: 0, stop: true },
       "*",
     );
   });
@@ -467,7 +467,7 @@ describe("sample report relay", () => {
     expect(send).not.toHaveBeenCalled();
     message(frame.contentWindow!);
     expect(send).toHaveBeenCalledExactlyOnceWith(
-      { type: PREVIEW_SCROLL_MESSAGE, deltaY: 10 },
+      { type: PREVIEW_MESSAGE.scroll, deltaY: 10 },
       "*",
     );
     frame.srcdoc = reportDocument();

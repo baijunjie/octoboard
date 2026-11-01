@@ -18,7 +18,7 @@ import { StatusIcon } from "../components/status/StatusIcon";
 import { StatusMark } from "../components/status/StatusMark";
 import { TitledControl } from "../components/hint/TitledControl";
 import { leave, mountForTooltip, openPopover, openTooltip } from "../components/hint/tooltipTestSupport";
-import { gitBadgeAriaLabel } from "../gitStatusLabel";
+import { gitBadgeAriaLabel } from "../git/gitStatusLabel";
 import { isolate } from "../i18n/isolate";
 import { LanguageProvider } from "../i18n/react";
 import type { Account, ChangeEntry, Launch } from "../protocol";

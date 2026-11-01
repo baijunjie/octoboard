@@ -5,7 +5,7 @@ import { ExportConfigurationDialog } from "../configuration/ExportConfigurationD
 import { ImportConfigurationDialog } from "../configuration/ImportConfigurationDialog";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
-import { useCurrentConsole } from "../currentConsole";
+import { useCurrentConsole } from "../store";
 import { SettingRow } from "./SettingRow";
 
 /** Moving configuration between computers: exporting consoles and projects, the application settings

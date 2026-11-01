@@ -5,7 +5,7 @@ import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { errorAlerts } from "../errorAlerts";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 import type { PlatformAdapter } from "../platform";
 import { sessionOf } from "../fixtures/builders";
 import { CATALOGS, format } from "../i18n/catalog";
@@ -68,15 +68,17 @@ const { FakeController } = vi.hoisted(() => {
 });
 vi.mock("./TerminalController", () => ({ TerminalController: FakeController }));
 // One object for every render: the pane re-attaches when `terminalUrl` changes identity.
-const daemon = vi.hoisted(() => ({ terminalUrl: () => "", request: vi.fn(async (_body: unknown) => ({ type: "ack", id: null })), toastError: vi.fn() }));
+const daemon = vi.hoisted(() => ({ terminalUrl: () => "", request: vi.fn(async (_body: unknown) => ({ type: "ack", id: null })), raiseError: vi.fn() }));
 const store = vi.hoisted(() => ({ snapshotEpoch: 0, connectionState: "open", sessions: new Map<string, unknown>() }));
-vi.mock("../store", () => ({
+vi.mock("../store", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../store")>()),
   useDaemon: () => daemon,
   useDaemonStore: (select: (state: typeof store) => unknown) => select(store),
+  useSession: (id: string | null | undefined) => (id ? store.sessions.get(id) : undefined),
 }));
 const platform = vi.hoisted(() => ({ links: undefined as PlatformAdapter["links"] }));
 vi.mock("../platform/react", () => ({ usePlatform: () => platform }));
-vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "light" }) }));
+vi.mock("../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "light" }) }));
 
 const roots: Root[] = [];
 beforeEach(() => {

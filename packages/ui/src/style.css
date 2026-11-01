@@ -350,7 +350,7 @@ html {
 }
 
 /* A console session's colour dot, drawn by `BindingBadge`. The colours are kept in one place,
-   `packages/ui/src/sessionColours.ts`, which also gives the dot its two custom properties: the
+   `packages/ui/src/sessions/sessionColours.ts`, which also gives the dot its two custom properties: the
    entry's colour for each appearance. */
 .session-colour-dot {
   background-color: var(--session-colour-light);

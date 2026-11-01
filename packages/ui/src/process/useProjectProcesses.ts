@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
-import { errorPresentation, type ErrorPresentation } from "../errorPresentation";
-import { listProcesses } from "../processes";
+import { errorPresentation, type ErrorPresentation } from "../errors/errorPresentation";
+import { listProcesses } from "./processes";
 import type { ProcessTree } from "../protocol";
 import { useDaemon } from "../store";
 

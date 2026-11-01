@@ -1,7 +1,7 @@
 import { FileText, FolderClosed, SquareActivity, SquareTerminal, type LucideIcon } from "lucide-react";
 
 import type { PlainMessageKey } from "../i18n/catalog";
-import type { PanelKind } from "./stackState";
+import type { PanelKind } from "../layout/panelKind";
 
 /** What a kind of panel is called and drawn as, apart from its content, so a menu can offer a panel
  * without importing the panels themselves (`PANEL_ENTRIES`, which builds on this). */

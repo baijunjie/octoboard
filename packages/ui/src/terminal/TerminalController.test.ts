@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { IS_MAC } from "../useWindowShortcut";
+import { IS_MAC } from "../input/keys";
 import { TerminalController } from "./TerminalController";
 
 /** Enough of xterm for the controller: writes are parsed in a later task, in order, as xterm's are,

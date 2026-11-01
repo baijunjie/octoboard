@@ -1,7 +1,6 @@
+import { PREVIEW_MESSAGE, postPreviewMessage, readScrollParts } from "./messages";
 import { isReportBridgeSource, withReportBridge } from "./reportBridge";
 
-/** The website accepts this only from its own preview iframe's contentWindow. */
-export const PREVIEW_SCROLL_MESSAGE = "octoboard-preview-scroll";
 const REPORT_SCROLL_MESSAGE = "octoboard-preview-report-scroll";
 const INJECTED_MARKER = "data-website-preview-scroll-bridge";
 
@@ -220,34 +219,19 @@ export function withReportScrollBridge(srcdoc: string): string {
 export function installPreviewScrollBridge(win: Window = window): () => void {
   if (win.parent === win) return () => {};
   const doc = win.document;
+  // The website accepts this only from its own preview iframe's contentWindow.
   const send = (deltaY: number, velocity?: number, stop?: boolean) =>
-    win.parent.postMessage(
-      { type: PREVIEW_SCROLL_MESSAGE, deltaY, velocity, stop },
-      "*",
-    );
+    postPreviewMessage(win.parent, { type: PREVIEW_MESSAGE.scroll, deltaY, velocity, stop });
   const removeRelay = installBoundaryScrollRelay(win, send);
   const onMessage = (event: MessageEvent) => {
-    const data = event.data as {
-      type?: unknown;
-      deltaY?: unknown;
-      velocity?: unknown;
-      stop?: unknown;
-    } | null;
-    if (
-      data?.type !== REPORT_SCROLL_MESSAGE ||
-      typeof data.deltaY !== "number" ||
-      !Number.isFinite(data.deltaY)
-    )
-      return;
+    const data = event.data as { type?: unknown; deltaY?: unknown; velocity?: unknown; stop?: unknown } | null;
+    const parts = data?.type === REPORT_SCROLL_MESSAGE ? readScrollParts(data) : undefined;
+    if (!parts) return;
     // A message carries a scroll delta, a release velocity, or a stop signal.
-    const stop = data.stop === true;
-    const velocity =
-      typeof data.velocity === "number" && Number.isFinite(data.velocity)
-        ? data.velocity
-        : undefined;
-    if (data.deltaY === 0 && !velocity && !stop) return;
+    const { deltaY, velocity, stop } = parts;
+    if (deltaY === 0 && !velocity && !stop) return;
     if (isReportBridgeSource(doc, event.source, INJECTED_MARKER))
-      send(data.deltaY, velocity, stop || undefined);
+      send(deltaY, velocity, stop || undefined);
   };
   win.addEventListener("message", onMessage);
   return () => {

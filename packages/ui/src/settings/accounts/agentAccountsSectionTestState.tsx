@@ -4,12 +4,12 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { vi } from "vitest";
 
-import { DEFAULT_SETTINGS } from "../../defaultSettings";
+import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { accountOf } from "../../fixtures/builders";
 import type { Account, AccountLogin, AccountQuota, AccountSharing, Agent, AgentAvailability, Console, Project, Session, Settings } from "../../protocol";
 
 export const request = vi.fn(() => Promise.resolve({}));
-export const toastError = vi.fn();
+export const raiseError = vi.fn();
 export const toastNotice = vi.fn();
 export const settings: Settings = { ...DEFAULT_SETTINGS, added_agents: ["claude", "codex", "grok"], default_clone_dir: "/home/dev/Projects" };
 export const accountQuotas: AccountQuota[] = [];
@@ -43,10 +43,10 @@ export const sectionEntry = { current: null as HTMLElement | null };
 
 export const account = (id: string, agent: Account["agent"]): Account => accountOf(id, agent, id, `/home/dev/.${id}`);
 
-/** `../../store` reading `state()`, with `request`, `toastError` and `toastNotice` as the daemon's. */
+/** `../../store` reading `state()`, with `request`, `raiseError` and `toastNotice` as the daemon's. */
 export const storeStandIn = (original: typeof import("../../store")) => ({
   ...original,
-  useDaemon: () => ({ request, toastError, toastNotice, store: { getState: () => state() } }),
+  useDaemon: () => ({ request, raiseError, toastNotice, store: { getState: () => state() } }),
   useDaemonStore: (selector: (s: unknown) => unknown) => {
     useSyncExternalStore(bus.subscribe, bus.version);
     return selector(state());

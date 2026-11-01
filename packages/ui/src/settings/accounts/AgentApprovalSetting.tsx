@@ -1,16 +1,16 @@
 import React, { useState } from "react";
 
-import { AGENT_LABEL } from "../../agents";
+import { AGENT_LABEL } from "../../agents/agents";
 import { HelpTip } from "../../components/hint/HelpTip";
-import { InlineReference } from "../../components/text/InlineReference";
+import { InlineReference } from "../../i18n/InlineReference";
 import { ConfirmDialog } from "../../components/dialog/ConfirmDialog";
 import { OptionSelect } from "../../components/form/OptionSelect";
-import { reportError } from "../../reportError";
 import type { PlainMessageKey } from "../../i18n/catalog";
 import { Message, useT } from "../../i18n/react";
 import type { Agent, ApprovalReviewer, ClaudeApprovalMode } from "../../protocol";
 import { useDaemon, useDaemonStore } from "../../store";
 import { SettingRow } from "../SettingRow";
+import { alertFailure } from "../../components/alerts/raiseError";
 
 /** The choices an agent has for approving permission requests, in the order its selector lists them after "Follow
  * account configuration", each with the message that words it. The one place that says which agents have a choice
@@ -61,7 +61,7 @@ function ApprovalSelect<T extends string>({ label, value, choices, save, confirm
     }
     setBusy(true);
     void save(picked === "inherit" ? null : picked)
-      .catch((err) => reportError(err, undefined, undefined, undefined, t("settings.accounts.approval.saveFailedTitle")))
+      .catch(alertFailure({ title: t("settings.accounts.approval.saveFailedTitle") }))
       .finally(() => setBusy(false));
   };
   // The trigger must stay focusable while the popover returns keyboard focus after selection.

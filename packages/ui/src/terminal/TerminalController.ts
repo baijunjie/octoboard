@@ -4,8 +4,8 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { type IBuffer, type IBufferRange, Terminal } from "@xterm/xterm";
 
 import type { TermControl, TermEvent } from "../protocol";
-import { interactionIsTouch } from "../touchInput";
-import { IS_MAC, isSecondaryPress } from "../useWindowShortcut";
+import { interactionIsTouch } from "../input/touchInput";
+import { IS_MAC, isSecondaryPress } from "../input/keys";
 import { TerminalLinkColors } from "./links/linkColors";
 import { OSC_52, osc52ClipboardText } from "./osc52";
 import { installPathLinks, type PathAnswer, type PathLinkCache, type PathLinkTarget } from "./links/pathLinks";
@@ -207,8 +207,8 @@ export const TERMINAL_FONT_FAMILY = '"SF Mono", Menlo, Consolas, "Noto Sans Mono
  *
  * This class only knows about one session's socket; it has no notion of whether that session's
  * process is still meant to be running. Automatic reconnection after a dropped socket is therefore
- * the job of `TerminalPane` and `ShellTerminalView` (they have the record with the status this
- * needs), not this one's.
+ * the job of `useTerminalReconnect` (used by `TerminalPane` and `ShellTerminalView`, which have the
+ * record with the status this needs), not this one's.
  */
 export class TerminalController {
   readonly term: Terminal;
@@ -609,7 +609,7 @@ export class TerminalController {
    * Switches the running terminal's colours to the given mode's palette, without recreating the
    * `xterm.js` instance — xterm applies a theme change to the live screen immediately, so this is
    * the one safe way to follow the app's light/dark switch (the instance itself is mount-only, per
-   * `TerminalPane`'s effect).
+   * `useTerminalController`).
    */
   setColorTheme(mode: "light" | "dark"): void {
     this.term.options.theme = XTERM_THEMES[mode];

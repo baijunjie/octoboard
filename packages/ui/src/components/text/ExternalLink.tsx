@@ -1,13 +1,13 @@
 import { buttonVariants } from "@heroui/styles";
 import React, { useRef, useState } from "react";
 
-import { ActionableError } from "../../actionableError";
+import { ActionableError } from "../../errors/actionableError";
 import type { Translate } from "../../i18n/catalog";
 import { useT } from "../../i18n/react";
 import { useOptionalPlatform } from "../../platform/react";
-import { reportError } from "../../reportError";
 import { ExternalLinkIcon } from "./ExternalLinkIcon";
 import { useFocusVisibleProps } from "../focus/useFocusVisibleProps";
+import { raiseError } from "../alerts/raiseError";
 
 export { ExternalLinkIcon } from "./ExternalLinkIcon";
 
@@ -22,7 +22,7 @@ type Props = Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "onCli
 
 /** Native menu and terminal links share the anchor's visible failure and manual destination. */
 export function reportExternalLinkFailure(t: Translate, href: string, cause: unknown): void {
-  reportError(new ActionableError(t("externalLink.unavailable"), "openExternal", { cause }), undefined, undefined, <div className="flex flex-col gap-4"><p>{t("externalLink.unavailable")}</p><p dir="ltr" className="font-mono [overflow-wrap:anywhere]">{href}</p></div>, t("externalLink.unavailableTitle"));
+  raiseError(new ActionableError(t("externalLink.unavailable"), "openExternal", { cause }), { title: t("externalLink.unavailableTitle"), content: <div className="flex flex-col gap-4"><p>{t("externalLink.unavailable")}</p><p dir="ltr" className="font-mono [overflow-wrap:anywhere]">{href}</p></div> });
 }
 
 /** A browser destination stays a real anchor while native shells open it outside the application. */

@@ -3,9 +3,9 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it } from "vitest";
 
-import { hasCodeParams } from "../../errorPresentation";
-import { ActionableError } from "../../actionableError";
-import type { ErrorAlertView } from "../../errorAlerts";
+import { hasCodeParams } from "../../errors/errorPresentation";
+import { ActionableError } from "../../errors/actionableError";
+import type { ErrorAlertView } from "../alerts/errorAlerts";
 import { useFailureWhenBlocked } from "./useFailureWhenBlocked";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

@@ -4,17 +4,17 @@ import { CircleCheck } from "lucide-react";
 import { AttendedStatusAnnouncer } from "../components/announce/AttendedStatusAnnouncer";
 import { Button } from "../components/controls/Button";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
-import { InlineReference } from "../components/text/InlineReference";
+import { InlineReference } from "../i18n/InlineReference";
 import { StatusBadge } from "../components/status/StatusBadge";
-import { ActionableError } from "../actionableError";
+import { ActionableError } from "../errors/actionableError";
 import { Message, useT } from "../i18n/react";
 import type { PlainMessageKey } from "../i18n/catalog";
 import type { MacosPermissionKind } from "../platform";
 import { usePlatform } from "../platform/react";
-import { reportError } from "../reportError";
 import { SettingRow } from "./SettingRow";
 import { useMacosPermissions } from "./useMacosPermissions";
 import { useSectionRefocus } from "./useSectionRefocus";
+import { raiseError } from "../components/alerts/raiseError";
 
 const PERMISSIONS = [
   {
@@ -90,19 +90,18 @@ export function PermissionsSection(): React.ReactElement {
     } catch (cause) {
       const privacy = t("settings.permissions.privacyPane");
       const pane = t(systemPane);
-      reportError(
-        new ActionableError(t("settings.permissions.openFailed", { privacy, pane }), "none", { cause }),
-        undefined,
-        undefined,
-        <Message
-          id="settings.permissions.openFailed"
-          params={{
-            privacy: <InlineReference dir="auto" wrap>{privacy}</InlineReference>,
-            pane: <InlineReference dir="auto" wrap>{pane}</InlineReference>,
-          }}
-        />,
-        t("settings.permissions.openFailedTitle"),
-      );
+      raiseError(new ActionableError(t("settings.permissions.openFailed", { privacy, pane }), "none", { cause }), {
+        title: t("settings.permissions.openFailedTitle"),
+        content: (
+          <Message
+            id="settings.permissions.openFailed"
+            params={{
+              privacy: <InlineReference dir="auto" wrap>{privacy}</InlineReference>,
+              pane: <InlineReference dir="auto" wrap>{pane}</InlineReference>,
+            }}
+          />
+        ),
+      });
     }
   };
 
@@ -115,21 +114,20 @@ export function PermissionsSection(): React.ReactElement {
       // The call itself rejecting is no answer from macOS but a defect in the app, so this is raised as an
       // unexpected failure (a plain `Error`, not an `ActionableError`): the alert keeps what the call said behind
       // Error details and offers Report issue, while the body still gives the manual workaround.
-      reportError(
-        cause instanceof Error ? cause : new Error(String(cause)),
-        undefined,
-        undefined,
-        <Message
-          id="settings.permissions.requestFailed"
-          params={{
-            permission: <InlineReference dir="auto" wrap>{t(label)}</InlineReference>,
-            privacy: <InlineReference dir="auto" wrap>{privacy}</InlineReference>,
-            pane: <InlineReference dir="auto" wrap>{pane}</InlineReference>,
-            add: <InlineReference dir="auto">+</InlineReference>,
-          }}
-        />,
-        t("settings.permissions.requestFailedTitle"),
-      );
+      raiseError(cause instanceof Error ? cause : new Error(String(cause)), {
+        title: t("settings.permissions.requestFailedTitle"),
+        content: (
+          <Message
+            id="settings.permissions.requestFailed"
+            params={{
+              permission: <InlineReference dir="auto" wrap>{t(label)}</InlineReference>,
+              privacy: <InlineReference dir="auto" wrap>{privacy}</InlineReference>,
+              pane: <InlineReference dir="auto" wrap>{pane}</InlineReference>,
+              add: <InlineReference dir="auto">+</InlineReference>,
+            }}
+          />
+        ),
+      });
     }
   };
 

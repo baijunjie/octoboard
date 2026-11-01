@@ -17,7 +17,7 @@ function mount(session: Session, inspect: Daemon["request"]) {
   const daemon: Daemon = {
     store: createStateStore({ sessions: new Map([[session.id, session]]) }),
     request: vi.fn(inspect) as never,
-    toastError: vi.fn(),
+    raiseError: vi.fn(),
     toastNotice: vi.fn(),
     onToast: () => () => {},
     dismissTrustPrompt: () => {},

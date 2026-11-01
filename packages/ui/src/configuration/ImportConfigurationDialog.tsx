@@ -1,10 +1,9 @@
 import { Button } from "../components/controls/Button";
-import { reportError } from "../reportError";
 
 import React, { useEffect, useRef, useState } from "react";
 
-import { errorAlerts } from "../errorAlerts";
-import { InlineReference } from "../components/text/InlineReference";
+import { errorAlerts } from "../components/alerts/errorAlerts";
+import { InlineReference } from "../i18n/InlineReference";
 import { Dialog, useDialogAction, useSubmitValidation } from "../components/dialog/Dialog";
 import { dialogAround } from "../components/dialog/dialogElement";
 import { isolate } from "../i18n/isolate";
@@ -32,6 +31,7 @@ import {
 import { ImportResult, type Imported } from "./ImportResult";
 import { ImportReview } from "./ImportReview";
 import type { Region } from "./RegionTabs";
+import { raiseError } from "../components/alerts/raiseError";
 
 type Stage =
   | { kind: "choose" }
@@ -124,7 +124,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
     try {
       opened = await configurationFile.open();
     } catch (err) {
-      if (picker === pickerRef.current) reportError(fileFailure(t, err, "configuration.import.couldNotRead"), undefined, undefined, undefined, t("configuration.import.alertTitle"));
+      if (picker === pickerRef.current) raiseError(fileFailure(t, err, "configuration.import.couldNotRead"), { title: t("configuration.import.alertTitle") });
       return;
     } finally {
       if (picker === pickerRef.current) {

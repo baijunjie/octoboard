@@ -3,11 +3,11 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { AGENT_OPTIONS } from "../agents";
+import { AGENT_OPTIONS } from "../agents/agents";
 import type { NewSessionRequest } from "../dialogs/dialogRequest";
 import { consoleOf } from "../fixtures/builders";
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
-import { IS_MAC } from "../useWindowShortcut";
+import { IS_MAC } from "../input/keys";
 import { NewSessionButton } from "./NewSessionButton";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -21,7 +21,7 @@ function mount(initial: Partial<State> = {}, shortcut = false) {
   const daemon: Daemon = {
     store: createStateStore(initial),
     request: vi.fn(),
-    toastError: vi.fn(),
+    raiseError: vi.fn(),
     toastNotice: vi.fn(),
     onToast: () => () => {},
     dismissTrustPrompt: () => {},

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 
-import { ActionableError } from "../actionableError";
+import { ActionableError } from "../errors/actionableError";
 import type { Translate } from "../i18n/catalog";
 import { osc52ClipboardText, programCopyHandler } from "./osc52";
 
@@ -25,16 +25,16 @@ describe("osc52ClipboardText", () => {
 describe("programCopyHandler", () => {
   const t = ((key: string) => key) as Translate;
   const copyWith = async (writeText: (text: string) => Promise<void>) => {
-    const toastError = vi.fn();
-    programCopyHandler({ writeText }, () => ({ t, toastError }))!("text");
+    const raiseError = vi.fn();
+    programCopyHandler({ writeText }, () => ({ t, raiseError }))!("text");
     await new Promise((resolve) => setTimeout(resolve));
-    return toastError;
+    return raiseError;
   };
 
   it("alerts when the clipboard fails, with the clipboard as the way out", async () => {
-    const toastError = await copyWith(() => Promise.reject(new Error("denied")));
-    expect(toastError).toHaveBeenCalledOnce();
-    const error = toastError.mock.calls[0][0] as ActionableError;
+    const raiseError = await copyWith(() => Promise.reject(new Error("denied")));
+    expect(raiseError).toHaveBeenCalledOnce();
+    const error = raiseError.mock.calls[0][0] as ActionableError;
     expect(error.message).toBe("terminal.copyFailed");
     expect(error.recovery).toBe("clipboard");
   });
@@ -44,6 +44,6 @@ describe("programCopyHandler", () => {
   });
 
   it("is absent without a clipboard", () => {
-    expect(programCopyHandler(undefined, () => ({ t, toastError: () => {} }))).toBeUndefined();
+    expect(programCopyHandler(undefined, () => ({ t, raiseError: () => {} }))).toBeUndefined();
   });
 });

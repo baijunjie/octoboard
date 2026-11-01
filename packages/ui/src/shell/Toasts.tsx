@@ -2,16 +2,14 @@ import { Toast, toast, type ToastContentValue } from "@heroui/react";
 import React, { useCallback, useEffect, useSyncExternalStore } from "react";
 import type { QueuedToast } from "react-aria-components";
 
-import { CodeToneContext } from "../components/text/codeTone";
-import { InlineReference } from "../components/text/InlineReference";
+import { CodeToneContext } from "../i18n/codeTone";
 import { DaemonErrorMessage, DaemonErrorTitle } from "../components/alerts/DaemonErrorMessage";
-import { errorAlertParts } from "../errorAlertParts";
-import { errorAlerts } from "../errorAlerts";
-import { hasCodeParams, hasShellTimeoutDetails } from "../errorPresentation";
+import { errorAlertOf } from "../components/alerts/raiseError";
+import { errorAlerts } from "../components/alerts/errorAlerts";
+import { hasCodeParams, hasShellTimeoutDetails } from "../errors/errorPresentation";
 import { t } from "../i18n/language";
-import { Message, useT } from "../i18n/react";
-import { sessionLocationContent } from "../sessionCopy";
-import { sessionDisplayTitle } from "../sessionLabel";
+import { useT } from "../i18n/react";
+import { sessionLocationContent } from "../sessions/sessionCopy";
 import { useDaemon, type ToastRequest } from "../store";
 import { TOAST_BREAKPOINT } from "../components/dialog/toastGeometry";
 import { TitledControl } from "../components/hint/TitledControl";
@@ -49,39 +47,13 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
   useEffect(
     () =>
       onToast((request) => {
+        if (request.kind === "error") {
+          errorAlerts.report(errorAlertOf(request, store.getState()));
+          return;
+        }
         const { sessions, consoles, projects } = store.getState();
         const session = request.session ? sessions.get(request.session) : undefined;
-        const location = session && sessionLocationContent(t, session, consoles, projects);
-        if (request.kind === "error") {
-          const { title, body, details, remedyInBody } = errorAlertParts(request);
-          // Which session the alert is about goes in the body, since the daemon words its message as "this session"
-          // without naming it: from the session's record, or, when it is gone, from the name the request carries.
-          const goneName = request.daemonTitle?.params.title;
-          const sessionName = session ? sessionDisplayTitle(t, session) : goneName;
-          const sessionLine = sessionName ? <InlineReference dir="auto" wrap>{sessionName}</InlineReference> : undefined;
-          const place = session && (session.project_id ? projects.get(session.project_id) : consoles.get(session.console_id));
-          const placeName = place ? <InlineReference dir="auto" wrap>{place.name}</InlineReference> : t("error.alertLocationUnknown");
-          errorAlerts.report({
-            message: request.message,
-            session: request.session,
-            error: request.error ?? request.daemonError ?? request.message,
-            recovery: request.recovery,
-            title,
-            content: (
-              <>
-                {sessionLine && <div className="mb-2 flex flex-col gap-1">
-                  <p dir="auto"><Message id="error.alertSession" params={{ session: sessionLine }} /></p>
-                  {session && <p dir="auto">{session.project_id
-                    ? <Message id="error.alertProject" params={{ project: placeName }} />
-                    : <Message id="error.alertConsole" params={{ console: placeName }} />}</p>}
-                </div>}
-                {body}
-              </>
-            ),
-            details,
-            remedyInBody,
-          });
-        } else showToast(request, location);
+        showToast(request, session && sessionLocationContent(t, session, consoles, projects));
       }),
     [store, onToast],
   );

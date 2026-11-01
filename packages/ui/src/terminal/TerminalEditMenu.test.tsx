@@ -7,10 +7,11 @@ import type { ClipboardCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import type { TerminalController } from "./TerminalController";
 import { TerminalEditMenu } from "./TerminalEditMenu";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }));
-vi.mock("../store", () => ({ useDaemon: () => ({ toastError }) }));
+const { raiseError } = vi.hoisted(() => ({ raiseError: vi.fn() }));
+vi.mock("../store", async (importOriginal) => ({ ...(await importOriginal<typeof import("../store")>()), useDaemon: () => ({ raiseError }) }));
 let root: Root;
 let container: HTMLDivElement;
 let target: HTMLDivElement;
@@ -26,7 +27,7 @@ const render = () => act(() => root.render(
   </PlatformProvider>,
 ));
 beforeEach(() => {
-  toastError.mockClear();
+  raiseError.mockClear();
   container = document.body.appendChild(document.createElement("div"));
   target = document.body.appendChild(document.createElement("div"));
   input = target.appendChild(document.createElement("textarea"));
@@ -150,7 +151,7 @@ it("copies the selection through the document without a clipboard, keeping Copy 
   await choose("Copy");
   expect(execCommand).toHaveBeenCalledWith("copy");
   expect(copied).toEqual(["selection"]);
-  expect(toastError).not.toHaveBeenCalled();
+  expect(raiseError).not.toHaveBeenCalled();
 });
 
 it.each(["Copy", "Paste"])("reports %s failures with localized text", async (action) => {
@@ -159,10 +160,13 @@ it.each(["Copy", "Paste"])("reports %s failures with localized text", async (act
   clipboard!.readText = vi.fn(async () => { throw new Error("raw system error"); });
   await open();
   await choose(action);
-  expect(toastError).toHaveBeenCalledWith(expect.objectContaining({
+  expect(errorAlerts.getSnapshot()).toHaveLength(1);
+  expect(errorAlerts.getSnapshot()[0]).toMatchObject({
     message: action === "Copy" ? "Could not copy the selection" : "Could not paste from the clipboard",
-    recovery: "clipboard",
-  }), undefined, action === "Copy" ? "Could not copy" : "Could not paste");
+    classification: { kind: "actionable", recovery: "clipboard" },
+    title: action === "Copy" ? "Could not copy" : "Could not paste",
+  });
+  errorAlerts.acknowledge();
 });
 
 it.each([

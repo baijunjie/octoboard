@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useCurrentLanguage, useT } from "../../i18n/react";
-import { abbreviateHome } from "../../pathDisplay";
 import type { Event } from "../../protocol";
 import { useDaemon, useDaemonStore } from "../../store";
 import { bodyFromFileContent, type ViewerContent, type ViewerSubject } from "../../viewer/content";
-import { browseFailure } from "../browseError";
+import { projectBrowseFailure } from "../browseError";
 import type { ShownFile } from "../tree";
 
 /** How many times a read is asked again when the file changed while it was read. */
@@ -69,9 +68,7 @@ export function useFileReader(project: string, worktree?: string): FileReader {
       })
       .catch((err: unknown) => {
         if (!current()) return;
-        const state = store.getState();
-        const root = state.projects.get(project)?.path;
-        const failure = browseFailure(t, language, err, state, root && abbreviateHome(root, state.homeDir));
+        const failure = projectBrowseFailure(t, language, err, store.getState(), project);
         if (failure.kind === "superseded") return;
         if (failure.kind === "changed" && attempt < CHANGED_RETRIES) return read(target, attempt + 1);
         if (failure.kind === "disconnected") {

@@ -3,7 +3,7 @@ import { expect, it, vi } from "vitest";
 
 import { pageOf, sessionOf } from "../fixtures/builders";
 import type { Event, Project, ShellTerminal } from "../protocol";
-import { accountQuotaOf } from "../accountQuotaOf";
+import { accountQuotaOf } from "../accounts/accountQuotaOf";
 import { createDaemon, dismissAccountLogin, trackAccountLogin } from ".";
 
 const client = vi.hoisted(() => ({

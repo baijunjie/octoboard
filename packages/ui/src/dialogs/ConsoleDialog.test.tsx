@@ -2,13 +2,13 @@
 import { act } from "react";
 import { expect, it, vi } from "vitest";
 
-import { errorAlerts } from "../errorAlerts";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 import { consoleOf } from "../fixtures/builders";
-import { imageToAvatar } from "../avatarImage";
+import { imageToAvatar } from "./avatarImage";
 import { work, personal, render, buttons, click, clickButton, choose, sent, type, openAdvanced, pickerNamed, clearButton, stored } from "./consoleDialogTestSupport";
 
 // Decoding an image needs a canvas, which jsdom does not have; each test says what the read gives.
-vi.mock("../avatarImage", () => ({ imageToAvatar: vi.fn() }));
+vi.mock("./avatarImage", () => ({ imageToAvatar: vi.fn() }));
 
 const PLACEHOLDER = "The agent's own setting";
 

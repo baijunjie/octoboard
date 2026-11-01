@@ -20,7 +20,7 @@ function mount(consoles: ReturnType<typeof consoleOf>[], platform: PlatformAdapt
   const daemon: Daemon = {
     store: createStateStore({ consoles: new Map(consoles.map((c) => [c.id, c])) }),
     request: vi.fn(),
-    toastError: vi.fn(),
+    raiseError: vi.fn(),
     toastNotice: vi.fn(),
     onToast: () => () => {},
     dismissTrustPrompt: () => {},

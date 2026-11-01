@@ -1,7 +1,7 @@
 import { GripVertical } from "lucide-react";
 import React, { useLayoutEffect, useRef, useState } from "react";
 
-import { AGENT_LABEL } from "../../agents";
+import { AGENT_LABEL } from "../../agents/agents";
 import { useListMotion } from "../../components/motion/useListMotion";
 import { ActionMenu, type ActionMenuEntry } from "../../components/menus/ActionMenu";
 import { FadeOverflow } from "../../components/text/FadeOverflow";
@@ -14,9 +14,9 @@ import type { Account, Agent } from "../../protocol";
 import { AccountEmail } from "./AccountEmail";
 import { AccountUsageCell } from "../../quota/AccountUsageCell";
 import { AccountNameLine, LoginStateBadge } from "../../quota/AccountQuotaSummary";
-import { exhaustedQuotaWindow } from "../../quota/quotaFormat";
+import { exhaustedQuotaWindow } from "../../accounts/quotaFormat";
 import { useAccountQuota } from "../../quota/useAccountQuota";
-import { useNow } from "../../useNow";
+import { useNow } from "../../format/useNow";
 import { AccountDisableSwitch } from "./AccountDisableSwitch";
 import { AccountLoginAnnouncer, useClearSucceededLogin, useSucceededAccountLogin } from "./AccountLogin";
 import { AccountLoginButton, type ReturnLoginFocus } from "./AccountLoginButton";

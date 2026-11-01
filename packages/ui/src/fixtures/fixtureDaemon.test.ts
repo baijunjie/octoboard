@@ -1,22 +1,23 @@
 // @vitest-environment jsdom
-import { DEFAULT_SETTINGS } from "../defaultSettings";
+import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import { t } from "../i18n/language";
-import type { ToastRequest } from "../store";
+import { currentLanguage, t } from "../i18n/language";
+import type { State, ToastRequest } from "../store";
+import { broadcastToast } from "../store/toasts";
 
 import type { Agent, RequestBody } from "../protocol";
 import { exportedDocument } from "./fixtureConfiguration";
 import { createFixtureDaemon } from "./fixtureDaemon";
 import type { Fixture } from "./fixture";
 import { terminalFixtureUrl } from "./fakeTerminal";
-import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "../gallery/fixtures/restore";
+import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./restoreSample";
 import type { FixtureFile } from "./sampleFiles";
 import { SAMPLE_GIT } from "./sampleGit";
 import { quotaFailure, quotaOf, quotaWindow, resetCreditOf, resetCreditsOf } from "./quotas";
-import { accountOf, accountSharingOf, branchItemOf, consoleOf, gitStatusOf, leftoverOf, pageOf, processTreeOf, projectOf, sessionOf, shellTerminalOf, snapshotState, worktreeItemOf } from "./builders";
-import { DEFAULT_GIT_WORKFLOW, FOLLOWING_GIT_WORKFLOW } from "../gitWorkflow";
+import { accountOf, accountSharingOf, branchItemOf, broadcastErrorToast, consoleOf, gitStatusOf, leftoverOf, pageOf, processTreeOf, projectOf, sessionNoticeToast, sessionOf, shellTerminalOf, snapshotState, worktreeItemOf } from "./builders";
+import { DEFAULT_GIT_WORKFLOW, FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
 
 describe("the fixture daemon's session archiving", () => {
   it("archives running and interrupted descendants and supports reopening", async () => {
@@ -1033,7 +1034,7 @@ describe("the fixture daemon's structured notices", () => {
   it("settles the scenario's toasts as raised only once the stack has been handed them, a delay after it subscribed", async () => {
     vi.useFakeTimers();
     try {
-      const daemon = createFixtureDaemon({ ...scenario, toasts: [{ kind: "error", message: "Could not save" }] });
+      const daemon = createFixtureDaemon({ ...scenario, toasts: [{ kind: "notice", message: "Could not save" }] });
       const toasts: ToastRequest[] = [];
       const raised = vi.fn();
       void daemon.scenarioToastsRaised.then(raised);
@@ -1056,7 +1057,7 @@ describe("the fixture daemon's structured notices", () => {
     vi.useFakeTimers();
     try {
       const params = { title: "Release notes", reason_code: "config_dir_unreachable", agent: "Claude Code", path: "/Users/dev/.claude-work", reason: "Permission denied" };
-      const daemon = createFixtureDaemon({ ...scenario, toasts: [{ kind: "error", code: "launch_failed", params, message: "" }] });
+      const daemon = createFixtureDaemon({ ...scenario, toasts: [sessionNoticeToast("s-gone", "launch_failed", params)] });
       const toasts: ToastRequest[] = [];
       const unsubscribe = daemon.onToast((toast) => toasts.push(toast));
       await vi.runAllTimersAsync();
@@ -1072,6 +1073,61 @@ describe("the fixture daemon's structured notices", () => {
   });
 });
 
+describe("the fixture daemon's scenario toasts", () => {
+  const state = () => snapshotState({ sessions: [sessionOf("s-1", "c", "p", "Review index", "idle")] });
+
+  /** The toasts a scenario's fixtures raise once the stack has subscribed, with the records they were worded from. */
+  async function raised(toasts: Fixture["toasts"]): Promise<{ got: ToastRequest[]; records: State }> {
+    vi.useFakeTimers();
+    try {
+      const daemon = createFixtureDaemon({ state: state(), toasts });
+      const got: ToastRequest[] = [];
+      const unsubscribe = daemon.onToast((toast) => got.push(toast));
+      await vi.runAllTimersAsync();
+      unsubscribe();
+      return { got, records: daemon.store.getState() };
+    } finally {
+      vi.useRealTimers();
+    }
+  }
+
+  it("routes a broadcast fixture through the code the store routes the daemon's event with", async () => {
+    const notice = { type: "session_notice", session: "s-1", code: "message_not_sent", params: { agent: "Codex" }, message: "" } as const;
+    const failure = { type: "error", id: null, code: "a_code_from_a_newer_daemon", params: {}, message: "Its own text." } as const;
+    const { got, records } = await raised([{ kind: "broadcast", event: notice }, { kind: "broadcast", event: failure }]);
+    expect(got).toEqual([broadcastToast(notice, records, currentLanguage()), broadcastToast(failure, records, currentLanguage())]);
+    expect(got.map((toast) => toast.kind)).toEqual(["error", "error"]);
+  });
+
+  it("shows a session notice that is no failure as a timed notice, and a broadcast error as an alert naming no session", async () => {
+    const { got: [notice, failure] } = await raised([sessionNoticeToast("s-1", "claude_workspace_untrusted"), broadcastErrorToast("internal_error", { detail: "boom" }, "boom")]);
+    expect(notice).toMatchObject({ kind: "notice", session: "s-1" });
+    expect(failure).toMatchObject({ kind: "error", daemonError: { code: "internal_error" } });
+    expect(failure).not.toHaveProperty("session");
+  });
+
+  it("raises a raised fixture as the action's alert, its message worded as a rejected request carries it", async () => {
+    const { got: [toast] } = await raised([{ kind: "raised", code: "file_not_found", params: { path: "src/main.ts" }, message: "", title: "Could not reveal", session: "s-1", recovery: "hostPathGone" }]);
+    expect(toast).toMatchObject({ kind: "error", title: "Could not reveal", session: "s-1", recovery: "hostPathGone", daemonError: { code: "file_not_found", params: { path: "src/main.ts" } } });
+    expect(toast?.message).toContain("src/main.ts");
+    expect(toast?.error).toBeInstanceOf(Error);
+    expect((toast?.error as Error).message).toBe(toast?.message);
+  });
+
+  it("raises a notice fixture as the UI's own timed notice, worded in the viewing language when a function", async () => {
+    const { got } = await raised([{ kind: "notice", message: "Saved" }, { kind: "notice", message: (t) => t("common.pathCopied") }]);
+    expect(got).toEqual([{ kind: "notice", message: "Saved" }, { kind: "notice", message: t("common.pathCopied") }]);
+  });
+});
+
+describe("the fixture daemon's file search", () => {
+  it("refuses a search with the scenario's search error instead of answering it", async () => {
+    const error = { code: "source_unavailable", params: { path: "", cause: "missing", detail: "gone" }, message: " is unavailable: gone" };
+    const daemon = createFixtureDaemon({ state: snapshotState({ projects: [projectOf("p", "c", "Website")] }), searchError: error });
+    await expect(daemon.request({ type: "search_project_files", project: "p", query: "main" })).rejects.toMatchObject({ code: "source_unavailable", params: { path: "" } });
+  });
+});
+
 describe("the fixture daemon's error titles", () => {
   const scenario = { };
 
@@ -1080,7 +1136,7 @@ describe("the fixture daemon's error titles", () => {
     const toasts: ToastRequest[] = [];
     const unsubscribe = daemon.onToast((toast) => toasts.push(toast));
     const error = new Error("disk full");
-    daemon.toastError(error, "s-1", "Could not save the setting");
+    daemon.raiseError(error, { title: "Could not save the setting", session: "s-1" });
     expect(toasts).toEqual([expect.objectContaining({ kind: "error", title: "Could not save the setting", session: "s-1", error })]);
     unsubscribe();
   });
@@ -1091,8 +1147,8 @@ describe("the fixture daemon's error titles", () => {
       const daemon = createFixtureDaemon({
         ...scenario,
         toasts: [
-          { kind: "error", message: "one", title: "Could not open the folder" },
-          { kind: "error", message: "two", title: (t) => t("settings.saveFailedTitle") },
+          { kind: "raised", message: "one", title: "Could not open the folder" },
+          { kind: "raised", message: "two", title: (t) => t("settings.saveFailedTitle") },
         ],
       });
       const toasts: ToastRequest[] = [];

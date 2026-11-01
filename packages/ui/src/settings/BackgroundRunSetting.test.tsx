@@ -8,7 +8,7 @@ import { runInBackground } from "../lifecycle/runInBackground";
 import { useBackgroundRunSync } from "../lifecycle/useBackgroundRunSync";
 import type { PlatformAdapter } from "../platform";
 import { PlatformProvider } from "../platform/react";
-import { PREFERENCE_KEYS } from "../preferenceKeys";
+import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import { GeneralSection } from "./GeneralSection";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -16,8 +16,7 @@ import { GeneralSection } from "./GeneralSection";
 // The rows beside it read the theme and the daemon's settings, which this test has no use for.
 vi.mock("./AppearanceSetting", () => ({ AppearanceSetting: () => null }));
 vi.mock("./LanguageSetting", () => ({ LanguageSetting: () => null }));
-vi.mock("./ArchiveCleanupSetting", () => ({ ArchiveCleanupSetting: () => null }));
-vi.mock("./SidebarOrderSetting", () => ({ SidebarOrderSetting: () => null }));
+vi.mock("./DaemonSwitchSetting", () => ({ DaemonSwitchSetting: () => null }));
 
 function Sync() {
   useBackgroundRunSync();

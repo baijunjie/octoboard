@@ -1,10 +1,10 @@
 import React from "react";
 
-import { AGENT_LABEL } from "../../agents";
+import { AGENT_LABEL } from "../../agents/agents";
 import { useT } from "../../i18n/react";
 import type { Account, Launch, Session, Settings } from "../../protocol";
-import { sessionAccount } from "../../sessionLabel";
-import { sessionModelValues } from "../../sessionModel";
+import { sessionAccount } from "../../sessions/sessionLabel";
+import { sessionModelValues } from "../../sessions/sessionModel";
 import { AgentIcon } from "./AgentIcon";
 import { StatusBadge } from "../status/StatusBadge";
 

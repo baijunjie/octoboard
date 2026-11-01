@@ -3,9 +3,9 @@ import React from "react";
 
 import { Message, useT } from "../i18n/react";
 import type { QuotaWindow } from "../protocol";
-import { useNow } from "../useNow";
+import { useNow } from "../format/useNow";
 import { QuotaWindowName } from "./quotaCopy";
-import { quotaResetsIn, quotaWindowLabel, remainingPercentAt, type QuotaNaming } from "./quotaFormat";
+import { quotaResetsIn, quotaWindowLabel, remainingPercentAt, type QuotaNaming } from "../accounts/quotaFormat";
 
 /** The line above or beneath a quota bar: the window's headline ("5h 82% remaining") with the
  * countdown to its reset ("resets in 1h 57m") at its end. It is hidden from assistive technology,

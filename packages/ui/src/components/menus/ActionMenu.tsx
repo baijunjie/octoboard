@@ -4,11 +4,12 @@ import { MenuContext, useSlottedContext } from "react-aria-components";
 import { setInteractionModality } from "react-aria";
 import React, { useEffect, useId, useRef, useState } from "react";
 
-import { isSecondaryPress } from "../../useWindowShortcut";
-import { errorPresentation, type ErrorPresentation } from "../../errorPresentation";
+import { isSecondaryPress } from "../../input/keys";
+import { errorPresentation, type ErrorPresentation } from "../../errors/errorPresentation";
 import { isolate } from "../../i18n/isolate";
 import { FailureAlert } from "../alerts/FailureAlert";
-import { ReasonText, reasonText, type Reason } from "../text/ReasonText";
+import { ReasonText } from "../text/ReasonText";
+import { reasonText, type Reason } from "../../format/reason";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../announce/StatusAnnouncer";
 import { useT } from "../../i18n/react";
 import { FadeOverflow } from "../text/FadeOverflow";

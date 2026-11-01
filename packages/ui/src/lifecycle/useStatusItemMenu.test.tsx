@@ -10,8 +10,8 @@ import { PlatformProvider } from "../platform/react";
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
 import type { StatusItemMenuDraft } from "./statusItemMenu";
 import { useStatusItemMenu } from "./useStatusItemMenu";
-import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
-import { DEFAULT_SETTINGS } from "../defaultSettings";
+import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
+import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 
 const withIcons = vi.hoisted(() => vi.fn(async (draft: StatusItemMenuDraft, _appearance: "light" | "dark") => ({ ...draft, icons: {} })));
 vi.mock("./statusItemIcons", () => ({ withIcons }));

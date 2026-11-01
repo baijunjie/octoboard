@@ -1,17 +1,16 @@
 import { type Dispatch, type SetStateAction, useRef, useState } from "react";
 
-import { runAccountSwitchBatch } from "../accountSwitchBatch";
+import { runAccountSwitchBatch } from "../dialogs/accountSwitchBatch";
 import { DaemonRequestError } from "../daemon-client";
 import type { ConfirmLaunch } from "../dialogs/useConfirmIncompleteLaunch";
 import type { ModelEdits } from "../dialogs/SessionModelDialog";
-import { errorPresentation } from "../errorPresentation";
-import { modelChangeRecovery } from "../errorRecovery";
+import { modelChangeRecovery } from "../errors/errorRecovery";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import { ALREADY_RUNNING_CODES } from "../protocol";
-import { sessionDisplayTitle } from "../sessionLabel";
+import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { useDaemon } from "../store";
-import { useOctoboardTheme } from "../theme";
+import { useOctoboardTheme } from "../preferences/theme";
 
 /**
  * The requests that launch a session again or change how it runs: resuming or reopening it, from a control or from
@@ -22,7 +21,7 @@ import { useOctoboardTheme } from "../theme";
 export function useSessionRequests({ confirmLaunch, announce }: { confirmLaunch: ConfirmLaunch; announce: (text: string) => void }) {
   const t = useT();
   const { resolved: appearance } = useOctoboardTheme();
-  const { request, toastError, store } = useDaemon();
+  const { request, raiseError, store } = useDaemon();
   // Sessions whose `resume_session` is in flight, for the terminal's loading state.
   const [resumingIds, setResumingIds] = useState<ReadonlySet<string>>(new Set());
 
@@ -31,7 +30,7 @@ export function useSessionRequests({ confirmLaunch, announce }: { confirmLaunch:
   const inFlightRef = useRef<Set<string>>(new Set());
 
   const runOnce = (key: string, title: string, action: () => Promise<void>): Promise<boolean> =>
-    runOnceGuarded(inFlightRef.current, key, action, (error) => toastError(error, undefined, title));
+    runOnceGuarded(inFlightRef.current, key, action, (error) => raiseError(error, { title }));
 
   /** Resumes a session; resolves to whether the daemon accepted it. A console may now
    * hold any number of live console sessions, so there is nothing to pre-emptively refuse here —
@@ -95,7 +94,7 @@ export function useSessionRequests({ confirmLaunch, announce }: { confirmLaunch:
         // change is answered at once, and `announce` holds both back past the focus move.
         if (reply.outcome === "recorded") announce(t("dialog.sessionModel.doneRecorded", params));
         else if (reply.outcome === "restarted") announce(t("dialog.sessionModel.done", params));
-      }, (err: unknown) => toastError(errorPresentation(err as Error), sessionId, t("dialog.sessionModel.failedTitle"), modelChangeRecovery(err)));
+      }, (err: unknown) => raiseError(err, { title: t("dialog.sessionModel.failedTitle"), session: sessionId, recovery: modelChangeRecovery(err) }));
   };
 
   return { resumingIds, resumeSession, resumeFromDialog, switchAccounts, changeSessionModel };
@@ -111,13 +110,13 @@ async function runOnceGuarded(
   inFlight: Set<string>,
   key: string,
   action: () => Promise<void>,
-  toastError: (message: string | Error) => void,
+  raise: (error: unknown) => void,
 ): Promise<boolean> {
   try {
     await runOnceRejecting(inFlight, key, action);
     return true;
   } catch (err) {
-    toastError(errorPresentation(err as Error));
+    raise(err);
     return false;
   }
 }

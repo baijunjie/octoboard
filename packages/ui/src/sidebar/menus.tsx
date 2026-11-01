@@ -1,10 +1,10 @@
 import { Archive, ArrowLeftRight, Copy, Cpu, Download, Focus, Forward, Folder, FolderPlus, GitBranch, KeyRound, List, Lock, LockOpen, Palette, PanelRight, Pencil, Pin, PinOff, RotateCcw, Settings2, Terminal, Trash2, Undo2, Unlink, Upload, SquareArrowOutUpRight } from "lucide-react";
 
-import { handoffBlock, switchEntries, switchEntryBlock, type QuotaReadings } from "../accountChoices";
+import { handoffBlock, switchEntries, switchEntryBlock, type QuotaReadings } from "../accounts/accountChoices";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanel, ActionMenuSubmenu } from "../components/menus/ActionMenu";
 import { ExternalLinkIcon } from "../components/text/ExternalLinkIcon";
 import { RepositoryIcon } from "../components/icons/RepositoryIcon";
-import { repositoryLink } from "../repositoryLink";
+import { repositoryLink } from "../git/repositoryLink";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { SessionRelativeTime } from "../components/status/SessionMetadata";
 import { AgentIcon } from "../components/icons/AgentIcon";
@@ -13,7 +13,7 @@ import type { Translate } from "../i18n/catalog";
 import type { Account, AccountSharing, Agent, Console, Project, Session, Settings } from "../protocol";
 import { PANEL_META } from "../panels/panelMeta";
 import { accountUsage } from "../quota/accountUsage";
-import { sessionChoiceTitle, sessionDisplayTitle } from "../sessionLabel";
+import { sessionChoiceTitle, sessionDisplayTitle } from "../sessions/sessionLabel";
 import { ShortcutKbd } from "../shortcuts/ShortcutKbd";
 import { archivePreviewSessions, isUnusedSession } from "../sessions/order";
 import { SessionColourSwatches } from "./SessionColourSwatches";
@@ -202,7 +202,7 @@ function switchAccountSubmenu(
         label: name,
         // A directory is a path, so it reads left to right and shows its end, as it does elsewhere.
         // `block` gives the span the label's width to clip against; inline, it never overflows.
-        ...(isPath ? { content: <PathText path={name} as="span" className="block" />, ariaLabel: name } : {}),
+        ...(isPath ? { content: <PathText path={name} className="block" />, ariaLabel: name } : {}),
         // The key sits in the bar's width, so that the labels line up.
         icon: isPath ? <span aria-hidden="true" className="flex w-8 shrink-0 justify-center"><KeyRound className="size-4 text-app-muted" /></span> : icon,
         reason,

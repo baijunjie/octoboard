@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { beginAccountDrag } from "./accountDrag";
-import { orderedAccounts } from "../../accountOrder";
-import { errorPresentation } from "../../errorPresentation";
+import { orderedAccounts } from "../../accounts/accountOrder";
 import { useT } from "../../i18n/react";
 import type { Account, Agent } from "../../protocol";
 import { useDaemon, useDaemonStore } from "../../store";
+import { raiseError } from "../../components/alerts/raiseError";
 
 /** An optimistic order survives the reply arriving before the settings broadcast. A changed account set or a newer
  * saved order supersedes it; only one write per agent may be in flight. */
 export function useAccountOrder(agent: Agent, accounts: Account[]) {
   const t = useT();
-  const { request, toastError } = useDaemon();
+  const { request } = useDaemon();
   const saved = useDaemonStore((s) => s.settings.account_order[agent]);
   const base = JSON.stringify([saved, accounts.map((account) => account.id)]);
   const [pending, setPending] = useState<{ base: string; order: (string | null)[] }>();
@@ -37,7 +37,7 @@ export function useAccountOrder(agent: Agent, accounts: Account[]) {
     setPending(change);
     void request({ type: "reorder_accounts", agent, accounts: next }).catch((err) => {
       setPending((held) => held === change ? undefined : held);
-      toastError(errorPresentation(err as Error), undefined, t("settings.accounts.reorderAccountsFailedTitle"));
+      raiseError(err, { title: t("settings.accounts.reorderAccountsFailedTitle") });
     }).finally(() => {
       writing.current = false;
       setBusy(false);

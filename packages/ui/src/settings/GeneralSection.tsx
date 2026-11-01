@@ -2,11 +2,10 @@ import React from "react";
 
 import { usePlatform } from "../platform/react";
 import { AppearanceSetting } from "./AppearanceSetting";
-import { ArchiveCleanupSetting } from "./ArchiveCleanupSetting";
 import { BackgroundRunSetting } from "./BackgroundRunSetting";
+import { DaemonSwitchSetting } from "./DaemonSwitchSetting";
 import { LanguageSetting } from "./LanguageSetting";
 import { MarkdownStyleSetting } from "./MarkdownStyleSetting";
-import { SidebarOrderSetting } from "./SidebarOrderSetting";
 
 /** The small app-wide settings: the window's appearance, how a Markdown document is styled, the
  * language, whether the sidebar is ordered by status, whether archived sessions whose conversation
@@ -19,8 +18,8 @@ export function GeneralSection(): React.ReactElement {
       <AppearanceSetting />
       <LanguageSetting />
       <MarkdownStyleSetting />
-      <SidebarOrderSetting />
-      <ArchiveCleanupSetting />
+      <DaemonSwitchSetting field="sidebar_order_by_status" />
+      <DaemonSwitchSetting field="auto_delete_unresumable_archives" />
       {backgroundRun && <BackgroundRunSetting />}
     </>
   );

@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { AnchoredTooltip } from "../hint/AnchoredTooltip";
-import { InlineReference } from "../text/InlineReference";
+import { InlineReference } from "../../i18n/InlineReference";
 
 import { OptionSelect } from "./OptionSelect";
 

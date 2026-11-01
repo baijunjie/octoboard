@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS } from "../../defaultSettings";
+import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import type { Account, AccountQuota, Agent, AgentAvailability, Console, Project, Settings } from "../../protocol";
 import type { Scenario } from "../scenario";
 import type { Ui } from "../../fixtures/interact";

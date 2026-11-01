@@ -3,7 +3,7 @@ import { act } from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { DaemonRequestError } from "../../daemon-client";
-import { errorAlerts } from "../../errorAlerts";
+import { errorAlerts } from "./errorAlerts";
 import { mountForTooltip } from "../hint/tooltipTestSupport";
 import { PaneFailure } from "./PaneFailure";
 

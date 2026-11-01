@@ -1,16 +1,16 @@
-import { orderedAccounts } from "../accountOrder";
-import { accountDisabled, consoleAccount } from "../accountChoices";
-import { AGENT_SHORT_NAME, defaultAccountName, listedAgents } from "../agents";
+import { consoleAccount } from "../accounts/accountChoices";
+import { AGENT_SHORT_NAME, defaultAccountName, listedAgents } from "../agents/agents";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { Language } from "../i18n/languages";
 import type { StatusItemSubmenu, StatusItemSubmenuItem } from "../platform";
 import { joinPhrases } from "../i18n/joinPhrases";
 import type { Account, AccountQuota, Agent, AgentAvailability, Console, QuotaWindow, Settings } from "../protocol";
-import { exhaustedQuotaWindow, isNotLoggedIn, orderedQuotaWindows, planLabel, quotaResetsIn, quotaWindowLabel, remainingPercentAt, twoLayerWindows, usageBarWindows, type QuotaNaming } from "../quota/quotaFormat";
-import { formatRelativeTime, isJustNow } from "../relativeTime";
+import { exhaustedQuotaWindow, isNotLoggedIn, orderedQuotaWindows, planLabel, quotaResetsIn, quotaWindowLabel, remainingPercentAt, twoLayerWindows, usageBarWindows, type QuotaNaming } from "../accounts/quotaFormat";
+import { formatRelativeTime, isJustNow } from "../format/relativeTime";
+import { listedQuotaAccounts, type QuotaRow } from "../quota/quotaListing";
 import { accountQuotaLabel } from "../quota/sessionQuota";
-import { accountQuotaOf } from "../accountQuotaOf";
+import { accountQuotaOf } from "../accounts/accountQuotaOf";
 import { agentIconKey } from "./statusItemIconKeys";
 
 const MINUTE = 60_000;
@@ -62,13 +62,12 @@ function windowParts(t: Translate, source: StatusItemQuotaSource, naming: QuotaN
 /** One account's lines: its header with the plan (and, with windows to show, how long ago they were read, at its right),
  * then per window a row (the shell draws its bar), or a single note when there is nothing current to show.
  * The 5-hour window and the account-wide weekly one are one two-layer item, as in Settings. */
-function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent, account: Account | null): StatusItemSubmenuItem[] {
+function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent, { account, disabled }: QuotaRow): StatusItemSubmenuItem[] {
   const name = account ? isolate(account.name) : defaultAccountName(t, source.defaultAccountNames, agent);
   const quota = accountQuotaOf(source.accountQuotas, agent, account?.id ?? null);
   const planned = quota?.plan ? t("statusItem.quota.account", { account: name, plan: planLabel(quota.plan) }) : name;
   // A turned-off account is listed only while the selected session runs on it, and says so last, after its quota
   // state, as the rail's row puts its badge after the rest.
-  const disabled = accountDisabled(source.accounts, source.disabledDefaultAccounts, agent, account?.id ?? null);
   const marked = (header: string) => disabled ? t("statusItem.quota.accountDisabled", { account: header, disabled: t("accountChoice.disabled.reason") }) : header;
   if (!quota) return [{ kind: "header", title: marked(planned) }, { kind: "note", text: t("quota.loading") }];
   // An entry with no windows is unavailable whether or not it says why, which the menu does not, except for an
@@ -120,21 +119,16 @@ function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent,
  * whose accounts are all turned off: unlike the rail's panel, which lists an undetermined agent, a submenu
  * without readings to fill it would be empty. */
 export function buildQuotaSubmenus(t: Translate, source: StatusItemQuotaSource, currentConsole?: Console, inUse?: { agent: Agent; account: string | null }): StatusItemSubmenu[] {
-  return listedAgents(source.addedAgents).flatMap((agent): StatusItemSubmenu[] => {
-    if (source.agentAvailability.get(agent)?.availability !== "available") return [];
-    const accounts = orderedAccounts(agent, source.accounts, source.accountOrder).filter((account) => {
-      const id = account?.id ?? null;
-      return !accountDisabled(source.accounts, source.disabledDefaultAccounts, agent, id) || (inUse?.agent === agent && inUse.account === id);
-    });
-    if (accounts.length === 0) return [];
-    const items = accounts.flatMap((account, index): StatusItemSubmenuItem[] => [
+  const available = listedAgents(source.addedAgents).filter((agent) => source.agentAvailability.get(agent)?.availability === "available");
+  return listedQuotaAccounts(available, source, inUse).flatMap(({ agent, rows }): StatusItemSubmenu[] => {
+    const items = rows.flatMap((row, index): StatusItemSubmenuItem[] => [
       ...(index > 0 ? [{ kind: "separator" as const }] : []),
-      ...accountLines(t, source, agent, account),
+      ...accountLines(t, source, agent, row),
     ]);
     const accountId = currentConsole ? consoleAccount(currentConsole, agent, source.accounts) : undefined;
     // A turned-off account has no lines in the submenu unless it is the one in use, so otherwise its bar and name would
     // head a list that does not hold it.
-    const listed = accountId !== undefined && accounts.some((account) => (account?.id ?? null) === accountId);
+    const listed = accountId !== undefined && rows.some(({ account }) => (account?.id ?? null) === accountId);
     const reading = listed ? accountQuotaOf(source.accountQuotas, agent, accountId) : undefined;
     const bar = reading && !reading.unavailable ? usageBarWindows(reading) : undefined;
     const accountName = source.accounts.find((account) => account.id === accountId)?.name;

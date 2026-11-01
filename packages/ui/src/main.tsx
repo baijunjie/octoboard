@@ -2,10 +2,9 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 
 import { App } from "./App";
-import { suppressNativeContextMenu } from "./contextMenuGuard";
+import { suppressNativeContextMenu } from "./input/contextMenuGuard";
 import { resolveDaemonAddress, resolveRecovered, resolveStartupError } from "./daemon";
-import { runtimeError } from "./runtimeError";
-import { reportError } from "./reportError";
+import { runtimeError } from "./errors/runtimeError";
 import { ErrorAlerts } from "./shell/ErrorAlerts";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { LanguageProvider } from "./i18n/react";
@@ -16,17 +15,18 @@ import { selectPlatform } from "./platform";
 import { PlatformProvider } from "./platform/react";
 import { DaemonFailedScreen, NoAddressMessage, StartupScreen } from "./StartupScreen";
 import { createDaemon, DaemonProvider } from "./store";
-import { ThemeProvider } from "./theme";
+import { ThemeProvider } from "./preferences/theme";
 import { UpdatesProvider } from "./updates/UpdatesProvider";
-import "./focusGuard";
+import "./input/focusGuard";
 import "./style.css";
+import { raiseError } from "./components/alerts/raiseError";
 
 window.addEventListener("error", (event) => {
   const error = runtimeError(event);
-  if (error !== undefined) reportError(error);
+  if (error !== undefined) raiseError(error, { title: undefined });
 });
 window.addEventListener("unhandledrejection", (event) => {
-  reportError(event.reason);
+  raiseError(event.reason, { title: undefined });
 });
 
 const rootEl = document.getElementById("root")!;

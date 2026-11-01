@@ -3,7 +3,7 @@ import { TriangleAlert } from "lucide-react";
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useFocusVisible, useObjectRef } from "react-aria";
 
-import { AGENT_LABEL } from "../../agents";
+import { AGENT_LABEL } from "../../agents/agents";
 import { useT } from "../../i18n/react";
 import type { Agent } from "../../protocol";
 import { AgentIcon } from "../icons/AgentIcon";

@@ -34,8 +34,11 @@ Run these commands from the repository root:
 - [`apps/web/seo/`](seo/) is ordinary project code imported by both the Vue app and `apps/web/nuxt.config.ts`.
   It is not Nuxt's `shared/` directory. A file placed there is externalized, so the import stays a `.ts`
   specifier that does not resolve and `nuxt generate` fails as the prerenderer starts.
-- [`apps/web/seo/site-seo.ts`](seo/site-seo.ts) owns locale registration, `robots.txt`, Open
-  Graph locale values, canonical and Markdown path helpers, and JSON-LD construction.
+- [`apps/web/seo/site-seo.ts`](seo/site-seo.ts) owns the locale table, `robots.txt`, Open
+  Graph locale values, canonical and Markdown path helpers, and JSON-LD construction. The table takes its languages,
+  their order, names and text direction from
+  [`packages/ui/src/i18n/languages.ts`](../../packages/ui/src/i18n/languages.ts) and adds only each language's route
+  code and Open Graph locale.
 - [`apps/web/seo/page-outline.ts`](seo/page-outline.ts) owns the homepage's `featureGroups`, the flattened
   `homeFeatures` shared by Markdown and JSON-LD, and `homeSections` shared by the page directory and scroll
   tracking. It also lists the steps, questions, platforms, hero agents (a name plus an icon file in
@@ -84,8 +87,10 @@ Run these commands from the repository root:
   supplies element visibility, document visibility and reduced-motion gating for it and the workflow.
 - [`apps/web/app/components/ProductPreview.vue`](app/components/ProductPreview.vue) hosts the separately built
   React preview in an iframe, with scene selection, loading/error handling, responsive presentation, and a link to
-  the standalone preview. It receives scroll handoffs and keyboard/pointer interaction messages from that iframe.
-  The React entry, fixtures and sending bridges belong to
+  the standalone preview. It receives scroll handoffs and keyboard/pointer interaction messages from that iframe,
+  spelled and read through the message contract in
+  [`packages/ui/src/website-preview/messages.ts`](../../packages/ui/src/website-preview/messages.ts), which
+  `FeatureAppView.vue` shares for the feature frames. The React entry, fixtures and sending bridges belong to
   [`packages/ui/`](../../packages/ui/README.md).
 - [`apps/web/app/components/WorkflowDemo.vue`](app/components/WorkflowDemo.vue) renders the illustrative
   eight-node constellation from [`apps/web/seo/page-outline.ts`](seo/page-outline.ts), with the coordinator at its
@@ -117,7 +122,7 @@ Run these commands from the repository root:
   website development and generation, placing the generated assets in the ignored `apps/web/public/preview/`
   directory for Nuxt to serve and copy into the static output.
 - [`apps/web/scripts/check-locales.mjs`](scripts/check-locales.mjs) validates each catalog against the English source
-  and the supported language list.
+  and the language list derived in `seo/site-seo.ts`.
 - [`apps/web/scripts/generate-og-images.py`](scripts/generate-og-images.py) writes one committed 1200×630 PNG per
   route code in [`apps/web/seo/site-seo.ts`](seo/site-seo.ts) (`zh`, not `zh-Hans`) to
   `apps/web/public/og-image-<code>.png`. It draws
@@ -137,8 +142,8 @@ path. Their defaults in `apps/web/site.config.ts` are the origin `https://octobo
 The same configuration supplies page links, assets, canonical URLs and sitemap entries. When overriding these
 values, use the same values for generation and preview.
 
-The locale table in [`apps/web/seo/site-seo.ts`](seo/site-seo.ts) maps the 17 catalog files to their route
-prefixes, and [`apps/web/nuxt.config.ts`](nuxt.config.ts) passes that table to `@nuxtjs/i18n`. English has
+The locale table in [`apps/web/seo/site-seo.ts`](seo/site-seo.ts), derived from the application's language list,
+maps the 17 catalog files to their route prefixes, and [`apps/web/nuxt.config.ts`](nuxt.config.ts) passes that table to `@nuxtjs/i18n`. English has
 no language prefix; Simplified Chinese uses `zh` in routes and `zh-Hans` for its catalog and language metadata.
 The English catalog is the message source, and the locale check validates every other catalog against it.
 [`apps/web/app/plugins/detect-language.client.ts`](app/plugins/detect-language.client.ts) handles the website's

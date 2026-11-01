@@ -1,14 +1,14 @@
 import { useState } from "react";
 
-import { agentOpeningChoice, choiceChangingSharing, choiceDisabled, choiceExhaustion, choiceGroups, choiceSignedOut, choiceKey, currentChoice, findEntry, openingChoice, type AccountChoice, type ChoiceGroup } from "../accountChoices";
-import { AGENT_LABEL, agentsInListingOrder, defaultAccountName, inheritedSessionLaunch, launchWithOverrides, pickableAgents, projectSessionAgent } from "../agents";
+import { agentOpeningChoice, choiceChangingSharing, choiceDisabled, choiceExhaustion, choiceGroups, choiceSignedOut, choiceKey, currentChoice, findEntry, openingChoice, type AccountChoice, type ChoiceGroup } from "../accounts/accountChoices";
+import { AGENT_LABEL, agentsInListingOrder, defaultAccountName, inheritedSessionLaunch, launchWithOverrides, pickableAgents, projectSessionAgent } from "../agents/agents";
 import { agentIconPickerOptions } from "../components/icons/AgentIcon";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { Agent, Console, Project } from "../protocol";
 import { quotaUsedUpMessage } from "../quota/quotaCopy";
 import { useDaemonStore } from "../store";
-import { useNow } from "../useNow";
+import { useNow } from "../format/useNow";
 import { accountOption } from "./accountOptions";
 import { accountRefusalMessage } from "./accountRefusalMessage";
 

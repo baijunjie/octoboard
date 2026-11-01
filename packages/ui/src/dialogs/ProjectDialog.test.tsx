@@ -296,3 +296,22 @@ it.each(["keyboard", "mouse"] as const)("opens the directory browser on its path
   expect(input("Directory")).toBeDefined();
   expect(document.activeElement).toBe(browse);
 });
+
+it.each([
+  { name: "an absolute typed path", typed: "/srv/code", opensAt: "/srv/code" },
+  { name: "a home-relative typed path", typed: "~/code", opensAt: "~/code" },
+  { name: "nothing typed", typed: "", opensAt: "~" },
+])("opens the directory browser at $opensAt for $name", async ({ typed, opensAt }) => {
+  const pending = render();
+  if (typed) type(input("Directory"), typed);
+  await click(buttonText("Browse"));
+  expect(pending.filter((p) => p.body.type === "list_dir").map((p) => p.body)).toEqual([{ type: "list_dir", path: opensAt }]);
+});
+
+// A relative path names no place the picker could list, so it opens at the home directory rather than on its own failure.
+it("opens the directory browser at the home directory for a typed path that names no place", async () => {
+  const pending = render();
+  type(input("Directory"), "code/a");
+  await click(buttonText("Browse"));
+  expect(pending.filter((p) => p.body.type === "list_dir").map((p) => p.body)).toEqual([{ type: "list_dir", path: "~" }]);
+});

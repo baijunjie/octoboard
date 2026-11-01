@@ -1,6 +1,6 @@
 import { useEffect, type RefObject } from "react";
 
-import { onReducedMotion, prefersReducedMotion } from "../../reducedMotion";
+import { onReducedMotion, prefersReducedMotion } from "../motion/reducedMotion";
 import { dialogAround } from "./dialogElement";
 
 /**

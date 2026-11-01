@@ -2,8 +2,9 @@
 import { act } from "react";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { DaemonRequestError } from "../../daemon-client";
-import { request, settings, toastError } from "./agentAccountsSectionTestState";
+import { request, settings } from "./agentAccountsSectionTestState";
 import { chooseItem, mount, rowOf, selectTab } from "./agentAccountsSectionTestSupport";
+import { errorAlerts } from "../../components/alerts/errorAlerts";
 
 vi.mock("../../store", async (importOriginal) => (await import("./agentAccountsSectionTestState")).storeStandIn(await importOriginal()));
 vi.mock("../../components/icons/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
@@ -58,7 +59,8 @@ describe("account order in Settings", () => {
     expect(earlier.getAttribute("aria-disabled")).toBe("true");
     await act(async () => reject(new DaemonRequestError("changed", "account_order_invalid", {})));
     expect(rows(container)).toEqual(["default:claude", "claude-work"]);
-    expect(toastError).toHaveBeenCalledWith(expect.anything(), undefined, "Could not reorder the accounts");
+    expect(errorAlerts.getSnapshot().map((alert) => alert.title)).toEqual(["Could not reorder the accounts"]);
+    errorAlerts.acknowledge();
   });
 
   it("drags by the grip and keeps the optimistic order when the reply precedes the broadcast", async () => {

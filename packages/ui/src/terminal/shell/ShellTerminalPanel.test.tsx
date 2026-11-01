@@ -64,7 +64,7 @@ function mount(terminals: ShellTerminal[], { holdCreate, eventFirst = true, fram
   const daemon: Daemon = {
     store,
     request,
-    toastError: vi.fn(),
+    raiseError: vi.fn(),
     toastNotice: vi.fn(),
     onToast: () => () => {},
     dismissTrustPrompt: () => {},
@@ -232,12 +232,12 @@ it("starts a terminal in the project's own directory for an empty place, not in 
 });
 
 it("words a refused start in a folder as that folder being gone, and a refused start elsewhere by its own code", async () => {
-  const toastError = vi.fn();
+  const raiseError = vi.fn();
   const gone = new DaemonRequestError("not a folder", "path_not_a_directory", { path: "/w/src" });
-  const daemon = { request: vi.fn(async () => { throw gone; }), store: createStateStore(), toastError } as unknown as Pick<Daemon, "request" | "store" | "toastError">;
+  const daemon = { request: vi.fn(async () => { throw gone; }), store: createStateStore(), raiseError } as unknown as Pick<Daemon, "request" | "store" | "raiseError">;
   await startShellTerminal(daemon, "p", { place: { path: "src" } });
   await startShellTerminal(daemon, "p", { place: {} });
-  expect(toastError.mock.calls.map((call) => call[3])).toEqual(["hostPathGone", undefined]);
+  expect(raiseError.mock.calls.map((call) => call[1].recovery)).toEqual(["hostPathGone", undefined]);
 });
 
 it("starts no second terminal from the header while the first, with none yet, is being started", async () => {
@@ -289,7 +289,7 @@ it("joins the earlier start still pending when the later one has already settled
   const request = vi.fn((body: RequestBody) => new Promise<Event>((resolve) => {
     if (body.type === "create_shell_terminal") holds.push(resolve);
   }));
-  const daemon = { store, request, toastError: vi.fn() } as unknown as Daemon;
+  const daemon = { store, request, raiseError: vi.fn() } as unknown as Daemon;
   const created = (id: string) => ({ type: "shell_terminal_created", id: null, shell_terminal: shell(id, 1) }) as Event;
   const first = startShellTerminal(daemon, "p");
   const second = startShellTerminal(daemon, "p");

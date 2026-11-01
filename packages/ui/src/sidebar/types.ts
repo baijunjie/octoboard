@@ -1,6 +1,6 @@
 import type { ActionMenuEntry } from "../components/menus/ActionMenu";
 import type { DialogRequest, NewSessionRequest } from "../dialogs/dialogRequest";
-import type { PanelKind } from "../panels/stackState";
+import type { PanelKind } from "../layout/panelKind";
 import type { Console, ConsoleSessionColour, Project, Session } from "../protocol";
 import type { SettingsSectionId } from "../settings/SettingsDialog";
 

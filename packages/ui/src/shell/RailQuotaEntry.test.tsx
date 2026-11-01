@@ -9,10 +9,10 @@ import { enter, leave, mountForTooltip, openTooltip, pointer, press as pressWith
 import { currentLanguage, setLanguage } from "../i18n/language";
 import type { Account, AccountQuota, Agent, Availability, Session } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
-import { MODAL_OPEN } from "../layout/useRegionCycle";
+import { MODAL_OPEN } from "../components/focus/regionFocus";
 import { RailQuotaEntry } from "./RailQuotaEntry";
-import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
-import { DEFAULT_SETTINGS } from "../defaultSettings";
+import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
+import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 
 // jsdom has no layout, so a scroller never reports overflow. This one reports the way the library's
 // does, once when it mounts: overflowing when its list holds the marked account. Each scroller's report

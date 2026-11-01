@@ -1,5 +1,5 @@
 import type { Agent } from "../../protocol";
-import { onReducedMotion, prefersReducedMotion } from "../../reducedMotion";
+import { onReducedMotion, prefersReducedMotion } from "../motion/reducedMotion";
 
 /** How far the pointer has to move before a press on a tab is a drag rather than a press. */
 export const DRAG_THRESHOLD = 5;

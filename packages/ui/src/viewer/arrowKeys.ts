@@ -1,4 +1,4 @@
-import { isImeKey } from "../imeKey";
+import { isImeKey } from "../input/imeKey";
 
 /** Elements whose own handling of Left and Right comes first: text the user edits, and composite
  * widgets that move among their own items with the arrows. */

@@ -136,7 +136,7 @@ it.each([
   await pressButton(label);
   const toasts = dialog.toasts();
   expect(toasts).toHaveLength(toasted);
-  if (toasted) expect(toasts[0]).toEqual([notWaiting, "s-1", "Could not approve the request"]);
+  if (toasted) expect(toasts[0]).toEqual([notWaiting, { title: "Could not approve the request", session: "s-1" }]);
 });
 
 // A reopen or resume fails with the target's own resume error, which says "this session": the toast
@@ -149,7 +149,7 @@ it.each<{ label: string; params: Record<string, string>; subject: string }>([
   const failure = new DaemonRequestError("could not be resumed", "session_already_starting", params);
   const dialog = mountPendingQuestionDialog({ sessionRequests: [reopen] }, () => Promise.reject(failure));
   await pressButton("Reopen session");
-  expect(dialog.toasts()).toEqual([[failure, subject, "Could not approve the request"]]);
+  expect(dialog.toasts()).toEqual([[failure, { title: "Could not approve the request", session: subject }]]);
 });
 
 it.each<"reopen" | "resume">(["reopen", "resume"])("an approval of a %s that finds the request no longer waiting toasts about the requester", async (action) => {
@@ -157,14 +157,14 @@ it.each<"reopen" | "resume">(["reopen", "resume"])("an approval of a %s that fin
   const failure = new DaemonRequestError("no longer waiting", SESSION_REQUEST_NOT_WAITING, { session: "t-9" });
   const dialog = mountPendingQuestionDialog({ sessionRequests: [asked] }, () => Promise.reject(failure));
   await pressButton(action === "reopen" ? "Reopen session" : "Resume session");
-  expect(dialog.toasts()).toEqual([[failure, "s-1", "Could not approve the request"]]);
+  expect(dialog.toasts()).toEqual([[failure, { title: "Could not approve the request", session: "s-1" }]]);
 });
 
 it("an approval of a start that fails toasts about the requesting session", async () => {
   const failure = new DaemonRequestError("could not start", "launch_failed", { session: "other" });
   const dialog = mount(() => Promise.reject(failure));
   await pressButton("Start session");
-  expect(dialog.toasts()).toEqual([[failure, "s-1", "Could not approve the request"]]);
+  expect(dialog.toasts()).toEqual([[failure, { title: "Could not approve the request", session: "s-1" }]]);
 });
 
 // A request already on screen is not swapped under the user's pointer, neither for a trust prompt

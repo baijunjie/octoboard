@@ -9,10 +9,10 @@ import React, { createContext, useContext } from "react";
 
 import { CenteredEmptyPanel } from "../components/panel/EmptyPanel";
 import { PaneFailure } from "../components/alerts/PaneFailure";
-import type { ErrorPresentation } from "../errorPresentation";
+import type { ErrorPresentation } from "../errors/errorPresentation";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useCurrentLanguage, useT } from "../i18n/react";
-import { formatFileSize, formatSideSize } from "./format";
+import { formatFileSize, formatSideSize } from "../format/fileSize";
 import { FIRST_ANNOUNCEMENT_DELAY_MS } from "./notices";
 import { ViewerErrorMessage } from "./ViewerErrorMessage";
 

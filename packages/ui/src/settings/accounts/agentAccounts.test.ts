@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { accountOf } from "../../fixtures/builders";
 import type { Account } from "../../protocol";
-import { isAbsoluteConfigDir, nameCollision, nextConfigDir } from "./agentAccounts";
+import { nameCollision, nextConfigDir } from "./agentAccounts";
 
 const account = (id: string, agent: Account["agent"], name: string): Account => accountOf(id, agent, name, `/home/${id}`);
 
@@ -12,22 +12,6 @@ it.each([
   [["~/.claude-2", "~/.claude-3"], "~/.claude-1"],
 ])("uses the smallest free positive suffix for %j", (occupied, expected) => {
   expect(nextConfigDir("~/.claude", occupied, "/home/dev")).toBe(expected);
-});
-
-describe("isAbsoluteConfigDir", () => {
-  it.each([
-    ["/home/me/.claude-work", true],
-    ["  /home/me  ", true],
-    ["~/work", true],
-    ["~", true],
-    ["relative/dir", false],
-    ["./dir", false],
-    ["~other/dir", false],
-    ["", false],
-    ["   ", false],
-  ])("judges %j to be %s", (path, expected) => {
-    expect(isAbsoluteConfigDir(path)).toBe(expected);
-  });
 });
 
 describe("nameCollision", () => {

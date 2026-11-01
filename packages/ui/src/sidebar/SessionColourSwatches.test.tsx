@@ -5,7 +5,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { mountForTooltip } from "../components/hint/tooltipTestSupport";
 import { CONSOLE_SESSION_COLOURS, type ConsoleSessionColour } from "../protocol";
-import { ThemeProvider } from "../theme";
+import { ThemeProvider } from "../preferences/theme";
 import { SessionColourSwatches } from "./SessionColourSwatches";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

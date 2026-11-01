@@ -1,6 +1,7 @@
-import { ActionableError } from "../actionableError";
+import { ActionableError } from "../errors/actionableError";
 import type { Translate } from "../i18n/catalog";
 import type { ClipboardCapability } from "../platform";
+import type { Daemon } from "../store";
 
 /** The OSC 52 identifier, the escape sequence a program sends to put text on the terminal's clipboard. */
 export const OSC_52 = 52;
@@ -33,14 +34,14 @@ export function osc52ClipboardText(payload: string): string | undefined {
  */
 export function programCopyHandler(
   clipboard: ClipboardCapability | undefined,
-  report: () => { t: Translate; toastError: (error: ActionableError, session?: string, title?: string) => void },
+  report: () => { t: Translate; raiseError: Daemon["raiseError"] },
 ): ((text: string) => void) | undefined {
   if (!clipboard) return undefined;
   return (text) => {
     clipboard.writeText(text).catch((cause: unknown) => {
       if (cause instanceof DOMException && cause.name === "NotAllowedError") return;
-      const { t, toastError } = report();
-      toastError(new ActionableError(t("terminal.copyFailed"), "clipboard", { cause }), undefined, t("common.copyFailedTitle"));
+      const { t, raiseError } = report();
+      raiseError(new ActionableError(t("terminal.copyFailed"), "clipboard", { cause }), { title: t("common.copyFailedTitle") });
     });
   };
 }

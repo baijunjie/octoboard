@@ -5,7 +5,7 @@ import { expect, it, vi } from "vitest";
 import type { Account, AccountQuota, AgentAvailability } from "../../protocol";
 import { press } from "../../components/hint/tooltipTestSupport";
 import { trackMountRefocus } from "../../components/dialog/dialogTestSupport";
-import { accountLogins, accountQuotas, availability, request, settings, toastError } from "./agentAccountsSectionTestState";
+import { accountLogins, accountQuotas, availability, request, settings, raiseError } from "./agentAccountsSectionTestState";
 import { buttonNamed, mount, openDetailsOf, rowLogin, rowOf } from "./agentAccountsSectionTestSupport";
 
 vi.mock("../../store", async (importOriginal) => (await import("./agentAccountsSectionTestState")).storeStandIn(await importOriginal()));
@@ -36,7 +36,7 @@ it("still opens when the refresh request fails", async () => {
   request.mockRejectedValueOnce(new Error("not connected"));
   mount();
   await act(async () => {});
-  expect(toastError).not.toHaveBeenCalled();
+  expect(raiseError).not.toHaveBeenCalled();
 });
 
 it("shows the plan and the usage of the default account and of an owned one, each in its own row", () => {

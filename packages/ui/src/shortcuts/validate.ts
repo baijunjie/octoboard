@@ -1,4 +1,4 @@
-import { IS_MAC } from "../useWindowShortcut";
+import { IS_MAC } from "../input/keys";
 import { bindingsEqual, isKnownCode, type Binding } from "./binding";
 import { ALL_COMMANDS, REBINDABLE_COMMANDS, type CommandId } from "./commands";
 

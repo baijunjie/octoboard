@@ -34,8 +34,8 @@ function reaches(from: string, target: string): boolean {
 }
 
 test("the error classification and presentation modules do not import each other at run time", () => {
-  const recovery = resolve(SOURCE, "errorRecovery.ts");
-  const presentation = resolve(SOURCE, "errorPresentation.ts");
+  const recovery = resolve(SOURCE, "errors/errorRecovery.ts");
+  const presentation = resolve(SOURCE, "errors/errorPresentation.ts");
   expect(reaches(recovery, recovery)).toBe(false);
   expect(reaches(presentation, presentation)).toBe(false);
 });

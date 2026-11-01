@@ -9,8 +9,8 @@ const readReply = (over: object = {}) => ({ type: "project_file", id: null, proj
 
 function click(target: Parameters<typeof openPathTarget>[0]["target"], answer: () => Promise<unknown>, viewFile: Parameters<typeof openPathTarget>[0]["viewFile"] = vi.fn()) {
   const request = vi.fn(async (body: { type: string }) => (body.type === "read_project_file" ? answer() : { type: "ack", id: null })) as never;
-  const toastError = vi.fn();
-  return { done: openPathTarget({ target, project: "p", request, viewFile, toastError }), request: request as unknown as ReturnType<typeof vi.fn>, viewFile, toastError };
+  const raiseError = vi.fn();
+  return { done: openPathTarget({ target, project: "p", request, viewFile, raiseError }), request: request as unknown as ReturnType<typeof vi.fn>, viewFile, raiseError };
 }
 const target = { path: "/r/a.ts", line: 4, view: { worktree: "w", path: "a.ts" } };
 
@@ -38,22 +38,22 @@ it("opens a file past the read cap on the host, and reports any other failed rea
   expect(big.request).toHaveBeenLastCalledWith({ type: "open_path_link", project: "p", path: "/r/a.ts" });
   const failed = click(target, () => Promise.reject(new DaemonRequestError("gone", "file_not_found", {})));
   await failed.done;
-  expect(failed.toastError).toHaveBeenCalledOnce();
-  expect(failed.toastError.mock.calls[0][3]).toBe("hostPathGone");
+  expect(failed.raiseError).toHaveBeenCalledOnce();
+  expect(failed.raiseError.mock.calls[0][1].recovery).toBe("hostPathGone");
   expect(failed.request).toHaveBeenCalledTimes(1);
   const refused = click(target, () => Promise.reject(new DaemonRequestError("denied", "permission_denied", { path: "a.ts", detail: "x" })));
   await refused.done;
-  expect(refused.toastError.mock.calls[0][3]).toBeUndefined();
+  expect(refused.raiseError.mock.calls[0][1].recovery).toBeUndefined();
 });
 
 it("reports a path outside every root (outside_scope) without the remedy of the browse views, whichever step of the click found it", async () => {
   const outside = () => Promise.reject(new DaemonRequestError("outside", "outside_scope", { path: "/r/a.ts" }));
-  const toastError = vi.fn();
-  await openPathTarget({ target: { path: "/r/a.ts" }, project: "p", request: outside as never, viewFile: undefined, toastError });
-  expect(toastError.mock.calls[0][3]).toBe("none");
+  const raiseError = vi.fn();
+  await openPathTarget({ target: { path: "/r/a.ts" }, project: "p", request: outside as never, viewFile: undefined, raiseError });
+  expect(raiseError.mock.calls[0][1].recovery).toBe("none");
   const read = click(target, outside);
   await read.done;
-  expect(read.toastError.mock.calls[0][3]).toBe("none");
+  expect(read.raiseError.mock.calls[0][1].recovery).toBe("none");
 });
 
 it("shows a file the system could launch in the viewer unread, and never opens it on the host", async () => {
@@ -65,7 +65,7 @@ it("shows a file the system could launch in the viewer unread, and never opens i
 
 it("does nothing for a file the system could launch when there is no viewer to show it", async () => {
   const request = vi.fn(async () => ({ type: "ack", id: null })) as never;
-  await openPathTarget({ target: { ...target, viewerOnly: true }, project: "p", request, viewFile: undefined, toastError: vi.fn() });
+  await openPathTarget({ target: { ...target, viewerOnly: true }, project: "p", request, viewFile: undefined, raiseError: vi.fn() });
   expect(request).not.toHaveBeenCalled();
 });
 
@@ -74,9 +74,16 @@ it("opens a path with no view on the host, and says when that fails", async () =
   await plain.done;
   expect(plain.request).toHaveBeenCalledExactlyOnceWith({ type: "open_path_link", project: "p", path: "/tmp/b.png" });
   const request = vi.fn(async () => { throw new Error("refused"); }) as never;
-  const toastError = vi.fn();
-  await openPathTarget({ target: { path: "/tmp/b.png" }, project: undefined, request, viewFile: undefined, toastError });
-  expect(toastError).toHaveBeenCalledOnce();
+  const raiseError = vi.fn();
+  await openPathTarget({ target: { path: "/tmp/b.png" }, project: undefined, request, viewFile: undefined, raiseError });
+  expect(raiseError).toHaveBeenCalledOnce();
+});
+
+it("hands a rejection that is not an Error to the alert as it came, titled for the failed open", async () => {
+  const request = vi.fn(async () => { throw "native refused"; }) as never;
+  const raiseError = vi.fn();
+  await openPathTarget({ target: { path: "/tmp/b.png" }, project: undefined, request, viewFile: undefined, raiseError });
+  expect(raiseError).toHaveBeenCalledExactlyOnceWith("native refused", { title: "Could not open the path", recovery: undefined });
 });
 
 const folder = { path: "/r/docs", kind: "directory" as const, line: 4, view: { worktree: "w", path: "docs/README.md" } };
@@ -96,17 +103,17 @@ it("opens the folder itself on the host when its entry file cannot be shown or r
   const failed = click(folder, () => Promise.reject(new DaemonRequestError("gone", "file_not_found", {})));
   await failed.done;
   expect(failed.viewFile).not.toHaveBeenCalled();
-  expect(failed.toastError).not.toHaveBeenCalled();
+  expect(failed.raiseError).not.toHaveBeenCalled();
   expect(failed.request).toHaveBeenLastCalledWith({ type: "open_path_link", project: "p", path: "/r/docs" });
 });
 
 it("opens a folder on the host without reading its entry file when asked to, but not a file", async () => {
   const request = vi.fn(async (body: { type: string }) => (body.type === "read_project_file" ? readReply() : { type: "ack", id: null })) as never;
   const viewFile = vi.fn();
-  await openPathTarget({ target: folder, onHost: true, project: "p", request, viewFile, toastError: vi.fn() });
+  await openPathTarget({ target: folder, onHost: true, project: "p", request, viewFile, raiseError: vi.fn() });
   expect(request).toHaveBeenCalledExactlyOnceWith({ type: "open_path_link", project: "p", path: "/r/docs" });
   expect(viewFile).not.toHaveBeenCalled();
-  await openPathTarget({ target: { ...target, kind: "file" }, onHost: true, project: "p", request, viewFile, toastError: vi.fn() });
+  await openPathTarget({ target: { ...target, kind: "file" }, onHost: true, project: "p", request, viewFile, raiseError: vi.fn() });
   expect(viewFile).toHaveBeenCalledOnce();
 });
 
@@ -114,12 +121,12 @@ it("reports a path gone since it was probed, with the remedy of finding it in th
   const gone = (root?: string) => () => Promise.reject(new DaemonRequestError("gone", "file_not_found", { path: "x", ...(root && { root }) }));
   const onHost = (answer: () => Promise<unknown>) => vi.fn((body: { type: string }) => (body.type === "open_path_link" ? answer() : Promise.resolve({ type: "ack", id: null }))) as never;
   const temporary = vi.fn();
-  await openPathTarget({ target: { path: "/tmp/x.log", line: undefined }, project: "p", request: onHost(gone("temporary")), viewFile: vi.fn(), toastError: temporary });
-  expect(temporary.mock.calls[0][3]).toBe("none");
+  await openPathTarget({ target: { path: "/tmp/x.log", line: undefined }, project: "p", request: onHost(gone("temporary")), viewFile: vi.fn(), raiseError: temporary });
+  expect(temporary.mock.calls[0][1].recovery).toBe("none");
   const folder = vi.fn();
-  await openPathTarget({ target: { path: "docs", kind: "directory", line: undefined }, project: "p", request: onHost(gone("project")), viewFile: vi.fn(), toastError: folder });
-  expect(folder.mock.calls[0][3]).toBe("hostPathGone");
+  await openPathTarget({ target: { path: "docs", kind: "directory", line: undefined }, project: "p", request: onHost(gone("project")), viewFile: vi.fn(), raiseError: folder });
+  expect(folder.mock.calls[0][1].recovery).toBe("hostPathGone");
   const read = vi.fn();
-  await openPathTarget({ target, project: "p", request: vi.fn(gone()) as never, viewFile: vi.fn(), toastError: read });
-  expect(read.mock.calls[0][3]).toBe("hostPathGone");
+  await openPathTarget({ target, project: "p", request: vi.fn(gone()) as never, viewFile: vi.fn(), raiseError: read });
+  expect(read.mock.calls[0][1].recovery).toBe("hostPathGone");
 });

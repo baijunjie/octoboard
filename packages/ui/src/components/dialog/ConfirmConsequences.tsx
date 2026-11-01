@@ -8,7 +8,7 @@ import { useAnnouncement } from "../announce/useAnnouncement";
 import { useListMotion } from "../motion/useListMotion";
 import { useT } from "../../i18n/react";
 import type { Session } from "../../protocol";
-import { sessionAgentLabel, sessionDisplayTitle, sessionShownStatusKind } from "../../sessionLabel";
+import { sessionAgentLabel, sessionDisplayTitle, sessionShownStatusKind } from "../../sessions/sessionLabel";
 import { useDaemonStore } from "../../store";
 
 /** A line the dialog's consequences add while an option is ticked: `key` names its kind, so a line

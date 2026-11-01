@@ -35,11 +35,13 @@ Per-package commands are in that package's doc.
 ## Shared packages
 
 - [`packages/ui/`](../packages/ui/README.md) — `@octoboard/ui`, the HeroUI + React 19 UI of the desktop application:
-  daemon client and store, platform adapter, window chrome (`src/shell/`), the hooks `App` is composed of
-  (`src/app/`), sidebar, terminal pane, right pane (project browser, shell terminals, session report), dialogs and
-  settings, file viewer, internationalization and keyboard shortcuts, with import layering between its directories
-  enforced by lint; plus a dev-only gallery of UI states, the shared fixtures runtime (`src/fixtures/`) it and the
-  separate website-preview build run on; loaded by `apps/desktop/` and also runs in a plain browser.
+  daemon client and store (`src/store/`), platform adapter, window chrome (`src/shell/`), the hooks `App` is composed
+  of (`src/app/`), the pure domain layers under them (`src/preferences/`, `src/input/`, `src/format/`, `src/agents/`,
+  `src/git/`, `src/sessions/`, `src/accounts/`, `src/errors/`), shared components, sidebar, terminal pane, right pane
+  (project browser, shell terminals, session report, processes), dialogs and settings, file viewer, internationalization
+  and keyboard shortcuts, with import layering between its directories enforced by lint; plus a dev-only gallery of UI
+  states, the shared fixtures runtime (`src/fixtures/`) it and the separate website-preview build run on; loaded by
+  `apps/desktop/` and also runs in a plain browser.
 
 ## Repository-level code and configuration
 

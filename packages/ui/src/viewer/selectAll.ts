@@ -1,4 +1,4 @@
-import { isPrimaryModifier } from "../useWindowShortcut";
+import { isPrimaryModifier } from "../input/keys";
 import { renderedCodeRange } from "./rendererDom";
 
 /** Whether a key press is the platform's Select All: ⌘A on an Apple keyboard, Ctrl+A elsewhere. */

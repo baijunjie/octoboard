@@ -5,7 +5,7 @@ import type { PlainMessageKey } from "../../i18n/catalog";
 import type { ChangeEntry, ChangeGroup, ChangeSide, CommitChanges, ConflictKind } from "../../protocol";
 import { changeStatus } from "../../viewer/content";
 import type { StatusKey } from "../../viewer/statusMarks";
-import { displayWirePath, wireBaseName } from "../../wirePath";
+import { displayWirePath, wireBaseName } from "../../format/wirePath";
 import type { ChangeLayout } from "./changeLayout";
 import { compareFilePaths } from "../tree";
 

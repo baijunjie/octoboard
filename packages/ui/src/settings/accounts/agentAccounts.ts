@@ -8,14 +8,6 @@ export function nextConfigDir(base: string, occupied: string[], home: string): s
   return `${base}-${number}`;
 }
 
-/** Whether `path` is one the daemon accepts as a config directory: absolute, or starting with
- * `~/` (or just `~`), which it expands. Only the shape is judged — whether the directory exists
- * is not asked, since an agent may be pointed at one that is yet to be created. */
-export function isAbsoluteConfigDir(path: string): boolean {
-  const trimmed = path.trim();
-  return trimmed.startsWith("/") || trimmed === "~" || trimmed.startsWith("~/");
-}
-
 /** What a typed account name collides with: another account of the same agent (by its stored
  * name), the agent's default account under the name it is shown by, or the word the daemon reserves for the default
  * account, which `name` then is as typed. */

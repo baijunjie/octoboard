@@ -1,10 +1,11 @@
-import { DEFAULT_SETTINGS } from "../../defaultSettings";
+import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { DEFAULT_ACCOUNT_NAME, type Account, type AccountQuota, type AccountSharing, type Settings } from "../../protocol";
 import type { SessionRequest } from "../../store";
 import type { Scenario } from "../scenario";
-import { accountOf, ALL_AGENTS, SAMPLE, consoleOf, failureTitle, projectOf, sessionOf, snapshotState } from "../../fixtures/builders";
+import { accountOf, ALL_AGENTS, SAMPLE, consoleOf, failureTitle, projectOf, sessionOf, snapshotState, broadcastErrorToast, sessionNoticeToast } from "../../fixtures/builders";
 import { quotaFailure, quotaOf, quotaWindow } from "../../fixtures/quotas";
 import { SHELL_TIMEOUT } from "./shellTimeout";
+import { GONE_SESSION } from "./structuredErrors";
 
 const TRUST = "Trust prompts and toasts";
 
@@ -382,8 +383,8 @@ export const noticeScenarios: Scenario[] = [
     description: "Two notice toasts, not alerts, stacked (hover the stack to spread it) and tied to the Claude Code session. Each says the account the session ran on reached its usage limit, so the app switched the session, named by its title as a chip, to another account, naming the agent in parentheses after the account it left; both account names are chips. One switches from account Work to Personal; the other leaves the agent's default account, whose chip reads \"Default\" here and 默认 in Simplified Chinese, so check it with the language control too.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [
-      { kind: "session_notice", code: "account_switched_automatically", params: { agent: "Claude Code", from: "Work", account: "Personal", session: "s-web-1" }, message: "", session: "s-web-1" },
-      { kind: "session_notice", code: "account_switched_automatically", params: { agent: "Claude Code", from: DEFAULT_ACCOUNT_NAME, account: "Work", session: "s-web-1" }, message: "", session: "s-web-1" },
+      sessionNoticeToast("s-web-1", "account_switched_automatically", { agent: "Claude Code", from: "Work", account: "Personal", session: "s-web-1" }),
+      sessionNoticeToast("s-web-1", "account_switched_automatically", { agent: "Claude Code", from: DEFAULT_ACCOUNT_NAME, account: "Work", session: "s-web-1" }),
     ],
   },
   {
@@ -566,35 +567,28 @@ export const noticeScenarios: Scenario[] = [
     category: "exceptional",
     title: "Queued error alerts",
     description:
-      "Errors require explicit OK, with no close button or automatic dismissal, and every sentence is the application's own, under a title naming what failed (the first three \"Could not open in the file manager\", \"Could not save the setting\" and \"Could not open a session\", the two refused reopens \"Could not reopen the session\"): raw text from the daemon or the system appears only in the Error details disclosure (closed here) of the alerts that carry it. OK advances through: a file that is gone, named as code, with the advice to find it in the project's files if it was moved or renamed; the closed connection, whose remedy names Try again as a chip; an unknown account, whose Manage accounts button sits in the footer, left of OK; two refused reopens (the agent no longer has the session's conversation, and Codex could not restore its archived one, whose system text is under Error details), each an expected refusal with its own advice rather than the unexpected-failure alert; a session-specific error and a failed trust confirmation, each titled for what failed (\"Request not carried out\", \"Could not answer the trust confirmation\") with a Session line above the message naming the session and where it is, the session and its project each a chip; and, last, an unknown code from a newer daemon: the generic sentence \"Something unexpected went wrong.\", with the daemon's English text under Error details and the Report issue guidance.",
+      "Errors require explicit OK, with no close button or automatic dismissal, and every sentence is the application's own, under a title naming what failed (the first three \"Could not open in the file manager\", \"Could not save the setting\" and \"Could not open a session\", the two refused reopens \"Could not reopen the session\"): raw text from the daemon or the system appears only in the Error details disclosure (closed here) of the alerts that carry it. OK advances through: a file that is gone, named as code, with the advice to find it in the project's files if it was moved or renamed; the closed connection, whose remedy names Try again as a chip; an unknown account, whose Manage accounts button sits in the footer, left of OK; two refused reopens (the agent no longer has the session's conversation, and Codex could not restore its archived one, whose system text is under Error details), each an expected refusal with its own advice rather than the unexpected-failure alert; a failed trust confirmation, titled \"Could not answer the trust confirmation\", with a Session line above the message naming the session and where it is, the session and its project each a chip; and, last, an unknown code from a newer daemon: the generic sentence \"Something unexpected went wrong.\", with the daemon's English text under Error details and the Report issue guidance.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [
-      { kind: "error", code: "file_not_found", params: { path: "src/main.ts" }, message: "", title: failureTitle("common.revealFailedTitle"), recovery: "hostPathGone" },
-      { kind: "error", code: "connection_closed", params: {}, message: (t) => t("connection.error.connectionClosed"), title: failureTitle("settings.saveFailedTitle") },
-      { kind: "error", code: "unknown_account", params: { account: "removed-account" }, message: "The configured account no longer exists", title: failureTitle("dialog.session.failedTitle") },
+      { kind: "raised", code: "file_not_found", params: { path: "src/main.ts" }, message: "", title: failureTitle("common.revealFailedTitle"), recovery: "hostPathGone" },
+      { kind: "raised", code: "connection_closed", params: {}, message: (t) => t("connection.error.connectionClosed"), title: failureTitle("settings.saveFailedTitle") },
+      { kind: "raised", code: "unknown_account", params: { account: "removed-account" }, message: "The configured account no longer exists", title: failureTitle("dialog.session.failedTitle") },
       {
-        kind: "error",
+        kind: "raised",
         title: failureTitle("sidebar.session.reopenFailedTitle"),
         code: "conversation_unresumable",
         params: { agent: "Claude Code", session: "s-web-1" },
         message: "Claude Code no longer has the conversation of this session, so it cannot be resumed",
       },
       {
-        kind: "error",
+        kind: "raised",
         title: failureTitle("sidebar.session.reopenFailedTitle"),
         code: "codex_unarchive_failed",
         params: { detail: "no rollout found for thread id 0199c3a2-7e41-7b52-9d0e-4f6a1c85b2d7" },
         message: "`codex unarchive` failed: no rollout found for thread id 0199c3a2-7e41-7b52-9d0e-4f6a1c85b2d7",
       },
-      { kind: "error", code: "session_request_not_waiting", params: { session: "s-web-1" }, message: "", session: "s-web-1" },
-      {
-        kind: "error",
-        code: "trust_answer_failed",
-        params: { agent: "Codex", reason_code: "cursor_moved_away" },
-        message: "",
-        session: codexSession.id,
-      },
-      { kind: "error", code: "a_code_from_a_newer_daemon", params: {}, message: "The daemon's own English text for a code this build does not know." },
+      sessionNoticeToast(codexSession.id, "trust_answer_failed", { agent: "Codex", reason_code: "cursor_moved_away" }),
+      broadcastErrorToast("a_code_from_a_newer_daemon", {}, "The daemon's own English text for a code this build does not know."),
     ],
   },
   {
@@ -605,7 +599,7 @@ export const noticeScenarios: Scenario[] = [
     description: "The quick-create race has no durable form. Its acknowledgement, titled \"Cannot open a session\", keeps the former owner's full mixed-script task and session title as a wrapping name chip; a known refusal, it gives the advice for a session that is gone and offers no report guidance or Report issue button. The plain error sentence remains available to system surfaces.",
     state: snapshotState({ consoles: [console_], projects: [web], sessions: [] }),
     toasts: [{
-      kind: "error",
+      kind: "raised",
       title: failureTitle("dialog.session.blockedTitle"),
       code: "quick_create_owner_gone",
       params: { name: "Review release readiness مرحبا 東京 (UnbrokenOwnerNameForProductionDeploymentCompatibilityReview)" },
@@ -619,7 +613,7 @@ export const noticeScenarios: Scenario[] = [
     title: "Message written but not sent by the agent",
     description: "An error alert tied to a console session, Hub. It is titled \"Message not sent\", and the body starts with separate Session and Console lines, with Hub and Main each a name chip. Then the body names the agent and explains the single retry of the current input without pasting the message again. Pending dialogs must be answered first. The recovery asks the person to check the automatic retry before pressing Enter if the message still waits in the input box, and not to paste it again.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
-    toasts: [{ kind: "error", code: "message_not_sent", params: { agent: "Claude Code", submit_retry: "once" }, message: "", session: SAMPLE.consoleSession.id }],
+    toasts: [sessionNoticeToast(SAMPLE.consoleSession.id, "message_not_sent", { agent: "Claude Code", submit_retry: "once" })],
   },
   {
     id: "toast-message-not-sent-long-title",
@@ -628,7 +622,7 @@ export const noticeScenarios: Scenario[] = [
     title: "Message not sent, session with a long title",
     description: "The session line of the alert, when the session's title is long and holds a word with no break opportunity: look that the session's chip wraps inside the dialog, keeps the project chip (Website) readable after it, and leaves the dialog's width, the title above it and the message below it undisturbed.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions: [...sessions, longTitled] }),
-    toasts: [{ kind: "error", code: "message_not_sent", params: { agent: "Claude Code", submit_retry: "once" }, message: "", session: longTitled.id }],
+    toasts: [sessionNoticeToast(longTitled.id, "message_not_sent", { agent: "Claude Code", submit_retry: "once" })],
   },
   {
     id: "toast-queued-messages-dropped",
@@ -637,7 +631,7 @@ export const noticeScenarios: Scenario[] = [
     title: "Queued messages dropped for a project session",
     description: "An error alert titled \"Queued messages dropped\", with the session line above the message, the session and its project each a chip: what was dropped, the advice to check the session's input line before sending anything else, and why that line may hold part of a message.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
-    toasts: [{ kind: "error", code: "queued_messages_dropped", params: {}, message: "", session: "s-web-1" }],
+    toasts: [sessionNoticeToast("s-web-1", "queued_messages_dropped")],
   },
   {
     id: "toast-message-acceptance-unconfirmed",
@@ -646,7 +640,7 @@ export const noticeScenarios: Scenario[] = [
     title: "Message not confirmed by the agent",
     description: "An error alert titled \"Message not confirmed\", with the session line above the message, the session and its project each a chip: the summary says the agent (Codex) did not confirm that it accepted a message the app wrote into the session, with the agent and app names as chips; the recovery step asks the person to check the conversation before deciding whether to send the message again; the details say the message may already be queued, is not sent again by the app, and that later messages are held for at most three seconds or until another prompt is sent.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
-    toasts: [{ kind: "error", code: "message_acceptance_unconfirmed", params: { agent: "Codex" }, message: "", session: "s-web-1" }],
+    toasts: [sessionNoticeToast("s-web-1", "message_acceptance_unconfirmed", { agent: "Codex" })],
   },
   {
     id: "toast-message-notices",
@@ -656,8 +650,8 @@ export const noticeScenarios: Scenario[] = [
     description: "Two notice toasts, not alerts, stacked (hover the stack to spread it) and tied to the Claude Code session; each names the agent. One says a dialog came up while the message was written and discarded it, and that the message is written again once the dialog has been answered. The other says the message went into a view of its background agents rather than the conversation, and asks the person to check the session; it does not say the message will be written again.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [
-      { kind: "session_notice", code: "message_discarded_by_dialog", params: { agent: "Claude Code" }, message: "", session: "s-web-1" },
-      { kind: "session_notice", code: "message_diverted_by_view", params: { agent: "Claude Code" }, message: "", session: "s-web-1" },
+      sessionNoticeToast("s-web-1", "message_discarded_by_dialog", { agent: "Claude Code" }),
+      sessionNoticeToast("s-web-1", "message_diverted_by_view", { agent: "Claude Code" }),
     ],
   },
   {
@@ -667,7 +661,7 @@ export const noticeScenarios: Scenario[] = [
     title: "Unexpected failure and issue reporting",
     description: "The danger alert says only \"Something unexpected went wrong.\", then that this may be a bug that cannot be resolved here, and to use Report issue (named in a noninteractive hint chip) to file an Issue with the steps that led to it; it never asks for a screenshot. Its secondary footer button, with an external-link icon, sits to the left of OK and opens the configured issue form with the sanitized error details already filled in (a new browser tab here). The daemon's own text for the failure is in the Error details disclosure below the guidance, closed here; it is the daemon's text, not a JavaScript stack.",
     state: snapshotState({ consoles: [console_], projects: [web, api], sessions }),
-    toasts: [{ kind: "error", code: "internal_error", params: { detail: "Unexpected session state while applying an update" }, message: "Unexpected session state while applying an update" }],
+    toasts: [broadcastErrorToast("internal_error", { detail: "Unexpected session state while applying an update" }, "Unexpected session state while applying an update")],
   },
   {
     id: "error-issue-link-failed",
@@ -677,7 +671,7 @@ export const noticeScenarios: Scenario[] = [
     description: "The opener failure takes precedence over the original unexpected error. Its actionable recovery asks to copy the issue address shown above and open it in the browser by hand, and to describe the steps that led to the error when reporting; the address is the plain issue URL, not the prefilled one, alone on its line as plain monospace text without a chip, and there is no recursive Report issue link. Error details is open and holds only the system's reason (\"The operating system could not open the default browser\") on a surface of its own as one line that scrolls sideways, never the application's own sentence or a stack. OK returns to the original failure.",
     state: snapshotState({ consoles: [console_], projects: [web, api], sessions }),
     externalLinkError: "The operating system could not open the default browser",
-    toasts: [{ kind: "error", code: "internal_error", params: { detail: "Unexpected session state while applying an update" }, message: "Unexpected session state while applying an update" }],
+    toasts: [broadcastErrorToast("internal_error", { detail: "Unexpected session state while applying an update" }, "Unexpected session state while applying an update")],
     steps: [(ui) => ui.press(ui.t("error.issue.report")), (ui) => ui.press(ui.t("error.diagnostics"))],
   },
   {
@@ -687,21 +681,16 @@ export const noticeScenarios: Scenario[] = [
     title: "Branches and worktrees left after an archive",
     description: "Under the header saying these were to be removed and are still there, the danger alert groups the leftovers by reason under short lead lines: under \"Removing this failed:\" a branch git failed to delete, shown as its name alone; under the lead for a locked worktree, that worktree, its folder icon before the path shortened with ~ and its branch icon on the next line aligned with the folder icon, its row ending with a soft warning \"uncommitted changes\" badge; then, under the singular lead saying the worktree is your home folder, the root of a disk or holds the app's own data so it was kept, the ~ worktree on branch scratch-home with no raw text of its own; and, last, under the plural lead \"Whether these worktrees are or hold another project's folder could not be checked:\", two worktrees with no raw text of their own, followed by the plural note that they may hold another project's files and to check what is in them before removing them by hand. Recovery guidance follows, then the Error details disclosure, open here: below a heading naming the branch, git's multi-line message sits in a block of its own, so no git text is in the list above and none for the three worktrees. The archive itself stands.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
-    toasts: [{
-      kind: "error",
-      code: "session_branches_not_removed",
-      params: {
-        count: "5",
-        items: JSON.stringify([
-          { kind: "worktree", name: "/Users/dev/worktrees/website-changelog-tidy", branch: "changelog-tidy", state: "locked", uncommitted: true, detail: null },
-          { kind: "branch", name: "fix/rename-index", branch: "fix/rename-index", state: "failed", uncommitted: false, detail: GIT_REFUSAL },
-          { kind: "worktree", name: "/Users/dev/worktrees/website-mounted-share", branch: "mounted-share", state: "failed", uncommitted: false, detail: FOLDER_UNKNOWN_DETAIL, cause: "project_folder_unknown" },
-          { kind: "worktree", name: "/Users/dev/worktrees/website-mounted-assets", branch: null, state: "failed", uncommitted: false, detail: FOLDER_UNKNOWN_DETAIL, cause: "project_folder_unknown" },
-          { kind: "worktree", name: "/Users/dev", branch: "scratch-home", state: "failed", uncommitted: false, detail: PROTECTED_FOLDER_DETAIL, cause: "protected_folder" },
-        ]),
-      },
-      message: "The worktree is locked; the branch could not be deleted",
-    }],
+    toasts: [broadcastErrorToast("session_branches_not_removed", {
+      count: "5",
+      items: JSON.stringify([
+        { kind: "worktree", name: "/Users/dev/worktrees/website-changelog-tidy", branch: "changelog-tidy", state: "locked", uncommitted: true, detail: null },
+        { kind: "branch", name: "fix/rename-index", branch: "fix/rename-index", state: "failed", uncommitted: false, detail: GIT_REFUSAL },
+        { kind: "worktree", name: "/Users/dev/worktrees/website-mounted-share", branch: "mounted-share", state: "failed", uncommitted: false, detail: FOLDER_UNKNOWN_DETAIL, cause: "project_folder_unknown" },
+        { kind: "worktree", name: "/Users/dev/worktrees/website-mounted-assets", branch: null, state: "failed", uncommitted: false, detail: FOLDER_UNKNOWN_DETAIL, cause: "project_folder_unknown" },
+        { kind: "worktree", name: "/Users/dev", branch: "scratch-home", state: "failed", uncommitted: false, detail: PROTECTED_FOLDER_DETAIL, cause: "protected_folder" },
+      ]),
+    }, "The worktree is locked; the branch could not be deleted")],
     steps: [(ui) => ui.press(ui.t("error.diagnostics"))],
   },
   {
@@ -711,17 +700,12 @@ export const noticeScenarios: Scenario[] = [
     title: "Worktree kept, whether it holds another project's folder unknown",
     description: "With a single worktree left, the alert has no header: the singular lead \"Whether this worktree is or holds another project's folder could not be checked:\" is its summary, over the worktree (folder icon, path shortened with ~, branch on the next line) with no raw text under it, then the singular note that it may hold another project's files and to check what is in it before removing it by hand. There is no Error details disclosure, as there is no raw text to show.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
-    toasts: [{
-      kind: "error",
-      code: "session_branches_not_removed",
-      params: {
-        count: "1",
-        items: JSON.stringify([
-          { kind: "worktree", name: "/Users/dev/worktrees/website-mounted-share", branch: "mounted-share", state: "failed", uncommitted: false, detail: FOLDER_UNKNOWN_DETAIL, cause: "project_folder_unknown" },
-        ]),
-      },
-      message: "The worktree could not be removed",
-    }],
+    toasts: [broadcastErrorToast("session_branches_not_removed", {
+      count: "1",
+      items: JSON.stringify([
+        { kind: "worktree", name: "/Users/dev/worktrees/website-mounted-share", branch: "mounted-share", state: "failed", uncommitted: false, detail: FOLDER_UNKNOWN_DETAIL, cause: "project_folder_unknown" },
+      ]),
+    }, "The worktree could not be removed")],
   },
   {
     id: "toast-session-branches-not-removed-protected",
@@ -730,18 +714,13 @@ export const noticeScenarios: Scenario[] = [
     title: "Worktrees kept as the home folder or the app's data",
     description: "With only worktrees kept for their folder left, the alert has no header: the plural lead (the worktrees are your home folder, the root of a disk, or hold the app's own data, so they were kept) is its summary, over two worktrees (folder icon, path shortened with ~, branch on the next line) with no raw text under them. There is no recovery guidance, since nothing here is for the person to retry, and no Error details disclosure, as there is no raw text to show.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
-    toasts: [{
-      kind: "error",
-      code: "session_branches_not_removed",
-      params: {
-        count: "2",
-        items: JSON.stringify([
-          { kind: "worktree", name: "/Users/dev", branch: "scratch-home", state: "failed", uncommitted: false, detail: PROTECTED_FOLDER_DETAIL, cause: "protected_folder" },
-          { kind: "worktree", name: "/Users/dev/.octoboard", branch: null, state: "failed", uncommitted: false, detail: PROTECTED_FOLDER_DETAIL, cause: "protected_folder" },
-        ]),
-      },
-      message: "The worktrees could not be removed",
-    }],
+    toasts: [broadcastErrorToast("session_branches_not_removed", {
+      count: "2",
+      items: JSON.stringify([
+        { kind: "worktree", name: "/Users/dev", branch: "scratch-home", state: "failed", uncommitted: false, detail: PROTECTED_FOLDER_DETAIL, cause: "protected_folder" },
+        { kind: "worktree", name: "/Users/dev/.octoboard", branch: null, state: "failed", uncommitted: false, detail: PROTECTED_FOLDER_DETAIL, cause: "protected_folder" },
+      ]),
+    }, "The worktrees could not be removed")],
   },
   {
     id: "toast-session-branches-not-removed-locked",
@@ -750,18 +729,13 @@ export const noticeScenarios: Scenario[] = [
     title: "Only locked worktrees left after an archive",
     description: "With a single group of leftovers the alert has no header over it: only the lead line of its group (the worktrees are locked), over two worktrees. Each path has a folder icon; the first has its branch icon on a separate line aligned with the folder icon, while the second has a detached HEAD note indented to the path text. Recovery guidance follows.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
-    toasts: [{
-      kind: "error",
-      code: "session_branches_not_removed",
-      params: {
-        count: "2",
-        items: JSON.stringify([
-          { kind: "worktree", name: "/Users/dev/worktrees/search-api-ranking", branch: "feat/ranking", state: "locked", uncommitted: false, detail: null },
-          { kind: "worktree", name: "/Users/dev/worktrees/search-api-spike", branch: null, state: "locked", uncommitted: false, detail: null },
-        ]),
-      },
-      message: "The worktrees are locked",
-    }],
+    toasts: [broadcastErrorToast("session_branches_not_removed", {
+      count: "2",
+      items: JSON.stringify([
+        { kind: "worktree", name: "/Users/dev/worktrees/search-api-ranking", branch: "feat/ranking", state: "locked", uncommitted: false, detail: null },
+        { kind: "worktree", name: "/Users/dev/worktrees/search-api-spike", branch: null, state: "locked", uncommitted: false, detail: null },
+      ]),
+    }, "The worktrees are locked")],
   },
   {
     id: "toast-project-branches-not-determined",
@@ -770,12 +744,7 @@ export const noticeScenarios: Scenario[] = [
     title: "Project removed, what went with its folder not found out",
     description: "The danger alert names the removed project as a chip and says the worktrees outside its folder, and its branches if the repository stays, were left, then its own recovery guidance. Git's reason is not in the sentence: it is in the Error details disclosure, open here, in a block of its own. The project itself is gone.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
-    toasts: [{
-      kind: "error",
-      code: "project_branches_not_determined",
-      params: { name: "Docs Site", detail: "fatal: not a git repository: '/Users/dev/code/docs-site/.git'" },
-      message: "",
-    }],
+    toasts: [broadcastErrorToast("project_branches_not_determined", { name: "Docs Site", detail: "fatal: not a git repository: '/Users/dev/code/docs-site/.git'" })],
     steps: [(ui) => ui.press(ui.t("error.diagnostics"))],
   },
   {
@@ -792,7 +761,7 @@ export const noticeScenarios: Scenario[] = [
         : session),
     }),
     toasts: [{
-      kind: "error",
+      kind: "raised",
       title: failureTitle("dialog.archiveSession.failedTitle"),
       code: "session_has_running_sessions",
       params: {
@@ -810,13 +779,7 @@ export const noticeScenarios: Scenario[] = [
     title: "Launch failed for a session the app still has",
     description: "An error alert titled \"Could not start the session\", without the session's name. The first line of the body is the session line, \"Session: Review the retry logic — Search API\", with the session and its project each a chip, then the failure itself: the missing path is a chip in the sentence saying it does not exist.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
-    toasts: [{
-      kind: "error",
-      code: "launch_failed",
-      params: { title: codexSession.title, reason_code: "path_not_found", path: "/Users/dev/code/search-api" },
-      message: "",
-      session: codexSession.id,
-    }],
+    toasts: [sessionNoticeToast(codexSession.id, "launch_failed", { title: codexSession.title, reason_code: "path_not_found", path: "/Users/dev/code/search-api" })],
   },
   {
     id: "toast-launch-path",
@@ -825,18 +788,13 @@ export const noticeScenarios: Scenario[] = [
     title: "Launch failed, nested path in its reason",
     description: "The session record is gone, so its name comes from the failure itself: the alert is still titled \"Could not start the session\", with the \"Session:\" line above the message holding the name as a chip and no location; the configuration path inside the failure reason is a chip.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
-    toasts: [{
-      kind: "error",
-      code: "launch_failed",
-      params: {
-        title: "Draft the release notes",
-        reason_code: "config_dir_unreachable",
-        agent: "Claude Code",
-        path: "/Users/dev/.claude-work",
-        reason: "Permission denied",
-      },
-      message: "",
-    }],
+    toasts: [sessionNoticeToast(GONE_SESSION, "launch_failed", {
+      title: "Draft the release notes",
+      reason_code: "config_dir_unreachable",
+      agent: "Claude Code",
+      path: "/Users/dev/.claude-work",
+      reason: "Permission denied",
+    })],
   },
   {
     id: "error-account-switch-automatically-failed",
@@ -845,22 +803,16 @@ export const noticeScenarios: Scenario[] = [
     title: "Automatic account switch failed, session left interrupted",
     description: "An error alert titled \"Could not switch account\", with the session line above the message. The sentence says the session on Work reached its usage limit, and the app could neither switch it to Personal nor bring it back up on the account it had, so it is interrupted. Beneath it, on a line of its own, comes why it could not be brought back up, in the application's own words: sharing for Work being changed, with Work a chip, and nothing after it. No advice to resume it, none to wait and try again, no Error details disclosure and no Report issue: only the acknowledgement button.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
-    toasts: [{
-      kind: "session_notice",
-      code: "account_switch_automatically_failed",
-      params: {
-        agent: "Claude Code",
-        from: "Work",
-        from_id: "a-work",
-        account: "Personal",
-        account_id: "a-personal",
-        name: "Work",
-        reason: "Sharing for account Work is being changed.",
-        reason_code: "account_sharing_in_progress",
-      },
-      message: "",
-      session: "s-web-1",
-    }],
+    toasts: [sessionNoticeToast("s-web-1", "account_switch_automatically_failed", {
+      agent: "Claude Code",
+      from: "Work",
+      from_id: "a-work",
+      account: "Personal",
+      account_id: "a-personal",
+      name: "Work",
+      reason: "Sharing for account Work is being changed.",
+      reason_code: "account_sharing_in_progress",
+    })],
   },
   {
     id: "error-account-switch-automatically-failed-relaunch-ended",
@@ -869,22 +821,16 @@ export const noticeScenarios: Scenario[] = [
     title: "Automatic account switch failed, the restored session ended at once",
     description: "The alert says the session on Work could neither switch to Personal nor be brought back up on its previous account. Beneath it, the reason names the session and says it ended as soon as it was relaunched and stays on its current account, without claiming the relaunch used the new account: this failure occurred while restoring Work. No advice to resume, Error details or Report issue appears; the footer holds OK alone.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions: sessions.map((session) => session.id === "s-web-1" ? { ...session, status: "interrupted" } : session) }),
-    toasts: [{
-      kind: "session_notice",
-      code: "account_switch_automatically_failed",
-      params: {
-        agent: "Claude Code",
-        from: "Work",
-        from_id: "a-work",
-        account: "Personal",
-        account_id: "a-personal",
-        reason: "the session ended as soon as it was relaunched on the account it had",
-        reason_code: "switch_did_not_come_up",
-        session: "s-web-1",
-      },
-      message: "",
+    toasts: [sessionNoticeToast("s-web-1", "account_switch_automatically_failed", {
+      agent: "Claude Code",
+      from: "Work",
+      from_id: "a-work",
+      account: "Personal",
+      account_id: "a-personal",
+      reason: "the session ended as soon as it was relaunched on the account it had",
+      reason_code: "switch_did_not_come_up",
       session: "s-web-1",
-    }],
+    })],
   },
   {
     id: "error-account-switch-automatically-failed-kept-aside",
@@ -893,26 +839,20 @@ export const noticeScenarios: Scenario[] = [
     title: "Automatic account switch failed, an older item kept aside on a full disk",
     description: "The same error alert, \"Could not switch account\", for a session on Work that could not be switched to Personal nor brought back up on Work, because the conversation could not be copied into Work's folder and an older item there could not be put back. After the sentence and the reason line, which says where the older item is kept and until when (the folders are chips), comes the short advice to copy that item out of the folder before then, with the timing not repeated, then, as a paragraph of its own, the remedy for a full disk, which does not say to retry. Each appears once. No Report issue.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
-    toasts: [{
-      kind: "session_notice",
-      code: "account_switch_automatically_failed",
-      params: {
-        agent: "Claude Code",
-        from: "Work",
-        from_id: "a-work",
-        account: "Personal",
-        account_id: "a-personal",
-        reason: "The conversation could not be copied into /Users/dev/.claude-work: No space left on device (os error 28)",
-        reason_code: "relocation_failed",
-        path: "/Users/dev/.claude-work",
-        stage: "kept_staging",
-        cause: "not_restored",
-        kept_in: "/Users/dev/.claude-work/.octoboard-switch/9b1d4e7a-5c3f-4a28-b6d0-1e8f2a7c3d59",
-        detail: "No space left on device (os error 28)",
-      },
-      message: "",
-      session: "s-web-1",
-    }],
+    toasts: [sessionNoticeToast("s-web-1", "account_switch_automatically_failed", {
+      agent: "Claude Code",
+      from: "Work",
+      from_id: "a-work",
+      account: "Personal",
+      account_id: "a-personal",
+      reason: "The conversation could not be copied into /Users/dev/.claude-work: No space left on device (os error 28)",
+      reason_code: "relocation_failed",
+      path: "/Users/dev/.claude-work",
+      stage: "kept_staging",
+      cause: "not_restored",
+      kept_in: "/Users/dev/.claude-work/.octoboard-switch/9b1d4e7a-5c3f-4a28-b6d0-1e8f2a7c3d59",
+      detail: "No space left on device (os error 28)",
+    })],
   },
   {
     id: "error-account-switch-automatically-failed-disk-full",
@@ -921,20 +861,14 @@ export const noticeScenarios: Scenario[] = [
     title: "Automatic account switch failed on a full disk reported as an internal error",
     description: "The same error alert, \"Could not switch account\", for a session on the default account (its chip reads \"Default\" here and 默认 in Simplified Chinese, so check it with the language control too) that could not be brought back up, by a failure the daemon classed as internal but whose text says the disk is full: the line beneath the sentence is \"The disk is full.\", followed by the remedy for a full disk, which does not say to retry. There is no Report issue guidance or button, and the daemon's raw text is only in the Error details disclosure, open here.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
-    toasts: [{
-      kind: "session_notice",
-      code: "account_switch_automatically_failed",
-      params: {
-        agent: "Claude Code",
-        from: DEFAULT_ACCOUNT_NAME,
-        account: "Work",
-        account_id: "a-work",
-        reason: "No space left on device (os error 28)",
-        reason_code: "internal_error",
-      },
-      message: "",
-      session: "s-web-1",
-    }],
+    toasts: [sessionNoticeToast("s-web-1", "account_switch_automatically_failed", {
+      agent: "Claude Code",
+      from: DEFAULT_ACCOUNT_NAME,
+      account: "Work",
+      account_id: "a-work",
+      reason: "No space left on device (os error 28)",
+      reason_code: "internal_error",
+    })],
     steps: [(ui) => ui.press(ui.t("error.diagnostics"))],
   },
   {
@@ -944,21 +878,15 @@ export const noticeScenarios: Scenario[] = [
     title: "Automatic account switch failed on a denied folder access reported as an internal error",
     description: "The same error alert, \"Could not switch account\", for a session on Work that could not be brought back up, by a failure the daemon classed as internal but whose text says access to a folder was denied: the line beneath the sentence is \"Access was denied.\", followed by the remedy for denied access (check the folder's file permissions and that its disk is writable, grant the app access in system privacy settings if needed), which ends there: it does not offer to choose another accessible folder, and does not say to retry. There is no Report issue guidance or button, and the daemon's raw text is only in the Error details disclosure, open here.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
-    toasts: [{
-      kind: "session_notice",
-      code: "account_switch_automatically_failed",
-      params: {
-        agent: "Claude Code",
-        from: "Work",
-        from_id: "a-work",
-        account: "Personal",
-        account_id: "a-personal",
-        reason: "Permission denied (os error 13)",
-        reason_code: "internal_error",
-      },
-      message: "",
-      session: "s-web-1",
-    }],
+    toasts: [sessionNoticeToast("s-web-1", "account_switch_automatically_failed", {
+      agent: "Claude Code",
+      from: "Work",
+      from_id: "a-work",
+      account: "Personal",
+      account_id: "a-personal",
+      reason: "Permission denied (os error 13)",
+      reason_code: "internal_error",
+    })],
     steps: [(ui) => ui.press(ui.t("error.diagnostics"))],
   },
   {
@@ -968,21 +896,15 @@ export const noticeScenarios: Scenario[] = [
     title: "Automatic account switch failed for a reason the app has no words for",
     description: "The same error alert, \"Could not switch account\", for a session on Work that could not be brought back up, but the failure carries a reason code this build has no wording for: the line beneath the sentence is the generic \"Something unexpected went wrong.\" with the Report issue guidance and button, and the daemon's English text (also in Simplified Chinese) is only in the Error details disclosure, open here.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
-    toasts: [{
-      kind: "session_notice",
-      code: "account_switch_automatically_failed",
-      params: {
-        agent: "Claude Code",
-        from: "Work",
-        from_id: "a-work",
-        account: "Personal",
-        account_id: "a-personal",
-        reason: "The configuration directory could not be prepared.",
-        reason_code: "a_code_from_a_newer_daemon",
-      },
-      message: "",
-      session: "s-web-1",
-    }],
+    toasts: [sessionNoticeToast("s-web-1", "account_switch_automatically_failed", {
+      agent: "Claude Code",
+      from: "Work",
+      from_id: "a-work",
+      account: "Personal",
+      account_id: "a-personal",
+      reason: "The configuration directory could not be prepared.",
+      reason_code: "a_code_from_a_newer_daemon",
+    })],
     steps: [(ui) => ui.press(ui.t("error.diagnostics"))],
   },
   {
@@ -992,29 +914,24 @@ export const noticeScenarios: Scenario[] = [
     title: "Shell environment timeout alert",
     description: "The error alert presents the shell command as selectable code, then the cause, launch consequence and recovery as separate readable parts.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
-    toasts: [{ kind: "error", title: failureTitle("dialog.session.failedTitle"), ...SHELL_TIMEOUT }],
+    toasts: [{ kind: "raised", title: failureTitle("dialog.session.failedTitle"), ...SHELL_TIMEOUT }],
   },
   {
     id: "toast-notice",
     group: TRUST,
     category: "exceptional",
     title: "Warning notices and recovery",
-    description: "Deliberate warning notices: an untrusted workspace workaround naming its allow and deny settings as code and a trust entry blocked by a locked store. Session links identify where recovery is needed. The trust file's path is set as code.",
+    description: "Deliberate warning notices, not alerts: an untrusted workspace workaround naming its allow and deny settings as code, a trust entry blocked by a locked store, and a request that was not carried out because the session was no longer waiting for an answer. Session links identify where recovery is needed. The trust file's path is set as code.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [
-      { kind: "session_notice", code: "claude_workspace_untrusted", params: {}, message: "", session: "s-web-1" },
-      {
-        kind: "session_notice",
-        code: "trust_not_carried_over",
-        params: {
-          agent: "Grok Build",
-          path: "/Users/dev/.grok/trusted_folders.toml",
-          reason: "the file stayed locked by another program",
-          reason_code: "store_locked",
-        },
-        message: "",
-        session: grokSession.id,
-      },
+      sessionNoticeToast("s-web-1", "claude_workspace_untrusted"),
+      sessionNoticeToast("s-web-1", "session_request_not_waiting", { session: "s-web-1" }),
+      sessionNoticeToast(grokSession.id, "trust_not_carried_over", {
+        agent: "Grok Build",
+        path: "/Users/dev/.grok/trusted_folders.toml",
+        reason: "the file stayed locked by another program",
+        reason_code: "store_locked",
+      }),
     ],
   },
   {
@@ -1024,13 +941,7 @@ export const noticeScenarios: Scenario[] = [
     title: "Session not resumed after a sharing change",
     description: "A session notice that is a failure is an error alert, not a toast, and has no Report issue. Titled \"Could not resume the session\", with the session line above the message, it says only that a session of account Work could not be resumed after its sharing changed, so it is left interrupted, and to resume it yourself. The system's own text (No such file or directory, os error 2) is not in the sentence but in the Error details disclosure, open here.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
-    toasts: [{
-      kind: "session_notice",
-      code: "sharing_resume_failed",
-      params: { account: "a-work", name: "Work", detail: "No such file or directory (os error 2)" },
-      message: "",
-      session: "s-web-1",
-    }],
+    toasts: [sessionNoticeToast("s-web-1", "sharing_resume_failed", { account: "a-work", name: "Work", detail: "No such file or directory (os error 2)" })],
     steps: [(ui) => ui.press(ui.t("error.diagnostics"))],
   },
   {
@@ -1040,20 +951,14 @@ export const noticeScenarios: Scenario[] = [
     title: "Session started before its sharing links were repaired",
     description: "An error alert titled \"Could not repair sharing links\", with the session line above the message, says only that the session started with account Work's directory as it stands, because its links to the default configuration could not be brought up to date. Under it come the advice for each cause (permission denied, in use). The entries that could not be repaired are in the Error details disclosure, open here, each with what it was left as and the system's own text in a block of its own under it.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
-    toasts: [{
-      kind: "session_notice",
-      code: "account_sharing_repair_failed",
-      params: {
-        account: "a-work",
-        name: "Work",
-        items: JSON.stringify([
-          { item: "skills/", left: "unchanged", cause: "permission_denied", detail: "permission denied", sessions: [] },
-          { item: "plugins/", left: "unchanged", cause: "busy", detail: "resource busy", sessions: [] },
-        ]),
-      },
-      message: "",
-      session: "s-web-1",
-    }],
+    toasts: [sessionNoticeToast("s-web-1", "account_sharing_repair_failed", {
+      account: "a-work",
+      name: "Work",
+      items: JSON.stringify([
+        { item: "skills/", left: "unchanged", cause: "permission_denied", detail: "permission denied", sessions: [] },
+        { item: "plugins/", left: "unchanged", cause: "busy", detail: "resource busy", sessions: [] },
+      ]),
+    })],
     steps: [(ui) => ui.press(ui.t("error.diagnostics"))],
   },
   {
@@ -1063,19 +968,13 @@ export const noticeScenarios: Scenario[] = [
     title: "Trust not carried over, with what the system said",
     description: "A trust entry that could not be copied is a toast when the cause is worded (see Warning notices and recovery); with the system's own text it is an error alert titled \"Trust not carried over\", with the session line above the message. The sentence says only that Grok Build will ask again the next time it opens the folder, with the file as code and the reason as the application's own short words; the system's text (Permission denied, os error 13) is only in the Error details disclosure, open here.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
-    toasts: [{
-      kind: "session_notice",
-      code: "trust_not_carried_over",
-      params: {
-        agent: "Grok Build",
-        path: "/Users/dev/.grok/trusted_folders.toml",
-        reason: "Permission denied (os error 13)",
-        reason_code: "store_io_failed",
-        detail: "Permission denied (os error 13)",
-      },
-      message: "",
-      session: grokSession.id,
-    }],
+    toasts: [sessionNoticeToast(grokSession.id, "trust_not_carried_over", {
+      agent: "Grok Build",
+      path: "/Users/dev/.grok/trusted_folders.toml",
+      reason: "Permission denied (os error 13)",
+      reason_code: "store_io_failed",
+      detail: "Permission denied (os error 13)",
+    })],
     steps: [(ui) => ui.press(ui.t("error.diagnostics"))],
   },
 ];

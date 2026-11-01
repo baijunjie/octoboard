@@ -4,7 +4,7 @@ import { Dialog } from "../../components/dialog/Dialog";
 import { useT } from "../../i18n/react";
 import type { Agent } from "../../protocol";
 import { useAccountQuota } from "../../quota/useAccountQuota";
-import { ringForAutomaticFocus } from "../../touchInput";
+import { ringForAutomaticFocus } from "../../input/touchInput";
 import { AccountDisableSwitch } from "./AccountDisableSwitch";
 import { AccountLoginAnnouncer, useSucceededAccountLogin } from "./AccountLogin";
 import { AccountSharingSwitch } from "./AccountSharingSwitch";

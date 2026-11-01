@@ -1,9 +1,9 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import type { StatusItemMenuDraft } from "./statusItemMenu";
-import { resolveCssColour } from "../cssColour";
+import { resolveCssColour } from "../preferences/cssColour";
 import { withIcons } from "./statusItemIcons";
 
-vi.mock("../cssColour", () => ({ resolveCssColour: vi.fn() }));
+vi.mock("../preferences/cssColour", () => ({ resolveCssColour: vi.fn() }));
 beforeEach(() => { vi.mocked(resolveCssColour).mockReset(); });
 
 const meter = { session: { name: "5h", detail: "", fraction: 0 }, weekly: { name: "Weekly", detail: "", fraction: 0 }, label: "", agent: "claude" } as const;

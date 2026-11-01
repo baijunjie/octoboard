@@ -12,7 +12,7 @@ import { usePanelStacks } from "./panels/usePanelStacks";
 import { PlatformProvider } from "./platform/react";
 import type { Project } from "./protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "./store";
-import { ThemeProvider } from "./theme";
+import { ThemeProvider } from "./preferences/theme";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -79,7 +79,7 @@ function mountApp() {
   const daemon: Daemon = {
     store: createStateStore(snapshotState({ consoles: [console_], projects: [project], sessions })),
     request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
-    toastError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
+    raiseError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
     dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
   };
   return mountForTooltip(

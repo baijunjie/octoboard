@@ -1,5 +1,5 @@
 import { DiagnosticBlock } from "../components/alerts/DiagnosticBlock";
-import { errorAlerts } from "../errorAlerts";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 import { t } from "../i18n/language";
 import { Message } from "../i18n/react";
 

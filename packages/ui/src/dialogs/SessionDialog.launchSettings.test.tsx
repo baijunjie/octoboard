@@ -5,11 +5,11 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { accountOf } from "../fixtures/builders";
 import type { Daemon } from "../store";
 import { parentConsole, renderDialog, hub1, buttons, optionElements, pickerNamed } from "./sessionDialogTestSupport";
-import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
-import { DEFAULT_SETTINGS } from "../defaultSettings";
+import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
+import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 
 
-vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
+vi.mock("../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
 
 function answerSessionModels(daemon: Daemon) {
   vi.mocked(daemon.request).mockImplementation(async (body) => body.type === "list_agent_models"

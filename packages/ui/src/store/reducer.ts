@@ -1,6 +1,6 @@
 import type { ConnectionState } from "../daemon-client";
-import { accountQuotaOf } from "../accountQuotaOf";
-import { sameValue } from "../sameValue";
+import { accountQuotaOf } from "../accounts/accountQuotaOf";
+import { sameValue } from "./sameValue";
 import type { AccountLogin, AccountQuota, AccountSharing, Event, Project, Session, ShellTerminal } from "../protocol";
 import { accountLoginKey, type State, type TrustPrompt } from "./state";
 import { sessionRequestOf, withRequest } from "./sessionRequests";

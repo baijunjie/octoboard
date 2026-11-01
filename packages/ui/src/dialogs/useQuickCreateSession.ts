@@ -1,18 +1,18 @@
-import { ActionableError } from "../actionableError";
+import { ActionableError } from "../errors/actionableError";
 import { useRef } from "react";
 
-import { noAgentState } from "../agents";
+import { noAgentState } from "../agents/agents";
 import { useLatest } from "../components/hooks/useLatest";
-import { errorPresentation } from "../errorPresentation";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
-import { sessionDisplayTitle } from "../sessionLabel";
+import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { liveConsoleSessions } from "../sessions/order";
 import { useDaemon } from "../store";
-import { useOctoboardTheme } from "../theme";
+import { useOctoboardTheme } from "../preferences/theme";
 import type { NewSessionRequest } from "./dialogRequest";
 import { defaultOpenSessionRequest } from "./openSessionRequest";
 import type { ConfirmLaunch } from "./useConfirmIncompleteLaunch";
+import { raiseError, alertFailure } from "../components/alerts/raiseError";
 
 /**
  * Opens the session `target` asks the session dialog for without the dialog, with the values the
@@ -31,7 +31,7 @@ export function useQuickCreateSession(
 ): (target: NewSessionRequest) => void {
   const t = useT();
   const { resolved: appearance } = useOctoboardTheme();
-  const { request, store, toastError } = useDaemon();
+  const { request, store } = useDaemon();
   const pending = useRef(false);
   const latestConsoleId = useLatest(currentConsoleId);
   return (target) => {
@@ -45,13 +45,13 @@ export function useQuickCreateSession(
       // An owner that is no longer live cannot take a session, and there is no dialog to say so.
       const owner = sessions.get(binding.to.id) ?? binding.to;
       if (!liveConsoleSessions([...sessions.values()], target.console.id).some((s) => s.id === owner.id)) {
-        toastError(new ActionableError(t("dialog.session.ownerGone", { name: isolate(sessionDisplayTitle(t, owner)) }), "ownerGone", { code: "quick_create_owner_gone", params: { name: sessionDisplayTitle(t, owner) } }), undefined, t("dialog.session.blockedTitle"));
+        raiseError(new ActionableError(t("dialog.session.ownerGone", { name: isolate(sessionDisplayTitle(t, owner)) }), "ownerGone", { code: "quick_create_owner_gone", params: { name: sessionDisplayTitle(t, owner) } }), { title: t("dialog.session.blockedTitle") });
         return;
       }
     }
     const opening = defaultOpenSessionRequest(t, target.console, project, binding, state, Date.now(), appearance);
     if (!("request" in opening)) {
-      toastError(new ActionableError(t("daemon.quick_create_unavailable"), "none", { code: "quick_create_unavailable" }), undefined, t("dialog.session.blockedTitle"));
+      raiseError(new ActionableError(t("daemon.quick_create_unavailable"), "none", { code: "quick_create_unavailable" }), { title: t("dialog.session.blockedTitle") });
       return;
     }
     const startedIn = latestConsoleId.current;
@@ -60,7 +60,7 @@ export function useQuickCreateSession(
       .then((reply) => {
         if (reply.type === "session_opened" && latestConsoleId.current === startedIn) onOpened(reply.session.id);
       })
-      .catch((err: unknown) => toastError(errorPresentation(err as Error), undefined, t("dialog.session.failedTitle"))))
+      .catch(alertFailure({ title: t("dialog.session.failedTitle") })))
       .finally(() => {
         pending.current = false;
       });

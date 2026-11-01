@@ -1,5 +1,5 @@
-import { DEFAULT_SETTINGS } from "../../defaultSettings";
-import { AGENT_LABEL } from "../../agents";
+import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
+import { AGENT_LABEL } from "../../agents/agents";
 import type { Session, SessionContext } from "../../protocol";
 import type { Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";

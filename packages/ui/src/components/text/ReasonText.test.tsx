@@ -3,7 +3,8 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it } from "vitest";
 
-import { ReasonText, reasonText, type Reason } from "./ReasonText";
+import { ReasonText } from "./ReasonText";
+import { reasonText, type Reason } from "../../format/reason";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

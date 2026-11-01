@@ -4,7 +4,7 @@
 import type { ReactNode } from "react";
 
 import type { HostPath } from "../components/host/useHostPathActions";
-import type { ErrorPresentation } from "../errorPresentation";
+import type { ErrorPresentation } from "../errors/errorPresentation";
 import type { FileContent, LineStats, MessageParams } from "../protocol";
 import { joinedPatch, saysNothingChanged } from "./patch";
 import type { StatusKey } from "./statusMarks";

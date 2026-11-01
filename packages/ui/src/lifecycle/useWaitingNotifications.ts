@@ -4,8 +4,8 @@ import { useLatest } from "../components/hooks/useLatest";
 import { t } from "../i18n/language";
 import { usePlatform } from "../platform/react";
 import type { Console, Project } from "../protocol";
-import { sessionWithLocation } from "../sessionLabel";
-import { useWaitingIds } from "../sessions/useSessions";
+import { sessionWithLocation } from "../sessions/sessionLabel";
+import { useWaitingIds } from "../store";
 import { useDaemon } from "../store";
 
 /**

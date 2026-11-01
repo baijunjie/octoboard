@@ -25,7 +25,7 @@ afterEach(async () => {
 const daemon: Daemon = {
   store: createStateStore({ connectionState: "open", snapshotEpoch: 1 }),
   request: (body) => new Promise((resolve, reject) => pending.push({ body, resolve, reject })),
-  toastError: () => {},
+  raiseError: () => {},
   toastNotice: () => {},
   onToast: () => () => {},
   dismissTrustPrompt: () => {},

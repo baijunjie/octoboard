@@ -6,7 +6,7 @@ import { useStableHandler } from "../components/hooks/useLatest";
 import { archiveKey } from "../navigation/history";
 import type { Console, Project } from "../protocol";
 import { indexSessions, NO_SESSIONS, sessionsOf } from "../sessions/sessionIndex";
-import { useSession } from "../sessions/useSessions";
+import { useSession } from "../store";
 import type { ArchiveScope } from "../sidebar/types";
 import { useDaemonStore } from "../store";
 

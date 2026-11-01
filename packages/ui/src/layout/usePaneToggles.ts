@@ -3,12 +3,12 @@ import { useEffect, useRef, useState } from "react";
 
 import { keepsEscape } from "../components/focus/keepsEscape";
 import { useLatest } from "../components/hooks/useLatest";
-import { isImeKey } from "../imeKey";
-import { CANNOT_HOVER } from "../touchInput";
-import { minWidthQuery, useIsNarrow, useMediaQuery } from "../breakpoint";
+import { isImeKey } from "../input/imeKey";
+import { CANNOT_HOVER } from "../input/touchInput";
+import { minWidthQuery, useIsNarrow, useMediaQuery } from "../components/hooks/breakpoint";
 import { useDockedPanelVisible } from "./panelVisibility";
 import { type ConsolePeek, useConsolePeek } from "./useConsolePeek";
-import { MODAL_OPEN } from "./useRegionCycle";
+import { MODAL_OPEN } from "../components/focus/regionFocus";
 
 /** The two panes that float in on hover. */
 type Pane = "sidebar" | "aside";

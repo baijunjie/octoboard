@@ -11,7 +11,7 @@ import { useFocusVisible } from "react-aria";
 
 import { MotionListBox } from "../motion/MotionListBox";
 import { Tag } from "./Tag";
-import { InlineReference } from "../text/InlineReference";
+import { InlineReference } from "../../i18n/InlineReference";
 import { AnchoredTooltip } from "../hint/AnchoredTooltip";
 import { useListMotion } from "../motion/useListMotion";
 import { Message, useT } from "../../i18n/react";

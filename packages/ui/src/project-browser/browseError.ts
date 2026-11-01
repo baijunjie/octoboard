@@ -1,12 +1,13 @@
 import { DaemonRequestError } from "../daemon-client";
-import { daemonMessage } from "../daemonMessage";
-import { errorPresentation, type ErrorPresentation } from "../errorPresentation";
+import { daemonMessage } from "../errors/daemonMessage";
+import { errorPresentation, type ErrorPresentation } from "../errors/errorPresentation";
 import type { Translate } from "../i18n/catalog";
 import type { Language } from "../i18n/languages";
 import { REQUEST_SUPERSEDED, SOURCE_CHANGED, type MessageParams } from "../protocol";
 import type { State } from "../store";
-import { formatFileSize } from "../viewer/format";
-import { displayWirePath } from "../wirePath";
+import { formatFileSize } from "../format/fileSize";
+import { abbreviateHome } from "../format/pathDisplay";
+import { displayWirePath } from "../format/wirePath";
 
 /** How a failed browse request is treated: given up for a newer one (nothing to show), worth asking
  * again at once, lost with the connection (asked again once it is back), or a failure to show. */
@@ -76,4 +77,17 @@ export function browseFailure(
   // plain text does.
   const message = daemonMessage(language, err.code, params, err.message, records);
   return { kind: "failed", code: err.code, message: errorPresentation(new DaemonRequestError(message, err.code, params)) };
+}
+
+/** `browseFailure` for a request about `project`, whose directory (home-abbreviated) it shows for a path naming the
+ * directory itself; an unknown project shows the empty path as it is. */
+export function projectBrowseFailure(
+  t: Translate,
+  language: Language,
+  err: unknown,
+  state: Pick<State, "consoles" | "projects" | "sessions" | "homeDir">,
+  project: string,
+): BrowseFailure {
+  const root = state.projects.get(project)?.path;
+  return browseFailure(t, language, err, state, root && abbreviateHome(root, state.homeDir));
 }

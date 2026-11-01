@@ -1,17 +1,17 @@
 import { GitBranch } from "lucide-react";
 
-import { ActionableError } from "../actionableError";
+import { ActionableError } from "../errors/actionableError";
 import { useStableHandler } from "../components/hooks/useLatest";
 import { copyText } from "../components/host/copyText";
 import type { ActionMenuEntry } from "../components/menus/ActionMenu";
 import { reportExternalLinkFailure } from "../components/text/ExternalLink";
 import { FadeOverflow } from "../components/text/FadeOverflow";
-import { errorPresentation } from "../errorPresentation";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import type { ConsoleSessionColour, Project, Session } from "../protocol";
 import { useDaemon } from "../store";
-import { displayWirePath } from "../wirePath";
+import { displayWirePath } from "../format/wirePath";
+import { raiseError, alertFailure } from "../components/alerts/raiseError";
 
 /**
  * The project and session rows' requests that only ask the daemon or the host for something and
@@ -23,10 +23,10 @@ import { displayWirePath } from "../wirePath";
 export function useRowRequests() {
   const t = useT();
   const { clipboard, links } = usePlatform();
-  const { request, toastError, toastNotice } = useDaemon();
+  const { request, toastNotice } = useDaemon();
 
   const pullProjectBranch = (project: Project) => {
-    request({ type: "pull_project_branch", project: project.id }).catch((err: unknown) => toastError(errorPresentation(err as Error), undefined, t("sidebar.project.pullFailedTitle")));
+    request({ type: "pull_project_branch", project: project.id }).catch(alertFailure({ title: t("sidebar.project.pullFailedTitle") }));
   };
 
   const openRepository = (url: string) => {
@@ -34,31 +34,31 @@ export function useRowRequests() {
   };
 
   const openProjectDirectory = (project: Project) => {
-    request({ type: "open_project_directory", project: project.id }).catch((err: unknown) => toastError(errorPresentation(err as Error), undefined, t("common.revealFailedTitle")));
+    request({ type: "open_project_directory", project: project.id }).catch(alertFailure({ title: t("common.revealFailedTitle") }));
   };
 
   const copyProjectName = (project: Project) => {
     copyText(project.name, { clipboard }).then(
       () => toastNotice(t("sidebar.project.nameCopied")),
-      (cause: unknown) => toastError(new ActionableError(t("sidebar.project.copyNameFailed"), "clipboard", { cause }), undefined, t("common.copyFailedTitle")),
+      (cause: unknown) => raiseError(new ActionableError(t("sidebar.project.copyNameFailed"), "clipboard", { cause }), { title: t("common.copyFailedTitle") }),
     );
   };
 
   const copySessionId = (session: Session) => {
     copyText(session.id, { clipboard }).then(
       () => toastNotice(t("sidebar.session.idCopied")),
-      (cause: unknown) => toastError(new ActionableError(t("sidebar.session.copyIdFailed"), "clipboard", { cause }), undefined, t("common.copyFailedTitle")),
+      (cause: unknown) => raiseError(new ActionableError(t("sidebar.session.copyIdFailed"), "clipboard", { cause }), { title: t("common.copyFailedTitle") }),
     );
   };
 
   const openSystemTerminal = (project: Project) => {
-    request({ type: "open_project_terminal", project: project.id }).catch((err: unknown) => toastError(errorPresentation(err as Error), undefined, t("sidebar.project.openSystemTerminalFailedTitle")));
+    request({ type: "open_project_terminal", project: project.id }).catch(alertFailure({ title: t("sidebar.project.openSystemTerminalFailedTitle") }));
   };
 
   const pushProjectBranch = (project: Project) => {
     request({ type: "push_project_branch", project: project.id })
       .then(() => toastNotice(t("sidebar.project.pushed")))
-      .catch((err: unknown) => toastError(errorPresentation(err as Error), undefined, t("sidebar.project.pushFailedTitle")));
+      .catch(alertFailure({ title: t("sidebar.project.pushFailedTitle") }));
   };
 
   const loadProjectBranches = async (project: Project): Promise<ActionMenuEntry[]> => {
@@ -80,7 +80,7 @@ export function useRowRequests() {
         onClick: () => {
           if (current) return;
           request({ type: "switch_project_branch", project: project.id, branch: branch.name })
-            .catch((err: unknown) => toastError(errorPresentation(err as Error), undefined, t("sidebar.project.switchBranchFailedTitle")));
+            .catch(alertFailure({ title: t("sidebar.project.switchBranchFailedTitle") }));
         },
       };
     });
@@ -90,12 +90,12 @@ export function useRowRequests() {
   };
 
   const setSessionColour = (session: Session, colour: ConsoleSessionColour) => {
-    request({ type: "set_session_colour", session: session.id, colour }).catch((err: unknown) => toastError(errorPresentation(err as Error), undefined, t("sidebar.session.colourFailedTitle")));
+    request({ type: "set_session_colour", session: session.id, colour }).catch(alertFailure({ title: t("sidebar.session.colourFailedTitle") }));
   };
 
   const setLocked = (session: Session, locked: boolean) => {
     request({ type: "set_session_locked", session: session.id, locked }).catch((err: unknown) =>
-      toastError(errorPresentation(err as Error), undefined, t(locked ? "sidebar.session.lockFailedTitle" : "sidebar.session.unlockFailedTitle")));
+      raiseError(err, { title: t(locked ? "sidebar.session.lockFailedTitle" : "sidebar.session.unlockFailedTitle") }));
   };
 
   const setPinned = (target: { project: Project } | { session: Session }, pinned: boolean) => {
@@ -103,7 +103,7 @@ export function useRowRequests() {
       "project" in target
         ? [{ type: "update_project", project: target.project.id, pinned } as const, pinned ? "sidebar.project.pinFailedTitle" as const : "sidebar.project.unpinFailedTitle" as const]
         : [{ type: "set_session_pinned", session: target.session.id, pinned } as const, pinned ? "sidebar.session.pinFailedTitle" as const : "sidebar.session.unpinFailedTitle" as const];
-    request(body).catch((err: unknown) => toastError(errorPresentation(err as Error), undefined, t(failedTitle)));
+    request(body).catch(alertFailure({ title: t(failedTitle) }));
   };
 
   const stableSetSessionColour = useStableHandler(setSessionColour);

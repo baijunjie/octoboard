@@ -1,6 +1,6 @@
 import type { IBufferCell, IBufferRange, ILink, ILinkProvider, Terminal } from "@xterm/xterm";
 
-import { IS_MAC } from "../../useWindowShortcut";
+import { IS_MAC } from "../../input/keys";
 import {
   cachedRows,
   crossesJoin,

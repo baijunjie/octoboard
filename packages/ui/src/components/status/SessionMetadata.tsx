@@ -5,8 +5,8 @@ import { isolate } from "../../i18n/isolate";
 import { joinPhrases } from "../../i18n/joinPhrases";
 import { useCurrentLanguage, useT } from "../../i18n/react";
 import type { Session, SessionContext } from "../../protocol";
-import { formatRelativeTime } from "../../relativeTime";
-import { useNow } from "../../useNow";
+import { formatRelativeTime } from "../../format/relativeTime";
+import { useNow } from "../../format/useNow";
 import { IndicatorTooltip } from "../hint/IndicatorTooltip";
 import { StatusBadge } from "./StatusBadge";
 

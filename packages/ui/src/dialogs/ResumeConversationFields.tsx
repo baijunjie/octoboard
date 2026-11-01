@@ -1,18 +1,18 @@
 import { Spinner } from "@heroui/react";
 import React, { useId } from "react";
 
-import { AGENT_LABEL } from "../agents";
+import { AGENT_LABEL } from "../agents/agents";
 import { agentIconPickerOptions } from "../components/icons/AgentIcon";
 import { DaemonErrorMessage } from "../components/alerts/DaemonErrorMessage";
 import { errorDetails, errorRemedy } from "../components/alerts/errorParts";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
-import { InlineReference } from "../components/text/InlineReference";
+import { InlineReference } from "../i18n/InlineReference";
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
-import { EXAMPLE_CONVERSATION_ID } from "../conversationId";
+import { EXAMPLE_CONVERSATION_ID } from "../agents/conversationId";
 import { Message, useT } from "../i18n/react";
 import type { Agent } from "../protocol";
-import { sessionAccountName } from "../sessionLabel";
+import { sessionAccountName } from "../sessions/sessionLabel";
 import { useDaemonStore } from "../store";
 import { AgentAccountField } from "./AgentAccountField";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";

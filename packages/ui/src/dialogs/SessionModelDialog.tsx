@@ -1,18 +1,18 @@
 import { Description } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
-import { ActionableError } from "../actionableError";
-import { inheritedSessionLaunch, launchWithOverrides } from "../agents";
+import { ActionableError } from "../errors/actionableError";
+import { inheritedSessionLaunch, launchWithOverrides } from "../agents/agents";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
-import { InlineReference } from "../components/text/InlineReference";
+import { InlineReference } from "../i18n/InlineReference";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { useHasPainted } from "../components/motion/useHasPainted";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { Launch, Session } from "../protocol";
-import type { AcknowledgementView } from "../errorAlerts";
-import { sessionDisplayTitle } from "../sessionLabel";
+import type { AcknowledgementView } from "../components/alerts/errorAlerts";
+import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { useDaemonStore } from "../store";
 import { Dialog } from "../components/dialog/Dialog";
 import { dialogAround } from "../components/dialog/dialogElement";

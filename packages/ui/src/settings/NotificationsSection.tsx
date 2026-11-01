@@ -1,14 +1,14 @@
 import React from "react";
 
 import { Button } from "../components/controls/Button";
-import { InlineReference } from "../components/text/InlineReference";
-import { ActionableError } from "../actionableError";
+import { InlineReference } from "../i18n/InlineReference";
+import { ActionableError } from "../errors/actionableError";
 import { Message, useT } from "../i18n/react";
 import { useNotificationPermission } from "../lifecycle/useNotificationPermission";
 import { usePlatform } from "../platform/react";
-import { reportError } from "../reportError";
 import { SettingRow } from "./SettingRow";
 import { useSectionRefocus } from "./useSectionRefocus";
+import { raiseError } from "../components/alerts/raiseError";
 
 /** Whether Octoboard may notify when a session raises its hand, with the ask where the platform
  * wants it made from a user gesture (a browser). Pressing the Enable button is that gesture. The macOS
@@ -24,13 +24,7 @@ export function NotificationsSection(): React.ReactElement {
       await notifications?.openSystemSettings?.();
     } catch (cause) {
       const pane = t("settings.notifications.systemPane");
-      reportError(
-        new ActionableError(t("settings.notifications.openFailed", { notifications: pane }), "none", { cause }),
-        undefined,
-        undefined,
-        <Message id="settings.notifications.openFailed" params={{ notifications: <InlineReference dir="auto" wrap>{pane}</InlineReference> }} />,
-        t("settings.notifications.openFailedTitle"),
-      );
+      raiseError(new ActionableError(t("settings.notifications.openFailed", { notifications: pane }), "none", { cause }), { title: t("settings.notifications.openFailedTitle"), content: <Message id="settings.notifications.openFailed" params={{ notifications: <InlineReference dir="auto" wrap>{pane}</InlineReference> }} /> });
     }
   };
 

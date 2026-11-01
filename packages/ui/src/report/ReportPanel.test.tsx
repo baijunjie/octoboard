@@ -29,7 +29,7 @@ it("composes the embedded report relay before its only srcdoc assignment, includ
     pages: new Map([["console-session", [pageOf("first", "console-session", "<body data-website-preview-report>First</body>", 0)]]]),
   });
   const daemon: Daemon = {
-    store, request: vi.fn(), toastError: vi.fn(), toastNotice: vi.fn(),
+    store, request: vi.fn(), raiseError: vi.fn(), toastNotice: vi.fn(),
     onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
   };
   const container = document.body.appendChild(document.createElement("div"));
@@ -64,7 +64,7 @@ function renderReport(pageCount = 2) {
   const pages = Array.from({ length: pageCount }, (_, i) => pageOf(`page-${i}`, "console-session", `<p>Page ${i}</p>`, i));
   const store = createStateStore({ pages: new Map([["console-session", pages]]) });
   const daemon: Daemon = {
-    store, request: vi.fn(), toastError: vi.fn(), toastNotice: vi.fn(),
+    store, request: vi.fn(), raiseError: vi.fn(), toastNotice: vi.fn(),
     onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
   };
   const container = document.body.appendChild(document.createElement("section"));
@@ -154,10 +154,10 @@ it("lands a tap's focus on the page, and F6's or a pointer's on the header's fir
 
 it("shows a failed page listing in the panel with its reason and Try again, and opens no error alert dialog", async () => {
   const request = vi.fn().mockRejectedValueOnce(new Error("Daemon busy")).mockResolvedValue({ type: "ack", id: null });
-  const toastError = vi.fn();
+  const raiseError = vi.fn();
   const store = createStateStore({ connectionState: "open" });
   const daemon: Daemon = {
-    store, request, toastError, toastNotice: vi.fn(),
+    store, request, raiseError, toastNotice: vi.fn(),
     onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
   };
   const container = document.body.appendChild(document.createElement("section"));
@@ -180,7 +180,7 @@ it("shows a failed page listing in the panel with its reason and Try again, and 
   expect(panel.querySelector("h2")?.textContent).toBe("Could not load the pages of this session");
   expect(panel.textContent).toContain("Something unexpected went wrong.");
   expect(container.querySelector("[role=alert]")).not.toBeNull();
-  expect(toastError).not.toHaveBeenCalled();
+  expect(raiseError).not.toHaveBeenCalled();
   const retry = [...panel.querySelectorAll("button")].find((button) => button.textContent === "Try again")!;
   await act(async () => retry.click());
   expect(request).toHaveBeenCalledTimes(2);
@@ -197,7 +197,7 @@ async function renderListed(request: Daemon["request"]) {
 
 async function renderWith(request: Daemon["request"], store: ReturnType<typeof createStateStore>) {
   const daemon: Daemon = {
-    store, request, toastError: vi.fn(), toastNotice: vi.fn(),
+    store, request, raiseError: vi.fn(), toastNotice: vi.fn(),
     onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
   };
   const container = document.body.appendChild(document.createElement("section"));

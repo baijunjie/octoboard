@@ -7,7 +7,7 @@ import { mountForTooltip } from "./components/hint/tooltipTestSupport";
 import { consoleOf, snapshotState } from "./fixtures/builders";
 import { PlatformProvider } from "./platform/react";
 import { createStateStore, DaemonProvider, type Daemon } from "./store";
-import { ThemeProvider } from "./theme";
+import { ThemeProvider } from "./preferences/theme";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -40,7 +40,7 @@ it.each(["sidebar", "terminal"] as const)("opens console session settings from t
   const daemon: Daemon = {
     store: createStateStore(snapshotState({ consoles: [console_] })),
     request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
-    toastError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
+    raiseError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
     dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
   };
   const container = mountForTooltip(

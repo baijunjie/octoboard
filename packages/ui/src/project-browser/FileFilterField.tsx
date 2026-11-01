@@ -10,7 +10,7 @@ import { PaneToolbar } from "../components/panel/PaneToolbar";
 import { StatusMark } from "../components/status/StatusMark";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { useT } from "../i18n/react";
-import { isImeKey } from "../imeKey";
+import { isImeKey } from "../input/imeKey";
 
 export interface FileFilterState {
   filter: string;

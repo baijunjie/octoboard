@@ -5,7 +5,7 @@ import { ordersByStatus } from "../sessions/order";
 import { focusAfterSelect } from "../sidebar/focus";
 import type { ArchiveScope, FocusTarget } from "../sidebar/types";
 import { useDaemon } from "../store";
-import { nextWaitingSession, waitingSessionsInTreeOrder } from "../waiting";
+import { nextWaitingSession, waitingSessionsInTreeOrder } from "../sessions/waiting";
 
 /**
  * Putting a session on screen, whichever control asked: selecting it (which resumes an interrupted one), reopening an

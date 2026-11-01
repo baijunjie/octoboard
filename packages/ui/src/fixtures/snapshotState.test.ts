@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS } from "../defaultSettings";
+import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { describe, expect, it } from "vitest";
 
 import { gitStatusOf, projectOf, shellTerminalOf, snapshotState } from "./builders";

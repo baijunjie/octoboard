@@ -5,8 +5,8 @@ import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { TerminalController } from "./TerminalController";
 
 const platform = vi.hoisted(() => ({ mac: true }));
-vi.mock("../useWindowShortcut", async (original) => ({
-  ...await original<typeof import("../useWindowShortcut")>(),
+vi.mock("../input/keys", async (original) => ({
+  ...await original<typeof import("../input/keys")>(),
   get IS_MAC() { return platform.mac; },
 }));
 

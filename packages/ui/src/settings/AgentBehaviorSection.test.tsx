@@ -11,7 +11,7 @@ import { AgentBehaviorSection } from "./AgentBehaviorSection";
 const request = vi.fn(() => Promise.resolve({}) as Promise<never>);
 
 vi.mock("../store", () => ({
-  useDaemon: () => ({ request, toastError: vi.fn() }),
+  useDaemon: () => ({ request, raiseError: vi.fn() }),
   useDaemonStore: (selector: (state: { settings: Record<string, boolean> }) => unknown) =>
     selector({ settings: { auto_approve_session_requests: true, auto_approve_resume_requests: false, auto_approve_account_switches: false, auto_approve_handoffs: true, ask_questions_as_choices: true } }),
 }));

@@ -1,4 +1,4 @@
-import { accountDisabledPickable, accountDisabledUnavailable, accountSignedOutUnavailable, type ChoiceEntry } from "../accountChoices";
+import { accountDisabledPickable, accountDisabledUnavailable, accountSignedOutUnavailable, type ChoiceEntry } from "../accounts/accountChoices";
 import type { Translate } from "../i18n/catalog";
 import { accountUsage } from "../quota/accountUsage";
 import type { Option } from "../components/form/OptionSelect";

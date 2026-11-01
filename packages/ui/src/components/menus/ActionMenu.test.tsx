@@ -6,7 +6,7 @@ import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
-import { errorAlerts } from "../../errorAlerts";
+import { errorAlerts } from "../alerts/errorAlerts";
 import { detailsButton } from "../alerts/detailsTestSupport";
 import { AnchoredTooltip } from "../hint/AnchoredTooltip";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../announce/StatusAnnouncer";

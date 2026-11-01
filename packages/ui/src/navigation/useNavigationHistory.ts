@@ -3,12 +3,13 @@ import { setInteractionModality } from "react-aria";
 import { flushSync } from "react-dom";
 
 import { refocusIfLost } from "../components/focus/refocusIfLost";
-import { MODAL_OPEN } from "../layout/useRegionCycle";
+import { MODAL_OPEN } from "../components/focus/regionFocus";
 import { usePlatform } from "../platform/react";
 import type { Session } from "../protocol";
 import { matchesCommand } from "../shortcuts/store";
 import { useDaemon, useDaemonStore } from "../store";
-import { IS_MAC, useWindowShortcut } from "../useWindowShortcut";
+import { IS_MAC } from "../input/keys";
+import { useWindowShortcut } from "../shortcuts/useWindowShortcut";
 import { canGo, EMPTY_HISTORY, go, type Location, locationKey, push, replaceCurrent } from "./history";
 
 /** Back and Forward, ⌘[ and ⌘] unless rebound, matched on the physical key so a keyboard layout does not move

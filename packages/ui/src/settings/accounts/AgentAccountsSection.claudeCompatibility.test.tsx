@@ -2,7 +2,7 @@
 import { act } from "react";
 import { expect, it, vi } from "vitest";
 
-import { errorAlerts } from "../../errorAlerts";
+import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { request, settings } from "./agentAccountsSectionTestState";
 import { mount } from "./agentAccountsSectionTestSupport";
 

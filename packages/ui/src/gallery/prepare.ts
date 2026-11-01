@@ -1,6 +1,5 @@
 import type { Language } from "../i18n/languages";
-import { PREFERENCE_KEYS } from "../preferenceKeys";
-import { storedPreference, type Preferences } from "../fixtures/preferences";
+import { writeStartingPreferences } from "../fixtures/preferences";
 import type { Scenario } from "./scenario";
 
 /**
@@ -15,11 +14,7 @@ export function prepareStorage(scenario: Scenario, language: Language, theme: "l
     for (const key of Object.keys(localStorage)) {
       if (key.startsWith("octoboard.")) localStorage.removeItem(key);
     }
-    localStorage.setItem("heroui-theme", theme);
-    localStorage.setItem(PREFERENCE_KEYS.language, language);
-    for (const [name, value] of Object.entries(scenario.preferences ?? {})) {
-      if (value !== undefined) localStorage.setItem(PREFERENCE_KEYS[name as keyof Preferences], storedPreference(value));
-    }
+    writeStartingPreferences(localStorage, { language, theme, preferences: scenario.preferences });
   } catch {
     // Without storage the app starts from its defaults, in the system's language.
   }

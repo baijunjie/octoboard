@@ -10,7 +10,7 @@ labels — is a message in `packages/ui/src/i18n/messages/en.ts` and in every tr
   `packages/ui/src/i18n/language.ts` is for code outside React only: a component that calls it keeps showing the old
   language after the user switches, with no error.
 - A helper that returns display text takes the `Translate` function as its first parameter (as `statusLabel(t, status)`
-  in `packages/ui/src/sessionLabel.ts` does) instead of calling `t()` itself.
+  in `packages/ui/src/sessions/sessionLabel.ts` does) instead of calling `t()` itself.
 - A module-level table (options, menu items, rows) stores a `PlainMessageKey` and looks it up at render, never text
   resolved when the module loads.
 - A sentence with a variable part is one message with a `{placeholder}`, never translated fragments joined in code,

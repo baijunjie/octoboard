@@ -1,4 +1,4 @@
-import { AGENT_LABEL } from "../../agents";
+import { AGENT_LABEL } from "../../agents/agents";
 import type { Session } from "../../protocol";
 import { describing, type Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";

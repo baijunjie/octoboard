@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLatest } from "../components/hooks/useLatest";
 import { usePlatform } from "../platform/react";
 import type { Session, ShellTerminal } from "../protocol";
-import { type StatusKind, sessionStatusKind } from "../sessionLabel";
+import { type StatusKind, sessionStatusKind } from "../sessions/sessionLabel";
 import { reportDaemonExit, reportExitFailure } from "./exitFailure";
 
 /** How long `doQuit` waits for `shutdown`'s `ack` before giving up on it. The daemon drops the

@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import {
+  PREVIEW_MESSAGE,
+  readPreviewMessage,
+} from "../../../../packages/ui/src/website-preview/messages";
+import { localeByCode } from "../../seo/site-seo";
 const { t } = useSiteCopy();
 const { locale } = useI18n();
 const config = useRuntimeConfig();
@@ -22,7 +27,7 @@ const scale = computed(() =>
   compact.value ? 1 : Math.min(1, width.value / 1440),
 );
 const source = computed(() => {
-  const language = locale.value === "zh" ? "zh-Hans" : locale.value;
+  const { language } = localeByCode(locale.value);
   return `${config.app.baseURL}preview/website-preview.html?scene=${selected.value}&lang=${language}`;
 });
 let readinessTimer: ReturnType<typeof setTimeout> | undefined;
@@ -100,37 +105,23 @@ function startFling(initial: number) {
 }
 function receive(event: MessageEvent) {
   if (event.source !== frame.value?.contentWindow) return;
-  if (
-    event.data?.type === "octoboard-preview-interaction" &&
-    (event.data.modality === "keyboard" || event.data.modality === "pointer")
-  ) {
-    keyboardInteraction.value = event.data.modality === "keyboard";
+  const message = readPreviewMessage(event.data);
+  if (!message) return;
+  if (message.type === PREVIEW_MESSAGE.interaction) {
+    keyboardInteraction.value = message.modality === "keyboard";
     syncFrameFocus();
-    return;
-  }
-  if (
-    event.data?.type === "octoboard-preview-scroll" &&
-    typeof event.data.deltaY === "number" &&
-    Number.isFinite(event.data.deltaY)
-  ) {
+  } else if (message.type === PREVIEW_MESSAGE.scroll) {
     // Any message from the preview, a stop signal included, ends a glide in progress.
     stopFling();
-    if (event.data.stop === true) return;
-    if (event.data.deltaY !== 0)
-      window.scrollBy({ top: event.data.deltaY, behavior: "instant" });
-    else if (
-      typeof event.data.velocity === "number" &&
-      Number.isFinite(event.data.velocity)
-    )
-      startFling(event.data.velocity);
-    return;
-  }
-  if (event.data?.type === "octoboard-preview-ready") {
+    if (message.stop) return;
+    if (message.deltaY !== 0)
+      window.scrollBy({ top: message.deltaY, behavior: "instant" });
+    else if (message.velocity !== undefined) startFling(message.velocity);
+  } else if (message.type === PREVIEW_MESSAGE.ready) {
     stopWaiting();
     ready.value = true;
     failed.value = false;
-  }
-  if (event.data?.type === "octoboard-preview-error") {
+  } else {
     stopWaiting();
     failed.value = true;
   }

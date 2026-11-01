@@ -3,14 +3,14 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { AGENT_INSTALL_URL } from "../../agents";
+import { AGENT_INSTALL_URL } from "../../agents/agents";
 import { DaemonRequestError } from "../../daemon-client";
-import { errorAlerts } from "../../errorAlerts";
+import { errorAlerts } from "../../components/alerts/errorAlerts";
 import type { Agent, AgentAvailability, RequestBody } from "../../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../../store";
 import { AddAgentDialog } from "./AddAgentDialog";
-import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
-import { DEFAULT_SETTINGS } from "../../defaultSettings";
+import { DEFAULT_GIT_WORKFLOW } from "../../git/gitWorkflow";
+import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -26,7 +26,7 @@ function render(
       agentAvailability: new Map(Object.entries(availability).map(([agent, state]) => [agent as Agent, { agent: agent as Agent, availability: state, default_account_dir: null }])),
     }),
     request: vi.fn(request) as Daemon["request"],
-    toastError: vi.fn(),
+    raiseError: vi.fn(),
     toastNotice: vi.fn(),
     onToast: () => () => {},
     dismissTrustPrompt: () => {},

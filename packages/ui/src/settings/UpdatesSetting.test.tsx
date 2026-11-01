@@ -7,7 +7,7 @@ import { press } from "../components/alerts/detailsTestSupport";
 import { LanguageProvider } from "../i18n/react";
 import type { AvailableUpdate, PlatformAdapter, UpdaterCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";
-import { PREFERENCE_KEYS } from "../preferenceKeys";
+import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import { updateChannel } from "../updates/updateChannel";
 import type { UpdateStore } from "../updates/updateStore";
 import { UpdatesProvider, useUpdates } from "../updates/UpdatesProvider";

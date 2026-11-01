@@ -25,9 +25,9 @@ import {
   stackedKinds,
   toggleMaximized,
   unavailableKinds,
-  type PanelKind,
   type PanelStack as Stack,
 } from "./stackState";
+import type { PanelKind } from "../layout/panelKind";
 import { usePanelStacks } from "./usePanelStacks";
 import { columnSplit, panelColumns } from "./panelColumns";
 

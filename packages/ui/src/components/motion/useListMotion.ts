@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 
-import { onReducedMotion, prefersReducedMotion } from "../../reducedMotion";
+import { onReducedMotion, prefersReducedMotion } from "./reducedMotion";
 
 const SELECTOR = "[data-list-motion], [data-flip]";
 /** How long list motion takes, in milliseconds. */

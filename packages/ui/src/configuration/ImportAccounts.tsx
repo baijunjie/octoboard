@@ -1,12 +1,12 @@
 import { CircleCheck, CircleDot, Info, type LucideIcon } from "lucide-react";
 import React, { useId } from "react";
 
-import { AGENT_DEFAULT_CONFIG_DIR, AGENT_LABEL } from "../agents";
-import { InlineReference } from "../components/text/InlineReference";
+import { AGENT_DEFAULT_CONFIG_DIR, AGENT_LABEL } from "../agents/agents";
+import { InlineReference } from "../i18n/InlineReference";
 import { MarkLineBox } from "../components/status/MarkLineBox";
 import { StatusBadge } from "../components/status/StatusBadge";
 import { StatusMark } from "../components/status/StatusMark";
-import { accountNameText } from "../daemonMessage";
+import { accountNameText } from "../errors/daemonMessage";
 import { OptionSelect } from "../components/form/OptionSelect";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";

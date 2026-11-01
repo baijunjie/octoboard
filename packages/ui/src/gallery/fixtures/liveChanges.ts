@@ -1,5 +1,5 @@
 import type { Account, AccountQuota, Agent, AgentAvailability, Event as DaemonEvent, Page, ShellTerminal } from "../../protocol";
-import { accountQuotaOf } from "../../accountQuotaOf";
+import { accountQuotaOf } from "../../accounts/accountQuotaOf";
 import type { Step } from "../../fixtures/interact";
 import type { LiveChange } from "../scenario";
 import { ALL_AGENTS } from "../../fixtures/builders";

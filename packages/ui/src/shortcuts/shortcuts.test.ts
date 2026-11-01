@@ -2,8 +2,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import { format, type Translate } from "../i18n/catalog";
-import { PREFERENCE_KEYS } from "../preferenceKeys";
-import { IS_MAC } from "../useWindowShortcut";
+import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
+import { IS_MAC } from "../input/keys";
 import { bindingParts, bindingsEqual, describeBinding, eventKey, matches, parseBinding, toAccelerator, type Binding } from "./binding";
 import { defaultBinding, isAvailable, REBINDABLE_COMMANDS } from "./commands";
 import { bindingFor, effectiveBindings, matchesCommand, replaceOverrides, restoreAllBindings, restoreBinding, sanitizeOverrides, setBinding, shortcutOverrides } from "./store";

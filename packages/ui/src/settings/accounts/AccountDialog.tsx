@@ -1,23 +1,23 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 
-import { Button } from "../../components/controls/Button";
 import { FailureAlert } from "../../components/alerts/FailureAlert";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../../components/announce/StatusAnnouncer";
-import { errorPresentation, type ErrorPresentation } from "../../errorPresentation";
-import { AGENT_DEFAULT_CONFIG_DIR, AGENT_LABEL, defaultAccountName, listedAgents } from "../../agents";
+import { errorPresentation, type ErrorPresentation } from "../../errors/errorPresentation";
+import { AGENT_DEFAULT_CONFIG_DIR, AGENT_LABEL, defaultAccountName, listedAgents } from "../../agents/agents";
 import { agentIconSetupOptions } from "../../components/icons/AgentIcon";
 import { TILDE_PARAMS } from "../../components/text/literalParams";
 import { Dialog, useDialogAction, useRefocusIfLost, useSubmitValidation } from "../../components/dialog/Dialog";
-import { DirectoryPicker } from "../../components/dialog/DirectoryPicker";
+import { useDirectoryBrowse } from "../../components/dialog/DirectoryPicker";
 import { OptionSelect } from "../../components/form/OptionSelect";
 import { TextInput } from "../../components/form/TextInput";
+import { isAbsoluteOrHomePath } from "../../format/pathDisplay";
 import type { MessageKey } from "../../i18n/catalog";
 import { isolate } from "../../i18n/isolate";
-import { InlineReference } from "../../components/text/InlineReference";
+import { InlineReference } from "../../i18n/InlineReference";
 import { Message, useT } from "../../i18n/react";
 import type { Account, Agent } from "../../protocol";
 import { useDaemon, useDaemonStore } from "../../store";
-import { isAbsoluteConfigDir, nameCollision, nextConfigDir, type NameCollision } from "./agentAccounts";
+import { nameCollision, nextConfigDir, type NameCollision } from "./agentAccounts";
 
 /** What each kind of name collision says. */
 const COLLISION_MESSAGE = {
@@ -55,7 +55,6 @@ export function AccountDialog({
   const [directoryFailure, setDirectoryFailure] = useState<{ message: ErrorPresentation; attempt: number }>();
   const [listingAttempt, setListingAttempt] = useState(0);
   const [listingPending, setListingPending] = useState(true);
-  const [pickingDirectory, setPickingDirectory] = useState(false);
   const { busy, run } = useDialogAction(undefined, t(editing || renameDefault ? "settings.accounts.dialog.saveFailedTitle" : "settings.accounts.dialog.addFailedTitle"));
   const { shown, attempt } = useSubmitValidation();
   const directoryField = useRef<HTMLDivElement>(null);
@@ -86,6 +85,7 @@ export function AccountDialog({
       ...Array.from(agentAvailability.values()).flatMap((availability) => availability.default_account_dir ? [availability.default_account_dir] : []),
     ], directoryListing.home)
     : "");
+  const directoryBrowse = useDirectoryBrowse(configDir, setConfigDir);
 
   const collision = name.trim() === "" && renameDefault
     ? undefined
@@ -93,7 +93,7 @@ export function AccountDialog({
   const nameError = !name && !renameDefault
     ? t("dialog.nameRequired")
     : collision && t(COLLISION_MESSAGE[collision.kind], { name: isolate(collision.name), agent: AGENT_LABEL[agent] });
-  const dirError = isAbsoluteConfigDir(configDir) ? undefined : "notAbsolute";
+  const dirError = isAbsoluteOrHomePath(configDir) ? undefined : "notAbsolute";
 
   const submit = () => {
     if (!attempt(nameError, renameDefault ? undefined : dirError)) return;
@@ -153,11 +153,7 @@ export function AccountDialog({
           description={<Message id={agent === "grok" ? "settings.accounts.dirHintGrok" : "settings.accounts.dirHint"} />}
           describedBy={showDirectoryFailure ? directoryFailureId : undefined}
           errorMessage={shown(dirError) && <Message id="settings.accounts.dirNotAbsolute" params={TILDE_PARAMS} />}
-          trailing={
-            <Button type="button" variant="secondary" onPress={() => setPickingDirectory(true)}>
-              {t("common.browse")}
-            </Button>
-          }
+          trailing={directoryBrowse.browseButton()}
         /></div>}
         {showDirectoryFailure && <FailureAlert
           textId={directoryFailureId}
@@ -173,17 +169,7 @@ export function AccountDialog({
           }}
         />}
       </Dialog>
-      {pickingDirectory && (
-        <DirectoryPicker
-          title={t("dialog.chooseDirectory")}
-          initialPath={isAbsoluteConfigDir(configDir) ? configDir : "~"}
-          onPick={(picked) => {
-            setConfigDir(picked);
-            setPickingDirectory(false);
-          }}
-          onClose={() => setPickingDirectory(false)}
-        />
-      )}
+      {directoryBrowse.picker}
     </>
   );
 }

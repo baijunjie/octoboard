@@ -1,10 +1,10 @@
-import { DEFAULT_SETTINGS } from "../../defaultSettings";
-import { FOLLOWING_GIT_WORKFLOW } from "../../gitWorkflow";
+import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
+import { FOLLOWING_GIT_WORKFLOW } from "../../git/gitWorkflow";
 import type { Agent, AgentAvailability, Console, RelocationCause, Settings } from "../../protocol";
 import { describing, type Ui, type Step } from "../../fixtures/interact";
 import type { FixtureError } from "../../fixtures/sampleFiles";
 import type { Scenario } from "../scenario";
-import { accountOf, ALL_AGENTS, SAMPLE, branchItemOf, consoleOf, consoleWith, keptOf, leftoverOf, minutesAgo, processTreeOf, projectOf, projectWith, sessionOf, snapshotState, switchingAccount, unknownFolderWorktreeOf, worktreeItemOf } from "../../fixtures/builders";
+import { accountOf, ALL_AGENTS, SAMPLE, branchItemOf, consoleOf, consoleWith, keptOf, leftoverOf, minutesAgo, processTreeOf, projectOf, projectWith, sessionOf, snapshotState, switchingAccount, unknownFolderWorktreeOf, worktreeItemOf, sessionNoticeToast } from "../../fixtures/builders";
 import { agentAvailability } from "./liveChanges";
 import { SAMPLE_CODEX_MODELS } from "../../fixtures/agentModels";
 import { IMAGES } from "../../fixtures/viewerImages";
@@ -632,7 +632,7 @@ export const dialogScenarios: Scenario[] = [
     title: "Notice below a centered dialog",
     description: "The notice stays at the window's bottom end when there is room below the dialog, even if its horizontal span reaches the footer. Resize the window to compare genuine overlap with the clear space below a centered dialog.",
     steps: [(ui) => ui.press(ui.t("sidebar.consoleSessions.new"))],
-    toasts: [{ kind: "session_notice", code: "claude_workspace_untrusted", params: {}, message: "", session: "s-web-1" }],
+    toasts: [sessionNoticeToast("s-web-1", "claude_workspace_untrusted")],
   },
   {
     ...dialogFixture,
@@ -644,7 +644,7 @@ export const dialogScenarios: Scenario[] = [
     description: "The stack clears the footer even while collapsed, since spreading its notices would otherwise cover the buttons. Hover to expand it, then move away: the stack's anchor stays steady in both states.",
     steps: [(ui) => ui.press(ui.t("sidebar.consoleSessions.new"))],
     toasts: [
-      { kind: "session_notice", code: "claude_workspace_untrusted", params: {}, message: "", session: "s-web-1" },
+      sessionNoticeToast("s-web-1", "claude_workspace_untrusted"),
       { kind: "notice", message: (t) => t("common.pathCopied") },
     ],
   },
@@ -660,7 +660,7 @@ export const dialogScenarios: Scenario[] = [
       (ui) => ui.press(ui.t("rail.newConsole")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
     ],
-    toasts: [{ kind: "session_notice", code: "claude_workspace_untrusted", params: {}, message: "", session: "s-web-1" }],
+    toasts: [sessionNoticeToast("s-web-1", "claude_workspace_untrusted")],
   },
   {
     id: "sidebar-session-menu-unused-locked",
@@ -1816,6 +1816,21 @@ export const dialogScenarios: Scenario[] = [
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),
+      (ui) => ui.press(ui.t("common.browse")),
+    ],
+  },
+  {
+    ...dialogFixture,
+    id: "dialog-directory-picker-relative-path",
+    group: "Projects",
+    category: "normal",
+    title: "Directory picker after a relative path was typed",
+    description: "Browse was pressed with the relative path code/a in the Directory field, a path that names no place the picker could list. It opens at the home directory, with the path field reading /Users/dev and the rows written from ~, as it does with nothing typed, and not on a failed listing of the typed path.",
+    steps: [
+      consoleActions,
+      (ui) => ui.press(ui.t("sidebar.console.addProject")),
+      (ui) => ui.focus(ui.t("dialog.project.directory")),
+      (ui) => ui.type("code/a"),
       (ui) => ui.press(ui.t("common.browse")),
     ],
   },

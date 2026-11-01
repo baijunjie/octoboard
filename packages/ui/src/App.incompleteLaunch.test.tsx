@@ -8,8 +8,8 @@ import { consoleOf, projectOf, sessionOf, snapshotState } from "./fixtures/build
 import { PlatformProvider } from "./platform/react";
 import type { Account } from "./protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "./store";
-import { ThemeProvider } from "./theme";
-import { IS_MAC } from "./useWindowShortcut";
+import { ThemeProvider } from "./preferences/theme";
+import { IS_MAC } from "./input/keys";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -51,7 +51,7 @@ function mountWith(incomplete: boolean) {
   const daemon: Daemon = {
     store,
     request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
-    toastError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
+    raiseError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
     dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
   };
   const container = mountForTooltip(

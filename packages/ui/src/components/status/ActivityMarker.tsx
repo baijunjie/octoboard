@@ -2,7 +2,7 @@ import { Hand, LoaderCircle, MessageCircleMore } from "lucide-react";
 import React from "react";
 
 import { useT } from "../../i18n/react";
-import { activityLabel, type ShownStatusKind } from "../../sessionLabel";
+import { activityLabel, type ShownStatusKind } from "../../sessions/sessionLabel";
 import type { Activity } from "../../sessions/order";
 import { IndicatorTooltip } from "../hint/IndicatorTooltip";
 import { WavingHand, WorkingDot } from "./statusGlyphs";

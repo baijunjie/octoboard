@@ -15,6 +15,7 @@ import { galleryFailure } from "../fixtures/banner";
 import { SCENARIOS } from "./fixtures";
 import { installFakeTerminal } from "../fixtures/fakeTerminal";
 import { holdPrimaryModifier } from "./heldModifier";
+import { afterFrames, applyDocumentTheme } from "../fixtures/pageFrame";
 import { createUi, settleMotion, stuckExit } from "../fixtures/interact";
 import { prepareStorage } from "./prepare";
 import { LIVE_CHANGE_EVENT } from "./scenario";
@@ -28,10 +29,7 @@ const theme = params.get("theme") === "dark" ? "dark" : "light";
 
 if (scenario) prepareStorage(scenario, language, theme);
 
-// What `index.html`'s bootstrap script does for the real page, so the first paint, and the error
-// screen outside `ThemeProvider`, are themed.
-document.documentElement.classList.add(theme);
-document.documentElement.setAttribute("data-theme", theme);
+applyDocumentTheme(document, theme);
 
 installFakeTerminal();
 // The shell's Held control: the new-session "+" buttons as they are while the shortcut modifier is down.
@@ -54,11 +52,11 @@ const [{ App }, { Toasts }, { ErrorAlerts }, { ErrorBoundary }, { LanguageProvid
     import("../platform/react"),
     import("../StartupScreen"),
     import("../store"),
-    import("../theme"),
+    import("../preferences/theme"),
     import("../updates/UpdatesProvider"),
   ]);
 // After react-aria's own listeners are registered, as in `main.tsx` (see `focusGuard.ts`).
-await import("../focusGuard");
+await import("../input/focusGuard");
 await import("../style.css");
 const { createFixtureDaemon } = await import("../fixtures/fixtureDaemon");
 const { installReportPageFixture } = await import("./reportPageFixture");
@@ -319,15 +317,10 @@ if (daemon && scenario?.toasts?.length) {
   const raised = await Promise.race([daemon.scenarioToastsRaised.then(() => true), ui.wait(TOASTS_LIMIT_MS).then(() => false)]);
   if (!raised) galleryFailure(`The scenario's toasts were not raised within ${TOASTS_LIMIT_MS / 1000}s: nothing on the page subscribed to them`);
 }
-// The first wait: two frames after the last step, not at its end, since what the last step set going (a render, a
-// transition's first frames, a failure line) has usually been drawn by then, which is what a capture or a read of
-// the overlay needs. It is capped at 200ms, though, so that a tab drawing no frames (a background one) cannot hold
-// it forever: it ends at two frames or at 200ms, whichever is first, and a page too busy to draw two frames in
-// that time goes on without them.
-await new Promise<void>((resolve) => {
-  requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-  setTimeout(resolve, 200);
-});
+// The first wait: two frames after the last step, not at its end, since what the last step set going has usually
+// been drawn by then, which is what a capture or a read of the overlay needs. The cap is short, so that a page too
+// busy to draw two frames in that time goes on without them.
+await afterFrames(200);
 // What the steps set easing (a dialog growing to its height) is waited out, so the view captured is the
 // settled one; the wait is capped, as the other is, so that a page that never settles still claims ready.
 await settleMotion(document, 1000);

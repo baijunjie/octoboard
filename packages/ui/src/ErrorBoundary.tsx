@@ -1,6 +1,6 @@
 import React from "react";
 
-import { errorDiagnostic } from "./errorText";
+import { errorDiagnostic } from "./errors/errorText";
 import { DiagnosticBlock } from "./components/alerts/DiagnosticBlock";
 import { useT } from "./i18n/react";
 import { useAppExit } from "./lifecycle/useAppExit";

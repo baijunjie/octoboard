@@ -7,8 +7,8 @@ import { IndicatorTooltip } from "../components/hint/IndicatorTooltip";
 import { focusHolderOrButton } from "../components/focus/handFocusOff";
 import { StatusMark } from "../components/status/StatusMark";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
-import { gitBadgeContent } from "../gitStatusCopy";
-import { gitBadgeAriaLabel, gitFailureLabel, gitFailureShown } from "../gitStatusLabel";
+import { gitBadgeContent } from "../git/gitStatusCopy";
+import { gitBadgeAriaLabel, gitFailureLabel, gitFailureShown } from "../git/gitStatusLabel";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { GitStatus } from "../protocol";
 

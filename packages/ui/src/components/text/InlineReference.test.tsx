@@ -8,9 +8,9 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished } from "vitest";
 
 import { CodeBlock } from "./CodeBlock";
-import { CodeToneContext } from "./codeTone";
+import { CodeToneContext } from "../../i18n/codeTone";
 import { ErrorAlert } from "../alerts/ErrorAlert";
-import { InlineReference } from "./InlineReference";
+import { InlineReference } from "../../i18n/InlineReference";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

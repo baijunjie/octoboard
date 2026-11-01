@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished } from "vitest";
 
-import { useQuickCreateModifier } from "../useQuickCreateModifier";
+import { useQuickCreateModifier } from "../sidebar/useQuickCreateModifier";
 import { holdPrimaryModifier } from "./heldModifier";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

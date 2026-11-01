@@ -5,12 +5,12 @@ import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 
-import { errorAlerts } from "../../errorAlerts";
+import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { currentLanguage, setLanguage, t } from "../../i18n/language";
 import type { Console, Project, Session } from "../../protocol";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { AgentAccountsSection } from "./AgentAccountsSection";
-import { account, availability, bus, consoles, projects, request, sectionEntry, sessions, settings, toastError } from "./agentAccountsSectionTestState";
+import { account, availability, bus, consoles, projects, request, sectionEntry, sessions, settings } from "./agentAccountsSectionTestState";
 import { animate, buttonNamed, chooseItem, menuItem, mount, openDetailsOf, openSettingsOf, openTabMenu, rowOf, selectTab } from "./agentAccountsSectionTestSupport";
 
 vi.mock("../../store", async (importOriginal) => (await import("./agentAccountsSectionTestState")).storeStandIn(await importOriginal()));
@@ -600,7 +600,8 @@ it("reports a refused reorder", async () => {
   await openTabMenu(container, "Codex");
   await chooseItem("Move earlier");
   await act(async () => {});
-  expect(toastError).toHaveBeenCalledOnce();
+  expect(errorAlerts.getSnapshot()).toHaveLength(1);
+  errorAlerts.acknowledge();
 });
 
 it("offers the same entries in an actions button of each tab, named for its agent", async () => {

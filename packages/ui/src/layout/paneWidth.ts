@@ -1,9 +1,9 @@
 import { useState, useSyncExternalStore } from "react";
 
-import { createPersistedPreference } from "../persistedPreference";
-import { MIN_TWO_COLUMN_ASIDE_WIDTH } from "../panels/panelColumns";
-import { PREFERENCE_KEYS } from "../preferenceKeys";
-import { minWidthQuery, useMediaQuery } from "../breakpoint";
+import { createPersistedPreference } from "../preferences/persistedPreference";
+import { MIN_TWO_COLUMN_ASIDE_WIDTH } from "./panelColumnWidth";
+import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
+import { minWidthQuery, useMediaQuery } from "../components/hooks/breakpoint";
 
 /** The two panes whose docked width the user can change. */
 export type PaneSide = "sidebar" | "aside";

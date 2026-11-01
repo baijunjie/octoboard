@@ -1,7 +1,7 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
 
-import { onReducedMotion, prefersReducedMotion } from "../reducedMotion";
-import { ringForAutomaticFocus } from "../touchInput";
+import { onReducedMotion, prefersReducedMotion } from "../components/motion/reducedMotion";
+import { ringForAutomaticFocus } from "../input/touchInput";
 import { useLatest } from "../components/hooks/useLatest";
 import { ArchiveView } from "./ArchiveView";
 

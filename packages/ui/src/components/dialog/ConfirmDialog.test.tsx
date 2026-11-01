@@ -3,7 +3,7 @@ import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { errorAlerts } from "../../errorAlerts";
+import { errorAlerts } from "../alerts/errorAlerts";
 import { currentLanguage, setLanguage } from "../../i18n/language";
 import { createStateStore, DaemonProvider, type Daemon } from "../../store";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -16,7 +16,7 @@ function fakeDaemon(): Daemon {
   return {
     store: createStateStore({}),
     request: vi.fn(),
-    toastError: vi.fn(),
+    raiseError: vi.fn(),
     toastNotice: vi.fn(),
     onToast: () => () => {},
     dismissTrustPrompt: () => {},

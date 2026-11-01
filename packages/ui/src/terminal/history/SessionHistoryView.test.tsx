@@ -5,7 +5,7 @@ import { setInteractionModality } from "react-aria";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { DaemonRequestError } from "../../daemon-client";
-import { errorAlerts } from "../../errorAlerts";
+import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { isolate } from "../../i18n/isolate";
 import type { Event, HistoryMessage, Session, SessionContext } from "../../protocol";
 import { SessionHistoryView } from "./SessionHistoryView";
@@ -14,14 +14,15 @@ import { SessionHistoryView } from "./SessionHistoryView";
 
 const daemon = vi.hoisted(() => ({ request: vi.fn<(body: unknown) => Promise<unknown>>() }));
 const store = vi.hoisted(() => ({ snapshotEpoch: 0, consoles: new Map(), projects: new Map(), sessions: new Map(), homeDir: "/home/dev" }));
-vi.mock("../../errorAlerts", () => ({ errorAlerts: { report: vi.fn() } }));
+vi.mock("../../components/alerts/errorAlerts", () => ({ errorAlerts: { report: vi.fn() } }));
 vi.mock("../../store", () => ({
   useDaemon: () => daemon,
   useDaemonStore: (select: (state: typeof store) => unknown) => select(store),
+  useSession: (id: string | null | undefined) => (id ? store.sessions.get(id) : undefined),
   useErrorRecords: (select: (state: typeof store) => unknown) => select(store),
 }));
 vi.mock("../../platform/react", () => ({ usePlatform: () => ({ links: undefined }) }));
-vi.mock("../../theme", () => ({ useOctoboardTheme: () => ({ resolved: "light" }) }));
+vi.mock("../../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "light" }) }));
 vi.mock("../../viewer/MarkdownDocument", () => ({
   MarkdownDocument: ({ text }: { text: string }) => <div data-testid="markdown">{text}</div>,
 }));

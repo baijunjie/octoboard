@@ -1,9 +1,10 @@
-import { ActionableError } from "../../actionableError";
-import { DETAIL_BLOCK_CODES, RECOVERY_CODES, hasRichMessage, hasTrustDiagnostic, leftBranchDetail, leftBranchItems, messageCode, sharingFailureItems, sharingRawReason, sharingReasonKey } from "../../daemonMessage";
-import { hasCodeParams, hasShellTimeoutDetails, unwordedReason } from "../../errorPresentation";
-import { isUncataloguedFailure } from "../../uncataloguedFailure";
+import { ActionableError } from "../../errors/actionableError";
+import { hasRichMessage, hasTrustDiagnostic, leftBranchDetail, leftBranchItems, messageCode, sharingFailureItems, sharingRawReason, sharingReasonKey } from "../../errors/daemonMessage";
+import { hasCodeParams, hasShellTimeoutDetails, unwordedReason } from "../../errors/errorPresentation";
+import { isUncataloguedFailure } from "../../errors/uncataloguedFailure";
 import { isMessageKey } from "../../i18n/catalog";
-import { NESTED_FAILURE_CODES, NESTED_REMEDY_CODES, type MessageParams } from "../../protocol";
+import type { MessageParams } from "../../protocol";
+import { codeRecord } from "../../errors/codes";
 
 // What `DaemonErrorMessage` has to show for each of its parts, answered without rendering. Plain predicates, apart from
 // the node builders in `errorParts.tsx` so that `DaemonErrorMessage` can ask them without importing the file that
@@ -38,7 +39,7 @@ export function hasRawDetails(error: { code: string; params: MessageParams; mess
   if (left) return left.some((item) => !!leftBranchDetail(item));
   const sharing = sharingRawReason(error);
   if (sharingFailureItems(error.code, error.params) || sharing?.raw) return true;
-  if (!sharing && (DETAIL_BLOCK_CODES.has(error.code) || hasTrustDiagnostic(error.code, error.params)) && error.params.detail) return true;
+  if (!sharing && (codeRecord(error.code)?.detailBlock || hasTrustDiagnostic(error.code, error.params)) && error.params.detail) return true;
   if (unwordedReason(error.code, error.params)) return true;
   const nested = nestedFailure(error);
   return nested !== undefined && hasRawDetails(nested);
@@ -50,9 +51,9 @@ export function hasErrorRemedy(error: { code: string; params: MessageParams; mes
   if (isUncataloguedFailure(error)) return false;
   if (hasShellTimeoutDetails(error)) return true;
   if (!hasCodeParams(error) || !hasRichMessage(error.code, error.params)) return false;
-  if (RECOVERY_CODES.has(error.code) && isMessageKey(`daemon.${messageCode(error.code, error.params)}.recovery`)) return true;
+  if (codeRecord(error.code)?.recoveryLine && isMessageKey(`daemon.${messageCode(error.code, error.params)}.recovery`)) return true;
   const nested = nestedFailure(error);
-  return nested !== undefined && NESTED_REMEDY_CODES.has(error.code) && hasErrorRemedy(nested);
+  return nested !== undefined && codeRecord(error.code)?.nested === "failureAndRemedy" && hasErrorRemedy(nested);
 }
 
 /** Whether an alert's default body already carries the failure's remedy sentence, so the alert adds no second one:
@@ -64,7 +65,7 @@ export function remedyInBody(content: unknown, shown: string | { code: string; p
 /** The structured cause a `launch_failed` or a failed automatic switch carries under its own code, as a failure of its own. */
 export function nestedFailure(error: { code: string; params: MessageParams }): { code: string; params: MessageParams; message: string } | undefined {
   const { reason_code: reason } = error.params;
-  if (!NESTED_FAILURE_CODES.has(error.code) || !reason || reason === error.code) return undefined;
+  if (!codeRecord(error.code)?.nested || !reason || reason === error.code) return undefined;
   const nested = { code: reason, params: error.params, message: error.params.reason ?? "" };
   return hasCodeParams(nested) || hasShellTimeoutDetails(nested) ? nested : undefined;
 }

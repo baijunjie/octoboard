@@ -38,7 +38,7 @@ function controlledDaemon() {
         pending.push(request);
         leftOver.push(request);
       }),
-    toastError: () => {},
+    raiseError: () => {},
     toastNotice: () => {},
     onToast: () => () => {},
     dismissTrustPrompt: () => {},

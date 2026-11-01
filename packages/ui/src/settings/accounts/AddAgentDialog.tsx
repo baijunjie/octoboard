@@ -1,7 +1,7 @@
 import React, { useRef, useState } from "react";
 
 import { Button } from "../../components/controls/Button";
-import { AGENT_INSTALL_URL, AGENT_LABEL, AGENT_OPTIONS } from "../../agents";
+import { AGENT_INSTALL_URL, AGENT_LABEL, AGENT_OPTIONS } from "../../agents/agents";
 import { AgentIcon } from "../../components/icons/AgentIcon";
 import { ExternalLink } from "../../components/text/ExternalLink";
 import { FadeOverflow } from "../../components/text/FadeOverflow";

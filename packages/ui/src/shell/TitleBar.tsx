@@ -5,7 +5,7 @@ import { PANE_ID } from "../layout/paneOverlay";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import type { Session } from "../protocol";
-import { sessionDisplayTitle, sessionShownStatusKind } from "../sessionLabel";
+import { sessionDisplayTitle, sessionShownStatusKind } from "../sessions/sessionLabel";
 import { useDaemonStore } from "../store";
 import { ChromeButton } from "./ChromeButton";
 import { FadeOverflow } from "../components/text/FadeOverflow";

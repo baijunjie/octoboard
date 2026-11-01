@@ -1,14 +1,17 @@
 // Shared by the viewer's tests: the providers the header needs around a `FileViewer`.
 import React from "react";
 
-import { errorText } from "../errorText";
+import { forwardAlerts } from "../components/alerts/alertTestSupport";
+import { errorText } from "../errors/errorText";
+import { errorPresentation } from "../errors/errorPresentation";
 import type { PlatformAdapter } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 
 const NO_TOASTS = { notice: () => {}, error: () => {} };
 
-/** The platform and daemon a `FileViewer` renders inside. `toasts` is where the daemon's toasts go. */
+/** The platform and daemon a `FileViewer` renders inside. `toasts` is where the daemon's toasts go, and the error
+ * alerts raised without a daemon (`raiseError` from `components/alerts/raiseError`) too. */
 export function ViewerHost({
   clipboard,
   links,
@@ -26,7 +29,7 @@ export function ViewerHost({
     () => ({
       store: createStateStore(),
       request: request ?? (() => Promise.reject(new Error("no daemon"))),
-      toastError: (message) => toasts.error(errorText(message)),
+      raiseError: (error) => toasts.error(errorText(errorPresentation(error))),
       toastNotice: toasts.notice,
       onToast: () => () => {},
       dismissTrustPrompt: () => {},
@@ -35,6 +38,9 @@ export function ViewerHost({
     }),
     [toasts.error, toasts.notice, request],
   );
+  // A layout effect, so it is installed before the children's passive effects (where an alert raised as they mount
+  // would be missed otherwise) and is replaced when `toasts.error` changes.
+  React.useLayoutEffect(() => forwardAlerts(toasts.error), [toasts.error]);
   return (
     <PlatformProvider value={{ kind: "browser", clipboard, links }}>
       <DaemonProvider value={daemon}>{children}</DaemonProvider>

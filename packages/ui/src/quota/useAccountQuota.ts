@@ -1,6 +1,6 @@
 import type { AccountQuota, Agent } from "../protocol";
 import { useDaemonStore } from "../store";
-import { accountQuotaOf } from "../accountQuotaOf";
+import { accountQuotaOf } from "../accounts/accountQuotaOf";
 
 /** What is known of an account's quota: its entry, `"loading"` for an account whose reading has not
  * landed yet, or `undefined` for one that has nothing to wait for. */

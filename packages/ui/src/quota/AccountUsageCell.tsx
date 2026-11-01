@@ -3,10 +3,10 @@ import React from "react";
 import { StatusBadge } from "../components/status/StatusBadge";
 import { useT } from "../i18n/react";
 import type { QuotaWindow } from "../protocol";
-import { useNow } from "../useNow";
+import { useNow } from "../format/useNow";
 import { AccountQuotaNotice, NoUsageReading, QuotaStaleMark } from "./AccountQuotaSummary";
 import { AccountUsageBar } from "./AccountUsageBar";
-import { quotaUsedUpDetail, usageBarSummary, usageBarWindows } from "./quotaFormat";
+import { quotaUsedUpDetail, usageBarSummary, usageBarWindows } from "../accounts/quotaFormat";
 import type { QuotaReading } from "./useAccountQuota";
 
 /** An account's usage in a table row: the picker's two-layer usage bar (`AccountUsageBar`, the 5-hour window with the

@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { useHasPainted } from "../components/motion/useHasPainted";
 import { useT } from "../i18n/react";
-import { useOctoboardTheme } from "../theme";
+import { useOctoboardTheme } from "../preferences/theme";
 import { BodyView } from "./BodyView";
 import { ChangeView } from "./ChangeView";
 import type { ViewerContent, ViewerSubject } from "./content";

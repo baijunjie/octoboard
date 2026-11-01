@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { DaemonRequestError } from "../daemon-client";
-import { errorPresentation, type ErrorPresentation } from "../errorPresentation";
+import { errorPresentation, type ErrorPresentation } from "../errors/errorPresentation";
 import { useT } from "../i18n/react";
 import type { ProcessTree, SessionBranchItem, SessionBranchTarget } from "../protocol";
 import { useDaemon, type Daemon } from "../store";

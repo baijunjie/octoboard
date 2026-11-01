@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
-import { errorAlerts } from "../errorAlerts";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 import { press, tap } from "../components/hint/tooltipTestSupport";
 import { DocumentImage } from "./DocumentImage";
 import { FormulaView } from "./FormulaView";

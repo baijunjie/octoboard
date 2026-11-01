@@ -1,7 +1,7 @@
 import React, { useCallback, useSyncExternalStore } from "react";
 import { I18nProvider } from "react-aria-components";
 
-import { InlineReference } from "../components/text/InlineReference";
+import { InlineReference } from "./InlineReference";
 
 import { format, globalParam, messageText, type MessageArgs, type MessageKey, splitPlaceholders, type Translate } from "./catalog";
 import { currentLanguage, subscribeLanguage } from "./language";

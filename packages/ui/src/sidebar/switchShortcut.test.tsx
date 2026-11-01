@@ -7,7 +7,7 @@ import { consoleOf, sessionOf } from "../fixtures/builders";
 import type { PlatformAdapter } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import type { Session } from "../protocol";
-import { IS_MAC } from "../useWindowShortcut";
+import { IS_MAC } from "../input/keys";
 import type { FocusTarget } from "./types";
 import { useSwitchShortcut } from "./switchShortcut";
 

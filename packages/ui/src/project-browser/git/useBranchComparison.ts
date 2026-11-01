@@ -1,11 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import type { ErrorPresentation } from "../../errorPresentation";
+import type { ErrorPresentation } from "../../errors/errorPresentation";
 import { useCurrentLanguage, useT } from "../../i18n/react";
-import { abbreviateHome } from "../../pathDisplay";
 import type { ComparisonEndpoint } from "../../protocol";
 import { useDaemon, useDaemonStore } from "../../store";
-import { browseFailure } from "../browseError";
+import { projectBrowseFailure } from "../browseError";
 import { changeItems, type ChangeItem } from "./changes";
 import { gitMoment } from "./gitRequests";
 import { sendBrowseListRequest } from "../browseListRequests";
@@ -78,9 +77,7 @@ export function useBranchComparison(
       })
       .catch((err: unknown) => {
         if (!current()) return;
-        const state = store.getState();
-        const root = state.projects.get(project)?.path;
-        const failure = browseFailure(t, language, err, state, root && abbreviateHome(root, state.homeDir));
+        const failure = projectBrowseFailure(t, language, err, store.getState(), project);
         if (failure.kind === "superseded") return;
         if (failure.kind === "disconnected") {
           // Left as it is; the reconnect asks again.

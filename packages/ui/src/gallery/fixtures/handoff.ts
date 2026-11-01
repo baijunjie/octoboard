@@ -1,8 +1,8 @@
-import { DEFAULT_SETTINGS } from "../../defaultSettings";
+import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import type { Agent, AgentAvailability } from "../../protocol";
 import type { Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
-import { accountOf, ALL_AGENTS, SAMPLE, branchItemOf, minutesAgo, sessionOf, snapshotState, worktreeItemOf } from "../../fixtures/builders";
+import { accountOf, ALL_AGENTS, SAMPLE, branchItemOf, minutesAgo, sessionOf, snapshotState, worktreeItemOf, sessionNoticeToast } from "../../fixtures/builders";
 
 const { console: console_, web, api, consoleSession: hub } = SAMPLE;
 
@@ -331,7 +331,7 @@ export const handoffScenarios: Scenario[] = [
     title: "Messages dropped during a handoff",
     description: "The notice arrives as an error alert titled \"Handoff messages dropped\", whose body opens with the session line, \"Session: Rework the result ranking — Website\", with the session's title and its project each a chip, then, as plain text rather than a chip, what was dropped, followed by the recovery of checking the session they were meant for or the one that took over.",
     state,
-    toasts: [{ kind: "error", code: "handoff_messages_dropped", params: {}, message: "", session: lead.id }],
+    toasts: [sessionNoticeToast(lead.id, "handoff_messages_dropped")],
   },
   {
     id: "toast-sharing-messages-dropped",
@@ -340,6 +340,6 @@ export const handoffScenarios: Scenario[] = [
     title: "Messages dropped during a sharing change",
     description: "The notice arrives as an error alert titled \"Messages dropped during a sharing change\", whose body opens with the session line, \"Session: Rework the result ranking — Website\", with the session's title and its project each a chip, then, as plain text rather than a chip, what was dropped, saying the session was not restarted, followed by its own recovery line: the messages were never written to a terminal and the session may not be running, so resume it if still needed and send them again.",
     state,
-    toasts: [{ kind: "error", code: "sharing_messages_dropped", params: {}, message: "", session: lead.id }],
+    toasts: [sessionNoticeToast(lead.id, "sharing_messages_dropped")],
   },
 ];

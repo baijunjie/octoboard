@@ -14,7 +14,7 @@ import { ConnectionBanner } from "./ConnectionBanner";
 const daemon: Daemon = {
   store: createStateStore({}),
   request: vi.fn(),
-  toastError: vi.fn(),
+  raiseError: vi.fn(),
   toastNotice: vi.fn(),
   onToast: () => () => {},
   dismissTrustPrompt: () => {},

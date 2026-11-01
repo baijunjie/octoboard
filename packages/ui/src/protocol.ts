@@ -132,14 +132,6 @@ export type ProjectSource = "local" | "parent" | "git";
  * the default account in the current language. */
 export const DEFAULT_ACCOUNT_NAME = "Default";
 
-/** The session notices that carry the failure they report as `reason_code` and the failure's own params, so the reason is
- * worded from that failure's message. */
-export const NESTED_FAILURE_CODES: ReadonlySet<string> = new Set(["launch_failed", "account_switch_automatically_failed"]);
-
-/** Those among them whose nested failure's own remedy sentence is shown: a failed launch has none of its own. A failed
- * automatic switch says what to do in its own sentence. */
-export const NESTED_REMEDY_CODES: ReadonlySet<string> = new Set(["launch_failed"]);
-
 /** A console session's badge colour (`Session.colour`): one of a fixed palette of sixteen, in hue
  * order around the colour wheel and then the muted ones, assigned on creation and changed
  * afterwards only by the user. The ids are never shown: the user sees the colour, not a name. What

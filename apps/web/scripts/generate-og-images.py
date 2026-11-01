@@ -22,15 +22,17 @@ Fonts other than Hiragino are pinned to one google/fonts commit and cached
 under ~/.cache/octoboard-og-fonts/.
 
 Run from the repository: `python3 apps/web/scripts/generate-og-images.py`.
-Needs macOS, Pillow, libraqm, and a network connection the first time a font
-is missing from the cache. The PNGs are committed. The site build does not
-run this script; a missing PNG fails when the Nuxt config loads.
+Needs macOS, Node 22.6 or later (it reads the site locales with type stripping),
+Pillow, libraqm, and a network connection the first time a font is missing from
+the cache. The PNGs are committed. The site build does not run this script; a
+missing PNG fails when the Nuxt config loads.
 """
 
 from __future__ import annotations
 
 import json
 import re
+import subprocess
 import unicodedata
 import urllib.request
 from pathlib import Path
@@ -96,17 +98,30 @@ HIRAGINO_SANS = {
 
 
 def locales() -> list[tuple[str, str]]:
-    """Route code and catalog filename, in the order seo/site-seo.ts lists them."""
-    text = (WEB / "seo/site-seo.ts").read_text("utf-8")
-    block = re.search(r"export const locales[^=]*=\s*\[(.*?)\n\];", text, re.S)
-    if not block:
-        raise SystemExit("seo/site-seo.ts has no locales array")
-    found = re.findall(
-        r'code:\s*"([^"]+)"[\s\S]*?file:\s*"([^"]+)"',
-        block.group(1),
+    """Route code and catalog filename, in the order seo/site-seo.ts lists them.
+
+    The list is derived there from the UI's languages, so Node evaluates the
+    module and hands the pairs over.
+    """
+    script = (
+        "const { locales } = await import('./seo/site-seo.ts');"
+        "console.log(JSON.stringify(locales.map((locale) => [locale.code, locale.file])));"
     )
+    try:
+        result = subprocess.run(
+            ["node", "--experimental-strip-types", "--input-type=module", "-e", script],
+            cwd=WEB,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        raise SystemExit("node is not on PATH; Node 22.6 or later is needed to read seo/site-seo.ts")
+    except subprocess.CalledProcessError as error:
+        raise SystemExit(f"could not read the locales of seo/site-seo.ts:\n{error.stderr}")
+    found = [(code, file) for code, file in json.loads(result.stdout)]
     if not found:
-        raise SystemExit("seo/site-seo.ts locales have no code/file pairs")
+        raise SystemExit("seo/site-seo.ts lists no locales")
     return found
 
 

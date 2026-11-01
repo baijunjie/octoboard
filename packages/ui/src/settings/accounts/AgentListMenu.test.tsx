@@ -6,14 +6,15 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import type { Agent } from "../../protocol";
 import { useAgentList } from "./AgentListMenu";
+import { errorAlerts } from "../../components/alerts/errorAlerts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const request = vi.fn(() => Promise.resolve({}));
-const toastError = vi.fn();
+const raiseError = vi.spyOn(errorAlerts, "report").mockImplementation(() => {});
 vi.mock("../../store", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../store")>()),
-  useDaemon: () => ({ request, toastError }),
+  useDaemon: () => ({ request, raiseError }),
 }));
 
 const ADDED: Agent[] = ["claude", "codex", "grok"];

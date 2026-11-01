@@ -3,7 +3,8 @@ import { textDirection } from "../i18n/languages";
 import { useCurrentLanguage } from "../i18n/react";
 import { resolveSwipe, type SwipeToward } from "../layout/paneSwipe";
 import { useSwipe } from "../layout/useSwipe";
-import type { OwnerKind, PanelKind } from "../panels/stackState";
+import type { OwnerKind } from "../panels/stackState";
+import type { PanelKind } from "../layout/panelKind";
 
 /** Swipes open and close the drawer and the floating panel through the paths the toggles use, in a window narrow
  * enough to float the right pane's panels (`asideFloats`). */

@@ -22,7 +22,7 @@ async function mount(request: (body: RequestBody) => Promise<Event>, initialSele
   vi.useFakeTimers();
   const daemon = {
     store: createStateStore({ projects: new Map([[project.id, project]]), sessions: new Map([[first.id, first], [second.id, second]]) }),
-    request: vi.fn(request), toastError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
+    request: vi.fn(request), raiseError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
   } as unknown as Daemon;
   let owner: AsideOwner = { kind: "project", project: project.id };
   let selected: string | undefined = initialSelection;

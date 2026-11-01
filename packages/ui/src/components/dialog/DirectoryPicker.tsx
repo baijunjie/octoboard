@@ -5,7 +5,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "../controls/Button";
 import { EmptyPanel } from "../panel/EmptyPanel";
 import { FailureAlert } from "../alerts/FailureAlert";
-import { PathText } from "../text/MarkedPath";
+import { PathText } from "../text/PathText";
 import { openingFocus } from "../focus/regionFocus";
 import { useStickyHeadingFocus } from "../scroll/stickyHeadingFocus";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../announce/StatusAnnouncer";
@@ -13,15 +13,15 @@ import { StatusBadge } from "../status/StatusBadge";
 import { DaemonRequestError } from "../../daemon-client";
 import { FadeOverflow } from "../text/FadeOverflow";
 import { useStickyScrollFade } from "../scroll/scrollFade";
-import { errorPresentation, type ErrorPresentation } from "../../errorPresentation";
+import { errorPresentation, type ErrorPresentation } from "../../errors/errorPresentation";
 import { joinPhrases } from "../../i18n/joinPhrases";
 import { useCurrentLanguage, useT } from "../../i18n/react";
 import type { DirEntry, Event } from "../../protocol";
-import { abbreviateHome } from "../../pathDisplay";
-import { reportError } from "../../reportError";
+import { abbreviateHome, isAbsoluteOrHomePath } from "../../format/pathDisplay";
 import { useDaemon, useDaemonStore } from "../../store";
 import { Dialog, useRefocusIfLost } from "./Dialog";
 import { useTrimmedField } from "../form/useTrimmedField";
+import { raiseError } from "../alerts/raiseError";
 
 /** The ids of the list's two entries that are not a directory. A real entry's id is its absolute
  * path, which neither of these can be. */
@@ -108,7 +108,7 @@ export function DirectoryPicker({
       // listing yet: it is reported apart from the picker, which keeps its listing or its first-listing Alert as they are,
       // and reported even when a newer listing has been taken since.
       if (!initial) {
-        reportError(err, undefined, undefined, undefined, t("directoryPicker.navigationFailedTitle"));
+        raiseError(err, { title: t("directoryPicker.navigationFailedTitle") });
         return;
       }
       if (!take()) return;
@@ -291,4 +291,39 @@ function DirectoryList({ listRef, entries, showParent, onOpen }: {
       )}
     </div>
   );
+}
+
+/** Where the picker opens for the directory typed in a field: the typed path when it names a place (absolute, `~` or under
+ * it), otherwise the home directory. */
+export function pickerStart(value: string): string {
+  return isAbsoluteOrHomePath(value) ? value.trim() : "~";
+}
+
+/** The Browse button of a directory field and the picker it opens, which fills the field through `onPick`. The picker is
+ * returned apart from the button: it goes beside the field's form, never inside the field (a `TextInput`'s `trailing`), whose
+ * react-aria contexts the picker's own input would otherwise take over. */
+export function useDirectoryBrowse(
+  value: string,
+  onPick: (path: string) => void,
+): { browseButton: (isDisabled?: boolean) => React.ReactElement; picker: React.ReactElement | null } {
+  const t = useT();
+  const [picking, setPicking] = useState(false);
+  return {
+    browseButton: (isDisabled) => (
+      <Button type="button" variant="secondary" isDisabled={isDisabled} onPress={() => setPicking(true)}>
+        {t("common.browse")}
+      </Button>
+    ),
+    picker: picking ? (
+      <DirectoryPicker
+        title={t("dialog.chooseDirectory")}
+        initialPath={pickerStart(value)}
+        onPick={(picked) => {
+          onPick(picked);
+          setPicking(false);
+        }}
+        onClose={() => setPicking(false)}
+      />
+    ) : null,
+  };
 }

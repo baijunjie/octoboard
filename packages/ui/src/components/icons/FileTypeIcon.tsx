@@ -6,7 +6,7 @@ import {
 
 import type { ReactElement } from "react";
 
-import { wireBaseName } from "../../wirePath";
+import { wireBaseName } from "../../format/wirePath";
 
 const FILE_TYPES: readonly [RegExp, LucideIcon][] = [
   [/^(licen[cs]e|copying|notice)(\..*)?$/i, Scale],

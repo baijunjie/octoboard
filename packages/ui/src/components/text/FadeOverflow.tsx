@@ -1,6 +1,6 @@
 import React, { useCallback, useLayoutEffect, useRef, useState } from "react";
 
-import { onReducedMotion, prefersReducedMotion } from "../../reducedMotion";
+import { onReducedMotion, prefersReducedMotion } from "../motion/reducedMotion";
 import { AnchoredTooltip } from "../hint/AnchoredTooltip";
 import { ValueTooltipText } from "../hint/ValueTooltipText";
 

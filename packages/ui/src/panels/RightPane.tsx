@@ -7,7 +7,7 @@ import type { AsideOwner } from "../layout/asideOwner";
 import type { Project } from "../protocol";
 import type { PanelContentProps } from "./panelRegistry";
 import { PanelStack } from "./PanelStack";
-import type { PanelKind } from "./stackState";
+import type { PanelKind } from "../layout/panelKind";
 
 /**
  * The right pane: the pane's frame (`layout/AsidePane.tsx`) around the stack of its owner's panels.

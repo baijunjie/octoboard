@@ -1,14 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import type { ErrorPresentation } from "../../errorPresentation";
+import type { ErrorPresentation } from "../../errors/errorPresentation";
 import { useCurrentLanguage, useT } from "../../i18n/react";
-import { abbreviateHome } from "../../pathDisplay";
 import { WORKTREE_UNAVAILABLE } from "../../protocol";
 import { useDaemon, useDaemonStore } from "../../store";
-import { browseFailure } from "../browseError";
+import { projectBrowseFailure } from "../browseError";
 import { changeItems, type ChangeItem } from "./changes";
 import { sendBrowseListRequest } from "../browseListRequests";
-import { AUTO_REFRESH_MS } from "../autoRefresh";
+import { useAutoRefresh } from "../autoRefresh";
 
 /** How many times a change list is asked again when what it read changed while it was read. */
 const CHANGED_RETRIES = 2;
@@ -76,9 +75,7 @@ export function useChangeList(
       })
       .catch((err: unknown) => {
         if (!current()) return;
-        const state = store.getState();
-        const root = state.projects.get(project)?.path;
-        const failure = browseFailure(t, language, err, state, root && abbreviateHome(root, state.homeDir));
+        const failure = projectBrowseFailure(t, language, err, store.getState(), project);
         if (failure.kind === "superseded") return;
         if (failure.kind === "changed" && attempt < CHANGED_RETRIES) return send(background, attempt + 1);
         if (failure.kind === "disconnected") {
@@ -110,25 +107,7 @@ export function useChangeList(
 
   // The periodic refresh, and one on coming back to the window, or to a pane that was hidden,
   // after a while.
-  useEffect(() => {
-    if (!active) return;
-    const tick = () => {
-      if (document.visibilityState !== "visible" || live.current.inFlight) return;
-      send(true);
-    };
-    const timer = setInterval(tick, AUTO_REFRESH_MS);
-    const onVisible = () => {
-      if (Date.now() - live.current.lastRefresh > AUTO_REFRESH_MS / 2) tick();
-    };
-    onVisible();
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", onVisible);
-    return () => {
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", onVisible);
-    };
-  }, [active, worktree]);
+  useAutoRefresh(active, worktree, { busy: () => live.current.inFlight, lastAt: () => live.current.lastRefresh, run: () => send(true) });
 
   useEffect(() => {
     const s = live.current;

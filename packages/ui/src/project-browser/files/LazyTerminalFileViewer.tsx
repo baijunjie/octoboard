@@ -1,9 +1,9 @@
 import React, { lazy, Suspense, useState } from "react";
 
-import { ActionableError } from "../../actionableError";
+import { ActionableError } from "../../errors/actionableError";
 import { useT } from "../../i18n/react";
-import { useDaemon } from "../../store";
 import type { TerminalFileViewer as TerminalFileViewerType } from "./TerminalFileViewer";
+import { raiseError } from "../../components/alerts/raiseError";
 
 const load = () => lazy(() => import("./TerminalFileViewer").then((module) => ({ default: module.TerminalFileViewer })));
 /** The viewer, loaded the first time one is shown, and loaded again after a failed load: `lazy`
@@ -20,7 +20,6 @@ export function LazyTerminalFileViewer(props: React.ComponentProps<typeof Termin
   // its memoization would take for constant and so keep rendering the one that failed.
   "use no memo";
   const t = useT();
-  const { toastError } = useDaemon();
   const [, retried] = useState(0);
   return (
     <LoadBoundary
@@ -28,7 +27,7 @@ export function LazyTerminalFileViewer(props: React.ComponentProps<typeof Termin
         Viewer = load();
         retried((count) => count + 1);
         // A known failure: the body says to open the file again, and it is not reported as a bug.
-        toastError(new ActionableError(t("viewer.loadFailed"), "none"), undefined, t("viewer.loadFailedTitle"));
+        raiseError(new ActionableError(t("viewer.loadFailed"), "none"), { title: t("viewer.loadFailedTitle") });
         props.onClose();
       }}
     >

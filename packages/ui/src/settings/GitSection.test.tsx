@@ -3,17 +3,18 @@ import { act, useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
+import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
 import { LanguageProvider } from "../i18n/react";
 import type { GitWorkflowSettings } from "../protocol";
 import { GitSection } from "./GitSection";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 vi.mock("./CloneDirSetting", () => ({ CloneDirSetting: () => <p>Clone directory</p> }));
 
 const request = vi.fn(() => Promise.resolve({}) as Promise<never>);
-const toastError = vi.fn();
+const raiseError = vi.spyOn(errorAlerts, "report").mockImplementation(() => {});
 let autoPull = false;
 let gitWorkflow: GitWorkflowSettings = DEFAULT_GIT_WORKFLOW;
 
@@ -27,15 +28,16 @@ const store = (next: GitWorkflowSettings) => {
   act(() => listeners.forEach((listener) => listener()));
 };
 
-vi.mock("../store", () => ({
-  useDaemon: () => ({ request, toastError }),
+vi.mock("../store", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../store")>()),
+  useDaemon: () => ({ request, raiseError }),
   useDaemonStore: (selector: (state: { settings: { git_workflow: GitWorkflowSettings; auto_pull_repositories: boolean } }) => unknown) =>
     useSyncExternalStore(subscribe, () => selector({ settings: { git_workflow: gitWorkflow, auto_pull_repositories: autoPull } })),
 }));
 
 beforeEach(() => {
   request.mockClear();
-  toastError.mockClear();
+  raiseError.mockClear();
   request.mockImplementation(() => Promise.resolve({}) as Promise<never>);
   gitWorkflow = DEFAULT_GIT_WORKFLOW;
   autoPull = false;
@@ -153,7 +155,7 @@ it("reports a failed change to the user", async () => {
   request.mockImplementation(() => Promise.reject(new Error("daemon refused")) as Promise<never>);
   const container = mount();
   await act(async () => toggle(container, "Revert gate").click());
-  expect(toastError).toHaveBeenCalledOnce();
+  expect(raiseError).toHaveBeenCalledOnce();
 });
 
 it("splits the rows into Repository, Development and Protection under h3 headings", () => {

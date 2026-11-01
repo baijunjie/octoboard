@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import type { AccountSharing } from "../../protocol";
 import { DaemonRequestError } from "../../daemon-client";
-import { errorAlerts } from "../../errorAlerts";
+import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { currentLanguage, setLanguage } from "../../i18n/language";
 import { press } from "../../components/hint/tooltipTestSupport";
 import { accountSharing, request, settings } from "./agentAccountsSectionTestState";

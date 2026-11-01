@@ -1,14 +1,14 @@
 import { useState } from "react";
 
-import { choiceKey, findEntry } from "../accountChoices";
-import { AGENT_LABEL } from "../agents";
+import { choiceKey, findEntry } from "../accounts/accountChoices";
+import { AGENT_LABEL } from "../agents/agents";
 import { DaemonRequestError } from "../daemon-client";
-import { CONVERSATION_ID } from "../conversationId";
-import type { ErrorPresentation } from "../errorPresentation";
+import { CONVERSATION_ID } from "../agents/conversationId";
+import type { ErrorPresentation } from "../errors/errorPresentation";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { Agent, Project, Session } from "../protocol";
-import { sessionDisplayTitle } from "../sessionLabel";
+import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { useDaemon, useDaemonStore } from "../store";
 import { useChoiceGroups } from "./useLaunchChoice";
 import { useLocatedConversation } from "./useLocatedConversation";

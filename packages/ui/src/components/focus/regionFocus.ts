@@ -1,4 +1,9 @@
-import { ringForAutomaticFocus, TEXT_ENTRY } from "../../touchInput";
+import { ringForAutomaticFocus, TEXT_ENTRY } from "../../input/touchInput";
+
+/** A dialog or a menu is open: ordinary regions stay unavailable. A toast is an `alertdialog`
+ * too, but a non-modal one. */
+export const MODAL_OPEN =
+  '[role="dialog"]:not([aria-modal="false"]), [role="alertdialog"]:not([aria-modal="false"]), [role="menu"]';
 
 /** A window region, named by its `data-region`. */
 export type Region = string;

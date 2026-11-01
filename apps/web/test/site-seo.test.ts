@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { LANGUAGES } from "../../../packages/ui/src/i18n/languages.ts";
 import { featureGroups, homeFeatures } from "../seo/page-outline.ts";
 import { readLocaleMessages, renderAgentFiles } from "../seo/agent-documents.ts";
 import {
@@ -71,6 +72,16 @@ test("each locale has a 1200 by 630 share image", () => {
     assert.equal(bytes.readUInt32BE(16), 1200, locale.code);
     assert.equal(bytes.readUInt32BE(20), 630, locale.code);
   }
+});
+
+test("the site offers the application's languages, in its order, with Simplified Chinese at /zh/", () => {
+  assert.deepEqual(locales.map((locale) => locale.language), [...LANGUAGES]);
+  assert.deepEqual(locales.filter((locale) => locale.dir).map((locale) => locale.code), ["ar"]);
+  const chinese = locales.find((locale) => locale.language === "zh-Hans");
+  assert.equal(chinese?.code, "zh");
+  assert.equal(chinese?.ogLocale, "zh_CN");
+  assert.equal(chinese?.file, "zh-Hans.json");
+  assert.equal(chinese?.name, "简体中文");
 });
 
 test("Open Graph locales use a territory, including Simplified Chinese", () => {

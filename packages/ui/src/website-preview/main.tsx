@@ -3,9 +3,10 @@ import { installPreviewKeyboardGuard } from "./keyboard";
 import { installPreviewFocusGuard } from "./focus";
 import { installPreviewInteractionBridge, withReportInteractionBridge } from "./interactionBridge";
 import { installPreviewScrollBridge, withReportScrollBridge } from "./scrollBridge";
+import { PREVIEW_MESSAGE, postPreviewMessage } from "./messages";
 import { isLanguage, type Language } from "../i18n/languages";
-import { PREFERENCE_KEYS } from "../preferenceKeys";
-import { storedPreference } from "../fixtures/preferences";
+import { writeStartingPreferences } from "../fixtures/preferences";
+import { afterFrames, applyDocumentTheme } from "../fixtures/pageFrame";
 import { copyFor, createPreviewScenario, type PreviewScene } from "./scenarios";
 
 // No application modules may evaluate before this: preferences must never touch the host origin.
@@ -44,16 +45,8 @@ const { scenario, output } = createPreviewScenario(
   language,
   !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
 );
-localStorage.setItem(PREFERENCE_KEYS.language, language);
-localStorage.setItem("heroui-theme", theme);
-for (const [key, value] of Object.entries(scenario.preferences)) {
-  localStorage.setItem(
-    PREFERENCE_KEYS[key as keyof typeof scenario.preferences],
-    storedPreference(value),
-  );
-}
-document.documentElement.className = theme;
-document.documentElement.dataset.theme = theme;
+writeStartingPreferences(localStorage, { language, theme, preferences: scenario.preferences });
+applyDocumentTheme(document, theme);
 
 async function start(): Promise<void> {
   const { installFakeTerminal } = await import("../fixtures/fakeTerminal");
@@ -84,12 +77,12 @@ async function start(): Promise<void> {
     import("../platform/react"),
     import("../report/pageDocumentTransform"),
     import("../store"),
-    import("../theme"),
+    import("../preferences/theme"),
     import("./daemon"),
     import("../fixtures/interact"),
     import("react-aria"),
   ]);
-  await import("../focusGuard");
+  await import("../input/focusGuard");
   await import("../style.css");
   await import("./style.css");
   const daemon = createPreviewDaemon(scenario);
@@ -126,11 +119,9 @@ async function start(): Promise<void> {
     held.blur();
     held.focus({ preventScroll: true });
   }
-  await new Promise<void>((resolve) =>
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-  );
+  await afterFrames(200);
   document.documentElement.dataset.previewReady = "true";
-  window.parent.postMessage({ type: "octoboard-preview-ready" }, "*");
+  postPreviewMessage(window.parent, { type: PREVIEW_MESSAGE.ready });
 }
 
 start().catch((error: unknown) => {
@@ -139,5 +130,5 @@ start().catch((error: unknown) => {
   root.textContent = copy.unavailable;
   root.setAttribute("role", "alert");
   document.documentElement.dataset.previewError = "true";
-  window.parent.postMessage({ type: "octoboard-preview-error" }, "*");
+  postPreviewMessage(window.parent, { type: PREVIEW_MESSAGE.error });
 });

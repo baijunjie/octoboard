@@ -3,7 +3,7 @@ import { act } from "react";
 import { afterEach, describe, expect, it, onTestFinished } from "vitest";
 
 import { focusAfterLoss, setFocusAfterModalLoss } from "../components/focus/regionFocus";
-import { errorAlerts } from "../errorAlerts";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 import type { SessionRequest, State, TrustPrompt } from "../store";
 import { Dialog } from "../components/dialog/Dialog";
 import { framesAsTimers, openable, settleFrames } from "../components/dialog/dialogTestSupport";

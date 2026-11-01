@@ -171,13 +171,57 @@ export function RowIconButton({
   );
 }
 
+/** The mark of a pinned or locked row, which is also the way to take it off: its glyph becomes
+ * `hoverIcon` while the button is hovered or holds keyboard focus. Placed like `RowIconButton`, so
+ * pressing it neither selects the row behind it nor moves focus. Removing the mark takes the button
+ * away, and keyboard focus with it, so `returnFocusTo` is the element that takes the focus over
+ * first when the button holds it. */
+function RowMarkButton({
+  icon: Icon,
+  hoverIcon: HoverIcon,
+  tooltip,
+  label,
+  tone,
+  onPress,
+  returnFocusTo,
+}: {
+  icon: LucideIcon;
+  hoverIcon: LucideIcon;
+  tooltip: React.ReactNode;
+  label: string;
+  tone: string;
+  onPress: () => void;
+  returnFocusTo: RefObject<HTMLElement | null>;
+}): React.ReactElement {
+  const holder = useRef<HTMLDivElement>(null);
+  return (
+    <div ref={holder} className="flex shrink-0" onClick={(e) => e.stopPropagation()}>
+      <TitledControl title={tooltip}>
+        <Button
+          isIconOnly
+          size="xs"
+          variant="ghost"
+          aria-label={label}
+          preventFocusOnPress
+          onPress={() => {
+            handFocusOff(holder.current, returnFocusTo.current, true);
+            onPress();
+          }}
+          className={`group/mark shrink-0 rounded-md hover:text-foreground ${tone}`}
+        >
+          <Icon aria-hidden="true" className="size-4 group-hover/mark:hidden group-data-[focus-visible=true]/mark:hidden" />
+          <HoverIcon aria-hidden="true" className="hidden size-4 group-hover/mark:block group-data-[focus-visible=true]/mark:block" />
+        </Button>
+      </TitledControl>
+    </div>
+  );
+}
+
 /** The pin mark of a pinned project or session, which is also the way to unpin it: a pin glyph that
- * becomes the unpin one while the button is hovered or holds keyboard focus. Placed like
- * `RowIconButton`, so pressing it neither selects the row behind it nor moves focus. `name` is
- * what it unpins, for the accessible name, as the tooltip is the bare verb. Unpinning takes the
- * button away, and keyboard focus with it, so `returnFocusTo` is the element that takes the focus
- * over first when the button holds it: the enclosing row, or an element holding the first button
- * that stays (a header, which is no tab stop itself). */
+ * becomes the unpin one while the button is hovered or holds keyboard focus (see `RowMarkButton`).
+ * `name` is what it unpins, for the accessible name, as the tooltip is the bare verb.
+ * `returnFocusTo` is the enclosing row, or an element holding the first button that stays (a
+ * header, which is no tab stop itself). */
 export function PinButton({
   name,
   onUnpin,
@@ -190,58 +234,36 @@ export function PinButton({
   returnFocusTo: RefObject<HTMLElement | null>;
 }): React.ReactElement {
   const t = useT();
-  const holder = useRef<HTMLDivElement>(null);
-  const unpin = () => {
-    handFocusOff(holder.current, returnFocusTo.current, true);
-    onUnpin();
-  };
   return (
-    <div ref={holder} className="flex shrink-0" onClick={(e) => e.stopPropagation()}>
-      <TitledControl title={shortcut ? <ShortcutTooltip action="pin">{t("sidebar.unpin")}</ShortcutTooltip> : t("sidebar.unpin")}>
-        <Button
-          isIconOnly
-          size="xs"
-          variant="ghost"
-          aria-label={t("sidebar.unpinItem", { name: isolate(name) })}
-          preventFocusOnPress
-          onPress={unpin}
-          className="group/pin shrink-0 rounded-md text-app-muted hover:text-foreground"
-        >
-          <Pin aria-hidden="true" className="size-4 group-hover/pin:hidden group-data-[focus-visible=true]/pin:hidden" />
-          <PinOff aria-hidden="true" className="hidden size-4 group-hover/pin:block group-data-[focus-visible=true]/pin:block" />
-        </Button>
-      </TitledControl>
-    </div>
+    <RowMarkButton
+      icon={Pin}
+      hoverIcon={PinOff}
+      tooltip={shortcut ? <ShortcutTooltip action="pin">{t("sidebar.unpin")}</ShortcutTooltip> : t("sidebar.unpin")}
+      label={t("sidebar.unpinItem", { name: isolate(name) })}
+      tone="text-app-muted"
+      onPress={onUnpin}
+      returnFocusTo={returnFocusTo}
+    />
   );
 }
 
+/** The lock mark of a locked session, which is also the way to unlock it (see `RowMarkButton`). */
 export function LockButton({ name, onUnlock, returnFocusTo }: {
   name: string;
   onUnlock: () => void;
   returnFocusTo: RefObject<HTMLElement | null>;
 }): React.ReactElement {
   const t = useT();
-  const holder = useRef<HTMLDivElement>(null);
   return (
-    <div ref={holder} className="flex shrink-0" onClick={(e) => e.stopPropagation()}>
-      <TitledControl title={<ShortcutTooltip action="lock">{t("sidebar.session.unlock")}</ShortcutTooltip>}>
-        <Button
-          isIconOnly
-          size="xs"
-          variant="ghost"
-          aria-label={t("sidebar.session.unlockItem", { name: isolate(name) })}
-          preventFocusOnPress
-          onPress={() => {
-            handFocusOff(holder.current, returnFocusTo.current, true);
-            onUnlock();
-          }}
-          className="group/lock shrink-0 rounded-md text-warning-soft-foreground hover:text-foreground"
-        >
-          <Lock aria-hidden="true" className="size-4 group-hover/lock:hidden group-data-[focus-visible=true]/lock:hidden" />
-          <LockOpen aria-hidden="true" className="hidden size-4 group-hover/lock:block group-data-[focus-visible=true]/lock:block" />
-        </Button>
-      </TitledControl>
-    </div>
+    <RowMarkButton
+      icon={Lock}
+      hoverIcon={LockOpen}
+      tooltip={<ShortcutTooltip action="lock">{t("sidebar.session.unlock")}</ShortcutTooltip>}
+      label={t("sidebar.session.unlockItem", { name: isolate(name) })}
+      tone="text-warning-soft-foreground"
+      onPress={onUnlock}
+      returnFocusTo={returnFocusTo}
+    />
   );
 }
 

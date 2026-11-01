@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 
 import { usePlatform } from "../platform/react";
-import { useOctoboardTheme } from "../theme";
+import { useOctoboardTheme } from "../preferences/theme";
+import { useSerialPush } from "./useSerialPush";
 
 /**
  * Pushes the user's theme choice onto the native window's own appearance (on macOS the traffic
@@ -23,14 +24,14 @@ export function useNativeWindowTheme(): void {
   const { nativeWindow } = usePlatform();
   const { choice } = useOctoboardTheme();
   // Each call is a dynamic `import()` plus an IPC round trip, with nothing else sequencing two
-  // in-flight ones — chaining onto the previous call's settling, rather than firing independently,
-  // is what keeps a rapid choice change from settling out of order and leaving the window on a
-  // stale appearance until the next change.
-  const pendingRef = useRef<Promise<void>>(Promise.resolve());
+  // in-flight ones — pushing serially, rather than firing independently, is what keeps a rapid
+  // choice change from settling out of order and leaving the window on a stale appearance until
+  // the next change.
+  const push = useSerialPush();
 
   useEffect(() => {
     if (!nativeWindow) return;
     const theme = choice === "system" ? undefined : choice;
-    pendingRef.current = pendingRef.current.then(() => nativeWindow.setTheme(theme).catch(() => {}));
-  }, [nativeWindow, choice]);
+    push(() => nativeWindow.setTheme(theme));
+  }, [nativeWindow, choice, push]);
 }

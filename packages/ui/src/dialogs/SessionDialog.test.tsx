@@ -10,10 +10,10 @@ import { accountOf, type ProjectExtra, sessionOf } from "../fixtures/builders";
 import { DaemonProvider } from "../store";
 import { SessionDialog } from "./SessionDialog";
 import { parentConsole, project, renderDialog, hub1, buttons, optionElements, choose, pickerNamed } from "./sessionDialogTestSupport";
-import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
-import { DEFAULT_SETTINGS } from "../defaultSettings";
+import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
+import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 
-vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
+vi.mock("../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
 
 /** An `agentAvailability` map with every agent `unavailable` — "no agent available at all". Named
  * distinctly from `agents.ts`'s own `noAgentState`, which this is only a fixture for. */
@@ -82,7 +82,7 @@ it.each(["archived", "removed"])("turns a fixed-owner form into a failure modal 
     container.remove();
   });
   expect(onClose).not.toHaveBeenCalled();
-  expect(daemon.toastError).not.toHaveBeenCalled();
+  expect(daemon.raiseError).not.toHaveBeenCalled();
   act(() => root.render(
     <DaemonProvider value={daemon}>
       <SessionDialog
@@ -97,7 +97,7 @@ it.each(["archived", "removed"])("turns a fixed-owner form into a failure modal 
     </DaemonProvider>,
   ));
   expect(onClose).not.toHaveBeenCalled();
-  expect(daemon.toastError).not.toHaveBeenCalled();
+  expect(daemon.raiseError).not.toHaveBeenCalled();
   const dialog = document.body.querySelector('[role="alertdialog"]');
   expect(dialog?.textContent).toContain("Hub is no longer available, so a session cannot be opened for it.");
   expect(dialog?.querySelector("form")).toBeNull();
@@ -114,7 +114,7 @@ it("says only the owner's loss when both the fixed owner and every agent are una
     container.remove();
   });
   expect(onClose).not.toHaveBeenCalled();
-  expect(daemon.toastError).not.toHaveBeenCalled();
+  expect(daemon.raiseError).not.toHaveBeenCalled();
   const dialog = document.body.querySelector('[role="alertdialog"]');
   expect(dialog?.textContent).toContain("is no longer available");
   expect(dialog?.textContent).not.toContain("No agent is available");
@@ -143,7 +143,7 @@ it("keeps the owner select, back on none, when the chosen console session is arc
     ),
   );
   expect(onClose).not.toHaveBeenCalled();
-  expect(daemon.toastError).not.toHaveBeenCalled();
+  expect(daemon.raiseError).not.toHaveBeenCalled();
   const ownerTrigger = buttons().find((b) => b.textContent?.includes("No console session"));
   expect(ownerTrigger).toBeDefined();
   await act(async () => ownerTrigger?.click());
@@ -158,7 +158,7 @@ it("keeps the owner select, back on none, when the chosen console session is arc
 it("turns into an acknowledgement-only failure modal when no agent is available at all", () => {
   const { container, root, onClose, daemon } = renderDialog([], { agentAvailability: everyAgentUnavailable() });
   expect(onClose).not.toHaveBeenCalled();
-  expect(daemon.toastError).not.toHaveBeenCalled();
+  expect(daemon.raiseError).not.toHaveBeenCalled();
   expect(document.body.querySelector('[role="alertdialog"]')?.textContent).toContain("No agent is available to open a session.");
   act(() => root.unmount());
   container.remove();
@@ -322,7 +322,7 @@ it("turns into the same failure modal when agents are installed but none is adde
     settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [] },
   });
   expect(onClose).not.toHaveBeenCalled();
-  expect(daemon.toastError).not.toHaveBeenCalled();
+  expect(daemon.raiseError).not.toHaveBeenCalled();
   expect(document.body.querySelector('[role="alertdialog"]')?.textContent).toContain("No agent is available to open a session.");
   act(() => root.unmount());
   container.remove();

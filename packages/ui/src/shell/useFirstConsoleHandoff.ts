@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-import { MODAL_OPEN } from "../layout/useRegionCycle";
+import { MODAL_OPEN } from "../components/focus/regionFocus";
 import { focusTopBar } from "../components/focus/regionFocus";
 
 /** Hands focus to the top bar after the first console is made from the welcome screen. The button

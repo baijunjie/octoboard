@@ -6,15 +6,15 @@ import { expect, it, vi } from "vitest";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { enter, leave, mountForTooltip, openTooltip, withFakeTimers } from "../components/hint/tooltipTestSupport";
 import { accountOf, consoleOf, projectOf, sessionOf } from "../fixtures/builders";
-import { errorAlerts } from "../errorAlerts";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 import { isolate } from "../i18n/isolate";
 import type { Account, Project, Session, SessionBranchItem } from "../protocol";
 import { DaemonRequestError } from "../daemon-client";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import type { DialogRequest } from "./dialogRequest";
 import { RequestedDialog } from "./RequestedDialog";
-import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
-import { DEFAULT_SETTINGS } from "../defaultSettings";
+import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
+import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -37,7 +37,7 @@ function mount(
       settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
     }),
     request: vi.fn(callbacks.request) as never,
-    toastError: vi.fn(),
+    raiseError: vi.fn(),
     toastNotice: vi.fn(),
     onToast: () => () => {},
     dismissTrustPrompt: () => {},
@@ -425,7 +425,7 @@ it("reports a refused unused deletion without offering an unguarded confirmation
   await act(async () => {});
   expect(document.querySelector("[role=alertdialog]")).toBeNull();
   expect(daemon.request).toHaveBeenCalledTimes(1);
-  expect(daemon.toastError).toHaveBeenCalledOnce();
+  expect(daemon.raiseError).toHaveBeenCalledOnce();
   expect(onClose).toHaveBeenCalledOnce();
 });
 
@@ -1271,7 +1271,7 @@ it("names the session and its owner in the unbind confirmation and releases only
   await submitDialog();
   expect(daemon.request).toHaveBeenCalledExactlyOnceWith({ type: "release_session", session: unbindable.id });
   expect(onClose).toHaveBeenCalledOnce();
-  expect(daemon.toastError).not.toHaveBeenCalled();
+  expect(daemon.raiseError).not.toHaveBeenCalled();
 });
 
 it("is a warning confirmation when unbinding: the warning icon leads, the action is primary, the consequence is shown and each name appears once", () => {
@@ -1319,7 +1319,7 @@ it("closes the unbind confirmation silently when the daemon refuses with session
   });
   await submitDialog();
   expect(onClose).toHaveBeenCalledOnce();
-  expect(daemon.toastError).not.toHaveBeenCalled();
+  expect(daemon.raiseError).not.toHaveBeenCalled();
   expect(errorAlerts.getSnapshot()).toEqual([]);
 });
 
@@ -1397,6 +1397,6 @@ it.each([
     daemon.store.setState({ sessions: new Map(rest.map((s) => [s.id, s])) });
   });
   expect(onClose).toHaveBeenCalledOnce();
-  expect(daemon.toastError).not.toHaveBeenCalled();
+  expect(daemon.raiseError).not.toHaveBeenCalled();
   expect(errorAlerts.getSnapshot()).toEqual([]);
 });

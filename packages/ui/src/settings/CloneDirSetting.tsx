@@ -2,18 +2,17 @@ import { InputGroup, TextField } from "@heroui/react";
 import { Folder } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
-import { Button } from "../components/controls/Button";
 import { AnchoredTooltip } from "../components/hint/AnchoredTooltip";
 import { ValueTooltipText } from "../components/hint/ValueTooltipText";
 import { useLatest } from "../components/hooks/useLatest";
-import { errorPresentation } from "../errorPresentation";
-import { DirectoryPicker } from "../components/dialog/DirectoryPicker";
+import { useDirectoryBrowse } from "../components/dialog/DirectoryPicker";
 import { useTrimmedField } from "../components/form/useTrimmedField";
 import { Message, useT } from "../i18n/react";
-import { isImeKey } from "../imeKey";
-import { abbreviateHome } from "../pathDisplay";
+import { isImeKey } from "../input/imeKey";
+import { abbreviateHome } from "../format/pathDisplay";
 import { useDaemon, useDaemonStore } from "../store";
 import { SettingRow } from "./SettingRow";
+import { alertFailure } from "../components/alerts/raiseError";
 
 /** The directory a `git` association clones into when none is named (see `Settings.default_clone_dir`
  * in protocol.ts). The text is sent when the field loses focus or Enter is pressed, and a directory
@@ -26,12 +25,11 @@ import { SettingRow } from "./SettingRow";
  * the two differ. */
 export function CloneDirSetting(): React.ReactElement {
   const t = useT();
-  const { request, toastError } = useDaemon();
+  const { request } = useDaemon();
   const storedFull = useDaemonStore((s) => s.settings.default_clone_dir);
   const home = useDaemonStore((s) => s.homeDir);
   const stored = abbreviateHome(storedFull, home);
   const [draft, setDraft] = useState(stored);
-  const [picking, setPicking] = useState(false);
   const [hovered, setHovered] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   // Follows the daemon's value: another window, or a refused edit, puts the field back to it.
@@ -49,9 +47,14 @@ export function CloneDirSetting(): React.ReactElement {
       return;
     }
     void request({ type: "update_settings", default_clone_dir: typed })
-      .catch((err) => toastError(errorPresentation(err as Error), undefined, t("settings.saveFailedTitle")))
+      .catch(alertFailure({ title: t("settings.saveFailedTitle") }))
       .finally(() => setDraft(latest.current));
   };
+
+  const directoryBrowse = useDirectoryBrowse(storedFull, (picked) => {
+    setDraft(picked);
+    save(picked);
+  });
 
   return (
     <>
@@ -93,24 +96,11 @@ export function CloneDirSetting(): React.ReactElement {
           {/* Not taking focus on a mouse press keeps the field from losing it, and so from sending
               what is typed, just to open the picker. */}
           <div onMouseDown={(event) => event.preventDefault()}>
-            <Button type="button" variant="secondary" onPress={() => setPicking(true)}>
-              {t("common.browse")}
-            </Button>
+            {directoryBrowse.browseButton()}
           </div>
         </div>
       </SettingRow>
-      {picking && (
-        <DirectoryPicker
-          title={t("dialog.chooseDirectory")}
-          initialPath={storedFull || "~"}
-          onPick={(picked) => {
-            setPicking(false);
-            setDraft(picked);
-            save(picked);
-          }}
-          onClose={() => setPicking(false)}
-        />
-      )}
+      {directoryBrowse.picker}
     </>
   );
 }

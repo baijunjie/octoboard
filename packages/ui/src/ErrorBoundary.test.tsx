@@ -5,7 +5,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { appConfig } from "./appConfig";
 import { ErrorBoundary } from "./ErrorBoundary";
-import { errorAlerts } from "./errorAlerts";
+import { errorAlerts } from "./components/alerts/errorAlerts";
 import { t } from "./i18n/language";
 import type { ExitCapability, PlatformAdapter } from "./platform";
 import { PlatformProvider } from "./platform/react";

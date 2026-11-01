@@ -9,7 +9,7 @@ import { SessionAgentIcon } from "../components/icons/SessionAgentIcon";
 import { EmptyPanel } from "../components/panel/EmptyPanel";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { IndicatorTooltip } from "../components/hint/IndicatorTooltip";
-import { InlineReference } from "../components/text/InlineReference";
+import { InlineReference } from "../i18n/InlineReference";
 import { PaneTitle } from "../components/panel/PaneTitle";
 import { RowControls, RowIconGroup, RowIconLine, RowIconSlot } from "../components/controls/RowControls";
 import { hasVisibleContext, SessionContextLabel, SessionRelativeTime } from "../components/status/SessionMetadata";
@@ -20,14 +20,13 @@ import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { FadedScroller } from "../components/scroll/scrollFade";
 import type { NewSessionRequest } from "../dialogs/dialogRequest";
 import { isolate } from "../i18n/isolate";
-import { joinPhrases } from "../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
-import { activityLabelKey, sessionAccountModelLine, sessionAriaLabel, sessionDisplayTitle, sessionShownStatusKind, statusLabel } from "../sessionLabel";
-import { inheritedLaunch, sessionModelEffort, sessionModelLabel } from "../sessionModel";
+import { activityLabelKey, sessionAccountModelLine, sessionDisplayTitle, sessionRowName, sessionShownStatusKind, statusLabel } from "../sessions/sessionLabel";
+import { sessionModelLabel } from "../sessions/sessionModel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
-import { useHasBoundSessions, useProjectSessions, useSessionProjectId } from "../sessions/useSessions";
-import { useDaemon, useDaemonStore, useDaemonStoreEqual } from "../store";
+import { useHasBoundSessions, useProjectSessions, useSessionProjectId } from "../store";
+import { useDaemon, useDaemonStore, useDaemonStoreEqual, useSessionLaunch } from "../store";
 import { BindingBadge } from "../components/status/BindingBadge";
 import { GitBadge } from "./GitBadge";
 import { projectMenu } from "./menus";
@@ -608,14 +607,12 @@ const SessionCard = memo(function SessionCard({
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const hasBound = useHasBoundSessions(session.id);
   const rowRef = useRef<HTMLDivElement>(null);
-  const inherited = useDaemonStoreEqual((s) => inheritedLaunch(session, s.consoles, s.projects));
-  const launch = sessionModelEffort(session, inherited);
+  const launch = useSessionLaunch(session);
   const modelLabel = sessionModelLabel(t, session.agent, launch);
   const agentLine = sessionAccountModelLine(t, session, accounts, defaultNames, modelLabel);
   // The row is one button, so the model line beside the agent's mark reaches assistive technology
   // only through the row's name, where it comes last; the account is already in its first part.
-  const name = [sessionAriaLabel(t, language, session, accounts, under ?? consoleOwner, defaultNames)];
-  if (under && consoleOwner) name.push(t("sidebar.session.boundTo", { name: isolate(sessionDisplayTitle(t, consoleOwner)) }));
+  const name = sessionRowName(t, language, session, { accounts, defaultNames, owners: [under ?? consoleOwner, under && consoleOwner], modelLabel });
   const showPin = session.pinned && !own;
   // A console session's card shows its own colour; a project session's shows its console owner's.
   const badgeOwner = own ? session : consoleOwner;
@@ -623,7 +620,7 @@ const SessionCard = memo(function SessionCard({
     <TreeRow
       ref={rowRef}
       describedBy={metadataId}
-      ariaLabel={joinPhrases(language, [...name, modelLabel])}
+      ariaLabel={name}
       selected={selected}
       locked={session.locked}
       onActivate={() => handlers.onSelectSession(session)}
@@ -680,14 +677,13 @@ function ArchivedRow({
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const rowRef = useRef<HTMLDivElement>(null);
-  const inherited = useDaemonStoreEqual((s) => inheritedLaunch(session, s.consoles, s.projects));
-  const launch = sessionModelEffort(session, inherited);
+  const launch = useSessionLaunch(session);
   return (
     <TreeRow
       ref={rowRef}
       describedBy={session.ended_at != null ? metadataId : undefined}
       // The model and effort are in the agent mark's tooltip only, so the row's name carries them too.
-      ariaLabel={joinPhrases(language, [sessionAriaLabel(t, language, session, accounts, undefined, defaultNames), sessionModelLabel(t, session.agent, launch)])}
+      ariaLabel={sessionRowName(t, language, session, { accounts, defaultNames, owners: [], modelLabel: sessionModelLabel(t, session.agent, launch) })}
       selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
     >

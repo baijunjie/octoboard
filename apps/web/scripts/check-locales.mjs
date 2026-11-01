@@ -1,26 +1,9 @@
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
+import { locales } from "../seo/site-seo.ts";
 
 const directory = new URL("../i18n/locales/", import.meta.url);
-const expected = [
-  "ar",
-  "de",
-  "en",
-  "es",
-  "fr",
-  "hi",
-  "id",
-  "it",
-  "ja",
-  "ko",
-  "pt-BR",
-  "ru",
-  "th",
-  "tr",
-  "vi",
-  "zh-Hans",
-  "zh-Hant",
-];
+const expected = locales.map((locale) => locale.language);
 const files = (await readdir(directory))
   .filter((name) => name.endsWith(".json"))
   .sort();

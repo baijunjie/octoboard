@@ -1,7 +1,7 @@
 import { setInteractionModality } from "react-aria";
 import { useCallback, useEffect, useRef } from "react";
 
-import { focusOpenDialog, focusRegion, regionElements, type Region } from "../components/focus/regionFocus";
+import { focusOpenDialog, focusRegion, MODAL_OPEN, regionElements, type Region } from "../components/focus/regionFocus";
 import { useLatest } from "../components/hooks/useLatest";
 
 /** The window's regions in visual order, each an element (or several) marked `data-region`. The
@@ -18,11 +18,6 @@ type ShownRegion = Exclude<FixedRegion, "toast">;
 function windowRegions(panels: readonly string[]): readonly Region[] {
   return [...BEFORE_PANELS, ...panels, ...AFTER_PANELS];
 }
-
-/** A dialog or a menu is open: ordinary regions stay unavailable. A toast is an `alertdialog`
- * too, but a non-modal one. */
-export const MODAL_OPEN =
-  '[role="dialog"]:not([aria-modal="false"]), [role="alertdialog"]:not([aria-modal="false"]), [role="menu"]';
 
 function currentRegion(regions: readonly Region[]): Region | undefined {
   return regions.find((region) => regionElements(region).some((el) => el.contains(document.activeElement)));

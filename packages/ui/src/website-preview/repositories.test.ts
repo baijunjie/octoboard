@@ -3,7 +3,7 @@ import { posix } from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { objectIdCheck } from "../fixtures/invariants";
-import { sessionStatusKind } from "../sessionLabel";
+import { sessionStatusKind } from "../sessions/sessionLabel";
 import { previewRepositories } from "./repositories";
 import { createPreviewDaemon } from "./daemon";
 import { createPreviewScenario } from "./scenarios";

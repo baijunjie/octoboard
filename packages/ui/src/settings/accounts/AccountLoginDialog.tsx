@@ -2,27 +2,28 @@ import { AlertDialog, Spinner } from "@heroui/react";
 import React, { useEffect, useRef, useState } from "react";
 
 import { Button } from "../../components/controls/Button";
-import { AGENT_LABEL, defaultAccountName } from "../../agents";
+import { AGENT_LABEL, defaultAccountName } from "../../agents/agents";
 import { DaemonErrorMessage } from "../../components/alerts/DaemonErrorMessage";
 import { DetailsDisclosure } from "../../components/alerts/ErrorDetailsDisclosure";
 import { errorRemedy, rawErrorDetails } from "../../components/alerts/errorParts";
 import { ExternalLink } from "../../components/text/ExternalLink";
-import { InlineReference } from "../../components/text/InlineReference";
+import { InlineReference } from "../../i18n/InlineReference";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../../components/announce/StatusAnnouncer";
 import { DaemonRequestError } from "../../daemon-client";
-import { daemonMessage } from "../../daemonMessage";
+import { daemonMessage } from "../../errors/daemonMessage";
 import { RecoveryGuidance } from "../../components/alerts/ErrorGuidance";
-import { uncataloguedSummaryKey } from "../../errorPresentation";
-import { isUncataloguedFailure } from "../../uncataloguedFailure";
-import { classifyError } from "../../errorRecovery";
+import { uncataloguedSummaryKey } from "../../errors/errorPresentation";
+import { isUncataloguedFailure } from "../../errors/uncataloguedFailure";
+import { classifyError } from "../../errors/errorRecovery";
 import { Dialog } from "../../components/dialog/Dialog";
-import { useIssueReport } from "../../useIssueReport";
+import { useIssueReport } from "../../components/alerts/useIssueReport";
 import { isolate } from "../../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
 import type { AccountLogin, Agent, MessageParams } from "../../protocol";
 import { dismissAccountLogin, trackAccountLogin, useDaemon, useDaemonStore } from "../../store";
-import { ringForAutomaticFocus } from "../../touchInput";
+import { ringForAutomaticFocus } from "../../input/touchInput";
 import { accountLoginOf, loginIsActive, useAccountLoginActions } from "./AccountLogin";
+import { raiseError } from "../../components/alerts/raiseError";
 
 const NO_RECORDS = { consoles: new Map(), projects: new Map(), sessions: new Map() };
 
@@ -54,7 +55,7 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
-  const { store, toastError } = useDaemon();
+  const { store } = useDaemon();
   const actions = useAccountLoginActions();
   const held = useDaemonStore((s) => accountLoginOf(s.accountLogins, agent, account));
   // What the store held for the account when the dialog opened to start a login, if it had ended, is the record of
@@ -74,7 +75,7 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
   const pendingStart = useRef<Promise<void> | undefined>(undefined);
 
   const cancel = () => actions.cancel(agent, account).catch((err: unknown) => {
-    if ((err as Partial<DaemonRequestError>).code !== "login_not_running") toastError(err as Error, undefined, t("settings.accounts.login.cancelFailedTitle"));
+    if ((err as Partial<DaemonRequestError>).code !== "login_not_running") raiseError(err, { title: t("settings.accounts.login.cancelFailedTitle") });
   });
   const begin = () => {
     setRefusal(undefined);

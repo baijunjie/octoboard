@@ -10,7 +10,7 @@ import { TitledControl } from "../components/hint/TitledControl";
 import { PlainMarkedPath } from "../components/text/MarkedPath";
 import { type HostPath, useHostPathActions } from "../components/host/useHostPathActions";
 import { Message, useT } from "../i18n/react";
-import { displayWirePath } from "../wirePath";
+import { displayWirePath } from "../format/wirePath";
 import { ChangeStatusBadge } from "./ChangeStatusBadge";
 import type { ViewerChange } from "./content";
 import type { StatusKey } from "./statusMarks";

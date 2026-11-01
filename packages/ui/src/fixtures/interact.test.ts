@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { createUi, stuckExit, type Matcher } from "./interact";
 import { format } from "../i18n/catalog";
-import { IS_MAC } from "../useWindowShortcut";
+import { IS_MAC } from "../input/keys";
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {

@@ -4,18 +4,17 @@ import React, { useRef, useState } from "react";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { useTabScrollLabels } from "../components/tabs/tabScrollLabels";
 import { DaemonRequestError } from "../daemon-client";
-import { errorPresentation } from "../errorPresentation";
-import { ActionableError } from "../actionableError";
+import { ActionableError } from "../errors/actionableError";
 import { isolate } from "../i18n/isolate";
 import type { MessageKey } from "../i18n/catalog";
-import { InlineReference } from "../components/text/InlineReference";
+import { InlineReference } from "../i18n/InlineReference";
 import { Message, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
-import { sessionChoiceTitle, sessionDisplayTitle } from "../sessionLabel";
+import { sessionChoiceTitle, sessionDisplayTitle } from "../sessions/sessionLabel";
 import { BindingBadge } from "../components/status/BindingBadge";
 import { liveConsoleSessions } from "../sessions/order";
 import { useDaemon, useDaemonStore } from "../store";
-import { useOctoboardTheme } from "../theme";
+import { useOctoboardTheme } from "../preferences/theme";
 import { AgentAccountField } from "./AgentAccountField";
 import { Dialog, useDialogAction, useSubmitValidation } from "../components/dialog/Dialog";
 import type { NewSessionBinding } from "./dialogRequest";
@@ -28,6 +27,7 @@ import { useResumeTarget, type ResumeTarget } from "./useResumeTarget";
 import { openSessionRequest } from "./openSessionRequest";
 import { OptionSelect } from "../components/form/OptionSelect";
 import { TextInput } from "../components/form/TextInput";
+import { alertFailure } from "../components/alerts/raiseError";
 
 type Conversation = "new" | "resume";
 
@@ -116,7 +116,7 @@ export function SessionDialog({
   const t = useT();
   const { resolved: appearance } = useOctoboardTheme();
   const tabScrollLabels = useTabScrollLabels();
-  const { request, toastError } = useDaemon();
+  const { request } = useDaemon();
   const [title, setTitle] = useState("");
   const [pickedOwner, setPickedOwner] = useState(NO_OWNER);
   const [conversation, setConversation] = useState<Conversation>("new");
@@ -200,7 +200,7 @@ export function SessionDialog({
         // the dialog open.
         if (target.kind !== "running") await onResume(target.session.id);
         const name = foundName.trim();
-        if (target.kind === "archived" && name && name !== target.session.title) await request({ type: "rename_session", session: target.session.id, title: name }).catch((err: unknown) => toastError(errorPresentation(err), undefined, t("dialog.rename.failedTitle")));
+        if (target.kind === "archived" && name && name !== target.session.title) await request({ type: "rename_session", session: target.session.id, title: name }).catch(alertFailure({ title: t("dialog.rename.failedTitle") }));
         onOpened(target.session.id);
         onClose();
         return;

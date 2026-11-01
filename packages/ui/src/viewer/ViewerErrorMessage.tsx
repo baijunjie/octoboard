@@ -2,8 +2,8 @@ import React from "react";
 
 import { DaemonErrorMessage } from "../components/alerts/DaemonErrorMessage";
 import { codedMessageNode } from "../components/alerts/errorParts";
-import { InlineReference } from "../components/text/InlineReference";
-import { hasCodeParams, type ErrorPresentation } from "../errorPresentation";
+import { InlineReference } from "../i18n/InlineReference";
+import { hasCodeParams, type ErrorPresentation } from "../errors/errorPresentation";
 import { globalParam } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";

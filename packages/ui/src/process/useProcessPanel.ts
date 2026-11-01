@@ -1,7 +1,7 @@
 import { createContext, useContext, useState } from "react";
 
 import { ownerKey, type AsideOwner } from "../layout/asideOwner";
-import { useSession } from "../sessions/useSessions";
+import { useSession } from "../store";
 import { useProcessTrees, type ProcessPolling } from "./useProcessTrees";
 
 /** The project filter follows a changed sidebar selection, while a manual choice lasts until that

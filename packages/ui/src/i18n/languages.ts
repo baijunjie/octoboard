@@ -1,3 +1,6 @@
+// apps/web/seo/site-seo.ts loads this file, also from plain Node with type stripping: relative imports carry their .ts
+// extension, type-only imports use `import type`, and no enums or other TypeScript-only runtime syntax.
+
 /** Every language Octoboard offers, ordered by tag. The order is the order of the options in
  * Settings, and it breaks ties when a system language matches more than one entry (see
  * `matchLanguage`), which is why a bare `zh` lands on `zh-Hans`. */

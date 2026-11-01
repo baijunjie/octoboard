@@ -5,12 +5,12 @@ import { ListLayout, Virtualizer } from "react-aria-components";
 
 import { FadeOverflow } from "../../components/text/FadeOverflow";
 import { MotionListBox } from "../../components/motion/MotionListBox";
-import { InlineReference } from "../../components/text/InlineReference";
+import { InlineReference } from "../../i18n/InlineReference";
 import { StatusBadge } from "../../components/status/StatusBadge";
 import { useScrollFade } from "../../components/scroll/scrollFade";
 import { Message, useT } from "../../i18n/react";
 import type { BranchInfo } from "../../protocol";
-import { displayWirePath } from "../../wirePath";
+import { displayWirePath } from "../../format/wirePath";
 import { BranchOriginBadge } from "./BranchOriginBadge";
 import { shortCommit } from "./shortCommit";
 

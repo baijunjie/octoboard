@@ -5,12 +5,12 @@ import { afterEach, expect, it, onTestFinished } from "vitest";
 
 import { DaemonErrorMessage } from "../components/alerts/DaemonErrorMessage";
 import { DaemonRequestError } from "../daemon-client";
-import type { ErrorPresentation } from "../errorPresentation";
+import type { ErrorPresentation } from "../errors/errorPresentation";
 import { format, globalParam, type Translate } from "../i18n/catalog";
 import { setLanguage } from "../i18n/language";
 import type { Language } from "../i18n/languages";
 import { ViewerErrorMessage } from "./ViewerErrorMessage";
-import { rawFailureText } from "../errorText";
+import { rawFailureText } from "../errors/errorText";
 import { viewerErrorText } from "./viewerError";
 import { ViewerHost } from "./viewerTestSupport";
 

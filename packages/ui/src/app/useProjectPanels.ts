@@ -1,7 +1,8 @@
 import { useStableHandler } from "../components/hooks/useLatest";
 import type { HostPath } from "../components/host/useHostPathActions";
 import type { AsideOwner } from "../layout/asideOwner";
-import { openPanel, OWNER_KINDS, type OwnerKind, type PanelKind, type PanelStack, type PanelStacks } from "../panels/stackState";
+import { openPanel, OWNER_KINDS, type OwnerKind, type PanelStack, type PanelStacks } from "../panels/stackState";
+import type { PanelKind } from "../layout/panelKind";
 import { setProjectBrowserMode } from "../project-browser/browserState";
 import type { Project } from "../protocol";
 import type { ProjectPanelKind } from "../sidebar/types";

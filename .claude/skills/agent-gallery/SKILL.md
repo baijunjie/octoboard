@@ -25,7 +25,7 @@ row each, and the items below the table say so where packages differ.
 
 | Scope | Gallery approach | Where scenarios live | Opening the gallery | Scenario direct entry | Quick check (full) | Quick check (selected scenarios) |
 |---|---|---|---|---|---|---|
-| `packages/ui` | Self-built: `gallery.html` / `gallery-frame.html` over `packages/ui/src/gallery/` (the real `App` over the fixture daemon) | `packages/ui/src/gallery/fixtures/` — the area's file, or a new file listed in its `index.ts`; how a scenario is built and the conventions for writing one are in `packages/ui/README.md`, section "The UI state gallery". All of them are `gallery-writer`'s. The fixture-backed website preview (`packages/ui/src/website-preview/`) is not part of the gallery | `pnpm gallery --port <free port>` in `packages/ui` (the script's port 5175 is strict, so another checkout serving it fails the start; pick a free one; `BROWSER=none` in front keeps it from opening a browser tab); the address is the `Local:` line Vite prints | `http://localhost:<port>/gallery.html?scenario=<id>&theme=<light\|dark>&lang=<en\|zh-Hans\|…>`, plus `width=<px>`, `height=<px>`, `held=1` (shortcut modifier held) as needed; the frame alone, sized by the browser window, is `gallery-frame.html?scenario=<id>&theme=…&lang=…`, with `held=1` and `chrome=1` (the desktop window chrome) as needed | `pnpm gallery:sweep` in `packages/ui` (starts its own dev server on a free port) | `pnpm gallery:sweep <id or pattern …>`, or `--group <title>`; `--list` lists the ids |
+| `packages/ui` | Self-built: `gallery.html` / `gallery-frame.html` over `packages/ui/src/gallery/` (the real `App` over the fixture daemon) | `packages/ui/src/gallery/fixtures/` — the area's file, or a new file listed in its `index.ts`; how a scenario is built and the conventions for writing one are in `packages/ui/README.md`, section "The UI state gallery". All of them are `gallery-writer`'s, and so is `packages/ui/src/fixtures/`, the shared fixtures runtime (fixture daemon, builders, sample data) that both the gallery and the website preview use. The fixture-backed website preview itself (`packages/ui/src/website-preview/`) is not part of the gallery | `pnpm gallery --port <free port>` in `packages/ui` (the script's port 5175 is strict, so another checkout serving it fails the start; pick a free one; `BROWSER=none` in front keeps it from opening a browser tab); the address is the `Local:` line Vite prints | `http://localhost:<port>/gallery.html?scenario=<id>&theme=<light\|dark>&lang=<en\|zh-Hans\|…>`, plus `width=<px>`, `height=<px>`, `held=1` (shortcut modifier held) as needed; the frame alone, sized by the browser window, is `gallery-frame.html?scenario=<id>&theme=…&lang=…`, with `held=1` and `chrome=1` (the desktop window chrome) as needed | `pnpm gallery:sweep` in `packages/ui` (starts its own dev server on a free port) | `pnpm gallery:sweep <id or pattern …>`, or `--group <title>`; `--list` lists the ids |
 
 - UI check items: render smoke (each scenario reaches `data-gallery-ready`, no `[data-gallery-failure]` overlay, no
   uncaught error): self-built `packages/ui/scripts/gallery-sweep.mjs` on Playwright; light; `en` only, `--lang <list>`
@@ -38,9 +38,10 @@ row each, and the items below the table say so where packages differ.
   chip geometry, self-built on Playwright, `node scripts/gallery-chip-geometry.mjs http://localhost:<port>` in
   `packages/ui` against a gallery served from this checkout (unlike the sweep it falls back to no other browser:
   without Playwright's own Chromium, set `OCTOBOARD_CHROMIUM` to one).
-- What many scenarios share: `packages/ui/src/gallery/fixtures/` helpers and `packages/ui/src/gallery/fixtureDaemon.ts`
-  (mocks shared by many scenarios), and the gallery machinery itself under `packages/ui/src/gallery/`, the gallery's
-  pages and its scripts in `packages/ui/scripts/`.
+- What many scenarios share: `packages/ui/src/gallery/fixtures/` helpers, the shared fixtures runtime in
+  `packages/ui/src/fixtures/` (its `fixtureDaemon.ts` mocks the daemon for every scenario; the website preview uses it
+  too), and the gallery machinery itself under `packages/ui/src/gallery/`, the gallery's pages and its scripts in
+  `packages/ui/scripts/`.
 - App preview: gallery only.
 - Preview scratch location: `packages/ui/src/gallery/preview/` (ignored by git, so per checkout). Each `.ts` / `.tsx`
   file directly in it default-exports a `Scenario[]` that `packages/ui/src/gallery/fixtures/index.ts` appends to the

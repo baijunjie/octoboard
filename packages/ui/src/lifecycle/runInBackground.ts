@@ -1,5 +1,5 @@
-import { createPersistedPreference } from "../persistedPreference";
-import { PREFERENCE_KEYS } from "../preferenceKeys";
+import { createPersistedPreference } from "../preferences/persistedPreference";
+import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 
 /** Whether closing the window leaves the app running in the background (the Settings switch the
  * desktop app offers) rather than quitting it. Off until the user turns it on; `useBackgroundRunSync`

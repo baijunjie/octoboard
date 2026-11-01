@@ -5,14 +5,14 @@ import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import type { AccountLogin, AccountTrashOutcome, Session } from "../../protocol";
 import { DaemonRequestError } from "../../daemon-client";
-import { errorAlerts } from "../../errorAlerts";
+import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { ErrorAlerts } from "../../shell/ErrorAlerts";
 import { framesAsTimers, settleFrames, trackMountRefocus } from "../../components/dialog/dialogTestSupport";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../../components/announce/StatusAnnouncer";
 import { windowAttention } from "../../components/announce/windowTestSupport";
 import { SettingsDialog } from "../SettingsDialog";
 import { registerSettingsLauncher } from "../settingsLauncher";
-import { accountLogins, bus, dismissAccountLogin, request, sessions, settings, toastError, trackAccountLogin } from "./agentAccountsSectionTestState";
+import { accountLogins, bus, dismissAccountLogin, request, sessions, settings, raiseError, trackAccountLogin } from "./agentAccountsSectionTestState";
 import { buttonNamed, chooseItem, mount, openDetailsOf, openSettingsOf, openTabMenu, rowOf } from "./agentAccountsSectionTestSupport";
 
 vi.mock("../../store", async (importOriginal) => (await import("./agentAccountsSectionTestState")).storeStandIn(await importOriginal()));
@@ -417,7 +417,7 @@ describe("an account's actions menu", () => {
     expect(dialog.textContent).not.toContain("is being removed.It");
     expect(dialog.querySelectorAll("p")).toHaveLength(1);
     expect(buttonNamed(dialog, "Log in again")).toBeDefined();
-    expect(toastError).not.toHaveBeenCalled();
+    expect(raiseError).not.toHaveBeenCalled();
   });
 
   it("notes that this window started the login it asked for, and shows a refusal in the modal", async () => {
@@ -430,7 +430,7 @@ describe("an account's actions menu", () => {
     const dialog = document.querySelector('[role="alertdialog"]')!;
     expect(dialog.textContent).toContain("Another Codex account is logging in");
     expect(buttonNamed(dialog, "Log in again")).toBeDefined();
-    expect(toastError).not.toHaveBeenCalled();
+    expect(raiseError).not.toHaveBeenCalled();
   });
 
   it("keeps the login status region out of display:none while it is empty, so its first text is announced", () => {
@@ -741,7 +741,7 @@ describe("an account's actions menu", () => {
     const shown = [...document.querySelectorAll('[role="alertdialog"]')].map((alert) => alert.textContent ?? "").join("\n");
     expect(shown).toContain("claude-work");
     expect(shown).toContain(code === "account_still_sharing" ? "cannot be turned off while" : "Nothing was rolled back");
-    expect(toastError).not.toHaveBeenCalled();
+    expect(raiseError).not.toHaveBeenCalled();
   });
 
   it("reports a refusal to point a sharing account at another directory", async () => {

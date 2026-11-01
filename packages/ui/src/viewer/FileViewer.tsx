@@ -8,8 +8,8 @@ import { RowIconGroup } from "../components/controls/RowControls";
 import { StatusBadge } from "../components/status/StatusBadge";
 import { Dialog } from "../components/dialog/Dialog";
 import { useCurrentLanguage, useT } from "../i18n/react";
-import { minWidthQuery, useMediaQuery } from "../breakpoint";
-import { displayWirePath, wireBaseName } from "../wirePath";
+import { minWidthQuery, useMediaQuery } from "../components/hooks/breakpoint";
+import { displayWirePath, wireBaseName } from "../format/wirePath";
 import { useRendererScope } from "./codeRenderer";
 import { changeStatus, type ViewerSubject } from "./content";
 import { ControlsSlot } from "./controlsSlot";
@@ -23,7 +23,7 @@ import {
   RenamedFrom,
   TitleStatusBadge,
 } from "./headerParts";
-import { formatFileSize } from "./format";
+import { formatFileSize } from "../format/fileSize";
 import { MarkdownLocationProvider, type MarkdownLocation } from "./markdownLocation";
 import { NoticeSlotBoxes, NoticeSlotsProvider } from "./notices";
 import { STATUS_LABELS, type StatusKey } from "./statusMarks";

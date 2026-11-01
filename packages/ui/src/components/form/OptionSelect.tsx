@@ -2,13 +2,14 @@ import { Description, FieldError, Label, ListBox, Select } from "@heroui/react";
 import React, { useId, useRef } from "react";
 import { ButtonContext } from "react-aria-components";
 
-import { CodeToneContext } from "../text/codeTone";
+import { CodeToneContext } from "../../i18n/codeTone";
 import { FadeOverflow } from "../text/FadeOverflow";
 import { FieldClearButton } from "../controls/FieldClearButton";
 import { HandOffOnUnmount } from "../focus/HandOffOnUnmount";
 import { MarkLineBox } from "../status/MarkLineBox";
 import { MotionListBox } from "../motion/MotionListBox";
-import { ReasonText, type Reason } from "../text/ReasonText";
+import { ReasonText } from "../text/ReasonText";
+import type { Reason } from "../../format/reason";
 import { StatusBadge } from "../status/StatusBadge";
 
 /** One choice of an `OptionSelect`. */

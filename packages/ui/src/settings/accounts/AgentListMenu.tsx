@@ -1,19 +1,19 @@
 import { ArrowLeft, ArrowRight, Trash2 } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 
-import { AGENT_LABEL, listedAgents } from "../../agents";
+import { AGENT_LABEL, listedAgents } from "../../agents/agents";
 import { ActionMenu, type ActionMenuEntry } from "../../components/menus/ActionMenu";
-import { InlineReference } from "../../components/text/InlineReference";
+import { InlineReference } from "../../i18n/InlineReference";
 import { movedAgent } from "../../components/tabs/tabDrag";
 import { ConfirmDialog } from "../../components/dialog/ConfirmDialog";
-import { errorPresentation } from "../../errorPresentation";
 import type { Translate } from "../../i18n/catalog";
 import { joinNodes } from "../../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
 import type { Agent } from "../../protocol";
-import { sessionDisplayTitle } from "../../sessionLabel";
+import { sessionDisplayTitle } from "../../sessions/sessionLabel";
 import { useDaemon, useDaemonStoreEqual } from "../../store";
 import { agentUsage } from "./agentUsage";
+import { raiseError } from "../../components/alerts/raiseError";
 
 /** The agents the strip lists, the tabs' elements and the means to reorder the agents. The strip shows the order a
  * move or a drop has just asked for at once, not once the daemon's `settings_updated` has come back: until that
@@ -32,7 +32,7 @@ export function useAgentList(added: Agent[] | null): {
   move: (agent: Agent, by: -1 | 1) => void;
 } {
   const t = useT();
-  const { request, toastError } = useDaemon();
+  const { request } = useDaemon();
   // The order asked for, good for as long as the list it was asked against is the one held.
   const [pending, setPending] = useState<{ base: Agent[] | null; order: Agent[] }>();
   const agents = useMemo(() => (pending && pending.base === added ? pending.order : listedAgents(added)), [added, pending]);
@@ -60,7 +60,7 @@ export function useAgentList(added: Agent[] | null): {
     void request({ type: "reorder_agents", agents: order }).catch((err) => {
       setPending(undefined);
       setMoved(agent);
-      toastError(errorPresentation(err as Error), undefined, t("settings.accounts.reorderAgentsFailedTitle"));
+      raiseError(err, { title: t("settings.accounts.reorderAgentsFailedTitle") });
     });
   };
   const move = (agent: Agent, by: -1 | 1) => reorder(movedAgent(agents, agent, agents.indexOf(agent) + by), agent);

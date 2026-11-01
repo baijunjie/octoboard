@@ -1,12 +1,12 @@
 import React from "react";
 
-import { InlineReference } from "../text/InlineReference";
+import { InlineReference } from "../../i18n/InlineReference";
 import { IndicatorTooltip } from "../hint/IndicatorTooltip";
 import { isolate } from "../../i18n/isolate";
 import { Message, useT } from "../../i18n/react";
 import type { Session } from "../../protocol";
-import { sessionColourVars } from "../../sessionColours";
-import { sessionDisplayTitle } from "../../sessionLabel";
+import { sessionColourVars } from "../../sessions/sessionColours";
+import { sessionDisplayTitle } from "../../sessions/sessionLabel";
 
 /**
  * A bound project session's binding badge: a dot in its owner console session's colour, on the

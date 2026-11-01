@@ -3,7 +3,7 @@ import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 
-import { errorAlerts } from "../errorAlerts";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 import { sessionOf } from "../fixtures/builders";
 import type { ExitCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";

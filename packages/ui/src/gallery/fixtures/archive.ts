@@ -1,12 +1,11 @@
-import { DEFAULT_SETTINGS } from "../../defaultSettings";
+import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import type { Agent } from "../../protocol";
 import type { Scenario } from "../scenario";
-import { accountOf, branchItemOf, consoleOf, contextOf, minutesAgo, projectOf, sessionOf, snapshotState, worktreeItemOf } from "../../fixtures/builders";
+import { archiveProject as project, archivedLead, boundArchived, boundConsoleSession, console_, otherConsoleSession, otherOwnerArchived, unboundArchived, underArchivedLead } from "../../fixtures/archiveSessions";
+import { accountOf, branchItemOf, contextOf, minutesAgo, projectOf, sessionOf, snapshotState, worktreeItemOf } from "../../fixtures/builders";
 
 const GROUP = "Archive view";
 
-export const console_ = consoleOf("c-1", "Main");
-const project = projectOf("p-1", console_.id, "Search API");
 const AGENTS: Agent[] = ["claude", "codex", "grok"];
 
 const archived = Array.from({ length: 70 }, (_, i) =>
@@ -32,46 +31,6 @@ const state = snapshotState({
   projects: [project],
   sessions: [sessionOf("s-live", console_.id, project.id, "Live session", "idle"), ...archived, ...consoleSessions],
 });
-
-// A live console session with some of its own bound sessions since archived, among other sessions
-// not bound to it, kept out of `state` above so that mixing it into the shared project archive does
-// not perturb the counts the scenarios above assert. Exported for `ArchiveView.test.tsx`, which
-// renders the view on these directly.
-export const boundConsoleSession = sessionOf("s-bound-console", console_.id, undefined, "Hub", "idle", { colour: "teal" });
-export const boundArchived = Array.from({ length: 3 }, (_, i) =>
-  sessionOf(`s-bound${i}`, console_.id, project.id, `Bound archived session ${i}`, "archived", {
-    bound_to: boundConsoleSession.id,
-    ended_at: minutesAgo(5 + i * 5),
-  }),
-);
-// A second owner, an archived session bound to it instead of `boundConsoleSession`, and an
-// archived session with no owner at all — so `ArchiveView.test.tsx` can tell a real filter from
-// one that happens to pass everything through.
-export const otherConsoleSession = sessionOf("s-other-console", console_.id, undefined, "Hub 2", "idle", { colour: "lime" });
-export const otherOwnerArchived = sessionOf("s-other-bound", console_.id, project.id, "Archived session bound elsewhere", "archived", {
-  bound_to: otherConsoleSession.id,
-  context: { tokens: 846_209 },
-  ended_at: minutesAgo(5),
-});
-export const unboundArchived = sessionOf("s-unbound-archived", console_.id, project.id, "Unbound archived session", "archived", {
-  context: { tokens: 0 },
-  ended_at: minutesAgo(5),
-});
-
-// An archived lead session bound to `boundConsoleSession` with two archived sessions of its own:
-// a console session's archive reaches them, and lists them under their lead session. Exported for
-// `ArchiveView.test.tsx`, as the sessions above are.
-export const archivedLead = sessionOf("s-lead-archived", console_.id, project.id, "Release lead session", "archived", {
-  bound_to: boundConsoleSession.id,
-  context: contextOf(65),
-  ended_at: minutesAgo(8),
-});
-export const underArchivedLead = Array.from({ length: 2 }, (_, i) =>
-  sessionOf(`s-under-lead${i}`, console_.id, project.id, `Session ${i} of the archived lead session`, "archived", {
-    bound_to: archivedLead.id,
-    ended_at: minutesAgo(2 + i * 3),
-  }),
-);
 
 const liveLead = sessionOf("s-live-lead", console_.id, project.id, "Active lead session", "idle", { bound_to: boundConsoleSession.id });
 const underLiveLead = sessionOf("s-under-live-lead", console_.id, project.id, "Archived child of active lead", "archived", { bound_to: liveLead.id, ended_at: minutesAgo(1) });

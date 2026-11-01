@@ -11,7 +11,7 @@ import { isolate } from "./i18n/isolate";
 import type { PlatformAdapter, StatusItemCapability } from "./platform";
 import type { Project, RequestBody } from "./protocol";
 import { applyDaemonEvent, type Daemon } from "./store";
-import { IS_MAC } from "./useWindowShortcut";
+import { IS_MAC } from "./input/keys";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 // Each test mounts the whole App, which a machine under load can take longer than the default 5s for.
