@@ -8,6 +8,8 @@ import type { MarkdownStyle } from "../viewer/markdownStyle";
 export interface Preferences {
   /** The docked sidebar is shown (default) or hidden by the user. */
   sidebarVisible?: boolean;
+  /** Keep the right pane docked on wide screens (default), or float its open panels together. */
+  asideDocked?: boolean;
   /** Chosen docked widths in pixels. */
   sidebarWidth?: number;
   asideWidth?: number;

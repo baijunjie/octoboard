@@ -1,14 +1,14 @@
 # Touch swipes
 
-In a window narrower than 782 px — where the sidebar is a drawer that comes in from the start side, with the rail in it
-(see `docs/product/sidebar-drawer.md`), and the right pane's panels float over the terminal one at a time from the end
-side (see "Below 782 px: one panel floats over the terminal" in `docs/product/right-pane-panels.md`) — a finger swiping
-sideways opens and closes them. At 782 px and wider swipes do nothing.
+In a window narrower than 594 px — where the sidebar is a sidebar overlay that comes in from the start side, with the
+rail in it (see `docs/product/sidebar-drawer.md`), and the right pane's panels float over the terminal one at a time
+from the end side (see "Below 594 px: one panel floats over the terminal" in `docs/product/right-pane-panels.md`) — a
+finger swiping sideways opens and closes them. At 594 px and wider swipes do nothing.
 
 ## What counts as a swipe
 
 - **Only a finger.** A mouse, a trackpad and a pen never swipe.
-- **Anywhere in the window**, over the terminal, the drawer, a floating panel or the top bar alike, except:
+- **Anywhere in the window**, over the terminal, the sidebar overlay, a floating panel or the top bar alike, except:
   - a touch that starts on a resize handle or a slider, which takes the drag itself;
   - a touch that starts in something that can still scroll sideways in the direction the finger moves — a code view,
     a diff, a wide table — which scrolls instead; one that has nothing more to show that way lets the
@@ -30,14 +30,14 @@ one moving left towards the start; under a right-to-left language the other way 
 **A finger moving right:**
 
 - with a panel floating over the terminal, closes it;
-- otherwise opens the sidebar's drawer, while there is a console and it is closed;
+- otherwise opens the floating sidebar, while there is a console and it is closed;
 - otherwise does nothing.
 
 **A finger moving left:**
 
-- with the drawer open, closes it;
+- with the sidebar overlay open, closes it;
 - otherwise, while the right pane has an owner (see "What the right pane shows" in `docs/product/window-layout.md`):
-  - with no panel floating over the terminal, floats the panel last on screen for the owner's kind (see "Below 782 px:
+  - with no panel floating over the terminal, floats the panel last on screen for the owner's kind (see "Below 594 px:
     one panel floats over the terminal" in `docs/product/right-pane-panels.md`) while a swipe can open it, or,
     when it cannot, the first panel a swipe can open, in the top bar's order of toggles (see "The panel toggles in the
     top bar" in `docs/product/right-pane-panels.md`);
@@ -51,16 +51,16 @@ Processes panel once its list is known to be empty (see "Loading, refreshing and
 Terminal panel while the project has no shell terminal, so a swipe never starts a shell. Their toggles still open
 them.
 
-A swipe opens and closes these as their toggles do, so the drawer and a floating panel are still never on screen
-together. With no console (the welcome screen, see `docs/product/welcome-screen.md`) there is neither a drawer nor a
-right pane, so no swipe does anything.
+A swipe opens and closes these as their toggles do, so the sidebar overlay and a floating panel are still never on
+screen together. With no console (the welcome screen, see `docs/product/welcome-screen.md`) there is neither a sidebar
+overlay nor a right pane, so no swipe does anything.
 
 ## Keyboard focus after a swipe
 
 - **A swipe that floats a panel** moves focus into it as a panel opened by a tap does (see "Focus after a tap" in
   `docs/product/moving-focus-between-regions.md`).
-- **A swipe that opens the drawer** leaves focus where it is; a tooltip already showing on a top bar control that has
-  keyboard focus stays until focus moves.
-- **A swipe that closes the drawer or a panel** hands focus on as any other close does (see "Below 1168 px: the
-  sidebar becomes a drawer" in `docs/product/sidebar-drawer.md` and "Below 782 px: one panel floats over the terminal"
-  in `docs/product/right-pane-panels.md`).
+- **A swipe that opens the sidebar overlay** leaves focus where it is; a tooltip already showing on a top bar control
+  that has keyboard focus stays until focus moves.
+- **A swipe that closes the sidebar overlay or a panel** hands focus on as any other close does (see "Below 1394 px: the
+  sidebar floats" in `docs/product/sidebar-drawer.md` and "Below 594 px: one panel floats over the terminal" in
+  `docs/product/right-pane-panels.md`).

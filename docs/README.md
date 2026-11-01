@@ -109,10 +109,10 @@ Development plan docs and bug tickets are temporary and are not listed here.
 ### Window and interface
 
 - [Window layout](product/window-layout.md) — the chrome, top bar, rail, panes, minimum size and responsive widths.
-- [The sidebar's drawer](product/sidebar-drawer.md) — the sidebar as an overlay drawer below 1168 px, and below 782 px
+- [The floating sidebar](product/sidebar-drawer.md) — the sidebar as a floating overlay below 1394 px, and below 594 px
   the rail coming in with it as one card.
-- [Touch swipes](product/touch-swipes.md) — below 782 px, finger swipes that open, close and switch the drawer and the
-  floating right-pane panels.
+- [Touch swipes](product/touch-swipes.md) — below 594 px, finger swipes that open, close and switch the floating sidebar
+  and right-pane panels.
 - [Window size and position](product/window-size-and-position.md) — where the window opens across launches.
 - [Sidebar](product/sidebar.md) — the console header, session and project lists, and how selection works.
 - [Project rows](product/sidebar-project-rows.md) — a project row's actions in the sidebar.

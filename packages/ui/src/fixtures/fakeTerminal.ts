@@ -29,12 +29,12 @@ const ESC = "\x1b[";
 /** Opens (with a URI after it) or closes an OSC 8 hyperlink; each ends with the string terminator `ESC \`. */
 const OSC8 = "\x1b]8;;";
 
-/** The box's inner width in cells. The docked terminal pane keeps 520px, about 53 columns once its
- * padding is taken off (`docs/product/window-layout.md`, "Pane widths at 1168 px and wider"), so
- * the box (this plus its two bars) is 48 and does not wrap there. That makes only the box safe,
- * and only while docked: between 782px and 1168px the terminal's floor is about 40 columns, and
- * below 782px, where the right pane floats over it, it has no width floor at all, while the
- * sample's plain lines already run to 53. */
+/** The box's inner width in cells. At 1394px and wider the docked terminal pane keeps 520px,
+ * about 53 columns once its padding is taken off (`docs/product/window-layout.md`, "Pane widths
+ * at 1394 px and wider"), so the box (this plus its two bars) is 48 and does not wrap there.
+ * Between 594px and 1393px both side panes float, leaving the terminal the full available width.
+ * Below 594px it can narrow without a floor: the box can wrap, as can the sample's plain lines,
+ * which already run to 53 columns. */
 const BOX_INNER = 46;
 
 /** Whether a character takes two cells (the same BMP CJK ranges `cells` counts). */

@@ -13,6 +13,15 @@ export type PaneMode = "drawer" | "floating";
  * aside's toggles are recognised as part of its pointer watch (`data-pane-toggle`). */
 export const PANE_ID = { sidebar: "sidebar-pane", aside: "aside-pane" } as const;
 
+/** Delay for an incidental pointer crossing at either side of the window. */
+export const PANE_EDGE_DWELL_MS = 200;
+
+/** Rail controls keep their own actions; only blank rail space reveals the sidebar. */
+export function isRailPeekArea(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest("[data-region=rail]") !== null &&
+    target.closest("button, a, [role=button], [role=menuitem], [data-sidebar-peek-keep]") === null;
+}
+
 /** What a panel card of the right pane looks like, the same as the sidebar's floating card: rounded,
  * clipped to the corner, the sidebar's colour, the `panel-edge` hairline and the `--panel-card-shadow`
  * elevation, kept `--peek-gap` (`--panel-grip-gap` on the terminal side, `--panel-stack-gap` between cards) from
@@ -152,13 +161,22 @@ function peekGapPx(): number {
  * A pane still in the row while it eases out (`phase === "closing"`, the sidebar's) is not yet
  * `fixed`, so its offsets are relative to its offsetParent (the app root), which is never
  * transformed; that parent's viewport position is added back. */
-function outsidePane(pane: Element | null, event: PointerEvent, gap: number): boolean {
+function outsidePane(pane: Element | null, event: PointerEvent, gap: number, toggleSelector: string): boolean {
   if (!(pane instanceof HTMLElement)) return true;
   const parent = pane.offsetParent;
   const origin = parent && parent !== document.documentElement && parent !== document.body ? parent.getBoundingClientRect() : null;
   const left = pane.offsetLeft + (origin?.left ?? 0);
   const top = pane.offsetTop + (origin?.top ?? 0);
   const bottom = top + pane.offsetHeight;
+  // Bridge only the strip directly below a toggle that overlaps this pane. The top bar's
+  // other controls remain outside; a tooltip's portal never decides whether this strip is inside.
+  for (const toggle of document.querySelectorAll(toggleSelector)) {
+    const rect = toggle.getBoundingClientRect();
+    if (rect.width > 0 && rect.bottom <= top - gap &&
+      event.clientX >= Math.max(rect.left, left - gap) &&
+      event.clientX <= Math.min(rect.right, left + pane.offsetWidth + gap) &&
+      event.clientY >= rect.bottom && event.clientY <= top - gap) return false;
+  }
   return (
     event.clientX < left - gap ||
     event.clientX > left + pane.offsetWidth + gap ||
@@ -181,9 +199,9 @@ const PEEK_SETTLE_MS = 290;
  * out (they depend on where the card is when it stops, and a browser may not re-check what is under
  * a still pointer then). So every pointer move is looked at, and one that lands outside the card's
  * final extent (`outsidePane`) counts as leaving it, whether or not the card is under the pointer
- * at that moment. A move whose target is the pane's own toggle is inside, though the top bar it sits
- * in is not: the pointer is resting on the control that floated the card in, and a drift of it must
- * not send the card away. So is one on an element matching `alsoInside`, for what else keeps the
+ * at that moment. The pane's toggle and the narrow bridge directly below it to the pane count as
+ * inside too: resting on or moving from the control that floated the card in must not send it
+ * away. The rest of the top bar stays outside. So is one on an element matching `alsoInside`, for what else keeps the
  * card up from outside it: the sidebar's, the console avatars on the rail, which sit outside the
  * halo and whose own enter and leave events do not cover a pointer moving about on one. A pointer
  * that leaves the window counts as leaving too, as no move follows to say so. `leave` is reported
@@ -216,10 +234,10 @@ export function usePanePeekPointer(
     if (!active) return;
     // The aside's box includes the gaps around its cards; the sidebar's card has none of its own.
     const gap = pane === "aside" ? 0 : peekGapPx();
-    const insideSelector = `[data-pane-toggle=${PANE_ID[pane]}]${alsoInside ? `,${alsoInside}` : ""}`;
-    // The first `data-pane` match is the card: `PaneResizeHandle` carries the same attribute, but a
-    // side's handle is rendered only while that side is docked, never while its card floats, and the
-    // pane comes before it in the document either way. The element is looked up on every move but
+    const toggleSelector = `[data-pane-toggle=${PANE_ID[pane]}]`;
+    const insideSelector = `${toggleSelector},[role=separator][data-pane=${pane}]${alsoInside ? `,${alsoInside}` : ""}`;
+    // The frame precedes its width handle, which carries the same data-pane attribute.
+    // The element is looked up on every move but
     // the rectangle is read live, as the connection banner changes the card's bottom while it floats.
     const paneSelector = `[data-pane=${pane}]`;
     let left = false;
@@ -232,12 +250,15 @@ export function usePanePeekPointer(
     };
     const onMove = (event: PointerEvent) => {
       const target = event.target;
-      if (target instanceof Element && target.closest(insideSelector)) {
+      if (target instanceof Element && (target.closest(insideSelector) || (pane === "sidebar" && isRailPeekArea(target)))) {
         left = false;
         latest.current?.keep();
         return;
       }
-      if (outsidePane(document.querySelector(paneSelector), event, gap)) {
+      if (document.documentElement.classList.contains("pane-resizing")) {
+        left = false;
+        latest.current?.keep();
+      } else if (outsidePane(document.querySelector(paneSelector), event, gap, toggleSelector)) {
         onLeave();
       } else {
         left = false;

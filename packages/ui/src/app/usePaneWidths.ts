@@ -4,6 +4,7 @@ import type { AsideLayout } from "../layout/AsidePane";
 import type { DockPhase } from "../layout/paneDockMotion";
 import { NARROW_TERMINAL_PANEL_ASIDE_MIN, usePaneWidth } from "../layout/paneWidth";
 import type { PaneToggles } from "../layout/usePaneToggles";
+import { MIN_TWO_COLUMN_ASIDE_WIDTH } from "../panels/panelColumns";
 import type { PanelKind } from "../panels/stackState";
 
 /**
@@ -16,6 +17,8 @@ export function usePaneWidths({
   isNarrow,
   sidebarDocked,
   terminalPanelStacked,
+  stackedPanelCount,
+  asideOverlay,
   asideDocked,
   paneShown,
   columnShown,
@@ -28,6 +31,8 @@ export function usePaneWidths({
   sidebarDocked: boolean;
   /** The Terminal panel is one of those in the right pane's column. */
   terminalPanelStacked: boolean;
+  stackedPanelCount: number;
+  asideOverlay: boolean;
   asideDocked: boolean;
   paneShown: boolean;
   columnShown: boolean;
@@ -42,7 +47,7 @@ export function usePaneWidths({
   // A closing sidebar column keeps its width clamp until it leaves the row, so its content cannot
   // widen and reflow on the first frame. The sidebar is a column in the row only at and above the
   // breakpoint, where it is docked; below it, a drawer, which takes no room from the aside beside it.
-  const asideMin = isNarrow && terminalPanelStacked ? NARROW_TERMINAL_PANEL_ASIDE_MIN : 320;
+  const asideMin = !asideFloats && stackedPanelCount > 2 ? MIN_TWO_COLUMN_ASIDE_WIDTH : isNarrow && terminalPanelStacked ? NARROW_TERMINAL_PANEL_ASIDE_MIN : 320;
   const sidebarWidth = usePaneWidth("sidebar", {
     sidebar: !noConsoles && !isNarrow && (sidebarDocked || sidebarColumnPhase !== "closed"),
     aside: asideDocked,
@@ -54,8 +59,9 @@ export function usePaneWidths({
   const asideLayout: AsideLayout = {
     width: asideWidth.width,
     minWidth: asideWidth.min,
-    peek: paneShown ? undefined : asidePeek,
-    folded: paneShown && !columnShown,
+    keepMounted: asideOverlay && paneShown,
+    peek: paneShown && !asideOverlay ? undefined : asidePeek,
+    folded: paneShown && !columnShown && !asideOverlay,
     overlay: asideFloats,
     floatingKind,
   };

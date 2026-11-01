@@ -22,9 +22,9 @@ it("keeps a single panel full-height and four panels in two pairs", () => {
 });
 
 it("clamps column widths to usable bounds and recovers the saved proportion when widened", () => {
-  expect(columnSplit(700, 10, 0.75)).toEqual({ available: 690, minimum: 160, leading: 517.5 });
-  expect(columnSplit(530, 10, 0.75).leading).toBe(360);
-  expect(columnSplit(700, 10, 0.75).leading).toBe(517.5);
+  expect(columnSplit(700, 10, 0.75)).toEqual({ available: 690, minimum: 260, leading: 430 });
+  expect(columnSplit(530, 10, 0.75).leading).toBe(260);
+  expect(columnSplit(1100, 10, 0.75).leading).toBe(817.5);
   expect(columnSplit(300, 10, 0.75)).toEqual({ available: 290, minimum: 145, leading: 145 });
   expect(columnSplit(700, 10, NaN).leading).toBe(345);
 });

@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, ChevronRight, PanelLeft, PanelLeftDashed } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronRight, PanelLeft, PanelLeftDashed, PanelRight, PanelRightDashed } from "lucide-react";
 import React, { useSyncExternalStore } from "react";
 
 import { PANE_ID } from "../layout/paneOverlay";
@@ -108,6 +108,7 @@ interface TitleBarProps {
    * only floating in on hover (from its toggle or a console's avatar on the rail) does not count, since pressing
    * the toggle docks it. */
   sidebarShown: boolean;
+  sidebarRevealOnly?: boolean;
   /** Whether there is a sidebar at all; with no console there is none, and its toggle would control nothing. */
   hasSidebar: boolean;
   /** The docked sidebar column's target width in px (0 while hidden), which the start segment
@@ -123,8 +124,13 @@ interface TitleBarProps {
   /** The docked aside's width in px (0 while hidden), which the end segment follows, so the
    * breadcrumb ends where the aside begins. */
   asideSpan: number;
-  /** One toggle per kind of panel the pane's owner has, at the window's end: the only way to show
-   * and hide the right pane. `label` says what pressing it does, `open` is whether the kind's panel
+  asidePinned?: boolean;
+  onToggleAsideDocked?: () => void;
+  asideAutomatic?: boolean;
+  asideRevealed?: boolean;
+  onAsideHoverChange?: (hovered: boolean) => void;
+  /** One control per kind of panel the pane's owner has, at the window's end. A control toggles a
+   * visible card or reveals it in a hidden floating group. `open` is whether the panel
    * is on screen (the button then keeps the fills of a pressed one, and `Icon` shows which), and
    * `regionId` is the panel's id while it is in the document. The pointer resting on one while no
    * panel is open floats the pane in (`onHoverChange`). A toggle that goes away while it has focus
@@ -164,6 +170,7 @@ const toggleId = (kind: string) => `panel-toggle-${kind}`;
  */
 export function TitleBar({
   sidebarShown,
+  sidebarRevealOnly,
   hasSidebar,
   sidebarSpan,
   sidebarEasing,
@@ -171,6 +178,11 @@ export function TitleBar({
   onSidebarToggleEnter,
   onSidebarToggleLeave,
   asideSpan,
+  asidePinned = true,
+  onToggleAsideDocked,
+  asideAutomatic,
+  asideRevealed,
+  onAsideHoverChange,
   panelToggles,
   canGoBack,
   canGoForward,
@@ -200,7 +212,7 @@ export function TitleBar({
           </ChromeButton>
           {hasSidebar && (
             <ChromeButton
-              label={sidebarShown ? t("titleBar.sidebar.hide") : t("titleBar.sidebar.show")}
+              label={sidebarShown && !sidebarRevealOnly ? t("titleBar.sidebar.hide") : t("titleBar.sidebar.show")}
               onPress={onToggleSidebar}
               expanded={sidebarShown}
               controls={PANE_ID.sidebar}
@@ -226,6 +238,22 @@ export function TitleBar({
       >
         {panelToggles && panelToggles.length > 0 && (
           <div className="flex items-center gap-1 px-2">
+            {onToggleAsideDocked && (
+              <>
+                <HandOffOnUnmount from="#aside-float-toggle" to={focusTerminal} />
+                <ChromeButton
+                  id="aside-float-toggle"
+                  label={asideAutomatic ? t("titleBar.aside.show") : asidePinned ? t("titleBar.aside.float") : t("titleBar.aside.dock")}
+                  onPress={onToggleAsideDocked}
+                  onMouseHoverChange={onAsideHoverChange}
+                  expanded={asideAutomatic ? asideRevealed : undefined}
+                  popupId={asideAutomatic && asideRevealed ? PANE_ID.aside : undefined}
+                  paneToggle={PANE_ID.aside}
+                >
+                  {(asideAutomatic ? asideRevealed : asidePinned) ? <PanelRight aria-hidden="true" className="size-4 rtl:-scale-x-100" /> : <PanelRightDashed aria-hidden="true" className="size-4 rtl:-scale-x-100" />}
+                </ChromeButton>
+              </>
+            )}
             {panelToggles.map(({ kind, label, Icon, open, regionId, onPress, onHoverChange }) => (
               <React.Fragment key={kind}>
                 {/* First among what goes away with the toggle, so focus on it is still found. */}

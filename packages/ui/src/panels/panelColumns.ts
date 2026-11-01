@@ -1,6 +1,9 @@
 /** The usable width each card keeps before a pair stacks vertically. */
 export const MIN_PANEL_COLUMN_WIDTH = 260;
 
+/** Two cards and their gap, plus the pane's terminal-side and outer insets. */
+export const MIN_TWO_COLUMN_ASIDE_WIDTH = 2 * MIN_PANEL_COLUMN_WIDTH + 10 + 8 + 8;
+
 /** Packs panels in reading order, keeping a lone card in the leading column at full height. */
 export function panelColumns(kinds: readonly string[], width: number, gap: number): string[][] {
   if (kinds.length === 0) return [];
@@ -14,7 +17,7 @@ export function panelColumns(kinds: readonly string[], width: number, gap: numbe
 }
 
 /** A compact header keeps its frame controls usable while a column is narrowed. */
-const MIN_RESIZED_COLUMN_WIDTH = 160;
+const MIN_RESIZED_COLUMN_WIDTH = MIN_PANEL_COLUMN_WIDTH;
 
 /** Clamps the preferred split to the current width without rewriting the saved proportion. */
 export function columnSplit(width: number, gap: number, share = 0.5): { available: number; minimum: number; leading: number } {

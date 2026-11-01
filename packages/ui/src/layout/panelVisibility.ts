@@ -1,13 +1,13 @@
 import { createPersistedPreference, type PersistedPreference } from "../persistedPreference";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
 
-/** The panes the user can hide at and above the `docked` breakpoint. Below it the sidebar is a
- * drawer, whose open state `usePaneToggles` holds instead. The aside is not one: whether it shows
- * follows from its open panels (`panels/stackState.ts`). */
-export type DockedPanel = "sidebar";
+/** Each side's remembered docking choice. Responsive floating does not rewrite it; the right
+ * pane's open panel kinds are stored separately. */
+export type DockedPanel = "sidebar" | "aside";
 
 const visibility: Record<DockedPanel, PersistedPreference<boolean>> = {
   sidebar: createPersistedPreference(PREFERENCE_KEYS.sidebarVisible, (raw) => raw !== "false", String),
+  aside: createPersistedPreference(PREFERENCE_KEYS.asideDocked, (raw) => raw !== "false", String),
 };
 
 /** Whether the docked `panel` is shown, and a setter that persists the choice. Visible unless the

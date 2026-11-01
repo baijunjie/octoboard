@@ -341,7 +341,7 @@ desktop app).
   worded by why it cannot be read (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`). The
   viewer's own header actions follow "The header" in `docs/product/file-viewer.md`.
 - **Terminal** starts a new shell terminal in that folder, in the same place File manager would use, opens the
-  project's Terminal panel — floating it over the terminal below 782 px — and shows the new terminal as its tab, which
+  project's Terminal panel — floating it over the terminal below 594 px — and shows the new terminal as its tab, which
   takes keyboard focus (see "Starting a terminal" in `docs/product/terminal-panel.md`). It always starts another shell,
   however many the project has. A symbolic link listed as a folder starts the shell in the folder it leads to. A start
   the daemon refuses raises an error alert titled that the terminal could not be created, and adds no tab; when the

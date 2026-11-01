@@ -786,6 +786,9 @@ export const en = {
 
   "titleBar.back": "Back",
   "titleBar.forward": "Forward",
+  "titleBar.aside.float": "Float panels",
+  "titleBar.aside.dock": "Dock panels",
+  "titleBar.aside.show": "Show panels",
   "titleBar.sidebar.hide": "Hide sessions",
   "titleBar.sidebar.show": "Show sessions",
   "titleBar.report.hide": "Hide report panel",

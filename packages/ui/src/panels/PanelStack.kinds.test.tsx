@@ -42,7 +42,7 @@ vi.mock("./panelRegistry", () => {
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-function mount() {
+function mount(overlay = false) {
   mounted.length = 0;
   let latest!: ReturnType<typeof usePanelStacks>;
   function Probe() {
@@ -52,7 +52,8 @@ function mount() {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   let project = "p";
-  let peek: PanePeek | undefined;
+  let peek: PanePeek | undefined = overlay ? { active: true, reveal: () => {}, keep: () => {}, leave: () => {} } : undefined;
+  const dismiss = vi.fn();
   const render = () =>
     act(() =>
       root.render(
@@ -65,9 +66,10 @@ function mount() {
             selectedSessionId={undefined}
             focusTerminal={() => {}}
             peek={peek}
+            overlay={overlay}
             peekKind="files"
             frameKeys={{ onEscape: () => {}, onCycleRegion: () => {}, onMoveHistory: () => {}, onMoveConsoleSession: () => {} }}
-            onDismiss={() => {}}
+            onDismiss={dismiss}
             maximizeArea={{ current: null }}
           />
         </>,
@@ -81,6 +83,7 @@ function mount() {
   });
   return {
     container,
+    dismiss,
     setOpen: (open: string[]) => act(() => latest.setStack("project", { open, shares: {} })),
     switchTo: (id: string) => {
       project = id;
@@ -123,7 +126,7 @@ it("mounts no other card once the last docked panel closes, and shows the hovere
 });
 
 it("changes between paired and full-height columns on pane resize without replacing cards or focus", () => {
-  let width = 530;
+  let width = 600;
   const observers: (() => void)[] = [];
   vi.stubGlobal("ResizeObserver", class {
     constructor(callback: ResizeObserverCallback) { observers.push(() => callback([], this as unknown as ResizeObserver)); }
@@ -148,22 +151,31 @@ it("changes between paired and full-height columns on pane resize without replac
   expect(document.activeElement?.closest("[data-panel-card]")?.id).toBe("panel-files");
   act(() => control.focus());
   const handle = grid.querySelector<HTMLElement>("#panel-column-resize")!;
-  expect(handle.getAttribute("aria-valuenow")).toBe("260");
+  expect(handle.getAttribute("aria-valuenow")).toBe("295");
   act(() => handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })));
-  expect(handle.getAttribute("aria-valuenow")).toBe("276");
+  expect(handle.getAttribute("aria-valuenow")).toBe("311");
   const stored = JSON.parse(localStorage.getItem(PREFERENCE_KEYS.panelStacks)!);
-  expect(stored.project.columnShare).toBeCloseTo(276 / 520);
+  expect(stored.project.columnShare).toBeCloseTo(311 / 590);
   width = 529;
   act(() => observers.forEach((measure) => measure()));
   expect(columns()).toBe("minmax(0, 1fr)");
   expect(grid.querySelector("#panel-column-resize")).toBeNull();
-  width = 530;
+  width = 600;
   act(() => observers.forEach((measure) => measure()));
   const restored = grid.querySelector<HTMLElement>("#panel-column-resize")!;
-  expect(restored.getAttribute("aria-valuenow")).toBe("276");
+  expect(restored.getAttribute("aria-valuenow")).toBe("311");
   act(() => restored.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })));
   expect(columns()).toBe("minmax(0, 0.5fr) minmax(0, 0.5fr)");
   expect(stack.container.querySelector("#panel-files")).toBe(first);
   expect(stack.container.querySelector("#panel-fake")).toBe(second);
   expect(document.activeElement).toBe(control);
+});
+
+it("dismisses the floating group when its final open card is closed", () => {
+  const stack = mount(true);
+  stack.setOpen(["files"]);
+  const close = stack.container.querySelector<HTMLButtonElement>("#panel-files [aria-label='Close panel']")!;
+  act(() => close.click());
+  expect(stack.dismiss).toHaveBeenCalledOnce();
+  expect(JSON.parse(localStorage.getItem(PREFERENCE_KEYS.panelStacks)!).project.open).toEqual([]);
 });

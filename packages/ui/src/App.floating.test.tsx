@@ -89,8 +89,9 @@ function mountApp(width: number, touch = false, agents = false, waiting = false)
   // The test's interactions: taps on a touch screen, a mouse's presses otherwise.
   document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: touch ? "touch" : "mouse", bubbles: true }));
   document.documentElement.style.setProperty("--rail-width", "48px");
-  document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
-  document.documentElement.style.setProperty("--breakpoint-phone", "782px");
+  document.documentElement.style.setProperty("--peek-gap", "8px");
+  document.documentElement.style.setProperty("--breakpoint-docked", "1394px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "594px");
   onTestFinished(() => {
     act(() => {
       stacks.setStack("project", defaultStack("project"));
@@ -98,6 +99,7 @@ function mountApp(width: number, touch = false, agents = false, waiting = false)
     });
     vi.unstubAllGlobals();
     document.documentElement.style.removeProperty("--rail-width");
+    document.documentElement.style.removeProperty("--peek-gap");
     document.documentElement.style.removeProperty("--breakpoint-docked");
     document.documentElement.style.removeProperty("--breakpoint-phone");
     try {
@@ -223,12 +225,12 @@ it("closes every floating panel when the drawer opens, shows none while it is op
 });
 
 it("floats no panel when the window narrows while the drawer is open", async () => {
-  const { resize } = mountApp(900);
+  const { resize } = mountApp(900, true);
   await pressElement(toggle("Show sessions"));
   await pressElement(row("Fix header"));
-  // Wide enough to dock the pane, the drawer stays open beside the terminal as a session is picked.
-  expect(toggle("Hide sessions")).not.toBeNull();
-  expect(cards()).toEqual(["panel-files"]);
+  // Touch keeps the middle-width sidebar open over the terminal; the right group stays hidden.
+  expect(toggle("Show sessions")!.getAttribute("aria-expanded")).toBe("true");
+  expect(cards()).toEqual([]);
   await resize(390);
   expect(cards()).toEqual([]);
   expect(scrims()).toEqual(["Close sessions"]);

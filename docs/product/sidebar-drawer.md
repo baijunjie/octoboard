@@ -1,81 +1,54 @@
-# The sidebar's drawer
+# The floating sidebar
 
-In a window narrower than 1168 px the sidebar is not in the row of panes but an overlay **drawer** over them, and below
-782 px the rail comes in with it as part of the same card. The window's layout as a whole, the widths it switches at
-and the panes in the row are in `docs/product/window-layout.md`; what the sidebar itself shows is in
-`docs/product/sidebar.md`; opening and closing the drawer with a finger is in `docs/product/touch-swipes.md`.
+Below 1394 px the sidebar floats over the terminal instead of taking a column beside it. Below 594 px the rail
+comes in with it as part of the same card. The layout thresholds and hover entry areas are in "A hidden pane floats
+in on hover" in `docs/product/window-layout.md`; what the sidebar shows is in `docs/product/sidebar.md`.
 
-## Below 1168 px: the sidebar becomes a drawer
+## Below 1394 px: the sidebar floats
 
-Below 1168 px wide, the top bar stays as it is, and so does the rail down to 782 px (below that see "Below 782 px: the
-rail comes in with the drawer" below). The sidebar leaves the row: the terminal and, while one of its panels is open,
-the right pane share the content panel (their widths are in "Pane widths below 1168 px" in
-`docs/product/window-layout.md`). The sidebar becomes an **overlay drawer** over them, **closed by default**:
+The sidebar starts closed and overlays the terminal, so opening or closing it never resizes the agent terminal.
+Its large-screen docking preference is kept separately: widening to 1394 px restores the sidebar as the user left it.
+The top bar stays reachable, and from 594 px up the rail stays in the row beside the floating card.
 
-- The drawer has the same rounded corners, hairline edge and light card shadow as the floating panes (see "A hidden
-  pane floats in on hover" in `docs/product/window-layout.md`). It keeps an **8 px gap** from the top bar, from the
-  window's bottom (or the connection banner when it is shown) and from the rail, and is never drawn over the rail;
-  below 782 px the gaps are **4 px**, with the start gap measured from the window's edge instead, the rail being
-  inside it. Header heights are in "The window chrome and the content panel" in `docs/product/window-layout.md`.
-- From 782 px up to 1168 px it opens by fading in while rising into place by **4% of its own height**, and closes by
-  fading out while sinking back, without sliding sideways. Below 782 px it fades in while sliding in from the window's
-  start edge by **40 px**, and fades out while sliding back towards it. Either way it moves over **240 ms** with the
-  same `cubic-bezier(0.2, 0, 0, 1)` easing as a floating pane, and its edge and shadow move and fade with it. Where the
-  system asks for reduced motion it opens and closes at once, with no movement.
-  While it is closed, its exit included, it is out of reach: nothing in it takes a press, keyboard focus or the
-  attention of assistive technology.
-- From 782 px up the drawer is 280 px wide; below 782 px it is **328 px**, the rail's 48 px and the sidebar's 280 px.
-  Either way it is capped to the window's width less 64 px, so it never reaches the opposite edge of the content
-  panel; below 782 px that leaves at least 60 px of the dimmed area beside its end, there to press to close it. The
-  dimmed area behind the open drawer covers the content panel,
-  including the gaps — below 782 px its whole width, the rail being in the drawer — leaving the top bar, the rail where
-  it is in the row and the banner's Retry usable. It fades in and out with the drawer over the same 240 ms, at once
-  where the system asks for reduced motion, and takes no presses while it fades out.
-- It is opened and closed with the same toggle that hides and shows the sidebar at 1168 px and wider, at the top
-  bar's start (see "The sidebar toggle and the panel toggles" in `docs/product/window-layout.md`), and below 782 px
-  with a touch swipe too (see `docs/product/touch-swipes.md`).
-- It closes on its toggle, on a press anywhere in the dimmed area beside it, or on `Escape`; Open panel in a project's
-  action menu and a right pane floating in close it too (see "What the right pane shows" in
-  `docs/product/window-layout.md`), and so does a panel opened below 782 px. Opening the drawer closes a panel floating over the terminal (see "Below 782 px: one panel
-  floats over the terminal" in `docs/product/right-pane-panels.md`).
-  While it is open `Escape` closes it and **does not reach the running agent**; in a field in the drawer that holds
-  text it only clears the field, and the next one closes the drawer.
-- **Selecting a session in the drawer closes it below 782 px**, so the session's terminal shows — picked in the
-  sidebar or, with the rail in the drawer, by the rail's waiting count or from a console avatar's menu on the rail.
-  From 782 px up to 1168 px the drawer stays open beside the terminal.
-- A dialog opened from a control pressed in the open drawer, or from a menu opened there, gives keyboard focus back
-  to that control in the drawer as it closes, rather than to the terminal behind the drawer. While the drawer is open
-  this holds for the rail's controls as well, whether the rail is beside the drawer or, below 782 px, inside it:
-  Settings opened from the rail's Settings, by a press or a key, gives focus back to that button as it closes, the
-  drawer still open.
-- Widening the window to 1168 px or more closes it, and so does the last console going, which leaves no sidebar (see
-  `docs/product/welcome-screen.md`).
-- Closing the drawer while it holds keyboard focus — below 782 px in its rail too — moves focus to the terminal, and
-  so does widening the window past 1168 px while it is open when the sidebar is hidden in the wider layout.
+- **From 594 px up**, the top bar's sidebar button reveals the sidebar. Pressing it again keeps the sidebar open; it
+  never changes the docking preference at this width. A mouse can also reveal it from the button, blank rail space or
+  console avatars, and leaving hides it under the rules in "A hidden pane floats in on hover" in
+  `docs/product/window-layout.md`. Hover-revealed cards have no dimmed background. On a device whose primary input
+  cannot hover, pressing the button opens the sidebar with a dimmed area behind it; another press still keeps it open.
+- **Below 594 px**, pressing that button opens or closes the sidebar, and touch swipes do too (see
+  `docs/product/touch-swipes.md`). There is no hover reveal. The dimmed area covers the content panel around the card,
+  including its gaps, while the top bar and the connection banner's Retry remain reachable.
+- **Appearance**: rounded corners, a hairline edge and the light card shadow, inset 8 px from the top bar, the rail and
+  the window's bottom or the bottom banners. Below 594 px the gaps are 4 px, measured from the window's edge because the
+  rail is inside the card. Header heights are in "The window chrome and the content panel" in
+  `docs/product/window-layout.md`.
+- **Motion**: from 594 px up it fades in while rising by 4% of its height, and fades out while sinking back. Below 594
+  px it instead slides 40 px from the start edge as it fades in, and back towards that edge as it fades out. Both take
+  240 ms with `cubic-bezier(0.2, 0, 0, 1)` easing. Reduced motion removes the movement and delay. While closed, its exit
+  included, the sidebar takes no presses or keyboard focus and is hidden from assistive technology.
+- **Width**: 280 px from 594 px up; below that, 328 px including the 48 px rail. It is capped at the window's width less
+  the rail and two surrounding gaps, so it leaves room beside the card to dismiss an explicitly opened overlay.
+- **Dismissal**: `Escape` closes it without reaching the running agent; in a text field holding text it clears the field
+  first. A press on the dimmed area dismisses an explicitly opened overlay. Revealing the right pane closes it, and
+  opening the sidebar hides a floating right pane: only one floating side is revealed at a time.
+- **Selection**: below 594 px, selecting a session in the sidebar or its rail closes the card so the session's terminal
+  shows. From 594 px up, selecting a session leaves the floating sidebar up until its normal dismissal.
+- **Focus**: dismissing the sidebar while it holds keyboard focus hands focus to the terminal. A dialog opened from an
+  explicitly opened sidebar or its rail can return focus to its opening control when it closes. Widening to 1394 px
+  closes the overlay, handing focus to the terminal if the restored docked sidebar is hidden. Deleting the last console
+  also closes it because no sidebar remains (see `docs/product/welcome-screen.md`).
 
-Whether the docked sidebar is hidden plays no part below 1168 px: there, the drawer decides whether it is on screen,
-and widening the window again brings back the docked sidebar as the user last left it.
+## Below 594 px: the rail comes in with the sidebar
 
-Because the drawer overlays the terminal rather than pushing it aside, **opening or closing it never resizes the
-terminal**, so the running agent is never sent a terminal-size change by the drawer.
+While there is a console, the rail leaves the row below 594 px. The content panel spans the window and its top start
+corner is square. The floating sidebar is one card: the rail along its start side, then the sidebar, with a groove
+between them. Both use the sidebar's surface. The rail retains its controls and contents (see "The rail" in
+`docs/product/window-layout.md`).
 
-## Below 782 px: the rail comes in with the drawer
+The rail appears and disappears with the card over the same 240 ms. While closed, its exit included, none of the
+rail takes presses, keyboard focus or assistive-technology attention. `F6` skips it. Focus left on the rail when it
+goes away, including when narrowing below 594 px with the sidebar closed, is handed to the terminal.
 
-Below 782 px, while there is a console, **the rail is not in the row**: under the top bar the content panel spans the
-window's whole width, and its top start corner is square rather than rounded (see "The window chrome and the content
-panel" in `docs/product/window-layout.md`). The rail comes in only with the sidebar's drawer:
-
-- **The open drawer is one card holding both**: the rail's column along the card's start side, then the sidebar, with
-  a groove between them. The rail lies on the card's own surface, the sidebar's background, rather than on the
-  chrome's colour, and holds what it holds at any width (see "The rail" in `docs/product/window-layout.md`). The card
-  is drawn as in "Below 1168 px: the sidebar becomes a drawer" above.
-- **The rail comes and goes with the drawer**, in the same movement, over the same 240 ms.
-- **While the drawer is closed the rail is out of reach**, its exit included: nothing on it takes a press, keyboard
-  focus or the attention of assistive technology, and `F6` skips it (see "Moving focus between regions with F6" in
-  `docs/product/moving-focus-between-regions.md`). Focus on the rail as it goes — the drawer closing, or the window
-  narrowing below 782 px with the drawer closed — is handed to the terminal, as focus in the drawer is.
-- **With no console there is no drawer, and the rail stays in the row** at every width, being the way to New console
-  and Settings there (see `docs/product/welcome-screen.md`); the content panel then keeps its rounded corner.
-
-Under a right-to-left language the card is at the window's right edge, the rail at its right side (see
-`docs/product/right-to-left-layout.md`).
+With no console there is no sidebar, so the rail stays in the row at every width as the way to New console and
+Settings; the content panel keeps its rounded corner (see `docs/product/welcome-screen.md`). Under a right-to-left
+language the card and rail are at the window's right side (see `docs/product/right-to-left-layout.md`).

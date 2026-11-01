@@ -191,3 +191,27 @@ it("stops watching the pointer on unmount", () => {
   move(600);
   expect(peek.leave).not.toHaveBeenCalled();
 });
+
+it("keeps the bridge below a toggle in both directions, independently of tooltip visibility", () => {
+  const { hide, toggle } = mountToggle();
+  const pane = placePane();
+  toggle.getBoundingClientRect = () => ({ left: 1200, right: 1232, top: 4, bottom: 36, width: 32, height: 32 }) as DOMRect;
+  for (const tooltipShown of [false, true]) {
+    const tooltip = document.createElement("div");
+    tooltip.setAttribute("role", "tooltip");
+    if (tooltipShown) document.body.appendChild(tooltip);
+    move(1216, 38);
+    wait(1000);
+    expect(hide).not.toHaveBeenCalled();
+    enterPane(pane);
+    move(1216, 60);
+    leavePane(pane);
+    move(1216, 38);
+    wait(1000);
+    expect(hide).not.toHaveBeenCalled();
+    tooltip.remove();
+  }
+  move(1190, 38);
+  wait(SLIDE_AWAY_MS);
+  expect(hide).toHaveBeenCalledTimes(1);
+});

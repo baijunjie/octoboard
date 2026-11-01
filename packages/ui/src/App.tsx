@@ -118,6 +118,10 @@ export function App(): React.ReactElement {
     reportSessionId,
     availableKinds,
     asideFloats,
+    asideOverlay,
+    asidePinned,
+    toggleAsideDocked,
+    notePanelOpened,
     floating,
     floatingShown,
     ownerStack,
@@ -145,6 +149,7 @@ export function App(): React.ReactElement {
     stableToggleSidebar,
     stableTogglePanel,
     stableHoverPanelToggle,
+    stableHoverAside,
   } = usePaneLayout({
     asideOwner,
     hasAside,
@@ -185,8 +190,8 @@ export function App(): React.ReactElement {
   // Only the store and whether the notice is shown: the whole state changes with every tick of a download.
   const updateStore = useUpdateStore();
   const updateNoticeShown = useUpdateSelector((state) => updateNoticeKind(state) !== undefined) ?? false;
-  // A region off screen is skipped by F6: a hidden docked pane, a closed drawer or rail, and a
-  // floating pane too, which is only a hover away rather than shown. The top bar is always there.
+  // F6 includes only regions currently on screen, including a revealed floating group.
+  // The top bar is always available.
   const regionCycle = useRegionCycle({
     shown: {
       topbar: true,
@@ -198,7 +203,7 @@ export function App(): React.ReactElement {
       banner: connectionState === "reconnecting" || connectionState === "closed",
       update: updateNoticeShown,
     },
-    panels: shownPanelRegions(ownerStack, ownerKind),
+    panels: shownPanelRegions(asideOverlay && !panes.asidePeek.active ? undefined : ownerStack, ownerKind),
     focusTerminal,
   });
 
@@ -207,6 +212,8 @@ export function App(): React.ReactElement {
     isNarrow,
     sidebarDocked: panes.sidebarDocked,
     terminalPanelStacked: stackedPanels.includes("terminal"),
+    stackedPanelCount: stackedPanels.length,
+    asideOverlay,
     asideDocked,
     paneShown,
     columnShown,
@@ -329,7 +336,7 @@ export function App(): React.ReactElement {
     openFloating,
     panelStacks,
     setPanelStack,
-    noteOpened: floating.noteOpened,
+    noteOpened: notePanelOpened,
     sidebarOpen: panes.sidebarOpen,
     closeSidebar: panes.closeSidebar,
     showAllOf: processPanel.showAllOf,
@@ -474,6 +481,7 @@ export function App(): React.ReactElement {
       <Toasts focusTerminal={focusTerminal} />
       <TitleBar
         sidebarShown={panes.sidebarShown}
+        sidebarRevealOnly={isNarrow && !asideFloats}
         hasSidebar={!noConsoles}
         sidebarSpan={noConsoles ? 0 : columnSpan(sidebarColumnPhase, sidebarWidth.width)}
         sidebarEasing={isDockEasing(sidebarColumnPhase)}
@@ -481,9 +489,14 @@ export function App(): React.ReactElement {
         onSidebarToggleEnter={panes.sidebarPeek.reveal}
         onSidebarToggleLeave={panes.sidebarPeek.leave}
         asideSpan={asideDocked ? asideWidth.width : 0}
+        asidePinned={asidePinned}
+        onToggleAsideDocked={ownerKind && !asideFloats ? toggleAsideDocked : undefined}
+        asideAutomatic={isNarrow}
+        asideRevealed={panes.asidePeek.active}
+        onAsideHoverChange={stableHoverAside}
         panelToggles={ownerKind ? availableKinds.map((kind) => {
           const entry = PANEL_ENTRIES[kind];
-          const open = openPanels.includes(kind);
+          const open = openPanels.includes(kind) && (!asideOverlay || panes.asidePeek.active);
           return {
             kind,
             label: t(open ? entry.toggle.hide : entry.toggle.show),
@@ -520,6 +533,7 @@ export function App(): React.ReactElement {
           onSelectConsole={stableSwitchConsole}
           onConsoleEnter={panes.sidebarPeek.hoverConsole}
           onConsoleLeave={panes.sidebarPeek.leaveConsole}
+          onRailHoverChange={(hovered) => hovered ? panes.sidebarPeek.hoverRail() : panes.sidebarPeek.leaveRail()}
           hoverOpensSidebar={panes.sidebarPeek.peekable}
           onOpenDialog={stableOpenDialog}
           onSelectSession={stableSelectFromSidebar}
@@ -575,9 +589,9 @@ export function App(): React.ReactElement {
                 onReopenSession={stableReopenSession}
                 onArchiveSession={stableArchiveSession}
                 onOpenSettings={stableOpenSettingsAt}
-                open={panes.sidebarOpen}
-                drawerAway={isNarrow && !panes.sidebarOpen}
-                peek={panes.sidebarDocked ? undefined : panes.sidebarPeek}
+                open={panes.sidebarOpen || (!asideFloats && panes.sidebarPeek.active)}
+                drawerAway={isNarrow && !panes.sidebarOpen && !panes.sidebarPeek.active}
+                peek={isNarrow || !panes.sidebarDocked ? panes.sidebarPeek : undefined}
                 onPeekPress={stableCommitPreview}
                 onColumnPhase={setSidebarColumnPhase}
                 sidebarWidth={sidebarWidth}
@@ -585,10 +599,8 @@ export function App(): React.ReactElement {
               {panes.sidebarDocked && sidebarColumnPhase === "open" && (
                 <PaneResizeHandle side="sidebar" paneWidth={sidebarWidth} />
               )}
-              {/* Below the `docked` breakpoint the terminal keeps a 398px floor beside the open
-                  aside's own floor, and a window too narrow for both floats the aside over it
-                  (`asideFloats`) instead; `overflow-x-auto` stays a guard that lets focus reveal
-                  either pane should their combined minimum still exceed the viewport. */}
+              {/* Floating panes leave the agent area its full width; horizontal overflow remains a
+                  guard while the docked sidebar's column is changing width. */}
               <main className="relative flex min-w-0 flex-1 overflow-x-auto docked:overflow-visible">
                 {/* Takes the terminal's place in the row, so the archive covers the terminal alone, not the
                     aside beside it; the terminal fills it. Above the `docked` breakpoint the 520px basis
@@ -597,11 +609,10 @@ export function App(): React.ReactElement {
                     aside clip's shrink factor is never consulted. The open clip can shrink while the
                     sidebar's width eases, keeping the report within the viewport. 520px is about 53 columns at ~9.2px/column
                     off a real agent CLI (the terminal's padding eats the rest). Below the breakpoint the
-                    sidebar is an overlay, while the open aside stays beside the terminal. The terminal
-                    takes a much smaller floor: 398px is 40 columns at
+                    side panes both float over the terminal. Its 398px floor is 40 columns at
                     the same ~9.2px/column plus the same padding allowance, under which the terminal stops
-                    being usable at all. A window too narrow for that floor and the aside's (a phone)
-                    floats the aside over the terminal instead, and the terminal takes whatever width
+                    being usable at all. Mobile mode shows a single floating card and removes this
+                    floor, so the terminal takes whatever width
                     there is, so the row never scrolls. */}
                 {/* At the breakpoint it casts the content panel's soft shadow (`--panel-shadow`) over the
                     docked panes on either side, so the terminal reads as the layer above them. `z-1`
@@ -667,7 +678,7 @@ export function App(): React.ReactElement {
                         owner={asideOwner}
                         project={asideProject}
                         layout={asideLayout}
-                        active={paneShown || panes.asidePeek.active}
+                        active={asideOverlay ? panes.asidePeek.active : paneShown || panes.asidePeek.active}
                         selectedSessionId={selectedSessionId}
                         reportSessionId={reportSessionId}
                         focusTerminal={focusTerminal}
@@ -683,6 +694,9 @@ export function App(): React.ReactElement {
                         maximizeArea={agentAreaRef}
                         areaEasing={isDockEasing(sidebarColumnPhase)}
                         float={asideFloat}
+                        overlay={asideOverlay}
+                        onHoverChange={stableHoverAside}
+                        resizeHandle={asideOverlay ? <PaneResizeHandle side="aside" paneWidth={asideWidth} floating region={panelRegion((stackedPanels[0] ?? peekKind) as PanelKind)} /> : undefined}
                         floating={asideFloats && ownerStack ? { stack: ownerStack, onClose: floating.close } : undefined}
                       />
                     </ProcessPanelProvider>

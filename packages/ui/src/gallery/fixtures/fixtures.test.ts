@@ -16,7 +16,7 @@ import { DEFAULT_WIDTH, MIN_HEIGHT } from "../scenario";
 
 /** The arguments of a step that hold a value (a status) and not a name to look for, by position: a
  * value can spell the same as a message, and would be flagged for it. */
-const VALUE_ARGUMENTS: Partial<Record<keyof Ui, number[]>> = { hoverChangeStatus: [1] };
+const VALUE_ARGUMENTS: Partial<Record<keyof Ui, number[]>> = { hoverChangeStatus: [1], floatPane: [1] };
 
 /** Every scenario's steps, run against a `Ui` that presses nothing and records the names it was
  * given to look for, in `language`. Only `t`, `session` and `changeRow` are real. `key` and `type`

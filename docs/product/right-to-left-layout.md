@@ -10,16 +10,17 @@ Under a right-to-left language — Arabic, see "What follows the language" in `d
 window is mirrored. Every left and right named in `docs/product/window-layout.md` swaps, and so do the sides the other
 product docs name for parts of the window:
 
-- The rail is down the window's right edge — below 782 px, where it comes in with the sidebar's drawer, along the
-  drawer card's right side (see "Below 782 px: the rail comes in with the drawer" in `docs/product/sidebar-drawer.md`) —
-  the sidebar on the right inside the content panel, beside the rail, and the right pane on the left; the content
-  panel's rounded corner is its top right. The top bar's Back, Forward and sidebar toggle are at its right end, in mirrored order, the panel toggles at its left end, and the breadcrumb runs leftward
-  from them, starting over the terminal's area while the sidebar is shown and ending where the right pane does, on the
+- The rail is down the window's right edge — below 594 px, where it comes in with the floating sidebar, along the
+  sidebar overlay card's right side (see "Below 594 px: the rail comes in with the sidebar" in
+  `docs/product/sidebar-drawer.md`) — the sidebar on the right inside the content panel, beside the rail, and the right
+  pane on the left; the content panel's rounded corner is its top right. The top bar's Back, Forward and sidebar toggle
+  are at its right end, in mirrored order, the panel toggles at its left end, and the breadcrumb runs leftward from
+  them, starting over the terminal's area while the sidebar is shown and ending where the right pane does, on the
   window's left, while the right pane is docked, following each pane's inner edge while that pane is resized or eases,
   as in "The top bar" in `docs/product/window-layout.md`.
-- From 782 px up the sidebar's drawer and the floating cards keep their vertical fade and drift in either reading
-  direction. Below 782 px the drawer slides in from the window's right edge and a panel floating over the terminal from
-  its left edge, and the touch swipes that open and close them are mirrored with them (see
+- From 594 px up the floating sidebar and the floating cards keep their vertical fade and drift in either reading
+  direction. Below 594 px the sidebar overlay slides in from the window's right edge and a panel floating over the
+  terminal from its left edge, and the touch swipes that open and close them are mirrored with them (see
   `docs/product/touch-swipes.md`).
 - Each resize handle stays on its pane's inner edge, the sidebar's left edge and the right pane's right one. Dragging
   toward the terminal still widens the pane, and so does the arrow key pointing away from the pane.
@@ -29,23 +30,22 @@ product docs name for parts of the window:
   laid out in the direction of its own text, so a Latin name in an Arabic window still fades at its right edge. A path
   and a branch name fade where they begin instead (see "Names too long for their space" in
   `docs/product/labels-and-tooltips.md`).
-- Paths always read left to right, in the fields that take one and in the settings list. So does a branch name shown
-  on its own, as a label — in a project's branch badge, in the Git mode's branch selector, its current choice and its
-  listed options alike, and in the project menu's Switch branch submenu — whatever characters it starts with, so a
-  name opening with Arabic letters still reads from the left. So does an account's sign-in email. Where such a path,
-  branch name or email is cut, the tooltip giving its full text reads left to right too, as one left-to-right block
-  whose wrapped lines all start at the tooltip's left edge (see "Names too long for their space" and "How a tooltip
-  behaves" in `docs/product/labels-and-tooltips.md`). Settings' Default clone directory field reads left to right as
-  one control: its folder mark stays beside the path at the field's left edge, rather than sitting at the field's
-  leading edge with the path pushed away from it, and the tooltip giving the full path the field abbreviates reads left
-  to right the same way, its leading `/` at the left (see "Default clone directory" in `docs/product/settings.md`). The
-  Browse button beside the field keeps to the reading direction's end, so it is at the field's left.
+- Paths always read left to right, in the fields that take one and in the settings list. So does a branch name shown on
+  its own, as a label — in a project's branch badge, in the Git mode's branch selector, its current choice and its
+  listed options alike, and in the project menu's Switch branch submenu — whatever characters it starts with, so a name
+  opening with Arabic letters still reads from the left. So does an account's sign-in email. Where such a path, branch
+  name or email is cut, the tooltip giving its full text reads left to right too, as one left-to-right block whose
+  wrapped lines all start at the tooltip's left edge (see "Names too long for their space" and "How a tooltip behaves"
+  in `docs/product/labels-and-tooltips.md`). Settings' Default clone directory field reads left to right as one control:
+  its folder mark stays beside the path at the field's left edge, rather than sitting at the field's leading edge with
+  the path pushed away from it, and the tooltip giving the full path the field abbreviates reads left to right the same
+  way, its leading `/` at the left (see "Default clone directory" in `docs/product/settings.md`). The Browse button
+  beside the field keeps to the reading direction's end, so it is at the field's left.
 - **A value named inside a sentence keeps its own order**, wherever that sentence appears — a message, a tooltip, a
   `title`, a toast or an accessible name. A path, a branch name, a commit id, a `git` or operating-system message quoted
   inside localized wording (see "What follows the language" in `docs/product/language.md`) and a name the user typed all
-  read in the direction of their own text inside right-to-left prose — one the sentence sets as code reads left to
-  right — and the quotation marks, parentheses and full stop the sentence puts around them stay where the sentence
-  puts them.
+  read in the direction of their own text inside right-to-left prose — one the sentence sets as code reads left to right
+  — and the quotation marks, parentheses and full stop the sentence puts around them stay where the sentence puts them.
 - The rail's waiting count carries its badge at the hand glyph's top left rather than its top right, so the badge points
   into the content panel and the overflow pill stays clear of the window's edge, the rail being down the window's right
   edge (see "The rail" in `docs/product/window-layout.md`).
@@ -56,8 +56,7 @@ product docs name for parts of the window:
   Previous file and Next file buttons and its wrap control, focus mode's back button, the directory browser's
   parent-directory entry, the Open panel item's icon in a project's action menu, a window with a panel at its side, an
   action menu's submenu chevron, which points towards the side the submenu opens on — left here — and the chevron of a
-  collapsed project row, which points left. An expanded row's chevron points down, as in
-  left-to-right.
+  collapsed project row, which points left. An expanded row's chevron points down, as in left-to-right.
 - Glyphs that hang their rows or lines off the leading side are mirrored too: the Projects heading's Expand all projects
   / Collapse all projects button, whose own chevrons stay vertical, the Git mode's Group by folder toggle in either of
   its two states, and the "View all" glyph of an archive submenu and of a focus mode's archived list.

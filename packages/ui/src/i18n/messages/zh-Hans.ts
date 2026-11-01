@@ -705,6 +705,9 @@ export const zhHans: Translation<"other"> = {
 
   "titleBar.back": "后退",
   "titleBar.forward": "前进",
+  "titleBar.aside.float": "浮动面板区域",
+  "titleBar.aside.dock": "固定面板区域",
+  "titleBar.aside.show": "显示面板区域",
   "titleBar.sidebar.hide": "隐藏会话列表",
   "titleBar.sidebar.show": "显示会话列表",
   "titleBar.report.hide": "隐藏报告面板",

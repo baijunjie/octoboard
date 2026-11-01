@@ -133,7 +133,7 @@ export const layoutScenarios: Scenario[] = [
     title: "Hidden docked sidebar",
     state: railState,
     preferences: { sidebarVisible: false, sidebarConsole: main.id },
-    description: "The breadcrumb remains while the sidebar is hidden. From fully closed, hover the sidebar toggle, then Main's avatar and another console's avatar: each inset preview fades in while the whole card rises by 4% of its own height over 240ms, shows its console and fades out as it sinks back, so let it fully close before comparing the next trigger. A preview card's header line runs level with the docked report header's. Press the toggle to compare the docked column's 200ms opening and closing with the report pane.",
+    description: "The breadcrumb remains while the sidebar is hidden. From fully closed, hover the sidebar toggle, then Main's avatar and another console's avatar: each inset preview fades in while the whole card rises by 4% of its own height over 240ms, shows its console and fades out as it sinks back, so let it fully close before comparing the next trigger. Rest on a blank part of the left rail for 200ms to reveal the current console, then move into the card; briefly crossing the rail must leave it closed. Console avatars keep their independent 130ms preview delay. Hovering Usage, Settings, or any other rail button must not open the sidebar, and entering a button or leaving the rail cancels the blank-area delay. Move from the top-bar sidebar toggle through the small gap directly below it into the card: the preview stays visible even if the pointer pauses in that gap. These rail triggers are absent in the single-card mobile layout. A preview card's header line runs level with the docked report header's. Press the toggle to compare the docked column's 200ms opening and closing with the report pane.",
     steps: [
       (ui) => ui.press(ui.session("Hub")),
     ],
@@ -143,11 +143,11 @@ export const layoutScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Floating sidebar card beside the docked Files pane",
-    // The hidden docked sidebar exists only in a docked window (from 1168px).
-    minWidth: 1168,
+    // The hidden docked sidebar exists only in a docked window (from 1394px).
+    minWidth: 1394,
     state: railState,
     preferences: { sidebarVisible: false, sidebarConsole: main.id },
-    description: "The hidden docked sidebar floated in by hovering its toggle, over the terminal, while the Files panel stays docked on the other side, to compare the two cards: both are rounded-xl with the same hairline edge, the same drop shadow and the same 8px gap to the top bar and the bottom (and to the rail or window edge), and their headers are both 40px tall with the same type, padding and bottom line. Any difference in corner radius, edge, shadow or header height between them is a mismatch.",
+    description: "The hidden docked sidebar floated in by hovering its toggle, over the terminal, while the Files panel stays docked on the other side, to compare the two cards: both are rounded-xl with the same hairline edge, the same drop shadow and the same 8px gap to the top bar and the bottom (and to the rail or window edge), and their headers are both 40px tall with the same type, padding and bottom line. Any difference in corner radius, edge, shadow or header height between them is a mismatch. Dismiss the sidebar and rest on a blank part of its rail for 200ms to reveal it again; crossing the rail briefly or hovering a rail action button must not reveal it. Console avatars retain their independent 130ms preview delay, and moving from the blank rail into the revealed card keeps it visible.",
     steps: [
       (ui) => ui.press(ui.session("Fix the summary layout")),
       (ui) => ui.floatPane(ui.t("titleBar.sidebar.show")),
@@ -170,11 +170,11 @@ export const layoutScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Floating report",
-    // Hovering a toggle floats a panel in only where the right pane docks (from 782px); below it a press does.
-    minWidth: 782,
+    // Hover reveals a pane from 594px up; below that only a press opens a single mobile card.
+    minWidth: 594,
     state: railState,
     preferences: { panelStacks: { report: { open: [], shares: {} } } },
-    description: "The report floated in over the terminal by hovering the Report toggle with no panel open, the pointer now resting on it, after fading in as the card rose by 4% of its own height. Only the Report card floats, with its header (the Report name, the page arrows and count, Close panel), rounded corners, hairline edge and the same drop shadow as the sidebar's floating card, 8px from the top bar, the window's end and the bottom; the terminal shows in the gap around it, unobscured. The Report toggle is not pressed: pressing it docks the pane.",
+    description: "The report floated in over the terminal by hovering the Report toggle with no panel open, the pointer now resting on it, after fading in as the card rose by 4% of its own height. Only the Report card floats, with its header (the Report name, the page arrows and count, Close panel), rounded corners, hairline edge and the same drop shadow as the sidebar's floating card, 8px from the top bar, the window's end and the bottom; the terminal shows in the gap around it, unobscured. The Report toggle is not pressed: pressing it opens the panel, which docks on a wide screen or stays in the floating group below 1394px.",
     steps: [
       (ui) => ui.press(ui.session("Hub")),
       (ui) => ui.floatPane(ui.t("titleBar.report.show")),
@@ -188,7 +188,7 @@ export const layoutScenarios: Scenario[] = [
     width: 390,
     state: railState,
     preferences: { sidebarConsole: main.id },
-    description: "Below 782px the rail is not in the row: the content panel spans the window's full width under the top bar, and its top corner at the start edge is square, where wider windows round it beside the rail. The sidebar toggle brings the rail in with the drawer (see Mobile sidebar card), and so does a swipe towards the end of the line on a touch screen (a touch-emulating window will do), the card sliding in from the start edge; a swipe towards the start opens the right pane's panels one at a time, in the order of the top bar's toggles (here only Files: Report has no pages, Processes has confirmed no processes, and the shell Terminal has no tabs; nonempty panels join the cycle in toggle order), each sliding in from the end edge and the last returning to the first, and one towards the end closes the open panel. The width is fixed because the layout exists only in this range.",
+    description: "Below 594px the rail is not in the row: the content panel spans the window's full width under the top bar, and its top corner at the start edge is square, where wider windows round it beside the rail. The sidebar toggle brings the rail in with the drawer (see Mobile sidebar card), and so does a swipe towards the end of the line on a touch screen (a touch-emulating window will do), the card sliding in from the start edge; a swipe towards the start opens the right pane's panels one at a time, in the order of the top bar's toggles (here only Files: Report has no pages, Processes has confirmed no processes, and the shell Terminal has no tabs; nonempty panels join the cycle in toggle order), each sliding in from the end edge and the last returning to the first, and one towards the end closes the open panel. The width is fixed because the layout exists only in this range.",
     steps: [
       (ui) => ui.swipe("end"),
       // Picking a session closes the drawer, and the rail goes with it.
@@ -227,14 +227,12 @@ export const layoutScenarios: Scenario[] = [
     title: "Files panel beside or over the terminal",
     state: railState,
     preferences: { sidebarConsole: main.id },
-    description: "In a wide window the Files panel docks beside the terminal as one card, with the Files and Changes tabs, the filter and refresh buttons and Close panel in its header and the top bar's Files toggle pressed. Choose Narrow (800px): the sessions list is a drawer, closed here, but the right pane still docks down to 782px, its width clamped to what leaves the terminal its 398px floor, so the Files card sits beside the terminal about 346px wide, with the same card and header fitting. Choose Phone (420px): below 782px the right pane no longer docks beside the terminal and the Files card floats over it, the only panel shown, with a dimmed 48px strip of the terminal beside it, reaching the window's start edge (mirrored under right-to-left) since no rail stands there, that closes it when pressed. The terminal under the card keeps the whole width and cannot be focused. The card fades in as it slides in from the window's end edge (the start edge under right-to-left), the dimmed strip fading with it; on a touch screen a swipe towards the end of the line closes it, and one towards the start switches to the next panel. The top bar's Files toggle is pressed; Close panel, the strip and Escape all close the card, and opening the sessions drawer closes it, as opening the card closes the drawer.",
+    description: "In a wide window the Files panel docks beside the terminal as one card, with the Files and Changes tabs, the filter and refresh buttons and Close panel in its header and the top bar's Files toggle pressed. Choose Narrow (800px): below 1394px both side panes float over the agent terminal instead of taking its width. The Files card appears by hovering or pressing its toggle and hides after the pointer leaves. While the floating group is visible, pressing Files again closes only that card; any other open cards remain, and closing the last card hides the group. When the group is hidden, pressing an already-open panel’s icon reveals it first. Either side’s group icon reveals its floating group without toggling it closed. Escape dismisses a floating group, and a card’s X closes that card. Other open right-hand panels would float with Files. Choose Phone (420px): below 594px only one right-hand card floats over the terminal, with a dimmed 48px strip of the terminal beside it, reaching the window's start edge (mirrored under right-to-left) since no rail stands there, that closes it when pressed. The terminal under the card keeps the whole width and cannot be focused. The card fades in as it slides in from the window's end edge (the start edge under right-to-left), the dimmed strip fading with it; on a touch screen a swipe towards the end of the line closes it, and one towards the start switches to the next panel. The top bar's Files toggle is pressed; Close panel, the strip and Escape all close the card, and opening the sessions drawer closes it, as opening the card closes the drawer.",
     steps: [
       (ui) => ui.press(ui.session("Fix the summary layout")),
-      // Picking a session closes the drawer below 782px, which clears any floating panel: the panel is brought in
-      // after it.
-      (ui) => ui.showPanel("files"),
-      // Above 782px a pick leaves the drawer up over the terminal.
+      // Picking a session closes the mobile sidebar, which clears any floating panel.
       (ui) => ui.closeDrawer(),
+      (ui) => ui.showPanel("files"),
     ],
   },
   {
@@ -242,11 +240,11 @@ export const layoutScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Floating Files panel",
-    // Hovering a toggle floats a panel in only where the right pane docks (from 782px); below it a press does.
-    minWidth: 782,
+    // Hover reveals a pane from 594px up; below that only a press opens a single mobile card.
+    minWidth: 594,
     state: railState,
     preferences: { panelStacks: { project: { open: [], shares: {} } } },
-    description: "The Files panel floated in over the agent terminal by hovering the Files toggle with no panel open, the pointer now resting on it, after fading in as the card rose by 4% of its own height. Only the Files card floats, with rounded corners, a hairline edge and the same drop shadow as the sidebar's floating card, 8px from the top bar, the window's end and the bottom; the terminal shows in the gap around it, unobscured. The Files toggle is not pressed: pressing it docks the pane.",
+    description: "The Files panel floated in over the agent terminal by hovering the Files toggle with no panel open, the pointer now resting on it, after fading in as the card rose by 4% of its own height. Only the Files card floats, with rounded corners, a hairline edge and the same drop shadow as the sidebar's floating card, 8px from the top bar, the window's end and the bottom; the terminal shows in the gap around it, unobscured. The Files toggle is not pressed: pressing it opens the panel, which docks on a wide screen or stays in the floating group below 1394px.",
     steps: [
       (ui) => ui.press(ui.session("Fix the summary layout")),
       (ui) => ui.floatPane(ui.t("titleBar.files.show")),

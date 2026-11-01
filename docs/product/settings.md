@@ -23,14 +23,13 @@ change all but the last two (see "Application settings: `get_settings` and `upda
 
 ## In a narrow window
 
-Below 1168 px — the width under which the sidebar becomes a drawer (see "Below 1168 px: the sidebar becomes a drawer"
-in `docs/product/sidebar-drawer.md`), so only a client with no window minimum of its own, such as a
-plain browser, gets here — the dialog fills the window inside a 16 px margin on every side, and the list of sections
-becomes a row of tabs along its top, above the selected section. When the tabs do not fit the row's width, the row
-scrolls sideways, fading at the end with more beyond it (see "The surfaces that fade" in
-`docs/product/scrolling-surfaces.md`), and the selected section's tab is scrolled into view when the dialog opens.
-While the connection banner's strip is on screen the dialog keeps that 16 px clear of the strip's top edge instead of
-the window's bottom edge, and is that much shorter (see "What an open dialog, menu or popover covers" in
+Below 1394 px — the width under which the sidebar floats (see "Below 1394 px: the sidebar floats" in
+`docs/product/sidebar-drawer.md`) — the dialog fills the window inside a 16 px margin on every side, and the list of
+sections becomes a row of tabs along its top, above the selected section. When the tabs do not fit the row's width, the
+row scrolls sideways, fading at the end with more beyond it (see "The surfaces that fade" in
+`docs/product/scrolling-surfaces.md`), and the selected section's tab is scrolled into view when the dialog opens. While
+the connection banner's strip is on screen the dialog keeps that 16 px clear of the strip's top edge instead of the
+window's bottom edge, and is that much shorter (see "What an open dialog, menu or popover covers" in
 `docs/product/window-layout.md`).
 
 Below 640 px each setting row puts its control under its name and its line of text instead of beside them.
@@ -85,11 +84,11 @@ keyboard focus back on the selected session's terminal, unless a dialog is open 
 dialog. It goes to the control in that dialog that opened Settings — the console dialog's Manage accounts button,
 say — while that control is still there, even when the press gave it no focus; else to the control that dialog opens
 on (see "Where keyboard focus starts in a form dialog" in `docs/product/dialogs.md`); and only else to the dialog
-itself. Opened from the rail while the sidebar's drawer is open, it gives focus back to the
-rail instead (see "Below 1168 px: the sidebar becomes a drawer" in `docs/product/sidebar-drawer.md`).
+itself. Opened from the rail while the floating sidebar is open, it gives focus back to the
+rail instead (see "Below 1394 px: the sidebar floats" in `docs/product/sidebar-drawer.md`).
 
 With no dialog beneath it and no session's terminal to take focus — no session is selected, or Settings was opened
-from the open drawer — focus is still handed to something. It goes, in order:
+from the open sidebar overlay — focus is still handed to something. It goes, in order:
 
 1. to the control whose press opened Settings, while that control is still on screen, even when the press gave it no
    focus — a screen reader's press on the terminal empty panel's **Add agent**, say, or on the rail's **Settings**

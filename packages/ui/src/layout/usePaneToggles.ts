@@ -5,7 +5,7 @@ import { keepsEscape } from "../components/focus/keepsEscape";
 import { useLatest } from "../components/hooks/useLatest";
 import { isImeKey } from "../imeKey";
 import { CANNOT_HOVER } from "../touchInput";
-import { useIsNarrow, useMediaQuery } from "./breakpoint";
+import { minWidthQuery, useIsNarrow, useMediaQuery } from "./breakpoint";
 import { useDockedPanelVisible } from "./panelVisibility";
 import { type ConsolePeek, useConsolePeek } from "./useConsolePeek";
 import { MODAL_OPEN } from "./useRegionCycle";
@@ -37,7 +37,7 @@ export interface PanePeek {
    * the aside; the sidebar's is its toggle and the rail's avatars, through `useConsolePeek`); does
    * nothing where the pane cannot float, and closes the other side's floating pane. It arms no slide-away timer: that
    * starts when the pointer leaves the pane or whatever brought it up (`leave`). */
-  reveal: () => void;
+  reveal: (force?: boolean) => void;
   /** The pointer is on the floating pane again: cancels a pending slide-away. */
   keep: () => void;
   /** The pointer left whatever kept the floating pane up: slides it away after a short delay. */
@@ -57,8 +57,7 @@ interface PeekControl extends PanePeek {
 }
 
 /** The state, timer and focus hand-off of one pane's hover reveal; `peekable` is whether the pane
- * may float right now (the pane is not docked, and exists at all; the sidebar's also only in a wide
- * window). */
+ * may float right now: the pane exists and is not docked, outside mobile interaction. */
 function usePanePeek(panel: Pane, peekable: boolean, focusTerminal: () => void, keyboardInput?: () => boolean): PeekControl {
   const [active, setActive] = useState(false);
   const activeRef = useRef(false);
@@ -93,7 +92,7 @@ function usePanePeek(panel: Pane, peekable: boolean, focusTerminal: () => void, 
     const tick = () => {
       const popupOpen = document.querySelector(`[data-pane=${panel}] [aria-haspopup][aria-expanded=true]`);
       const pointerOn = document.querySelector(`[data-pane=${panel}]:hover`);
-      if (focusKeeps() || popupOpen || pointerOn || document.querySelector(MODAL_OPEN)) {
+      if (focusKeeps() || popupOpen || pointerOn || document.querySelector(MODAL_OPEN) || document.documentElement.classList.contains("pane-resizing")) {
         timer.current = setTimeout(tick, PEEK_HIDE_DELAY_MS);
       } else {
         hide();
@@ -101,9 +100,9 @@ function usePanePeek(panel: Pane, peekable: boolean, focusTerminal: () => void, 
     };
     timer.current = setTimeout(tick, PEEK_HIDE_DELAY_MS);
   };
-  const reveal = () => {
+  const reveal = (force = false) => {
     clearTimeout(timer.current);
-    if (!peekable) return;
+    if (!peekable && !force) return;
     setPeek(true);
   };
 
@@ -145,18 +144,16 @@ export interface PaneToggles {
  * (`panelVisibility.ts`). Both states live in one place since the toggle sits in the window chrome,
  * and widening the window past the breakpoint has to be able to close the overlay.
  *
- * The aside has no toggle or drawer of its own: it is docked while a panel is open
- * (`panels/stackState.ts`), floating over the terminal instead only in a window too narrow to dock it
- * (`useAsideFloats`), and with none open it floats in over the terminal while the pointer
- * rests on a panel kind's toggle (`asidePeek`), showing that panel; pressing the toggle docks it.
+ * The aside's stored panel stack is independent of its docking choice. A floating group uses
+ * `asidePeek` to reveal all its open cards; with none open it previews a hovered kind instead.
+ * Mobile interaction (`useAsideFloats`) shows only one panel at a time.
  * Likewise a hidden docked sidebar floats in from its toggle or a console's avatar on the rail
  * (`sidebarPeek`). Leaving a floating pane (or Escape) hides it again. The two never float
  * together: revealing one hides the other.
  *
  * `hasSidebar` is whether the sidebar is rendered at all (it is not while there is no console);
- * `asidePeekable` is whether the aside may float in now: something owns it, its column has no
- * panel in it (none open, or the one open maximized, which folds the column away) and the window
- * is wide enough to dock it (narrower, a panel opens only on a press). Neither pane floats in on a
+ * `asidePeekable` is whether the aside may reveal its floating group or preview an empty docked
+ * column, with an owner and outside mobile interaction. Neither pane floats in on a
  * device whose primary input cannot hover. `focusTerminal` is where keyboard focus goes when the
  * pane holding it is hidden.
  * `drawer` is the drawer's open state when the caller keeps it, for what has to know it before this
@@ -181,6 +178,7 @@ export function usePaneToggles({
 }): PaneToggles {
   const closeFloating = useLatest(closeFloatingPanel);
   const isNarrow = useIsNarrow();
+  const mobile = !useMediaQuery(() => minWidthQuery("phone"));
   // A device whose primary input cannot hover (a phone or a tablet's touch screen) floats no pane in:
   // a tap on a toggle or an avatar is a press, never a rest of the pointer.
   const canHover = !useMediaQuery(() => CANNOT_HOVER);
@@ -188,7 +186,7 @@ export function usePaneToggles({
   const ownDrawer = useState(false);
   const [sidebarOpen, setSidebarOpen] = drawer ?? ownDrawer;
   const [sidebarDocked, setSidebarDocked] = useDockedPanelVisible("sidebar");
-  const sidebarPeek = usePanePeek("sidebar", canHover && !isNarrow && !sidebarDocked && hasSidebar, focusTerminal);
+  const sidebarPeek = usePanePeek("sidebar", canHover && !mobile && (isNarrow || !sidebarDocked) && hasSidebar, focusTerminal);
   const asidePeek = usePanePeek("aside", canHover && asidePeekable, focusTerminal, () => keyboardInput.current);
   const revealPeek = (mine: PeekControl, other: PeekControl) => () => {
     if (!mine.peekable) return;
@@ -247,6 +245,14 @@ export function usePaneToggles({
       if (sidebarDocked) releaseFocus("sidebar", focusTerminal);
       else sidebarPeek.hide(false);
       return setSidebarDocked(!sidebarDocked);
+    }
+    if (!mobile) {
+      if (canHover) revealPeek(sidebarPeek, asidePeek)();
+      else {
+        setSidebarOpen(true);
+        asidePeek.hide();
+      }
+      return;
     }
     if (sidebarOpen) return closeSidebar();
     setSidebarOpen(true);
@@ -307,13 +313,14 @@ export function usePaneToggles({
     // The aside's float would come out over the sidebar's open drawer, so the drawer makes way.
     asidePeek: {
       ...asidePeek,
-      reveal: () => {
-        if (!asidePeek.peekable) return;
+      reveal: (force = false) => {
+        if (!asidePeek.peekable && !force) return;
         if (sidebarOpen) closeSidebar();
-        revealPeek(asidePeek, sidebarPeek)();
+        sidebarPeek.hide();
+        asidePeek.reveal(force);
       },
     },
-    sidebarShown: isNarrow ? sidebarOpen : sidebarDocked,
+    sidebarShown: isNarrow ? sidebarOpen || (!mobile && sidebarPeek.active) : sidebarDocked,
     toggleSidebar,
     closeSidebar,
     dismissOverlays,

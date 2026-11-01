@@ -32,22 +32,23 @@ The rail's account quota panel is not a region and does not change the cycle: bo
 has floated it in. A panel opened by a tap or the keyboard is modal, as a menu is, so the keys wait until it closes (see
 "Opening the panel" in `docs/product/account-quota-panel.md`).
 
-**A region not on screen is skipped**: a docked sidebar the user has hidden, the sidebar's drawer while it is closed,
-the rail below 782 px while that drawer is closed, the rail then coming in only with it (see "Below 782 px: the rail
-comes in with the drawer" in `docs/product/sidebar-drawer.md`), a pane that is only floating in, the right pane's panels
-when nothing owns the pane or none of its panels is open, a panel with nothing to take focus (a Files panel while it is
-still loading, see "Loading the project pane" in `docs/product/project-pane.md`), the terminal and the archive view
-while a maximized panel covers them (see "Maximizing a panel" in `docs/product/right-pane-panels.md`) or a panel floats
-over them below 782 px (see "Below 782 px: one panel floats over the terminal" in `docs/product/right-pane-panels.md`),
-and the terminal when no session is selected — unless its area is then offering a creation action, which makes it a stop
-(see "A console with nothing in it" in `docs/product/session-terminal.md`) — or while the archive view covers it. With
-no console the sidebar, the archive view, the terminal and the right pane are all skipped together, none of them being
-on screen, and the welcome screen is the only stop between the rail and the update notice or the connection banner; with
-a console the welcome screen is the one skipped. The sidebar counts as shown when it is docked in the row at 1168 px and
-wider, or its drawer is open below that. A docked sidebar column that is still easing closed already counts as hidden,
-and one that is still easing open already counts as shown (see "The sidebar toggle and the panel toggles" in
-`docs/product/window-layout.md`). A right pane panel counts as shown while it is open, docked in the pane's column or
-maximized, or, below 782 px, while it floats over the terminal.
+**A region not on screen is skipped**: a docked sidebar the user has hidden, the floating sidebar while it is closed,
+the rail below 594 px while that sidebar overlay is closed, the rail then coming in only with it (see "Below 594 px: the
+rail comes in with the sidebar" in `docs/product/sidebar-drawer.md`), a large-screen sidebar hover preview, a
+single-card hover preview, hidden floating groups, the right pane's panels when nothing owns the pane or none of its
+panels is open, a panel with nothing to take focus (a Files panel while it is still loading, see "Loading the project
+pane" in `docs/product/project-pane.md`), the terminal and the archive view while a maximized panel covers them (see
+"Maximizing a panel" in `docs/product/right-pane-panels.md`) or a panel floats over them below 594 px (see "Below 594
+px: one panel floats over the terminal" in `docs/product/right-pane-panels.md`), and the terminal when no session is
+selected — unless its area is then offering a creation action, which makes it a stop (see "A console with nothing in it"
+in `docs/product/session-terminal.md`) — or while the archive view covers it. With no console the sidebar, the archive
+view, the terminal and the right pane are all skipped together, none of them being on screen, and the welcome screen is
+the only stop between the rail and the update notice or the connection banner; with a console the welcome screen is the
+one skipped. The sidebar counts as shown when it is docked in the row at 1394 px and wider, or the floating sidebar is
+revealed below that. A docked sidebar column that is still easing closed already counts as hidden, and one that is still
+easing open already counts as shown (see "The sidebar toggle and the panel toggles" in `docs/product/window-layout.md`).
+A right pane panel counts as shown while it is open, docked in the pane's column or maximized, in a revealed floating
+group, or floating alone below 594 px.
 
 Where focus lands in each region:
 
@@ -98,7 +99,7 @@ treats a device whose primary input cannot hover, such as a phone, as if the las
 - **A session picked by a tap is shown without focusing its terminal**; a tap on the terminal focuses it.
 - **Focus handed to the terminal when what held it goes away or is hidden** — a panel closing, a pane going — is not put
   in the terminal. While a maximized panel or a panel floating over the terminal covers it (see "Maximizing a panel" and
-  "Below 782 px: one panel floats over the terminal" in `docs/product/right-pane-panels.md`), focus goes to that panel's
+  "Below 594 px: one panel floats over the terminal" in `docs/product/right-pane-panels.md`), focus goes to that panel's
   first control that takes no text; otherwise to the top bar's first enabled control.
 - **A panel that floats over the terminal opened by a tap** takes focus on its first control that takes no text: in the
   Terminal panel a control of its header, not the shell; in the report panel the report page.

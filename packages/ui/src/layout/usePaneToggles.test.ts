@@ -17,10 +17,11 @@ afterEach(() => {
  * value and a way to re-render it with other panes present. The `matchMedia` stub answers
  * `matches: !narrow` to every query but the one for a device that cannot hover (`noHover`), so the
  * wide case does not exercise the reduced-motion path. */
-function mountToggles(narrow: boolean, focusTerminal: () => void = () => {}, noHover = false) {
-  document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
+function mountToggles(narrow: boolean, focusTerminal: () => void = () => {}, noHover = false, mobile = narrow) {
+  document.documentElement.style.setProperty("--breakpoint-docked", "1394px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "594px");
   vi.stubGlobal("matchMedia", (query: string) => ({
-    matches: query === "(hover: none)" ? noHover : !narrow,
+    matches: query === "(hover: none)" ? noHover : query === "(min-width: 594px)" ? !mobile : !narrow,
     media: query,
     addEventListener: () => {},
     removeEventListener: () => {},
@@ -166,7 +167,8 @@ it("leaves focus in a docked card when the aside stops being peekable as a colum
 });
 
 it("hands focus in the docked sidebar to the terminal when the window narrows it into the closed drawer", () => {
-  document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
+  document.documentElement.style.setProperty("--breakpoint-docked", "1394px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "594px");
   let narrow = false;
   const listeners = new Set<() => void>();
   vi.stubGlobal("matchMedia", (query: string) => ({
@@ -212,4 +214,45 @@ it.each([true, false])("floats neither pane in on a device that cannot hover (na
     act(() => panes().toggleSidebar());
     expect(panes().sidebarPeek.peekable).toBe(false);
   }
+});
+
+it("floats the sidebar on medium screens while retaining its wide-screen docking preference", () => {
+  const { panes } = mountToggles(true, () => {}, false, false);
+  expect(panes().sidebarDocked).toBe(true);
+  expect(panes().sidebarPeek.peekable).toBe(true);
+  act(() => panes().sidebarPeek.reveal());
+  expect(panes().sidebarPeek.active).toBe(true);
+  act(() => panes().asidePeek.reveal());
+  expect(panes().sidebarPeek.active).toBe(false);
+  expect(panes().sidebarDocked).toBe(true);
+});
+
+it("opens the floating group on a press on a touch-only medium screen", () => {
+  const { panes } = mountToggles(true, () => {}, true, false);
+  act(() => panes().asidePeek.reveal());
+  expect(panes().asidePeek.active).toBe(false);
+  act(() => panes().asidePeek.reveal(true));
+  expect(panes().asidePeek.active).toBe(true);
+  act(() => panes().dismissOverlays());
+  expect(panes().asidePeek.active).toBe(false);
+});
+
+it("keeps a medium-screen sidebar revealed when its button is pressed after hovering", () => {
+  const { panes } = mountToggles(true, () => {}, false, false);
+  act(() => panes().sidebarPeek.reveal());
+  expect(panes().sidebarShown).toBe(true);
+  act(() => panes().toggleSidebar());
+  act(() => panes().toggleSidebar());
+  expect(panes().sidebarPeek.active).toBe(true);
+  expect(panes().sidebarShown).toBe(true);
+  expect(panes().sidebarDocked).toBe(true);
+});
+
+it("keeps a touch-only medium-screen sidebar open on repeated presses", () => {
+  const { panes } = mountToggles(true, () => {}, true, false);
+  act(() => panes().toggleSidebar());
+  act(() => panes().toggleSidebar());
+  expect(panes().sidebarOpen).toBe(true);
+  expect(panes().sidebarShown).toBe(true);
+  expect(panes().sidebarDocked).toBe(true);
 });

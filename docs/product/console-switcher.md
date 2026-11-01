@@ -77,28 +77,28 @@ Forward moving to a place in another console likewise show that place's own sess
 
 ## Previewing a console from the rail
 
-While the docked sidebar is hidden, at 1168 px and wider, resting the mouse on a console's avatar floats the sidebar
-in showing **that** console — when it comes up, how it looks and when it goes away are in "A hidden pane floats in on
-hover" in `docs/product/window-layout.md`. The sidebar's toggle in the top bar floats it in as well, but always
-showing the **current** console, so that way in is never a preview: a pointer moving from an avatar onto the toggle
-puts the floating card back on the current console. For any console other than the current one, resting on its avatar
-is a **preview**:
+While the sidebar floats automatically from 594–1393 px, or its docked column is hidden at 1394 px and wider, resting
+the mouse on a console's avatar floats the sidebar in showing **that** console — when it comes up, how it looks and when
+it goes away are in "A hidden pane floats in on hover" in `docs/product/window-layout.md`. The sidebar's toggle in the
+top bar floats it in as well, but always showing the **current** console, so that way in is never a preview: a pointer
+moving from an avatar onto the toggle puts the floating card back on the current console. For any console other than the
+current one, resting on its avatar is a **preview**:
 
 - It shows the console's own view — the header, its console sessions and its projects — never a focus mode, which
   belongs to the current console only. Resting on the current console's avatar shows the sidebar as it is, focus mode
   included. Moving from one avatar to another fades the new console's view in, as switching console does.
 - **Hovering changes nothing**: the current console, its tile on the rail, the remembered console and the window's
   history all stay as they were.
-- **A press anywhere inside the floating sidebar**, with any mouse button, makes the previewed console the current
-  one, and the press then goes on to do what it does there — select a row, open a menu, start a dialog. Pressing the
-  avatar itself makes it current too, as always. Such a press closes an open archive view at once, but the terminal's
-  area and the right pane change only **once the press has ended**, and to what the press chose itself where it
-  chose something: a session the press selected is shown, with its own pane; otherwise the console's remembered
-  session is shown as described in "What switching console shows" above. A press that only gave the right pane to
-  something, as Open panel in a project's action menu does, still brings the remembered session into the terminal's
-  area, and the right pane keeps what the press gave it. In the window's history the console change together with the press's selection, or
-  with the remembered session shown at its end, counts as one visit (see "What counts as a place" in
+- **A press anywhere inside the floating sidebar**, with any mouse button, makes the previewed console the current one,
+  and the press then goes on to do what it does there — select a row, open a menu, start a dialog. Pressing the avatar
+  itself makes it current too, as always. Such a press closes an open archive view at once, but the terminal's area and
+  the right pane change only **once the press has ended**, and to what the press chose itself where it chose something:
+  a session the press selected is shown, with its own pane; otherwise the console's remembered session is shown as
+  described in "What switching console shows" above. A press that only gave the right pane to something, as Open panel
+  in a project's action menu does, still brings the remembered session into the terminal's area, and the right pane
+  keeps what the press gave it. In the window's history the console change together with the press's selection, or with
+  the remembered session shown at its end, counts as one visit (see "What counts as a place" in
   `docs/product/navigation-history.md`).
-- Showing the sidebar for good with its toggle while it previews a console shows the current console, not the one the
-  card was previewing. The card goes away and the column eases open; see "Hiding the sidebar"
+- At 1394 px and wider, showing the sidebar for good with its toggle while it previews a console shows the current
+  console, not the one the card was previewing. The card goes away and the column eases open; see "Hiding the sidebar"
   and "A hidden pane floats in on hover" in `docs/product/window-layout.md`.

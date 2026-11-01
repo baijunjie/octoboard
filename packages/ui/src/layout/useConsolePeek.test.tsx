@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
+import { PANE_EDGE_DWELL_MS } from "./paneOverlay";
 import { CONSOLE_PEEK_DWELL_MS, type ConsolePeek, useConsolePeek } from "./useConsolePeek";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -87,7 +88,7 @@ it("keeps showing the console after the sidebar slid away, and drops it once the
   expect(peek().consoleId).toBeUndefined();
 });
 
-it("does nothing where the sidebar cannot float: docked, or a narrow window", () => {
+it("does nothing where the sidebar cannot float: docked, or mobile", () => {
   const { control, peek } = mount(false);
   act(() => peek().hoverConsole("c-1"));
   wait(CONSOLE_PEEK_DWELL_MS * 2);
@@ -137,4 +138,49 @@ it("cancels a pending dwell when the toggle floats the sidebar in", () => {
   wait(CONSOLE_PEEK_DWELL_MS * 2);
   expect(control.reveal).toHaveBeenCalledTimes(1);
   expect(peek().consoleId).toBeUndefined();
+});
+
+it("reveals the current console after resting on blank rail space, without resetting on each move", () => {
+  const { control, peek } = mount();
+  act(() => peek().hoverRail());
+  wait(80);
+  act(() => peek().hoverRail());
+  wait(PANE_EDGE_DWELL_MS - 81);
+  expect(control.reveal).not.toHaveBeenCalled();
+  wait(1);
+  expect(control.reveal).toHaveBeenCalledOnce();
+  expect(peek().consoleId).toBeUndefined();
+});
+
+it("cancels blank-rail dwell on a control or when floating becomes unavailable", () => {
+  const { control, peek, render } = mount();
+  act(() => peek().hoverRail());
+  wait(PANE_EDGE_DWELL_MS - 1);
+  act(() => peek().leaveRail());
+  wait(PANE_EDGE_DWELL_MS);
+  expect(control.reveal).not.toHaveBeenCalled();
+  act(() => peek().hoverRail());
+  control.peekable = false;
+  render();
+  wait(PANE_EDGE_DWELL_MS);
+  expect(control.reveal).not.toHaveBeenCalled();
+});
+
+it("lets an avatar keep its own preview after leaving blank rail space", () => {
+  const { control, peek } = mount();
+  act(() => peek().hoverRail());
+  wait(100);
+  act(() => peek().hoverConsole("c-2"));
+  wait(CONSOLE_PEEK_DWELL_MS);
+  expect(control.reveal).toHaveBeenCalledOnce();
+  expect(peek().consoleId).toBe("c-2");
+});
+
+it("clears a pending blank-rail reveal on unmount", () => {
+  const { control, peek } = mount();
+  act(() => peek().hoverRail());
+  act(() => root!.unmount());
+  expect(vi.getTimerCount()).toBe(0);
+  wait(PANE_EDGE_DWELL_MS);
+  expect(control.reveal).not.toHaveBeenCalled();
 });

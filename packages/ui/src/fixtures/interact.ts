@@ -190,10 +190,9 @@ export interface Ui {
    * in a panel starts with it, after the session is selected, so that the scenario runs at any width the page's
    * control picks; a closed panel's content is not in the page, so nothing else finds it. */
   showPanel: (kind: "files" | "terminal" | "report") => Promise<void>;
-  /** Closes the sidebar's drawer if it is open: below the docked breakpoint, where the toggle reads "Hide sessions"
-   * while the drawer is up. In a docked window, where the sidebar is not a drawer, and with the drawer already closed,
-   * it does nothing. Called right after a pick whose target is in the terminal area: a pick closes the drawer below
-   * the phone breakpoint but leaves it up above it, over the terminal's left side. */
+  /** Closes an open sidebar overlay: a phone's Hide sessions toggle closes its card, while the
+   * medium-width Show sessions button only reveals it, so Escape closes that floating card.
+   * A docked or already hidden sidebar is left alone. */
   closeDrawer: () => Promise<void>;
   /** Swipes a finger sideways across the middle of the window, `toward` the edge at the start or the end of the
    * line (the left or the right edge in left-to-right text, the other way round in right-to-left, as the document's
@@ -316,8 +315,9 @@ export interface Ui {
    * which floats the pane in over the content, then on to the pane (the right pane's first card), which
    * keeps it there for as long as the pointer rests on it, as a user would reach its content; no
    * tooltip is left up over it. It returns once the floating pane has finished fading in. Fails if
-   * no pane floats in, which also catches a toggle whose pane is docked. */
-  floatPane: (toggle: Matcher) => Promise<void>;
+   * no pane floats in, which also catches a toggle whose pane is docked. With `mobilePanel`,
+   * phone widths open that single card instead, since the group hover trigger is absent there. */
+  floatPane: (toggle: Matcher, mobilePanel?: "files" | "terminal" | "report") => Promise<void>;
   /** Moves the pointer onto the first control named `host` and leaves it there, as `hoverIndicator`
    * does, for a control whose tooltip is anchored to it rather than linked to it (a resize handle's,
    * or an agent tab's that is not installed), mounted only while the pointer is on the control and
@@ -984,8 +984,10 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       }, `Nothing to hover in the label of the menu item matching ${String(item)}${line === undefined ? "" : ` that reads ${String(line)}`}`);
       await expectAnchoredTooltip(`The label of the menu item matching ${String(item)}`, tooltip);
     },
-    async floatPane(toggle) {
+    async floatPane(toggle, mobilePanel) {
+      if (mobilePanel && below("phone")) return this.showPanel(mobilePanel);
       const control = await waitFor(() => find(toggle), `Nothing to hover matching ${String(toggle)}`);
+      const paneId = control.getAttribute("data-pane-toggle") ?? control.getAttribute("aria-controls");
       pointAt(control);
       const pane = await waitFor(() => {
         // A docked pane is part of the layout; only a floating one is fixed over it. The right
@@ -993,17 +995,20 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
         // hidden-docked, so the visibility check tells its floating from its being away.
         // It is settled once its fade-up has ended: fully opaque, visible and with no transition running.
         for (const found of doc.querySelectorAll<HTMLElement>("[data-pane=aside], [data-pane=sidebar]")) {
+          if (paneId && found.id !== paneId) continue;
           const style = found.ownerDocument.defaultView?.getComputedStyle(found);
           const settled = style?.position === "fixed" && style.visibility === "visible" && style.opacity === "1" && (found.getAnimations?.().length ?? 0) === 0;
           if (settled) return found;
         }
         return undefined;
       }, `The control matching ${String(toggle)} floated in no pane under the pointer`);
-      const init = { bubbles: true, pointerType: "mouse" } as const;
       // The floating pane's frame passes pointer events through, so the pointer lands on a card.
       const target = pane.querySelector<HTMLElement>("[data-panel-card]") ?? pane;
+      const box = target.getBoundingClientRect();
+      const init = { bubbles: true, pointerType: "mouse", clientX: box.x + box.width / 2, clientY: box.y + box.height / 2 } as const;
       control.dispatchEvent(new PointerEvent("pointerout", { ...init, relatedTarget: target }));
       target.dispatchEvent(new PointerEvent("pointerover", { ...init, relatedTarget: control }));
+      target.dispatchEvent(new PointerEvent("pointermove", init));
       await wait(TOOLTIP_DELAY_MS + TOOLTIP_SHOW_MS);
     },
     async hoverSessionContext(row) {
@@ -1200,12 +1205,24 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       const [show, hide] = [t(`titleBar.${kind}.show`), t(`titleBar.${kind}.hide`)];
       const toggle = await waitFor(() => find((name) => name === show || name === hide), `Nothing is named ${show} or ${hide} to bring the panel in with`);
       if (nameOf(toggle) === show) await clickWhenFound(() => toggle, "");
+      else {
+        // An open panel can belong to a floating group that is currently hidden. Reveal that
+        // group without pressing its toggle, which would close the panel in the saved stack.
+        const pane = doc.querySelector<HTMLElement>("[data-pane=aside]");
+        const style = pane && doc.defaultView?.getComputedStyle(pane);
+        if (!pane || style?.visibility === "hidden" || style?.opacity === "0") await this.floatPane(hide);
+      }
     },
     async closeDrawer() {
       if (!below("docked")) return;
       const [show, hide] = [t("titleBar.sidebar.show"), t("titleBar.sidebar.hide")];
       const toggle = await waitFor(() => find((name) => name === show || name === hide), `Nothing is named ${show} or ${hide} to close the drawer with`);
-      if (nameOf(toggle) === hide) await clickWhenFound(() => toggle, "");
+      if (below("phone")) {
+        if (nameOf(toggle) === hide) await clickWhenFound(() => toggle, "");
+      } else if (toggle.getAttribute("aria-expanded") === "true") {
+        toggle.focus();
+        await this.key("Escape");
+      }
     },
     async pressTab(matcher) {
       await clickWhenFound(() => findAll(matcher).find((element) => element.matches('[role="tab"]')), `No tab matching ${String(matcher)}`);

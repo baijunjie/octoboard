@@ -96,5 +96,5 @@ keyboard focus. With reduced motion requested by the system, the view opens and 
 
 It takes keyboard focus as it opens, so keystrokes stop reaching the terminal it covers, and it keeps focus after a
 deletion. It is a region of its own in the `F6` cycle (see "Moving focus between regions with F6" in
-`docs/product/moving-focus-between-regions.md`). Below 1168 px, where the sidebar is a drawer, opening the archive
-view closes the sidebar's drawer so that the view is not hidden behind it.
+`docs/product/moving-focus-between-regions.md`). Below 1394 px, opening the archive view closes an explicitly opened
+sidebar overlay. A sidebar revealed by hover follows its usual pointer and keyboard-focus dismissal rules.

@@ -11,8 +11,10 @@ export interface AsideLayout {
   width: number;
   /** The docked column's floor, shared with its width clamp and resize handle. */
   minWidth?: number;
-  /** The hover reveal of the aside while it has no panel open: the cards float over the terminal,
-   * showing the panel whose toggle the pointer is on. `undefined` while the pane is docked. */
+  /** Keep open cards mounted while their floating group is hidden. */
+  keepMounted?: boolean;
+  /** Reveals the floating group, or one hovered kind when none are open.
+   * `undefined` while the pane is docked. */
   peek?: PanePeek;
   /** Docked with no card in its column, its one open panel being maximized over the agent
    * terminal's area (`panels/PanelStack.tsx`): it takes no room in the row, so that area, and the
@@ -20,8 +22,8 @@ export interface AsideLayout {
    * floating pane's rules look for (`id`, `data-pane`): a panel floating in comes in a pane of its
    * own (`panels/RightPane.tsx`). */
   folded?: boolean;
-  /** The window is too narrow to dock the pane beside the terminal (`useAsideFloats`): with a panel
-   * open it floats over the agent terminal's area instead, at its chosen width capped to that area
+  /** Mobile interaction shows one open panel over the agent terminal's area,
+   * at its chosen width capped to that area
    * less a strip to dismiss it by, and takes no room in the row. */
   overlay?: boolean;
   /** The kind of the panel floating over the terminal in that window, while one is (`overlay`). */
@@ -36,7 +38,7 @@ export interface AsideLayout {
  * nothing in that gap but what is behind it, the agent terminal's background, so the cards read as
  * lying on the content.
  *
- * While it has a panel open it is docked, a row sibling of the terminal that takes its room from it
+ * While docked it is a row sibling of the terminal that takes its room from it
  * and shrinks to the row's available room down to `minWidth` (320px by default), and docking (and
  * going, when its last panel closes) is at once. In a window too narrow for that (`overlay`, a phone)
  * it floats over the terminal's area instead, holding one panel at a time
@@ -48,14 +50,14 @@ export interface AsideLayout {
  * place and back out of it, sliding in from the end edge and back to it (`useFadeUp`, replayed when
  * another panel takes its place, at once under reduced motion), staying inert while it goes, with no hover's card taking its place until it
  * has gone; the terminal under it keeps its size, and `data-floating-panel` marks it for the
- * terminal's focus hand-off. With no panel open it is nothing, except while `peek` is active (the
- * pointer is on a panel kind's toggle): then it is a fixed overlay at `--aside-width` (capped at
- * 92vw), so only its cards are on the terminal, whose pointer events the gap does not take. The
+ * terminal's focus hand-off. With `peek`, the group floats at `--aside-width`, capped to leave
+ * the rail clear. The gaps pass pointer events through except for the width grip; only the cards
+ * cover the terminal. With no open card it previews the hovered kind instead. The
  * cards look the same docked and floating (`PANEL_CARD_CLASS`, the sidebar's floating card). It
  * floats in and out as the sidebar's floating card does: fading in as each card slides in from the
  * end edge, and the other way out (only the desktop hover's peek rises by 4% of the card's height),
  * in `PANE_INSET_MS` with the sidebar's easing and reduced-motion handling (`usePaneDockMotion`
- * holds both), and is not rendered once it has gone.
+ * holds both). An open floating group stays mounted while hidden to retain its contents.
  *
  * `children` can be a function of the hover's `peek` the pane is following, which is none while a
  * floating panel fades away, so the stack keeps the leaving card rather than the hovered one.
@@ -72,8 +74,8 @@ function motionOf(shown: boolean, preparing: boolean): "shown" | "away" | "prepa
   return preparing ? "preparing" : shown ? "shown" : "away";
 }
 
-export function AsidePane({ layout, children }: { layout: AsideLayout; children?: React.ReactNode | ((peek: PanePeek | undefined) => React.ReactNode) }): React.ReactElement | null {
-  const { width, minWidth = 320, peek: hoverPeek, folded = false, overlay = false, floatingKind } = layout;
+export function AsidePane({ layout, children, resizeHandle }: { layout: AsideLayout; children?: React.ReactNode | ((peek: PanePeek | undefined) => React.ReactNode); resizeHandle?: React.ReactNode }): React.ReactElement | null {
+  const { width, minWidth = 320, peek: hoverPeek, folded = false, overlay = false, floatingKind, keepMounted = false } = layout;
   // A panel floating over the terminal fades in as it comes, again for another panel in its place,
   // and back out as it goes; it is that, not a hover's card, until it has gone.
   const open = overlay && floatingKind !== undefined;
@@ -84,14 +86,14 @@ export function AsidePane({ layout, children }: { layout: AsideLayout; children?
   // there is no column to ease out before the card floats in.
   const dock = usePaneDockMotion(false, peek?.active ?? false);
   usePanePeekPointer("aside", peek);
-  if (peek && !dock.inset) return null;
+  if (peek && !dock.inset && !keepMounted) return null;
   return (
     <div
       id={folded ? undefined : PANE_ID.aside}
       data-pane={folded ? undefined : "aside"}
       data-floating-panel={open ? "" : undefined}
       // A panel on its way out takes no presses and no focus.
-      inert={floating && !open}
+      inert={(floating && !open) || (peek !== undefined && !dock.insetShown)}
       // The pane fades; each card in it moves (below `phone` sliding from the end edge, else rising by
       // 4% of its own height, `style.css`), so the card's frame, background and shadow move with its
       // content and the percentage is the card's.
@@ -103,7 +105,7 @@ export function AsidePane({ layout, children }: { layout: AsideLayout; children?
       onPointerLeave={peek?.leave}
       className={`flex min-h-0 flex-col ${folded ? "" : floating ? "p-(--peek-gap)" : "ps-(--panel-grip-gap) pe-(--peek-gap) py-(--peek-gap)"} ${
         peek
-          ? `pointer-events-none fixed bottom-(--bottom-chrome-height) top-(--top-chrome-height) end-0 z-40 w-(--aside-width) max-w-[92vw] transition-[opacity,visibility] duration-240 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none ${dock.insetShown ? "opacity-100" : "opacity-0 invisible"}${dock.preparingInset ? " transition-none" : ""}`
+          ? `pointer-events-none fixed bottom-(--bottom-chrome-height) top-(--top-chrome-height) end-0 z-40 w-(--aside-width) max-w-[calc(100vw-var(--rail-width))] transition-[opacity,visibility] duration-240 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none ${dock.insetShown ? "opacity-100" : "opacity-0 invisible"}${dock.preparingInset ? " transition-none" : ""}`
           : folded
             ? "h-full w-0"
             : floating
@@ -112,6 +114,7 @@ export function AsidePane({ layout, children }: { layout: AsideLayout; children?
       }`}
     >
       {typeof children === "function" ? children(peek) : children}
+      {peek && resizeHandle}
     </div>
   );
 }

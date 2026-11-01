@@ -12,6 +12,7 @@ import { PanelFrameProvider } from "../components/panel/PanelHeader";
 import { PANEL_ENTRIES, type PanelContentProps } from "./panelRegistry";
 import {
   closePanel,
+  restoreStack,
   maximizedKind,
   MIN_PANEL_HEIGHT,
   panelId,
@@ -126,6 +127,7 @@ export function PanelStack({
   areaEasing = false,
   floatOnly = false,
   floating,
+  overlay = false,
 }: {
   owner: AsideOwner;
   project: Project | undefined;
@@ -153,6 +155,8 @@ export function PanelStack({
    * which it leaves as it is; closing that panel calls `onClose`. No card is maximized there, as
    * there is no area beside the pane left to cover. */
   floating?: { stack: Stack; onClose: () => void };
+  /** All open cards float as a group; maximization is reserved for docked cards. */
+  overlay?: boolean;
 }): React.ReactElement {
   const t = useT();
   const order = OWNER_KINDS[owner.kind];
@@ -170,7 +174,7 @@ export function PanelStack({
   const sessionGone = (kind: string) => unavailableKinds(owner.kind, reportSessionId).includes(kind);
   // Another owner's card is never shown for this one (Back or Forward while the pane fades away).
   const keep = floating && floatingKind === undefined && leaving !== undefined && leaving.owner === ownerId && !peek?.active && !sessionGone(leaving.kind) ? leaving.kind : undefined;
-  const base = floating ? (keep !== undefined ? { open: [keep], shares: {} } : floating.stack) : stacks[owner.kind];
+  const base = floating ? (keep !== undefined ? { open: [keep], shares: {} } : floating.stack) : overlay ? restoreStack(stacks[owner.kind]) : stacks[owner.kind];
   const setStack = (next: Stack, options?: { persist?: boolean }) => setStackOf(owner.kind, next, options);
   const open = floatOnly ? [] : shownKinds(base, order);
   // The kind a floating pane shows is taken while it floats in, and kept while it floats out, so a
@@ -242,7 +246,10 @@ export function PanelStack({
   const close = (kind: PanelKind) => {
     if (open.length === 0) onDismiss();
     else if (floating) floating.onClose();
-    else setStack(closePanel(base, kind, order));
+    else {
+      setStack(closePanel(base, kind, order));
+      if (overlay && open.length === 1) onDismiss();
+    }
   };
 
   return (
@@ -290,7 +297,7 @@ export function PanelStack({
                   onCommit={persist}
                   onReset={() => resizeColumn(column, (current) => resetBoundary(current, 0, column))}
                   region={panelRegion(upper as PanelKind)}
-                  className="absolute inset-x-0 -inset-y-[calc((24px-var(--panel-stack-gap))/2)] z-10"
+                  className="absolute inset-x-0 -inset-y-[calc((24px-var(--panel-stack-gap))/2)] z-10 pointer-events-auto"
                 />
               </div>
             )}

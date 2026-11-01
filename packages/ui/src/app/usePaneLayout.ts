@@ -2,10 +2,11 @@ import { useEffect, useLayoutEffect, useState } from "react";
 
 import { useStableHandler } from "../components/hooks/useLatest";
 import type { AsideOwner } from "../layout/asideOwner";
+import { useDockedPanelVisible } from "../layout/panelVisibility";
 import { useIsNarrow } from "../layout/breakpoint";
 import { useAsideFloats } from "../layout/paneWidth";
 import { usePaneToggles } from "../layout/usePaneToggles";
-import { maximizedKind, OWNER_KINDS, restoreStack, shownKinds, stackedKinds, toggleKind, unavailableKinds as unavailableKindsOf, type OwnerKind, type PanelKind } from "../panels/stackState";
+import { maximizedKind, openPanel, OWNER_KINDS, restoreStack, shownKinds, stackedKinds, toggleKind, unavailableKinds as unavailableKindsOf, type OwnerKind, type PanelKind } from "../panels/stackState";
 import { useFloatingPanel } from "../panels/useFloatingPanel";
 import { usePanelStacks } from "../panels/usePanelStacks";
 import { useProcessPanel } from "../process/useProcessPanel";
@@ -66,33 +67,41 @@ export function usePaneLayout({
   // drawer's open state is kept here, as the floating panel has to know it before the pane toggles
   // run.
   const asideFloats = useAsideFloats();
+  const isNarrow = useIsNarrow();
+  const [asidePinned, setAsidePinned] = useDockedPanelVisible("aside");
+  const asideOverlay = !asideFloats && (isNarrow || !asidePinned);
+  const [revealAside, setRevealAside] = useState(false);
   const drawer = useState(false);
   const floating = useFloatingPanel({ floats: asideFloats, owner: ownerKind, stacks: panelStacks, drawerOpen: drawer[0], focusTerminal, unavailable: unavailableKinds });
   const floatingShown = floating.kind !== undefined;
   const storedStack = ownerKind ? panelStacks[ownerKind] : undefined;
   const ownerStack = asideFloats && ownerKind ? { open: floating.kind ? [floating.kind] : [], shares: {} } : storedStack;
-  const openPanels = ownerStack ? shownKinds(ownerStack, ownerOrder) : [];
+  const openPanels = ownerStack ? shownKinds(ownerStack, ownerOrder) as PanelKind[] : [];
   const paneShown = openPanels.length > 0;
   // A maximized panel (`PanelStack.tsx`) leaves the pane's column and covers
   // the agent terminal's area, which is inert meanwhile and not an F6 stop; the sidebar and the
   // panels left in the column stay as they are. With none left there, the column folds away and the
   // area, with the panel over it, reaches the window's end.
-  const covered = ownerStack !== undefined && maximizedKind(ownerStack, ownerOrder) !== undefined;
-  const stackedPanels = ownerStack ? stackedKinds(ownerStack, ownerOrder) : [];
+  const covered = !asideOverlay && ownerStack !== undefined && maximizedKind(ownerStack, ownerOrder) !== undefined;
+  const stackedPanels = ownerStack ? stackedKinds(asideOverlay ? restoreStack(ownerStack) : ownerStack, ownerOrder) : [];
   const columnShown = stackedPanels.length > 0;
   // With no card in the column (none open, or the one open maximized) a panel that is not open
   // floats in while the pointer rests on its toggle.
   const panes = usePaneToggles({
     hasSidebar: !noConsoles,
     // Below the width that floats panels over the terminal a panel opens only on a press.
-    asidePeekable: hasAside && !columnShown && !asideFloats,
+    asidePeekable: hasAside && (asideOverlay || !columnShown) && !asideFloats,
     focusTerminal,
     floatingPanel: floatingShown,
     closeFloatingPanel: floating.close,
     drawer,
   });
-  const isNarrow = useIsNarrow();
-  const asideDocked = hasAside && columnShown && !asideFloats;
+  const asideDocked = hasAside && columnShown && !asideFloats && !asideOverlay;
+  useEffect(() => {
+    if (!revealAside || !asideOverlay) return;
+    panes.asidePeek.reveal(true);
+    setRevealAside(false);
+  }, [revealAside, asideOverlay]);
   /** Floats `kind` of `owner`, out of the sidebar's drawer's way. */
   const openFloating = (owner: OwnerKind, kind: PanelKind) => {
     floating.open(owner, kind);
@@ -100,7 +109,8 @@ export function usePaneLayout({
   };
   const [peekKind, setPeekKind] = useState<PanelKind>();
   // The panels the project menu need not offer, as they are on screen: open, or floating in on hover.
-  const panelsOnScreen = panes.asidePeek.active && peekKind !== undefined && !openPanels.includes(peekKind) ? [...openPanels, peekKind] : openPanels;
+  const onScreen = asideOverlay && !panes.asidePeek.active ? [] : openPanels;
+  const panelsOnScreen = panes.asidePeek.active && peekKind !== undefined && !openPanels.includes(peekKind) ? [...onScreen, peekKind] : onScreen;
   // Every sidebar row takes it, so it keeps its identity until the panels on screen change.
   const panelsKey = panelsOnScreen.join(",");
   const ownerProjectId = ownerKind === "project" ? asideProjectId : undefined;
@@ -123,6 +133,19 @@ export function usePaneLayout({
       if (floating.kind === kind) return floating.close();
       openFloating(ownerKind, kind);
       if (kind === "terminal" && asideOwner?.kind === "project") void startShellTerminal(daemon, asideOwner.project, { ifNone: true });
+      return;
+    }
+    if (asideOverlay) {
+      const opened = !openPanels.includes(kind);
+      const closing = !opened && panes.asidePeek.active;
+      const next = closing ? toggleKind(ownerStack, kind, ownerOrder) : openPanel(ownerStack, kind, ownerOrder);
+      const remaining = shownKinds(next, ownerOrder) as PanelKind[];
+      setPanelStack(ownerKind, next);
+      setPeekKind(closing ? remaining[0] : kind);
+      if (remaining.length === 0) panes.asidePeek.hide();
+      else panes.asidePeek.reveal(true);
+      if (!closing) floating.noteOpened(ownerKind, kind);
+      if (kind === "terminal" && opened && asideOwner?.kind === "project") void startShellTerminal(daemon, asideOwner.project, { ifNone: true });
       return;
     }
     // A card floating in docks in place, keeping focus, except beside a folded column, where it
@@ -153,8 +176,14 @@ export function usePaneLayout({
   }, [peekGone]);
   const hoverPanelToggle = (kind: PanelKind, hovered: boolean) => {
     if (!hovered) return panes.asidePeek.leave();
-    if (columnShown || openPanels.includes(kind)) return;
+    if (!asideOverlay && (columnShown || openPanels.includes(kind))) return;
     setPeekKind(kind);
+    panes.asidePeek.reveal();
+  };
+  const hoverAside = (hovered: boolean) => {
+    if (!asideOverlay || !ownerKind) return;
+    if (!hovered) return panes.asidePeek.leave();
+    setPeekKind(openPanels[0] ?? availableKinds[0]);
     panes.asidePeek.reveal();
   };
   // The hidden sidebar floats in showing the console whose avatar the pointer is on, which is not
@@ -190,6 +219,7 @@ export function usePaneLayout({
   const stableToggleSidebar = useStableHandler(panes.toggleSidebar);
   const stableTogglePanel = useStableHandler(togglePanel);
   const stableHoverPanelToggle = useStableHandler(hoverPanelToggle);
+  const stableHoverAside = useStableHandler(hoverAside);
   return {
     noConsoles,
     ownerKind,
@@ -197,6 +227,22 @@ export function usePaneLayout({
     reportSessionId,
     availableKinds,
     asideFloats,
+    asideOverlay,
+    asidePinned,
+    notePanelOpened: (owner: OwnerKind, kind: PanelKind) => {
+      floating.noteOpened(owner, kind);
+      if (asideOverlay) panes.asidePeek.reveal(true);
+    },
+    toggleAsideDocked: () => {
+      if (isNarrow) {
+        setPeekKind(openPanels[0] ?? availableKinds[0]);
+        panes.asidePeek.reveal(true);
+        return;
+      }
+      setAsidePinned(!asidePinned);
+      if (asidePinned) setRevealAside(true);
+      else panes.asidePeek.hide(false);
+    },
     floating,
     floatingShown,
     ownerStack,
@@ -224,5 +270,6 @@ export function usePaneLayout({
     stableToggleSidebar,
     stableTogglePanel,
     stableHoverPanelToggle,
+    stableHoverAside,
   };
 }

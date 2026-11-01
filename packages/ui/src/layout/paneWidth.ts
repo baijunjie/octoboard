@@ -1,30 +1,31 @@
 import { useState, useSyncExternalStore } from "react";
 
 import { createPersistedPreference } from "../persistedPreference";
+import { MIN_TWO_COLUMN_ASIDE_WIDTH } from "../panels/panelColumns";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
 import { minWidthQuery, useMediaQuery } from "./breakpoint";
 
 /** The two panes whose docked width the user can change. */
 export type PaneSide = "sidebar" | "aside";
 
-/** Per pane, at and above the `docked` breakpoint: the width it has until the user resizes it (what
- * a double-click on its handle returns to) and the bounds of a chosen width. Below the breakpoint
- * each is a fixed-width drawer instead. */
+/** Remembered widths and bounds. Responsive modes change the rendered allocation without
+ * replacing the user's choices. Floating groups use the same chosen width as docked groups. */
 const PANES = {
   sidebar: { key: PREFERENCE_KEYS.sidebarWidth, min: 280, default: 280, max: 480 },
   aside: { key: PREFERENCE_KEYS.asideWidth, min: 320, default: 420, max: 720 },
 } satisfies Record<PaneSide, { key: string; min: number; default: number; max: number }>;
 
-/** The terminal pane's floor (the terminal's wrapper in `App.tsx`); the window's 1168px minimum is
- * this plus the rail, the sidebar's default and the aside's minimum. Below the `docked` breakpoint
- * the sidebar is a drawer and the floor drops to `NARROW_TERMINAL_FLOOR`, which the docked aside
- * shares the row with until the window is too narrow for both (`useAsideFloats`). */
+/** The agent terminal's floor beside docked panes. Below the docked breakpoint both sides
+ * float over it; a narrower floor still protects the agent view until mobile mode removes it. */
 const TERMINAL_FLOOR = 520;
 export const NARROW_TERMINAL_FLOOR = 398;
 
 /** The aside's floor below the `docked` breakpoint while the Terminal panel is in its column: a
  * narrow Shell header reserves room for a normal tab, its focus ring and every action. */
 export const NARROW_TERMINAL_PANEL_ASIDE_MIN = 336;
+
+/** A two-column floating group plus the rail left clear beside it. */
+export const MOBILE_ASIDE_MIN = MIN_TWO_COLUMN_ASIDE_WIDTH;
 
 /** The terminal's floor in a window narrower than the `docked` breakpoint or not. */
 function terminalFloor(narrow: boolean): number {
@@ -93,12 +94,12 @@ export interface DockedPanes {
  * width first, down to its minimum. The sidebar therefore only ever assumes the aside's
  * minimum (not its chosen width), and the aside gets what is left after the sidebar's
  * rendered width. A pane that is not docked is not limited by the viewport (it overlays the
- * terminal). At 1168px with both docked: rail 48, sidebar 280, terminal 520, aside 320.
+ * terminal). The two-column aside minimum is reserved before the sidebar receives spare width.
  */
 function maxWidthFor(side: PaneSide, docked: DockedPanes, narrow: boolean, chosenSidebar: number | undefined, railWidth: number, asideMin: number): number {
   const { max } = PANES[side];
   const min = side === "aside" ? asideMin : PANES.sidebar.min;
-  if (!docked[side]) return max;
+  if (!docked[side]) return side === "aside" ? Math.max(min, Math.min(max, viewportWidth - railWidth)) : max;
   if (side === "sidebar") {
     const asideReserve = docked.aside ? asideMin : 0;
     return clamp(viewportWidth - railWidth - terminalFloor(narrow) - asideReserve, min, max);
@@ -156,17 +157,8 @@ export function usePaneWidth(side: PaneSide, docked: DockedPanes, narrow: boolea
   };
 }
 
-/**
- * Whether the window is too narrow to dock the aside beside the terminal (a phone): its open panels
- * then float over the agent terminal's area instead of taking room from it, and the terminal keeps
- * the whole width with no floor that would scroll the row. A media query rather than the viewport
- * store above, so a resize re-renders only when the answer changes. The width is the `phone`
- * breakpoint of `style.css`, which is also what the `phone:` variants (the rail, which then
- * appears only with the sidebar's drawer) switch at: the narrowest window that docks the aside is
- * the rail, the terminal's narrow floor and the aside's largest floor side by side, one width
- * whichever panels are open, so opening the Terminal panel never moves the pane from beside the
- * terminal to over it. `layout/paneWidth.test.tsx` holds the token to that sum.
- */
+/** Whether the window needs mobile interaction: a two-column floating group no longer fits
+ * beside the rail. Below this CSS breakpoint, one panel floats at a time and swipes switch it. */
 export function useAsideFloats(): boolean {
   return !useMediaQuery(() => minWidthQuery("phone"));
 }

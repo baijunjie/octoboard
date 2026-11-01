@@ -195,6 +195,17 @@ it("floatPane fails where the toggle floats in no pane, as one whose pane is doc
   await done;
 });
 
+it("floatPane opens its mobile card without looking for the absent group trigger", async () => {
+  windowOfWidth(420);
+  document.body.innerHTML = '<button aria-label="Show report panel"></button>';
+  const pressed = vi.fn();
+  document.querySelector("button")!.addEventListener("click", pressed);
+  const done = createUi(document, "en").floatPane("Dock panels", "report");
+  await vi.advanceTimersByTimeAsync(500);
+  await done;
+  expect(pressed).toHaveBeenCalledOnce();
+});
+
 it("pressInPanel presses the control of the panel it names and leaves the same name in another untouched", async () => {
   document.body.innerHTML = "<section id=\"panel-files\"><button>Close panel</button></section><section id=\"panel-terminal\"><button>Close panel</button></section>";
   const pressed: string[] = [];
@@ -259,8 +270,8 @@ const SHOW_SESSIONS = format("en", "titleBar.sidebar.show");
 const HIDE_SESSIONS = format("en", "titleBar.sidebar.hide");
 
 function windowOfWidth(width: number): void {
-  document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
-  document.documentElement.style.setProperty("--breakpoint-phone", "782px");
+  document.documentElement.style.setProperty("--breakpoint-docked", "1394px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "594px");
   vi.stubGlobal("matchMedia", (query: string) => ({ matches: width >= Number(/min-width: ([\d.]+)px/.exec(query)![1]) }));
 }
 afterEach(() => vi.unstubAllGlobals());
@@ -316,13 +327,27 @@ it.each([
   ["Show", "titleBar.files.show", true],
   ["Hide", "titleBar.files.hide", false],
 ] as const)("showPanel presses a %s toggle only when it is the one that brings the panel in", async (_word, key, pressesIt) => {
-  document.body.innerHTML = `<button aria-label="${format("en", key)}"></button>`;
+  document.body.innerHTML = `<button aria-label="${format("en", key)}"></button><div data-pane="aside"></div>`;
   const pressed = vi.fn();
   document.addEventListener("click", pressed);
   const done = createUi(document, "en").showPanel("files");
   await vi.advanceTimersByTimeAsync(500);
   await done;
   expect(pressed).toHaveBeenCalledTimes(pressesIt ? 1 : 0);
+});
+
+it("showPanel reveals an open floating group without closing its panel", async () => {
+  document.body.innerHTML = '<button aria-label="Hide files panel"></button>';
+  const pressed = vi.fn();
+  document.addEventListener("click", pressed);
+  document.querySelector("button")!.addEventListener("pointerover", () => {
+    document.body.insertAdjacentHTML("beforeend", '<div data-pane="aside" style="position:fixed;visibility:visible;opacity:1"><div data-panel-card></div></div>');
+  });
+  const done = createUi(document, "en").showPanel("files");
+  await vi.advanceTimersByTimeAsync(2000);
+  await done;
+  expect(pressed).not.toHaveBeenCalled();
+  expect(document.querySelector("[data-panel-card]")).not.toBeNull();
 });
 
 it("showPanel waits for a toggle that is drawn late and fails where there is none", async () => {
@@ -346,12 +371,33 @@ it.each([
 ])("closeDrawer closes the drawer when it is open in a window of %i px and does nothing docked", async (width, closes) => {
   windowOfWidth(width);
   const { toggle } = drawerWithToggle();
-  if (width < 1168) toggle.click();
+  if (width < 1394) toggle.click();
   else toggle.setAttribute("aria-label", HIDE_SESSIONS);
   const done = createUi(document, "en").closeDrawer();
   await vi.advanceTimersByTimeAsync(500);
   await done;
   expect(toggle.getAttribute("aria-label")).toBe(closes ? SHOW_SESSIONS : HIDE_SESSIONS);
+});
+
+it.each([true, false])("closeDrawer uses Escape for a medium sidebar only while expanded=%s", async (expanded) => {
+  windowOfWidth(800);
+  document.body.innerHTML = `<button aria-label="${SHOW_SESSIONS}" aria-expanded="${expanded}"></button>`;
+  const toggle = document.querySelector("button")!;
+  const clicked = vi.fn();
+  const escaped = vi.fn();
+  toggle.addEventListener("click", clicked);
+  toggle.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      escaped();
+      toggle.setAttribute("aria-expanded", "false");
+    }
+  });
+  const done = createUi(document, "en").closeDrawer();
+  await vi.advanceTimersByTimeAsync(500);
+  await done;
+  expect(clicked).not.toHaveBeenCalled();
+  expect(escaped).toHaveBeenCalledTimes(expanded ? 1 : 0);
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
 });
 
 it("hoverTerminalUrl puts the pointer on the first row of a link that wraps in a narrow terminal", async () => {

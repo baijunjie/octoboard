@@ -147,7 +147,7 @@ short "Resize" shown beside the grip only while a mouse pointer rests on the han
 announced for each says what it resizes (see "Resizing the sidebar and the right pane" in
 `docs/product/window-layout.md` and "Resizing panels" in `docs/product/right-pane-panels.md`).
 
-While the docked sidebar is hidden at 1168 px and wider, a console's avatar opens its tooltip on keyboard focus only:
+While the sidebar can reveal on hover, a console's avatar opens its tooltip on keyboard focus only:
 resting the mouse on it floats the sidebar in instead (see "Previewing a console from the rail" in
 `docs/product/console-switcher.md`). That card names the console at its top but not what is going on in it, so **a mouse
 user with the docked sidebar hidden never reads the avatar's tooltip**; what is going on is then read from the sessions

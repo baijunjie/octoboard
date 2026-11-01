@@ -4,6 +4,7 @@
 export const PREFERENCE_KEYS = {
   language: "octoboard.language",
   sidebarVisible: "octoboard.sidebarVisible",
+  asideDocked: "octoboard.asideDocked",
   // The aside's keys keep the names they had while the pane only ever held the report panel, so a
   // choice made then still applies. The visibility key is no longer written: the open panels
   // (`panelStacks`) say whether the pane shows, and a hidden pane found here is carried over as

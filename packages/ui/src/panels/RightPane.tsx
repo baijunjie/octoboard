@@ -1,5 +1,7 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 
+import { useLatest } from "../components/hooks/useLatest";
+import { PANE_EDGE_DWELL_MS, PANE_ID } from "../layout/paneOverlay";
 import { AsidePane, type AsideLayout } from "../layout/AsidePane";
 import type { AsideOwner } from "../layout/asideOwner";
 import type { Project } from "../protocol";
@@ -29,6 +31,9 @@ export function RightPane({
   areaEasing,
   float,
   floating,
+  overlay,
+  resizeHandle,
+  onHoverChange,
 }: {
   owner: AsideOwner;
   project: Project | undefined;
@@ -57,12 +62,37 @@ export function RightPane({
   /** In a window too narrow to dock the pane, the one panel floating over the agent terminal
    * (`PanelStack`'s `floating`). */
   floating?: React.ComponentProps<typeof PanelStack>["floating"];
+  overlay?: boolean;
+  resizeHandle?: React.ReactNode;
+  onHoverChange?: (hovered: boolean) => void;
 }): React.ReactElement {
+  const edgeDwell = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const hover = useLatest(onHoverChange);
+  useEffect(() => { if (!overlay) clearTimeout(edgeDwell.current); }, [overlay]);
+  useEffect(() => () => clearTimeout(edgeDwell.current), []);
   const shared = { owner, project, selectedSessionId, reportSessionId, focusTerminal, peekKind, frameKeys, onViewFile, onDismiss, maximizeArea, areaEasing };
   return (
     <>
-      <AsidePane layout={layout}>
-        {(peek) => <PanelStack {...shared} active={active} peek={peek} floating={floating} />}
+      {overlay && (
+        <div
+          aria-hidden="true"
+          data-aside-reveal-edge
+          data-pane-toggle={PANE_ID.aside}
+          className="fixed end-0 top-(--top-chrome-height) bottom-(--bottom-chrome-height) z-30 w-(--rail-width)"
+          onPointerEnter={(event) => {
+            if (event.pointerType !== "mouse") return;
+            clearTimeout(edgeDwell.current);
+            edgeDwell.current = setTimeout(() => hover.current?.(true), PANE_EDGE_DWELL_MS);
+          }}
+          onPointerLeave={(event) => {
+            if (event.pointerType !== "mouse") return;
+            clearTimeout(edgeDwell.current);
+            hover.current?.(false);
+          }}
+        />
+      )}
+      <AsidePane layout={layout} resizeHandle={resizeHandle}>
+        {(peek) => <PanelStack {...shared} active={active} peek={peek} floating={floating} overlay={overlay} />}
       </AsidePane>
       {float && (
         <AsidePane layout={{ width: layout.width, peek: float }}>

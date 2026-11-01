@@ -7,7 +7,7 @@ import { isolate } from "../i18n/isolate";
 import { joinPhrases } from "../i18n/joinPhrases";
 import { textDirection } from "../i18n/languages";
 import { useCurrentLanguage, useT } from "../i18n/react";
-import { PHONE_SLIDE_AWAY } from "../layout/paneOverlay";
+import { isRailPeekArea, PHONE_SLIDE_AWAY } from "../layout/paneOverlay";
 import type { Console } from "../protocol";
 import { statusLabel } from "../sessionLabel";
 import { consoleMenu, type ConsoleMenuHandlers } from "../sidebar/menus";
@@ -158,6 +158,7 @@ interface RailProps extends ConsoleMenuHandlers {
    * showing this console. */
   onConsoleEnter: (consoleId: string) => void;
   onConsoleLeave: () => void;
+  onRailHoverChange?: (hovered: boolean) => void;
   /** Whether the hidden sidebar can float in on hovering an avatar right now. */
   hoverOpensSidebar: boolean;
   waitingCount: number;
@@ -192,6 +193,7 @@ export function Rail({
   onSelectConsole,
   onConsoleEnter,
   onConsoleLeave,
+  onRailHoverChange,
   hoverOpensSidebar,
   onOpenDialog,
   onSelectSession,
@@ -214,6 +216,9 @@ export function Rail({
       // `data-escape-scope`: Escape on one of its controls closes an open drawer too, as on the top bar.
       data-escape-scope
       data-region="rail"
+      onPointerEnter={(event) => event.pointerType === "mouse" && onRailHoverChange?.(isRailPeekArea(event.target))}
+      onPointerMove={(event) => event.pointerType === "mouse" && onRailHoverChange?.(isRailPeekArea(event.target))}
+      onPointerLeave={(event) => event.pointerType === "mouse" && onRailHoverChange?.(false)}
       aria-label={t("rail.label")}
       // `inert` rather than `aria-hidden` and `tabindex`: it takes the whole subtree out of the focus
       // order and the accessibility tree at once, which `invisible` does only once the exit is over.

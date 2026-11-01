@@ -42,19 +42,20 @@ const HIT_WIDTH = { sidebar: 6, aside: 24 } as const;
  * `ResizeSeparator` on that edge. It runs the pane's full height, below the top bar and above
  * the connection banner, so the line covers the whole edge. It is
  * rendered right after its pane, so Tab reaches it next to the pane, but it is positioned against the
- * window: the nearest positioned ancestor must be the app root, as tall as the window, and no element
- * between them may be positioned. `App.tsx` renders it only while its pane is docked and shown. The
- * sidebar's is hidden below the `docked` breakpoint, where that pane is a fixed-width drawer; the
- * aside's is there wherever the aside docks, and gone in a window too narrow for that, where its
- * panel floats over the terminal instead.
+ * window for a docked pane: its nearest positioned ancestor must be the app root. A floating
+ * group carries the handle inside its own frame, so the hit area follows its actual edge and is
+ * part of its pointer watch. Mobile interaction has no width handle.
  */
 export function PaneResizeHandle({
   side,
   paneWidth,
   label: ownLabel,
   region,
+  floating = false,
 }: {
   side: PaneSide;
+  /** Positioned inside a floating pane so its hit area moves with the resized edge. */
+  floating?: boolean;
   paneWidth: PaneWidth;
   /** The handle's accessible name, when the caller has a better one than the side's. */
   label?: string;
@@ -81,8 +82,8 @@ export function PaneResizeHandle({
       tooltip={appearance === "grip" ? t("pane.resize") : undefined}
       // Centred on the pane's inner edge, or in the gap it leaves, anchored to the logical side the
       // pane is on.
-      style={{ [edge]: `calc(${width - HIT_WIDTH[side] / 2}px - ${centre} + ${offset})` }}
-      className={`absolute top-(--top-chrome-height) bottom-(--bottom-chrome-height) z-10 ${layout}`}
+      style={floating ? { insetInlineStart: "calc((var(--panel-grip-gap) - 24px) / 2)" } : { [edge]: `calc(${width - HIT_WIDTH[side] / 2}px - ${centre} + ${offset})` }}
+      className={floating ? "absolute inset-y-0 z-50 w-6 pointer-events-auto" : `absolute top-(--top-chrome-height) bottom-(--bottom-chrome-height) z-10 ${layout}`}
     />
   );
 }
