@@ -2122,7 +2122,7 @@ export const zhHans: Translation<"other"> = {
   "settings.updates.install": "下载并安装",
   "settings.updates.restart": "立即重新启动",
   "settings.updates.channel.label": "更新渠道",
-  "settings.updates.channel.description": "选择 Beta 会收到所有版本，包括稳定版本；选择稳定版则只收到稳定版本。",
+  "settings.updates.channel.description": "选择稳定版只会收到稳定版本；选择 Beta 则会收到所有版本，包括稳定版本。",
   "settings.updates.channel.beta": "Beta",
   "settings.updates.channel.stable": "稳定版",
   "settings.git.group.repository": "仓库",

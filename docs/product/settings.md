@@ -451,7 +451,7 @@ The application itself, under its own heading in the section: its icon, its name
 version running ("Version …"). Then, one row each:
 
 - **Updates** and **Update channel**, in the macOS application only: where the application's updates stand, with the
-  button that moves them on, and the choice between the Beta and Stable channels (see "The Updates and Update channel
+  button that moves them on, and the choice between the Stable and Beta channels (see "The Updates and Update channel
   rows" in `docs/product/in-app-updates.md`).
 - **Website**, **GitHub repository** and **Issue tracker**: external links, each shown as its address without the
   `https://` — `octoboard.dev`, `github.com/baijunjie/octoboard` and

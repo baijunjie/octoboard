@@ -36,7 +36,7 @@ export interface Preferences {
   markdownStyle?: MarkdownStyle;
   /** Closing the window keeps the app running in the background; off by default. */
   runInBackground?: boolean;
-  /** The release channel the application updates from; beta when unset. */
+  /** The release channel the application updates from; stable when unset. */
   updateChannel?: UpdateChannel;
   /** The keyboard shortcuts the user has changed, by command; the others keep their defaults. */
   keyboardShortcuts?: Overrides;

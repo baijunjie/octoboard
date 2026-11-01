@@ -215,7 +215,7 @@ it("speaks the result of a check that starts while Settings is open, an automati
   expect(await spoken(container)).toContain("Version 0.1.0 is the latest on this channel.");
 });
 
-it("keeps the channel the user picks, beta by default, and looks again on the new one", async () => {
+it("keeps the channel the user picks and looks again on the new one", async () => {
   const check = vi.fn(async () => undefined);
   const { container } = mount({ kind: "tauri", updater: updaterOf(check) });
   await act(async () => {});

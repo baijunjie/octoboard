@@ -70,8 +70,8 @@ export function UpdatesSetting(): React.ReactElement | null {
   }
   const status = versionStatus(t, state);
   const channels: { value: UpdateChannel; label: string }[] = [
-    { value: "beta", label: t("settings.updates.channel.beta") },
     { value: "stable", label: t("settings.updates.channel.stable") },
+    { value: "beta", label: t("settings.updates.channel.beta") },
   ];
   // Pressing Check for updates again is the way to retry, so the mark has no button of its own. A failed
   // automatic check that ends while Settings is open is spoken here, as the mark appearing says nothing by

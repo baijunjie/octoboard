@@ -10,8 +10,8 @@ none of this: no checks, no update notice, and no Updates or Update channel rows
 
 There are two channels, chosen in Settings' About section (see "The Updates and Update channel rows" below):
 
-- **Beta**, the default, receives every release, stable ones included;
-- **Stable** receives only stable releases.
+- **Stable**, the default, receives only stable releases;
+- **Beta** receives every release, stable ones included.
 
 A release is stable when its version has no prerelease suffix: `0.2.0` reaches both channels, `0.2.0-beta.1` only
 Beta. Only a version newer than the one running is ever offered, so switching from Beta to Stable while running a beta
@@ -21,8 +21,8 @@ older version.
 The choice is kept **per client**, in the window's own browser storage, as the choice to keep running in the background
 is (see "Closing the window" in `docs/product/application-lifecycle.md`): the daemon neither stores nor carries
 it, and it is not part of a configuration export (see "The application settings an export carries" in
-`docs/product/configuration-export-and-import.md`). Storage that has been cleared, or holds anything but Stable, reads
-as Beta.
+`docs/product/configuration-export-and-import.md`). A saved choice of either channel is kept; storage that holds no
+choice, has been cleared, or holds anything but Beta reads as Stable.
 
 **Switching the channel** withdraws at once an update found on the other channel, with its notice, and checks the new
 channel straight away. An update already downloading is the exception: it is kept and installs as usual. A check still
@@ -197,5 +197,5 @@ except when the check that did not finish was the one **Check for updates** star
 alert says. A failed automatic check is announced even after an earlier check was pressed. What the row said
 when Settings opened is not announced.
 
-**Update channel** chooses between **Beta** and **Stable** (see "Update channels" above), with a line saying that Beta
-gets every release, stable ones included, and Stable only stable releases.
+**Update channel** chooses between **Stable** and **Beta**, listed in that order (see "Update channels" above), with a
+line saying that Stable gets only stable releases and Beta every release, stable ones included.

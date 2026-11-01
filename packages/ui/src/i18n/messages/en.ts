@@ -2307,7 +2307,7 @@ export const en = {
   "settings.updates.install": "Download and install",
   "settings.updates.restart": "Restart now",
   "settings.updates.channel.label": "Update channel",
-  "settings.updates.channel.description": "Beta gets every release, stable ones included. Stable gets only stable releases.",
+  "settings.updates.channel.description": "Stable gets only stable releases. Beta gets every release, stable ones included.",
   "settings.updates.channel.beta": "Beta",
   "settings.updates.channel.stable": "Stable",
   "settings.git.group.repository": "Repository",

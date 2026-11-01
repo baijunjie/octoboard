@@ -26,9 +26,10 @@ const NOTES = [
   "- Several smaller fixes to the file viewer and the Git panel.",
 ].join("\n");
 
-const newer: AvailableUpdate = { version: "0.2.0-beta.2", notes: NOTES };
+const newer: AvailableUpdate = { version: "0.2.0", notes: NOTES };
+const newerBeta: AvailableUpdate = { version: "0.2.0-beta.2", notes: NOTES };
 
-const FAILED_CHECK = "error sending request for url (https://updates.octoboard.example/beta/latest.json): error trying to connect: dns error: failed to lookup address information";
+const FAILED_CHECK = "error sending request for url (https://updates.octoboard.example/stable/latest.json): error trying to connect: dns error: failed to lookup address information";
 const FAILED_INSTALL = "failed to download the update archive: the connection closed before the whole file arrived (received 8123456 of 41234567 bytes)";
 
 /** Selects an idle session, so the notice sits under a terminal as it does in use. */
@@ -71,7 +72,7 @@ export const updateScenarios: Scenario[] = [
     title: "Update notice, a release without notes",
     description: "The strip has no What is new button: only the sentence, Download and install and the Later icon.",
     state: quiet,
-    updater: { check: { version: "0.2.0-beta.2" }, checked: true },
+    updater: { check: { version: "0.2.0" }, checked: true },
     steps: [openSession],
   },
   {
@@ -119,9 +120,8 @@ export const updateScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "About with updates, up to date, Stable channel",
-    description: "The whole About section on a platform that can update itself: the icon, the name and \"Version 0.2.0-beta.1\" in the header, then the Updates row saying this version is the latest on the channel with Check for updates beside it, the Update channel row with Stable chosen, the three links, License, Copyright and Third-party licenses with View licenses. Scroll to see all of it.",
+    description: "The whole About section on a platform that can update itself: the icon, the name and \"Version 0.1.0\" in the header, then the Updates row saying this version is the latest on the channel with Check for updates beside it, the Update channel row with Stable chosen, the three links, License, Copyright and Third-party licenses with View licenses. Scroll to see all of it.",
     state: quiet,
-    preferences: { updateChannel: "stable" },
     updater: { checked: true },
     steps: [openSettings],
   },
@@ -130,7 +130,7 @@ export const updateScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "About, Updates row while a check runs",
-    description: "The Updates row says it is checking for updates, and Check for updates shows its pending spinner. The channel is Beta, the default.",
+    description: "The Updates row says it is checking for updates, and Check for updates shows its pending spinner. The channel is Stable, the default.",
     state: quiet,
     updater: { check: "pending", checked: true },
     steps: [openSettings],
@@ -184,7 +184,8 @@ export const updateScenarios: Scenario[] = [
     description:
       "A newer version was on offer on Beta, with its notice; Stable was chosen instead. The offer is withdrawn at once: no notice under the dialog's veil, and the Updates row, no longer offering Download and install, says it is checking for updates on Stable (that check is never answered here). The channel selector reads Stable.",
     state: quiet,
-    updater: { check: { beta: newer, stable: "pending" }, checked: true },
+    preferences: { updateChannel: "beta" },
+    updater: { check: { beta: newerBeta, stable: "pending" }, checked: true },
     steps: [
       openSession,
       openSettings,

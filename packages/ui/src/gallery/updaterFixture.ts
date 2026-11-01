@@ -12,7 +12,7 @@ const perChannel = (check: NonNullable<UpdaterFixture["check"]>): check is Parti
 
 /** The shell's updater as a scenario describes it (`UpdaterFixture`), which the real `UpdatesProvider` then
  * drives exactly as it drives the desktop app's. */
-export function fixtureUpdater({ currentVersion = "0.2.0-beta.1", check = "upToDate", install = {} }: UpdaterFixture): UpdaterCapability {
+export function fixtureUpdater({ currentVersion = "0.1.0", check = "upToDate", install = {} }: UpdaterFixture): UpdaterCapability {
   return {
     currentVersion: async () => currentVersion,
     check: async (channel) => {
