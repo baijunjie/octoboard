@@ -23,5 +23,5 @@ pub fn run(session: &str, port: u16, key: &str) {
         return;
     }
     // The response is discarded: the daemon never steers the agent through it.
-    let _ = crate::cli::loopback::post(port, key, &format!("/hook/{session}"), &payload, TIMEOUT);
+    let _ = crate::loopback::post(port, key, &format!("/hook/{session}"), &payload, TIMEOUT);
 }

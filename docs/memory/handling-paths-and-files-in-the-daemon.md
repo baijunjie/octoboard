@@ -79,25 +79,6 @@ A refusal from these readers does not mean the agent cannot read the file. Where
 the unsafe answer (an allowlist it may hold would be skipped), a regular file that is there but refused takes the safe
 side.
 
-## Read an agent's record only through `records::line_file`
-
-Applies to daemon code that reads the content of an agent's record (a Claude transcript, a Codex rollout, a Grok
-session file). Never `BufRead::read_line`, `read_until`, `lines()` or a whole-file read on it: a record line can be
-arbitrarily long (an embedded image, a pasted file), and those hold the whole line in memory; and a Codex rollout may
-be a `.jsonl.zst` that only `line_file::open` decompresses. Use `LineFile` for a file read again as it grows, and
-`read_to`, `read_from` or `read_whole_until` for a one-off pass; each skips a line past `LINE_LIMIT` and goes on after
-it, so a reader decides only what to do with the lines it is handed.
-
-## Replace a file whole only through `hostfs::replace`
-
-Applies to daemon code that writes a file by staging it and renaming it over the old one — state the daemon keeps,
-a configuration file it rewrites for an agent, anything a reader must see old or new and never half. Do not write the
-staging and rename by hand: call `hostfs::replace::replace_file` (with a staging name of your own, where a sweep looks
-for it) or `replace_beside`, choosing `Permissions::Private` for content that can hold secrets and a `Kept*` variant
-for a file the user or an agent may have given a mode. Hand-written copies kept drifting from it: no flush before the
-rename (a crash can leave the target empty), a mode given only at open (cut by the umask, ignored for a staging file
-left by a crash), the staging file left behind when a step failed.
-
 ## Decide whether two account directories are one by `account_dir_key`, never by comparing their text
 
 Applies to daemon code that asks whether two agent configuration directories are the same one — an account's
@@ -122,20 +103,20 @@ Linux), and a bind mount or a macOS firmlink gives one directory two real paths.
 what each path resolves to, and for containment walk the resolved path's ancestors: `hostfs::identity::DirectoryIdentities`
 answers "is this one of these directories", `hostfs::place::Place` answers "does this lie in that one".
 
-Decide which way a path that cannot be resolved (nothing there, unreadable, no inode, the look timed out) counts by
-what a match does. Where a match grants something, as trust coverage does, it matches nothing, with no fallback to the
-text. Where a match is what protects, as refusing a second project at one directory does, it falls back to the
-normalised text. Where a missed match destroys something — moving a folder to the Trash, removing a linked worktree
-— a path that cannot be resolved counts as a match, and that decision is made only in `apps/daemon/src/trash_safety.rs`
+Decide which way a path that cannot be resolved (nothing there, unreadable, no inode, the look timed out) counts by what
+a match does. Where a match grants something, as trust coverage does, it matches nothing, with no fallback to the text.
+Where a match is what protects, as refusing a second project at one directory does, it falls back to the normalised
+text. Where a missed match destroys something — moving a folder to the Trash, removing a linked worktree — a path that
+cannot be resolved counts as a match, and that decision is made only in `apps/daemon/src/trash_safety.rs`
 (`looked_at_for_trash` for a move to the Trash, `Worktrees` for a worktree's removal), whose module header says which
 paths fall back to their text; it also protects the home directory, the root of a disk and a directory holding
 Octoboard's data whatever else is found. Code that destroys a directory asks it; extend it rather than write a second.
 The looks read the file system, so they run on blocking threads after the store's lock is released, each with a
 deadline, and one that outran it is left to finish and, once it has run past its stuck threshold, recorded in a
-`state::StalledPasses` under its key, so later decisions take the fallback at once instead of starting another thread a
-stuck mount holds the same way; `hostfs::place::looked_within` and `coordinator::projects::identities_within` are the
-shape. `state.directory_looks` is one registry for every decision of this kind (trust, project removal, branch cleanup,
-account removal), so a look with a shorter deadline than theirs — a quick check ahead of a confirmation — keeps
+`blocking_pass::StalledPasses` under its key, so later decisions take the fallback at once instead of starting another
+thread a stuck mount holds the same way; `hostfs::place::looked_within` and `coordinator::projects::identities_within`
+are the shape. `state.directory_looks` is one registry for every decision of this kind (trust, project removal, branch
+cleanup, account removal), so a look with a shorter deadline than theirs — a quick check ahead of a confirmation — keeps
 `hostfs::place::Looking::stuck_after` at the full deadline: a merely slow path recorded as stuck makes all of them take
 a healthy path as unreachable. A decision that must not be cut short by what such an earlier look left running takes
 `Stuck::Wait` instead of `Stuck::Skip`.

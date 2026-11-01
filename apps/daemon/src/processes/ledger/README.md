@@ -3,7 +3,7 @@
 `apps/daemon/src/processes/ledger/` owns attribution, persistence and cleanup of the processes an agent launch starts,
 including descendants that leave the agent's terminal session. It reads the native macOS or Linux process table and
 builds process trees for the request layer in `apps/daemon/src/processes/requests/mod.rs`; the wire interface belongs to
-[`apps/daemon/PROTOCOL.md`](../../PROTOCOL.md).
+[`apps/daemon/PROTOCOL.md`](../../../PROTOCOL.md).
 
 The ledger is held on `AppState`. Launch setup and the carry-over of a restart (an account switch, a model change, a
 change of an account's sharing) enter through `apps/daemon/src/coordinator/launch.rs`,

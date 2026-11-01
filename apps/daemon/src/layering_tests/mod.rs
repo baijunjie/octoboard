@@ -1,0 +1,460 @@
+//! Holds the daemon's top-level modules to their dependency direction by reading the crate's own
+//! source. Every `crate::` path in production code, in a `use` or inline, is an edge from the
+//! top-level module the file sits in to the one the path names; an edge may point only to the
+//! module's own layer or one below it, unless `UPWARD` lists it. The layers, and why each upward
+//! edge is there, are in `docs/structure/daemon.md`, section "Dependency direction", which keeps
+//! its table in step with `LAYERS` and `UPWARD` here.
+//!
+//! Only production code counts: a file reached only through a `#[cfg(test)]` module, a file under
+//! `#![cfg(test)]`, and any item, variant, match arm, field or statement under a `cfg` predicate
+//! that holds only in tests (`cfg(test)`, `cfg(all(test, …))`, `cfg(any(test, all(test, …)))`) are
+//! left out, since tests reach across modules to build their fixtures. The scan (`scan`) is
+//! lexical, not the compiler's: comments (doc links included) and the contents of string and
+//! character literals are blanked before paths are read; a name a `use` brings in from another
+//! module (`use crate::mcp;`, `use crate::session::term;`) is followed through the file wherever it
+//! starts a path, without regard to the block the `use` sits in, but a child module's
+//! `use super::*` that inherits such an import from its parent is not followed; a glob import is
+//! seen only as the import of its module; and nothing a macro expands to is seen beyond the tokens
+//! written at its call. Methods and fields reached through a value (`state.store.get_session(…)`)
+//! are not paths and are not seen at all, so a `Types` entry admits everything the types it covers
+//! expose. A test-only field of a tuple struct or tuple variant whose type holds a comma inside
+//! angle brackets (`HashMap<K, V>`) is cut short at that comma, so the rest of its type is read as
+//! production code: this can only add an edge, never hide one.
+
+mod scan;
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use scan::{scan_crate, Scan};
+
+const RULE_DOC: &str = "docs/structure/daemon.md, section \"Dependency direction\"";
+const THIS_FILE: &str = "apps/daemon/src/layering_tests/mod.rs";
+
+/// The layers, lowest first. A module may use its own layer and the layers below it.
+const LAYERS: &[(&str, &[&str])] = &[
+    (
+        "foundation",
+        &[
+            "blocking_pass",
+            "interface_language",
+            "loopback",
+            "rfc3339",
+            "wire_path",
+        ],
+    ),
+    ("wire", &["protocol"]),
+    (
+        "host",
+        &[
+            "env_shell",
+            "git",
+            "host_open",
+            "hostfs",
+            "instance_lock",
+            "log_file",
+            "paths",
+            "processes",
+        ],
+    ),
+    ("storage", &["git_workflow", "store"]),
+    ("state", &["state"]),
+    (
+        "workspace",
+        &[
+            "branch_cleanup",
+            "branch_origin",
+            "browse",
+            "host_tools",
+            "path_links",
+            "project_git",
+            "project_trash",
+            "revert_gate",
+            "terminal",
+            "trash_safety",
+        ],
+    ),
+    (
+        "agent sessions",
+        &[
+            "accounts",
+            "adapter",
+            "agents",
+            "handoff",
+            "hooks",
+            "messaging",
+            "records",
+            "session",
+            "session_git_hooks",
+            "titles",
+        ],
+    ),
+    (
+        "control",
+        &["config_document", "coordinator", "mcp", "session_request"],
+    ),
+    ("entry", &["cli", "server"]),
+];
+
+/// Items of the crate root (`main.rs`) any module may name.
+const ROOT_ITEMS: &[&str] = &["APP_NAME"];
+
+/// `AppState` holds the live state of every module, so `state` may name the types of any module
+/// outside the entry layer, and their associated items (`Outbox::new`), whatever the layer;
+/// anything else it reaches upward goes through `UPWARD`.
+const STATE: &str = "state";
+
+/// The layer of the ways into the daemon, which nothing the daemon holds may name.
+const ENTRY: &str = "entry";
+
+/// What an upward edge in `UPWARD` covers of the paths into its target module.
+enum Scope {
+    /// Types only, named as a module path ending in a type (`ledger::ProcessTree`).
+    Types,
+    /// Paths starting with one of these, given after the target module.
+    Items(&'static [&'static str]),
+}
+
+/// An edge allowed to point to a higher layer.
+struct Upward {
+    from: &'static str,
+    to: &'static str,
+    scope: Scope,
+    /// Why it points upward; the table in the rule's doc carries the same reason.
+    reason: &'static str,
+}
+
+const UPWARD: &[Upward] = &[
+    Upward {
+        from: "protocol",
+        to: "accounts",
+        scope: Scope::Types,
+        reason: "a sharing failure goes on the wire in the types account sharing reports it in",
+    },
+    Upward {
+        from: "protocol",
+        to: "config_document",
+        scope: Scope::Types,
+        reason: "the configuration document and its import's findings go on the wire as the \
+                 types export and import build",
+    },
+    Upward {
+        from: "protocol",
+        to: "git_workflow",
+        scope: Scope::Types,
+        reason: "the Git workflow settings and overrides go on the wire as the types \
+                 git_workflow resolves",
+    },
+    Upward {
+        from: "protocol",
+        to: "processes",
+        scope: Scope::Types,
+        reason: "a process tree goes on the wire as the ledger's own ProcessTree",
+    },
+    Upward {
+        from: "protocol",
+        to: "titles",
+        scope: Scope::Types,
+        reason: "a session record carries the titles read off its agent's records as RecordTitles",
+    },
+    Upward {
+        from: "git",
+        to: "browse",
+        scope: Scope::Items(&["budget::GIT_READ_TIMEOUT", "budget::GIT_STDERR"]),
+        reason: "IsolatedGit is bounded by browse's read budgets, which keep every read limit in \
+                 one place",
+    },
+    Upward {
+        from: "processes",
+        to: "state",
+        scope: Scope::Types,
+        reason: "processes::requests answers the clients' process requests off AppState",
+    },
+    Upward {
+        from: "processes",
+        to: "store",
+        scope: Scope::Items(&["LOCAL_HOST_ID"]),
+        reason: "processes::requests names the local host the way stored records do",
+    },
+    Upward {
+        from: "store",
+        to: "accounts",
+        scope: Scope::Items(&["dirs::account_dir_key"]),
+        reason: "an account update compares directories the way accounts does (case folded on \
+                 macOS) to tell a repoint from a respelling",
+    },
+    Upward {
+        from: "store",
+        to: "titles",
+        scope: Scope::Types,
+        reason: "a session row stores RecordTitles, the titles read off the agent's records",
+    },
+    Upward {
+        from: "state",
+        to: "accounts",
+        scope: Scope::Items(&[
+            "shared_config::in_use",
+            "shared_config::runs_under",
+            "shared_config::sharing_in_progress",
+        ]),
+        reason: "the sharing locks and claims AppState holds decide what an account's sharing \
+                 change covers by shared_config's own rules, and refuse with its error",
+    },
+    Upward {
+        from: "state",
+        to: "handoff",
+        scope: Scope::Items(&["package_file::remove_in"]),
+        reason: "forgetting a session removes its handoff package; remove_in is std-only file work",
+    },
+    Upward {
+        from: "state",
+        to: "project_git",
+        scope: Scope::Items(&["header::apply_header"]),
+        reason: "the git status AppState holds takes a fresh header the way project_git reads it",
+    },
+    Upward {
+        from: "state",
+        to: "session",
+        scope: Scope::Items(&["term::FRAGMENT_HAZARD"]),
+        reason: "the notice for a dropped write queue explains the hazard in the words the \
+                 session's own write uses",
+    },
+    Upward {
+        from: "state",
+        to: "titles",
+        scope: Scope::Items(&["project_names", "resolve"]),
+        reason: "a session's title is resolved where AppState publishes it",
+    },
+    Upward {
+        from: "accounts",
+        to: "coordinator",
+        scope: Scope::Items(&[
+            "account_choice",
+            "account_switch",
+            "launch::LaunchEdit",
+            "open::report_failed_launch",
+            "restart::record_needs_shell_env",
+        ]),
+        reason: "accounts::auto_switch answers a usage limit with the coordinator's account \
+                 switch and launch, the path a switch the user asks for takes",
+    },
+    Upward {
+        from: "adapter",
+        to: "mcp",
+        scope: Scope::Items(&["Owner", "SERVER_KEY", "role", "stdio::CALL_TIMEOUT"]),
+        reason: "an adapter writes the agent's MCP server entry and role text from mcp's server \
+                 key, role descriptions and call timeout",
+    },
+    Upward {
+        from: "handoff",
+        to: "coordinator",
+        scope: Scope::Items(&["bindings", "lifecycle", "open"]),
+        reason: "a handoff opens the receiving session and archives the original through the \
+                 coordinator's own open and lifecycle",
+    },
+    Upward {
+        from: "handoff",
+        to: "mcp",
+        scope: Scope::Items(&["qualified_tool_name"]),
+        reason: "the text handed to the receiving session names MCP tools as its agent sees them",
+    },
+    Upward {
+        from: "messaging",
+        to: "coordinator",
+        scope: Scope::Items(&["bindings", "lifecycle"]),
+        reason: "messaging::reporting acts on a worker's final report, archiving its team, \
+                 through the coordinator's bindings and lifecycle",
+    },
+    Upward {
+        from: "messaging",
+        to: "mcp",
+        scope: Scope::Items(&["qualified_tool_name", "tools_for"]),
+        reason: "the notices sessions are sent name MCP tools as each agent sees them",
+    },
+    Upward {
+        from: "session",
+        to: "mcp",
+        scope: Scope::Items(&["Owner"]),
+        reason: "a launch carries whom the worker reports to, which its MCP role text is \
+                 written from",
+    },
+];
+
+#[test]
+fn every_top_level_module_depends_only_downward_or_as_listed() {
+    let scan = scan_crate();
+    let mut problems = Vec::new();
+    let layer_of = check_layers(&scan, &mut problems);
+    let usage = check_edges(&scan, &layer_of, &mut problems);
+    check_stale_entries(&layer_of, &usage, &mut problems);
+    assert!(
+        problems.is_empty(),
+        "the daemon's top-level modules break their dependency direction:\n  {}\n\nA module may \
+         use only its own layer and the layers below it ({RULE_DOC}). Turn the dependency \
+         around, or move what it needs to a lower layer; an edge that has to point upward goes \
+         into `UPWARD` in {THIS_FILE}, with its reason, and into that section's table.",
+        problems.join("\n  ")
+    );
+}
+
+/// Every production module in exactly one layer, and every layered module a production one.
+/// Returns each layered module's layer.
+fn check_layers(scan: &Scan, problems: &mut Vec<String>) -> BTreeMap<&'static str, usize> {
+    let mut layer_of = BTreeMap::new();
+    for (index, (layer, modules)) in LAYERS.iter().enumerate() {
+        for module in *modules {
+            if let Some(earlier) = layer_of.insert(*module, index) {
+                problems.push(format!(
+                    "`{module}` is in two layers, `{}` and `{layer}`",
+                    LAYERS[earlier].0
+                ));
+            }
+            if !scan.modules.contains(*module) {
+                problems.push(format!(
+                    "layer `{layer}` names `{module}`, which main.rs does not declare as a module"
+                ));
+            }
+        }
+    }
+    for module in &scan.modules {
+        if !layer_of.contains_key(module.as_str()) {
+            problems.push(format!(
+                "`{module}` is in no layer; add it to `LAYERS` in {THIS_FILE} and to the layer \
+                 table in {RULE_DOC}"
+            ));
+        }
+    }
+    layer_of
+}
+
+/// Which `UPWARD` entries, and which of their items, an edge relied on.
+struct Usage {
+    entries: Vec<bool>,
+    items: BTreeSet<(usize, &'static str)>,
+}
+
+/// Every edge downward, within its layer, or allowed: by `ROOT_ITEMS`, by the `state` exception,
+/// or by an `UPWARD` entry.
+fn check_edges(
+    scan: &Scan,
+    layer_of: &BTreeMap<&'static str, usize>,
+    problems: &mut Vec<String>,
+) -> Usage {
+    let mut usage = Usage {
+        entries: vec![false; UPWARD.len()],
+        items: BTreeSet::new(),
+    };
+    for edge in &scan.edges {
+        if edge.from == edge.to {
+            continue;
+        }
+        let here = format!("apps/daemon/src/{}:{}", edge.file, edge.line);
+        let named = if edge.path.is_empty() {
+            format!("crate::{}", edge.to)
+        } else {
+            format!("crate::{}::{}", edge.to, edge.path.join("::"))
+        };
+        if !scan.modules.contains(&edge.to) {
+            if !ROOT_ITEMS.contains(&edge.to.as_str()) {
+                problems.push(format!(
+                    "{here}: `{named}` is an item of main.rs that is not in `ROOT_ITEMS`"
+                ));
+            }
+            continue;
+        }
+        let (Some(&from), Some(&to)) = (
+            layer_of.get(edge.from.as_str()),
+            layer_of.get(edge.to.as_str()),
+        ) else {
+            continue;
+        };
+        if to <= from
+            || (edge.from == STATE && LAYERS[to].0 != ENTRY && names_a_type(&edge.path, true))
+        {
+            continue;
+        }
+        let allowed = UPWARD.iter().enumerate().find_map(|(index, upward)| {
+            if upward.from != edge.from || upward.to != edge.to {
+                return None;
+            }
+            match upward.scope {
+                Scope::Types => names_a_type(&edge.path, false).then_some((index, None)),
+                Scope::Items(items) => items
+                    .iter()
+                    .find(|item| starts_with(&edge.path, item))
+                    .map(|item| (index, Some(*item))),
+            }
+        });
+        match allowed {
+            Some((index, item)) => {
+                usage.entries[index] = true;
+                if let Some(item) = item {
+                    usage.items.insert((index, item));
+                }
+            }
+            None => problems.push(format!(
+                "{here}: `{}` (layer `{}`) uses `{named}`, in the higher layer `{}`",
+                edge.from, LAYERS[from].0, LAYERS[to].0
+            )),
+        }
+    }
+    usage
+}
+
+/// Every `UPWARD` entry an upward edge between layered modules, and every entry and item still
+/// relied on, so the list shrinks as the code does.
+fn check_stale_entries(
+    layer_of: &BTreeMap<&'static str, usize>,
+    usage: &Usage,
+    problems: &mut Vec<String>,
+) {
+    for (index, upward) in UPWARD.iter().enumerate() {
+        let name = format!("`{} -> {}` ({})", upward.from, upward.to, upward.reason);
+        match (layer_of.get(upward.from), layer_of.get(upward.to)) {
+            (Some(from), Some(to)) if to > from => {}
+            _ => {
+                problems.push(format!(
+                    "`UPWARD` lists {name}, which is not an upward edge between layered modules"
+                ));
+                continue;
+            }
+        }
+        if !usage.entries[index] {
+            problems.push(format!(
+                "`UPWARD` lists {name}, which no production code uses any more; remove it here \
+                 and from {RULE_DOC}"
+            ));
+        }
+        if let Scope::Items(items) = upward.scope {
+            for item in items {
+                if !usage.items.contains(&(index, *item)) {
+                    problems.push(format!(
+                        "`UPWARD` lists {name} for `{item}`, which no production code uses any \
+                         more; remove it here and from {RULE_DOC}"
+                    ));
+                }
+            }
+        }
+    }
+}
+
+/// Whether `path` is a module path ending in a type (`lane::Gate`), and, with `associated`, also
+/// one going on to a single item of that type (`lane::Gate::with_budget`).
+fn names_a_type(path: &[String], associated: bool) -> bool {
+    let is_type = |segment: &String| {
+        segment.starts_with(|c: char| c.is_ascii_uppercase())
+            && segment.contains(|c: char| c.is_ascii_lowercase())
+    };
+    let Some(position) = path.iter().position(is_type) else {
+        return false;
+    };
+    let after = path.len() - position - 1;
+    path[..position]
+        .iter()
+        .all(|s| s.starts_with(|c: char| c.is_ascii_lowercase()))
+        && (after == 0 || (associated && after == 1))
+}
+
+fn starts_with(path: &[String], item: &str) -> bool {
+    let item: Vec<&str> = item.split("::").collect();
+    path.len() >= item.len() && path.iter().zip(&item).all(|(a, b)| a == b)
+}

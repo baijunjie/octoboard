@@ -50,7 +50,7 @@ trash = "5"
 # are what the project already builds for SQLite, and a decoder-only crate would add a second
 # implementation of a format Codex itself writes with the reference one.
 zstd = { version = "0.13", default-features = false }
-# Watches each repository's refs for a commit made outside the daemon (`crate::git_watch`).
+# Watches each repository's refs for a commit made outside the daemon (`crate::project_git::watch`).
 notify = "8.2"
 
 # The private Codex app-server transport and control-socket tests share axum's resolved protocol.

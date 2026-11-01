@@ -22,7 +22,7 @@ use std::time::Duration;
 
 use super::identity::{self, Identity};
 use super::lexically_normalise;
-use crate::state::StalledPasses;
+use crate::blocking_pass::StalledPasses;
 
 /// How many paths are looked at at once.
 const LOOKS_AT_ONCE: usize = crate::blocking_pass::BLOCKING_WIDTH;
@@ -298,7 +298,7 @@ mod tests {
     use std::time::{Duration, Instant};
 
     use super::{looked_within, looked_within_stuck, Looking, Stuck, LOOKS_AT_ONCE_OVERRIDE};
-    use crate::state::StalledPasses;
+    use crate::blocking_pass::StalledPasses;
     use crate::test_support::PATIENCE;
 
     fn skipping(deadline: Duration) -> Looking {

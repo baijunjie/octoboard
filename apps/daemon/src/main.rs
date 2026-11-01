@@ -23,7 +23,10 @@ mod host_tools;
 mod hostfs;
 mod instance_lock;
 mod interface_language;
+#[cfg(test)]
+mod layering_tests;
 mod log_file;
+mod loopback;
 mod mcp;
 mod messaging;
 mod path_links;

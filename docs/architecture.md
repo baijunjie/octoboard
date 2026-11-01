@@ -2,8 +2,9 @@
 
 Why Octoboard is built the way it is: what it is, how it is layered, the technology choices, the constraints that keep
 the design open, and the traps found along the way. What the product does is in `docs/product/`; what the agent CLIs do
-is in `docs/agent-cli-reference.md`; how the code is laid out is in `docs/project-map.md`. This document keeps only the
-reasoning and the constraints, not a restatement of the code.
+is in `docs/agent-cli-reference.md`; the technology stack and the code layout are in `docs/project-map.md` and the
+per-end structure docs under `docs/structure/`. This document keeps only the reasoning and the constraints, not a
+restatement of the code.
 
 ## Positioning
 

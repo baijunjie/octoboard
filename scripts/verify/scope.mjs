@@ -8,7 +8,8 @@
 // `daemon` and `native` are the two Rust crates, which the Rust steps always check together (one
 // `cargo test --workspace`, one feature set), so selecting either selects both Rust steps.
 
-// What `apps/web` imports from `packages/ui/src`: `i18n/matchLanguage.ts` and what it imports.
+// What `apps/web` imports from `packages/ui/src` outside the preview inputs below: `i18n/matchLanguage.ts`,
+// `i18n/languages.ts` and what they import.
 export const WEB_IMPORTS_FROM_UI = [
   "packages/ui/src/i18n/matchLanguage.ts",
   "packages/ui/src/i18n/languages.ts",

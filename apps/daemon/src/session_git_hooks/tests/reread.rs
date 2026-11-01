@@ -30,7 +30,7 @@ fn reread_until(
             let (session, report) = parse_report(line);
             assert!(report.moved, "every transaction here moves a ref: {line}");
             let body = serde_json::to_vec(&report).unwrap();
-            crate::cli::loopback::post(
+            crate::loopback::post(
                 daemon.port,
                 TEST_KEY,
                 &format!("/git-ref/{session}"),

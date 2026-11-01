@@ -2103,7 +2103,7 @@ placements, pick the placement from the language (`textDirection(useCurrentLangu
 
 Verify a direction change by rendering it, not by reading it: the gallery serves every scenario under `ar`, and a
 run of it against `en` at the same width catches a part that fails to mirror as readily as one that mirrors when it
-should not (see "The UI state gallery" in `packages/ui/README.md`).
+should not (see `packages/ui/src/gallery/README.md`).
 
 ## Motion
 

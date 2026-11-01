@@ -19,9 +19,8 @@
 //!   watch.
 //! - [`git_status`]: each project's live git status, with the claim that keeps two checks of one
 //!   project from racing and the timestamp that keeps them from piling up across several clients.
-//! - [`stalled`]: work that outran its deadline, per console or per path;
-//!   [`agent_availability`]: each agent's availability; [`forget`]: what is dropped where a
-//!   record is removed.
+//! - [`agent_availability`]: each agent's availability; [`forget`]: what is dropped where a record
+//!   is removed.
 //!
 //! What is held in memory for a session, project or console is dropped where its record is
 //! removed, the records the store removes by cascade included, except for what a later pass drops
@@ -43,7 +42,6 @@ mod requests;
 mod sessions;
 mod sharing_lock;
 mod sharing_status;
-mod stalled;
 mod status;
 #[cfg(test)]
 pub(crate) mod test_support;
@@ -59,7 +57,6 @@ pub use git_status::GitCheckClaim;
 pub use live::Running;
 pub use sessions::Deletion;
 pub use sharing_lock::AccountSharingLock;
-pub use stalled::StalledPasses;
 pub use turns::TurnClose;
 pub use write_queue::{OutboxHold, WriteHold};
 
@@ -71,6 +68,7 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use tokio::sync::broadcast;
 
+use crate::blocking_pass::StalledPasses;
 use crate::messaging::outbox::Outbox;
 use crate::protocol::{
     error_code, Agent, AgentAvailability, Availability, CodedError, Event, SessionStatus,

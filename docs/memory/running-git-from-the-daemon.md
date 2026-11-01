@@ -2,16 +2,15 @@
 
 ## Build and run every `git` the daemon spawns through `git::run`, and give it a deadline
 
-`apps/daemon/src/git/run.rs` builds and runs every `git` the daemon starts: take a `UserGit` (`UserGit::cached_shell`
-on a path that repeats), get the command from `UserGit::command` with its call-site family's `Policy` and an `Access`
-(`Access::Read` for anything that only reads the repository, a status-only `git diff --quiet` included, which adds the
-index guard), then add the subcommand and arguments to the `Command` it hands back. Start from there rather than from
-`Command::new` or from `git::env::non_interactive`, and set none of the variables `apps/daemon/src/git/env.rs` sets at a
-call site; that module's header carries the reason for each one, and a call site that assembles its own takes some of
-them and misses the rest. Global options or variables fixed for a whole family of call sites go in a `Policy` defined
-beside its users (`UNMONITORED` in `apps/daemon/src/git/branch_git.rs` is the shape), not repeated per call. The one
-exception is a `git` that runs inside the user's own git hook with the hook's inherited environment
-(`apps/daemon/src/revert_gate/git.rs`).
+Every `git` the daemon starts goes through `apps/daemon/src/git/run.rs` (`docs/structure/daemon.md`, "Shared entry
+points", which also names the one exception). Take a `UserGit` (`UserGit::cached_shell` on a path that repeats), get the
+command from `UserGit::command` with its call-site family's `Policy` and an `Access` (`Access::Read` for anything that
+only reads the repository, a status-only `git diff --quiet` included, which adds the index guard), then add the
+subcommand and arguments to the `Command` it hands back. Start from there rather than from `Command::new` or from
+`git::env::non_interactive`, and set none of the variables `apps/daemon/src/git/env.rs` sets at a call site; that
+module's header carries the reason for each one, and a call site that assembles its own takes some of them and misses
+the rest. Global options or variables fixed for a whole family of call sites go in a `Policy` defined beside its users
+(`UNMONITORED` in `apps/daemon/src/git/branch_git.rs` is the shape), not repeated per call.
 
 The environment is part of that, for a command that writes as much as for one that reads: `UserGit::command` passes
 the user's login-shell snapshot through `git::env::user_configuration_only` on the way in. That filter keeps what says

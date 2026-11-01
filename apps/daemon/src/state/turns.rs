@@ -4,6 +4,12 @@
 use super::AppState;
 use crate::protocol::now_millis;
 
+/// How long an open turn must have been quiet before a clock-attributed turn end may be read as
+/// belonging to it. Grok's `idle_prompt` backstop fires about 60 s after a turn ends and carries no
+/// turn id, so a turn still producing events cannot be the one it is talking about. Set under that
+/// delay so jitter does not make a legitimate backstop unusable.
+const BACKSTOP_QUIET: std::time::Duration = std::time::Duration::from_secs(45);
+
 /// What the daemon remembers about a session's current turn.
 #[derive(Default)]
 pub(super) struct TurnState {
@@ -283,9 +289,7 @@ impl AppState {
                 turn.echo_pending = false;
                 return TurnClose::NotThisTurn;
             }
-            if now_millis().saturating_sub(turn.last_event_at)
-                < crate::hooks::BACKSTOP_QUIET.as_millis() as i64
-            {
+            if now_millis().saturating_sub(turn.last_event_at) < BACKSTOP_QUIET.as_millis() as i64 {
                 return TurnClose::NotThisTurn;
             }
         }

@@ -3,6 +3,15 @@
 Pointers to the long-lived documentation under `docs/`, grouped by area; open the one whose question matches yours.
 Development plan docs and bug tickets are temporary and are not listed here.
 
+Where to start, by question:
+
+- What is it built with, and where is the code? The [project map](project-map.md), then the end's structure doc under
+  "Code" below.
+- Where does new code go, and which helper must it use? The end's structure doc.
+- How does one module work? The `README.md` beside the module, linked from its structure doc.
+- What does the product do? The product docs below. Why is it built this way? [Architecture](architecture.md).
+- How should I work in this project? The development memory below.
+
 ## Product
 
 ### Sessions
@@ -175,7 +184,8 @@ Development plan docs and bug tickets are temporary and are not listed here.
 
 - [Application lifecycle](product/application-lifecycle.md) — requirements, startup, daemon connection and its key,
   restarting a daemon that dies, closing, quitting, crashes, logs and owned files.
-- [In-app updates](product/in-app-updates.md) — update channels, checking, notice, download and restart.
+- [In-app updates](product/in-app-updates.md) — update channels, where updates come from, checking, notice, download
+  and restart.
 - [Menu bar icon](product/menu-bar-icon.md) — the macOS menu bar icon, its dot and menu.
 - [Website](product/website.md) — the official site: publishing, pages and languages, the homepage and navigation,
   platform availability, motion and missing pages.
@@ -198,7 +208,19 @@ Development plan docs and bug tickets are temporary and are not listed here.
 
 ## Code
 
-- [Project map](project-map.md) — the monorepo layout, one line per module linking to that module's own doc.
+- [Project map](project-map.md) — the technology stack and frameworks of each end, the two workspaces, and which
+  structure doc to open for which end; start here to find where code lives.
+- [Daemon structure](structure/daemon.md) — `apps/daemon`'s directory map and CLI modes, the test-enforced dependency
+  direction between its modules with its allow-list, where new code goes, and the shared helpers new daemon code must
+  use.
+- [UI structure](structure/ui.md) — `packages/ui`'s directory map, the lint-enforced import layering, where new code
+  goes, and the shared UI entry points (errors, terminal, settings, auto-refresh, fixtures).
+- [Desktop structure](structure/desktop.md) — `apps/desktop`'s Tauri shell: directory map, IPC surface, where new code
+  goes, and its build and release scripts.
+- [Website structure](structure/web.md) — `apps/web`'s Nuxt directory map, what it imports from the UI package, where
+  new code goes, and its SEO, locale and icon entry points.
+- [Tooling structure](structure/tooling.md) — the workspaces and toolchains, `pnpm verify` scoping, git hooks, CI
+  workflows and repository configuration, and where new scripts and checks go.
 
 ## Development memory
 

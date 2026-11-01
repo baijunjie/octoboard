@@ -4,7 +4,6 @@
 //! running daemon; the revert gate runs the gate directly from its arguments.
 
 pub(crate) mod hook;
-pub(crate) mod loopback;
 pub(crate) mod status_line;
 
 use anyhow::Result;

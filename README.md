@@ -48,72 +48,32 @@ are planned and are not available yet.
 
 ## Develop
 
-Install the agent CLIs you want to use. Octoboard launches them from your shell environment. Those agents are
-yours, including one you point at a model you host yourself. How a launch is configured is in
-[Launching agents](docs/product/launching-agents.md).
-
-Build and run the desktop app from the
-[desktop development guide](apps/desktop/README.md#development): install the workspace, build the daemon sidecar,
-then start Tauri.
-
-### Code quality
-
-Install the workspace; in the main working copy with the main branch (the remote's default branch) checked out,
-this also installs the repository hooks (staged formatting on commit, verification on push). CI, linked
-worktrees and other checkouts skip it, as does a clone whose `core.hooksPath` hands hooks to another hook system,
-which then calls `sh .githooks/hook.sh <pre-commit|pre-push> "$@"`; a hook that cannot be installed is reported as
-a warning. After hook changes land in the main branch, run `pnpm install` there again to refresh them;
-`pnpm hooks:install` installs them explicitly. The revert gate is not one of these hooks: it is Octoboard's
-built-in gate ([revert gate](docs/product/revert-gate.md)), which applies when its `revert_gate` git workflow
-setting is on (off by default) and only to git run inside Octoboard project sessions:
+You need macOS, Node.js with pnpm, a Rust toolchain, and the agent CLIs you want to use. Octoboard launches the agents
+from your shell environment; those agents are yours, including one you point at a model you host yourself. How a launch
+is configured is in [Launching agents](docs/product/launching-agents.md).
 
 ```sh
-pnpm install
+pnpm install                                   # Install the workspace (and, in the main checkout, the git hooks).
+pnpm --filter @octoboard/desktop build:daemon  # Build the daemon sidecar once (and again after daemon changes).
+pnpm --filter @octoboard/desktop tauri dev     # Start the UI dev server and open the desktop window on it.
 ```
 
-Before each commit, the hook formats only staged JavaScript, TypeScript, TSX, Vue and Rust files. It formats
-staged content and preserves separate unstaged edits; conflicts stop the commit without changing either version.
-CSS, JSON, Markdown and other file types are outside this formatting scope. ESLint fixes layout only;
-non-formatting lint, type checks, builds and tests run before pushing, not after routine development or local merges.
+Each part has its own entry doc with the rest of its first-time flow:
 
-Before each push, the hook runs read-only checks for every affected package, using the destination's advertised
-remote commit and the exact commit being pushed. This includes all unpushed local merges and commits. A new branch
-is measured from its merge base with the live remote target branch (or remote HEAD); an unavailable baseline
-selects the full set. Rust changes run the Rust checks of both crates; tag pushes are not verified (release CI
-checks the tag); a checkout that predates the hook scripts skips that stage with a warning. Multiple affected
-packages are combined: an ordinary UI change does not run Rust or website checks. Shared protocols, imported code,
-configuration and dependency inputs also select their consumers; unknown inputs conservatively select everything.
-Checks require the pushed commit checked out in a clean working tree, so a different checkout cannot certify it.
+| Part | What it is | Entry doc |
+|---|---|---|
+| `apps/desktop/` | The macOS desktop application (Tauri 2 shell) | [apps/desktop/README.md](apps/desktop/README.md) |
+| `apps/daemon/` | `octoboardd`, the Rust daemon that owns agent processes and data | [apps/daemon/README.md](apps/daemon/README.md) |
+| `packages/ui/` | The React + HeroUI interface, also runnable in a browser | [packages/ui/README.md](packages/ui/README.md) |
+| `apps/web/` | The public website at octoboard.dev (Nuxt) | [apps/web/README.md](apps/web/README.md) |
 
-Manual entry points:
+The git hooks format staged files on commit and run the affected checks on push; `pnpm verify --dry-run` shows which
+checks a change selects and `pnpm verify` runs them. How the checks are scoped is in
+[scripts/verify/README.md](scripts/verify/README.md).
 
-```sh
-pnpm format:staged          # The same staged formatter the commit hook runs.
-pnpm verify --dry-run      # Show checks for changes from the freshly fetched upstream/remote target.
-pnpm verify                # Run those checks without rewriting files.
-pnpm verify --base <ref>   # Use an explicit remote baseline, including non-ancestor force-push tips.
-pnpm verify --quick        # Before a local merge: no builds, only the UI and Rust tests related to the changes.
-pnpm verify --full         # Check every package.
-pnpm verify --release      # Check the shipping application, without website or gallery-only suites.
-```
-
-Verification stops at the first failure and reuses successful checks for identical content and toolchain versions;
-`--fresh` forces them to run again. UI tests and Rust tests queue for a machine-wide slot across worktrees. Website
-checks build the site before its SEO tests read the generated output. Build configuration changes also select the
-relevant UI build. Broad manual commands (`pnpm format`, `pnpm format:check`, `pnpm typecheck`) remain available,
-but are not routine development steps.
-
-The Code quality workflow runs application lint, production UI type checks, application UI tests, desktop script
-tests, Rust formatting and both Rust crates' tests unconditionally before a release and on request. It excludes
-website checks and standalone gallery/website-preview tests; application tests may still use their shared fixtures.
-The release job then builds, signs and notarizes the application. Formatting does not replace code review.
-
-The desktop shell is [Tauri 2](https://github.com/tauri-apps/tauri) around a
-[React](https://github.com/facebook/react) and [HeroUI](https://github.com/heroui-inc/heroui) interface. A
-[Rust](https://github.com/rust-lang/rust) daemon, `octoboardd`, owns agent processes and application data.
-Terminals render with [xterm.js](https://github.com/xtermjs/xterm.js). The UI talks to the daemon over
-WebSocket/HTTP only. Where to read next: [project map](docs/project-map.md),
-[architecture](docs/architecture.md), [documentation index](docs/README.md).
+Where to read next: the [documentation index](docs/README.md) answers which doc to open for which question, the
+[project map](docs/project-map.md) gives the technology stack and directory map, and
+[architecture](docs/architecture.md) explains why it is built this way.
 
 ## This is an AI-native project
 

@@ -84,6 +84,7 @@ export const CRATE_WIDE_TESTS = {
       "src/accounts/shared_config/link.rs",
     ] },
     { filter: "records::history::", test: "every_opening_octoboard_writes_with_is_matched", why: "scans every source file for `*_OPENING` constants", covers: ["src/records/history.rs"] },
+    { filter: "layering_tests::", test: "every_top_level_module_depends_only_downward_or_as_listed", why: "scans every source file's `crate::` paths against the daemon's layer order", covers: ["src/layering_tests/scan.rs"] },
   ],
   native: [],
 };

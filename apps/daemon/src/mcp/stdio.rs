@@ -238,7 +238,7 @@ async fn forward_until(
     tokio::pin!(cancelled);
     // The loopback client is blocking: the connect as well as the exchange, which can take minutes.
     let connecting = tokio::task::spawn_blocking(move || {
-        let stream = crate::cli::loopback::connect(port, CALL_TIMEOUT)?;
+        let stream = crate::loopback::connect(port, CALL_TIMEOUT)?;
         let closer = stream.try_clone()?;
         Ok::<_, std::io::Error>((stream, closer))
     });
@@ -252,7 +252,7 @@ async fn forward_until(
         () = &mut cancelled => return Forwarded::Cancelled,
     };
     let exchange = tokio::task::spawn_blocking(move || {
-        crate::cli::loopback::exchange(stream, port, &key, &path, &body)
+        crate::loopback::exchange(stream, port, &key, &path, &body)
     });
     tokio::select! {
         answered = exchange => Forwarded::Answered(answered.unwrap_or_else(|err| {

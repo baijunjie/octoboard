@@ -43,7 +43,7 @@ fn report(port: u16, key: &str, session: &str, window: u64) -> std::thread::Join
     let path = format!("/context-window/{session}");
     let body = serde_json::json!({ "window": window }).to_string();
     std::thread::spawn(move || {
-        let _ = crate::cli::loopback::post(port, &key, &path, body.as_bytes(), TIMEOUT);
+        let _ = crate::loopback::post(port, &key, &path, body.as_bytes(), TIMEOUT);
     })
 }
 

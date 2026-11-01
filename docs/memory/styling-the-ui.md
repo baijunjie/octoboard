@@ -61,20 +61,22 @@ showing them (the jsdom tests never hover). When giving a HeroUI part a backgrou
 sticky row, say — restore each state fill on the same element with its state attribute's variant
 (`data-[hovered=true]:bg-default`).
 
-## A `docked:` utility loses to an `sm:` or an `rtl:` twin on the same property
+## A `docked:` or `phone:` utility loses to an `sm:` or an `rtl:` twin on the same property
 
-`docked` is this project's one custom breakpoint and its token is in `px`, while Tailwind's built-in breakpoints are
-in `rem`. Tailwind orders breakpoints by value only where it can compare them, so a px-valued one cannot be placed
-against the rem-valued built-ins and its media block is emitted ahead of all of them; a selector variant such as
-`rtl:` is emitted after every media variant. Either way the `docked:` rule comes first, so at equal specificity the
-twin wins and the `docked:` value never applies — with no build warning and nothing to see in the source.
+`docked` and `phone` are this project's custom breakpoints and their tokens are in `px`, while Tailwind's built-in
+breakpoints are in `rem`. Tailwind orders breakpoints by value only where it can compare them, so a px-valued one cannot
+be placed against the rem-valued built-ins and its media block is emitted ahead of all of them; a selector variant such
+as `rtl:` is emitted after every media variant. Either way the `docked:` or `phone:` rule comes first, so at equal
+specificity the twin wins and the custom breakpoint's value never applies — with no build warning and nothing to see in
+the source.
 
-- Never pair an `sm:` / `md:` / `lg:` utility with a `docked:` one for the same property. Write the narrow side as
-  `max-docked:` and leave the wide side to the inherited or the component's own value: `max-docked:` emits
-  `@media (width < 1168px)`, the exact complement of the `docked:` band, and being a Tailwind utility it also wins
-  inside that band over HeroUI's own prebuilt responsive rules, which sit in HeroUI's components layer.
-- `rtl:` has no `max-` form, so a `docked:` value for a property also set under `rtl:` needs a `docked:rtl:` twin
-  instead.
+- Never pair an `sm:` / `md:` / `lg:` utility with a `docked:` or `phone:` one for the same property. Write the narrow
+  side as `max-docked:` or `max-phone:` and leave the wide side to the inherited or the component's own value: each
+  emits `@media (width < …)` on its own token's value, the exact complement of the `docked:` or `phone:` band, and
+  being a Tailwind utility it also wins inside that band over HeroUI's own prebuilt responsive rules, which sit in
+  HeroUI's components layer.
+- `rtl:` has no `max-` form, so a `docked:` or `phone:` value for a property also set under `rtl:` needs a
+  `docked:rtl:` or `phone:rtl:` twin instead.
 
 ## Under a local override of a HeroUI token, use the token itself, not its `--color-*` alias or a token derived from it
 

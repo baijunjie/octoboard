@@ -454,7 +454,7 @@ async fn post_hook(state: &AppState, port: u16, session: &str, name: &str, mut p
     let body = serde_json::to_vec(&payload).unwrap();
     let path = format!("/hook/{session}");
     tokio::task::spawn_blocking(move || {
-        crate::cli::loopback::post(port, TEST_KEY, &path, &body, PATIENCE)
+        crate::loopback::post(port, TEST_KEY, &path, &body, PATIENCE)
     })
     .await
     .unwrap()

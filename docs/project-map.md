@@ -1,71 +1,47 @@
 # Project Map
 
-Navigation for the code tree: one line per module, linking to that module's own doc for how it works internally.
+Top-level map of the code: what is built with what, and which structure doc answers where things are and which rules new
+code follows.
 
-The repository is a pnpm-workspace monorepo split two ways:
+Octoboard is a monorepo that orchestrates AI coding agents (Claude Code, Codex, Grok Build) on a developer's machine.
+Everything revolves around one daemon; every client reaches it only through the WebSocket/HTTP protocol in
+[`apps/daemon/PROTOCOL.md`](../apps/daemon/PROTOCOL.md).
 
-- **`apps/`** holds the deliverables — one directory per thing that ships, the daemon among them, since it ships as the
-  desktop application's sidecar and is the whole of a server-side deployment on its own.
-- **`packages/`** holds code shared between them.
+## Technology stack
+
+| End | Stack |
+|---|---|
+| Daemon | Rust (edition 2021, toolchain pinned in `rust-toolchain.toml`), tokio, axum (HTTP and WebSocket), SQLite through rusqlite, `portable-pty` and `alacritty_terminal`, `rmcp` for the MCP server, clap |
+| UI | TypeScript, React 19 with the React Compiler, HeroUI 3 (react-aria), Tailwind 4, Zustand, xterm.js, Vite 8, Vitest |
+| Desktop shell | Tauri 2 (Rust crate plus npm scripts), macOS only |
+| Website | Nuxt 4 (Vue 3, Nuxt i18n, sitemap), generated as static files for GitHub Pages |
+| Tooling | Node scripts (`.mjs`), pnpm 10, ESLint (also formats), rustfmt, GitHub Actions |
+
+## Workspaces
 
 The repository root is two workspace roots at once:
 
-- The **pnpm workspace** (`package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`): its packages are the `apps/*` and
-  `packages/*` directories that have a `package.json`; `apps/daemon/` has none and so is not one of them.
+- The **pnpm workspace** (`package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`): the `apps/*` and `packages/*`
+  directories that have a `package.json`, namely `apps/desktop/`, `apps/web/` and `packages/ui/`.
 - The **Cargo workspace** (`Cargo.toml`, `Cargo.lock`): the daemon (`apps/daemon/`) and the desktop shell's Tauri crate
-  (`apps/desktop/src-tauri/`) are its two members, built into one `target/` directory.
+  (`apps/desktop/src-tauri/`), built into one `target/` directory.
 
-Per-package commands are in that package's doc.
+`apps/` holds the deliverables, one directory per thing that ships; `packages/` holds code shared between them.
 
-## Deliverables
+## Structure docs
 
-- [`apps/daemon/`](../apps/daemon/README.md) — `octoboardd`, the Rust daemon and the core of the system: the one process
-  that owns every agent process and all of Octoboard's data, reached by every client only through the WebSocket/HTTP
-  protocol in [`apps/daemon/PROTOCOL.md`](../apps/daemon/PROTOCOL.md).
-- [`apps/desktop/`](../apps/desktop/README.md) — `@octoboard/desktop`, the Tauri 2 shell of the macOS desktop
-  application: window, native menu, menu bar icon, `octoboardd` sidecar and its restart when it dies, exit flow, macOS
-  privacy grants, in-app updates, and the build, install, release and release-publishing scripts; it loads the UI from
-  `packages/ui/` and has no UI of its own.
-- [`apps/web/`](../apps/web/README.md) — `@octoboard/web`, the public Nuxt website: localized product and privacy pages
-  generated as static files for GitHub Pages, including a fixture-backed preview built from the shared React UI.
-- [`apps/ios/`](../apps/ios/README.md) — placeholder for the native iOS client; no content, not a workspace package.
-- [`apps/android/`](../apps/android/README.md) — placeholder for the native Android client; no content, not a workspace
-  package.
+Each doc holds that end's directory map, its dependency direction, where new code goes, and the shared entry points new
+code must use.
 
-## Shared packages
+- [Daemon](structure/daemon.md) — `apps/daemon/` ([README](../apps/daemon/README.md)): `octoboardd`, the core of the
+  system; owns every agent process and all of Octoboard's data.
+- [UI](structure/ui.md) — `packages/ui/` ([README](../packages/ui/README.md)): the React UI of the desktop application,
+  with the dev-only state gallery, the fixtures runtime and the website preview build.
+- [Desktop shell](structure/desktop.md) — `apps/desktop/` ([README](../apps/desktop/README.md)): the Tauri 2 macOS shell
+  with its build, install and release scripts; loads the UI and starts the daemon as a sidecar.
+- [Website](structure/web.md) — `apps/web/` ([README](../apps/web/README.md)): the public Nuxt website.
+- [Tooling](structure/tooling.md) — `scripts/`, `.githooks/`, `.github/`, `config/`, `patches/`, `eslint.config.mjs`,
+  `rustfmt.toml` and the other repository configuration: verification, hooks, CI, release.
 
-- [`packages/ui/`](../packages/ui/README.md) — `@octoboard/ui`, the HeroUI + React 19 UI of the desktop application:
-  daemon client and store (`src/store/`), platform adapter, window chrome (`src/shell/`), the hooks `App` is composed
-  of (`src/app/`), the pure domain layers under them (`src/preferences/`, `src/input/`, `src/format/`, `src/agents/`,
-  `src/git/`, `src/sessions/`, `src/accounts/`, `src/errors/`), shared components, sidebar, terminal pane, right pane
-  (project browser, shell terminals, session report, processes), dialogs and settings, file viewer, internationalization
-  and keyboard shortcuts, with import layering between its directories enforced by lint; plus a dev-only gallery of UI
-  states, the shared fixtures runtime (`src/fixtures/`) it and the separate website-preview build run on; loaded by
-  `apps/desktop/` and also runs in a plain browser.
-
-## Repository-level code and configuration
-
-- [`scripts/`](../scripts/) — repository-level commands and hook helpers: `env.mjs` (shared env-file reader),
-  `git.mjs` (the one way the repository scripts run `git`, which `verify.mjs`, `pre-push.mjs`, `verify/tree.mjs` and
-  the desktop release publishing go through), `test-rust.mjs` (Rust tests), `clippy-rust.mjs` (Rust lint with warnings
-  denied), `format-staged.mjs` (staged-file formatting), `pre-push.mjs` (push verification), and `verify.mjs` with
-  `verify/` (checks selected from changed inputs, plus the application release checks).
-- [`.githooks/`](../.githooks/) — git hook entry points: `hook.sh` dispatches pre-commit to `scripts/format-staged.mjs`
-  and pre-push to `scripts/pre-push.mjs`; `install.sh` installs them into the common hooks directory (and migrates
-  older clones), and `auto-install.sh` runs it on `pnpm install` in the main checkout.
-- [`.github/workflows/`](../.github/workflows/) — CI: `release.yml` (builds, signs and publishes the desktop release
-  when a version tag is pushed), `quality.yml` (application checks before release and on request) and
-  `website.yml` (publishing the website to GitHub Pages); [`.github/release-notes.sh`](../.github/release-notes.sh)
-  validates a release tag and prints its notes for `release.yml`; [`.github/dependabot.yml`](../.github/dependabot.yml)
-  configures Dependabot's updates of the actions the workflows use.
-- [`config/app.json`](../config/app.json) — the single source for product identity, repository and issue-report
-  destinations, author and support contacts, website address, license and copyright year, read by the UI, the website
-  and both Cargo crates' `build.rs`; the copies the toolchain requires elsewhere are checked against it.
-- [`eslint.config.mjs`](../eslint.config.mjs) — the repository-wide lint and formatting rules for JavaScript,
-  TypeScript, TSX and Vue; [`rustfmt.toml`](../rustfmt.toml) is the Rust counterpart.
-- [`.env`](../.env), [`.env.local.example`](../.env.local.example), [`.env.secret.example`](../.env.secret.example) —
-  the committed non-secret release and deployment configuration (no script reads it yet), and the templates for the
-  gitignored machine-local and release-credential files.
-- [`patches/`](../patches/) — the pnpm dependency patches registered by `patchedDependencies` in `pnpm-workspace.yaml`.
-- [`assets/branding/`](../assets/branding/) — brand source artwork that no app serves, including the logo the root
-  README shows.
+Placeholders for future native clients, with no content and not workspace packages: [`apps/ios/`](../apps/ios/README.md)
+and [`apps/android/`](../apps/android/README.md).

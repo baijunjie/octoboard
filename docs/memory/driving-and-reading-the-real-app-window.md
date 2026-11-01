@@ -89,9 +89,9 @@ Where a check needs a real client against a real daemon but not the native windo
 daemon" section of `packages/ui/README.md`) in a headless browser driven over the DevTools protocol, with real mouse and
 key events. The daemon treats it as any other client, so every daemon-side outcome and everything the agent in a session
 sees is exercised, and no screen-recording or accessibility grant is needed for it; what it leaves out is the Tauri
-shell's own event path, which carries no daemon traffic anyway (`apps/desktop/README.md`, the opening under its title
-"Octoboard desktop application"). That is enough to confirm what a dialog does. It is not the app's WebKit, so it
-settles behaviour and never rendering.
+shell's own event path, which carries no daemon traffic anyway (`docs/structure/desktop.md`, the opening under its title
+"Desktop shell structure (`apps/desktop/`)"). That is enough to confirm what a dialog does. It is not the app's WebKit,
+so it settles behaviour and never rendering.
 
 So where a check has to run in the real app, keep the GUI out of the setup: create the consoles, projects and sessions a
 verification needs by sending the daemon's own protocol requests, and drive only the behaviour under test through the

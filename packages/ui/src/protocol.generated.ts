@@ -706,8 +706,8 @@ export type Console = {
  * order around the colour wheel and then the muted ones, assigned on creation and changed
  * afterwards only by the user (see `Session.colour`). The daemon only ever hands the label
  * around; what each one looks like in the light and the dark appearance is the UI's own
- * (`packages/ui/src/sessionColours.ts`), not here. A stored label must stay readable, so one is
- * renamed or removed only together with a schema version step (`SCHEMA_VERSION` in
+ * (`packages/ui/src/sessions/sessionColours.ts`), not here. A stored label must stay readable,
+ * so one is renamed or removed only together with a schema version step (`SCHEMA_VERSION` in
  * `apps/daemon/src/store/schema.rs`).
  */
 export type ConsoleSessionColour = "red" | "orange" | "amber" | "yellow" | "lime" | "green" | "teal" | "cyan" | "sky" | "blue" | "indigo" | "violet" | "fuchsia" | "pink" | "brown" | "gray";

@@ -2,8 +2,8 @@ name: Release
 
 # Pushing an annotated tag `v<version>` builds, signs, notarizes and publishes that version, once the application
 # checks have passed. The tag's message is the release notes, which the in-app update notice shows too. What runs is
-# `pnpm release` and `publish-release`, as on a Mac by hand (apps/desktop/README.md's "Release builds" and "In-app
-# updates and publishing a release" sections); this workflow only supplies their credentials from the repository's
+# `pnpm release` and `publish-release`, as on a Mac by hand (apps/desktop/scripts/README.md's "Release builds" and
+# "Publishing a release" sections); this workflow only supplies their credentials from the repository's
 # secrets.
 on:
   push:
@@ -52,7 +52,7 @@ jobs:
             if [ -z "$(printenv "$name")" ]; then missing="$missing $name"; fi
           done
           if [ -n "$missing" ]; then
-            echo "::error::These repository secrets are not set:$missing. See apps/desktop/README.md."
+            echo "::error::These repository secrets are not set:$missing. See the \"Releasing by tag\" section of apps/desktop/scripts/README.md."
             exit 1
           fi
       # The release builds `--locked`; a `Cargo.lock` that no longer matches the manifests would otherwise fail only

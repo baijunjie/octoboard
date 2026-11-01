@@ -46,14 +46,14 @@ same-commit diff.
 
 To see how the UI renders in a given state — connection loss, a session status, a dialog, the archive, report pages,
 toasts, a narrow window, a language or the right-to-left layout — open it in the UI state gallery
-(`packages/ui/README.md`, section "The UI state gallery") rather than building the state up against a running daemon.
-Where no scenario shows the state, do not write one yourself: hand it to the `agent-gallery` skill, which dispatches
-the subagent that owns the gallery and the criteria for what a scenario is worth carrying (`CLAUDE.md`, section
-"Dispatching subagents"). The gallery is the real `App` over a fixture daemon in the Vite dev server, so it settles
-rendering, layout and copy and nothing more: it has no real daemon timing, protocol round trips or agent terminal, and
-it is not the app's WKWebView. A pointer interaction or a WebKit rendering question is still checked with the gallery
-page loaded in Playwright's `webkit`, a paint defect still in the real window, and behaviour that depends on the
-daemon, the shell or how the window starts up still in the real app.
+(`packages/ui/src/gallery/README.md`, section "How it works") rather than building the state up against a running
+daemon. Where no scenario shows the state, do not write one yourself: hand it to the `agent-gallery` skill, which
+dispatches the subagent that owns the gallery and the criteria for what a scenario is worth carrying (`CLAUDE.md`,
+section "Dispatching subagents"). The gallery is the real `App` over a fixture daemon in the Vite dev server, so it
+settles rendering, layout and copy and nothing more: it has no real daemon timing, protocol round trips or agent
+terminal, and it is not the app's WKWebView. A pointer interaction or a WebKit rendering question is still checked with
+the gallery page loaded in Playwright's `webkit`, a paint defect still in the real window, and behaviour that depends on
+the daemon, the shell or how the window starts up still in the real app.
 
 Whether to sweep the gallery (`pnpm gallery:sweep`) at all, and on which scenarios, languages and themes, is set by the
 "Quick check" section of `.claude/skills/agent-gallery/SKILL.md`; a change touching the UI is not by itself a reason to
@@ -111,8 +111,8 @@ therefore leave every scenario showing what it showed before, with nothing in th
 which side is wrong: the viewer's bar for the lines past a diff's last hunk went on claiming more might follow because
 no fixture change carried both sides' whole text for the new line count to be taken from. So before reading a scenario
 as a fix that did not work, check that its fixture can produce the input the fix reads at all. Where a reply gains such
-a field, the fixture has to be taught it as `packages/ui/README.md`, section "The UI state gallery", under
-"Conventions for writing scenarios", sets out.
+a field, the fixture has to be taught it as `packages/ui/src/fixtures/README.md`, section "Conventions for teaching the
+fixture daemon a reply", sets out.
 
 The public website's product preview is one more scenario over the same fixture daemon (`createPreviewScenario` in
 `packages/ui/src/website-preview/scenarios.ts`), but it is not among the gallery's scenarios, so neither

@@ -20,14 +20,14 @@ the terminal renders cannot be read that way: ask the user to look, and do not r
 ## Build the daemon and confirm what the running sidecar executes before trusting any verification of it
 
 Launching the app in dev mode does not build the daemon: the dev command starts the frontend dev server only (for the
-build step itself and when to rerun it, see the "Development" section of `apps/desktop/README.md`). In a worktree that
-has never been built, the missing sidecar fails loudly at compile time; in one that has been built before, the launch
-silently uses the binary already sitting there, and a verification of a daemon-side change then measures the *old*
-behaviour and reports a pass or a failure that has nothing to do with the change. So build the daemon first, then
-confirm positively that the running sidecar is executing it: take the content hash of the executable the live sidecar
-process has open and compare it against the fresh build output. The sidecar directory the build script copies into is
-not that executable — the process runs from a further copy under the Tauri crate's own target directory — so an
-up-to-date sidecar directory on its own proves nothing about what is running.
+build step itself and when to rerun it, see `build-daemon.mjs` under "External interfaces" in
+`apps/desktop/scripts/README.md`). In a worktree that has never been built, the missing sidecar fails loudly at compile
+time; in one that has been built before, the launch silently uses the binary already sitting there, and a verification
+of a daemon-side change then measures the *old* behaviour and reports a pass or a failure that has nothing to do with
+the change. So build the daemon first, then confirm positively that the running sidecar is executing it: take the
+content hash of the executable the live sidecar process has open and compare it against the fresh build output. The
+sidecar directory the build script copies into is not that executable — the process runs from a further copy under the
+Tauri crate's own target directory — so an up-to-date sidecar directory on its own proves nothing about what is running.
 
 ## Read and stage what passes between the shell, the webview and the daemon through a wrapped sidecar in a packaged build
 
@@ -67,12 +67,13 @@ output — so the window comes up blank, or on code that is not the code under t
 indistinguishable from a webview that threw while mounting, so a build mistake reads as a defect in the change and
 gets chased through the frontend instead.
 
-`pnpm build:app` is also the only build that cannot sign (what it strips and refuses is in the "Release builds"
-section of `apps/desktop/README.md`). Do not run a bare `pnpm tauri build` or `pnpm release` for a verification: the
-Tauri CLI signs and notarizes with whatever `APPLE_*` the calling shell carries, with nothing in its output to say so —
-a plain verification build has been Developer ID-signed and sent to Apple's notary service that way — and
-`pnpm release` loads the credentials from the gitignored repo-root `.env.secret` itself, so wherever that file is
-filled in, a shell carrying no `APPLE_*` is not a build that cannot sign. Nor strip the variables by hand.
+`pnpm build:app` is also the only build that cannot sign (what it strips and refuses is under `build-app.mjs` in the
+"External interfaces" section of `apps/desktop/scripts/README.md`). Do not run a bare `pnpm tauri build` or
+`pnpm release` for a verification: the Tauri CLI signs and notarizes with whatever `APPLE_*` the calling shell carries,
+with nothing in its output to say so — a plain verification build has been Developer ID-signed and sent to Apple's
+notary service that way — and `pnpm release` loads the credentials from the gitignored repo-root `.env.secret` itself,
+so wherever that file is filled in, a shell carrying no `APPLE_*` is not a build that cannot sign. Nor strip the
+variables by hand.
 
 Never run a bare `pnpm tauri build` or `pnpm tauri bundle` at all, for any purpose, on macOS: only the scripts
 (`pnpm build:app`, `pnpm install:macos`, `pnpm release`) put the `actool` shim in `apps/desktop/scripts/actool/` on the

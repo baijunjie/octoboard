@@ -146,7 +146,8 @@ WebSocket upgrade, passes two checks in turn:
   application hands the key to its own window, and to the window it reloads onto a daemon started again (see "Starting
   up" above); the daemon hands it to the agents' helpers it starts, beside the port. A key is good only for the launch
   that made it: after any daemon start, a page or program holding an earlier one is refused until it is given the new
-  one.
+  one. A page of the UI carries the key in its own address, and never sends that address as a referrer, so the key
+  does not travel with a link it opens or a request it makes.
 
 ## Losing the daemon connection
 

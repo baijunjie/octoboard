@@ -12,9 +12,10 @@
 //! (`sidecar.rs`), so until then the old UI stays paired with the old daemon, which is why nothing
 //! here ever restarts the application by itself.
 //!
-//! Each channel is one manifest on a fixed-tag release of the public repository (see "In-app updates
-//! and publishing a release" in `apps/desktop/README.md`). The endpoint is set per check from the chosen channel
-//! rather than from `tauri.conf.json`, which carries only the signing key's public half.
+//! Each channel is one manifest on a fixed-tag release of the public repository (see "Where
+//! updates come from" in `docs/product/in-app-updates.md`). The endpoint is set per check from the
+//! chosen channel rather than from `tauri.conf.json`, which carries only the signing key's public
+//! half.
 
 use std::sync::Mutex;
 use std::time::Duration;

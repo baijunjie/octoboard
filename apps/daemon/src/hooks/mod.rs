@@ -365,12 +365,6 @@ pub fn event_name(payload: &Value) -> Option<String> {
     None
 }
 
-/// How long an open turn must have been quiet before a clock-attributed turn end may be read as
-/// belonging to it. Grok's `idle_prompt` backstop fires about 60 s after a turn ends and carries no
-/// turn id, so a turn still producing events cannot be the one it is talking about. Set under that
-/// delay so jitter does not make a legitimate backstop unusable.
-pub const BACKSTOP_QUIET: std::time::Duration = std::time::Duration::from_secs(45);
-
 /// A turn that has just ended, as far as a report can be built from it.
 pub struct TurnEnd {
     /// The turn's final assistant text, where the agent reports one. Absent on a turn-end signal

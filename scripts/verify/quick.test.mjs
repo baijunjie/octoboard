@@ -15,7 +15,7 @@ const walk = (directory) => readdirSync(path.join(root, directory), { withFileTy
 });
 
 const quick = (files) => quickSteps(planScope(files), files);
-const WIDE = ["protocol::", "records::history::"];
+const WIDE = ["layering_tests::", "protocol::", "records::history::"];
 const labels = (files) => quick(files).steps.map((step) => step.label);
 
 test("a crate source file maps to its top-level module as a libtest filter", () => {
@@ -94,7 +94,7 @@ test("narrowed test steps are heavy, last and never stamped; a fallback keeps th
   const related = narrowed.filter((step) => /related/.test(step.label));
   assert.ok(related.every((step) => step.heavy && step.stamp === false));
   assert.deepEqual(related[0].cmd, ["pnpm", "--filter", "@octoboard/ui", "exec", "vitest", "related", "--run", "src/a/X.tsx", ...UI_DISK_TESTS]);
-  assert.deepEqual(related[1].cmd, ["node", "scripts/test-rust.mjs", "--", "coordinator::", "protocol::", "records::history::"]);
+  assert.deepEqual(related[1].cmd, ["node", "scripts/test-rust.mjs", "--", "coordinator::", "layering_tests::", "protocol::", "records::history::"]);
   assert.ok(narrowed.filter((step) => !/related/.test(step.label)).every((step) => step.stamp !== false));
   const fallback = quick(["packages/ui/vite.config.ts"]);
   const ui = fallback.steps.find((step) => step.label === "ui tests");

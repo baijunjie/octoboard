@@ -30,6 +30,26 @@ running on the old channel when the channel changes says nothing about the new o
 channel is checked in its place. The check a switch starts reports a failure the way an automatic check does, without an
 alert (see "When something fails" below).
 
+## Where updates come from
+
+Each channel is one static manifest, in the format of Tauri's updater, kept on a release of the public repository
+under the fixed tag `updater`, whatever version it announces:
+
+- Beta: `https://github.com/baijunjie/octoboard/releases/download/updater/beta.json`
+- Stable: `https://github.com/baijunjie/octoboard/releases/download/updater/stable.json`
+
+A manifest holds the version it announces, its release notes, its publication date and, under both `darwin-aarch64`
+and `darwin-x86_64`, the address and signature of the same update archive: a release is one universal build serving
+both Mac architectures. Every release is written to `beta.json`, and a release without a prerelease suffix to
+`stable.json` too, which is what puts stable releases on the Beta channel (see "Update channels" above). A channel never
+moves backwards: a release of an older version published after a newer one leaves a manifest that already announces
+the newer version as it is. The `updater` release is itself marked a prerelease, so it is never the repository's
+latest release.
+
+Each version is published once, as the release `v<version>` — marked a prerelease when the version has a suffix — with
+the `.dmg` and the update archive `Octoboard_<version>_universal.app.tar.gz` with its signature beside it as `.sig`. A
+published version's files are never replaced; a changed build ships as a new version.
+
 ## When the application checks
 
 - **Automatically**: the first time **30 seconds** after Octoboard starts, so it never competes with the window
