@@ -301,16 +301,21 @@ export function pickerStart(value: string): string {
 
 /** The Browse button of a directory field and the picker it opens, which fills the field through `onPick`. The picker is
  * returned apart from the button: it goes beside the field's form, never inside the field (a `TextInput`'s `trailing`), whose
- * react-aria contexts the picker's own input would otherwise take over. */
+ * react-aria contexts the picker's own input would otherwise take over. `picking` is whether the picker is open,
+ * for a field that must tell focus moving into the picker from the user leaving it. */
 export function useDirectoryBrowse(
   value: string,
   onPick: (path: string) => void,
-): { browseButton: (isDisabled?: boolean) => React.ReactElement; picker: React.ReactElement | null } {
+): {
+  browseButton: (options?: { isDisabled?: boolean; preventFocusOnPress?: boolean }) => React.ReactElement;
+  picker: React.ReactElement | null;
+  picking: boolean;
+} {
   const t = useT();
   const [picking, setPicking] = useState(false);
   return {
-    browseButton: (isDisabled) => (
-      <Button type="button" variant="secondary" isDisabled={isDisabled} onPress={() => setPicking(true)}>
+    browseButton: ({ isDisabled, preventFocusOnPress } = {}) => (
+      <Button type="button" variant="secondary" isDisabled={isDisabled} preventFocusOnPress={preventFocusOnPress} onPress={() => setPicking(true)}>
         {t("common.browse")}
       </Button>
     ),
@@ -325,5 +330,6 @@ export function useDirectoryBrowse(
         onClose={() => setPicking(false)}
       />
     ) : null,
+    picking,
   };
 }

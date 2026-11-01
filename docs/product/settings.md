@@ -209,7 +209,10 @@ behaves" in
 `docs/product/labels-and-tooltips.md`). The daemon stores the
 directory expanded, as an absolute path without a trailing slash; a leading `~/` in what is sent is expanded again. The
 value is sent when the field loses focus or Enter is pressed, and at once when a directory is picked; a value equal to
-what the field shows unedited, or to the full path it stands for, sends nothing. `Escape` while the field holds keyboard
+what the field shows unedited, or to the full path it stands for, sends nothing. Focus moving from the field into its
+Browse directory browser is not leaving it and sends nothing: a pick replaces what was typed and sends the picked
+directory, and a cancelled browser hands focus back to the field, whose next loss of focus sends what is typed. A mouse
+press on Browse leaves focus in the field until the browser opens. `Escape` while the field holds keyboard
 focus closes Settings and discards what was typed. It is the only exit that loses it: the close button, a press on the
 dimmed area around the dialog, and moving focus out of the field all save the typed path first. Once a send is answered
 the field shows the stored directory again, written as above. A value that is neither absolute nor starts with `~/` is

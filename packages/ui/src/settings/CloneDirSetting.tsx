@@ -15,14 +15,14 @@ import { SettingRow } from "./SettingRow";
 import { alertFailure } from "../components/alerts/raiseError";
 
 /** The directory a `git` association clones into when none is named (see `Settings.default_clone_dir`
- * in protocol.ts). The text is sent when the field loses focus or Enter is pressed, and a directory
- * picked with Browse is sent at once; blanking the field goes back to the built-in default. Escape
- * is the one way out that sends nothing: it closes Settings from under the field, which takes the
- * input away without its ever losing focus, so what was typed is discarded — which is what Escape
- * is taken to mean here. Once a send is answered the field shows the daemon's value again: the
- * normalised form of whatever was typed, written with the daemon host's home directory as `~`
- * (which the daemon expands again when it is sent back), with the full path as the tooltip whenever
- * the two differ. */
+ * in protocol.ts). The text is sent when the field loses focus, other than to its directory picker,
+ * or Enter is pressed, and a directory picked with Browse is sent at once; blanking the field goes
+ * back to the built-in default. Escape is the one way out that sends nothing: it closes Settings
+ * from under the field, which takes the input away without its ever losing focus, so what was typed
+ * is discarded — which is what Escape is taken to mean here. Once a send is answered the field shows
+ * the daemon's value again: the normalised form of whatever was typed, written with the daemon
+ * host's home directory as `~` (which the daemon expands again when it is sent back), with the full
+ * path as the tooltip whenever the two differ. */
 export function CloneDirSetting(): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
@@ -69,7 +69,9 @@ export function CloneDirSetting(): React.ReactElement {
             {...draftField}
             onBlur={() => {
               draftField.onBlur();
-              save(draft);
+              // Focus moving into the picker is not leaving the field: what is typed waits for the pick, which
+              // replaces it, or for the field's next blur once a cancelled picker has handed focus back.
+              if (!directoryBrowse.picking) save(draft);
             }}
             className="min-w-0 flex-1"
           >
@@ -93,11 +95,9 @@ export function CloneDirSetting(): React.ReactElement {
           {/* The field says the whole path while the pointer is on it, the hover being the group's
               and the tooltip anchored to the input inside it. */}
           {stored !== storedFull && <AnchoredTooltip tooltip={<ValueTooltipText label={input} dir="ltr">{storedFull}</ValueTooltipText>} anchor={input} hovered={hovered} />}
-          {/* Not taking focus on a mouse press keeps the field from losing it, and so from sending
-              what is typed, just to open the picker. */}
-          <div onMouseDown={(event) => event.preventDefault()}>
-            {directoryBrowse.browseButton()}
-          </div>
+          {/* A mouse press on Browse leaves focus in the field until the picker opens, and a cancelled
+              picker hands it back to the field rather than to Browse. */}
+          {directoryBrowse.browseButton({ preventFocusOnPress: true })}
         </div>
       </SettingRow>
       {directoryBrowse.picker}

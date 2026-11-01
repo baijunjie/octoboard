@@ -91,3 +91,44 @@ it("sends the directory picked in the browser once", async () => {
   expect(request.mock.calls.filter(([body]) => body?.type === "update_settings")).toEqual([[{ type: "update_settings", default_clone_dir: "/srv/new" }]]);
   expect(document.body.querySelector('input[aria-label="Directory path"]')).toBeNull();
 });
+
+// jsdom does not move focus on a mouse press, so the move the browser would make is made by hand: the press has to put
+// focus back in the field before anything sees the field lose it, which would send what is typed.
+it("keeps a mouse press on Browse from taking focus from the field", () => {
+  request.mockClear();
+  const { input } = mount();
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "/srv/repos");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.focus();
+  });
+  act(() => {
+    browse().dispatchEvent(new MouseEvent("mousedown", { button: 0, bubbles: true, cancelable: true }));
+    browse().focus();
+  });
+  expect(document.activeElement).toBe(input);
+  expect(request).not.toHaveBeenCalled();
+});
+
+// The picker taking focus is not the user leaving the field: what is typed is sent only once focus leaves the field
+// again after a cancelled picker has handed it back.
+it("does not send what is typed when focus moves into the picker, and sends it on the field's next blur", async () => {
+  request.mockClear();
+  request.mockImplementation((body) => Promise.resolve(body?.type === "list_dir" ? { type: "dir_listing", path: "/home/dev/Projects", entries: [] } : {}) as Promise<never>);
+  const { input } = mount();
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "/srv/repos");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.focus();
+  });
+  await act(async () => browse().click());
+  const pickerInput = document.body.querySelector<HTMLInputElement>('input[aria-label="Directory path"]')!;
+  act(() => pickerInput.focus());
+  const sent = () => request.mock.calls.filter(([body]) => body?.type === "update_settings");
+  expect(sent()).toEqual([]);
+  await act(async () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Cancel")!.click());
+  expect(document.body.querySelector('input[aria-label="Directory path"]')).toBeNull();
+  act(() => input.focus());
+  act(() => input.blur());
+  expect(sent()).toEqual([[{ type: "update_settings", default_clone_dir: "/srv/repos" }]]);
+});
