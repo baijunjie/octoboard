@@ -37,10 +37,14 @@ const MarkdownDocument = lazy(() => import("../../viewer/MarkdownDocument").then
 export function SessionHistoryView({
   session,
   onSelectSession,
+  restoreFocus,
 }: {
   session: Pick<Session, "id" | "context" | "started_at" | "ended_at" | "bound_to">;
   /** Shows a session as selecting it in the sidebar would; without it the owner is not linked. */
   onSelectSession?: (session: Session) => void;
+  /** Where focus goes when the owner link goes away while it holds focus; without it, to the
+   * messages, or to the view itself while there are none. */
+  restoreFocus?: () => void;
 }): React.ReactElement {
   const t = useT();
   const { history, reload } = useSessionHistory(session.id);
@@ -49,9 +53,10 @@ export function SessionHistoryView({
   const rootRef = useRef<HTMLElement>(null);
   // The retry button goes away under focus, into the loading state: it moves to the messages when
   // there are any, else to the view itself.
-  const held = useFocusHandoff(() => {
+  const focusMessagesOrView = () => {
     (rootRef.current?.querySelector<HTMLElement>("[role=region][tabindex]") ?? rootRef.current)?.focus();
-  });
+  };
+  const held = useFocusHandoff(focusMessagesOrView);
   const messages = history.state === "loaded" ? history.messages.filter((message): message is ConversationMessage => message.speaker !== "octoboard") : [];
   const spoken =
     history.state === "loading"
@@ -79,7 +84,7 @@ export function SessionHistoryView({
             <PaneTitle heading={t("history.title")} className="min-w-0" />
             <SessionContextLabel context={session.context} />
           </div>
-          <OwnerLine ownerId={session.bound_to} onSelectSession={onSelectSession} />
+          <OwnerLine ownerId={session.bound_to} onSelectSession={onSelectSession} restoreFocus={restoreFocus ?? focusMessagesOrView} />
         </div>
         <ArchivedSessionMetadata session={session} />
       </header>
@@ -112,15 +117,28 @@ export function SessionHistoryView({
 }
 
 /** The "Reports to" line under the heading: the owner as a link that shows it as selecting it in the
- * sidebar would. Nothing without an owner this window knows, or without a way to show it. */
-function OwnerLine({ ownerId, onSelectSession }: { ownerId: string | null | undefined; onSelectSession?: (session: Session) => void }): React.ReactElement | null {
+ * sidebar would. Nothing without an owner this window knows, or without a way to show it.
+ *
+ * The owner's record going away (deleted here, in another window or by an agent) takes the link
+ * with it, so the line hands focus on itself (`restoreFocus`): it renders on that change because it
+ * selects the owner, which nothing above it is sure to. */
+function OwnerLine({
+  ownerId,
+  onSelectSession,
+  restoreFocus,
+}: {
+  ownerId: string | null | undefined;
+  onSelectSession?: (session: Session) => void;
+  restoreFocus: () => void;
+}): React.ReactElement | null {
   const t = useT();
   const focus = useFocusVisibleProps();
+  const held = useFocusHandoff(restoreFocus);
   const owner = useSession(ownerId);
   if (!owner || !onSelectSession) return null;
   const title = sessionDisplayTitle(t, owner);
   return (
-    <p className="flex min-w-0 whitespace-pre text-xs text-app-muted">
+    <p onFocus={held.onFocus} onBlur={held.onBlur} className="flex min-w-0 whitespace-pre text-xs text-app-muted">
       <CatalogMessage
         id="history.owner"
         params={{

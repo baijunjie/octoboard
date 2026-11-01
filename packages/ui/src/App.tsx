@@ -340,9 +340,6 @@ export function App(): React.ReactElement {
   // dependency of its own. The whole session map is not: entering focus mode through a summary
   // chip deliberately keeps the selection, and an unrelated status event must not drop that view.
   // Project context includes its hidden console-bound sessions, whatever the card visibility.
-  // `App` renders when it changes, and the terminal pane renders with it: that render is what runs
-  // the pane's check for a focused control that went away, such as the history's link to the owner
-  // once the owner's record is deleted.
   const consoleSessionAboveSelection = useDaemonStore(
     (s) => selectedSession && consoleSessionAbove(selectedSession, (id) => s.sessions.get(id))?.id,
   );

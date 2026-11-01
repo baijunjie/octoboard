@@ -398,10 +398,10 @@ there; with only its empty line (nothing installed) it is skipped. An archived s
 history and made `inert`, so the region lands on the history instead: its message list, or while there is none, its
 first control below its header (the header's link to the session's owner is never the landing), and failing that the
 floating bar's Reopen. A control in the pane that goes away while it holds focus (the owner link once the owner is
-shown, Reconnect, a creation action) hands focus on as focus meant for the agent terminal, so a panel its press brings
-up over the agent area takes it rather than the inert terminal. A region whose focus goes through a method of its own
-rather than its first control (the terminal's) is only a stop when that method actually leaves focus inside it, which is
-how the cycle tells the two apart.
+shown or deleted, Reconnect, a creation action) hands focus on as focus meant for the agent terminal, so a panel its
+press brings up over the agent area takes it rather than the inert terminal. A region whose focus goes through a method
+of its own rather than its first control (the terminal's) is only a stop when that method actually leaves focus inside
+it, which is how the cycle tells the two apart.
 Below the `phone` breakpoint the rail is out of the row and comes in only inside the sidebar's drawer card: while the
 drawer is closed the rail is `inert` and not a stop, and focus inside it when the drawer closes is handed on before the
 browser can drop it to `<body>` (a layout effect, since a swipe closes the drawer from a touch listener React does not

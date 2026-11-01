@@ -51,7 +51,7 @@ nothing for that check to run in, rather than unmount with the element. The chec
 renders, so the caller must render on the change that takes the element away: select that value in the caller
 itself, never count on a parent rendering it again. A change that makes a component render less can stop its
 hand-off with nothing failing; `packages/ui/src/App.focusHandoff.test.tsx` drives the removals only for the terminal
-pane, the update notice and the connection banner.
+pane (its history's owner line included), the update notice and the connection banner.
 
 ## A modal raised over another dialog mounts a commit after it as a top layer for that commit, and focuses itself one render after mounting
 

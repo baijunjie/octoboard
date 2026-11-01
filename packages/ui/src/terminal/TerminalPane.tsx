@@ -569,7 +569,7 @@ export function TerminalPane({
           inert={resuming}
           className="contents"
         >
-          <SessionHistoryView key={session.id} session={session} onSelectSession={onSelectSession} />
+          <SessionHistoryView key={session.id} session={session} onSelectSession={onSelectSession} restoreFocus={restoreFocus ?? focusTerminal} />
         </div>
       )}
       {cover && (

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // Where focus goes when a control that held it goes away from under it, in the three children of `App` whose check
-// for that runs after each of their own renders (`useFocusHandoff`): the terminal pane, the update notice and the
-// connection banner. Each case drives the removal by what removes the control in the app, so the hand-off is shown to
-// run, not only to land in the right place once it does.
+// for that runs after each of their own renders (`useFocusHandoff`): the terminal pane (with its history's owner
+// line), the update notice and the connection banner. Each case drives the removal by what removes the control in
+// the app, so the hand-off is shown to run, not only to land in the right place once it does.
 import { act } from "react";
 import { expect, it, vi } from "vitest";
 
@@ -41,6 +41,27 @@ it("hands focus on an archived session's owner link to its history when the owne
   act(() => link!.focus());
 
   // Archive clean-up deleting the owner's record takes the link away while it holds focus.
+  await deliver(daemon, { type: "session_deleted", session: owner.id });
+  expect(document.querySelector("[data-region=terminal] header button")).toBeNull();
+  expect(document.activeElement).toBe(document.querySelector("[data-region=terminal] [role=region][tabindex]"));
+});
+
+it("hands focus on an archived session's owner link to its history when a project-session owner's record is deleted", async () => {
+  stubWindow();
+  // A project-session owner: no console session sits above the selection, so nothing above the history renders on
+  // the deletion. Interrupted rather than archived, so the archive's preview lists the session under it.
+  const owner = sessionOf("s-lead", console_.id, project.id, "Release lead", "interrupted");
+  const archived = sessionOf("s-old", console_.id, project.id, "Old fix", "archived", { bound_to: owner.id });
+  const daemon = fakeDaemon(snapshotState({ consoles: [console_], projects: [project], sessions: [owner, archived, live] }), (body) =>
+    body.type === "read_session_history" ? { type: "session_history", id: null, messages: [{ speaker: "user", text: "Hello", turn: 1 }] } : { type: "ack", id: null });
+  mountApp(daemon);
+  await pressElement(byLabel(`Actions for project ${isolate(project.name)}`));
+  await pressMenuItem("View archive");
+  await pressMenuItem("Old fix");
+  const link = document.querySelector<HTMLElement>("[data-region=terminal] header button");
+  expect(link?.textContent).toContain("Release lead");
+  act(() => link!.focus());
+
   await deliver(daemon, { type: "session_deleted", session: owner.id });
   expect(document.querySelector("[data-region=terminal] header button")).toBeNull();
   expect(document.activeElement).toBe(document.querySelector("[data-region=terminal] [role=region][tabindex]"));
