@@ -2536,12 +2536,14 @@ fn git_workflow_schema(whose: GitWorkflowFor) -> Value {
             "squash_before_delivery": {
                 "type": nullable(json!("boolean")),
                 "description": format!(
-                    "Whether to consolidate the branch's commits so each resulting commit covers \
-                     one complete change and can be reverted on its own, before delivering finished \
-                     work by merge, push or pull request. Use the common ancestor of the current \
-                     branch and its target branch as the base, and rewrite only the current \
-                     branch's commits. Preserve existing `Reverts:` lines marking deliberate \
-                     reverts in the original commit messages. Squash before any requested rebase. \
+                    "Whether to squash the branch's commits into one commit for the feature the \
+                     branch delivers, with its tests, documentation and the fixes made while \
+                     reviewing or checking it, keeping a separate commit only for a bug fix \
+                     unrelated to that feature, before delivering finished work by merge, push or \
+                     pull request. Use the common ancestor of the current branch and its target \
+                     branch as the base, and rewrite only the current branch's commits. Preserve \
+                     existing `Reverts:` lines marking deliberate reverts in the original commit \
+                     messages. Squash before any requested rebase. \
                      Never rewrite a pushed branch that other people or sessions also use. \
                      Applies only while `development` is not `in_place`. Default off. {RULE_REACHES}"
                 ),

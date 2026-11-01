@@ -2335,9 +2335,9 @@ export const en = {
     "A project session is asked to create a branch and a worktree of its own before it changes files. A change reaches only sessions begun after it, and a project's own rules for worktrees and branches come first.",
   "settings.gitWorkflow.squash.label": "Squash commits before delivery",
   "settings.gitWorkflow.squash.description.off":
-    "Once this is on, commits are squashed into independently meaningful, revertible commits before delivering finished work by merge, push or pull request. A change reaches only sessions begun after it, and a project's own rules come first.",
+    "Once this is on, a branch's commits are squashed into one commit for its feature before delivering finished work by merge, push or pull request. Only a bug fix unrelated to that feature keeps a commit of its own. A change reaches only sessions begun after it, and a project's own rules come first.",
   "settings.gitWorkflow.squash.description.on":
-    "Commits are squashed into independently meaningful, revertible commits before delivering finished work by merge, push or pull request. A change reaches only sessions begun after it, and a project's own rules come first.",
+    "A branch's commits are squashed into one commit for its feature before delivering finished work by merge, push or pull request. Only a bug fix unrelated to that feature keeps a commit of its own. A change reaches only sessions begun after it, and a project's own rules come first.",
   "settings.gitWorkflow.rebase.label": "Rebase before merging",
   "settings.gitWorkflow.rebaseBeforeDelivery.label": "Rebase before delivery",
   "settings.gitWorkflow.rebase.description.off":

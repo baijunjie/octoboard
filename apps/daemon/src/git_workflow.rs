@@ -53,9 +53,9 @@ pub const ITEMS: [&str; 5] = [
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GitWorkflowSettings {
     pub development: Development,
-    /// Whether commits are consolidated into independently meaningful, revertible commits before
-    /// delivering finished work by merge, push or pull request. Moot while `development` is
-    /// `InPlace`.
+    /// Whether a branch's commits are squashed into one commit for the feature it delivers, a
+    /// separate commit kept only for an unrelated bug fix, before delivering finished work by
+    /// merge, push or pull request. Moot while `development` is `InPlace`.
     pub squash_before_delivery: bool,
     /// Whether a branch is rebased onto its target branch before delivery (merge, push or pull
     /// request). The wire name is kept for compatibility. Moot while `development` is `InPlace`.

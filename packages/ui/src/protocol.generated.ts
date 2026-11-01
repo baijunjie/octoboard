@@ -1586,9 +1586,9 @@ export type GitWorkflowOverrideChanges = {
 export type GitWorkflowSettings = {
   development: Development,
   /**
-   * Whether commits are consolidated into independently meaningful, revertible commits before
-   * delivering finished work by merge, push or pull request. Moot while `development` is
-   * `InPlace`.
+   * Whether a branch's commits are squashed into one commit for the feature it delivers, a
+   * separate commit kept only for an unrelated bug fix, before delivering finished work by
+   * merge, push or pull request. Moot while `development` is `InPlace`.
    */
   squash_before_delivery: boolean,
   /**

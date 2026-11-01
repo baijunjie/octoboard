@@ -245,10 +245,10 @@ turning it on will do, and while it is on it says what is happening now.
   their values are kept, and the rows come back with them when a branch or a worktree of its own is chosen again. When a
   row that goes had keyboard focus — another window or a console session can change the choice — focus moves to this
   row's picker.
-- **Squash commits before delivery**, a switch, off to begin with. Its description says that commits are consolidated
-  into independently meaningful, revertible commits before delivering finished work by merging, pushing or opening a
-  pull request, before any rebase, that a change reaches only sessions begun after it, and that a project's own rules
-  come first.
+- **Squash commits before delivery**, a switch, off to begin with. Its description says that a branch's commits are
+  squashed into one commit for its feature before delivering finished work by merging, pushing or opening a pull
+  request, that only a bug fix unrelated to that feature keeps a commit of its own, that a change reaches only sessions
+  begun after it, and that a project's own rules come first.
 - **Rebase before delivery**, a switch, on to begin with. Its description says that a branch is rebased onto its target
   branch before delivering finished work by merging, pushing or opening a pull request, that a change reaches only
   sessions begun after it, and that a project's own rules come first.

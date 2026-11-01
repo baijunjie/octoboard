@@ -24,7 +24,7 @@ The revert gate does not depend on where sessions develop: it runs whenever the 
 | Setting | Key | Values | Application-wide default | What it names |
 |---|---|---|---|---|
 | Where sessions develop | `development` | `in_place`, `branch`, `worktree` | `worktree` | Where a project session works: directly on the current branch, given no rule (**On the current branch**); on a new branch of its own checked out in the project directory itself (**On a branch of its own**), which suits one session at a time; or on a new branch of its own in a worktree of its own (**In a worktree of its own**). |
-| Squash commits before delivery | `squash_before_delivery` | `true` / `false` | off | Whether finished work's commits are consolidated into independently meaningful, revertible commits before delivery, before any rebase. |
+| Squash commits before delivery | `squash_before_delivery` | `true` / `false` | off | Whether a branch's commits are squashed into one commit for the feature it delivers, with only a bug fix unrelated to that feature keeping a commit of its own, before delivery, before any rebase. |
 | Rebase before delivery | `rebase_before_merge` | `true` / `false` | on | Whether a branch is rebased onto its target branch before delivering finished work by merging, pushing or opening a pull request. |
 | Delivery | `delivery` | `ask`, `merge`, `pull_request` | `ask` | How finished work leaves its branch: the user is asked each time, the branch is merged into its target branch locally, or it is pushed and a pull request opened. |
 | Revert gate | `revert_gate` | `true` / `false` | off | Whether git run inside a project session is refused a branch update or a push that quietly undoes changes already on a branch other work is merged into (see `docs/product/revert-gate.md`). |
@@ -96,8 +96,9 @@ judges what they set out better than a keyword match would, and this works alike
 4. **Preparing delivery.** The rule always says to merge the branch into its target branch when merging locally.
    Each enabled preparation setting adds its own requirement before delivering finished work by merging, pushing or
    opening a pull request:
-   - With squashing on, it consolidates the branch's commits so each resulting commit covers one complete change and
-     can be reverted on its own. A branch containing only one complete change gets one commit. Commit messages describe
+   - With squashing on, it squashes the branch's commits into one commit for the feature the branch delivers, holding
+     all of its changes: its tests, documentation, and the fixes made while reviewing or checking it. Only a bug fix
+     that stands on its own, unrelated to that feature, keeps a separate commit. Commit messages describe
      the completed work. If the original commit messages contain `Reverts:` lines marking deliberate reverts, it
      preserves them when squashing. It uses the common ancestor of the current branch and its target branch as the base
      and rewrites only the current branch's commits. It starts with a clean working tree, records the pre-squash tip,

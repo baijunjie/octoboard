@@ -179,14 +179,15 @@ fn development_rule(settings: &GitWorkflowSettings, bound: bool) -> Option<Strin
     if settings.squash_before_delivery {
         preparation.push(
             "Before delivering finished work by merging, pushing or opening a pull request, \
-             consolidate the branch's commits so each resulting commit covers one complete change \
-             and can be reverted on its own. Use one commit if the branch contains only one \
-             complete change. Write commit messages that describe the completed work. If the \
-             original commit messages contain `Reverts:` lines marking deliberate reverts, \
-             preserve them when squashing. Use the common ancestor of the current branch and \
-             its target branch as the base, and rewrite only the current branch's commits. \
-             Start with a clean working tree, record the pre-squash tip, and use \
-             `git rebase -i $(git merge-base HEAD <target branch>)`, choosing squash or fixup \
+             squash the branch's commits into one commit for the feature the branch delivers, \
+             holding all of its changes: its tests, documentation, and the fixes made while \
+             reviewing or checking it. Keep a separate commit only for a bug fix that stands on \
+             its own, unrelated to that feature. Write commit messages that describe the \
+             completed work. If the original commit messages contain `Reverts:` lines marking \
+             deliberate reverts, preserve them when squashing. Use the common ancestor of the \
+             current branch and its target branch as the base, and rewrite only the current \
+             branch's commits. Start with a clean working tree, record the pre-squash tip, and \
+             use `git rebase -i $(git merge-base HEAD <target branch>)`, choosing squash or fixup \
              as appropriate and preserving the deliberate-revert lines in the final messages. \
              After squashing, verify that `git diff --exit-code <pre-squash tip> HEAD --` \
              reports no changes before any rebase onto the target branch. Do not reset \
@@ -1173,8 +1174,14 @@ mod tests {
                 assert!(!baseline.contains("rebase"));
                 assert!(!baseline.contains("Reverts:"));
                 let squash_only = rule(true, false);
-                assert!(squash_only.contains("each resulting commit covers one complete change"));
-                assert!(squash_only.contains("can be reverted on its own"));
+                assert!(squash_only
+                    .contains("squash the branch's commits into one commit for the feature the branch delivers"));
+                assert!(squash_only.contains(
+                    "its tests, documentation, and the fixes made while reviewing or checking it"
+                ));
+                assert!(squash_only.contains(
+                    "Keep a separate commit only for a bug fix that stands on its own, unrelated to that feature."
+                ));
                 assert!(squash_only.contains("Use the common ancestor of the current branch and its target branch as the base"));
                 assert!(squash_only.contains("rewrite only the current branch's commits"));
                 assert!(squash_only
