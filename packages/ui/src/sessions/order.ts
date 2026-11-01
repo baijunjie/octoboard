@@ -29,11 +29,6 @@ export function ordersByStatus(settings: Pick<Settings, "sidebar_order_by_status
   return settings.sidebar_order_by_status;
 }
 
-/** Whether a session has work under way, including work left running between turns. */
-export function countsAsWorking(session: Pick<Session, "status" | "background_tasks">): boolean {
-  return session.status === "working" || runsInBackground(session);
-}
-
 function rankOf(session: Session, delegating: ReadonlySet<string>): number {
   const kind = sessionStatusKind(session, delegating);
   if (kind === "starting" || showsSwitching(session)) return STATUS_RANK[outcomeKind(session)];
@@ -353,16 +348,18 @@ export function consoleStatus(sessions: Session[], delegating: ReadonlySet<strin
   return selected ? sessionShownStatusKind(selected, delegating) : undefined;
 }
 
-/** Every activity there is, most pressing first. The type is derived from the list rather than
+/** Every activity there is, most pressing first: a session itself busy beats one at its prompt with
+ * work left in the background, as that beats one merely running. The type is derived from the list rather than
  * written beside it, so whoever covers them all cannot be left behind by a new one. */
-export const ACTIVITIES = ["waiting", "working", "running"] as const;
+export const ACTIVITIES = ["waiting", "working", "background", "running"] as const;
 
 /** What a collapsed project or focus-mode switch chip shows: the most pressing activity beneath it. */
 export type Activity = (typeof ACTIVITIES)[number] | undefined;
 
 export function consoleActivity(sessions: Session[]): Activity {
   if (sessions.some((s) => s.status === "waiting_user")) return "waiting";
-  if (sessions.some(countsAsWorking)) return "working";
+  if (sessions.some((s) => s.status === "working")) return "working";
+  if (sessions.some(runsInBackground)) return "background";
   if (sessions.some((s) => s.status === "idle" || s.status === "starting")) return "running";
   return undefined;
 }
@@ -371,9 +368,9 @@ export function consoleActivity(sessions: Session[]): Activity {
  * in it and in the sessions bound to it, as far as the strip shows it. */
 export interface SwitchStripEntry {
   consoleSession: Session;
-  /** A raised hand beats a session at work, which beats nothing: a session merely running is not
-   * worth a chip's room. */
-  activity: "waiting" | "working" | undefined;
+  /** A raised hand beats a session at work, which beats work in the background, which beats nothing:
+   * a session merely running is not worth a chip's room. */
+  activity: Exclude<Activity, "running">;
 }
 
 /** The chips of the switch strip: the console's console sessions that are not archived, each with the
@@ -386,7 +383,7 @@ export function switchStrip(sessions: Session[], consoleId: string): SwitchStrip
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.started_at - b.started_at || (a.id < b.id ? -1 : 1));
   return consoleSessions.map((consoleSession) => {
     const activity = consoleActivity([consoleSession, ...sessions.filter((s) => s.bound_to === consoleSession.id)]);
-    return { consoleSession, activity: activity === "waiting" || activity === "working" ? activity : undefined };
+    return { consoleSession, activity: activity === "running" ? undefined : activity };
   });
 }
 

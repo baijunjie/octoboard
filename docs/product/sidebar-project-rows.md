@@ -25,10 +25,16 @@ stop of its own on the row, and pressing it does not fold the project; the row's
 while it shows.
 
 A collapsed project shows an activity marker taken from its sessions that are not archived, so a waiting session can
-be found with its project collapsed. It shows a waving hand while any session is waiting for the user; otherwise the
-working glyph while any is working or working in background; otherwise a green speech bubble while any is at its
-prompt — done, awaiting instructions or with child sessions working — or starting; otherwise nothing. The glyphs follow
-"Session statuses" in `docs/product/session-statuses.md`, with background work counted as working. **The marker carries a tooltip** saying which activity it stands for, in the
+be found with its project collapsed. It shows the first of these that applies:
+
+1. a waving hand while any session is waiting for the user;
+2. the *working* glyph, the blue pinging dot, while any is working;
+3. the *working in background* glyph, the hollow green ring, while any is working in background;
+4. a green speech bubble while any is at its prompt — done, awaiting instructions or with child sessions working — or
+   starting;
+5. otherwise nothing.
+
+The glyphs follow "Status glyphs" in `docs/product/session-statuses.md`. **The marker carries a tooltip** saying which activity it stands for, in the
 same words the row's own name folds in beside the project's name (see "Tooltips on indicators" in
 `docs/product/labels-and-tooltips.md`).
 

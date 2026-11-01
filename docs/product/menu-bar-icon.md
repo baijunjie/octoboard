@@ -79,7 +79,7 @@ From top to bottom:
      assistive technology once, as its menu item, the heading's words.
    - **Pictures.** Each heading has a still glyph for its status, mirroring the sidebar's (see "Status glyphs" in
      `docs/product/session-statuses.md`) — the waving hand for waiting for you, the circle with a check mark for done,
-     the speech bubble for awaiting instructions, the green ring around a dot for child sessions working, the blue
+     the speech bubble for awaiting instructions, the green ring around a dot for child sessions working, the green
      hollow ring for working in background, the blue dot for working — and each session line has the mark of its agent
      (Claude Code, Codex, Grok), as the sidebar draws them. The menu cannot animate, so the dot and the rings do not
      ping.

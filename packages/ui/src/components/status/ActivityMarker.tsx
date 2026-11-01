@@ -6,15 +6,21 @@ import { activityLabel } from "../../sessions/sessionLabel";
 import { type ShownStatusKind } from "../../sessions/sessionStatus";
 import type { Activity } from "../../sessions/order";
 import { IndicatorTooltip } from "../hint/IndicatorTooltip";
+import { DELEGATED_DOT_PX, DELEGATED_RING_PX } from "./delegatedGlyph";
 import { WavingHand, WorkingDot } from "./statusGlyphs";
+
+/** The badge's delegated ring; its dot keeps the glyph's proportion to the ring. */
+const BADGE_DELEGATED_RING_PX = 10;
+const BADGE_DELEGATED_DOT_PX = (BADGE_DELEGATED_RING_PX * DELEGATED_DOT_PX) / DELEGATED_RING_PX;
 
 /** The marker a collapsed project row shows for the sessions beneath it, and focus mode's
  * console-switch chip for the sessions of that console session: a waving hand when one is waiting
  * for the user, a ringing dot when one is
- * at work, a speech bubble when one is merely running, awaiting instructions.
+ * at work, a hollow green ring when none is but work runs in the background, a speech bubble when
+ * one is merely running, awaiting instructions.
  *
  * It carries the indicator tooltip that puts the activity into words for a sighted user, who has
- * only three glyphs of a similar size to tell the three apart. The marker and the tooltip's trigger
+ * only four glyphs of a similar size to tell them apart. The marker and the tooltip's trigger
  * are both left unnamed: the row's and the chip's own accessible names already say the activity.
  *
  * On the chip that puts the trigger's `div` inside a `<button>`, which no content model allows. It
@@ -53,6 +59,12 @@ function activityMarker(activity: Activity): React.ReactElement | null {
           <WorkingDot small />
         </span>
       );
+    case "background":
+      return (
+        <span aria-hidden="true" className="flex shrink-0">
+          <WorkingDot small kind="background" />
+        </span>
+      );
     case "running":
       return <MessageCircleMore aria-hidden="true" className="size-3.5 shrink-0 text-success-soft-foreground" />;
     default:
@@ -62,7 +74,7 @@ function activityMarker(activity: Activity): React.ReactElement | null {
 
 /** Inverted status glyphs stay legible over arbitrary avatar colours. Done wears its check mark on the
  * idle badge's green. Delegated, background and working follow their glyphs' progression: a green disc
- * with a ring around a dot, a blue disc with a hollow centre, and a blue disc with a solid centre; only
+ * with a ring around a dot, a green disc with a hollow centre, and a blue disc with a solid centre; only
  * the centre breathes, keeping the badge steady.
  * The avatar supplies its tooltip and accessible name, so the badge is decorative. */
 export function ActivityBadge({ status, className = "" }: { status: ShownStatusKind | undefined; className?: string }): React.ReactElement | null {
@@ -89,8 +101,11 @@ export function ActivityBadge({ status, className = "" }: { status: ShownStatusK
     case "delegated":
       return (
         <span aria-hidden="true" className={`${disc} bg-success text-success-foreground`}>
-          <span className="flex size-2.5 items-center justify-center rounded-full border-[1.5px] border-current motion-safe:animate-status-breathe">
-            <span className="size-1 rounded-full bg-current" />
+          <span
+            className="flex items-center justify-center rounded-full border-[1.5px] border-current motion-safe:animate-status-breathe"
+            style={{ width: BADGE_DELEGATED_RING_PX, height: BADGE_DELEGATED_RING_PX }}
+          >
+            <span className="rounded-full bg-current" style={{ width: BADGE_DELEGATED_DOT_PX, height: BADGE_DELEGATED_DOT_PX }} />
           </span>
         </span>
       );
@@ -102,7 +117,7 @@ export function ActivityBadge({ status, className = "" }: { status: ShownStatusK
       );
     case "background":
       return (
-        <span aria-hidden="true" className={`${disc} bg-accent text-accent-foreground`}>
+        <span aria-hidden="true" className={`${disc} bg-success text-success-foreground`}>
           <span className="size-2 rounded-full border-[1.5px] border-current motion-safe:animate-status-breathe" />
         </span>
       );

@@ -69,6 +69,7 @@ export const en = {
   // on beneath, which is also what a console's avatar in the rail says as its tooltip.
   "activity.waiting": "A session is waiting for you",
   "activity.working": "A session is working",
+  "activity.background": "A session is working in the background",
   "activity.running": "A session is running",
 
   "startup.daemonFailed.title": "The daemon failed to start",
@@ -869,9 +870,11 @@ export const en = {
   // belongs there too.
   "sidebar.activity.waiting": "{name}, a session is waiting for you",
   "sidebar.activity.working": "{name}, a session is working",
+  "sidebar.activity.background": "{name}, a session is working in the background",
   "sidebar.activity.running": "{name}, a session is running",
   "sidebar.activity.waitingPinned": "{name}, pinned, a session is waiting for you",
   "sidebar.activity.workingPinned": "{name}, pinned, a session is working",
+  "sidebar.activity.backgroundPinned": "{name}, pinned, a session is working in the background",
   "sidebar.activity.runningPinned": "{name}, pinned, a session is running",
   "sidebar.console.actions": "Actions for console {name}",
   "sidebar.console.addProject": "Add project",

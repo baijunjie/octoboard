@@ -7,8 +7,8 @@
 | Waiting for the user | `waiting_user` | an orange (warning) raised hand that waves now and then | The agent is waiting on a permission decision, including its folder-trust confirmation, or has asked the user a question through its own ask-the-user tool; or Octoboard is asking the user on the agent's behalf while the agent's call waits, which is a session request (see "Waiting for the answer" in `docs/product/session-requests.md`). |
 | Done | `idle`, with `has_conversation` true | a green circle with a check mark | The process is running and sitting at its prompt with nothing left running in the background and no delegated work in progress, and the session has a conversation. See "Done, awaiting instructions and child sessions working" below. |
 | Awaiting instructions | `idle`, with `has_conversation` false | a green speech bubble | The process is running and sitting at its prompt, and the session has never had a conversation: it waits for its first instruction. |
-| Child sessions working | `idle`, while a session under it is starting, working or waiting for the user | a hollow green ring with a small filled green dot in its centre, pinging outward | The process is sitting at its prompt with nothing of its own left running, while work it delegated is in progress in the sessions under it. See "Done, awaiting instructions and child sessions working" below. |
-| Working in background | `idle`, with a non-empty `background_tasks` | a hollow blue (accent) ring, pinging outward | The process is sitting at its prompt, but its last turn ended with work still running in the background. Claude Code sessions only; see "Working in background" below. |
+| Child sessions working | `idle`, while a session under it is starting, working or waiting for the user | a hollow green ring with a filled green dot in its centre, pinging outward | The process is sitting at its prompt with nothing of its own left running, while work it delegated is in progress in the sessions under it. See "Done, awaiting instructions and child sessions working" below. |
+| Working in background | `idle`, with a non-empty `background_tasks` | a hollow green ring, pinging outward | The process is sitting at its prompt, but its last turn ended with work still running in the background. Claude Code sessions only; see "Working in background" below. |
 | Switching account | any status except `archived`, with `switching_account` true | the *starting* arc | An account switch holds the session, or, in the window that confirmed the switch, the session waits for its turn in it (see "While a session is switching" in `docs/product/switching-session-accounts.md`). Shown in place of the session's own status, which it does not change; lists ranked by status sort it by the status it will have once the switch is over (see "The status order" in `docs/product/order-of-projects-and-sessions.md`). |
 | Interrupted | `interrupted` | a grey pause sign | No process is running, and it did not end by being archived. The session stays in its project's list (a console session, in the console sessions section) and can be resumed. |
 | Archived | `archived` | an archive box | Ended by being archived (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`). No longer listed among its project's sessions (a console session, no longer in the console sessions section); reached through the archive (see "Archived sessions" in `docs/product/archiving-and-resuming-sessions.md`) and can be reopened. |
@@ -39,18 +39,20 @@ The glyph stands for the status on the sidebar's rows, focus mode's cards, the t
 list of the sessions it affects. In a confirmation, archived sessions omit the status glyph; the warning identifies them
 as archived.
 
-**Colour and form progress gradually along the status order** (see "The status order" in
-`docs/product/order-of-projects-and-sessions.md`), so statuses next to each other look related: the orange hand of
-*waiting for the user*; then, in green, the check mark of *done*, the speech bubble of *awaiting instructions* and the
-ring with a centre dot of *child sessions working*; then, in blue, the hollow ring of *working in background* and the
-solid dot of *working*; then the grey pause of *interrupted*. *Starting* and *switching account* share a grey turning
-arc, and *archived* is an archive box. The ring of *child sessions working* is larger than the other dots, and its ping
-reaches less far, ending within the glyph's own slot.
+**Colour says whether the session itself is at its prompt or busy; form progresses gradually along the status
+order** (see "The status order" in `docs/product/order-of-projects-and-sessions.md`), so statuses next to each other
+look related. Orange is
+waiting for the user: the hand of *waiting for the user*. Green is the session itself at its prompt, where it can be
+talked to: the check mark of *done*, the speech bubble of *awaiting instructions*, the ring with a centre dot of *child
+sessions working* and the hollow ring of *working in background*. Blue is the session itself busy: the solid dot of
+*working*. The muted grey is a session with no prompt up: the pause of *interrupted*, and the turning arc
+that *starting* and *switching account* share. *Archived* is an archive box. The ring of *child sessions working* is
+larger than the other dots, and its ping reaches less far, ending within the glyph's own slot.
 
 The waving hand, the pings and the turning arc stand still where the system asks for reduced motion. Every status still
 differs from the rest by shape, so colour is never the only cue: the filled dot of *working* from the hollow ring of
-*working in background*, that ring from the ring of *child sessions working* by the latter's centre dot, and the rings
-from the speech bubble and the check mark.
+*working in background*, that ring from the larger ring of *child sessions working* by the latter's centre dot, and the
+rings from the speech bubble and the check mark.
 
 **How the status reaches a user who does not read the glyph** differs by placement:
 
@@ -202,7 +204,8 @@ session does not report" in `docs/product/reporting-to-owners.md`).
 **It has its own glyph and name** wherever a session's status is shown or said — its row, focus mode's card, the top
 bar's breadcrumb, a confirmation's list of sessions, the row's accessible name and the glyph's tooltip. A console's
 avatar distinguishes it from working too, using the badge and selection rules in "The console switcher" in
-`docs/product/console-switcher.md`. **For activity summaries, it counts as working**: a collapsed project's activity
+`docs/product/console-switcher.md`. **For activity summaries, it is an activity of its own**, below a session waiting
+for the user or working and above one merely running, shown with its own glyph by a collapsed project's activity
 marker (see "Project rows" in `docs/product/sidebar-project-rows.md`) and a switch strip chip (see "The switch strip"
 in `docs/product/focus-mode.md`). Project and session lists ranked by status give it a separate place, following
 "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`. The menu bar icon's menu lists it
@@ -244,7 +247,7 @@ Each has its own glyph and name wherever a session's status is shown or said, as
 own badge on a console's avatar (see "The console switcher" in `docs/product/console-switcher.md`). **For activity
 summaries, both count as a session running, not working**, as *awaiting instructions* does: a collapsed project's
 activity marker shows the speech bubble for them (see "Project rows" in `docs/product/sidebar-project-rows.md`), and a
-switch strip chip, which shows only waiting and working, shows nothing for them (see "The switch strip" in
+switch strip chip, which shows nothing for a session merely running, shows nothing for them (see "The switch strip" in
 `docs/product/focus-mode.md`). The sessions under one with child sessions working count by their own status, wherever
 they are. Project and session lists ranked by status give each a place of its own (see "The status order" in
 `docs/product/order-of-projects-and-sessions.md`), and the menu bar icon's menu lists each in a group of its own (see

@@ -26,7 +26,7 @@ grouping and the sidebar's choice to order by status or date do not affect that 
 | Done | A contrasting check mark on a green disc |
 | Awaiting instructions | A contrasting speech bubble on a green disc |
 | Child sessions working | A green disc with a contrasting ring around a contrasting dot |
-| Working in background | A blue disc with a contrasting hollow centre, 8 px across |
+| Working in background | A green disc with a contrasting hollow centre, 8 px across |
 | Working | A blue disc with a contrasting solid centre, 6 px across |
 
 If the chosen session is switching account, the badge instead shows a turning arc on a neutral disc, and its status

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { consoleOf } from "../fixtures/builders";
 import type { Project, Session, SessionStatus } from "../protocol";
-import { archiveNeedsConfirmation, countsAsWorking, isUnusedSession, consoleActivity, consoleStatus, INACTIVE_PROJECT_RANK, STATUS_RANK, archivePreviewSessions, projectRank, liveConsoleSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, ordersByStatus, sessionsInTreeOrder, sortProjects, switchStrip } from "./order";
+import { archiveNeedsConfirmation, isUnusedSession, consoleActivity, consoleStatus, INACTIVE_PROJECT_RANK, STATUS_RANK, archivePreviewSessions, projectRank, liveConsoleSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, ordersByStatus, sessionsInTreeOrder, sortProjects, switchStrip } from "./order";
 import { FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
 import { delegatingSessionIds } from "./sessionStatus";
 
@@ -123,16 +123,6 @@ describe("consoleStatus", () => {
   });
 });
 
-describe("countsAsWorking", () => {
-  it("counts a working session and one running in the background as working, and nothing else", () => {
-    const tasks = [{ id: "b1" }];
-    expect(countsAsWorking(session("w", "working", 1))).toBe(true);
-    expect(countsAsWorking({ ...session("bg", "idle", 1), background_tasks: tasks })).toBe(true);
-    expect(countsAsWorking(session("i", "idle", 1))).toBe(false);
-    expect(countsAsWorking({ ...session("u", "waiting_user", 1), background_tasks: tasks })).toBe(false);
-  });
-});
-
 describe("a session running in the background", () => {
   const background = { ...session("bg", "idle", 1), background_tasks: [{ id: "b1" }] };
 
@@ -149,11 +139,13 @@ describe("a session running in the background", () => {
     expect(ordered.map((s) => s.id)).toEqual(["pinned-work", "waiting", "idle", "new-bg", "bg", "working", "interrupted"]);
   });
 
-  it("ranks a project between idle and foreground work while its console still shows work", () => {
+  it("ranks a project between idle and foreground work while its console still shows background work", () => {
     expect(projectRank([background], NONE)).toBeLessThan(projectRank([session("w", "working", 1)], NONE));
     expect(projectRank([background], NONE)).toBeGreaterThan(projectRank([session("i", "idle", 2)], NONE));
     expect(projectRank([background, session("i", "idle", 2)], NONE)).toBe(projectRank([session("i", "idle", 2)], NONE));
-    expect(consoleActivity([background])).toBe("working");
+    expect(consoleActivity([background])).toBe("background");
+    expect(consoleActivity([background, session("w", "working", 3)])).toBe("working");
+    expect(consoleActivity([background, session("i", "idle", 2)])).toBe("background");
   });
 });
 
@@ -484,19 +476,21 @@ describe("switchStrip", () => {
     expect(ids(after)).toEqual(ids(before));
   });
 
-  it("sums a console session's activity with that of the sessions bound to it: a raised hand, then work, then nothing", () => {
+  it("sums a console session's activity with that of the sessions bound to it: a raised hand, then work, then background work, then nothing", () => {
     const strip = switchStrip(
       [
         hub("a", "idle", 4),
         hub("b", "idle", 3),
         hub("c", "waiting_user", 2),
         hub("d", "interrupted", 1),
+        hub("e", "idle", 0),
         session("a-1", "working", 1, false, "a"),
         session("a-2", "waiting_user", 1, false, "a"),
         session("b-1", "working", 1, false, "b"),
         session("b-2", "archived", 1, false, "b"),
         session("d-1", "idle", 1, false, "d"),
         session("unbound", "waiting_user", 1),
+        { ...session("e-1", "idle", 1, false, "e"), background_tasks: [{ id: "bg" }] },
       ],
       "c",
     );
@@ -505,6 +499,7 @@ describe("switchStrip", () => {
       b: "working",
       c: "waiting",
       d: undefined,
+      e: "background",
     });
   });
 });
@@ -555,7 +550,6 @@ describe("STATUS_RANK", () => {
 
   it("does not count delegated work, or a done session, as working", () => {
     const parent = session("parent", "idle", 1);
-    expect(countsAsWorking(parent)).toBe(false);
     expect(consoleActivity([parent])).toBe("running");
   });
 });

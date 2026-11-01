@@ -1,4 +1,5 @@
 import { AGENT_MARKS } from "../components/icons/agentMarks";
+import { DELEGATED_DOT_PX, DELEGATED_RING_PX } from "../components/status/delegatedGlyph";
 import { resolveCssColour, type Appearance } from "../preferences/cssColour";
 import type { StatusItemIcon, StatusItemMenu } from "../platform";
 import type { Agent } from "../protocol";
@@ -39,6 +40,9 @@ function stroked(paths: string[] | string, colour: string): string {
   return `<g fill="none" stroke="${colour}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</g>`;
 }
 
+/** The glyph's units per CSS pixel of the sidebar's glyphs: the working dot's 8px is drawn with r="5". */
+const MENU_UNITS_PER_PX = 1.25;
+
 /** The glyph colours are the ones the session list draws these statuses in (`StatusIcon`): HeroUI's soft
  * foreground of the status's colour, read from the stylesheet in the system's appearance rather than
  * written down here. */
@@ -51,12 +55,16 @@ function statusGlyph(status: StatusKind, appearance: Appearance): string | undef
     // The accent dot of `WorkingDot`, without the ping that cannot be drawn here.
     case "working":
       return accent && `<circle cx="12" cy="12" r="5" fill="${accent}"/>`;
-    // `WorkingDot`'s background ring: the same dot, hollow, in the same blue.
+    // `WorkingDot`'s background ring: the dot's size, hollow, in idle's green.
     case "background":
-      return accent && `<circle cx="12" cy="12" r="3.75" fill="none" stroke="${accent}" stroke-width="2.5"/>`;
-    // `WorkingDot`'s delegated glyph: a ring in idle's green around a dot.
-    case "delegated":
-      return success && `<circle cx="12" cy="12" r="6.5" fill="none" stroke="${success}" stroke-width="2"/><circle cx="12" cy="12" r="2.25" fill="${success}"/>`;
+      return success && `<circle cx="12" cy="12" r="3.75" fill="none" stroke="${success}" stroke-width="2.5"/>`;
+    // `WorkingDot`'s delegated glyph: a ring in idle's green around a dot, at the scale the working dot is
+    // drawn here (its 8px as 10 units), the ring's line thickened to 2 units to read at menu size.
+    case "delegated": {
+      const outer = (DELEGATED_RING_PX * MENU_UNITS_PER_PX) / 2;
+      const dot = (DELEGATED_DOT_PX * MENU_UNITS_PER_PX) / 2;
+      return success && `<circle cx="12" cy="12" r="${outer - 1}" fill="none" stroke="${success}" stroke-width="2"/><circle cx="12" cy="12" r="${dot}" fill="${success}"/>`;
+    }
     case "waiting_user":
       return warning && stroked(HAND, warning);
     case "idle":

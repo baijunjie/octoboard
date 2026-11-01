@@ -196,6 +196,8 @@ export function activityLabel(t: Translate, activity: Activity): string | undefi
       return t("activity.waiting");
     case "working":
       return t("activity.working");
+    case "background":
+      return t("activity.background");
     case "running":
       return t("activity.running");
     default:
@@ -212,6 +214,8 @@ export function activityLabelKey(activity: Activity, pinned = false) {
       return pinned ? ("sidebar.activity.waitingPinned" as const) : ("sidebar.activity.waiting" as const);
     case "working":
       return pinned ? ("sidebar.activity.workingPinned" as const) : ("sidebar.activity.working" as const);
+    case "background":
+      return pinned ? ("sidebar.activity.backgroundPinned" as const) : ("sidebar.activity.background" as const);
     case "running":
       return pinned ? ("sidebar.activity.runningPinned" as const) : ("sidebar.activity.running" as const);
     default:

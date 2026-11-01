@@ -308,8 +308,8 @@ These are:
   (see "Project rows" in `docs/product/sidebar-project-rows.md`) and inside focus mode's **console-switch chip** (see
   "The switch strip" in `docs/product/focus-mode.md`), whose tooltip says which activity it stands for, in the same
   words the name of the row or chip around it folds in beside the project's or console session's own name. Beneath a
-  collapsed project's row that is one of three — a session waiting for the user, one working, one merely running — while
-  a chip only ever shows the first two of them. Background work counts as working in both summaries. The rail's
+  collapsed project's row that is one of four — a session waiting for the user, one working, one working in the
+  background, one merely running — while a chip never shows the last of them. The rail's
   console avatar has its own status selection and badge rules (see "The console switcher" in
   `docs/product/console-switcher.md`); that decorative badge has no tooltip of its own;
 - the binding badge, the coloured dot on a project session's row bound to a console session, whose tooltip names that

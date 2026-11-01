@@ -15,14 +15,15 @@ type Naming = { "aria-hidden": true } | { role: "img"; "aria-label": string };
 
 /** The glyph itself, one per status in the status table of docs/product/session-statuses.md, as
  * lucide glyphs and dots rather than emoji (the project keeps user-facing UI free of decorative
- * emoji, the same convention `CLAUDE.md` sets for committed prose). Colour and form progress along the
- * status order, so neighbours look related: a raised hand in orange for the session waiting for the
- * user; in green, the statuses at the prompt, a check mark in a circle for done (its turn is over) and
- * a speech bubble for idle (waiting to be told); a green ring with a dot in its centre for delegated
- * (the sessions under it are working); a hollow blue ring for working in the background; the solid
- * blue working dot; and, in the muted ink, a pause sign for interrupted (stopped where it was, and can
- * be resumed from there) and a turning arc for starting. Every status has a shape of its own, so colour
- * is never the only cue. */
+ * emoji, the same convention `CLAUDE.md` sets for committed prose). Colour says whether the session
+ * itself is at its prompt or busy, and form progresses along the status order, so neighbours look
+ * related: a raised hand in orange for the session waiting for the user; in green, the statuses where
+ * the session itself is at its prompt and can be talked to, a check mark in a circle for done (its
+ * turn is over), a speech bubble for idle (waiting to be told), a ring with a dot in its centre for
+ * delegated (the sessions under it are working) and a hollow ring for working in the background; the
+ * solid blue working dot, the session itself busy; and, in the muted ink, a pause sign for interrupted
+ * (stopped where it was, and can be resumed from there) and a turning arc for starting. Every status
+ * has a shape of its own, so colour is never the only cue. */
 function statusGlyph(status: ShownStatusKind, naming: Naming): React.ReactElement {
   switch (status) {
     case "switching":
@@ -57,7 +58,7 @@ function statusGlyph(status: ShownStatusKind, naming: Naming): React.ReactElemen
         </span>
       );
     case "background":
-      // A hollow ring in the working dot's blue: at the prompt, but with work still going.
+      // A hollow ring in the green of the prompt statuses: at the prompt, but with work still going.
       return (
         <span {...naming} className="flex shrink-0">
           <WorkingDot kind="background" />

@@ -76,7 +76,7 @@ export const busyScenarios: Scenario[] = [
     category: "normal",
     title: "Many consoles, projects and sessions",
     description:
-      "Twelve projects with long and pinned names and paths, a pinned session and every status the list shows, including Starting with its muted turning arc and a session running in the background with its pinging hollow blue ring, Fix task 1-0 of Search API, listed after that project's Waiting for you row. A session of Media gateway with a title far wider than the sidebar row is selected, with its project's pane open at the end edge: the breadcrumb in the top bar fades out where that pane begins with its status icon still visible, and the row fits the sidebar.",
+      "Twelve projects with long and pinned names and paths, a pinned session and every status the list shows, including Starting with its muted turning arc and a session running in the background with its pinging hollow green ring, Fix task 1-0 of Search API, listed after that project's Waiting for you row. A session of Media gateway with a title far wider than the sidebar row is selected, with its project's pane open at the end edge: the breadcrumb in the top bar fades out where that pane begins with its status icon still visible, and the row fits the sidebar.",
     state,
     steps: [(ui) => ui.press(ui.session(SECOND_LONG_TITLE))],
   },

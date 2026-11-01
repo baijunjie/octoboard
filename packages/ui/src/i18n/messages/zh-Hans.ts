@@ -53,6 +53,7 @@ export const zhHans: Translation<"other"> = {
 
   "activity.waiting": "有会话在等你",
   "activity.working": "有会话正在工作",
+  "activity.background": "有会话在后台工作",
   "activity.running": "有会话在运行",
 
   "startup.daemonFailed.title": "守护进程启动失败",
@@ -783,9 +784,11 @@ export const zhHans: Translation<"other"> = {
   "sidebar.session.unpinFailedTitle": "无法取消置顶会话",
   "sidebar.activity.waiting": "{name}，有会话在等你",
   "sidebar.activity.working": "{name}，有会话正在工作",
+  "sidebar.activity.background": "{name}，有会话在后台工作",
   "sidebar.activity.running": "{name}，有会话在运行",
   "sidebar.activity.waitingPinned": "{name}，已置顶，有会话在等你",
   "sidebar.activity.workingPinned": "{name}，已置顶，有会话正在工作",
+  "sidebar.activity.backgroundPinned": "{name}，已置顶，有会话在后台工作",
   "sidebar.activity.runningPinned": "{name}，已置顶，有会话在运行",
   "sidebar.console.actions": "控制台 {name} 的操作",
   "sidebar.console.addProject": "添加项目",

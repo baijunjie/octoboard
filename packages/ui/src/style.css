@@ -793,7 +793,9 @@ html {
    tooltip, the control fills with their hovers, the sidebar resting, hovered and selected, the panel with
    its hover and selected fills, `--background`, `--chrome`) they are, in light, 4.36:1 accent, 3.93:1
    success, 4.10:1 warning and 4.83:1 danger, all on a hovered control fill; in dark 4.32:1, 6.08:1, 7.05:1
-   and 3.78:1, on a floating surface's hovered control fill. The title bar's status glyph and the rail's
+   and 3.78:1, on a floating surface's hovered control fill. Focus mode's switch chip, a tertiary button on
+   the sidebar, takes them lower when hovered or pressed: accent about 4.15:1 and success 3.74:1 in light,
+   success 6.07:1 in dark. The title bar's status glyph and the rail's
    waiting hand sit on the window material (light #e2e4e5, dark #484a4b), resting, hovered and pressed:
    accent 4.77 / 4.17 / 3.62 light and 3.61 resting in dark (a dot that is not a button), success 4.30 /
    3.76 / 3.27 light and 5.08 / 4.06 / 3.34 dark, warning 4.48 / 3.92 / 3.40 light and 5.90 / 4.72 / 3.88
@@ -1076,13 +1078,15 @@ html.pane-resizing * {
   }
 }
 
-/* Tailwind's ping at a smaller reach: the delegated ring (`statusGlyphs.tsx`) is 12px in a 16px slot,
-   which the stock ping's 2x would take to 24px. 4/3 ends its fading copy at the slot's edge, as the
-   other dots' copies end at theirs. Applied through `motion-safe:` only, like the ping. */
+/* Tailwind's ping at a smaller reach: the delegated ring (`statusGlyphs.tsx`) is more than half its 16px
+   slot, so the stock ping's 2x would carry its fading copy past the slot's edge. Whoever applies it sets
+   `--ping-scale` (`delegatedGlyph.ts`) to end the copy at the slot's edge, as the other dots' copies end
+   at theirs; without it the copy grows as the stock ping's. Applied through `motion-safe:` only, like
+   the ping. */
 @keyframes ping-small {
   75%,
   100% {
-    transform: scale(1.3333);
+    transform: scale(var(--ping-scale, 2));
     opacity: 0;
   }
 }

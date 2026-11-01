@@ -10,10 +10,11 @@ import { enter, leave, mountForTooltip, openPopover, openTooltip, press, trigger
 const ACTIVITY_TEXT: Array<[NonNullable<Activity>, string]> = [
   ["waiting", "A session is waiting for you"],
   ["working", "A session is working"],
+  ["background", "A session is working in the background"],
   ["running", "A session is running"],
 ];
 
-it.each(ACTIVITY_TEXT)("tells the %s activity marker apart from the other two, which look alike", (activity, text) => {
+it.each(ACTIVITY_TEXT)("tells the %s activity marker apart from the others, which look alike", (activity, text) => {
   const settle = withFakeTimers();
   const container = mountForTooltip(<ActivityMarker activity={activity} />);
 

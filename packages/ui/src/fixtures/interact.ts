@@ -281,7 +281,7 @@ export interface Ui {
   /** Moves the pointer onto the activity marker of the collapsed project row or the focus mode
    * switch strip chip named `host`, and leaves it there, as `hoverIndicator` does. The marker is
    * decorative and the last tooltip trigger in either, so it is taken as that; the step fails if
-   * the tooltip that opens is not one of the three activities' (an expanded row, which draws no
+   * the tooltip that opens is not one of the activities' (an expanded row, which draws no
    * marker, has none to hover), rather than leave whatever else was hovered up. The row's git badge
    * is a `role="presentation"` trigger as well, and the two are told apart by nothing but their
    * order in the row: the badge comes before the marker (`Sidebar.tsx`), which `hoverGitBadge`
