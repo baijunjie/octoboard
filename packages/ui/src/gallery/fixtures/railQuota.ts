@@ -4,7 +4,7 @@ import type { Account, Agent, AgentAvailability, AccountQuota, Settings } from "
 import { describing, type Step } from "../../fixtures/interact";
 import type { FixtureError } from "../../fixtures/sampleFiles";
 import type { Scenario } from "../scenario";
-import { accountOf, ALL_AGENTS, SAMPLE, minutesAgo, sessionOf, snapshotState } from "../../fixtures/builders";
+import { accountOf, ALL_AGENTS, SAMPLE, minutesAgo, snapshotState } from "../../fixtures/builders";
 import { accountAdded, accountRemoved, agentAvailability } from "./liveChanges";
 import { USED_UP_MIX, manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow, PERSONAL_RESET_CREDITS, resetCreditOf, resetCreditsOf } from "../../fixtures/quotas";
 
@@ -133,16 +133,6 @@ const longListState = railQuotaState(many.accounts, [
   ...many.quotas,
 ]);
 
-/** Hub on Claude Code's default account, whose session window was spent when it was read nine minutes ago and reset a
- * minute ago, with Work beside it, spent and not yet reset. Hub's weekly window is unaffected. */
-const resetPassedState = railQuotaState(
-  [accountOf("a-work", "claude", "Work", "/Users/dev/.claude-work")],
-  [
-    quotaOf("claude", null, "max", [quotaWindow("session", 100, -1), quotaWindow("weekly", 41, 3 * 24 * 60 + 4 * 60)], { fetched_at: minutesAgo(9) }),
-    quotaOf("claude", "a-work", "pro", [quotaWindow("session", 100, 42), quotaWindow("weekly", 63, 2 * 24 * 60 + 5 * 60)], { fetched_at: minutesAgo(9) }),
-  ],
-);
-
 /** Claude Code's default account usable, Work used up by its session window (its weekly window has room), and Side
  * project used up by its weekly window while its session window has room. */
 const usedUpState = railQuotaState(
@@ -230,9 +220,6 @@ const noneOnState = railQuotaState(
   ],
   { turnedOffDefaults: ["claude", "codex"] },
 );
-
-/** A session of the web project that has been archived, on Work (turned off in `turnedOffRunningOwnedState`). */
-const archivedOnWork = sessionOf("s-web-old", console_.id, web.id, "Old checkout flow", "archived", { account_id: "a-work" });
 
 /** Claude Code's accounts in every state a person meets (`USED_UP_MIX`), the default account being the usable one. */
 const usedUpMixState = railQuotaState(USED_UP_MIX.accounts, USED_UP_MIX.quotas);
@@ -324,23 +311,11 @@ export const railQuotaScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Rail usage button, weekly fallback",
-    description: "Hub's default Claude Code account has no session window. The compact indicator is a single outlined capsule showing its weekly 65% remaining, ignoring the model-specific weekly window; the accessible name identifies the default account and the \"Weekly · all models\" remainder, so named because the reading also has a model's weekly window.",
+    description: "Hub's default Claude Code account has no session window. The compact indicator is a single outlined capsule showing its weekly 65% remaining, ignoring the model-specific weekly window; the accessible name identifies the default account and the \"Weekly · all models\" remainder, so named because the reading also has a model's weekly window. A Grok Build credit-period window reads alike as a single capsule.",
     state: railQuotaState([], [quotaOf("claude", null, "max", [
       quotaWindow("weekly_model", 90, null, "Fable"),
       quotaWindow("weekly", 35, 3 * 24 * 60),
     ])]),
-    steps: [(ui) => ui.press(ui.session("Hub"))],
-  },
-  {
-    id: "rail-quota-selected-credit",
-    group: GROUP,
-    category: "normal",
-    title: "Rail usage button, credit-period fallback",
-    description: "Hub uses Grok Build's default account, which has only a credit-period window. The compact indicator is a single outlined capsule showing 77% remaining; the accessible name identifies Grok Build, the default account and credit-period remainder.",
-    state: {
-      ...shortTabsState,
-      sessions: new Map(sessions.map((session) => [session.id, session.id === "s-console" ? { ...session, agent: "grok" } : session])),
-    },
     steps: [(ui) => ui.press(ui.session("Hub"))],
   },
   {
@@ -362,18 +337,6 @@ export const railQuotaScenarios: Scenario[] = [
       ...longListState,
       sessions: new Map(sessions.map((session) => [session.id, session.id === "s-console" ? { ...session, account_id: "a-mobile" } : session])),
     },
-    steps: [
-      (ui) => ui.press(ui.session("Hub")),
-      (ui) => ui.hoverPanel(describing("usage button with a session's bar", (name) => name.startsWith(ui.t("rail.quota"))), ui.t("rail.quota")),
-    ],
-  },
-  {
-    id: "rail-quota-reset-passed",
-    group: GROUP,
-    category: "normal",
-    title: "Rail usage button and panel, a window whose reset has passed",
-    description: "Hub uses Claude Code's default account, whose reading (taken 9 minutes ago) has its session window spent, but that window's reset was a minute ago and no newer reading has arrived. The usage button's indicator shows that window full (100% remaining, over the weekly 59%), and in the panel the default account's session bar is full and its headline reads 100% remaining with \"resets now\". Work, whose session window is also spent but resets later, stays empty by comparison and is receded with a \"Limit reached\" badge after its plan badge, a muted name and grey bars, which the default account does not get.",
-    state: resetPassedState,
     steps: [
       (ui) => ui.press(ui.session("Hub")),
       (ui) => ui.hoverPanel(describing("usage button with a session's bar", (name) => name.startsWith(ui.t("rail.quota"))), ui.t("rail.quota")),
@@ -410,24 +373,6 @@ export const railQuotaScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.session("Hub")),
       (ui) => ui.hoverPanel(describing("usage button with a session's bar", (name) => name.startsWith(ui.t("rail.quota"))), ui.t("rail.quota")),
-    ],
-  },
-  {
-    id: "rail-quota-turned-off-stopped",
-    group: GROUP,
-    category: "normal",
-    title: "Rail usage, the selected session's turned-off account while the session is stopped",
-    description: "The selected session, an archived one that ran on Work, is stopped, and Work is turned off: the usage button has no mini bar, as the account's exception ends with the session. The panel lists Claude Code's default account and Client alone, with no row for Work or Side project, and no row stands out while the pointer is on the button.",
-    state: {
-      ...turnedOffRunningOwnedState,
-      sessions: new Map([...sessions, archivedOnWork].map((session) => [session.id, session])),
-    },
-    steps: [
-      // The archive menu is where a project's archived session is reached; its row opens the session's history.
-      (ui) => ui.press(ui.t("sidebar.project.actions", { name: web.name })),
-      (ui) => ui.press(ui.t("sidebar.project.archive")),
-      (ui) => ui.press((name) => name.startsWith(archivedOnWork.title)),
-      (ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota")),
     ],
   },
   {
@@ -564,24 +509,12 @@ export const railQuotaScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Rail usage panel, the reason an account's reading failed",
-    description: "The panel is opened from the keyboard and the default account's danger mark (Usage unavailable) is tapped with a finger: its small tooltip-like popover, holding why Claude Code's reading could not be had, is open above the mark with focus inside it, and the panel stays open under it.",
+    description: "The panel is opened from the keyboard and the default account's danger mark (Usage unavailable) is tapped with a finger: its small tooltip-like popover, holding why Claude Code's reading could not be had, is open above the mark with focus inside it, and the panel stays open under it. Resting the pointer on the mark opens the same popover without moving focus.",
     state: unreadState,
     steps: [
       (ui) => ui.focusControl(ui.t("rail.quota")),
       (ui) => ui.key("Enter"),
       (ui) => ui.touchPressStatusMark(ui.t("quota.unavailable")),
-    ],
-  },
-  {
-    id: "rail-quota-failure-hover",
-    group: GROUP,
-    category: "exceptional",
-    title: "Rail usage panel, the reason shown by resting on an account's mark",
-    description: "The panel floats in under a resting pointer and the pointer then rests on the default account's danger mark (Usage unavailable): its small tooltip-like popover, holding why Claude Code's reading could not be had, opens above the mark with no focus moved, and the panel stays open under it.",
-    state: unreadState,
-    steps: [
-      (ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota")),
-      (ui) => ui.hoverStatusMark(ui.t("quota.unavailable")),
     ],
   },
   {
@@ -598,21 +531,9 @@ export const railQuotaScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Rail usage panel, an account holding rate limit reset credits",
-    description: "Codex's tab: Personal, used up by its weekly window, reads \"2 usage limit resets available · expires in 6d 3h\" under its meters beside a \"Redeem reset\" button, while the default account above it, which holds no credit, has no such line.",
+    description: "Codex's tab: Personal, used up by its weekly window, reads \"2 usage limit resets available · expires in 6d 3h\" under its meters beside a \"Redeem reset\" button, while the default account above it, which holds no credit, has no such line. Production and Contractor show a count alone, or an expiry that has passed, in the same line.",
     state: resetCreditsState,
     steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota")), (ui) => ui.press(AGENT_LABEL.codex)],
-  },
-  {
-    id: "rail-quota-reset-credits-expiry-unknown",
-    group: GROUP,
-    category: "normal",
-    title: "Rail usage panel, reset credits without an expiry or past it",
-    description: "Hub runs on Production, so the panel opens on Codex's tab scrolled to it. Production reads \"3 usage limit resets available\" alone, since Codex gave no list and so no expiry, and Contractor, whose credit expired a minute ago with no newer reading, \"1 usage limit reset available · expires now\"; both keep their \"Redeem reset\" buttons.",
-    state: resetCreditsOn("a-codex-user"),
-    steps: [
-      (ui) => ui.press(ui.session("Hub")),
-      (ui) => ui.hoverPanel(describing("usage button with a session's bar", (name) => name.startsWith(ui.t("rail.quota"))), ui.t("rail.quota")),
-    ],
   },
   {
     id: "rail-quota-reset-credit-confirm",
@@ -720,19 +641,9 @@ export const railQuotaScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Redeem reset, no window needed a reset",
-    description: "Use reset was confirmed on Personal and Codex found no usage window eligible for a reset: the dialog has closed and a notice reads \"The usage of Personal does not need a reset right now.\"",
+    description: "Use reset was confirmed on Personal and Codex found no usage window eligible for a reset: the dialog has closed and a notice reads \"The usage of Personal does not need a reset right now.\" A reset with no credit left reads alike.",
     state: resetCreditsOn("a-codex"),
     resetCreditUse: "nothing_to_reset",
-    steps: [...redeemFromPanel("Personal"), (ui) => ui.confirm()],
-  },
-  {
-    id: "rail-quota-reset-credit-no-credit",
-    group: GROUP,
-    category: "exceptional",
-    title: "Redeem reset, no reset left",
-    description: "Use reset was confirmed on Personal and Codex had no credit left to use: the dialog has closed and a notice reads \"Personal has no usage limit resets available.\"",
-    state: resetCreditsOn("a-codex"),
-    resetCreditUse: "no_credit",
     steps: [...redeemFromPanel("Personal"), (ui) => ui.confirm()],
   },
 ];

@@ -1,8 +1,7 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { AGENT_LABEL } from "../../agents/agents";
 import { describing, type Ui, type Step } from "../../fixtures/interact";
-import type { AccountLogin, AccountSharing, AccountTrashOutcome, Agent, AgentAvailability } from "../../protocol";
-import type { AccountTrashAnswer } from "../../fixtures/fixture";
+import type { AccountLogin, AccountSharing, Agent, AgentAvailability } from "../../protocol";
 import type { FixtureError } from "../../fixtures/sampleFiles";
 import type { Scenario } from "../scenario";
 import { accountOf, ALL_AGENTS, SAMPLE, accountSharingOf, minutesAgo, sessionOf, snapshotState } from "../../fixtures/builders";
@@ -104,12 +103,6 @@ const quotaState: Scenario["state"] = {
   ],
 };
 
-/** `quotaState` with Claude Code not among the added agents, and Claude compatibility never chosen for any agent. */
-const noClaudeCodeState: Scenario["state"] = {
-  ...quotaState,
-  settings: { ...quotaState.settings!, added_agents: ["codex", "grok"] },
-};
-
 /** Claude Code's accounts in every state a person meets (`USED_UP_MIX`), the default account being the usable one.
  * Client is left out; Codex and Grok stay as they were. */
 const usedUpMixState: Scenario["state"] = {
@@ -131,8 +124,10 @@ const manyAccountsState: Scenario["state"] = {
   accountQuotas: [...quotaState.accountQuotas!, ...many.quotas],
 };
 
-/** The readings that did not come out whole, on the tabs of Claude Code and Grok. Codex is not installed, so its
- * accounts have no entry and Personal says it is not usable; Grok's binary went missing from the login shell's PATH. */
+/** The readings that did not come out whole, on Claude Code's tab. Codex is not installed, so its accounts have no
+ * entry and Personal says it is not usable. Grok Build is installed: a tab flags only an agent that is unavailable, so
+ * this changes nothing on the tabs, but the add-agent picker lists an installed agent as ready to add and one whose
+ * availability is not determined as still being checked. */
 const unavailableQuotaState: Scenario["state"] = {
   ...browserState,
   settings: { ...browserState.settings!, added_agents: ALL_AGENTS },
@@ -145,9 +140,6 @@ const unavailableQuotaState: Scenario["state"] = {
     quotaOf("claude", "a-long", "pro", [quotaWindow("session", 46, 83), quotaWindow("weekly", 62, 2 * 24 * 60 + 9 * 60)], {
       fetched_at: minutesAgo(12),
       unavailable: quotaFailure("quota_timed_out", { agent: "Claude Code" }, "Claude Code took too long to report its usage."),
-    }),
-    quotaOf("grok", null, null, [], {
-      unavailable: quotaFailure("quota_binary_not_found", { binary: "grok" }, "grok was not found, so usage cannot be read."),
     }),
   ],
 };
@@ -476,17 +468,6 @@ const sharingFailedState: Scenario["state"] = {
   accountSharing: accountSharingOf([{ account: "a-work", idle_sessions: 2, failure: { share: false, cause: "other", items: SHARING_FAILURE_ITEMS, detail: SHARING_FAILURE_DETAIL } }]),
 };
 
-/** Turning sharing on for Work failed because the default account's directory has moved since sharing was
- * turned on: no entry is named, and the raw reason is all the popover holds below the advice. The failure was
- * not rolled back, so the recorded choice, on, is where the switch sits. */
-const sharingDefaultMovedState: Scenario["state"] = {
-  ...sharingAccounts({ share: true, incomplete: true }, { share: false }),
-  accountSharing: accountSharingOf([{
-    account: "a-work",
-    failure: { share: true, cause: "default_moved", items: [], detail: "the default account's directory /Users/dev/.claude was not found; it was /Users/dev/.claude-old when sharing was turned on" },
-  }]),
-};
-
 /** Turning sharing on for Work failed as a whole for lack of disk space: the daemon names a cause but no entry, so the
  * warning holds the reason sentence rather than a line per cause. */
 const sharingNoSpaceState: Scenario["state"] = {
@@ -559,108 +540,24 @@ const workRunningState: Scenario["state"] = (() => {
   };
 })();
 
-/** What the daemon's quick look at Work's directory answers once the Trash option is ticked, for each refusal the dialog
- * prevents: the removal is disabled with the cause stated under the option, one scenario each. */
-const TRASH_PREVENTED = [
-  {
-    key: "protected",
-    outcome: { status: "protected" },
-    title: "Remove account to the Trash prevented, directory protected",
-    description: "A warning alert under the ticked option says the directory is your home folder, the root of a disk or holds Octoboard's own data, so it cannot be moved to the Trash; the sentence stops at the cause. Remove is disabled.",
-  },
-  {
-    key: "shared-account",
-    outcome: { status: "shared", kind: "account", name: "Client", agent: "Claude Code" },
-    title: "Remove account to the Trash prevented, directory shared with an account",
-    description: "A warning alert under the ticked option says the directory overlaps the directory of the Claude Code account Client, the agent and the account each a chip, so it cannot be moved to the Trash. Remove is disabled.",
-  },
-  {
-    key: "shared-default",
-    outcome: { status: "shared", kind: "default_account", agent: "Claude Code" },
-    title: "Remove account to the Trash prevented, directory is the default account's",
-    description: "A warning alert under the ticked option says the directory is, holds or lies inside the default Claude Code account's directory (the agent a chip), so it cannot be moved to the Trash. No account is named. Remove is disabled.",
-  },
-  {
-    key: "shared-project",
-    outcome: { status: "shared", kind: "project", name: "Website" },
-    title: "Remove account to the Trash prevented, directory holds a project",
-    description: "A warning alert under the ticked option says the directory holds the folder of the project Website (a chip), so it cannot be moved to the Trash. Remove is disabled.",
-  },
-  {
-    key: "unlookable",
-    outcome: { status: "unlookable" },
-    title: "Remove account to the Trash prevented, directory could not be looked at",
-    description: "A warning alert under the ticked option says the directory could not be accessed, so it cannot be moved to the Trash. Remove is disabled.",
-  },
-  {
-    key: "unreadable",
-    outcome: { status: "unlookable", cause: "unreadable" },
-    title: "Remove account to the Trash prevented, directory could not be read",
-    description: "A warning alert under the ticked option says the directory could not be read, so it cannot be checked for files of other accounts or projects and cannot be moved to the Trash. Remove is disabled.",
-  },
-  {
-    key: "other-unlooked",
-    outcome: { status: "unlookable", cause: "other_unlooked" },
-    title: "Remove account to the Trash prevented, other accounts' and projects' directories not checked",
-    description: "A warning alert under the ticked option says it could not be checked whether the directory holds or overlaps another account's or a project's directory, so it cannot be moved to the Trash. Remove is disabled.",
-  },
-] as const satisfies readonly { key: string; outcome: AccountTrashOutcome; title: string; description: string }[];
-
 /** What the daemon refuses, once Remove is pressed, a removal that asks for Work's directory to be moved to the Trash
- * with: only what the quick look before could not foresee (a state that changed since, a look that outran its time, the
- * move itself failing), one scenario each. */
+ * with: what the quick look before could not foresee. Two of the cases are shown, one scenario each: the daemon's
+ * refusal of sessions started since, and the move itself failing; the other causes that fail the same way (a state that
+ * changed since, a look that outran its time) put their own sentence in the same dialog. */
 const TRASH_REFUSALS = [
   {
     key: "sessions-started",
     error: { code: "account_has_running_sessions", params: { account: "a-work", name: "Work", sessions: "2" }, message: "account `Work` still has 2 sessions with a process" },
-    inspection: undefined,
     title: "Remove account to the Trash refused, sessions started since",
     description: "Work's confirmation was opened with no live sessions, so the option was ticked and Remove was available; two sessions started on Work meanwhile, and the daemon refused. An error dialog titled Could not remove the account, over the confirmation, says only that Account Work still has 2 sessions that are running or starting, so its directory cannot be moved to the Trash. Behind it the dialog is unchanged and Work is still listed.",
   },
   {
-    key: "shared-account",
-    error: { code: "account_directory_shared", params: { kind: "account", name: "Client", agent: "Claude Code" }, message: "the directory is shared with another account" },
-    inspection: [{ status: "ok" }, { status: "shared", kind: "account", name: "Client", agent: "Claude Code" }],
-    title: "Remove account to the Trash refused, directory shared since",
-    description: "The directory was not shared when the option was ticked and Remove was available; Client began using it meanwhile. An error dialog titled Could not remove the account, over the confirmation, says only that the directory overlaps the directory of the Claude Code account Client (the agent and the account each a chip), so it cannot be moved to the Trash. The confirmation asks again once the error is closed, so then the same reason stands under the option, announced, and Remove is disabled.",
-  },
-  {
     key: "failed",
     error: { code: "account_directory_trash_failed", params: { path: WORK_DIR, detail: "Operation not permitted (os error 1)" }, message: "could not move the directory to the Trash: Operation not permitted (os error 1)" },
-    inspection: undefined,
     title: "Account directory could not be moved to the Trash",
-    description: "An error dialog titled Could not remove the account, over the confirmation, says that the directory could not be moved to the Trash and, as the system's text names it (Operation not permitted, os error 1), that access was denied, with no remedy; the system's own text is in its Error details disclosure, closed here.",
+    description: "An error dialog titled Could not remove the account, over the confirmation, says that the directory could not be moved to the Trash and, as the system's text names it (Operation not permitted, os error 1), that access was denied, with no remedy; the system's own text is in its Error details disclosure, closed here. A directory that did not answer in time, could not be read or checked, or a login that did not end puts its own sentence in the same dialog.",
   },
-  {
-    key: "unanswered",
-    error: { code: "account_directory_trash_failed", params: { path: WORK_DIR, detail: "it did not respond in time", cause: "unanswered" }, message: "could not move the directory to the Trash: it did not respond in time" },
-    inspection: { status: "undecided" },
-    title: "Account directory did not respond in time",
-    description: "The quick look outran its time, so the option left Remove available; the full check on Remove did not get an answer either. An error dialog titled Could not remove the account, over the confirmation, says the directory, your home folder or Octoboard's data folder did not respond in time, so the directory could not be checked. The daemon's own text is in the closed Error details disclosure. The check asked again once the error is closed does not answer in time either, so the dialog stays as it was, Remove available to try again.",
-  },
-  {
-    key: "unreadable",
-    error: { code: "account_directory_trash_failed", params: { path: WORK_DIR, detail: "it could not be read", cause: "unreadable" }, message: "could not move the directory to the Trash: it could not be read" },
-    inspection: [{ status: "undecided" }, { status: "unlookable", cause: "unreadable" }],
-    title: "Account directory could not be read when removing",
-    description: "The quick look outran its time, so the option left Remove available; the full check on Remove could not read the directory. An error dialog titled Could not remove the account, over the confirmation, says the directory could not be read, so it could not be checked for files of other accounts or projects. The daemon's own text is in the closed Error details disclosure. The confirmation asks again once the error is closed, so then the same reason stands in a warning alert under the option, announced, and Remove is disabled.",
-  },
-  {
-    key: "other-unlooked",
-    error: { code: "account_directory_trash_failed", params: { path: WORK_DIR, detail: "it could not be checked", cause: "other_unlooked" }, message: "could not move the directory to the Trash: it could not be checked" },
-    inspection: [{ status: "undecided" }, { status: "unlookable", cause: "other_unlooked" }],
-    title: "Account directory could not be checked against other directories when removing",
-    description: "The quick look outran its time, so the option left Remove available; the full check on Remove could not tell whether the directory holds or overlaps another account's, the default account's or a project's directory. An error dialog titled Could not remove the account, over the confirmation, says only that, and that the directory cannot be moved to the Trash. The daemon's own text is in the closed Error details disclosure. The confirmation asks again once the error is closed, so then the same reason stands in a warning alert under the option, announced, and Remove is disabled.",
-  },
-  {
-    key: "signing-in",
-    error: { code: "account_directory_trash_failed", params: { path: WORK_DIR, detail: "its sign-in did not end in time", cause: "signing_in" }, message: "could not move the directory to the Trash: its sign-in did not end in time" },
-    inspection: undefined,
-    title: "Account directory could not be moved to the Trash, login did not end",
-    description: "Remove was pressed while Work's login was running and it did not end in time. An error dialog titled Could not remove the account, over the confirmation, says that the account's login did not end in time, so the directory could not be moved to the Trash. The daemon's own text is in the closed Error details disclosure. Closing the error leaves the dialog as it was, with no new check of the directory, Remove available to try again.",
-  },
-
-] as const satisfies readonly { key: string; error: FixtureError; inspection: AccountTrashAnswer | readonly AccountTrashAnswer[] | undefined; title: string; description: string }[];
+] as const satisfies readonly { key: string; error: FixtureError; title: string; description: string }[];
 
 export const settingsScenarios: Scenario[] = [
   {
@@ -670,28 +567,6 @@ export const settingsScenarios: Scenario[] = [
     title: "Browser General settings",
     description: "The Language row follows Appearance, then Markdown style starts on Tailwind. The \"Order the sidebar by status\" switch follows it, on, with the description that says sessions and projects move as their status changes. The archive-cleanup switch follows sidebar status ordering, on, with the description that says what is deleted and when. It is the last row. Below phone width, Settings fills the window without an outer inset; at tablet widths it retains a modest inset, and wider windows keep the desktop dialog layout.",
     state: browserState,
-    steps: [
-      (ui) => ui.press(ui.t("rail.settings")),
-    ],
-  },
-  {
-    id: "settings-general-archive-cleanup-off",
-    group: GROUP,
-    category: "normal",
-    title: "General, archive cleanup switched off",
-    description: "The archive-cleanup switch below sidebar status ordering is off, and its description now starts with \"Once this is on\" instead of stating the behaviour.",
-    state: { ...browserState, settings: { ...browserState.settings!, auto_delete_unresumable_archives: false } },
-    steps: [
-      (ui) => ui.press(ui.t("rail.settings")),
-    ],
-  },
-  {
-    id: "settings-general-sidebar-order-off",
-    group: GROUP,
-    category: "normal",
-    title: "General, sidebar status ordering switched off",
-    description: "The \"Order the sidebar by status\" switch below Markdown style is off, and its description now starts with \"Once this is on\" and says only what the switch does when on (sessions and projects move as their status changes, the ones waiting for you first after the pinned ones), without describing the order it keeps now. Switch it on and off to read both descriptions; the sidebar re-orders at once (see Console sessions, ordering by status switched off).",
-    state: { ...browserState, settings: { ...browserState.settings!, sidebar_order_by_status: false } },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
     ],
@@ -760,26 +635,11 @@ export const settingsScenarios: Scenario[] = [
     ],
   },
   {
-    id: "settings-permissions-request-failed",
-    group: GROUP,
-    category: "exceptional",
-    title: "Permissions, the request did not go through",
-    description: "Grant on Screen Recording cannot make its request, which is an unexpected failure: an error alert titled \"Could not request the permission\" says the request for Screen Recording did not go through and to grant it yourself in System Settings, choose Privacy & Security, then choose Screen & System Audio Recording, adding Octoboard with the + button if it is not listed. The title is plain text; Screen Recording, System Settings, Privacy & Security, Screen & System Audio Recording, Octoboard and the + in the body are each a chip. Beneath the body sit the report guidance (a bug that cannot be resolved here, with Report issue to file it) and a closed Error details disclosure holding the cause; the buttons are Report issue and OK. After OK the row still offers Grant, not pending and without System Settings guidance.",
-    state,
-    macosPermissions: { screenRecording: false, accessibility: false, screenRecordingAtLaunch: false },
-    macosRequestError: "the shell has no such command",
-    steps: [
-      (ui) => ui.press(ui.t("rail.settings")),
-      (ui) => ui.press(ui.t("settings.section.permissions")),
-      (ui) => ui.press(ui.t("settings.permissions.grant")),
-    ],
-  },
-  {
     id: "settings-permissions-system-open-failed",
     group: GROUP,
     category: "exceptional",
     title: "Permissions, System Settings did not open",
-    description: "After Grant is refused on Screen Recording and its Open System Settings is pressed, the system does not open the pane: an error alert titled \"Could not open System Settings\" says it did not open and to open it yourself, choose Privacy & Security, then choose Screen & System Audio Recording. The title is plain text; System Settings, Privacy & Security and Screen & System Audio Recording in the body are each a chip. OK is its only button: no recovery action and no Error details.",
+    description: "After Grant is refused on Screen Recording and its Open System Settings is pressed, the system does not open the pane: an error alert titled \"Could not open System Settings\" says it did not open and to open it yourself, choose Privacy & Security, then choose Screen & System Audio Recording. The title is plain text; System Settings, Privacy & Security and Screen & System Audio Recording in the body are each a chip. OK is its only button: no recovery action and no Error details. The Notifications pane failing to open reads alike.",
     state,
     macosPermissions: { screenRecording: false, accessibility: false, screenRecordingAtLaunch: false },
     macosSettingsOpenError: "the system did not open x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
@@ -797,21 +657,6 @@ export const settingsScenarios: Scenario[] = [
     title: "Agent behavior",
     description: "The lead line sits under the section heading, above a rule that opens the five rows: the session-request, resume-request, account-switch and handoff switches, all off, then Ask questions as choices, on, which is its default. Each of the four approval descriptions starts with \"Once this is on\" and says only what being on allows; the resume one names reopening, resuming and resuming a conversation in a new session, and none says what happens until then. The last row's description states what being on does, ending with the sentence that a change reaches sessions started afterwards. Switch a row to read its other description; none moves another.",
     state: browserState,
-    steps: [
-      (ui) => ui.press(ui.t("rail.settings")),
-      (ui) => ui.press(ui.t("settings.section.agentPermissions")),
-    ],
-  },
-  {
-    id: "settings-agent-permissions-on",
-    group: GROUP,
-    category: "normal",
-    title: "Agent behavior, approvals automatic, questions in text",
-    description: "The four approval switches are on, each description now stating the behaviour instead of starting with \"Once this is on\", each saying only what being on allows, with no advice to turn it off, while Ask questions as choices is off, its description starting with \"Once this is on\" and ending with the sentence that a change reaches sessions started afterwards.",
-    state: {
-      ...browserState,
-      settings: { ...browserState.settings!, auto_approve_session_requests: true, auto_approve_resume_requests: true, auto_approve_account_switches: true, auto_approve_handoffs: true, ask_questions_as_choices: false },
-    },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.agentPermissions")),
@@ -982,15 +827,6 @@ export const settingsScenarios: Scenario[] = [
     steps: codexDetails,
   },
   {
-    id: "settings-account-details-reset-credit-confirm",
-    group: GROUP,
-    category: "normal",
-    title: "Account details, the Redeem reset confirmation opened over it",
-    description: "\"Redeem reset\" in Personal's details has opened the confirmation above the details dialog, which stays behind it: \"One usage limit reset will be used on Personal.\", the first credit's title, description and \"Expires in 6d 3h\", Personal's usage meters and the note that the reset applies to the eligible usage windows now.",
-    state: resetCreditsState,
-    steps: [...codexDetails, redeemFromDetails],
-  },
-  {
     id: "settings-account-details-reset-credit-used",
     group: GROUP,
     category: "normal",
@@ -1036,18 +872,6 @@ export const settingsScenarios: Scenario[] = [
     description: "Add account, the right-hand icon button at the end of the tab row (the other, Add agent, is beside it), has the pointer on it, so its tooltip, \"Add account\", is open above it. The two buttons are plain icons in the same style as the ⋮ buttons, with no words.",
     state: quotaState,
     steps: [...openAccounts, (ui) => ui.hoverTitledControl(ui.t("settings.accounts.add"))],
-  },
-  {
-    id: "settings-accounts-switches-on",
-    group: GROUP,
-    category: "normal",
-    title: "Settings: accounts, all three account switches on",
-    description: "Above the agent tabs, the account-selection switch, the \"Automatically switch accounts at the usage limit\" switch and the \"Start usage windows automatically\" switch are all on, in that order. Each description states the behaviour and does not start with \"Once this is on\"; the automatic-switch one says a session that stops at its account's usage limit is switched to another account with usage left and carries on; the usage-window one is a single short sentence with its \"?\" after the label. Switch any off and on again to read both of its descriptions (off, the automatic-switch one starts with \"Once this is on\"); none moves another.",
-    state: { ...quotaState, settings: { ...quotaState.settings!, auto_select_account: true, auto_switch_on_usage_limit: true, auto_start_quota_windows: true } },
-    steps: [
-      (ui) => ui.press(ui.t("rail.settings")),
-      (ui) => ui.press(ui.t("settings.section.accounts")),
-    ],
   },
   {
     id: "settings-accounts-start-windows-help-popover",
@@ -1097,31 +921,17 @@ export const settingsScenarios: Scenario[] = [
       (ui) => ui.press(AGENT_LABEL.codex),
     ],
   },
-  ...(["claude", "codex"] as const).map((agent): Scenario => ({
-    id: `settings-accounts-approval-help-${agent}`,
+  {
+    id: "settings-accounts-approval-help-claude",
     group: GROUP,
     category: "normal",
-    title: `Settings: accounts, ${AGENT_LABEL[agent]} permission approval explanation`,
-    description: "The help button beside the Permission approval label above the table is touched with a finger. Its popover keeps the agent-specific explanation next to the selector it describes.",
+    title: "Settings: accounts, permission approval explanation",
+    description: "The help button beside the Permission approval label above the table is touched with a finger. Its popover keeps the agent's explanation next to the selector it describes; Codex's tab words it for its reviewers in the same popover.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
-      ...(agent === "codex" ? [((ui) => ui.press(AGENT_LABEL.codex)) satisfies Step] : []),
       (ui) => ui.touchPress(ui.t("settings.accounts.approval.helpLabel")),
-    ],
-  })),
-  {
-    id: "settings-accounts-codex-no-claude-code",
-    group: GROUP,
-    category: "normal",
-    title: "Settings: accounts, Codex tab with Claude Code not added",
-    description: "Claude Code is not among the added agents (the tab strip has Codex and Grok Build only) and Claude compatibility was never chosen, so the Claude compatibility switch on Codex's tab is off, where it is on when Claude Code is added.",
-    state: noClaudeCodeState,
-    steps: [
-      (ui) => ui.press(ui.t("rail.settings")),
-      (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.press(AGENT_LABEL.codex),
     ],
   },
   {
@@ -1137,20 +947,20 @@ export const settingsScenarios: Scenario[] = [
       (ui) => ui.press(AGENT_LABEL.grok),
     ],
   },
-  ...(["codex", "grok"] as const).map((agent): Scenario => ({
-    id: `settings-accounts-claude-compatibility-help-${agent}`,
+  {
+    id: "settings-accounts-claude-compatibility-help-codex",
     group: GROUP,
     category: "normal",
-    title: `Settings: accounts, ${AGENT_LABEL[agent]} Claude compatibility explanation`,
-    description: "The help button beside the Claude compatibility label is touched with a finger. Its popover says what the switch does for this agent and that a change takes effect when a session next starts or resumes; the agent's name, Claude Code, CLAUDE.md and Octoboard are chips, and a chip may wrap across lines.",
+    title: "Settings: accounts, Claude compatibility explanation",
+    description: "The help button beside the Claude compatibility label is touched with a finger. Its popover says what the switch does for this agent and that a change takes effect when a session next starts or resumes; the agent's name, Claude Code, CLAUDE.md and Octoboard are chips, and a chip may wrap across lines. Grok Build's tab words it for its agent in the same popover.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.press(AGENT_LABEL[agent]),
+      (ui) => ui.press(AGENT_LABEL.codex),
       (ui) => ui.touchPress(ui.t("settings.accounts.claudeCompat.helpLabel")),
     ],
-  })),
+  },
   {
     id: "settings-accounts-agents-undecided",
     group: GROUP,
@@ -1401,7 +1211,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Account login failed",
-    description: "Log in was chosen for Work and the CLI gave up: the dialog becomes a fixed failure alert, with the danger icon in its header beside the title \"Could not log in\", no close button, and Escape does nothing. The body is only \"Logging in to Claude Code account Work failed.\" (agent and account as chips): the failure carries no specific cause of its own, so none follows in the sentence. \"Error details\" is open here, holding the CLI's multiline text, and nothing else, in a selectable block of its own. The footer reads Close, then Log in again as the main button, which has the focus.",
+    description: "Log in was chosen for Work and the CLI gave up: the dialog becomes a fixed failure alert, with the danger icon in its header beside the title \"Could not log in\", no close button, and Escape does nothing. The body is only \"Logging in to Claude Code account Work failed.\" (agent and account as chips): the failure carries no specific cause of its own, so none follows in the sentence. \"Error details\" is open here, holding the CLI's multiline text, and nothing else, in a selectable block of its own. The footer reads Close, then Log in again as the main button, which has the focus. A login refused because the account is being removed ends the sentence with that cause and has no Error details, the layout of the Codex busy refusal below without its remedy paragraph. A login that timed out has no details either, and is the next scenario.",
     state: notSignedInState,
     loginOutcome: "failed",
     steps: [...loginFromInline(), (ui) => ui.press(ui.t("error.diagnostics"))],
@@ -1433,16 +1243,6 @@ export const settingsScenarios: Scenario[] = [
     ],
   },
   {
-    id: "settings-account-login-being-removed",
-    group: GROUP,
-    category: "exceptional",
-    title: "Account login refused, the account is being removed",
-    description: "Choosing Log in on Work is refused while the account is being removed with its directory: the dialog opens straight as a fixed failure alert (no close button), with the danger icon in its header and the title \"Could not log in\". The body is one sentence: the login to Claude Code account Work failed (agent and account as chips), followed by the cause \"The account is being removed.\" It has no remedy line and no Error details; the footer reads Close, then Log in again, which has the focus.",
-    state: notSignedInState,
-    loginStartError: { code: "account_being_removed", params: { account: "a-work", name: "Work" }, message: "account `Work` is being removed" },
-    steps: loginFromInline(),
-  },
-  {
     id: "settings-add-agent-refused",
     group: GROUP,
     category: "exceptional",
@@ -1470,23 +1270,6 @@ export const settingsScenarios: Scenario[] = [
       (ui) => ui.press(ui.t("settings.section.accounts")),
       (ui) => ui.contextMenu(AGENT_LABEL.claude),
       (ui) => ui.press(ui.t("settings.accounts.moveLater")),
-    ],
-  },
-  {
-    id: "settings-account-rename-default-taken",
-    group: GROUP,
-    category: "exceptional",
-    title: "Rename the default account, name already in use",
-    description: "Saving \"Work\", an account of the same agent, is refused with the conflicting name as a chip in the field's validation message.",
-    state: renamedDefaultState,
-    steps: [
-      (ui) => ui.press(ui.t("rail.settings")),
-      (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.press(ui.t("settings.accounts.actionsLabel", { name: RENAMED_DEFAULT, agent: AGENT_LABEL.claude })),
-      (ui) => ui.press(ui.t("settings.accounts.renameDefault")),
-      (ui) => ui.focus(ui.t("common.name")),
-      (ui) => ui.type("Work"),
-      (ui) => ui.confirm(),
     ],
   },
   {
@@ -1553,20 +1336,11 @@ export const settingsScenarios: Scenario[] = [
     steps: openSharingHelp("Work"),
   },
   {
-    id: "settings-accounts-sharing-help-grok",
-    group: GROUP,
-    category: "normal",
-    title: "Settings: accounts, Grok Build sharing explanation",
-    description: "The same explanation for a Grok Build account. What is never shared is login credentials, trusted_folders.toml and hooks-paths, the two files as chips. The popover keeps a narrow width, so a chip that does not fit at the end of a line moves to the next one whole, and no empty chip fragment is left at the end of the line above. What is shared, and what turning sharing off does, reads the same as for Claude Code.",
-    state: sharingHelpState("grok"),
-    steps: openSharingHelp("Work", "grok"),
-  },
-  {
     id: "settings-accounts-sharing-help-codex",
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Codex sharing explanation",
-    description: "The same explanation for a Codex account. What is never shared is one sentence, that login credentials are never shared, and no file is named. Personal's switch is off, with nothing under it.",
+    description: "The same explanation for a Codex account, without the idle-sessions paragraph. What is never shared is one sentence, that login credentials are never shared, and no file is named. Personal's switch is off, with nothing under it.",
     state: sharingHelpState("codex"),
     steps: openSharingHelp("Personal", "codex"),
   },
@@ -1575,7 +1349,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Permission approval could not be saved",
-    description: "The error alert is titled \"Could not save the permission approval\" and says only \"Access was denied.\" with the permissions remedy (the daemon sent the system's text with no code to word it by, so the application names the cause from that text); that text, which says the account settings could not be saved with Permission denied (os error 13), is only in the Error details disclosure, closed here. Codex's Permission approval row keeps Follow account configuration behind the alert; acknowledging the error leaves that saved selection intact.",
+    description: "The error alert is titled \"Could not save the permission approval\" and says only \"Access was denied.\" with the permissions remedy (the daemon sent the system's text with no code to word it by, so the application names the cause from that text); that text, which says the account settings could not be saved with Permission denied (os error 13), is only in the Error details disclosure, closed here. Codex's Permission approval row keeps Follow account configuration behind the alert; acknowledging the error leaves that saved selection intact. Approve everything refused for the same reason gets the same alert over its confirmation dialog, which stays open; Claude compatibility refused the same way has its own title, \"Could not save Claude compatibility\", and leaves its switch available again.",
     state: approvalState,
     accountApprovalError: { code: "store_io_failed", params: { detail: "Permission denied (os error 13)" }, message: "The account settings could not be saved: Permission denied (os error 13)" },
     steps: [
@@ -1583,33 +1357,6 @@ export const settingsScenarios: Scenario[] = [
       (ui) => ui.press(AGENT_LABEL.codex),
       (ui) => ui.press(ui.t("settings.accounts.approval.label", { agent: AGENT_LABEL.codex })),
       (ui) => ui.press(ui.t("settings.accounts.approval.auto")),
-    ],
-  },
-  {
-    id: "settings-account-approval-bypass-error",
-    group: GROUP,
-    category: "exceptional",
-    title: "Approve everything could not be saved",
-    description: "Confirming Approve everything was refused. The error alert is titled \"Could not save the permission approval\" and says only \"Access was denied.\" with the permissions remedy, and the system's text (the account settings could not be saved, Permission denied, os error 13) is only in its Error details disclosure, closed here, with the confirmation dialog still open beneath it; the Permission approval row still reads Automatic.",
-    state: quotaState,
-    accountApprovalError: { code: "store_io_failed", params: { detail: "Permission denied (os error 13)" }, message: "The account settings could not be saved: Permission denied (os error 13)" },
-    steps: [
-      ...bypassSteps,
-      (ui) => ui.confirm(),
-    ],
-  },
-  {
-    id: "settings-account-claude-compatibility-error",
-    group: GROUP,
-    category: "exceptional",
-    title: "Claude compatibility could not be saved",
-    description: "Turning Claude compatibility off on Codex's tab was refused. The error alert is titled \"Could not save Claude compatibility\" and says only \"Access was denied.\" with the permissions remedy, the system's text being only in its Error details disclosure, closed here; the switch is available again and still on.",
-    state: quotaState,
-    claudeCompatibilityError: { code: "store_io_failed", params: { detail: "Permission denied (os error 13)" }, message: "The settings could not be saved: Permission denied (os error 13)" },
-    steps: [
-      ...openAccounts,
-      (ui) => ui.press(AGENT_LABEL.codex),
-      (ui) => ui.press(ui.t("settings.accounts.claudeCompat.label", { agent: AGENT_LABEL.codex })),
     ],
   },
   {
@@ -1631,20 +1378,11 @@ export const settingsScenarios: Scenario[] = [
     steps: [...accountSettings("Work"), (ui) => ui.touchPressStatusMark(ui.t("settings.accounts.sharing.unfinishedMark"))],
   },
   {
-    id: "settings-accounts-sharing-default-moved-details",
-    group: GROUP,
-    category: "exceptional",
-    title: "Sharing change failed, the default directory has moved, popover open",
-    description: "The triangle right of Work's switch (on, its recorded position) is pressed. The popover holds the title \"Could not finish turning sharing on\", the single reason that the default account's directory has moved since sharing was turned on (no entry is named), and the advice to turn the switch off, then on again; below them only the raw reason, alone in a block on its own tinted surface, not as inline code.",
-    state: sharingDefaultMovedState,
-    steps: [...accountSettings("Work"), (ui) => ui.touchPressStatusMark(ui.t("settings.accounts.sharing.unfinishedMark"))],
-  },
-  {
     id: "settings-accounts-sharing-no-space-details",
     group: GROUP,
     category: "exceptional",
     title: "Sharing change failed, not enough disk space, popover open",
-    description: "Turning sharing on did not finish, so Work's switch sits at its position before the change, off, and the triangle right of it is pressed. The popover holds the title \"Could not finish turning sharing on\", the single cause \"There is not enough disk space.\" and its fix \"Free up disk space.\" as the two sentences after it (no entry is named), then the advice to turn the switch on again to try once more, then the raw reason alone in a block on its own tinted surface.",
+    description: "Turning sharing on did not finish, so Work's switch sits at its position before the change, off, and the triangle right of it is pressed. The popover holds the title \"Could not finish turning sharing on\", the single cause \"There is not enough disk space.\" and its fix \"Free up disk space.\" as the two sentences after it (no entry is named), then the advice to turn the switch on again to try once more, then the raw reason alone in a block on its own tinted surface. A default account's directory that has moved since sharing was turned on is worded in the same place.",
     state: sharingNoSpaceState,
     steps: [...accountSettings("Work"), (ui) => ui.touchPressStatusMark(ui.t("settings.accounts.sharing.unfinishedMark"))],
   },
@@ -1701,19 +1439,6 @@ export const settingsScenarios: Scenario[] = [
     description: "The warning-coloured triangle after the bar in Client's Usage cell is tapped with a finger: its popover holds why the newer reading failed. Client's settings dialog shows the last windows with the same triangle after \"Updated 12 minutes ago\".",
     state: unavailableQuotaState,
     steps: [...openAccounts, (ui) => ui.touchPressStatusMark(describing("the out-of-date mark", (name) => name.startsWith(ui.t("quota.stale", { age: "\u0000" }).split("\u0000")[0])))],
-  },
-  {
-    id: "settings-accounts-grok-quota-unavailable",
-    group: GROUP,
-    category: "exceptional",
-    title: "Settings: accounts, Grok Build binary not found",
-    description: "Grok Build's default account has a dash in its Usage cell followed by a danger-coloured circled \"!\", and no plan or status; the mark's reason names the missing binary and PATH as code.",
-    state: unavailableQuotaState,
-    steps: [
-      (ui) => ui.press(ui.t("rail.settings")),
-      (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.press(AGENT_LABEL.grok),
-    ],
   },
   {
     id: "settings-accounts-codex-not-installed",
@@ -1785,31 +1510,12 @@ export const settingsScenarios: Scenario[] = [
     steps: removeWork,
   },
   {
-    id: "settings-account-delete-trash",
-    group: GROUP,
-    category: "normal",
-    title: "Remove account to the Trash",
-    description: "The option is ticked and Work has no live sessions: the message now says the directory is moved to the Trash and that its archived sessions can no longer be resumed, the hint stays, and Remove is available.",
-    state: browserState,
-    steps: removeWorkToTrash,
-  },
-  {
     id: "settings-account-delete-trash-running",
     group: GROUP,
     category: "normal",
     title: "Remove account to the Trash, sessions still running",
     description: "The option is ticked and Work has four live sessions, so a plain line reads \"The account still has 4 sessions that are running or starting\" and says they must be ended or switched to another account first, over the list of them with their status marks, agent icons and titles; Remove is disabled. Neither Work's archived session nor Client's session is listed. Unticking the option removes the list and enables Remove.",
     state: workRunningState,
-    steps: removeWorkToTrash,
-  },
-  {
-    id: "settings-account-delete-trash-missing",
-    group: GROUP,
-    category: "normal",
-    title: "Remove account to the Trash, directory not there",
-    description: "The option is ticked and nothing is at Work's directory: the hint now says the account's directory does not exist, so there is nothing to move, the message stays the plain one for an unticked removal (nothing about the Trash or archived sessions), and Remove is available.",
-    state: browserState,
-    accountTrashInspection: { status: "missing" },
     steps: removeWorkToTrash,
   },
   {
@@ -1837,16 +1543,16 @@ export const settingsScenarios: Scenario[] = [
       (ui) => ui.confirm(),
     ],
   },
-  ...TRASH_PREVENTED.map(({ key, outcome, title, description }): Scenario => ({
-    id: `settings-account-delete-trash-prevented-${key}`,
+  {
+    id: "settings-account-delete-trash-prevented-shared-account",
     group: GROUP,
     category: "exceptional",
-    title,
-    description,
+    title: "Remove account to the Trash prevented, directory shared with an account",
+    description: "A warning alert under the ticked option says the directory overlaps the directory of the Claude Code account Client, the agent and the account each a chip, so it cannot be moved to the Trash. Remove is disabled. The other causes (the home folder or Octoboard's own data, the default account's directory, a project's folder, a directory that could not be looked at, read or checked) put their own sentence in the same alert.",
     state: browserState,
-    accountTrashInspection: outcome,
+    accountTrashInspection: { status: "shared", kind: "account", name: "Client", agent: "Claude Code" },
     steps: removeWorkToTrash,
-  })),
+  },
   {
     id: "settings-account-delete-trash-inspect-failed",
     group: GROUP,
@@ -1867,7 +1573,7 @@ export const settingsScenarios: Scenario[] = [
     accountTrashInspection: [{ code: "internal_error", params: { detail: "the daemon could not check the directory" }, message: "the daemon could not check the directory" }, "pending"],
     steps: [...removeWorkToTrash, (ui) => ui.press(ui.t("error.tryAgain"))],
   },
-  ...TRASH_REFUSALS.map(({ key, error, inspection, title, description }): Scenario => ({
+  ...TRASH_REFUSALS.map(({ key, error, title, description }): Scenario => ({
     id: `settings-account-delete-trash-${key}`,
     group: GROUP,
     category: "exceptional",
@@ -1875,29 +1581,26 @@ export const settingsScenarios: Scenario[] = [
     description,
     state: browserState,
     accountDeleteError: error,
-    ...(inspection && { accountTrashInspection: inspection }),
     steps: [...removeWorkToTrash, (ui) => ui.confirm()],
   })),
-  ...(["existing", "default", "reserved"] as const).map((kind): Scenario => ({
-    id: `settings-account-name-taken-${kind}`,
+  {
+    id: "settings-account-name-taken-existing",
     group: GROUP,
     category: "exceptional",
-    title: kind === "existing" ? "Add account, name already in use" : kind === "default" ? "Add account, default account name reserved" : "Add account, \"Default\" reserved while the default account is renamed",
-    description: kind === "reserved"
-      ? "Claude Code's default account has been renamed, yet typing \"Default\" is still refused: the message says the word is reserved for the default account, with the word typed as a chip."
-      : "The conflicting account name is a chip in the field's validation message.",
-    state: kind === "reserved" ? renamedDefaultState : browserState,
+    title: "Add account, name already in use",
+    description: "The conflicting account name is a chip in the field's validation message. Typing the default account's name, or \"Default\" while the default account is renamed, or renaming the default account to a name in use, is refused in the same place under the field, worded for its cause.",
+    state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
       (ui) => ui.press(ui.t("settings.accounts.add")),
       (ui) => ui.focus(ui.t("common.name")),
-      (ui) => ui.type(kind === "existing" ? "Work" : kind === "default" ? ui.t("settings.accounts.defaultName") : "Default"),
+      (ui) => ui.type("Work"),
       (ui) => ui.focus(ui.t("settings.accounts.configDir")),
       (ui) => ui.type("/Users/dev/.claude-studio"),
       (ui) => ui.confirm(),
     ],
-  })),
+  },
   {
     id: "settings-account-add-directory-failed",
     group: GROUP,
@@ -1928,12 +1631,12 @@ export const settingsScenarios: Scenario[] = [
       (ui) => ui.confirm(),
     ],
   },
-  ...(["owned", "default"] as const).map((kind): Scenario => ({
-    id: `settings-account-directory-taken-${kind}`,
+  {
+    id: "settings-account-directory-taken-owned",
     group: GROUP,
     category: "exceptional",
-    title: kind === "owned" ? "Add account, config directory used by another account" : "Add account, config directory used by the default account",
-    description: "Once Add is pressed, the daemon's refusal, naming the account that already uses the directory, is the error alert dialog's, raised over the dialog; the config directory field and the dialog itself show no error.",
+    title: "Add account, config directory used by another account",
+    description: "Once Add is pressed, the daemon's refusal, naming the account that already uses the directory (the default account, when it is that one's), is the error alert dialog's, raised over the dialog; the config directory field and the dialog itself show no error.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -1942,10 +1645,10 @@ export const settingsScenarios: Scenario[] = [
       (ui) => ui.focus(ui.t("common.name")),
       (ui) => ui.type("Studio"),
       (ui) => ui.focus(ui.t("settings.accounts.configDir")),
-      (ui) => ui.type(kind === "owned" ? "~/.claude-work/" : "/Users/dev/.claude"),
+      (ui) => ui.type("~/.claude-work/"),
       (ui) => ui.confirm(),
     ],
-  })),
+  },
   {
     id: "settings-trustedFolders",
     group: GROUP,
@@ -1994,20 +1697,6 @@ export const settingsScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.notifications")),
-    ],
-  },
-  {
-    id: "settings-notifications-system-open-failed",
-    group: GROUP,
-    category: "exceptional",
-    title: "Settings: System Settings did not open (desktop app)",
-    description: "After Open System Settings is pressed and the system does not open the pane, an error alert titled \"Could not open System Settings\" says it did not open and to open it yourself and choose Notifications. The title is plain text; System Settings and Notifications in the body are each a chip. OK is its only button: no recovery action and no Error details.",
-    state: browserState,
-    systemNotifications: { openError: "the system did not open x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=dev.octoboard.desktop" },
-    steps: [
-      (ui) => ui.press(ui.t("rail.settings")),
-      (ui) => ui.press(ui.t("settings.section.notifications")),
-      (ui) => ui.press(ui.t("settings.notifications.openSettings")),
     ],
   },
   {

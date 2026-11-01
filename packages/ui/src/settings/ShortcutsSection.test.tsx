@@ -196,3 +196,30 @@ it("leaves focus on Reset when the reset is refused", () => {
   act(() => reset.click());
   expect(document.activeElement).toBe(reset);
 });
+
+// The test runtime is not an Apple platform, so ⌃ is the primary modifier and ⌘ the other one; the
+// Apple-only refusals (control with a key, the system's Space and ` ) cannot be reached here.
+const refusals: [string, Binding, string][] = [
+  ["Escape, F6 and the context-menu key", { code: "Escape", primary: true }, "Escape, F6 and the context-menu key keep their own meaning."],
+  ["the caret and editing keys", { code: "ArrowLeft", primary: true }, "With Ctrl, the arrow keys, Home, End, Page Up, Page Down, Backspace, Delete and Enter move the caret or edit text, so they cannot be used."],
+  ["a key the system keeps", { code: "KeyK", other: true }, "The system keeps this combination for itself."],
+  ["Tab with the primary modifier", { code: "Tab", primary: true }, "The system keeps this combination for itself."],
+  ["Ctrl+C", { code: "KeyC", primary: true }, "Ctrl+C interrupts the program in the terminal, so it cannot be used."],
+];
+
+it.each(refusals)("says why %s cannot be used, keeps recording and saves nothing", (_name, binding, message) => {
+  const container = mount();
+  act(() => button(container, LOCK_CHANGE)!.click());
+  press(binding, { key: binding.code === "Escape" ? "Escape" : "" });
+  expect(container.querySelector(".text-danger")?.textContent).toBe(message);
+  expect(text(container)).toContain("Press the new keys…");
+  expect(bindingFor("lock")).toEqual({ code: "KeyL", primary: true, shift: true });
+});
+
+it("says Open settings cannot take Shift with a number or symbol key", () => {
+  const container = mount(APP);
+  act(() => button(container, "Change the shortcut for Open settings")!.click());
+  press({ code: "Digit1", primary: true, shift: true });
+  expect(container.querySelector(".text-danger")?.textContent).toBe("Open settings cannot use Shift with a number or symbol key.");
+  expect(text(container)).toContain("Press the new keys…");
+});

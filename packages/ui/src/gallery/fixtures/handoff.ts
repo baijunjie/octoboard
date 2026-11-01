@@ -1,8 +1,7 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
-import type { Agent, AgentAvailability } from "../../protocol";
 import type { Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
-import { accountOf, ALL_AGENTS, SAMPLE, branchItemOf, minutesAgo, sessionOf, snapshotState, worktreeItemOf, sessionNoticeToast } from "../../fixtures/builders";
+import { accountOf, ALL_AGENTS, SAMPLE, branchItemOf, minutesAgo, sessionOf, snapshotState, worktreeItemOf } from "../../fixtures/builders";
 
 const { console: console_, web, api, consoleSession: hub } = SAMPLE;
 
@@ -62,14 +61,6 @@ const startingState = snapshotState({
   sessions: [hub, lead, ...owned, ...hubOwned, bare, working, starting],
   settings,
 });
-
-// Detection has settled and finds no agent but Claude Code on the machine.
-const onlyClaude = new Map<Agent, AgentAvailability>(
-  (["claude", "codex", "grok"] as const).map((agent) => [
-    agent,
-    { agent, availability: agent === "claude" ? "available" : "unavailable", default_account_dir: `/Users/dev/.${agent}` },
-  ]),
-);
 
 // A bound session and its owner whose titles run to paragraphs, as a pasted brief does: the unbind confirmation
 // names each of them once, and the chips have to wrap inside the dialog.
@@ -136,15 +127,6 @@ export const handoffScenarios: Scenario[] = [
     steps: [openMenu(hub.title)],
   },
   {
-    id: "sidebar-session-menu-hand-off-disabled",
-    group: GROUP,
-    category: "normal",
-    title: "Menu of a bound session in the middle of a turn, Hand off disabled",
-    description: "Hand off is greyed out with \"Session busy\" under its name while the session is in the middle of a turn, while Change model before it, Unbind right after it and Archive stay available: a turn in progress does not stop the model from being changed.",
-    state,
-    steps: [openMenu(working.title)],
-  },
-  {
     id: "sidebar-session-menu-starting",
     group: GROUP,
     category: "normal",
@@ -158,18 +140,9 @@ export const handoffScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Menu of a locked session, Hand off disabled",
-    description: "Hand off and Archive are both greyed out with \"Session locked\" under their names although the session is idle; Archive shows the reason in place of its keyboard shortcut. Unlock stays available.",
+    description: "Hand off and Archive are both greyed out with \"Session locked\" under their names although the session is idle; Archive shows the reason in place of its keyboard shortcut. Unlock stays available. A session in the middle of a turn (\"Session busy\") or with no other agent to hand off to (\"No other agent\") greys Hand off the same way, with its own reason.",
     state: lockedState,
     steps: [openMenu(locked.title)],
-  },
-  {
-    id: "sidebar-session-menu-hand-off-no-agent",
-    group: GROUP,
-    category: "normal",
-    title: "Menu of an idle session, no other agent to hand off to",
-    description: "Codex and Grok Build are not installed, so no other agent could take the session over: Hand off is greyed out with \"No other agent\" under its name although the session is idle, and Archive stays available.",
-    state: { ...state, agentAvailability: onlyClaude },
-    steps: [openMenu(bare.title)],
   },
   {
     id: "dialog-hand-off",
@@ -186,18 +159,9 @@ export const handoffScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Hand off a console session",
-    description: "A console session is responsible for no branches and reports to no one, so the only line is the three sessions it owns, an archived one included, and nothing says it is checking branches.",
+    description: "A console session is responsible for no branches and reports to no one, so the only line is the three sessions it owns, an archived one included, and nothing says it is checking branches. A session that moves nothing has a single line too, starting with Nothing.",
     state,
     steps: openHandoff(hub.title),
-  },
-  {
-    id: "dialog-hand-off-nothing-moves",
-    group: GROUP,
-    category: "normal",
-    title: "Hand off a session that moves nothing",
-    description: "Under Moves to the new session the one line starts with Nothing and says why.",
-    state,
-    steps: openHandoff(bare.title),
   },
   {
     id: "dialog-hand-off-checking",
@@ -252,42 +216,13 @@ export const handoffScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Unbind refused while the session is changing",
-    description: "Unbind was confirmed and refused because the session is being started, handed off or otherwise changing. An error alert titled \"Could not unbind the session\", with OK alone, says the session is changing so its owner cannot change right now, then the line on waiting for its current turn or operation before retrying; it shows no session ID, raw daemon text, Report issue or Error details. The Unbind session confirmation lies fully hidden beneath it and shows again, still open, once OK is pressed.",
+    description: "Unbind was confirmed and refused because the session is being started, handed off or otherwise changing. An error alert titled \"Could not unbind the session\", with OK alone, says the session is changing so its owner cannot change right now, then the line on waiting for its current turn or operation before retrying; it shows no session ID, raw daemon text, Report issue or Error details. The Unbind session confirmation lies fully hidden beneath it and shows again, still open, once OK is pressed. A refusal because the owner is changing, or because the session got another owner meanwhile, reads alike.",
     state,
     sessionReleaseError: {
       code: "session_changing",
       params: { session: lead.id },
       message: `\`${lead.id}\` is being started, resumed, handed off, switched to another account, having its branches handed over or having its owner changed, so its owner cannot change now: look again once that is done`,
     },
-    steps: [...openUnbind(lead.title), (ui) => ui.confirm()],
-  },
-  {
-    id: "dialog-unbind-session-owner-changing",
-    group: GROUP,
-    category: "exceptional",
-    title: "Unbind refused while the owner is changing",
-    description: "Unbind was confirmed and refused because Hub, the owner, is being started, handed off or otherwise changing. An error alert titled \"Could not unbind the session\", with OK alone, opens with Hub as a chip at the start of its sentence, which says sessions cannot be bound to or moved from it right now, then the line telling you to wait for the owner's current start, resume, handoff, account switch or change of owner to finish; it shows no ID, raw daemon text, Report issue or Error details. The Unbind session confirmation lies fully hidden beneath it and shows again, still open, once OK is pressed.",
-    state,
-    sessionReleaseError: {
-      code: "session_owner_changing",
-      params: { session: lead.id, owner: hub.id },
-      message: `\`${hub.id}\` is being started, resumed, handed off, switched to another account or having its owner changed, so sessions cannot be bound to or moved from it now: look again once that is done`,
-    },
-    steps: [...openUnbind(lead.title), (ui) => ui.confirm()],
-  },
-  {
-    id: "dialog-unbind-session-binding-changed",
-    group: GROUP,
-    category: "exceptional",
-    title: "Unbind refused, the session got another owner meanwhile",
-    description: "Unbind was confirmed on Hub, but the session had been given to another owner (Update the dependencies) before the release landed. An error alert titled \"Could not unbind the session\", with OK alone, says the session's owner changed while it was being released, then the line saying the confirmation now names the session's current owner and to unbind again if you still want to; it shows no ID, raw daemon text, Report issue or Error details. Once OK is pressed the Unbind session confirmation is still open and now names Update the dependencies, not Hub, as the owner.",
-    state,
-    sessionReleaseError: {
-      code: "session_binding_changed",
-      params: { session: lead.id },
-      message: `the binding changed while it was being released — \`${lead.id}\` was bound elsewhere; look again before retrying`,
-    },
-    sessionReleaseMovedTo: sibling.id,
     steps: [...openUnbind(lead.title), (ui) => ui.confirm()],
   },
   {
@@ -305,41 +240,11 @@ export const handoffScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Hand off refused, the session is mid-turn",
-    description: "The daemon found the session in the middle of a turn after the window listed it as waiting. The alert says the session cannot be handed off yet, and the dialog stays behind it for another try.",
+    description: "The daemon found the session in the middle of a turn after the window listed it as waiting. The alert says the session cannot be handed off yet, and the dialog stays behind it for another try. A session archived meanwhile is refused in the same alert.",
     state,
     sessionHandoffs: {
       [bare.id]: { code: "session_working", params: { session: bare.id }, message: "The session is in the middle of a turn" },
     },
     steps: confirmHandoff(bare.title),
-  },
-  {
-    id: "dialog-hand-off-session-archived",
-    group: GROUP,
-    category: "exceptional",
-    title: "Hand off refused, the session was archived",
-    description: "The daemon archived the session after the window listed it. The alert says an archived session can be neither switched to another account nor handed off, and to reopen it first.",
-    state,
-    sessionHandoffs: {
-      [bare.id]: { code: "session_archived", params: { session: bare.id }, message: "An archived session cannot be handed off" },
-    },
-    steps: confirmHandoff(bare.title),
-  },
-  {
-    id: "toast-hand-off-messages-dropped",
-    group: "Trust prompts and toasts",
-    category: "exceptional",
-    title: "Messages dropped during a handoff",
-    description: "The notice arrives as an error alert titled \"Handoff messages dropped\", whose body opens with the session line, \"Session: Rework the result ranking — Website\", with the session's title and its project each a chip, then, as plain text rather than a chip, what was dropped, followed by the recovery of checking the session they were meant for or the one that took over.",
-    state,
-    toasts: [sessionNoticeToast(lead.id, "handoff_messages_dropped")],
-  },
-  {
-    id: "toast-sharing-messages-dropped",
-    group: "Trust prompts and toasts",
-    category: "exceptional",
-    title: "Messages dropped during a sharing change",
-    description: "The notice arrives as an error alert titled \"Messages dropped during a sharing change\", whose body opens with the session line, \"Session: Rework the result ranking — Website\", with the session's title and its project each a chip, then, as plain text rather than a chip, what was dropped, saying the session was not restarted, followed by its own recovery line: the messages were never written to a terminal and the session may not be running, so resume it if still needed and send them again.",
-    state,
-    toasts: [sessionNoticeToast(lead.id, "sharing_messages_dropped")],
   },
 ];

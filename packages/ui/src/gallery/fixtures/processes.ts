@@ -70,7 +70,6 @@ const scrollingProjectProcesses = [
 
 const listFailed: FixtureError = { code: "internal_error", params: { detail: "the process table could not be read" }, message: "the process table could not be read" };
 const stopRefused: FixtureError = { code: "internal_error", params: { detail: "the process ledger could not be updated" }, message: "the process ledger could not be updated" };
-const keepRefused: FixtureError = { code: "internal_error", params: { detail: "the process ledger could not be kept" }, message: "the process ledger could not be kept" };
 
 // The project's sessions again with one archived beside them, which the session filter must not offer.
 const archivedPreview = sessionOf("s-proc-archived", console_.id, web.id, "Migrate the build to Vite", "archived");
@@ -288,22 +287,11 @@ export const processScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Stop in flight",
-    description: "The user confirmed stopping the first process and the request is still pending. The confirmation stays open with its confirming button pending and cannot be dismissed (Cancel, Escape and the close button do nothing) until the request settles, while the panel remains behind it.",
+    description: "The user confirmed stopping the first process and the request is still pending. The confirmation stays open with its confirming button pending and cannot be dismissed (Cancel, Escape and the close button do nothing) until the request settles, while the panel remains behind it. Keep in flight holds its confirmation the same way.",
     state,
     preferences: panelPreferences,
     processes: { trees: pair, stop: "pending" },
     steps: [...openSession, (ui) => ui.press(stopOf(ui, pair[0])), (ui) => ui.confirm()],
-  },
-  {
-    id: "processes-keep-pending",
-    group: GROUP,
-    category: "normal",
-    title: "Keep in flight",
-    description: "The user confirmed keeping the first process and the request is still pending: the Keep process confirmation stays open with its confirming button pending, and cannot be dismissed until the request settles.",
-    state,
-    preferences: panelPreferences,
-    processes: { trees: pair, keep: "pending" },
-    steps: [...openSession, (ui) => ui.press(keepOf(ui, pair[0])), (ui) => ui.confirm()],
   },
   {
     id: "processes-list-failed",
@@ -333,21 +321,10 @@ export const processScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Stop refused",
-    description: "The user confirmed Stop on the first row, and the stop request was refused: an error alert titled \"Could not stop the process\" stands over the stop confirmation. After OK the confirmation remains available for retry or cancellation, with both process rows preserved in the panel behind it.",
+    description: "The user confirmed Stop on the first row, and the stop request was refused: an error alert titled \"Could not stop the process\" stands over the stop confirmation. After OK the confirmation remains available for retry or cancellation, with both process rows preserved in the panel behind it. A refused Keep is reported in the same way over its confirmation.",
     state,
     preferences: panelPreferences,
     processes: { trees: pair, stop: stopRefused },
     steps: [...openSession, (ui) => ui.press(stopOf(ui, pair[0])), (ui) => ui.confirm()],
-  },
-  {
-    id: "processes-keep-refused",
-    group: GROUP,
-    category: "exceptional",
-    title: "Keep refused",
-    description: "The user confirmed Keep on the first row, and the request was refused: an error alert titled \"Could not keep the process\" stands over the Keep confirmation. After OK the confirmation remains available for retry or cancellation, with both process rows preserved in the panel behind it.",
-    state,
-    preferences: panelPreferences,
-    processes: { trees: pair, keep: keepRefused },
-    steps: [...openSession, (ui) => ui.press(keepOf(ui, pair[0])), (ui) => ui.confirm()],
   },
 ];

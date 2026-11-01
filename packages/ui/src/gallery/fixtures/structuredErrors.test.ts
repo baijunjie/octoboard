@@ -1,6 +1,37 @@
 import { describe, expect, it } from "vitest";
 import { daemonMessage } from "../../errors/daemonMessage";
+import { shellTerminalOf } from "../../fixtures/builders";
 import { structuredErrorScenarios } from "./structuredErrors";
+
+const sample = structuredErrorScenarios[0].state!;
+const [consoleId] = sample.consoles!.keys();
+const [project] = sample.projects!.values();
+const shellTerminal = shellTerminalOf("shell-errors", project, "بناء Build shell", 0);
+
+/** The names a text is worded from: the records the scenarios' shared state holds, and a shell terminal. */
+const records = {
+  consoles: sample.consoles!, projects: sample.projects!, sessions: sample.sessions!,
+  shellTerminals: new Map([[shellTerminal.id, shellTerminal]]), accounts: sample.settings!.accounts,
+};
+
+/** Codes the scenarios no longer show, for a record that is held and for one that is gone, so their placeholders stay
+ * filled in every language without a scenario each. */
+const UNSHOWN: Array<{ code: string; params: Record<string, string> }> = [
+  { code: "unknown_console", params: { console: consoleId } },
+  { code: "unknown_console", params: { console: "missing-console-42" } },
+  { code: "unknown_project", params: { project: project.id } },
+  { code: "unknown_project", params: { project: "missing-project-42" } },
+  { code: "unknown_shell_terminal", params: { shell_terminal: shellTerminal.id } },
+  { code: "unknown_shell_terminal", params: { shell_terminal: "missing-shell_terminal-42" } },
+  { code: "not_a_git_repository", params: { project: project.id } },
+  { code: "not_a_git_repository", params: { project: "missing-project-42" } },
+  { code: "unknown_page", params: { page: "page-errors" } },
+  { code: "field_too_long", params: { field: "default_clone_dir", limit: "255" } },
+  { code: "field_required", params: { field: "console_id" } },
+  { code: "invalid_launch_setting", params: { agent: "Claude Code", field: "reasoning_effort", value: "unsupported-effort" } },
+  { code: "terminal_input_lost", params: { shell_terminal: shellTerminal.id } },
+  { code: "launch_failed", params: { title: "Review index", reason_code: "invalid_launch_setting", agent: "Claude Code", field: "reasoning_effort", value: "unsupported-effort" } },
+];
 
 // A successful render alone cannot reveal a missing fixture parameter: interpolation leaves it visible.
 describe("structured error fixture contracts", () => {
@@ -17,6 +48,14 @@ describe("structured error fixture contracts", () => {
         expect(text, scenario.id).not.toMatch(/\{[a-zA-Z_]+\}/);
         expect(text.trim(), scenario.id).not.toBe("");
       }
+    }
+  });
+
+  it.each(["en", "zh-Hans", "ar"] as const)("fills every placeholder of the codes no scenario shows in %s", (language) => {
+    for (const { code, params } of UNSHOWN) {
+      const text = daemonMessage(language, code, params, "", records);
+      expect(text, code).not.toMatch(/\{[a-zA-Z_]+\}/);
+      expect(text.trim(), code).not.toBe("");
     }
   });
 });

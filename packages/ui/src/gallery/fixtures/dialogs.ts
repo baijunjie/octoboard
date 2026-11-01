@@ -240,18 +240,6 @@ const editTextProject = (project: typeof nearLimitProject) => [
   (ui: Ui) => ui.press(ui.t("sidebar.project.edit")),
 ];
 
-/** The removal of `tagged[0]` with its folder refused because the daemon could not tell what the folder holds: the
- * inspection and the removal after it both refuse with `project_directory_trash_failed` and the cause, and the
- * inspection's refusal carries the token the removal sends back to have it repeated, as the daemon's does. */
-const folderUnchecked = (cause: "unanswered" | "unreadable", detail: string) => {
-  const refusal = { code: "project_directory_trash_failed", message: `could not move ${tagged[0].path} to the Trash: ${detail}` };
-  const params = { path: tagged[0].path, detail, cause };
-  return {
-    projectDeleteError: { ...refusal, params },
-    projectRemovalBranches: { [tagged[0].id]: { ...refusal, params: { ...params, inspection: `inspection-${cause}` } } },
-  } satisfies Partial<Scenario>;
-};
-
 const removeDocsSite = [
   (ui: Ui) => projectActions(ui, tagged[0].name),
   (ui: Ui) => ui.press(ui.t("sidebar.project.remove")),
@@ -473,13 +461,6 @@ const unusedState = snapshotState({
     unusedGrok,
   ],
 });
-// An unused session the user locked: its Delete is refused, saying so.
-const lockedUnused = sessionOf("s-locked-unused", console_.id, web.id, "Sketch the onboarding copy", "idle", { has_conversation: false, locked: true, started_at: minutesAgo(6) });
-const lockedUnusedState = snapshotState({
-  consoles: [console_],
-  projects: [web],
-  sessions: [sessionOf("s-web-used", console_.id, web.id, "Fix the summary layout", "working"), lockedUnused],
-});
 const openUnusedMenu = (ui: Ui) => ui.press(ui.t("sidebar.session.actions", { title: unusedSession.title }));
 const openSwitchAccount = (title: string) => [
   (ui: Ui) => ui.press(ui.t("sidebar.session.actions", { title })),
@@ -491,14 +472,6 @@ const submitConsoleSwitch = [
   (ui: Ui) => ui.press(ui.t("dialog.switchAccount.scopeConsole")),
   (ui: Ui) => ui.confirm(),
 ];
-
-/** The daemon's refusal of a switch to Work, whose weekly quota is used up and has no reset time; the reading also
- * has a model's own weekly window, which makes the account-wide one "for all models" in Claude Code's words. */
-const quotaRefusal = {
-  code: "account_quota_exhausted",
-  params: { agent: "Claude Code", account: accountsState.settings!.accounts[0].name, window: "Weekly", window_kind: "weekly", window_minutes: "10080", model_weekly: "true" },
-  message: `${accountsState.settings!.accounts[0].name} has reached its Claude Code usage limit (Weekly)`,
-};
 
 /** The daemon's `relocation_failed` for a switch into the account whose directory is `path` for every session of the
  * batch, stopped at `stage` for `cause`, with the system's own words `detail`. `kept_staging` also names where the
@@ -514,37 +487,12 @@ const NO_SPACE = "No space left on device (os error 28)";
 /** The same, into the Claude Code Work account. */
 const claudeRelocationFailure = (stage: "copy" | "kept_staging", cause: RelocationCause, detail: string) =>
   relocationFailure("/Users/dev/.claude-work", stage, cause, detail);
-/** The same, into the Codex Work account, whose thread database the `thread_record` stage updates. */
-const codexRelocationFailure = (cause: RelocationCause, detail: string) =>
-  relocationFailure("/Users/dev/.codex-work", "thread_record", cause, detail);
-
 /** The daemon's `switch_did_not_come_up`: the session was relaunched under the new account and its process ended at once. */
 const didNotComeUp = (session: string) => ({
   code: "switch_did_not_come_up",
   params: { session },
   message: `${session} ended as soon as it was relaunched under the new account`,
 });
-
-// Three Codex sessions share a console, the second bound to the hub: a Codex account's thread database is what the
-// `thread_record` stage of a switch updates.
-const codexWork = accountOf("a-codex-work", "codex", "Codex Work", "/Users/dev/.codex-work");
-const codexSwitchState = snapshotState({
-  consoles: [console_],
-  projects: [web, api],
-  sessions: [
-    sessionOf("s-codex-hub", console_.id, undefined, "Release coordinator", "idle", { agent: "codex" }),
-    sessionOf("s-codex-work", console_.id, web.id, "Review the release checklist", "idle", { agent: "codex" }),
-    sessionOf("s-codex-bound", console_.id, api.id, "Verify the migration", "idle", { agent: "codex", bound_to: "s-codex-hub" }),
-  ],
-  settings: { ...accountsState.settings!, accounts: [...accountsState.settings!.accounts, codexWork] },
-});
-const submitCodexSwitch = [
-  (ui: Ui) => ui.press(ui.t("sidebar.session.actions", { title: "Review the release checklist" })),
-  (ui: Ui) => ui.press(ui.t("sidebar.session.switchAccount")),
-  (ui: Ui) => ui.press(codexWork.name),
-  (ui: Ui) => ui.press(ui.t("dialog.switchAccount.scopeConsole")),
-  (ui: Ui) => ui.confirm(),
-];
 
 /** The refusal of a project's process list, as the daemon answers when it cannot read the process table. */
 const PROJECT_LIST_FAILED: FixtureError = { code: "internal_error", params: { detail: "the process table could not be read" }, message: "the process table could not be read" };
@@ -663,16 +611,6 @@ export const dialogScenarios: Scenario[] = [
     toasts: [sessionNoticeToast("s-web-1", "claude_workspace_untrusted")],
   },
   {
-    id: "sidebar-session-menu-unused-locked",
-    group: "Sidebar sessions",
-    category: "normal",
-    title: "Menu of a locked session that was never used",
-    description: "The final Delete is greyed out with \"Session locked\" under its name, so the never-used session cannot be deleted; Unlock stays available.",
-    state: lockedUnusedState,
-    sessionRecords: { [lockedUnused.id]: "absent" },
-    steps: [(ui) => ui.press(ui.t("sidebar.session.actions", { title: lockedUnused.title }))],
-  },
-  {
     id: "sidebar-session-menu-unused",
     group: "Sidebar sessions",
     category: "normal",
@@ -713,7 +651,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Console account switch, the conversation could not be copied",
-    description: "Three Claude Code failures, each for a cause the daemon names, so no paragraph about a bug and no Report issue. Each row words where the copy stopped (the conversation could not be copied, twice; and, for the third, that an older item could not be put back and is kept in a named folder). After the rows come the remedies, each once and always in this order: copy the older item out of the named folder before it is cleared and try the switch again (that failure was a full disk too); replace or remove the symbolic link named in the details; and free disk space, once for the two disk-full failures. Error details is closed but present, holding the system's own text per session; the footer holds OK alone.",
+    description: "Three Claude Code failures, each for a cause the daemon names, so no paragraph about a bug and no Report issue. Each row words where the copy stopped (the conversation could not be copied, twice; and, for the third, that an older item could not be put back and is kept in a named folder). After the rows come the remedies, each once and always in this order: copy the older item out of the named folder before it is cleared and try the switch again (that failure was a full disk too); replace or remove the symbolic link named in the details; and free disk space, once for the two disk-full failures. Error details is closed but present, holding the system's own text per session; the footer holds OK alone. The failures of a Codex switch, after the copy, use the same layout.",
     state: switchAccountState,
     sessionAccountSwitches: {
       "s-switch-bound": claudeRelocationFailure("copy", "no_space", NO_SPACE),
@@ -723,25 +661,11 @@ export const dialogScenarios: Scenario[] = [
     steps: submitConsoleSwitch,
   },
   {
-    id: "dialog-switch-account-codex-thread-record",
-    group: "Sidebar sessions",
-    category: "exceptional",
-    title: "Console account switch, the Codex thread record could not be updated",
-    description: "Three Codex failures at the stage after the copy, each for a cause the daemon names, so no paragraph about a bug and no Report issue. Each row says the conversation was copied into the account's directory but the target account's record of the thread could not be updated. After the rows, one remedy sentence per cause: close other programs using the account's files (the database was locked); make the account's config.toml readable valid TOML or remove it; set an absolute sqlite_home or CODEX_SQLITE_HOME, with ~ and HOME as chips. Error details is closed but present; the footer holds OK alone.",
-    state: codexSwitchState,
-    sessionAccountSwitches: {
-      "s-codex-bound": codexRelocationFailure("busy", "updating `/Users/dev/.codex-work/state_5.sqlite` failed: database is locked"),
-      "s-codex-hub": codexRelocationFailure("config_unreadable", "`config.toml` is not valid: TOML parse error at line 3, column 9"),
-      "s-codex-work": codexRelocationFailure("sqlite_home", "`CODEX_SQLITE_HOME` is the relative path `./state`, which depends on the directory the session starts in"),
-    },
-    steps: submitCodexSwitch,
-  },
-  {
     id: "dialog-switch-account-did-not-come-up",
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Console account switch, process stop and relaunch failures",
-    description: "Two sessions could not switch to Work: the first line names that account once and says they stay on their current account. Each row names its session only in the heading, followed by a short reason: one process ended as soon as it was relaunched, while the other did not stop in time. Neither reason repeats the session name or the unchanged account. The remedies follow the list once each: resume the interrupted session to carry on, and exit the other session's agent using its quit command before retrying. There is no paragraph about a bug, no Report issue and no Error details; the footer holds OK alone.",
+    description: "Two sessions could not switch to Work: the first line names that account once and says they stay on their current account. Each row names its session only in the heading, followed by a short reason: one process ended as soon as it was relaunched, while the other did not stop in time. Neither reason repeats the session name or the unchanged account. The remedies follow the list once each: resume the interrupted session to carry on, and exit the other session's agent using its quit command before retrying. There is no paragraph about a bug, no Report issue and no Error details; the footer holds OK alone. A refusal for a usage limit that is reached reads alike.",
     state: switchAccountState,
     sessionAccountSwitches: {
       "s-switch-bound": didNotComeUp("s-switch-bound"),
@@ -760,16 +684,6 @@ export const dialogScenarios: Scenario[] = [
       "s-switch-bound": { code: "unknown_account", params: { account: "a-removed" }, message: "unknown account a-removed" },
       "s-switch-work": { code: "unknown_account", params: { account: "a-removed" }, message: "unknown account a-removed" },
     },
-    steps: submitConsoleSwitch,
-  },
-  {
-    id: "dialog-switch-account-quota-refused",
-    group: "Sidebar sessions",
-    category: "exceptional",
-    title: "Console account switch refused, the usage limit is reached",
-    description: "The daemon holds a newer reading than the window and refuses two sessions' switch to the Work account. Both rows say the account's weekly limit for all models is reached, with no reset time, and the advice to choose another account or try again once the usage limit resets comes once under them. The footer holds OK alone. The account's name appears as a chip in the first line and in each row, in the app's language.",
-    state: switchAccountState,
-    sessionAccountSwitches: { "s-switch-bound": quotaRefusal, "s-switch-work": quotaRefusal },
     steps: submitConsoleSwitch,
   },
   {
@@ -1027,7 +941,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Session resume, conversation ID not valid",
-    description: "On the Resume conversation tab, a session title typed instead of an ID is marked invalid under the Session ID field once Open is pressed, with an example ID as code in the danger tone and the field focused; nothing else appears below it, the dialog stays as typed and nothing is sent.",
+    description: "On the Resume conversation tab, a session title typed instead of an ID is marked invalid under the Session ID field once Open is pressed, with an example ID as code in the danger tone and the field focused; nothing else appears below it, the dialog stays as typed and nothing is sent. A conversation ID that no account holds marks the field the same way with its own message.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.openSession")),
       (ui) => ui.press(ui.t("dialog.session.conversationResume")),
@@ -1043,20 +957,9 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "normal",
     title: "Session resume, conversation found in an agent's default account",
-    description: "On the Resume conversation tab, once the conversation is found in an agent's record, an empty Name and the Agent and Account field appear under the Session ID: the field is disabled and shows the record's own agent and account (Claude Code, default account), not the project's choice. Advanced is available below and the footer button reads Open.",
+    description: "On the Resume conversation tab, once the conversation is found in an agent's record, an empty Name and the Agent and Account field appear under the Session ID: the field is disabled and shows the record's own agent and account (Claude Code, default account), not the project's choice. Advanced is available below and the footer button reads Open. A conversation found in a named account of another agent shows that agent and account in the same disabled field.",
     conversationLocation: { kind: "record", agent: "claude", account: null },
     steps: resumeLookup,
-  },
-  {
-    ...dialogFixture,
-    state: resumeState,
-    id: "dialog-new-session-resume-record-account",
-    group: "Sidebar sessions",
-    category: "normal",
-    title: "Session resume, conversation found in a named account of another agent",
-    description: "The disabled Agent and Account field shows Codex and its account Team Codex, though the project's own agent is Claude Code; the Advanced section, once opened, carries Codex's model and reasoning effort.",
-    conversationLocation: { kind: "record", agent: "codex", account: "a-codex-team" },
-    steps: [...resumeLookup, (ui) => ui.press(ui.t("dialog.agentSettings.advanced"))],
   },
   {
     ...dialogFixture,
@@ -1076,7 +979,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "normal",
     title: "Session resume, conversation held by an interrupted session",
-    description: "Like the archived session, but Name is disabled as well (the session keeps its title) beside the disabled Agent and Account field; there is no Advanced section, and the footer button reads Resume.",
+    description: "Like the archived session, but Name is disabled as well (the session keeps its title) beside the disabled Agent and Account field; there is no Advanced section, and the footer button reads Resume. A session that is already running shows the same disabled fields, and Go to session as its button.",
     conversationLocation: { kind: "live_session", session: "s-web-interrupted" },
     steps: resumeLookup,
   },
@@ -1093,68 +996,13 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
-    state: resumeState,
-    id: "dialog-new-session-resume-live",
-    group: "Sidebar sessions",
-    category: "normal",
-    title: "Session resume, conversation already running",
-    description: "Name and the Agent and Account field are both disabled and show the running session's title, agent and account; there is no Advanced section, and the footer button reads Go to session and is enabled.",
-    conversationLocation: { kind: "live_session", session: "s-web-1" },
-    steps: resumeLookup,
-  },
-  {
-    ...dialogFixture,
     state: heldElsewhereState,
     id: "dialog-new-session-resume-outside-project",
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Session resume, conversation held by a session of another project",
-    description: "A danger Alert directly under the Session ID, titled \"Could not resume this conversation\", says the conversation is already held by a session in Website API, named by its task and its own name, \"Prevent duplicate API requests | Add idempotency keys\", as one chip, with the project as a chip of its own; nothing else appears below the field and the footer button is disabled.",
+    description: "A danger Alert directly under the Session ID, titled \"Could not resume this conversation\", says the conversation is already held by a session in Website API, named by its task and its own name, \"Prevent duplicate API requests | Add idempotency keys\", as one chip, with the project as a chip of its own; nothing else appears below the field and the footer button is disabled. A conversation held by a console session, by an account no longer offered, or a lookup the daemon refused, puts its own sentence in the same alert.",
     conversationLocation: { kind: "outside_project", session: "s-api-held" },
-    steps: resumeLookup,
-  },
-  {
-    ...dialogFixture,
-    state: resumeState,
-    id: "dialog-new-session-resume-outside-console",
-    group: "Sidebar sessions",
-    category: "exceptional",
-    title: "Session resume, conversation held by a console session",
-    description: "A danger Alert directly under the Session ID, titled \"Could not resume this conversation\", says the conversation is already held by the console session \"Hub\" in Main; nothing else appears below the field and the footer button is disabled.",
-    conversationLocation: { kind: "outside_project", session: "s-console" },
-    steps: resumeLookup,
-  },
-  {
-    ...dialogFixture,
-    state: resumeState,
-    id: "dialog-new-session-resume-unlocated",
-    group: "Sidebar sessions",
-    category: "exceptional",
-    title: "Session resume, no conversation with this ID",
-    description: "The Session ID field itself is marked invalid, its label and border in the danger colour, with its own error under it, \"No conversation with this ID was found in any account\"; no Alert stands under the field, and the footer button is disabled.",
-    conversationLocation: { kind: "not_found" },
-    steps: resumeLookup,
-  },
-  {
-    ...dialogFixture,
-    state: resumeState,
-    id: "dialog-new-session-resume-unavailable",
-    group: "Sidebar sessions",
-    category: "exceptional",
-    title: "Session resume, account holding the conversation no longer offered",
-    description: "The record sits in a Codex account that is no longer set up: a danger Alert directly under the Session ID, titled \"Could not resume this conversation\", says that the agent or account is no longer available; nothing else appears below the field and the footer button is disabled.",
-    conversationLocation: { kind: "record", agent: "codex", account: "a-removed" },
-    steps: resumeLookup,
-  },
-  {
-    ...dialogFixture,
-    state: resumeState,
-    id: "dialog-new-session-resume-lookup-failed",
-    group: "Sidebar sessions",
-    category: "exceptional",
-    title: "Session resume, lookup refused",
-    description: "The daemon refused the lookup, and its reason, in the application's own words, is a danger Alert directly under the Session ID, titled \"Could not resume this conversation\" over that reason, with no Details since there is no raw text; nothing else appears below the field and the footer button is disabled.",
-    conversationLocation: { code: "unknown_project", params: { project: "p-web" }, message: "unknown project p-web" },
     steps: resumeLookup,
   },
   {
@@ -1222,22 +1070,8 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Session launch refused, the agent is not added",
-    description: "The daemon finds Claude Code off the added list, which the window has not heard yet. The danger alert says the session cannot be opened with it, with the remedy in words and an Add agent button in the footer, left of OK; the dialog stays behind it.",
+    description: "The daemon finds Claude Code off the added list, which the window has not heard yet. The danger alert says the session cannot be opened with it, with the remedy in words and an Add agent button in the footer, left of OK; the dialog stays behind it. An account removed meanwhile is refused in the same alert, with Manage accounts as its button.",
     sessionOpenError: { code: "agent_not_added", params: { agent: "Claude Code" }, message: "Claude Code is not added. Add it in Settings → Agent accounts to open a session with it." },
-    steps: [
-      (ui) => ui.press(ui.t("sidebar.project.openSession")),
-      (ui) => ui.confirm(),
-    ],
-  },
-  {
-    ...dialogFixture,
-    state: sessionLaunchState,
-    id: "dialog-new-session-account-refused",
-    group: "Sidebar sessions",
-    category: "exceptional",
-    title: "Session launch refused, the account is gone",
-    description: "The daemon finds the account the session was to run under removed. The danger alert says so, with the remedy in words and a Manage accounts button in the footer, left of OK; the dialog stays behind it.",
-    sessionOpenError: { code: "unknown_account", params: { account: "a-removed" }, message: "unknown account a-removed" },
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.openSession")),
       (ui) => ui.confirm(),
@@ -1382,27 +1216,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Project folder could not be moved to the Trash",
-    description: "The move to the Trash failed; a separate error alert requires acknowledgement and the project is kept. It says only that the folder could not be moved and what to check; the system's own text (Operation not permitted, os error 1) is in its Error details disclosure, closed here, and in no sentence.",
-    steps: [...removeDocsSite, (ui) => ui.confirm()],
-  },
-  {
-    ...dialogFixture,
-    ...folderUnchecked("unanswered", "it did not respond in time, so whether another project's files are in it could not be told"),
-    id: "dialog-remove-project-folder-unanswered",
-    group: "Projects",
-    category: "exceptional",
-    title: "Project folder did not respond in time",
-    description: "With Trash checked the Project folder section lists nothing and shows no warning about what goes along, no \"Other worktrees unknown\" mark included. The daemon could not look at the folder, the home folder or its data folder in time, so it refuses to move the folder to the Trash; a separate error alert says the folder could not be checked and the project was kept, then advises trying again once the volume responds or removing the project without moving its folder to the Trash. The daemon's own text (it did not respond in time) is in the Error details disclosure, closed here, and in no sentence.",
-    steps: [...removeDocsSite, (ui) => ui.confirm()],
-  },
-  {
-    ...dialogFixture,
-    ...folderUnchecked("unreadable", "it could not be read, so whether another project's files are in it could not be told"),
-    id: "dialog-remove-project-folder-unreadable",
-    group: "Projects",
-    category: "exceptional",
-    title: "Project folder could not be read",
-    description: "With Trash checked the Project folder section lists nothing and shows no warning about what goes along, no \"Other worktrees unknown\" mark included. The daemon could not read the project's own folder, so it refuses to move it to the Trash; a separate error alert says the folder could not be read and the project was kept, then advises checking the folder's permissions and granting access in the system's privacy settings, or removing the project without moving its folder to the Trash. The daemon's own text (it could not be read) is in the Error details disclosure, closed here, and in no sentence.",
+    description: "The move to the Trash failed; a separate error alert requires acknowledgement and the project is kept. It says only that the folder could not be moved and what to check; the system's own text (Operation not permitted, os error 1) is in its Error details disclosure, closed here, and in no sentence. A folder that did not answer in time or could not be read puts its own sentence in the same alert.",
     steps: [...removeDocsSite, (ui) => ui.confirm()],
   },
   archiveConsoleSession,
@@ -1512,20 +1326,11 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
-    id: "dialog-edit-project-description",
-    group: "Projects",
-    category: "normal",
-    title: "Project settings with a description",
-    description: "Description sits right after Name, holding two lines within the field's three rows; the note under it says agent sessions read it.",
-    steps: editTaggedProject,
-  },
-  {
-    ...dialogFixture,
     id: "dialog-edit-project-long-description",
     group: "Projects",
     category: "normal",
     title: "Project fields approaching their character limits",
-    description: "Name shows 90 / 100 and Description 1800 / 2000. The long description keeps its three-row height and scrolls inside, with its note, counter and Tags still below it.",
+    description: "Name shows 90 / 100 and Description 1800 / 2000. The long description keeps its three-row height and scrolls inside, with its note, counter and Tags still below it. A description of two lines sits in the same field.",
     state: textProjectState(nearLimitProject),
     steps: editTextProject(nearLimitProject),
   },
@@ -1626,27 +1431,6 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
-    state: snapshotState({
-      consoles: [console_],
-      projects: [{ ...gitWorkflowProject, git_workflow: { ...FOLLOWING_GIT_WORKFLOW, squash_before_delivery: true } }],
-      sessions: [],
-      settings: accountsState.settings,
-    }),
-    id: "dialog-edit-project-git-squash",
-    group: "Projects",
-    category: "normal",
-    title: "Project git workflow, squashing on for this project",
-    description: "Squash commits before delivery reads On with no global badge, while the global setting is Off. The other four pickers follow the global settings and show their current values in grey badges. This project's squashing choice remains independent of the global setting.",
-    height: 1200,
-    steps: [
-      (ui) => projectActions(ui, gitWorkflowProject.name),
-      (ui) => ui.press(ui.t("sidebar.project.edit")),
-      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
-      (ui) => ui.press(ui.t("dialog.project.gitWorkflow.title")),
-    ],
-  },
-  {
-    ...dialogFixture,
     state: inPlaceState,
     id: "dialog-edit-project-git-workflow-in-place",
     group: "Projects",
@@ -1696,27 +1480,13 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Project model choices with a retained model",
-    description: "The open Model list ends with the model the project still stores but the agent no longer lists, selected, with a grey Not in the list badge after its name in the option as well as in the field.",
+    description: "The open Model list ends with the model the project still stores but the agent no longer lists, selected, with a grey Not in the list badge after its name in the option as well as in the field. The Reasoning effort list keeps its stored value the same way.",
     steps: [
       (ui) => projectActions(ui, configured.name),
       (ui) => ui.press(ui.t("sidebar.project.edit")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
       // The picker is named by the model it holds, followed by the badge.
       (ui) => ui.press(describing("the Model picker holding the retired model", (name) => name.startsWith(RETIRED_MODEL))),
-    ],
-  },
-  {
-    ...dialogFixture,
-    id: "dialog-edit-project-effort-choices",
-    group: "Projects",
-    category: "normal",
-    title: "Project reasoning effort choices with a retained value",
-    description: "The open Reasoning effort list retains the stored mixed-script value that no listed model offers, with a Not in the list badge after its raw name. The Model field beside it also retains its unlisted value.",
-    steps: [
-      (ui) => projectActions(ui, configured.name),
-      (ui) => ui.press(ui.t("sidebar.project.edit")),
-      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
-      (ui) => ui.press(describing("the Reasoning effort picker holding the retired value", (name) => name.startsWith(RETIRED_EFFORT))),
     ],
   },
   {
@@ -1812,25 +1582,10 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Directory picker",
-    description: "Each row shows the directory's name with its full path beneath in small muted text, the home directory written as ~, and a repository ends in a neutral \"git\" badge. On the long row the name fades and runs as a marquee on hover, and the path is cut from its start so the directory's own name at its end stays visible, with the folder icon level with the name.",
+    description: "Each row shows the directory's name with its full path beneath in small muted text, the home directory written as ~, and a repository ends in a neutral \"git\" badge. On the long row the name fades and runs as a marquee on hover, and the path is cut from its start so the directory's own name at its end stays visible, with the folder icon level with the name. Browse pressed with a relative path typed opens the same listing.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),
-      (ui) => ui.press(ui.t("common.browse")),
-    ],
-  },
-  {
-    ...dialogFixture,
-    id: "dialog-directory-picker-relative-path",
-    group: "Projects",
-    category: "normal",
-    title: "Directory picker after a relative path was typed",
-    description: "Browse was pressed with the relative path code/a in the Directory field, a path that names no place the picker could list. It opens at the home directory, with the path field reading /Users/dev and the rows written from ~, as it does with nothing typed, and not on a failed listing of the typed path.",
-    steps: [
-      consoleActions,
-      (ui) => ui.press(ui.t("sidebar.console.addProject")),
-      (ui) => ui.focus(ui.t("dialog.project.directory")),
-      (ui) => ui.type("code/a"),
       (ui) => ui.press(ui.t("common.browse")),
     ],
   },

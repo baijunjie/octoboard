@@ -1,6 +1,6 @@
 import type { ThirdPartyLicenses } from "../about/thirdPartyLicenses";
 import type { Language } from "../i18n/languages";
-import type { AvailableUpdate, MacosPermissionsStatus, UpdateChannel, UpdateProgress } from "../platform";
+import type { AvailableUpdate, MacosPermissionsStatus, UpdateProgress } from "../platform";
 import type { Fixture } from "../fixtures/fixture";
 import type { Step } from "../fixtures/interact";
 import type { Preferences } from "../fixtures/preferences";
@@ -38,26 +38,24 @@ export const DEFAULT_WIDTH = 1440;
  * scenario's `height` below it would not be the height it is shown at. */
 export const MIN_HEIGHT = 400;
 
-/** What a check answers: a newer version, `"upToDate"`, `"pending"` for a check that is never answered,
- * `"installed"` for the shell saying an update is already installed (which this window never saw), or the updater's
- * own failure text. */
-export type UpdaterCheck = AvailableUpdate | "upToDate" | "pending" | "installed" | { error: string };
+/** What a check answers: a newer version, `"upToDate"`, `"pending"` for a check that is never answered, or the
+ * updater's own failure text. */
+export type UpdaterCheck = AvailableUpdate | "upToDate" | "pending" | { error: string };
 
 /** What the desktop shell's updater answers, for a window that can update itself: the Settings rows and the
  * update notice exist only with one. */
 export interface UpdaterFixture {
   /** The version running. */
   currentVersion?: string;
-  /** What a check answers, `"upToDate"` by default: one answer for either channel, or one per channel (a channel
-   * left out answers `"upToDate"`). */
-  check?: UpdaterCheck | Partial<Record<UpdateChannel, UpdaterCheck>>;
+  /** What a check answers, `"upToDate"` by default, whichever channel is followed. */
+  check?: UpdaterCheck;
   /** Whether a check has already run when the window opens, as the automatic one does shortly after launch, so
    * its result (a notice, a Settings row) is on screen without a press. Without it the window has not looked
    * yet, and stays so: the gallery's provider makes no automatic checks of its own. */
   checked?: boolean;
   /** What an install does: `progress` is reported first, then it ends as `ends` says, by default with the update
    * in place; `"pending"` is a download that never finishes and `"gone"` the shell having nothing to install any more. */
-  install?: { progress?: UpdateProgress; ends?: "pending" | "gone" | { error: string } };
+  install?: { progress?: UpdateProgress; ends?: "pending" | "gone" };
 }
 
 export interface Scenario extends Fixture {
@@ -111,16 +109,13 @@ export interface Scenario extends Fixture {
   /** What the shell answers about the macOS privacy grants, for the Permissions section.
    * `"unreadable"` is a shell that refuses the read; without this the browser platform's own
    * answer stands, which is the section's "only in the macOS app" line. A stub `request` answers
-   * that the permission was not granted (unless the scenario gives a `macosRequestError`), which is
+   * that the permission was not granted, which is
    * how a scenario reaches the row's System Settings guidance — nothing in a browser can raise a
    * real prompt. */
   macosPermissions?: MacosPermissionsStatus | "unreadable";
   /** With `macosPermissions`, the reason the system gives for not opening the System Settings pane a row's
    * Open System Settings points at; without it the pane opens (nothing is shown). */
   macosSettingsOpenError?: string;
-  /** With `macosPermissions`, the reason a row's Grant request call fails with, so the request itself is
-   * rejected; without it the request is answered as not granted. */
-  macosRequestError?: string;
   /** The platform has what the desktop app's window has, so a view that lists or uses it shows the app's: the
    * window chrome (the `chrome=1` of the frame URL, which a view that exists only in the app cannot leave to
    * the address) and the native menu bar. */
@@ -130,8 +125,8 @@ export interface Scenario extends Fixture {
   backgroundRun?: boolean;
   /** The platform has the macOS app's notifications: the system manages them, so the app keeps no
    * switch of its own and the Settings row links to System Settings instead. Nothing is shown or
-   * opened; `{ openError }` is the reason the system gives for not opening the pane. */
-  systemNotifications?: boolean | { openError: string };
+   * opened. */
+  systemNotifications?: boolean;
   /** Opening an external link fails with this text, as a refused desktop opener does. Without it the browser
    * platform's own opener stands and opens the address in a new tab. */
   externalLinkError?: string;

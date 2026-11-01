@@ -48,15 +48,8 @@ const crowdState = snapshotState({
   ],
 });
 // What the quit confirmation is about: sessions that are idle hold a quit up no more than an idle
-// shell does, so `quitIdleState` is held up by its busy shell alone, and `quitBusyState` by that and a
-// working session.
+// shell does, so `quitBusyState` is held up by a busy shell and a working session.
 const quitShells = [shellTerminalOf("sh-idle", website, "zsh", 0), shellTerminalOf("sh-dev", website, "pnpm dev", 1, { busy: true })];
-const quitIdleState = snapshotState({
-  consoles: [main],
-  projects: [website],
-  sessions: [sessionOf("s-web-2", main.id, website.id, "Update the dependencies", "idle")],
-  shellTerminals: quitShells,
-});
 const quitQuietState = snapshotState({
   consoles: [main],
   projects: [website],
@@ -253,22 +246,12 @@ export const layoutScenarios: Scenario[] = [
     ],
   },
   {
-    id: "layout-quit-terminals",
-    group: GROUP,
-    category: "normal",
-    title: "Quit held up by a terminal",
-    description:
-      "Quitting while a shell terminal is running something, with every session idle: the dialog is titled \"Quit Octoboard\" (the app name is plain text in the title) and says some terminals are still running something and that quitting ends it. It makes no mention of sessions, which an idle session never holds a quit up for, nor of resuming, which a terminal cannot.",
-    state: quitIdleState,
-    quitRequested: true,
-  },
-  {
     id: "layout-quit-sessions-and-terminals",
     group: GROUP,
     category: "normal",
     title: "Quit held up by a session and a terminal",
     description:
-      "Quitting with a working session and a busy shell terminal: one dialog says both are still running, that the sessions are interrupted and can each be resumed next time, and that what the terminals run is ended.",
+      "Quitting with a working session and a busy shell terminal: one dialog says both are still running, that the sessions are interrupted and can each be resumed next time, and that what the terminals run is ended. A quit held up by a terminal alone words only that half.",
     state: quitBusyState,
     quitRequested: true,
   },
@@ -278,7 +261,7 @@ export const layoutScenarios: Scenario[] = [
     category: "exceptional",
     title: "Quit that did not end the app",
     description:
-      "Nothing holds the quit up, so it goes straight to the shell, which refuses: the error alert dialog is titled \"Could not quit\" and says Octoboard kept running instead of ending and to try quitting again; the shell's text is behind Error details, closed, with the Report issue guidance and button of an unexpected failure.",
+      "Nothing holds the quit up, so it goes straight to the shell, which refuses: the error alert dialog is titled \"Could not quit\" and says Octoboard kept running instead of ending and to try quitting again; the shell's text is behind Error details, closed, with the Report issue guidance and button of an unexpected failure. A restart that the shell refuses, and a permission request that does not go through, use the same alert with their own sentence.",
     state: quitQuietState,
     quitRequested: true,
     exitFailure: "the application is already shutting down",

@@ -150,7 +150,7 @@ const deleteAll: Scenario = {
   group: GROUP,
   category: "normal",
   title: "Delete all archived console sessions",
-  description: "A warning modal whose plain title is Delete archived sessions and whose body opens with the count of archived sessions deleted permanently. Plain options come first: the force-remove option counting the worktree with uncommitted changes and the unmerged branch left by the sessions deleted (Details closed, unchecked), then the unchecked option to also move the agents' own session records to the Trash with its short note. Under them stands the plain line \"1 archived session under a console session in the view is deleted too\", with nothing else under it yet. The confirming button reads \"Delete all\".",
+  description: "A warning modal whose plain title is Delete archived sessions and whose body opens with the count of archived sessions deleted permanently. Plain options come first: the force-remove option counting the worktree with uncommitted changes and the unmerged branch left by the sessions deleted (Details closed, unchecked), then the unchecked option to also move the agents' own session records to the Trash with its short note. Under them stands the plain line \"1 archived session under a console session in the view is deleted too\", with nothing else under it yet. The confirming button reads \"Delete all\". Ticking the agent-records Trash option alone adds only its consequence line under the options.",
   sessionBranches: [
     worktreeItemOf(project, deleteAllState.sessions.get("s-under-hub")!, "feat/hub-handoff", "/Users/dev/worktrees/search-api-hub-handoff"),
     branchItemOf(project, deleteAllState.sessions.get("s-under-hub")!, "fix/stale-cache"),
@@ -302,16 +302,6 @@ export const archiveScenarios: Scenario[] = [
     ],
   },
   deleteAll,
-  {
-    ...deleteAll,
-    id: "archive-delete-all-trash",
-    title: "Delete all archived console sessions, Trash option ticked",
-    description: "Only the agents' records Trash option is ticked; the force-remove option stays unchecked. The confirming button still reads \"Delete all\", and a consequence line saying the records go to the Trash now follows the plain line under the options.",
-    steps: [
-      ...deleteAll.steps!,
-      (ui) => ui.press(ui.t("dialog.deleteArchived.trashRecords")),
-    ],
-  },
   {
     id: "archive-emptied",
     group: GROUP,

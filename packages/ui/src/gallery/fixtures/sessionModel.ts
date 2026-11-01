@@ -2,7 +2,7 @@ import { AGENT_LABEL } from "../../agents/agents";
 import type { Session } from "../../protocol";
 import { describing, type Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
-import { accountOf, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState, switchingAccount } from "../../fixtures/builders";
+import { accountOf, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState } from "../../fixtures/builders";
 import type { FixtureError } from "../../fixtures/sampleFiles";
 
 const GROUP = "Sidebar sessions";
@@ -10,8 +10,7 @@ const GROUP = "Sidebar sessions";
 const console_ = consoleOf("c-1", "Main");
 const web = projectOf("p-1", console_.id, "Website");
 
-// A running session that chose its own model and effort, one interrupted that chose only a model, one still
-// launching and one in the middle of an account switch.
+// A running session that chose its own model and effort, and one still launching.
 const running = sessionOf("s-model-running", console_.id, web.id, "Rework the result ranking", "idle", {
   started_at: minutesAgo(50),
   model: "sonnet",
@@ -19,27 +18,17 @@ const running = sessionOf("s-model-running", console_.id, web.id, "Rework the re
   observed_model: "claude-sonnet-5-5",
   observed_effort: "medium",
 });
-const interrupted = sessionOf("s-model-interrupted", console_.id, web.id, "Fix the summary layout", "interrupted", { started_at: minutesAgo(80), model: "sonnet" });
 const starting = sessionOf("s-model-starting", console_.id, web.id, "Set up the search index", "starting", { started_at: minutesAgo(1) });
-const switching = sessionOf("s-model-switching", console_.id, web.id, "Check the index sizes", "idle", { started_at: minutesAgo(30), model: "sonnet", effort: "medium" });
-// A running session nothing has been typed into yet, and one that is showing a prompt and waiting for an answer.
-const fresh = sessionOf("s-model-fresh", console_.id, web.id, "Plan the next release", "idle", { started_at: minutesAgo(2), has_conversation: false, model: "sonnet", effort: "medium" });
-const waiting = sessionOf("s-model-waiting", console_.id, web.id, "Approve the index rebuild", "waiting_user", { started_at: minutesAgo(20), model: "sonnet", effort: "medium" });
 
-const state = snapshotState({ consoles: [console_], projects: [web], sessions: [running, interrupted, starting, switching] });
+const state = snapshotState({ consoles: [console_], projects: [web], sessions: [running, starting] });
 const menuState = {
   ...state,
   settings: { ...state.settings!, accounts: [accountOf("a-model-work", "claude", "Work", "/Users/dev/.claude-work")] },
 };
-const switchingState = switchingAccount(menuState, [switching.id]);
 
 // The session chose its model and effort and its records have not named any yet, as right after a change.
 const chosen = { ...running, model: "opus", effort: "high", observed_model: undefined, observed_effort: undefined };
 const chosenState = snapshotState({ consoles: [console_], projects: [web], sessions: [chosen] });
-const freshState = snapshotState({ consoles: [console_], projects: [web], sessions: [fresh] });
-// The running session beside the fresh one, so that deleting the fresh one leaves the window with a session.
-const beside = snapshotState({ consoles: [console_], projects: [web], sessions: [running, fresh] });
-const waitingState = snapshotState({ consoles: [console_], projects: [web], sessions: [waiting] });
 
 const openMenu = (title: string) => (ui: Ui) => ui.press(ui.t("sidebar.session.actions", { title }));
 const openDialog = (title: string) => [openMenu(title), (ui: Ui) => ui.press(ui.t("sidebar.session.changeModel"))];
@@ -67,11 +56,6 @@ const didNotStop: FixtureError = {
   params: { session: running.id },
   message: "the session's process did not end in time",
 };
-const didNotComeUp: FixtureError = {
-  code: "model_change_did_not_come_up",
-  params: { session: running.id },
-  message: "the session ended as soon as it was relaunched with the new model, so it keeps the model and effort it had",
-};
 
 // The agent no longer lists the model the dialog sent, as can be so once its list changed behind the dialog.
 const notOffered: FixtureError = {
@@ -83,15 +67,6 @@ const notOffered: FixtureError = {
 const openedFromAlert = [...changeToOpus, (ui: Ui) => ui.press(ui.t("sidebar.session.changeModel"))];
 
 export const sessionModelScenarios: Scenario[] = [
-  {
-    id: "sidebar-session-menu-switching-account",
-    group: GROUP,
-    category: "normal",
-    title: "Menu of a session switching its account, Change model disabled",
-    description: "Change model, with its chip icon, is greyed out with no reason under its name, as is Hand off, since the daemon refuses both until the switch ends; it stands after Copy session ID, before Switch account and Hand off.",
-    state: switchingState,
-    steps: [openMenu(switching.title)],
-  },
   {
     id: "focus-session-menu-change-model",
     group: "Focus mode",
@@ -107,18 +82,9 @@ export const sessionModelScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Change the model of a running session",
-    description: "The body names the session and says it restarts to take the new values, keeps its conversation, and that a turn in progress is cut off and continued where that is safe. Model and Reasoning effort start on what the session chose, Sonnet and medium, and Change model is greyed out until one of them differs; the note says a changed value is kept for this session from now on.",
+    description: "The body names the session and says it restarts to take the new values, keeps its conversation, and that a turn in progress is cut off and continued where that is safe. Model and Reasoning effort start on what the session chose, Sonnet and medium, and Change model is greyed out until one of them differs; the note says a changed value is kept for this session from now on. A session that is not running, one with no conversation yet and one waiting for an answer word the body differently in the same dialog.",
     state,
     steps: openDialog(running.title),
-  },
-  {
-    id: "dialog-session-model-interrupted",
-    group: GROUP,
-    category: "normal",
-    title: "Change the model of an interrupted session",
-    description: "The body says the session is not running and takes the values the next time it is resumed, with no word of a restart. Model starts on Sonnet and Reasoning effort is empty, since the session chose none.",
-    state,
-    steps: openDialog(interrupted.title),
   },
   {
     id: "dialog-session-model-models-loading",
@@ -131,49 +97,13 @@ export const sessionModelScenarios: Scenario[] = [
     steps: openDialog(running.title),
   },
   {
-    id: "dialog-session-model-fresh-conversation",
-    group: GROUP,
-    category: "normal",
-    title: "Change the model of a running session with no conversation yet",
-    description: "The body says the session restarts to take the values with a fresh conversation, as nothing has been typed into it yet, in place of the sentence about keeping its conversation. Nothing is said of a prompt.",
-    state: freshState,
-    steps: openDialog(fresh.title),
-  },
-  {
-    id: "dialog-session-model-waiting-prompt",
-    group: GROUP,
-    category: "normal",
-    title: "Change the model of a session waiting for the user",
-    description: "After the sentence about keeping its conversation the body adds that the session is waiting for you and restarting ends the prompt it is showing.",
-    state: waitingState,
-    steps: openDialog(waiting.title),
-  },
-  {
-    id: "dialog-session-model-follows-session",
-    group: GROUP,
-    category: "normal",
-    title: "Change model keeps an edit while the session changes outside the dialog",
-    description: "Reasoning effort was moved to high in the dialog, then another window changed the session to Opus: Model has followed to Opus while Reasoning effort stays on the edited high, and Change model is enabled.",
-    state,
-    steps: editedThenChangedOutside({ model: "opus", observed_model: undefined, observed_effort: undefined }),
-  },
-  {
     id: "dialog-session-model-held-restarting",
     group: GROUP,
     category: "normal",
     title: "Change model held while the session restarts",
-    description: "The amber warning says the session is starting and asks you to wait before changing its model settings. Change model is greyed out although Reasoning effort differs at high; the dialog stays open on the edit.",
+    description: "The amber warning says the session is starting and asks you to wait before changing its model settings. Change model is greyed out although Reasoning effort differs at high; the dialog stays open on the edit. A session switching its account holds the dialog the same way, with its own warning.",
     state,
     steps: editedThenChangedOutside({ status: "starting" }),
-  },
-  {
-    id: "dialog-session-model-held-switching-account",
-    group: GROUP,
-    category: "normal",
-    title: "Change model held while the session switches accounts",
-    description: "The amber warning says the session is switching accounts and asks you to wait before changing its model settings. Change model is greyed out although Reasoning effort differs at high; the dialog stays open on the edit.",
-    state,
-    steps: editedThenChangedOutside({ switching_account: true }),
   },
   {
     id: "dialog-session-model-from-alert",
@@ -225,22 +155,9 @@ export const sessionModelScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Change model of a session archived while the dialog is open",
-    description: "Another window archived the session after the dialog opened, so the dialog has turned into a failure modal titled \"Cannot change the model\": it names the session in an inline chip and says it was archived, so its model cannot be changed, and to reopen it to change its model and reasoning effort, with OK as its only button.",
+    description: "Another window archived the session after the dialog opened, so the dialog has turned into a failure modal titled \"Cannot change the model\": it names the session in an inline chip and says it was archived, so its model cannot be changed, and to reopen it to change its model and reasoning effort, with OK as its only button. A session deleted meanwhile turns the dialog into the same modal.",
     state,
     steps: [...openDialog(running.title), (ui) => ui.archiveSession(running.id)],
-  },
-  {
-    id: "dialog-session-model-session-deleted",
-    group: GROUP,
-    category: "exceptional",
-    title: "Change model of a session deleted while the dialog is open",
-    description: "The session was never typed into and another window deleted it after the dialog opened, so the dialog has turned into a failure modal titled \"Cannot change the model\": it names the session in an inline chip and says it no longer exists, so its model cannot be changed, with OK as its only button. The chip reads Plan the release checklist, the name the session had just before it was deleted, rather than the name it had when the dialog opened.",
-    state: beside,
-    steps: [
-      ...openDialog(fresh.title),
-      (ui) => ui.daemonEvents({ type: "session_upserted", session: { ...fresh, title: "Plan the release checklist" } }),
-      (ui) => ui.daemonEvents({ type: "session_deleted", session: fresh.id }),
-    ],
   },
   {
     id: "dialog-session-model-did-not-stop",
@@ -253,21 +170,11 @@ export const sessionModelScenarios: Scenario[] = [
     steps: changeToOpus,
   },
   {
-    id: "dialog-session-model-did-not-come-up",
-    group: GROUP,
-    category: "exceptional",
-    title: "Model change refused, the relaunched session ended at once",
-    description: "The danger alert titled \"Could not change the model\" names the session and project on separate labelled lines, then says the session ended as soon as it was relaunched with the new model, so it keeps the model and reasoning effort it had, with the advice that the session is no longer running and Change model, shown as a chip, picks a model and effort the agent offers, or resuming keeps the ones it had. A secondary Change model button stands before OK. The dialog has closed before the alert; the session behind it reads as not running, with Resume offered, still on the model and effort it had.",
-    state,
-    sessionModelChanges: { [running.id]: didNotComeUp },
-    steps: changeToOpus,
-  },
-  {
     id: "dialog-session-model-not-offered",
     group: GROUP,
     category: "exceptional",
     title: "Model change refused, the agent does not offer the model",
-    description: "The danger alert titled \"Could not change the model\" names the session and project on separate labelled lines, then says opus is not a model that Claude Code offers, with the advice to use Change model, shown as a chip, to pick one it does offer, in place of the launch settings of a new session. A secondary Change model button stands before OK. The dialog has closed before the alert; the session behind it reads Idle with the model and effort it had.",
+    description: "The danger alert titled \"Could not change the model\" names the session and project on separate labelled lines, then says opus is not a model that Claude Code offers, with the advice to use Change model, shown as a chip, to pick one it does offer, in place of the launch settings of a new session. A secondary Change model button stands before OK. The dialog has closed before the alert; the session behind it reads Idle with the model and effort it had. A relaunched session that ended at once is refused in the same alert, with the same button.",
     state,
     sessionModelChanges: { [running.id]: notOffered },
     steps: changeToOpus,

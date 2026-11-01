@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom/client";
 
 import { LANGUAGES, LANGUAGE_NAMES, isLanguage, type Language } from "../i18n/languages";
+import { MARKDOWN_STYLES, parseMarkdownStyle, type MarkdownStyle } from "../viewer/markdownStyle";
 import { DEFAULT_SCENARIO, GROUPS, SCENARIOS } from "./fixtures";
 import { CATEGORIES } from "./fixtures/groups";
 import { DEFAULT_WIDTH, LIVE_CHANGE_EVENT, MIN_HEIGHT, type Scenario } from "./scenario";
@@ -20,6 +21,9 @@ const WIDTHS = [
  * dialog's body outgrows it, which is what a laptop screen does to the longer ones. */
 const HEIGHTS = [{ label: "Short", height: 480 }];
 
+/** The styles by their display names. */
+const MARKDOWN_STYLE_NAMES: Record<MarkdownStyle, string> = { tailwind: "Tailwind", github: "GitHub", newsprint: "Newsprint", latex: "LaTeX" };
+
 const MIN_WIDTH = 320;
 
 interface View {
@@ -32,6 +36,8 @@ interface View {
   height?: number;
   /** Likewise; otherwise the scenario's own, and otherwise released. */
   held?: boolean;
+  /** Likewise; otherwise the scenario's own, and otherwise the app's default. Offered for a file-viewer scenario only. */
+  markdownStyle?: MarkdownStyle;
 }
 
 function readView(): View {
@@ -46,14 +52,17 @@ function readView(): View {
     width: Number.isFinite(width) && width > 0 ? width : undefined,
     height: Number.isFinite(height) && height > 0 ? height : undefined,
     held: params.has("held") ? params.get("held") === "1" : undefined,
+    markdownStyle: MARKDOWN_STYLES.find((style) => style === params.get("markdown")),
   };
 }
 
 /** The parameters the shell page and the frame both take from a view: its scenario, theme and
- * language, and the shortcut modifier when the viewer chose it (the frame otherwise follows the scenario). */
+ * language, and the shortcut modifier and the Markdown style when the viewer chose them (the frame otherwise follows
+ * the scenario). */
 function sharedParams(view: View): URLSearchParams {
   const params = new URLSearchParams({ scenario: view.scenario, theme: view.theme, lang: view.language });
   if (view.held !== undefined) params.set("held", view.held ? "1" : "0");
+  if (view.markdownStyle) params.set("markdown", view.markdownStyle);
   return params;
 }
 
@@ -103,8 +112,9 @@ function SizeBox({
   );
 }
 
-/** The view that picking `scenario` reaches: a scenario carrying its own width, height or held modifier opens
- * at it, dropping whatever was chosen for an earlier one. Each is otherwise sticky across the list. */
+/** The view that picking `scenario` reaches: a scenario carrying its own width, height or held modifier, or a viewer
+ * scenario carrying its own Markdown style, opens at it, dropping whatever was chosen for an earlier one. Each is
+ * otherwise sticky across the list. */
 function viewOf(view: View, scenario: Scenario): View {
   return {
     ...view,
@@ -112,6 +122,7 @@ function viewOf(view: View, scenario: Scenario): View {
     width: scenario.width ? undefined : view.width,
     height: scenario.height ? undefined : view.height,
     held: scenario.held ? undefined : view.held,
+    markdownStyle: scenario.viewer && scenario.preferences?.markdownStyle ? undefined : view.markdownStyle,
   };
 }
 
@@ -130,7 +141,9 @@ function Gallery(): React.ReactElement {
     window.history.replaceState(null, "", viewQuery(view));
   }, [view]);
 
-  const frameQuery = `?${sharedParams({ ...view, scenario: scenario.id })}`;
+  // Only a file-viewer scenario takes the Markdown style, so the frame's address leaves it out for any other; the
+  // shell's own address keeps it, so that a reload or a new tab carries the choice on.
+  const frameQuery = `?${sharedParams({ ...view, scenario: scenario.id, markdownStyle: scenario.viewer ? view.markdownStyle : undefined })}`;
   // The frame's URL says nothing of its width, which is only the iframe's size, so the width goes into its key: the
   // steps find the sidebar's drawer, a panel or a docked layout by the width the frame is, and must run again at a new
   // one.
@@ -240,6 +253,20 @@ function Gallery(): React.ReactElement {
               </button>
             ))}
           </div>
+          {scenario.viewer && (
+            <div className="group" role="group" aria-label="Markdown style">
+              Markdown style
+              {MARKDOWN_STYLES.map((style) => (
+                <button
+                  key={style}
+                  aria-pressed={(view.markdownStyle ?? scenario.preferences?.markdownStyle ?? parseMarkdownStyle(null)) === style}
+                  onClick={() => update({ markdownStyle: style })}
+                >
+                  {MARKDOWN_STYLE_NAMES[style]}
+                </button>
+              ))}
+            </div>
+          )}
           {scenario.liveChanges && (
             <div className="group" role="group" aria-label="Live changes">
               Live changes

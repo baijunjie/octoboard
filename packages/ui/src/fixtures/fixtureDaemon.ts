@@ -870,7 +870,6 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
             const message = `\`${unsupported}\` has no Claude compatibility setting; it applies to codex and grok`;
             return fail({ code: "internal_error", params: { detail: message }, message });
           }
-          if (body.claude_compatibility !== undefined && scenario.claudeCompatibilityError) return fail(scenario.claudeCompatibilityError);
           const current = store.getState();
           let cloneDir = current.settings.default_clone_dir;
           if (body.default_clone_dir !== undefined) {

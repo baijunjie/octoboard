@@ -1,11 +1,15 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it, onTestFinished, vi } from "vitest";
+import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { enter, openTooltip, press, withFakeTimers } from "../components/hint/tooltipTestSupport";
 import { sessionOf } from "../fixtures/builders";
 import type { Session } from "../protocol";
+import type { Binding } from "../shortcuts/binding";
+import { BindingKbd } from "../shortcuts/ShortcutKbd";
+import { defaultBinding } from "../shortcuts/commands";
+import { restoreAllBindings, setBinding } from "../shortcuts/store";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { SessionActions } from "./SessionActions";
 import type { SidebarHandlers } from "./types";
@@ -38,6 +42,11 @@ function mount(session: Session, inspect: Daemon["request"]) {
   render(session);
   return { container, daemon, handlers, render };
 }
+
+afterEach(() => {
+  restoreAllBindings();
+  localStorage.clear();
+});
 
 const unused = sessionOf("unused", "console", "project", "Unused", "archived", { has_conversation: false });
 const shortcut = (container: HTMLElement, label: string) => container.querySelector<HTMLButtonElement>(`button[aria-label^="${label} "]`);
@@ -109,4 +118,37 @@ it.each([true, false])("gives the Copy session ID row's ID its full text as a to
   // A press on the ID line is a press of the item, which still copies.
   press(id, "mouse");
   expect(handlers.onCopySessionId).toHaveBeenCalledExactlyOnceWith(session);
+});
+
+it("shows the keys the user set on the menu items, and the default on an item left alone", async () => {
+  const changed = {
+    lock: { code: "KeyK", primary: true, shift: true },
+    pin: { code: "KeyU", primary: true, shift: true },
+    focusMode: { code: "KeyG", primary: true, shift: true },
+    copyId: { code: "KeyI", primary: true, shift: true },
+  } as const;
+  for (const [command, binding] of Object.entries(changed)) expect(setBinding(command as keyof typeof changed, binding)).toBeUndefined();
+  const session = { ...unused, status: "idle" as const, has_conversation: true, role: "console" as const };
+  const { container } = mount(session, async () => ({ type: "ack", id: null }));
+  press(container.querySelector<HTMLElement>('button[aria-label^="Actions for session"]')!, "mouse");
+  await act(async () => {});
+
+  // The key caps as the menu draws them for a binding, rendered on their own to compare against.
+  const capsOf = (binding: Binding) => {
+    const host = document.body.appendChild(document.createElement("div"));
+    const hostRoot = createRoot(host);
+    act(() => hostRoot.render(<BindingKbd binding={binding} />));
+    const text = host.textContent;
+    act(() => hostRoot.unmount());
+    host.remove();
+    return text;
+  };
+  const shown = (label: string) => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((el) => el.textContent?.startsWith(label))!.querySelector("kbd")?.textContent;
+
+  expect(shown("Lock")).toBe(capsOf(changed.lock));
+  expect(shown("Pin")).toBe(capsOf(changed.pin));
+  expect(shown("Focus mode")).toBe(capsOf(changed.focusMode));
+  expect(shown("Copy session ID")).toBe(capsOf(changed.copyId));
+  expect(shown("Archive")).toBe(capsOf(defaultBinding("archive")));
+  for (const [command, binding] of Object.entries(changed)) expect(capsOf(binding)).not.toBe(capsOf(defaultBinding(command as keyof typeof changed)));
 });

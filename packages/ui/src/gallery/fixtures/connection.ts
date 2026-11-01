@@ -225,29 +225,9 @@ export const connectionScenarios: Scenario[] = [
     title: "A path with a line opens its code file in the viewer",
     description:
       "Clicking src/summary/Summary.tsx:42:7 opened Summary.tsx in the file viewer over the window, with the terminal left as it was behind it: line 42 is marked and scrolled into view, and the column is ignored. " +
-      "There are no Previous and Next buttons. At the far right of the header row, after the copy and wrap buttons, are File manager and Default application.",
+      "There are no Previous and Next buttons. At the far right of the header row, after the copy and wrap buttons, are File manager and Default application. A Markdown file opens in its source view the same way, and so does a file that exists only in a side worktree.",
     ...PATH_LINK_SCENARIO,
     steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("src/summary/Summary.tsx:42:7")],
-  },
-  {
-    id: "terminal-path-link-markdown",
-    group: TERMINAL,
-    category: "normal",
-    title: "A path with a line opens its Markdown file as source",
-    description: "Clicking docs/summary-notes.md:13 opened the document in its source view, not rendered, with line 13 marked and scrolled into view.",
-    ...PATH_LINK_SCENARIO,
-    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("docs/summary-notes.md:13")],
-  },
-  {
-    id: "terminal-path-link-worktree",
-    group: TERMINAL,
-    category: "normal",
-    title: "A path inside a side worktree opens in the viewer",
-    description:
-      "Clicking the side worktree's src/ui.ts:7 opened a file that exists only there, with line 7 marked: its first line says it is the experimental layout in the side worktree. " +
-      "The project's own folder has no src/ui.ts.",
-    ...PATH_LINK_SCENARIO,
-    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("src/ui.ts:7")],
   },
   {
     id: "terminal-path-link-directory",
@@ -303,22 +283,10 @@ export const connectionScenarios: Scenario[] = [
     title: "A path to a file removed since the link was drawn",
     description:
       "Clicking src/summary/Draft.ts, which the daemon found when the output was drawn but which is gone now, opened the error alert instead of the viewer, titled \"Could not open the path\" and saying src/summary/Draft.ts does not exist any more. " +
-      "Its remedy says the file may have been moved, renamed or deleted, and to find it in the project's files and try again from there; it does not offer Browse.",
+      "Its remedy says the file may have been moved, renamed or deleted, and to find it in the project's files and try again from there; it does not offer Browse. A folder that is gone, or one that is in more than one worktree, a program, or a file others can change, being refused uses the same alert with its own sentence and remedy.",
     ...PATH_LINK_SCENARIO,
     pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/Users/dev/code/website/src/summary/Draft.ts": { view: { path: "src/summary/Draft.ts" } } },
     steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("src/summary/Draft.ts")],
-  },
-  {
-    id: "terminal-path-link-removed-folder",
-    group: TERMINAL,
-    category: "exceptional",
-    title: "A project folder without an entry file removed since the link was drawn",
-    description:
-      "Clicking docs/plans/summary-layout, a folder the daemon found when the output was drawn but which is gone now, and which had no README to open in the viewer, opened the error alert instead of the file manager, titled \"Could not open the path\" and saying the path does not exist any more. " +
-      "Its remedy says it may have been moved, renamed or deleted, and to find it in the project's files and try again from there; it does not offer Browse.",
-    ...PATH_LINK_SCENARIO,
-    pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/Users/dev/code/website/docs/plans/summary-layout": { kind: "directory", gone: true } },
-    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("docs/plans/summary-layout")],
   },
   {
     id: "terminal-path-link-removed-outside",
@@ -327,57 +295,9 @@ export const connectionScenarios: Scenario[] = [
     title: "A path outside the project removed since the link was drawn",
     description:
       "Clicking /private/tmp/octoboard/scratchpad/icon/sheet3.png, a temporary file the daemon found when the output was drawn but which is gone now, opened the error alert instead of launching anything, titled \"Could not open the path\" and saying the path does not exist any more. " +
-      "It has no remedy line: unlike a project file, there are no project files to find it in.",
+      "It has no remedy line: unlike a project file, there are no project files to find it in. A path that is neither a file nor a folder, or that leads outside the project and the temporary folders, reads alike.",
     ...PATH_LINK_SCENARIO,
     pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/private/tmp/octoboard/scratchpad/icon/sheet3.png": { kind: "file", gone: true } },
-    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("/private/tmp/octoboard/scratchpad/icon/sheet3.png")],
-  },
-  {
-    id: "terminal-path-link-refused-ambiguous",
-    group: TERMINAL,
-    category: "exceptional",
-    title: "A folder now in more than one worktree",
-    description:
-      "Clicking docs/plans/summary-layout, a folder with no README to open in the viewer, which the daemon found in one place when the output was drawn but which another worktree of the project holds too now, opened the error alert instead of the file manager, titled \"Could not open the path\" and saying the path is in the project's folder in more than one worktree, so it is not opened. " +
-      "Its remedy says to find the one meant in the project's files and open it from there.",
-    ...PATH_LINK_SCENARIO,
-    pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/Users/dev/code/website/docs/plans/summary-layout": { kind: "directory", refused: "ambiguous" } },
-    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("docs/plans/summary-layout")],
-  },
-  {
-    id: "terminal-path-link-refused-launchable",
-    group: TERMINAL,
-    category: "exceptional",
-    title: "A file that became a program, refused on the host",
-    description:
-      "Clicking bin/helper, which was not a program when the output was drawn but is one now: the viewer found nothing it could show in it, so the click went on to the host, and the error alert opened instead of launching it, titled \"Could not open the path\" and saying it is something the system would run, so it is not opened from a link. " +
-      "Its remedy says that to run it, the user opens it from the file manager themself.",
-    ...PATH_LINK_SCENARIO,
-    pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/Users/dev/code/website/bin/helper": { kind: "file", refused: "launchable", view: { path: "bin/helper" } } },
-    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("bin/helper")],
-  },
-  {
-    id: "terminal-path-link-refused-not-private",
-    group: TERMINAL,
-    category: "exceptional",
-    title: "A temporary file that others can change",
-    description:
-      "Clicking /private/tmp/octoboard/scratchpad/icon/sheet3.png, a temporary file that was not changeable by other users of the computer when the output was drawn but is now, opened the error alert instead of opening it with its default application, titled \"Could not open the path\" and saying it can be changed by other users of this machine, so it is not opened from a link. " +
-      "Its remedy says that if the user trusts it, they open it from the file manager themself.",
-    ...PATH_LINK_SCENARIO,
-    pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/private/tmp/octoboard/scratchpad/icon/sheet3.png": { kind: "file", refused: "not_private" } },
-    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("/private/tmp/octoboard/scratchpad/icon/sheet3.png")],
-  },
-  {
-    id: "terminal-path-link-refused-not-openable",
-    group: TERMINAL,
-    category: "exceptional",
-    title: "A temporary path that is neither a file nor a folder",
-    description:
-      "Clicking /private/tmp/octoboard/scratchpad/icon/sheet3.png, which was a file when the output was drawn but now names something that is neither a file nor a folder (a socket, say), opened the error alert instead of opening anything, titled \"Could not open the path\" and saying it is not a file or folder, so it cannot be opened. " +
-      "It has no remedy line: the sentence says it all.",
-    ...PATH_LINK_SCENARIO,
-    pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/private/tmp/octoboard/scratchpad/icon/sheet3.png": { kind: "file", refused: "not_a_file_or_folder" } },
     steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("/private/tmp/octoboard/scratchpad/icon/sheet3.png")],
   },
   {
@@ -390,18 +310,6 @@ export const connectionScenarios: Scenario[] = [
       "It has no remedy line. The system's own text, Input/output error (os error 5), is only in the Error details disclosure, closed here.",
     ...PATH_LINK_SCENARIO,
     pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/private/tmp/octoboard/scratchpad/icon/sheet3.png": { kind: "file", refused: "unreadable", detail: "Input/output error (os error 5)" } },
-    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("/private/tmp/octoboard/scratchpad/icon/sheet3.png")],
-  },
-  {
-    id: "terminal-path-link-refused-outside",
-    group: TERMINAL,
-    category: "exceptional",
-    title: "A temporary path redirected outside the project and the system’s temporary folders",
-    description:
-      "Clicking /private/tmp/octoboard/scratchpad/icon/sheet3.png, a temporary file that was inside the temporary folders when the output was drawn but now leads outside them and the project, opened the error alert instead of opening anything, titled \"Could not open the path\" and saying it leads outside the project and the system’s temporary folders, so it is not opened from a link. " +
-      "It has no remedy line.",
-    ...PATH_LINK_SCENARIO,
-    pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/private/tmp/octoboard/scratchpad/icon/sheet3.png": { kind: "file", outside: true } },
     steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("/private/tmp/octoboard/scratchpad/icon/sheet3.png")],
   },
   {

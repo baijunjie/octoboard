@@ -11,7 +11,6 @@ import type { Language } from "../../i18n/languages";
 import type { FileContent, LineStats } from "../../protocol";
 import { RENDER_BUDGETS } from "../../viewer/budgets";
 import { bodyFromFileContent, type ChangeBodies, ChangeBodiesError, type ViewerBody, type ViewerChangeSide, type ViewerSubject } from "../../viewer/content";
-import { formatFileSize } from "../../format/fileSize";
 import { describing, type Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
 import { IMAGES } from "../../fixtures/viewerImages";
@@ -1089,7 +1088,7 @@ What the link in this note scrolls to.
 `;
 type Refusal = { message: string; code: string; params?: Record<string, string> };
 
-function failure(id: string, title: string, description: string, slot: "file" | "conflict" | "change", path: string, refusal: Refusal | ((t: Translate, language: Language) => string), steps?: Scenario["steps"]): Scenario {
+function failure(id: string, title: string, description: string, slot: "file" | "conflict" | "change", path: string, refusal: Refusal, steps?: Scenario["steps"]): Scenario {
   return {
     id, group: GROUP, category: "exceptional", title, description, steps,
     viewer: {
@@ -1097,7 +1096,7 @@ function failure(id: string, title: string, description: string, slot: "file" | 
         const { DaemonRequestError } = await import("../../daemon-client");
         const { displayWirePath } = await import("../../format/wirePath");
         const t: Translate = (key, ...args) => format(language, key, ...args);
-        const message = typeof refusal === "function" ? refusal(t, language) : new DaemonRequestError(refusal.message, refusal.code, { path: displayWirePath(path), ...refusal.params });
+        const message = new DaemonRequestError(refusal.message, refusal.code, { path: displayWirePath(path), ...refusal.params });
         switch (slot) {
           case "file":
             return [{ key: `live:${path}`, path, host: hostOf(path), content: { state: "error", message } }];
@@ -1112,18 +1111,11 @@ function failure(id: string, title: string, description: string, slot: "file" | 
 }
 
 const failureScenarios: Scenario[] = [
-  failure("viewer-file-error-not-found", "Failed read: file gone", "The explanation says this file does not exist any more without repeating the path the header names.", "file", "docs/plans/20261020-ui-standard-audit/alert-verification.md", { message: "docs/plans/20261020-ui-standard-audit/alert-verification.md does not exist any more.", code: "file_not_found" }),
-  failure("viewer-file-error-invalid-path", "Failed read: name not valid in the project", "The header shows the name that is not valid UTF-8 in its display form; the explanation refers to it as this path rather than repeating it.", "file", "docs/%FFreport%2520final.md", { message: "docs/�report%20final.md is not a valid path in this project.", code: "invalid_path" }),
+  failure("viewer-file-error-not-found", "Failed read: file gone", "The explanation says this file does not exist any more without repeating the path the header names. A name that is not valid UTF-8, a link that leads outside the project, a file that is not a regular file and a file that is too large (with its size, or without it) put their own sentence in the same pane.", "file", "docs/plans/20261020-ui-standard-audit/alert-verification.md", { message: "docs/plans/20261020-ui-standard-audit/alert-verification.md does not exist any more.", code: "file_not_found" }),
   failure("viewer-file-error-permission", "Failed read: permission refused", "The path is left to the header: the explanation says only that Octoboard is not allowed to read this file, and the system's reason (Permission denied, os error 13) is on a surface of its own under the sentence, not in it.", "file", "config/secrets.env", { message: "Octoboard is not allowed to read config/secrets.env: Permission denied (os error 13)", code: "permission_denied", params: { detail: "Permission denied (os error 13)" } }),
-  failure("viewer-file-error-outside-scope", "Failed read: link leads outside the project", "The explanation says the file leads outside this project without repeating its path.", "file", "docs/shared-notes.md", { message: "docs/shared-notes.md leads outside this project, so it is not shown.", code: "outside_scope" }),
-  failure("viewer-file-error-not-regular", "Failed read: not a regular file", "A named pipe: the explanation says this is not a regular file without repeating its path.", "file", "logs/live.pipe", { message: "logs/live.pipe is not a regular file.", code: "unsupported_file_type", params: { file_type: "fifo" } }),
-  failure("viewer-file-error-folder-denied", "Failed read: project folder refused", "The refusal names the project's folder, not this file, so its absolute path stays in the explanation; the system's reason (Operation not permitted, os error 1) is on a surface of its own under the sentence, not in it.", "file", "src/session.ts", { message: "Octoboard is not allowed to read /Users/dev/Projects/search-api: Operation not permitted (os error 1)", code: "permission_denied", params: { path: "/Users/dev/Projects/search-api", detail: "Operation not permitted (os error 1)" } }),
-  failure("viewer-file-error-too-large", "Failed read: file too large", "The explanation gives the file's size and the most that can be opened here, without repeating the path the header names.", "file", "data/export.csv", (t, language) => t("browser.error.fileTooLarge", { size: formatFileSize(language, 5_242_880), max: formatFileSize(language, 4_194_304) })),
-  failure("viewer-file-error-too-large-no-size", "Failed read: file too large, size unknown", "Without the file's size, the explanation gives only the most that can be opened here.", "file", "data/stream.log", (t, language) => t("browser.error.fileTooLargeNoSize", { max: formatFileSize(language, 4_194_304) })),
-  failure("viewer-file-error-source-unavailable", "Failed read: worktree folder unavailable", "The folder the read is scoped to is gone, so its absolute path stays in the explanation; the system's reason (No such file or directory, os error 2) is on a surface of its own under the sentence, not in it.", "file", "src/session.ts", { message: "The folder /Users/dev/Projects/search-api-review cannot be read: No such file or directory (os error 2)", code: "source_unavailable", params: { path: "/Users/dev/Projects/search-api-review", cause: "missing", detail: "No such file or directory (os error 2)" } }),
+  failure("viewer-file-error-source-unavailable", "Failed read: worktree folder unavailable", "The folder the read is scoped to is gone, so its absolute path stays in the explanation; the system's reason (No such file or directory, os error 2) is on a surface of its own under the sentence, not in it. A project folder that is refused (access denied) is worded for its cause, in the same place and with the same surface.", "file", "src/session.ts", { message: "The folder /Users/dev/Projects/search-api-review cannot be read: No such file or directory (os error 2)", code: "source_unavailable", params: { path: "/Users/dev/Projects/search-api-review", cause: "missing", detail: "No such file or directory (os error 2)" } }),
   failure("viewer-conflict-error-not-found", "Conflict whose file on disk is gone", "The pane holds the empty-state failure \"Could not open this file\" with the explanation that this file does not exist any more, without repeating the path. The header has no marks: the title's conflict chip is what says the path is in conflict.", "conflict", "docs/merge.md", { message: "docs/merge.md does not exist any more.", code: "file_not_found" }),
-  failure("viewer-change-error-unmerged", "Change read: conflicting index entry", "The change's explanation says the file is in conflict without repeating its path.", "change", "src/merge.ts", { message: "src/merge.ts is not a regular file.", code: "unsupported_file_type", params: { file_type: "unmerged" } }),
-  failure("viewer-change-error-changing", "Change read: still changing", "A failure the app words itself, with no code behind it, is shown as it is.", "change", "src/session.ts", (t) => t("git.error.changeChanging")),
+  failure("viewer-change-error-unmerged", "Change read: conflicting index entry", "The change's explanation says the file is in conflict without repeating its path. A change that is still changing is worded by the app in the same place.", "change", "src/merge.ts", { message: "src/merge.ts is not a regular file.", code: "unsupported_file_type", params: { file_type: "unmerged" } }),
 ];
 
 const EXPAND_FAILURE_PATCH = `diff --git a/src/pipeline.ts b/src/pipeline.ts
@@ -1299,30 +1291,12 @@ export const viewerScenarios: Scenario[] = [
     viewer: { subjects: async () => [file("docs/limits.md", text("docs/limits.md", LIMITS()))] },
   },
   {
-    id: "viewer-document-github",
+    id: "viewer-document-styles",
     group: GROUP,
     category: "normal",
-    title: "Rendered document, GitHub style",
-    description: "The document in the GitHub style: rules under the first two heading levels, a fully ruled zebra table, a barred quote and tinted inline code. Scroll down to confirm the table, the code block, the formula, the diagram and the footnote take neither the text's tint nor its rules.",
+    title: "Rendered document in each Markdown style",
+    description: "One document, opening in the GitHub style; the Markdown style control loads it in Tailwind, GitHub, Newsprint or LaTeX. GitHub: rules under the first two heading levels, a fully ruled zebra table, a barred quote and tinted inline code; scroll down to confirm the table, the code block, the formula, the diagram and the footnote take neither the text's tint nor its rules. Newsprint: a serif page capped in width and centred, a centred title over a double rule, an italic second-level heading and an italic quote; the Wide window shows the margins either side. LaTeX: a serif page capped in width and centred, justified and hyphenated text, a centred title, a table ruled only at its head and foot and an indented quote; the long identifier in inline code stays unhyphenated, and the code block in the list item, the formula and the diagram are not justified or hyphenated.",
     preferences: { markdownStyle: "github" },
-    viewer: { subjects: styleSampleSubjects },
-  },
-  {
-    id: "viewer-document-newsprint",
-    group: GROUP,
-    category: "normal",
-    title: "Rendered document, Newsprint style",
-    description: "The document in the Newsprint style: a serif page capped in width and centred, a centred title over a double rule, an italic second-level heading and an italic quote. The Wide window shows the margins either side.",
-    preferences: { markdownStyle: "newsprint" },
-    viewer: { subjects: styleSampleSubjects },
-  },
-  {
-    id: "viewer-document-latex",
-    group: GROUP,
-    category: "normal",
-    title: "Rendered document, LaTeX style",
-    description: "The document in the LaTeX style: a serif page capped in width and centred, justified and hyphenated text, a centred title, a table ruled only at its head and foot and an indented quote. The long identifier in inline code stays unhyphenated, and the code block in the list item, the formula and the diagram are not justified or hyphenated.",
-    preferences: { markdownStyle: "latex" },
     viewer: { subjects: styleSampleSubjects },
   },
   {

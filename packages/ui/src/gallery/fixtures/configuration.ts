@@ -451,32 +451,6 @@ const SHORTCUTS_FILE = documentWith({
   pin: { code: "KeyK", primary: true, shift: true },
 });
 
-/** A document whose client had changed none: an empty `keyboard_shortcuts`, which puts every shortcut back to its default. */
-const SHORTCUTS_DEFAULT_FILE = documentWith({});
-
-/** The same shortcuts, as the device the document is imported on has them already. */
-const SHORTCUTS_HERE = {
-  focusMode: { code: "KeyG", primary: true, shift: true },
-  lock: { code: "KeyK", primary: true, shift: true },
-  newSession: { code: "KeyO", primary: true },
-} as const;
-
-/** `SETTINGS_FAILED_CONSOLES_RESULT`'s consoles with the settings applied this time. */
-const SETTINGS_APPLIED_RESULT = imported({
-  settings_applied: carriedSettings(WITH_SETTING_OFF.settings!),
-  consoles: SETTINGS_FAILED_CONSOLES_RESULT.consoles,
-});
-
-/** `WITH_SETTING_OFF`, its document also carrying a Claude compatibility choice this machine already has. */
-const WITH_SETTINGS_HERE: Omit<Inspection, "type"> = {
-  ...WITH_SETTING_OFF,
-  settings: {
-    ...WITH_SETTING_OFF.settings!,
-    claude_compatibility: { grok: true },
-    current_claude_compatibility: THIS_CLAUDE_COMPATIBILITY,
-  },
-};
-
 /** The machine's home directory, which a document's `~/` stands for. */
 const HOME = "/Users/dev";
 
@@ -728,10 +702,7 @@ export const configurationScenarios: Scenario[] = [
     title: "Export, with full project paths included",
     description: "With Include full project paths checked, its description changes to \"An import first looks for each project at its recorded full path.\" and a warning alert stands directly under the option, titled \"The file contains project paths.\": the description says the paths are on the machine running Octoboard, which may not be the device in use, and may reveal details such as a user name; a separate line beneath says \"Share the file only with people you trust.\" No mark sits beside the checkbox.",
     state,
-    steps: [
-      ...exportFromSettings,
-      (ui) => ui.press(ui.t("configuration.export.paths.include")),
-    ],
+    steps: [...exportFromSettings, toggleExportPaths],
   },
   {
     id: "configuration-export-everything-only",
@@ -752,31 +723,13 @@ export const configurationScenarios: Scenario[] = [
     steps: [...exportFromSettings, toggleExportAccounts],
   },
   {
-    id: "configuration-export-accounts-paths",
-    group: GROUP,
-    category: "normal",
-    title: "Export, with the accounts and full project paths included",
-    description: "With both Accounts and Include full project paths checked, the paths option reads \"An import first looks for each project at its recorded full path.\" and the warning alert under it is titled \"The file contains project paths.\", exactly as with Accounts unchecked: the choice and its warning are about project paths alone, because account directories are always exported.",
-    state,
-    steps: [...exportFromSettings, toggleExportAccounts, toggleExportPaths],
-  },
-  {
     id: "configuration-export-accounts-only",
     group: GROUP,
     category: "normal",
     title: "Export, only the accounts",
-    description: "With Do not export consoles chosen and Application settings unchecked, only Accounts is checked and Export stays available. Include full project paths is not shown at all, as no console is exported to have project paths: account directories are written whatever the choice.",
+    description: "With Do not export consoles chosen and Application settings unchecked, only Accounts is checked and Export stays available. Include full project paths is not shown at all, as no console is exported to have project paths: account directories are written whatever the choice. With Application settings and Accounts both unchecked, Export is unavailable.",
     state,
     steps: [...exportFromSettings, exportScope("none"), toggleExportSettings, toggleExportAccounts],
-  },
-  {
-    id: "configuration-export-nothing",
-    group: GROUP,
-    category: "normal",
-    title: "Export, with nothing selected",
-    description: "With Do not export consoles chosen and both Application settings and Accounts unchecked, Export is unavailable, and Include full project paths is not shown.",
-    state,
-    steps: [...exportFromSettings, exportScope("none"), toggleExportSettings],
   },
   {
     id: "configuration-export-saved",
@@ -804,19 +757,6 @@ export const configurationScenarios: Scenario[] = [
     ],
   },
   {
-    id: "configuration-export-save-failed",
-    group: GROUP,
-    category: "exceptional",
-    title: "Export, the file could not be written",
-    description: "The error alert dialog, over the export dialog and titled \"Could not export the configuration\", says only \"Could not save the file.\" and a remedy about writing (file permissions, a writable disk or another folder), nothing about reading the file. The system's own text, Permission denied (os error 13), appears nowhere in the sentences and sits only in the Error details disclosure, closed here: open it to read it in its block.",
-    state,
-    configuration: { saveError: "Permission denied (os error 13)" },
-    steps: [
-      ...exportFromSettings,
-      (ui) => ui.press(ui.t("configuration.export.submit")),
-    ],
-  },
-  {
     id: "configuration-import-choose",
     group: GROUP,
     category: "normal",
@@ -826,45 +766,6 @@ export const configurationScenarios: Scenario[] = [
     configuration: { file: "pending" },
     steps: [
       (ui) => ui.press(ui.t("welcome.importConfiguration")),
-      chooseFile,
-    ],
-  },
-  {
-    id: "configuration-import-read-failed",
-    group: GROUP,
-    category: "exceptional",
-    title: "Import, the file could not be read",
-    description: "The error alert dialog, over the import dialog and titled \"Could not import the configuration\", says only \"Could not read the file.\" and a remedy about reading (that the file still exists and Octoboard may read it, where to grant access, or choosing another file), nothing about writing or disk space. Compare the next two, whose remedy is to choose a different file. The system's own text, Permission denied (os error 13), sits only in the Error details disclosure, closed here.",
-    state,
-    configuration: { readError: "Permission denied (os error 13)" },
-    steps: [
-      ...importFromSettings,
-      chooseFile,
-    ],
-  },
-  {
-    id: "configuration-import-file-too-large",
-    group: GROUP,
-    category: "exceptional",
-    title: "Import, a file too large to be a configuration",
-    description: "The remedy asks for a configuration file exported by a compatible Octoboard version, not about access to the file, which was read.",
-    state,
-    configuration: { readError: { kind: "too_large" } },
-    steps: [
-      ...importFromSettings,
-      chooseFile,
-    ],
-  },
-  {
-    id: "configuration-import-file-not-text",
-    group: GROUP,
-    category: "exceptional",
-    title: "Import, a file that is not text",
-    description: "The remedy asks for a configuration file exported by a compatible Octoboard version, not about access to the file, which was read.",
-    state,
-    configuration: { readError: { kind: "not_text" } },
-    steps: [
-      ...importFromSettings,
       chooseFile,
     ],
   },
@@ -885,24 +786,9 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Import, not a configuration file",
+    description: "A file that is not a configuration, one of a version this one cannot read, one too large or not text, and an avatar that is too large or not an image refuse in the same error alert dialog over the import dialog, titled \"Could not import the configuration\", whose remedy asks for a file exported by a compatible Octoboard version (or another avatar), with no Error details.",
     state,
     configuration: refusal("notes.json", JSON.stringify({ hello: "world" }), failure("configuration_not_recognised", {}, "not a configuration document")),
-    steps: [
-      ...importFromSettings,
-      chooseFile,
-    ],
-  },
-  {
-    id: "configuration-import-refused-version",
-    group: GROUP,
-    category: "exceptional",
-    title: "Import, a version this one cannot read",
-    state,
-    configuration: refusal(
-      "octoboard-configuration.json",
-      JSON.stringify({ format: "octoboard-configuration", version: 2, consoles: [] }),
-      failure("configuration_version_unsupported", { version: "2", supported: "1" }, "version 2 is not supported"),
-    ),
     steps: [
       ...importFromSettings,
       chooseFile,
@@ -913,7 +799,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Import, a document that cannot be read",
-    description: "The refusal says only that the configuration file could not be read; the parser's text about the unexpected type sits only in the Error details disclosure, closed here.",
+    description: "The refusal says only that the configuration file could not be read; the parser's text about the unexpected type sits only in the Error details disclosure, closed here. A file the system could not read, or an export that could not be saved, uses the same alert with its own sentence and remedy.",
     state,
     configuration: refusal(
       "octoboard-configuration.json",
@@ -943,7 +829,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, review of the application settings",
-    description: "Application settings ticked in the What to import group: the Application settings tab appears beside Consoles and projects (with a warning glyph) and is the one open. It holds one card, with no checkbox of its own. Lines that turn a setting on carry a muted consequence line (the automatic-switch line, \"Automatically switch accounts at the usage limit\", says a session that stops at its account's usage limit is then switched to another account with usage left and carries on), lines that turn one off do not (their \"Turns off\" badge is neutral, not accented), Git workflow and Claude compatibility read \"Set to the file's\" (the file turns Codex's off), and keyboard shortcuts read \"Set to the file's\" with a note that 3 of the file's shortcuts differ from the defaults and apply to this device or browser only.",
+    description: "Application settings ticked in the What to import group: the Application settings tab appears beside Consoles and projects (with a warning glyph) and is the one open. It holds one card, with no checkbox of its own. Lines that turn a setting on carry a muted consequence line (the automatic-switch line, \"Automatically switch accounts at the usage limit\", says a session that stops at its account's usage limit is then switched to another account with usage left and carries on), lines that turn one off do not (their \"Turns off\" badge is neutral, not accented), Git workflow and Claude compatibility read \"Set to the file's\" (the file turns Codex's off), and keyboard shortcuts read \"Set to the file's\" with a note that 3 of the file's shortcuts differ from the defaults and apply to this device or browser only. Lines the device already has read No change in the same card; shortcuts that are all defaults read \"Back to defaults\", with a consequence line that they apply to this device or browser only.",
     state,
     configuration: reviewing({ file: SHORTCUTS_FILE }),
     steps: [
@@ -1006,30 +892,10 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, review, why an account's directory cannot be used",
-    description: "A document of accounts alone, with the three that cannot be created as the file has them. The mouse rests on the warning mark after the Clients name: its popover opens above it with no click and no focus taken, saying the directory is already in use by Studio and that the account is left out unless another directory is chosen for it.",
+    description: "A document of accounts alone, with the three that cannot be created as the file has them. The mouse rests on the warning mark after the Clients name: its popover opens above it with no click and no focus taken, saying the directory is already in use by Studio and that the account is left out unless another directory is chosen for it. The directory being in use by the default account, or an account that cannot be created at all, puts its own sentence in the same popover.",
     state: accountsMachine,
     configuration: { file: FILE, inspection: ACCOUNTS_UNUSABLE },
     steps: [...importFromSettings, chooseFile, hoverAccountMark("directoryInUseMark", "Clients")],
-  },
-  {
-    id: "configuration-import-review-account-in-use-default-details",
-    group: GROUP,
-    category: "normal",
-    title: "Import, review, a directory in use by the default account",
-    description: "Same document, the mouse on the warning mark after the Original name: the directory is in use by the default account, named as the application names it in the current language. Switch the language to 简体中文 to read it as 默认; any other account is named as it is, as with Studio in the scenario above.",
-    state: accountsMachine,
-    configuration: { file: FILE, inspection: ACCOUNTS_UNUSABLE },
-    steps: [...importFromSettings, chooseFile, hoverAccountMark("directoryInUseMark", "Original")],
-  },
-  {
-    id: "configuration-import-review-account-invalid-details",
-    group: GROUP,
-    category: "normal",
-    title: "Import, review, why an account cannot be created",
-    description: "Same document, the mouse on the warning mark after the Default name: its popover opens above it, saying \"This account cannot be created: …\" and why (Claude Code already has an account named Default), then only \"The account is left out.\": no other directory could help, so its choice offers Leave out alone.",
-    state: accountsMachine,
-    configuration: { file: FILE, inspection: ACCOUNTS_UNUSABLE },
-    steps: [...importFromSettings, chooseFile, hoverAccountMark("invalidMark", "Default")],
   },
   {
     id: "configuration-import-review-accounts-left-out",
@@ -1134,57 +1000,11 @@ export const configurationScenarios: Scenario[] = [
     ],
   },
   {
-    id: "configuration-import-review-shortcuts-same",
-    group: GROUP,
-    category: "normal",
-    title: "Import, keyboard shortcuts, git workflow and Claude compatibility the device already has",
-    description: "With Application settings ticked in the What to import group, its tab holds Git workflow, Claude compatibility and keyboard shortcuts, all reading \"No change\" because the file's are the ones this device already has, below the switches, which all read \"No change\" too except automatic pull, which turns off.",
-    state: autoPulling,
-    preferences: { keyboardShortcuts: SHORTCUTS_HERE },
-    configuration: { file: SHORTCUTS_FILE, inspection: WITH_SETTINGS_HERE },
-    steps: [
-      ...importFromSettings,
-      chooseFile,
-      toggleSettings,
-      settingsTab,
-    ],
-  },
-  {
-    id: "configuration-import-review-shortcuts-reset",
-    group: GROUP,
-    category: "normal",
-    title: "Import, a file whose keyboard shortcuts are all defaults",
-    description: "With Application settings ticked, its tab is open. The file's settings are this device's except automatic pull, which turns off, so Git workflow reads \"No change\" and there is no Claude compatibility line (the file makes no choice), and its keyboard shortcuts are all defaults, so that line reads \"Back to defaults\" with the note that it applies to this device or browser only.",
-    state: autoPulling,
-    preferences: { keyboardShortcuts: SHORTCUTS_HERE },
-    configuration: { file: SHORTCUTS_DEFAULT_FILE, inspection: WITH_SETTING_OFF },
-    steps: [
-      ...importFromSettings,
-      chooseFile,
-      toggleSettings,
-      settingsTab,
-    ],
-  },
-  {
-    id: "configuration-import-review-fallback-details",
-    group: GROUP,
-    category: "normal",
-    title: "Import, review, why a project's account is not used",
-    description: "The mouse rests on the warning triangle after the Search API name: its popover opens above it with no click and no focus taken, saying that the Codex account Personal is not set up here, so the default account is used. The triangle after the Work laptop heading opens the same kind of popover for the console's own account. A touch or a key press opens it with focus inside.",
-    state,
-    configuration: reviewing(),
-    steps: [
-      ...importFromSettings,
-      chooseFile,
-      (ui) => ui.hoverStatusMark(ui.t("configuration.import.fallbacks.label", { subject: "Search API" })),
-    ],
-  },
-  {
     id: "configuration-import-review-not-found-details",
     group: GROUP,
     category: "normal",
     title: "Import, review, why a project is skipped",
-    description: "The mouse rests on the one warning triangle after the Notes name, \"Notes not found, and accounts not set up\": its popover opens above it with no click and no focus taken, listing each state as its own paragraph: the project is not found on the machine running Octoboard, it is skipped unless a directory is chosen for it, and then the account that falls back to the default. There is no second triangle beside it and the row has no state line under the name.",
+    description: "The mouse rests on the one warning triangle after the Notes name, \"Notes not found, and accounts not set up\": its popover opens above it with no click and no focus taken, listing each state as its own paragraph: the project is not found on the machine running Octoboard, it is skipped unless a directory is chosen for it, and then the account that falls back to the default. There is no second triangle beside it and the row has no state line under the name. A project's account that is not set up here, so the default account is used, is one such sentence in the same popover.",
     state,
     configuration: reviewing(),
     steps: [
@@ -1201,34 +1021,6 @@ export const configurationScenarios: Scenario[] = [
     description: "The reply comes after the last clone; the dialog cannot be dismissed meanwhile.",
     state,
     configuration: reviewing({ imported: "pending" }),
-    steps: [
-      ...importFromSettings,
-      chooseFile,
-      importNow,
-    ],
-  },
-  {
-    id: "configuration-import-refused-apply",
-    group: GROUP,
-    category: "exceptional",
-    title: "Import, refused before anything is created, an avatar too large",
-    description: "The daemon's reason is the error alert dialog's, raised over the review, which stays as it was with nothing written into it. The reason names the console whose avatar is larger than 256 KiB (Work laptop, as a name). The remedy under it is about the avatar, not the file: give the console a smaller avatar in the Octoboard the configuration came from, export it again, then import the new file; nothing suggests the file is damaged.",
-    state,
-    configuration: reviewing({ imported: failure("icon_too_large", { limit_kib: "256", console_name: "Work laptop" }, "the avatar of the console Work laptop is larger than 256 KiB") }),
-    steps: [
-      ...importFromSettings,
-      chooseFile,
-      importNow,
-    ],
-  },
-  {
-    id: "configuration-import-refused-avatar-image",
-    group: GROUP,
-    category: "exceptional",
-    title: "Import, refused before anything is created, an avatar that is not an image",
-    description: "The error alert dialog, raised over the unchanged review, says the avatar of the console Work laptop is not an image. Its remedy asks for an image as the console's avatar in the Octoboard the configuration came from, then to export again and import the new file; it does not ask for a smaller one.",
-    state,
-    configuration: reviewing({ imported: failure("icon_not_an_image", { console_name: "Work laptop" }, "the avatar of the console Work laptop is not an image") }),
     steps: [
       ...importFromSettings,
       chooseFile,
@@ -1325,7 +1117,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import result, the application settings applied",
-    description: "The Application settings tab holds the \"Application settings applied\" card, whose badges read On, Off, \"Matches the file\" (git workflow and Claude compatibility, in that order) and \"3 changes from the defaults\", the last with a muted line saying 2 shortcuts could not be applied. The Consoles and projects tab keeps its warning glyph.",
+    description: "The Application settings tab holds the \"Application settings applied\" card, whose badges read On, Off, \"Matches the file\" (git workflow and Claude compatibility, in that order) and \"3 changes from the defaults\", the last with a muted line saying 2 shortcuts could not be applied. The Consoles and projects tab keeps its warning glyph. Shortcuts back to their defaults read Defaults, without that muted line.",
     state,
     configuration: reviewing({ file: SHORTCUTS_FILE }),
     steps: [
@@ -1378,49 +1170,17 @@ export const configurationScenarios: Scenario[] = [
     steps: [...importFromWelcome, importNow],
   },
   {
-    id: "configuration-import-result-shortcuts-reset",
-    group: GROUP,
-    category: "normal",
-    title: "Import result, keyboard shortcuts back to their defaults",
-    description: "On the Application settings tab the card lists all eleven switches with the values applied, automatic pull as Off, Git workflow as \"Matches the file\" and no Claude compatibility line, and keyboard shortcuts as \"Defaults\", with no muted line under it.",
-    state: autoPulling,
-    preferences: { keyboardShortcuts: SHORTCUTS_HERE },
-    configuration: { file: SHORTCUTS_DEFAULT_FILE, inspection: WITH_SETTING_OFF, imported: SETTINGS_APPLIED_RESULT },
-    steps: [
-      ...importFromSettings,
-      chooseFile,
-      toggleSettings,
-      importNow,
-      settingsTab,
-    ],
-  },
-  {
     id: "configuration-import-result-fallbacks",
     group: GROUP,
     category: "normal",
     title: "Import result, accounts that fell back to the default",
-    description: "Everything was created, so the only thing to report is the fallbacks: a warning triangle follows the Documentation name in its header row and the Style Guide name in its row, and nothing else (no alert, no list of accounts) stands above or below the card but the one line of totals above it (\"1 console created · 1 project created · Nothing failed\"), with no tab bar as there is one region. Their popovers are in the next scenario.",
+    description: "Everything was created, so the only thing to report is the fallbacks: a warning triangle follows the Documentation name in its header row and the Style Guide name in its row, and nothing else (no alert, no list of accounts) stands above or below the card but the one line of totals above it (\"1 console created · 1 project created · Nothing failed\"), with no tab bar as there is one region.",
     state,
     configuration: { file: FILE, inspection: FALLBACKS_ONLY, imported: FALLBACKS_ONLY_RESULT },
     steps: [
       ...importFromSettings,
       chooseFile,
       importNow,
-    ],
-  },
-  {
-    id: "configuration-import-result-fallbacks-details",
-    group: GROUP,
-    category: "normal",
-    title: "Import result, why a console's accounts fell back",
-    description: "The mouse rests on the warning triangle after the Documentation name in the result's header row: its popover opens above it with no click and no focus taken, saying that the Claude Code account Work is not set up here, so the default account is used. The card stays as it is under the popover.",
-    state,
-    configuration: { file: FILE, inspection: FALLBACKS_ONLY, imported: FALLBACKS_ONLY_RESULT },
-    steps: [
-      ...importFromSettings,
-      chooseFile,
-      importNow,
-      (ui) => ui.hoverStatusMark(ui.t("configuration.import.fallbacks.label", { subject: "Documentation" })),
     ],
   },
   {

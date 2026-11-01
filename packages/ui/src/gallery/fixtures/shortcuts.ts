@@ -1,11 +1,10 @@
 // The gallery's scenarios for the keyboard shortcuts: Settings → Keyboard shortcuts as a browser and as
-// the desktop app list it, a row recording a new combination, the reasons a combination is refused, what
-// a changed shortcut looks like, and a menu that shows one. Which commands a client lists, and how a key
-// is written, follow the platform the gallery is viewed in (⌘ on an Apple keyboard, Ctrl elsewhere): the
-// steps press combinations through `ui.chord`, which turns a portable binding into that platform's keys.
+// the desktop app list it, a row recording a new combination, the reasons a combination is refused and what
+// a changed shortcut looks like. Which commands a client lists, and how a key is written, follow the platform
+// the gallery is viewed in (⌘ on an Apple keyboard, Ctrl elsewhere): the steps press combinations through
+// `ui.chord`, which turns a portable binding into that platform's keys.
 import type { Binding } from "../../shortcuts/binding";
 import type { Overrides } from "../../shortcuts/store";
-import { IS_MAC } from "../../input/keys";
 import type { Ui, Step } from "../../fixtures/interact";
 import type { Preferences } from "../../fixtures/preferences";
 import type { Scenario } from "../scenario";
@@ -13,7 +12,7 @@ import { SAMPLE, snapshotState } from "../../fixtures/builders";
 
 const GROUP = "Settings";
 
-const { console: console_, web, api, consoleSession, sessions } = SAMPLE;
+const { console: console_, web, api, sessions } = SAMPLE;
 
 const state = snapshotState({ consoles: [console_], projects: [web, api], sessions });
 
@@ -22,11 +21,11 @@ const openSection: Step[] = [
   (ui) => ui.press(ui.t("settings.section.shortcuts")),
 ];
 
-const changeLabel = (ui: Ui, command: "newSession" | "lock" | "nextConsoleSession") =>
+const changeLabel = (ui: Ui, command: "newSession" | "lock") =>
   ui.t("settings.shortcuts.changeLabel", { command: ui.t(`settings.shortcuts.command.${command}`) });
 
 /** Enters recording on the row of `command`. */
-const recordFor = (command: "newSession" | "lock" | "nextConsoleSession"): Step => (ui) => ui.press(changeLabel(ui, command));
+const recordFor = (command: "newSession" | "lock"): Step => (ui) => ui.press(changeLabel(ui, command));
 
 const chord = (binding: Binding): Step => (ui) => ui.chord(binding);
 
@@ -37,13 +36,6 @@ const customised: Overrides = {
   newSession: { code: "KeyO", primary: true },
 };
 
-const menuCustomised: Overrides = {
-  focusMode: { code: "KeyG", primary: true, shift: true },
-  lock: { code: "KeyK", primary: true, shift: true },
-  pin: { code: "KeyU", primary: true, shift: true },
-  copyId: { code: "KeyI", primary: true, shift: true },
-};
-
 /** A focus-mode key moved away and its default taken by another command, so putting it back is refused. */
 const defaultTaken: Overrides = {
   focusMode: { code: "KeyG", primary: true, shift: true },
@@ -51,9 +43,6 @@ const defaultTaken: Overrides = {
 };
 
 const customisedPreferences = (keyboardShortcuts: Overrides): Preferences => ({ keyboardShortcuts });
-
-/** Control with the key, however the platform names it: ⌃C on an Apple keyboard, Ctrl+C elsewhere. */
-const controlC: Binding = IS_MAC ? { code: "KeyC", other: true } : { code: "KeyC", primary: true };
 
 export const shortcutsScenarios: Scenario[] = [
   {
@@ -104,19 +93,9 @@ export const shortcutsScenarios: Scenario[] = [
     category: "exceptional",
     title: "Keyboard shortcuts, a key another command has",
     description:
-      "Recording continues on the New session row, which names the command that already has the combination, \"Toggle focus mode\", in a danger-coloured line under its name; nothing is saved.",
+      "Recording continues on the New session row, which names the command that already has the combination, \"Toggle focus mode\", in a danger-coloured line under its name; nothing is saved. A combination the desktop app has, one without a modifier, one the window or the system keeps and a terminal control key refuse in the same line, each with its own wording.",
     state,
     steps: [...openSection, recordFor("newSession"), chord({ code: "KeyF", primary: true, shift: true })],
-  },
-  {
-    id: "settings-shortcuts-conflict-desktop",
-    group: GROUP,
-    category: "exceptional",
-    title: "Keyboard shortcuts, a key the desktop app has",
-    description:
-      "Recording continues on the New session row after pressing the combination of Minimize, a command this browser does not list; its line says the combination is already used for Minimize in the desktop app.",
-    state,
-    steps: [...openSection, recordFor("newSession"), chord({ code: "KeyM", primary: true })],
   },
   {
     id: "settings-shortcuts-reset-refused",
@@ -124,29 +103,10 @@ export const shortcutsScenarios: Scenario[] = [
     category: "exceptional",
     title: "Keyboard shortcuts, a default another command holds",
     description:
-      "Reset was pressed on Toggle focus mode, whose default Lock or unlock the session now has: its row keeps its changed key and says the combination is already used for that command, and Reset stays beside it.",
+      "Reset was pressed on Toggle focus mode, whose default Lock or unlock the session now has: the row is not recording, keeps its changed key with Change and Reset beside it, and a danger-coloured line under its name says the combination is already used for that command.",
     state,
     preferences: customisedPreferences(defaultTaken),
     steps: [...openSection, (ui) => ui.press(ui.t("settings.shortcuts.resetLabel", { command: ui.t("settings.shortcuts.command.focusMode") }))],
-  },
-  {
-    id: "settings-shortcuts-needs-modifier",
-    group: GROUP,
-    category: "exceptional",
-    title: "Keyboard shortcuts, a key without a modifier",
-    description:
-      "Recording continues on the Lock or unlock row, whose line says to hold ⌘ (Ctrl outside an Apple keyboard) with the key. Choose 560px to see the line wrap under the row's name, where each row stacks below 640px.",
-    state,
-    steps: [...openSection, recordFor("lock"), chord({ code: "KeyJ" })],
-  },
-  {
-    id: "settings-shortcuts-reserved-key",
-    group: GROUP,
-    category: "exceptional",
-    title: "Keyboard shortcuts, a key the window keeps",
-    description: "Recording continues on the Lock or unlock row, whose line says Escape, F6 and the context-menu key keep their own meaning.",
-    state,
-    steps: [...openSection, recordFor("lock"), chord({ code: "F6", primary: true })],
   },
   {
     id: "settings-shortcuts-editing-key",
@@ -154,38 +114,8 @@ export const shortcutsScenarios: Scenario[] = [
     category: "exceptional",
     title: "Keyboard shortcuts, a key that edits text",
     description:
-      "Recording continues on the Lock or unlock row after pressing the left arrow with the shortcut modifier; its line says that with it the arrow keys, Home, End, Page Up, Page Down, Backspace, Delete and Enter move the caret or edit text, so they cannot be used.",
+      "Recording continues on the Lock or unlock row after pressing the left arrow with the shortcut modifier; its line says that with it the arrow keys, Home, End, Page Up, Page Down, Backspace, Delete and Enter move the caret or edit text, so they cannot be used. This is the longest refusal and wraps over several lines: choose 560px to see it wrap under the row's name, where each row stacks below 640px.",
     state,
     steps: [...openSection, recordFor("lock"), chord({ code: "ArrowLeft", primary: true })],
-  },
-  {
-    id: "settings-shortcuts-os-reserved",
-    group: GROUP,
-    category: "exceptional",
-    title: "Keyboard shortcuts, a combination the system keeps",
-    description: "Recording continues on the Lock or unlock row, whose line says the system keeps the combination for itself.",
-    state,
-    steps: [...openSection, recordFor("lock"), chord({ code: "Tab", primary: true })],
-  },
-  {
-    id: "settings-shortcuts-control-key",
-    group: GROUP,
-    category: "exceptional",
-    title: "Keyboard shortcuts, a terminal control key",
-    description:
-      "Recording continues on the Lock or unlock row after pressing Control and C. On an Apple keyboard its line says Control with a key is a terminal control key and to add ⌘; elsewhere it says Ctrl+C interrupts the program in the terminal, so it cannot be used.",
-    state,
-    steps: [...openSection, recordFor("lock"), chord(controlC)],
-  },
-  {
-    id: "sidebar-session-menu-customised-shortcuts",
-    group: "Sidebar sessions",
-    category: "normal",
-    title: "Session menu with changed shortcuts",
-    description:
-      "The Hub's menu shows the keys the user has set, not the defaults: Lock, Pin, Focus mode and Copy session ID carry their changed keys, and Archive its default.",
-    state,
-    preferences: customisedPreferences(menuCustomised),
-    steps: [(ui) => ui.press(ui.t("sidebar.session.actions", { title: consoleSession.title }))],
   },
 ];

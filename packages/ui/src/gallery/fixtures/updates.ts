@@ -8,12 +8,10 @@ const GROUP = "Updates";
 const { console: console_, web, sessions } = SAMPLE;
 
 // What the update scenarios sit over. Sessions that are idle hold a restart up no more than they hold a quit up, so
-// the first state is held up by nothing, and the three restart states by a working session, a busy shell, and both.
+// the first state is held up by nothing, and the restart state by a working session and a busy shell.
 const idle = sessions.filter(({ status }) => status === "idle");
 const busyShell = shellTerminalOf("sh-dev", web, "pnpm dev", 1, { busy: true });
 const quiet = snapshotState({ consoles: [console_], projects: [web], sessions: idle });
-const sessionsRunning = snapshotState({ consoles: [console_], projects: [web], sessions });
-const terminalRunning = snapshotState({ consoles: [console_], projects: [web], sessions: idle, shellTerminals: [busyShell] });
 const bothRunning = snapshotState({ consoles: [console_], projects: [web], sessions, shellTerminals: [busyShell] });
 const reconnecting = snapshotState({ consoles: [console_], projects: [web], sessions: idle, connectionState: "reconnecting" });
 
@@ -27,10 +25,8 @@ const NOTES = [
 ].join("\n");
 
 const newer: AvailableUpdate = { version: "0.2.0", notes: NOTES };
-const newerBeta: AvailableUpdate = { version: "0.2.0-beta.2", notes: NOTES };
 
 const FAILED_CHECK = "error sending request for url (https://updates.octoboard.example/stable/latest.json): error trying to connect: dns error: failed to lookup address information";
-const FAILED_INSTALL = "failed to download the update archive: the connection closed before the whole file arrived (received 8123456 of 41234567 bytes)";
 
 /** Selects an idle session, so the notice sits under a terminal as it does in use. */
 const openSession: Step = (ui) => ui.press(ui.session("Update the dependencies"));
@@ -130,7 +126,7 @@ export const updateScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "About, Updates row while a check runs",
-    description: "The Updates row says it is checking for updates, and Check for updates shows its pending spinner. The channel is Stable, the default.",
+    description: "The Updates row says it is checking for updates, and Check for updates shows its pending spinner. The channel is Stable, the default. Choosing the other channel while an update was on offer withdraws the offer and lands here.",
     state: quiet,
     updater: { check: "pending", checked: true },
     steps: [openSettings],
@@ -160,65 +156,17 @@ export const updateScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "About, Updates row waiting for a restart",
-    description: "The notice was hidden with Later; the Updates row still says the version takes effect after a restart and offers Restart now.",
+    description: "The notice was hidden with Later; the Updates row still says the version takes effect after a restart and offers Restart now. The same row when the installed version is not known to this window names no version.",
     state: quiet,
     updater: { check: newer, checked: true },
     steps: [downloadAndInstall, (ui) => ui.press(ui.t("updates.notice.later")), openSettings],
-  },
-  {
-    id: "updates-settings-installed-unknown-version",
-    group: GROUP,
-    category: "normal",
-    title: "Update installed, its version not known to this window",
-    description:
-      "The shell said an update was already installed, which this window never saw, so no version is named. The Updates row says that an update is installed and takes effect after a restart, with Restart now; the notice under the dialog's veil says the same in its own sentence, with Restart now and Later.",
-    state: quiet,
-    updater: { check: "installed", checked: true },
-    steps: [openSession, openSettings],
-  },
-  {
-    id: "updates-settings-channel-switched",
-    group: GROUP,
-    category: "normal",
-    title: "About, the channel switched while an update was on offer",
-    description:
-      "A newer version was on offer on Beta, with its notice; Stable was chosen instead. The offer is withdrawn at once: no notice under the dialog's veil, and the Updates row, no longer offering Download and install, says it is checking for updates on Stable (that check is never answered here). The channel selector reads Stable.",
-    state: quiet,
-    preferences: { updateChannel: "beta" },
-    updater: { check: { beta: newerBeta, stable: "pending" }, checked: true },
-    steps: [
-      openSession,
-      openSettings,
-      (ui) => ui.press(ui.t("settings.updates.channel.label")),
-      (ui) => ui.press(ui.t("settings.updates.channel.stable")),
-    ],
-  },
-  {
-    id: "updates-restart-sessions",
-    group: GROUP,
-    category: "normal",
-    title: "Restart held up by a session",
-    description: "Restart now with a working session opens the confirmation titled \"Restart Octoboard\" (the app name is plain text in the title), saying a restart interrupts the sessions, which can each be resumed afterwards; its confirming button reads Restart, not Quit.",
-    state: sessionsRunning,
-    updater: { check: newer, checked: true },
-    steps: [downloadAndInstall, restartNow],
-  },
-  {
-    id: "updates-restart-terminals",
-    group: GROUP,
-    category: "normal",
-    title: "Restart held up by a terminal",
-    description: "Every session is idle and a shell terminal runs something: the confirmation says a restart ends what the terminals run, and mentions no sessions.",
-    state: terminalRunning,
-    updater: { check: newer, checked: true },
-    steps: [downloadAndInstall, restartNow],
   },
   {
     id: "updates-restart-sessions-and-terminals",
     group: GROUP,
     category: "normal",
     title: "Restart held up by a session and a terminal",
-    description: "One confirmation says both are running: the sessions are interrupted and can each be resumed, and what the terminals run is ended.",
+    description: "One confirmation says both are running: the sessions are interrupted and can each be resumed, and what the terminals run is ended. A restart held up by sessions alone, or by terminals alone, words only its own half.",
     state: bothRunning,
     updater: { check: newer, checked: true },
     steps: [downloadAndInstall, restartNow],
@@ -258,7 +206,7 @@ export const updateScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Alert, checking for updates failed",
-    description: "Check for updates pressed in Settings > About failed: the alert stays until acknowledged, says the check failed and to check the connection, and keeps the updater's own text behind its disclosure.",
+    description: "Check for updates pressed in Settings > About failed: the alert stays until acknowledged, says the check failed and to check the connection, and keeps the updater's own text behind its disclosure. A download that fails part-way uses the same alert, pointing at the connection and the disk space.",
     state: quiet,
     updater: { check: { error: FAILED_CHECK } },
     steps: [openSettings, (ui) => ui.press(ui.t("settings.updates.check"))],
@@ -273,26 +221,5 @@ export const updateScenarios: Scenario[] = [
     state: quiet,
     updater: { check: newer, checked: true, install: { ends: "gone" } },
     steps: [openSession, downloadAndInstall],
-  },
-  {
-    id: "updates-error-install",
-    group: GROUP,
-    category: "exceptional",
-    title: "Alert, downloading the update failed",
-    description: "Download and install failed part-way: the alert says so and points at the connection and the disk space, with the updater's own text behind its disclosure. The notice offers the download again behind it.",
-    state: quiet,
-    updater: { check: newer, checked: true, install: { progress: { downloaded: 8_123_456, total: 41_234_567 }, ends: { error: FAILED_INSTALL } } },
-    steps: [openSession, downloadAndInstall],
-  },
-  {
-    id: "updates-restart-failed",
-    group: GROUP,
-    category: "exceptional",
-    title: "Alert, the restart did not happen",
-    description: "Restart now, with nothing holding the restart up, goes straight to the shell, which refuses: the error alert dialog is titled \"Could not restart\" and says Octoboard kept running instead of relaunching, and to quit it and open it again; the shell's text is behind Error details, closed, with the Report issue guidance and button of an unexpected failure. The notice that offered the restart stays behind.",
-    state: quiet,
-    updater: { check: newer, checked: true },
-    exitFailure: "the relaunch was refused by the system",
-    steps: [openSession, downloadAndInstall, restartNow],
   },
 ];

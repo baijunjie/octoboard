@@ -9,11 +9,15 @@ which resets the dev app's `octoboard.*` preferences (hence port 5175 for `pnpm 
 
 ## How it works
 
-- `gallery.html` loads `shell.tsx`, the scenario list and the controls: theme, language, window width and height, and
-  whether the shortcut modifier is held. Everything chosen lives in the URL. Scenarios are listed by functional area,
-  normal previews first and exceptional second. The chosen scenario renders in an iframe (`gallery-frame.html`,
-  `frame.tsx`), so the width control decides the `docked` and `phone` breakpoints for real. The frame alone, sized by
-  the browser window, is `gallery-frame.html?scenario=<id>&theme=…&lang=…` with `held=1` and `chrome=1` as needed.
+- `gallery.html` loads `shell.tsx`, the scenario list and the controls: theme, language, window width and height,
+  whether the shortcut modifier is held and, for a file-viewer scenario (`viewer`), the Markdown style. Everything
+  chosen lives in the URL. On a scenario whose frame shows a modal (every viewer scenario) the modal pulls focus back
+  into the frame, so the shell's scenario list and controls can only be used with the mouse there (a known limitation).
+  Scenarios are listed by functional area, normal previews first and exceptional second. The chosen scenario renders in
+  an iframe (`gallery-frame.html`, `frame.tsx`), so the width control decides the `docked` and `phone` breakpoints for
+  real. The frame alone, sized by the browser window, is `gallery-frame.html?scenario=<id>&theme=…&lang=…` with `held=1`
+  and `chrome=1` as needed, and, for a file-viewer scenario, `markdown=tailwind|github|newsprint|latex` (it stands over
+  the scenario's own `preferences.markdownStyle`).
 - `frame.tsx` follows `main.tsx` (the same platform, language, error boundary and theme providers) over a fixture daemon
   in place of the WebSocket one, and leaves out what only a native shell does. `prepare.ts` sets the app's stored
   preferences from the URL and the scenario before the app's modules load, so nothing the frame imports earlier may read
@@ -95,6 +99,8 @@ new reply, are in [`../fixtures/README.md`](../fixtures/README.md).
   is held: the new-session "+" buttons' quick form. The viewer can still choose Released with the page's Modifier
   control; like a width, that choice stays on scenarios that carry none and is dropped on picking one that carries its
   own. The modifier is pressed after the steps, so they find those buttons by their plain names.
+- **Markdown style.** The style chosen with the Markdown style control carries over to viewer scenarios that set no
+  `preferences.markdownStyle` and is dropped on picking a viewer scenario that sets its own.
 - **Live changes.** They are written with the builders in `fixtures/liveChanges.ts` (`accountAdded`, `accountRemoved`,
   `agentAvailability`, `terminalOpened`, `terminalClosed`, `pagePushed`, `latestPageDeleted`, `allPagesDeleted`), not
   raw `daemonEvents` steps; add a builder there for another kind of collection.

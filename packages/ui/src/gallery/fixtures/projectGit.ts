@@ -3,7 +3,7 @@ import { GIT_STDERR } from "./structuredErrors";
 // project's Git mode with (`sampleGit.ts`): the branch selector, the change list in its sections, whole or
 // by commit, a diff of each kind opened from it, and the states a source or a list can end in. Every change
 // here is built by the factory for its kind (`changeFixtures.ts`).
-import type { BranchInfo, ScopeCause, WorktreeInfo } from "../../protocol";
+import type { BranchInfo, WorktreeInfo } from "../../protocol";
 import { describing, type Ui } from "../../fixtures/interact";
 import type { Preferences } from "../../fixtures/preferences";
 import type { Scenario } from "../scenario";
@@ -259,27 +259,26 @@ const DETACHED_GIT = withWorktrees(SAMPLE_GIT, [{ ...WORKTREES[0], branch: null 
  * out and there is no branch to choose. */
 const BRANCHLESS_GIT: FixtureGit = { worktrees: [{ ...WORKTREES[0], branch: null }], changes: { "wt-main": [] }, branches: [] };
 
-/** The side worktree cannot use the project's folder, for the `cause` given (by default it has no copy, as a sparse
- * checkout leaves it); with `cutShort`, the daemon also stopped listing changes early. The project is a subfolder of the
- * repository, so its place in the side worktree is a path of its own below that worktree's root. */
-const sparse = (cause: ScopeCause = "missing", cutShort = false): FixtureGit => ({
+/** The side worktree has no copy of the project's folder, as a sparse checkout leaves it; with `cutShort`, the daemon
+ * also stopped listing changes early. The project is a subfolder of the repository, so its place in the side worktree is
+ * a path of its own below that worktree's root. */
+const sparse = (cutShort = false): FixtureGit => ({
   ...SAMPLE_GIT,
   ...(cutShort && { cutShort }),
   scope: "apps/web",
-  worktrees: [WORKTREES[0], { ...WORKTREES[1], scope_present: false, scope_cause: cause }, WORKTREES[2]],
+  worktrees: [WORKTREES[0], { ...WORKTREES[1], scope_present: false, scope_cause: "missing" }, WORKTREES[2]],
   changes: { ...SAMPLE_GIT.changes, "wt-side": [] },
 });
 
 /** The side worktree has `gh-pages` checked out, which shares no commit with `main`. */
-const orphaned = (shallow: boolean): FixtureGit => ({
+const orphaned: FixtureGit = {
   ...SAMPLE_GIT,
   worktrees: [WORKTREES[0], { ...WORKTREES[1], head: ORPHAN_TIP, branch: "gh-pages" }, WORKTREES[2]],
   branches: BRANCHES.map((branch) => (branch.name === "feature/ranking-experiments" ? { ...branch, name: "gh-pages", commit: ORPHAN_TIP } : branch)),
   comparisons: {},
   commits: {},
   forks: { "main..gh-pages": null },
-  shallow,
-});
+};
 
 const { console: console_, web, sessions } = SAMPLE;
 /** The session responsible for `feature/ranking-experiments`, checked out in the side worktree. The
@@ -416,22 +415,10 @@ const reviewScenarios: Scenario[] = [
     category: "normal",
     title: "A branch that has never been pushed",
     description:
-      "main is checked out where the project's folder is, and neither it nor the repository has a remote branch to compare it with, not even a remote default branch: the line above the list says it has no remote branch, so all of its commits are listed, with no fork named. Committed lists every file at its tip as added.",
+      "main is checked out where the project's folder is, and neither it nor the repository has a remote branch to compare it with, not even a remote default branch: the line above the list says it has no remote branch, so all of its commits are listed, with no fork named. Committed lists every file at its tip as added. A branch forked from the remote default branch names that fork in the same line.",
     state,
     preferences,
     git: NEVER_PUSHED_GIT,
-    steps: openGit,
-  },
-  {
-    id: "git-changes-never-pushed-forked",
-    group: GROUP,
-    category: "normal",
-    title: "A branch that has never been pushed, forked from the default branch",
-    description:
-      "feature/page-size is checked out where the project's folder is and has no remote branch, but the repository's remote default branch is origin/main: the line above the list reads Forked from origin/main at the commit it forked at, now at the branch's tip, and not that the branch has no remote branch. Committed lists only the two files the branch changed since the fork, not every file as added.",
-    state,
-    preferences,
-    git: FORKED_GIT,
     steps: openGit,
   },
   {
@@ -540,88 +527,11 @@ const reviewScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Why the project's folder is unavailable in a worktree, from a resting mouse",
-    description: "The mouse rests on the warning triangle at the end of the worktree name's line: its popover opens with no click and no focus taken, saying the project's folder is not in this worktree (the branch may lack it, or it may have been moved, renamed or deleted) and to restore it or check out a branch that has it.",
+    description: "The mouse rests on the warning triangle at the end of the worktree name's line: its popover opens with no click and no focus taken, saying the project's folder is not in this worktree (the branch may lack it, or it may have been moved, renamed or deleted) and to restore it or check out a branch that has it. A project folder reached through a link, a file where it should be, or one that cannot be read or is off limits puts its own sentence in the same popover.",
     state,
     preferences,
     git: sparse(),
     steps: [...selecting(rankingSession), (ui) => ui.hoverStatusMark(ui.t("git.changes.scope.mark"))],
-  },
-  {
-    id: "git-changes-scope-missing-terminal",
-    group: GROUP,
-    category: "exceptional",
-    title: "A terminal started in a worktree that lacks the project's folder",
-    description: "The Changes tab shows the side worktree, which has no copy of the project's folder, and Show terminal panel is pressed: the shell would start there, so the error alert opens, titled \"Could not create the terminal\" and saying the folder /Users/dev/code/search-api-experiments/apps/web cannot be read. Its remedy says the folder may have been moved, renamed or deleted, or be missing from the branch checked out there, and to restore it at that path and try again; the system's reason is behind Error details, closed.",
-    state,
-    preferences,
-    git: sparse(),
-    steps: [...selecting(rankingSession), (ui) => ui.press(ui.t("titleBar.terminal.show")), (ui) => ui.wait(400)],
-  },
-  {
-    id: "git-changes-scope-link-terminal",
-    group: GROUP,
-    category: "exceptional",
-    title: "A terminal started in a worktree whose project folder is a link",
-    description: "As with the worktree lacking the project's folder, Show terminal panel is pressed on the side worktree and the error alert opens, titled \"Could not create the terminal\" and saying the folder /Users/dev/code/search-api-experiments/apps/web cannot be read. Its remedy says that part of that path is a symbolic link, which Octoboard does not follow in a worktree, and to replace the link with a real folder; it does not suggest the folder was deleted. The system's reason is behind Error details, closed. The Changes tab behind it carries the warning triangle at the end of the worktree name's line, closed; its popover is in the next scenario.",
-    state,
-    preferences,
-    git: sparse("link"),
-    steps: [...selecting(rankingSession), (ui) => ui.press(ui.t("titleBar.terminal.show")), (ui) => ui.wait(400)],
-  },
-  {
-    id: "git-changes-scope-link-hover",
-    group: GROUP,
-    category: "exceptional",
-    title: "A branch whose worktree reaches the project's folder through a link",
-    description: "The mouse rests on the warning triangle at the end of the worktree name's line: its popover opens with no click and no focus taken, saying the path to the project's folder in that worktree goes through a symbolic link, which Octoboard does not follow, and to replace the link with a real folder. It does not suggest the folder was deleted.",
-    state,
-    preferences,
-    git: sparse("link"),
-    steps: [...selecting(rankingSession), (ui) => ui.hoverStatusMark(ui.t("git.changes.scope.mark"))],
-  },
-  {
-    id: "git-changes-scope-not-a-directory-hover",
-    group: GROUP,
-    category: "exceptional",
-    title: "A branch whose worktree has a file where the project's folder should be",
-    description: "The side worktree has feature/ranking-experiments checked out. The mouse rests on the warning triangle at the end of the worktree name's line: its popover opens with no click and no focus taken, saying that something other than a folder is where the project's folder should be in that worktree, and to put the folder back there.",
-    state,
-    preferences,
-    git: sparse("not_a_directory"),
-    steps: [...selecting(rankingSession), (ui) => ui.hoverStatusMark(ui.t("git.changes.scope.mark"))],
-  },
-  {
-    id: "git-changes-scope-unreadable-hover",
-    group: GROUP,
-    category: "exceptional",
-    title: "A branch whose worktree's project folder cannot be read",
-    description: "The side worktree has feature/ranking-experiments checked out. The mouse rests on the warning triangle at the end of the worktree name's line: its popover opens with no click and no focus taken, saying that the project's folder in that worktree cannot be read, and to make sure the folder is still there and its disk is connected.",
-    state,
-    preferences,
-    git: sparse("other"),
-    steps: [...selecting(rankingSession), (ui) => ui.hoverStatusMark(ui.t("git.changes.scope.mark"))],
-  },
-  {
-    id: "git-changes-scope-denied-hover",
-    group: GROUP,
-    category: "exceptional",
-    title: "A branch whose worktree's project folder is off limits to the app",
-    description: "The side worktree has feature/ranking-experiments checked out. The mouse rests on the warning triangle at the end of the worktree name's line: its popover opens with no click and no focus taken, saying that Octoboard is not allowed to read the project's folder in that worktree, and to check the folder's permissions and grant access in the system's privacy settings if needed.",
-    state,
-    preferences,
-    git: sparse("permission_denied"),
-    steps: [...selecting(rankingSession), (ui) => ui.hoverStatusMark(ui.t("git.changes.scope.mark"))],
-  },
-  {
-    id: "git-changes-scope-denied-terminal",
-    group: GROUP,
-    category: "exceptional",
-    title: "A terminal started in a worktree whose project folder the app may not read",
-    description: "Show terminal panel is pressed on the side worktree: the shell would start there, so the error alert opens, titled \"Could not create the terminal\" and saying Octoboard is not allowed to read /Users/dev/code/search-api-experiments/apps/web. Its remedy is about access (check the folder's permissions, and grant Octoboard access in the system's privacy settings if needed, then try again), not about the folder being gone or choosing another folder; the system's reason is behind Error details, closed.",
-    state,
-    preferences,
-    git: sparse("permission_denied"),
-    steps: [...selecting(rankingSession), (ui) => ui.press(ui.t("titleBar.terminal.show")), (ui) => ui.wait(400)],
   },
   {
     id: "git-changes-scope-and-cut-hover",
@@ -631,8 +541,19 @@ const reviewScenarios: Scenario[] = [
     description: "The side worktree lacks the project's folder and its change list was also cut short, so the Worktree line carries one warning triangle for both, not two. The mouse rests on it: its popover opens with no click and no focus taken, giving the cut reason with its remedy first, then why the project's folder is unavailable with its remedy.",
     state,
     preferences,
-    git: sparse("missing", true),
+    git: sparse(true),
     steps: [...selecting(rankingSession), (ui) => ui.hoverStatusMark(ui.t("git.changes.cutAndScope"))],
+  },
+  {
+    id: "git-changes-scope-missing-terminal",
+    group: GROUP,
+    category: "exceptional",
+    title: "A terminal started in a worktree that lacks the project's folder",
+    description: "The Changes tab shows the side worktree, which has no copy of the project's folder, and Show terminal panel is pressed: the shell would start there, so the error alert opens, titled \"Could not create the terminal\" and saying the folder /Users/dev/code/search-api-experiments/apps/web cannot be read, the path in the sentence. Its remedy says the folder may have been moved, renamed or deleted, or be missing from the branch checked out there, and to restore it at that path and try again; the system's reason is behind Error details, closed. A folder reached through a link in its path, or one whose access is denied, is refused with the same alert, worded for its cause with its own remedy, and the same closed Error details.",
+    state,
+    preferences,
+    git: sparse(),
+    steps: [...selecting(rankingSession), (ui) => ui.press(ui.t("titleBar.terminal.show")), (ui) => ui.wait(400)],
   },
   {
     id: "git-changes-listing-commits",
@@ -922,21 +843,10 @@ const reviewScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "A branch with no commit in common with main",
-    description: "gh-pages is checked out in the side worktree: its uncommitted change is listed, and a danger glyph on the Committed heading opens a popover saying main and gh-pages have no commit in common, with no Try again, since asking again gives the same answer.",
+    description: "gh-pages is checked out in the side worktree: its uncommitted change is listed, and a danger glyph on the Committed heading opens a popover saying main and gh-pages have no commit in common, with no Try again, since asking again gives the same answer. A shallow clone words it as missing history in the same popover.",
     state,
     preferences,
-    git: orphaned(false),
-    steps: selecting(rankingSession),
-  },
-  {
-    id: "git-compare-no-common-commit-shallow",
-    group: GROUP,
-    category: "exceptional",
-    title: "No common commit found in a shallow clone",
-    description: "The popover on the Committed heading's danger glyph words it as missing history of a shallow clone rather than unrelated branches, with no Try again, since asking again gives the same answer.",
-    state,
-    preferences,
-    git: orphaned(true),
+    git: orphaned,
     steps: selecting(rankingSession),
   },
   {

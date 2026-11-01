@@ -25,7 +25,7 @@ row each, and the items below the table say so where packages differ.
 
 | Scope | Gallery approach | Where scenarios live | Opening the gallery | Scenario direct entry | Quick check (full) | Quick check (selected scenarios) |
 |---|---|---|---|---|---|---|
-| `packages/ui` | Self-built: `gallery.html` / `gallery-frame.html` over `packages/ui/src/gallery/` (the real `App` over the fixture daemon) | `packages/ui/src/gallery/fixtures/` — the area's file, or a new file listed in its `index.ts`; how a scenario is built and the conventions for writing one are in `packages/ui/README.md`, section "The UI state gallery". All of them are `gallery-writer`'s, and so is `packages/ui/src/fixtures/`, the shared fixtures runtime (fixture daemon, builders, sample data) that both the gallery and the website preview use. The fixture-backed website preview itself (`packages/ui/src/website-preview/`) is not part of the gallery | `pnpm gallery --port <free port>` in `packages/ui` (the script's port 5175 is strict, so another checkout serving it fails the start; pick a free one; `BROWSER=none` in front keeps it from opening a browser tab); the address is the `Local:` line Vite prints | `http://localhost:<port>/gallery.html?scenario=<id>&theme=<light\|dark>&lang=<en\|zh-Hans\|…>`, plus `width=<px>`, `height=<px>`, `held=1` (shortcut modifier held) as needed; the frame alone, sized by the browser window, is `gallery-frame.html?scenario=<id>&theme=…&lang=…`, with `held=1` and `chrome=1` (the desktop window chrome) as needed | `pnpm gallery:sweep` in `packages/ui` (starts its own dev server on a free port) | `pnpm gallery:sweep <id or pattern …>`, or `--group <title>`; `--list` lists the ids |
+| `packages/ui` | Self-built: `gallery.html` / `gallery-frame.html` over `packages/ui/src/gallery/` (the real `App` over the fixture daemon) | `packages/ui/src/gallery/fixtures/` — the area's file, or a new file listed in its `index.ts`; how a scenario is built and the conventions for writing one are in `packages/ui/README.md`, section "The UI state gallery". All of them are `gallery-writer`'s, and so is `packages/ui/src/fixtures/`, the shared fixtures runtime (fixture daemon, builders, sample data) that both the gallery and the website preview use. The fixture-backed website preview itself (`packages/ui/src/website-preview/`) is not part of the gallery | `pnpm gallery --port <free port>` in `packages/ui` (the script's port 5175 is strict, so another checkout serving it fails the start; pick a free one; `BROWSER=none` in front keeps it from opening a browser tab); the address is the `Local:` line Vite prints | `http://localhost:<port>/gallery.html?scenario=<id>&theme=<light\|dark>&lang=<en\|zh-Hans\|…>`, plus `width=<px>`, `height=<px>`, `held=1` (shortcut modifier held), `markdown=<tailwind\|github\|newsprint\|latex>` (Markdown style, viewer scenarios) as needed; the frame alone, sized by the browser window, is `gallery-frame.html?scenario=<id>&theme=…&lang=…`, with `held=1`, `markdown=…` and `chrome=1` (the desktop window chrome) as needed | `pnpm gallery:sweep` in `packages/ui` (starts its own dev server on a free port) | `pnpm gallery:sweep <id or pattern …>`, or `--group <title>`; `--list` lists the ids |
 
 - UI check items: render smoke (each scenario reaches `data-gallery-ready`, no `[data-gallery-failure]` overlay, no
   uncaught error): self-built `packages/ui/scripts/gallery-sweep.mjs` on Playwright; light; `en` only, `--lang <list>`
@@ -48,6 +48,18 @@ row each, and the items below the table say so where packages differ.
   catalog, so it must also pass the gallery's tests; it imports fixtures from their own modules, never from that
   `index.ts` (a cycle). Temporary mocks and helpers go in `preview/mocks/`, which the loader does not read. The record
   of services the preview started goes in `preview/services.md`.
+- Scenarios verify the UI, not each piece of copy. The same UI with different copy does not get another scenario, nor
+  does a different value of a form control (select, switch, radio, segmented control, text field): one scenario shows
+  the UI, and where the other copy or values are worth asserting, a test does it. A value or a piece of copy is a
+  scenario of its own only where it changes the layout, such as the longest option label that must still fit. Error
+  scenarios are merged only where the message has the same format and layout and differs only in values or wording;
+  where the copy's format or layout differs (one line against several, a details block, a list, a long unbroken path,
+  a title against none), or the actions offered differ (a different set of buttons), they stay separate scenarios. In
+  this project this narrows `.claude/agents/gallery-writer.md`'s "Scenario standard": under "The number of mocks does
+  not decide the number of scenarios", targets that differ only in copy or a control's value are not split even where
+  showing one replaces the other, and being able to switch between them does not make them separate views; and
+  "Viewing conditions do not get their own scenarios" extends beyond the gallery's own viewing controls to copy and
+  form-control values. (Source: user instruction)
 
 ## Changing the gallery
 

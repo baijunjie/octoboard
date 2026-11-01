@@ -10,7 +10,6 @@ import React, { useEffect } from "react";
 import ReactDOM from "react-dom/client";
 
 import { isLanguage, type Language } from "../i18n/languages";
-import { ConfigurationFileError } from "../platform/configurationFileError";
 import { galleryFailure } from "../fixtures/banner";
 import { SCENARIOS } from "./fixtures";
 import { installFakeTerminal } from "../fixtures/fakeTerminal";
@@ -27,7 +26,10 @@ const requestedLanguage = params.get("lang");
 const language: Language = isLanguage(requestedLanguage) ? requestedLanguage : "en";
 const theme = params.get("theme") === "dark" ? "dark" : "light";
 
-if (scenario) prepareStorage(scenario, language, theme);
+// The shell's Markdown style control, which the shell offers for a viewer scenario only.
+const markdownStyle = scenario?.viewer ? params.get("markdown") : null;
+
+if (scenario) prepareStorage(scenario, language, theme, markdownStyle);
 
 applyDocumentTheme(document, theme);
 
@@ -76,13 +78,13 @@ let daemonExited: ((detail: string) => void) | undefined;
  * gallery: `windowChrome` while the URL says `chrome=1` (the window shortcuts among it, ⌃Tab
  * between console sessions; it also puts the top bar's drag region on) and, with the scenario's
  * `desktopApp`, the native menu bar (which no menu is drawn for), the macOS privacy grants stubbed
- * from the scenario's `macosPermissions` (its request rejected when it gives a `macosRequestError`,
- * its System Settings pane refused when it gives a `macosSettingsOpenError`), there being no other
+ * from the scenario's `macosPermissions` (its System Settings pane refused when it gives a
+ * `macosSettingsOpenError`), there being no other
  * way to look at those rows than to really change a system setting, a link opener that refuses with
  * the error of a scenario's `externalLinkError` (otherwise the browser's own opener stands, which
  * opens a new tab), and `backgroundRun` for a scenario that says so (the Settings switch), the
  * macOS app's system-managed `notifications` for one that says `systemNotifications` (nothing is
- * shown or opened; the pane refused when it gives an `openError`), the clipboard taken away for a
+ * shown or opened), the clipboard taken away for a
  * scenario that says so, and the configuration-file capability stubbed from the scenario's
  * `configuration` (absent where it says the platform has none) so that no download or file picker
  * is raised from a capture, and the exit capability for a scenario that says `quitRequested`, whose
@@ -104,9 +106,7 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
       macosPermissions: {
         status: () =>
           grants === "unreadable" ? Promise.reject(new Error("gallery: the shell has no such command")) : Promise.resolve(grants),
-        request: () => scenario?.macosRequestError === undefined
-          ? Promise.resolve(false)
-          : Promise.reject(new Error(scenario.macosRequestError)),
+        request: () => Promise.resolve(false),
         openSystemSettings: () => scenario?.macosSettingsOpenError === undefined
           ? Promise.resolve()
           : Promise.reject(new Error(scenario.macosSettingsOpenError)),
@@ -134,9 +134,7 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
       notifications: {
         ensurePermission: async () => true,
         notify: async () => {},
-        openSystemSettings: async () => {
-          if (typeof scenario.systemNotifications === "object") throw new Error(scenario.systemNotifications.openError);
-        },
+        openSystemSettings: async () => {},
       },
     }),
     ...(scenario?.clipboard === "unavailable" && { clipboard: undefined }),
@@ -149,14 +147,9 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
     configurationFile: configuration?.unavailable
       ? undefined
       : {
-        save: async (suggestedName) => {
-          if (configuration?.saveError !== undefined) throw new Error(configuration.saveError);
-          return configuration?.downloads ? { kind: "handedOver" } : { kind: "saved", name: suggestedName };
-        },
+        save: async (suggestedName) =>
+          configuration?.downloads ? { kind: "handedOver" } : { kind: "saved", name: suggestedName },
         open: async () => {
-          const readError = configuration?.readError;
-          if (typeof readError === "string") throw new ConfigurationFileError("io", readError);
-          if (readError !== undefined) throw new ConfigurationFileError(readError.kind);
           if (configuration?.file === "pending") return new Promise<never>(() => {});
           const file = configuration?.file ?? { name: "octoboard-configuration.json", text: EMPTY_DOCUMENT };
           return file === "dismissed" ? undefined : file;

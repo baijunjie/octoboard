@@ -90,11 +90,6 @@ export interface ConfigurationFixture {
    * `"pending"` for one that is never answered (a browser too old to report a dismissed picker).
    * Without it, an empty document of the right format. */
   file?: { name: string; text: string } | "dismissed" | "pending";
-  /** What the open dialog fails with, for a file that could not be read: the system's own text, or
-   * the kind of failure the desktop shell names. */
-  readError?: string | { kind: "too_large" | "not_text" };
-  /** What the save dialog fails with, for a file that could not be written. */
-  saveError?: string;
   /** For a platform that hands the file to a browser's download rather than saving it where the
    * user chose. */
   downloads?: boolean;
@@ -228,9 +223,6 @@ export interface Fixture {
   sessionHandoffs?: Record<string, FixtureError | "pending">;
   /** A refusal to save an agent's permission approval, Codex's reviewer or Claude Code's mode; successful requests update settings. */
   accountApprovalError?: FixtureError;
-  /** A refusal to save an agent's Claude compatibility switch (an `update_settings` carrying `claude_compatibility`);
-   * successful requests update settings. */
-  claudeCompatibilityError?: FixtureError;
   /** How a `set_account_sharing` that is not turned away at once ends. An `account_sharing_failed` error is a change that
    * fails part-way: the choice is recorded, the account stays incomplete and the failure (its items and detail from the
    * error's params) is kept in the account's sharing state until the next change starts. Any other error is a refusal
