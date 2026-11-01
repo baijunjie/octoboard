@@ -248,8 +248,11 @@ Development plan docs and bug tickets are temporary and are not listed here.
   gallery, fixture and capture pitfalls.
 - [What goes on the window material](memory/what-goes-on-the-window-material.md) — which chrome may sit on the
   translucent window material.
-- [Writing automated tests](memory/writing-automated-tests.md) — keeping tests lean, bounding waits and the daemon and
-  jsdom test pitfalls.
+- [Writing automated tests](memory/writing-automated-tests.md) — keeping tests lean, checking a test by breaking its
+  rule, replaying committed agent captures, and the jsdom test pitfalls.
+- [Writing daemon tests](memory/writing-daemon-tests.md) — fixtures that are real processes: sharing one exec'd script,
+  bounding waits by `PATIENCE` and waiting for the condition itself, signal windows in fixtures, stand-in markers,
+  seeded model lists, keeping tests off the real agent CLI, testing budgets by lowering them.
 - [Writing daemon code](memory/writing-daemon-code.md) — where live state lives, store writes, timing, threads, process
   cleanup and linting.
 - [Writing desktop shell code](memory/writing-desktop-shell-code.md) — main-thread queuing, native hooks into Tauri

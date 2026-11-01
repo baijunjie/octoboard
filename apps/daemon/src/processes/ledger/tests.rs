@@ -186,13 +186,17 @@ fn respawning(dir: &Path) -> ! {
         .ok()
         .and_then(|n| n.parse().ok())
         .unwrap_or(0);
-    // SAFETY: the handler only stores to an atomic.
+    // A later generation starts with `SIGTERM` blocked, so that a round of a stop that finds it
+    // before this point, as it can when its process has only just started, leaves the signal
+    // pending for the handler instead of ending it before it could start the next generation.
+    // SAFETY: the handler only stores to an atomic, and the mask is this thread's own.
     unsafe {
         libc::signal(
             libc::SIGTERM,
             note_terminated as extern "C" fn(libc::c_int) as libc::sighandler_t,
-        )
-    };
+        );
+        libc::pthread_sigmask(libc::SIG_UNBLOCK, &sigterm_set(), std::ptr::null_mut());
+    }
     let file = dir.join(format!("gen-{generation}"));
     let partial = file.with_extension("tmp");
     std::fs::write(&partial, std::process::id().to_string()).unwrap();
@@ -208,10 +212,14 @@ fn respawning(dir: &Path) -> ! {
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null());
-        // SAFETY: `setsid` is async-signal-safe.
+        // The mask is kept across `exec`, and the next generation unblocks `SIGTERM` once its
+        // handler is in place.
+        let blocked = sigterm_set();
+        // SAFETY: `setsid` and `pthread_sigmask` are async-signal-safe.
         unsafe {
-            next.pre_exec(|| {
+            next.pre_exec(move || {
                 libc::setsid();
+                libc::pthread_sigmask(libc::SIG_BLOCK, &blocked, std::ptr::null_mut());
                 Ok(())
             });
         }
@@ -220,6 +228,17 @@ fn respawning(dir: &Path) -> ! {
         next.spawn().expect("starting the next generation");
     }
     std::process::exit(0);
+}
+
+/// A signal set holding only `SIGTERM`.
+fn sigterm_set() -> libc::sigset_t {
+    // SAFETY: `sigemptyset` initializes the set before `sigaddset` reads it.
+    unsafe {
+        let mut set: libc::sigset_t = std::mem::zeroed();
+        libc::sigemptyset(&mut set);
+        libc::sigaddset(&mut set, libc::SIGTERM);
+        set
+    }
 }
 
 /// Waits for the child to be reaped, which a stopped child of this test process needs before it
@@ -326,17 +345,22 @@ fn a_process_first_seen_after_its_shell_exited_is_adopted_through_its_session() 
     std::fs::write(&go, "").unwrap();
     let second = wait_for_pid(&second);
     guard.0.push(second);
+    // The shell reads as gone (`start_of`) once its exit begins, but the kernel reparents its
+    // children later in that exit (seen on macOS): the reparenting is what is waited for.
     let deadline = Instant::now() + PATIENCE;
-    while table::start_of(shell).is_some() {
-        assert!(Instant::now() < deadline, "the shell never exited");
+    while table::start_of(shell).is_some()
+        || table::Table::read()
+            .unwrap()
+            .get(second)
+            .map(|proc| proc.ppid)
+            != Some(1)
+    {
+        assert!(
+            Instant::now() < deadline,
+            "the shell never exited, or its child was never reparented"
+        );
         std::thread::sleep(Duration::from_millis(20));
     }
-    let table = table::Table::read().unwrap();
-    assert_eq!(
-        table.get(second).map(|proc| proc.ppid),
-        Some(1),
-        "reparented"
-    );
     assert_eq!(
         launch_of(&state.process_ledger, second),
         None,
