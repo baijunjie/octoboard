@@ -7,7 +7,7 @@
   "brandSloganMeaning": "La programmation s’arrête ici. Une puissance à la hauteur du Terminator.",
   "heroCta": "Voir les versions",
   "heroSecondary": "Voir sur GitHub",
-  "heroNote": "macOS sur Apple Silicon · Prototype initial",
+  "heroPlatformNote": "macOS sur Mac avec puce Apple ou Intel · Prototype initial",
   "demoLabel": "Exemple d’agents travaillant sur plusieurs projets",
   "demoWorkspace": "Promotion dans les restaurants",
   "demoIllustration": "Exemple de déroulement",

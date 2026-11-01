@@ -7,7 +7,7 @@
   "brandSloganMeaning": "プログラミングに終止符を。その実力はターミネーターに匹敵します。",
   "heroCta": "リリースを見る",
   "heroSecondary": "GitHubで見る",
-  "heroNote": "macOS（Apple Silicon）· 初期プロトタイプ",
+  "heroPlatformNote": "macOS（Appleシリコン・Intel）· 初期プロトタイプ",
   "demoLabel": "複数プロジェクトでのエージェント連携例",
   "demoWorkspace": "飲食店のキャンペーン",
   "demoIllustration": "連携の流れ",

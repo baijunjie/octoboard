@@ -191,14 +191,14 @@ receive a hover background; an expanded question and its answer share a uniform 
 - Portability: project files remain in their original folders. Available native conversation records can be resumed
   through the original CLI; an additional account requires using that account's configuration directory.
 
-The primary action in the header, hero, and closing section uses the same localized label for viewing releases
-and opens the repository's GitHub Releases page. It does not link directly to an installer file. The hero identifies
-macOS Apple Silicon and labels the app as an early prototype. The closing note repeats that status beside the MIT
-License. Other repository links open GitHub; the footer links to the developer's motivation at the localized
-homepage's `#developer-intent` and to the localized privacy page, explicitly names the
-MIT License in its license link, provides the operator's email address, and ends with the analytics settings button
-described in `docs/product/website-privacy.md`, "Analytics consent". The hero, open-source section and footer use
-icon-only GitHub links with 44-by-44-pixel targets, accessible names and hover titles.
+The primary action in the header, hero, and closing section uses the same localized label for viewing releases and opens
+the repository's GitHub Releases page. It does not link directly to an installer file. The hero identifies macOS on
+Apple silicon and Intel and labels the app as an early prototype. The closing note repeats that status beside the MIT
+License. Other repository links open GitHub; the footer links to the developer's motivation at the localized homepage's
+`#developer-intent` and to the localized privacy page, explicitly names the MIT License in its license link, provides
+the operator's email address, and ends with the analytics settings button described in
+`docs/product/website-privacy.md`, "Analytics consent". The hero, open-source section and footer use icon-only GitHub
+links with 44-by-44-pixel targets, accessible names and hover titles.
 
 The footer forms a compact centered group: the wordmark and localized tagline, followed by navigation links and
 copyright. Its navigation has an accessible name identifying it as footer navigation. On small screens, the wordmark

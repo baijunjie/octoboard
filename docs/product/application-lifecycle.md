@@ -11,7 +11,7 @@ from it and what the daemon does today, not a finished behaviour.
 
 ## System requirements and distribution
 
-- **macOS 11 or later**, on Apple Silicon or Intel — the release build is one universal bundle holding both
+- **macOS 11 or later**, on Apple silicon or Intel — the release build is one universal bundle holding both
   architectures, the bundled daemon included.
 - Octoboard is distributed as a `.dmg` disk image. It cannot be distributed through the Mac App Store: its translucent
   window (see "The window chrome and the content panel" in `docs/product/window-layout.md`) relies on a private macOS

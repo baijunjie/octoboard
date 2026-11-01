@@ -29,8 +29,8 @@ task information with multiple providers. See the [privacy policy](https://octob
 
 The full introduction is on [octoboard.dev](https://octoboard.dev).
 
-**Status: early development.** The macOS app for Apple Silicon is still in development. Only the first
-prototype features are in place, and the details are still being refined.
+**Status: early development.** The macOS app, for Apple silicon and Intel Macs on macOS 11 or later, is still in
+development. Only the first prototype features are in place, and the details are still being refined.
 
 In the desktop app, the window, the daemon, and the projects share one machine. Linux is planned as a server
 form: the daemon would run on a headless machine you own, with the interface opened in a browser on another
@@ -40,7 +40,7 @@ are planned and are not available yet.
 
 | Form | Status |
 |---|---|
-| macOS app (Apple Silicon) | Early prototype, still in development |
+| macOS app (Apple silicon and Intel, macOS 11 or later) | Early prototype, still in development |
 | Linux server — the daemon on a headless server, the interface in a browser on the network | Planned |
 | Windows app | Planned |
 | iOS app | Planned |

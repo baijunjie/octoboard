@@ -171,7 +171,7 @@ test("agent documents follow the pages and do not publish a download that does n
   const home = files["index.md"];
   const llms = files["llms.txt"];
   assert.match(home, /Canonical: https:\/\/octoboard\.dev\//);
-  assert.match(home, /macOS on Apple Silicon · Early prototype/);
+  assert.match(home, /macOS on Apple silicon and Intel · Early prototype/);
   assert.match(home, /Octoboard is free and open source under the MIT License\./);
   assert.equal(home.includes("Awaiting instructions"), false);
   assert.match(home, /Switch accounts\. Continue the task\./);

@@ -59,7 +59,7 @@ useSeoMeta({
             }}<span class="link-arrow" aria-hidden="true"
             /></a>
           </div>
-          <p class="hero-note">{{ t("heroNote") }}</p>
+          <p class="hero-note">{{ t("heroPlatformNote") }}</p>
         </div>
         <div class="hero-art">
           <HeroMascot :paused="paused" />

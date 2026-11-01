@@ -7,7 +7,7 @@
   "brandSloganMeaning": "Programlama burada sona erer. Gücü Terminatör’e denktir.",
   "heroCta": "Sürümleri görüntüle",
   "heroSecondary": "GitHub’da görüntüle",
-  "heroNote": "Apple Silicon üzerinde macOS · Erken prototip",
+  "heroPlatformNote": "Apple Silicon ve Intel üzerinde macOS · Erken prototip",
   "demoLabel": "Ajanların projeler arasında birlikte çalışmasına bir örnek",
   "demoWorkspace": "Restoran kampanyası",
   "demoIllustration": "Örnek iş akışı",

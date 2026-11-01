@@ -7,7 +7,7 @@
   "brandSloganMeaning": "Programming ends here. Power to rival the Terminator.",
   "heroCta": "View releases",
   "heroSecondary": "View on GitHub",
-  "heroNote": "macOS on Apple Silicon · Early prototype",
+  "heroPlatformNote": "macOS on Apple silicon and Intel · Early prototype",
   "demoLabel": "Example of agents working across projects",
   "demoWorkspace": "Restaurant promotion",
   "demoIllustration": "Example workflow",

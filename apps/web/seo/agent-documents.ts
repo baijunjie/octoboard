@@ -123,7 +123,7 @@ function homeMarkdown(copy: AgentCopy, locale: SiteLocale): string {
     text("brandSloganMeaning"),
     text("workspaceIntroduction"),
     text("heroStatus"),
-    text("heroNote"),
+    text("heroPlatformNote"),
     link(text("heroCta"), releasesUrl(copy.repositoryUrl)),
     link(text("heroSecondary"), copy.repositoryUrl),
     text("workspaceAgentLabel"),

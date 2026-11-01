@@ -5,7 +5,7 @@ starts the `octoboardd` daemon as a sidecar, keeps running behind a menu bar ico
 own updates. The interface itself is [`packages/ui/`](../../packages/ui/README.md), bundled into the application at
 build time; it talks to the daemon ([`apps/daemon/`](../daemon/README.md)) only over the daemon's own protocol.
 
-It runs on macOS 11 or later; the release build is one universal bundle for Apple Silicon and Intel.
+It runs on macOS 11 or later; the release build is one universal bundle for Apple silicon and Intel.
 
 ## Develop
 
