@@ -148,6 +148,7 @@ export function AccountSharingSwitch({ account, opensFocused }: { account: Accou
         </>
       }
       below={progress && <SharingProgress id={id} progress={progress} />}
+      compact
     >
       <div className="flex items-center gap-2">
         <div ref={root} data-sharing-account={account.id}>

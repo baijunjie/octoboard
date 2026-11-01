@@ -5,11 +5,15 @@ import { MarkLineBox } from "../components/status/MarkLineBox";
 
 /** One setting: its name and, when it has one, a line saying what it does at the start, its control
  * at the end, with a thin divider under every row but the last (the copy of a row a list motion is
- * still removing does not count, so the divider goes as the row leaves). At phone widths the control moves
- * under the text instead, since beside it a wide control (a select) squeezes the description to a
- * few words per line. `help` is a help tip that ends the name's line (see "Explanations in help
- * tips" in `docs/product/labels-and-tooltips.md`). `below` is what the row has to say under itself across its whole
- * width (a progress bar), inside its divider. */
+ * still removing does not count, so the divider goes as the row leaves). At phone widths a wide
+ * control moves under the text instead, since beside it it squeezes the description to a few words
+ * per line. Pass `compact` when the control is one small control of a bounded width — a switch, one
+ * button, one badge, a link of a word or two, with a status mark beside it at most — so it stays
+ * beside the text at every width, where under it it would leave a line almost empty. Leave it off
+ * for a select, a text field, a group of buttons or a value whose width varies (a URL). `help` is a
+ * help tip that ends the name's line (see "Explanations in help tips" in
+ * `docs/product/labels-and-tooltips.md`). `below` is what the row has to say under itself across
+ * its whole width (a progress bar), inside its divider. */
 export function SettingRow({
   label,
   help,
@@ -17,6 +21,7 @@ export function SettingRow({
   children,
   below,
   motionKey,
+  compact = false,
 }: {
   label: React.ReactNode;
   help?: React.ReactNode;
@@ -24,10 +29,11 @@ export function SettingRow({
   children?: React.ReactNode;
   below?: React.ReactNode;
   motionKey?: string;
+  compact?: boolean;
 }): React.ReactElement {
   return (
     <div data-list-motion={motionKey} className="flex flex-col gap-3 groove-b py-4 [&:not(:has(~:not([data-list-motion-exit])))]:border-b-0">
-      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+      <div className={compact ? "flex items-center justify-between gap-4 sm:gap-6" : "flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6"}>
         <div className="min-w-0">
           <div className="flex items-start gap-2 text-sm font-medium text-foreground">
             <div className="min-w-0">{label}</div>
@@ -35,7 +41,8 @@ export function SettingRow({
           </div>
           {description && <div className="text-sm text-app-muted">{description}</div>}
         </div>
-        {children && <div className="shrink-0">{children}</div>}
+        {/* A row whose controls all render nothing (`false`) draws no empty box taking the gap. */}
+        {React.Children.toArray(children).length > 0 && <div className="shrink-0">{children}</div>}
       </div>
       {below}
     </div>
@@ -114,7 +121,7 @@ export function SwitchSettingRow({
   motionKey?: string;
 }): React.ReactElement {
   return (
-    <SettingRow label={label} help={help} description={description} motionKey={motionKey}>
+    <SettingRow label={label} help={help} description={description} motionKey={motionKey} compact>
       <SettingSwitch label={label} isSelected={isSelected} onChange={onChange} />
     </SettingRow>
   );

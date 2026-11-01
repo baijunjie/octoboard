@@ -105,7 +105,7 @@ export function UpdatesSetting(): React.ReactElement | null {
     );
   return (
     <>
-      <SettingRow label={t("settings.updates.version.label")} description={status}>
+      <SettingRow compact label={t("settings.updates.version.label")} description={status}>
         <div className="flex items-center gap-2">
           {warning}
           {action}

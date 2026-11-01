@@ -33,7 +33,9 @@ inset view keeps its 16 px margin above them (see "What an open dialog, menu or 
 with more beyond it (see "The surfaces that fade" in `docs/product/scrolling-surfaces.md`), and the selected section's
 tab is scrolled into view when the dialog opens.
 
-Below 640 px each setting row puts its control under its name and its line of text instead of beside them.
+A setting row whose control is one small control of a bounded width — a switch, a single button, a status badge or a
+short link, with a status mark beside it at most — keeps it beside its name and its line of text at every width. Below
+640 px any other control (a select, a text field, a group of buttons, a URL) goes under the name and the text instead.
 
 ## Moving between sections
 

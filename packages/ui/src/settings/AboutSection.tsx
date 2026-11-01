@@ -43,11 +43,11 @@ export function AboutSection(): React.ReactElement {
           <ExternalLink href={href}><span dir="ltr">{shown(href)}</span></ExternalLink>
         </SettingRow>
       ))}
-      <SettingRow label={t("settings.about.license.label")} description={t("settings.about.license.description", { license: isolate(appConfig.license) })}>
+      <SettingRow compact label={t("settings.about.license.label")} description={t("settings.about.license.description", { license: isolate(appConfig.license) })}>
         <ExternalLink href={`${appConfig.repositoryUrl}/blob/main/LICENSE`}>{t("settings.about.license.view")}</ExternalLink>
       </SettingRow>
       <SettingRow label={t("settings.about.copyright.label")} description={t("settings.about.copyright.description", { year: String(appConfig.copyrightYear), author: isolate(appConfig.author.name) })} />
-      <SettingRow label={t("settings.about.thirdParty.label")} description={t("settings.about.thirdParty.description")}>
+      <SettingRow compact label={t("settings.about.thirdParty.label")} description={t("settings.about.thirdParty.description")}>
         <Button size="sm" variant="outline" onPress={() => setLicensesOpen(true)}>{t("settings.about.thirdParty.open")}</Button>
       </SettingRow>
       {licensesOpen && <ThirdPartyLicensesDialog onClose={() => setLicensesOpen(false)} />}

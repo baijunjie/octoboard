@@ -22,12 +22,12 @@ export function ConfigurationSection(): React.ReactElement {
   if (!configurationFile) return <p className="text-sm text-app-muted">{t("settings.configuration.unavailable")}</p>;
   return (
     <>
-      <SettingRow label={t("settings.configuration.export.label")} description={t("settings.configuration.export.description")}>
+      <SettingRow compact label={t("settings.configuration.export.label")} description={t("settings.configuration.export.description")}>
         <Button size="sm" variant="outline" preventFocusOnPress onPress={() => setDialog("export")}>
           {t("settings.configuration.export.button")}
         </Button>
       </SettingRow>
-      <SettingRow label={t("settings.configuration.import.label")} description={t("settings.configuration.import.description")}>
+      <SettingRow compact label={t("settings.configuration.import.label")} description={t("settings.configuration.import.description")}>
         <Button size="sm" variant="outline" preventFocusOnPress onPress={() => setDialog("import")}>
           {t("settings.configuration.import.button")}
         </Button>

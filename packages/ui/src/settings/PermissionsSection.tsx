@@ -186,6 +186,7 @@ export function PermissionsSection(): React.ReactElement {
         <div className="groove-t">
           {rows.map(({ kind, label, systemPane, description, granted, stateKey, restart }) => (
             <SettingRow
+              compact
               key={kind}
               label={t(label)}
               description={

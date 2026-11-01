@@ -49,6 +49,7 @@ export function AgentClaudeCompatibilitySetting({ agent }: { agent: Agent }): Re
         </HelpTip>
       }
       description={t("settings.accounts.approval.description", { agent: AGENT_LABEL[agent] })}
+      compact
     >
       <SettingSwitch
         label={t("settings.accounts.claudeCompat.label", { agent: AGENT_LABEL[agent] })}

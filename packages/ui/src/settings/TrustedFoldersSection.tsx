@@ -48,7 +48,7 @@ export function TrustedFoldersSection(): React.ReactElement {
       ) : (
         <div ref={listRef} className="relative groove-t">
           {directories.map((path) => (
-            <SettingRow key={path} motionKey={path} label={<MarkedPath path={path} />}>
+            <SettingRow compact key={path} motionKey={path} label={<MarkedPath path={path} />}>
               <TitledControl title={t("settings.trusted.removeTooltip")}>
                 <Button
                   size="sm"

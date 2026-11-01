@@ -18,7 +18,7 @@ function DisableAccountRow({ agent, account, name }: { agent: Agent; account: st
   const t = useT();
   const disabled = useAccountDisabled(agent, account);
   return (
-    <SettingRow label={t("settings.accounts.disableAccount")} description={t(disabled ? "settings.accounts.disableHiddenDescriptionOnInUse" : "settings.accounts.disableHiddenDescriptionOffInUse")}>
+    <SettingRow compact label={t("settings.accounts.disableAccount")} description={t(disabled ? "settings.accounts.disableHiddenDescriptionOnInUse" : "settings.accounts.disableHiddenDescriptionOffInUse")}>
       <AccountDisableSwitch agent={agent} account={account} name={name} label="settings.accounts.disableAccountLabel" />
     </SettingRow>
   );
