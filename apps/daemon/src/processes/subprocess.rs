@@ -516,22 +516,120 @@ impl std::fmt::Display for ExchangeFailure {
     }
 }
 
+/// How long an agent CLI query's program is given to exit by itself after its reply, once its stdin
+/// is closed (see [`run_exchange_traced`]). The agents exit within a second or two of the end of
+/// their input; this leaves room for a login being written back.
+pub const AGENT_REPLY_GRACE: Duration = Duration::from_secs(5);
+
 /// Runs an already-configured `command` as a conversation over lines: writes every line of
 /// `input` to its stdin, keeps stdin open, and reads stdout line by line until `is_reply` accepts
 /// one, which is returned. For a program that answers a request on stdout and exits when its
 /// input ends, possibly before it has answered, so [`run_bounded`], which gives a closed stdin,
 /// cannot be used. Whatever else it prints is passed over, a line `is_reply` rejects included.
 ///
-/// Every end, a reply too, kills what `bounds.reach` names, since the program is by then running
-/// on nothing the caller wants. The same bounds apply as to [`run_bounded`]: `bounds.timeout`
-/// from the start, `bounds.stdout_limit` over everything printed (one byte more fails the run),
-/// and `bounds.stderr_limit` bytes of stderr kept, for the failure that reports it. Setting
-/// `cancel` ends the run within one [`BOUNDED_POLL`].
+/// Once the reply is in, the program is given [`AGENT_REPLY_GRACE`] to exit by itself, as
+/// [`run_exchange_traced`] says. Every other end kills what `bounds.reach` names. The same bounds
+/// apply as to [`run_bounded`]: `bounds.timeout` from the start, `bounds.stdout_limit` over
+/// everything printed (one byte more fails the run), and `bounds.stderr_limit` bytes of stderr
+/// kept, for the failure that reports it. Setting `cancel` ends the run within one
+/// [`BOUNDED_POLL`].
 pub fn run_exchange(
     command: &mut Command,
     input: &[String],
     bounds: &Bounds,
     cancel: &std::sync::atomic::AtomicBool,
+    is_reply: impl FnMut(&str) -> bool,
+) -> std::result::Result<String, ExchangeFailure> {
+    run_exchange_traced(
+        command,
+        input,
+        bounds,
+        cancel,
+        AGENT_REPLY_GRACE,
+        &mut ExchangeTrace::default(),
+        is_reply,
+    )
+}
+
+/// How a run ended after its reply came, when the program was given time to exit by itself.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AfterReply {
+    /// The program exited by itself, `after` the reply.
+    Exited { after: Duration },
+    /// It had not exited, and was killed `after` the reply for `why`.
+    Killed { after: Duration, why: &'static str },
+}
+
+/// What [`run_exchange_traced`] observed of the child, for a caller that logs how a run went.
+#[derive(Debug, Default)]
+pub struct ExchangeTrace {
+    /// The child's pid; `None` when it could not be started.
+    pub pid: Option<u32>,
+    /// How long the run took, up to the moment it was ended (not counting the stop itself).
+    pub elapsed: Duration,
+    /// The stderr kept (up to `bounds.stderr_limit`). Collected for a run that did not return a
+    /// reply after waiting a moment for it to settle, and for one that did as far as had
+    /// arrived by the end.
+    pub stderr: Vec<u8>,
+    /// How the program ended after the reply; `None` when no reply came or no grace was given.
+    pub after_reply: Option<AfterReply>,
+}
+
+/// Waits until the child `pid` has exited by itself, `until` has come, `cancel` is set or its
+/// output has gone past the limit, passing over whatever it prints meanwhile. The child is not
+/// reaped here.
+fn await_exit(
+    pid: libc::pid_t,
+    stdout_rx: &mpsc::Receiver<BoundedChunk>,
+    until: Instant,
+    cancel: &std::sync::atomic::AtomicBool,
+) -> AfterReply {
+    let waited = Instant::now();
+    let killed = |why| AfterReply::Killed {
+        after: waited.elapsed(),
+        why,
+    };
+    loop {
+        // `None`, where `waitid` cannot say, leaves the matter to the stop that follows.
+        if leader::exited_unreaped(pid) != Some(false) {
+            return AfterReply::Exited {
+                after: waited.elapsed(),
+            };
+        }
+        if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+            return killed("cancelled");
+        }
+        if Instant::now() >= until {
+            return killed("it did not exit in time");
+        }
+        match stdout_rx.recv_timeout(BOUNDED_POLL) {
+            Ok(BoundedChunk::Exceeded) => return killed("its output went past the limit"),
+            Ok(_) | Err(mpsc::RecvTimeoutError::Timeout) => {}
+            // Nothing more will come on stdout; the exit is polled.
+            Err(mpsc::RecvTimeoutError::Disconnected) => thread::sleep(BOUNDED_POLL),
+        }
+    }
+}
+
+/// [`run_exchange`] with the time the program is given to exit after its reply set by
+/// `reply_grace`, that also records the child's pid, the time the run took, its stderr and how it
+/// ended after the reply in `trace`, whether or not a reply came.
+///
+/// After a reply its stdin is closed and the program is waited for, for `reply_grace` or until
+/// the run's own deadline if that is nearer, with its output drained and still bounded, and
+/// `cancel` still ending the wait. The program may still be finishing work begun for the request
+/// (Claude Code can be writing a rotated OAuth token to the keychain through a `security` child of
+/// its own session), which a kill at the reply could lose. Only a program that has not exited by
+/// then is killed. What it leaves in its group or session is swept as it is for any other end, and
+/// the reply is returned whichever way the program ended. A `reply_grace` of zero kills at the
+/// reply.
+pub fn run_exchange_traced(
+    command: &mut Command,
+    input: &[String],
+    bounds: &Bounds,
+    cancel: &std::sync::atomic::AtomicBool,
+    reply_grace: Duration,
+    trace: &mut ExchangeTrace,
     mut is_reply: impl FnMut(&str) -> bool,
 ) -> std::result::Result<String, ExchangeFailure> {
     let Spawned {
@@ -540,7 +638,10 @@ pub fn run_exchange(
         stdout: stdout_rx,
         stderr: stderr_rx,
     } = spawn_bounded(command, bounds, true).map_err(ExchangeFailure::Failed)?;
-    // Held until the run is stopped below: closing it early is what makes such a program exit.
+    trace.pid = Some(leader.child.id());
+    let started = Instant::now();
+    // Held until the reply is in, or the run is stopped below: closing it early is what makes such
+    // a program exit.
     let mut stdin = stdin.expect("stdin was piped");
     let stdout_limit = bounds.stdout_limit;
 
@@ -590,17 +691,43 @@ pub fn run_exchange(
             }
         }
     };
+    if outcome.is_ok() && !reply_grace.is_zero() {
+        // Closing stdin is what tells the program its input has ended.
+        drop(stdin);
+        let until = (Instant::now() + reply_grace).min(deadline);
+        trace.after_reply = Some(await_exit(leader.pid(), &stdout_rx, until, cancel));
+    }
+    trace.elapsed = started.elapsed();
     leader.stop();
     match outcome {
         Err(ExchangeFailure::ClosedWithoutReply { .. }) => {
             let mut stderr = Vec::new();
             settle_stderr(&stderr_rx, &mut stderr);
+            trace.stderr = stderr.clone();
             Err(ExchangeFailure::ClosedWithoutReply {
                 status: leader.child.try_wait().ok().flatten(),
                 stderr,
             })
         }
-        other => other,
+        Ok(reply) => {
+            if matches!(trace.after_reply, Some(AfterReply::Exited { .. })) {
+                // The program is gone and the stop swept what it left, so the pipe ends soon and
+                // what it wrote is complete.
+                settle_stderr(&stderr_rx, &mut trace.stderr);
+            } else {
+                // Otherwise the reply is not waited on for its stderr; what has arrived is enough.
+                while let Ok(chunk) = stderr_rx.try_recv() {
+                    if let BoundedChunk::Data(bytes) = chunk {
+                        trace.stderr.extend_from_slice(&bytes);
+                    }
+                }
+            }
+            Ok(reply)
+        }
+        other => {
+            settle_stderr(&stderr_rx, &mut trace.stderr);
+            other
+        }
     }
 }
 
@@ -752,9 +879,9 @@ mod tests {
         assert_eq!(output.stderr, b"0123456789");
     }
 
-    /// Runs `script` under `/bin/sh` through [`run_exchange`] with `input` on its stdin, the
-    /// script recording its pid first; `None` when the run ended before it did (see
-    /// [`until_the_shell_ran`]).
+    /// Runs `script` under `/bin/sh` through [`run_exchange_traced`], with no time to exit after
+    /// the reply and `input` on its stdin, the script recording its pid first; `None` when the run
+    /// ended before it did (see [`until_the_shell_ran`]).
     fn exchange_of(
         script: &str,
         input: &[&str],
@@ -770,6 +897,26 @@ mod tests {
         bounds: Bounds,
         cancel: &AtomicBool,
     ) -> Option<(std::result::Result<String, ExchangeFailure>, i32)> {
+        exchange_graced_by(
+            script,
+            input,
+            bounds,
+            cancel,
+            Duration::ZERO,
+            &mut ExchangeTrace::default(),
+        )
+    }
+
+    /// [`exchange_cancelled_by`] with the `grace` the program is given to exit after its reply,
+    /// and its `trace`.
+    fn exchange_graced_by(
+        script: &str,
+        input: &[&str],
+        bounds: Bounds,
+        cancel: &AtomicBool,
+        grace: Duration,
+        trace: &mut ExchangeTrace,
+    ) -> Option<(std::result::Result<String, ExchangeFailure>, i32)> {
         let pid_file = ScratchFile::new("env-shell-exchange", "pid");
         let mut command = Command::new("/bin/sh");
         command.args([
@@ -777,10 +924,120 @@ mod tests {
             &format!("echo $$ > '{}'; {script}", pid_file.display()),
         ]);
         let input: Vec<String> = input.iter().map(|line| line.to_string()).collect();
-        let outcome = run_exchange(&mut command, &input, &bounds, cancel, |line| {
-            line.starts_with("reply")
-        });
+        let outcome = run_exchange_traced(
+            &mut command,
+            &input,
+            &bounds,
+            cancel,
+            grace,
+            trace,
+            |line| line.starts_with("reply"),
+        );
         Some((outcome, read_pid_file(&pid_file)?))
+    }
+
+    #[test]
+    fn a_program_that_exits_when_its_stdin_closes_is_left_to_exit_by_itself() {
+        // Replies, then idles until its input ends, as the agents do.
+        let script = "read a; echo \"reply $a\"; cat >/dev/null; echo done >&2";
+        let mut trace = ExchangeTrace::default();
+        let (outcome, pid) = until_the_shell_ran(|| {
+            exchange_graced_by(
+                script,
+                &["x"],
+                exchange_bounds(PATIENCE),
+                &AtomicBool::new(false),
+                PATIENCE,
+                &mut trace,
+            )
+        });
+        assert_eq!(outcome.expect("a reply"), "reply x");
+        assert!(
+            matches!(trace.after_reply, Some(AfterReply::Exited { .. })),
+            "{:?}",
+            trace.after_reply
+        );
+        // It ran on to the end, which a kill at the reply would have cut short.
+        assert_eq!(String::from_utf8_lossy(&trace.stderr).trim(), "done");
+        assert_gone_by(pid, Instant::now() + PATIENCE);
+    }
+
+    #[test]
+    fn a_program_that_ignores_its_stdin_closing_is_killed_after_the_grace_with_its_reply_kept() {
+        let grace = Duration::from_millis(300);
+        let mut trace = ExchangeTrace::default();
+        let (outcome, pid) = until_the_shell_ran(|| {
+            exchange_graced_by(
+                "read a; echo \"reply $a\"; exec /bin/sleep 300",
+                &["x"],
+                exchange_bounds(PATIENCE),
+                &AtomicBool::new(false),
+                grace,
+                &mut trace,
+            )
+        });
+        assert_eq!(outcome.expect("the reply survives the kill"), "reply x");
+        match trace.after_reply {
+            Some(AfterReply::Killed { after, .. }) => assert!(after >= grace, "{after:?}"),
+            other => panic!("{other:?}"),
+        }
+        assert_gone_by(pid, Instant::now() + PATIENCE);
+    }
+
+    #[test]
+    fn the_grace_ends_with_the_run_deadline_when_that_is_nearer() {
+        let mut trace = ExchangeTrace::default();
+        let started = Instant::now();
+        let (outcome, pid) = until_the_shell_ran(|| {
+            exchange_graced_by(
+                "echo reply; exec /bin/sleep 300",
+                &[],
+                exchange_bounds(Duration::from_millis(400)),
+                &AtomicBool::new(false),
+                Duration::from_secs(60),
+                &mut trace,
+            )
+        });
+        assert_eq!(outcome.expect("the reply survives the kill"), "reply");
+        assert!(matches!(trace.after_reply, Some(AfterReply::Killed { .. })));
+        assert!(started.elapsed() < Duration::from_secs(30));
+        assert_gone_by(pid, Instant::now() + PATIENCE);
+    }
+
+    #[test]
+    fn cancelling_during_the_grace_kills_the_program_and_keeps_the_reply() {
+        let cancel = std::sync::Arc::new(AtomicBool::new(false));
+        let flag = cancel.clone();
+        thread::spawn(move || {
+            thread::sleep(Duration::from_millis(300));
+            flag.store(true, Ordering::Relaxed);
+        });
+        let mut trace = ExchangeTrace::default();
+        let started = Instant::now();
+        let (outcome, pid) = until_the_shell_ran(|| {
+            exchange_graced_by(
+                "echo reply; exec /bin/sleep 300",
+                &[],
+                exchange_bounds(PATIENCE),
+                &cancel,
+                Duration::from_secs(60),
+                &mut trace,
+            )
+        });
+        assert_eq!(outcome.expect("the reply survives the kill"), "reply");
+        assert!(
+            matches!(
+                trace.after_reply,
+                Some(AfterReply::Killed {
+                    why: "cancelled",
+                    ..
+                })
+            ),
+            "{:?}",
+            trace.after_reply
+        );
+        assert!(started.elapsed() < Duration::from_secs(30));
+        assert_gone_by(pid, Instant::now() + PATIENCE);
     }
 
     fn exchange_bounds(timeout: Duration) -> Bounds {
@@ -895,7 +1152,10 @@ mod tests {
         Exits,
         TimesOut,
         Cancelled,
+        /// Replies and keeps running until it is killed.
         Replies,
+        /// Replies and exits by itself when its input ends.
+        RepliesThenExits,
     }
 
     /// Runs a stand-in agent CLI that leaves a helper in a process group of its own, through
@@ -908,6 +1168,7 @@ mod tests {
             SessionEnd::Exits => "exit 0",
             SessionEnd::TimesOut | SessionEnd::Cancelled => "exec /bin/sleep 300",
             SessionEnd::Replies => "read line; echo \"reply $line\"; exec /bin/sleep 300",
+            SessionEnd::RepliesThenExits => "read line; echo \"reply $line\"; cat >/dev/null",
         };
         let mut command = Command::new("/bin/bash");
         command.args([
@@ -935,12 +1196,18 @@ mod tests {
             });
         }
         match end {
-            SessionEnd::Replies => {
-                let reply = run_exchange(
+            SessionEnd::Replies | SessionEnd::RepliesThenExits => {
+                let grace = match end {
+                    SessionEnd::RepliesThenExits => PATIENCE,
+                    _ => Duration::ZERO,
+                };
+                let reply = run_exchange_traced(
                     &mut command,
                     &["x".to_string()],
                     &bounds,
                     &AtomicBool::new(false),
+                    grace,
+                    &mut ExchangeTrace::default(),
                     |line| line.starts_with("reply"),
                 );
                 assert_eq!(reply.expect("a reply"), "reply x");
@@ -965,6 +1232,7 @@ mod tests {
             SessionEnd::TimesOut,
             SessionEnd::Cancelled,
             SessionEnd::Replies,
+            SessionEnd::RepliesThenExits,
         ] {
             let helper = until_the_shell_ran(|| session_run_ending(&end));
             let mut guard = KillOnDrop(vec![helper]);

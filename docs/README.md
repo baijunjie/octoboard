@@ -74,8 +74,13 @@ Development plan docs and bug tickets are temporary and are not listed here.
 - [Logging an account in](product/logging-accounts-in.md) — the login dialog and how each agent signs in.
 - [Sharing the default configuration](product/sharing-the-default-configuration.md) — an account sharing the agent's
   default configuration and how a change is carried out.
-- [Account quotas](product/account-quotas.md) — how an account's plan quota is read, shown, and when it counts as used
-  up.
+- [Account quotas](product/account-quotas.md) — which accounts have a plan quota, how it is shown, its states, and when
+  it counts as used up.
+- [Account quota readings](product/account-quota-readings.md) — how and when Octoboard reads a quota through the
+  agent's CLI, the sign-in email a reading carries, what a reading leaves behind, and what the daemon's log records of
+  readings.
+- [Reading quotas from a session](product/reading-quotas-from-a-session.md) — the `get_account_quotas` session tool,
+  its fields and refresh rules.
 - [The account quota panel](product/account-quota-panel.md) — the rail's Account usage panel.
 - [Starting a usage window](product/starting-usage-windows.md) — kicking a usage window that has not begun counting.
 - [Codex usage limit resets](product/usage-limit-resets.md) — how a Codex account's usage limit resets are read and

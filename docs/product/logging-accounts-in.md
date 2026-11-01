@@ -19,7 +19,7 @@ is logging in. This applies to the default account and the accounts the user own
 Log in signs the account in with its agent's own CLI, run by the daemon in the background against the account's config
 directory (for the default account, the directory the user's login shell gives the agent), with no terminal and no
 window. Octoboard never uses or writes the credential itself; it reads the agent's sign-in record only for the
-account's email (see "The account's sign-in email" in `docs/product/account-quotas.md`). Each agent signs in its own
+account's email (see "The account's sign-in email" in `docs/product/account-quota-readings.md`). Each agent signs in its own
 way:
 
 | Agent | What the user sees |
@@ -106,4 +106,4 @@ Its buttons are **Report issue** where it applies, **Close**, and **Log in again
 again brings the running dialog back on a new login; Close closes it, as above.
 
 Whatever the outcome, the account's quota is read again within about 15 seconds (see "When quotas are read" in
-`docs/product/account-quotas.md`).
+`docs/product/account-quota-readings.md`).

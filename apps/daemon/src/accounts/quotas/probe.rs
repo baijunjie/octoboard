@@ -30,9 +30,12 @@ use std::time::Duration;
 
 use serde_json::{json, Value};
 
+use super::diagnostics::{redact, stderr_tail, truncate, ProbeTrace, LINE_LIMIT, MAX_NOTES};
 use crate::accounts::cli_run::{self, NotRun};
 use crate::agents::codex_app_server;
-use crate::processes::subprocess::{run_exchange, Bounds, ExchangeFailure};
+use crate::processes::subprocess::{
+    run_exchange_traced, AfterReply, Bounds, ExchangeFailure, ExchangeTrace, AGENT_REPLY_GRACE,
+};
 use crate::protocol::{
     quota_unavailable_code as code, Agent, QuotaUnavailable, QuotaWindow, QuotaWindowKind,
     ResetCredit, ResetCredits,
@@ -181,13 +184,16 @@ pub(super) fn is_response(value: &Value, id: i64) -> bool {
 }
 
 /// Runs the probe for `agent` and reads its reply. Blocking; setting `cancel` stops it, which
-/// reports as a failure.
+/// reports as a failure. Notes in `trace` what is worth logging of the run: the process's pid,
+/// how long it ran, its stderr, whether Octoboard had to end it, what the agent said that made
+/// the account read as not signed in, and any error-like line it printed besides the reply.
 pub(super) fn probe(
     agent: Agent,
     shell_env: &HashMap<String, String>,
     config_dir: Option<&Path>,
     timeout: Duration,
     cancel: &AtomicBool,
+    trace: &mut ProbeTrace,
 ) -> Result<Reading, QuotaUnavailable> {
     let conversation = conversation(agent);
     let mut run = cli_run::admitted_command(agent, shell_env, config_dir, conversation.args)
@@ -209,11 +215,15 @@ pub(super) fn probe(
     // arrive in either order.
     let reply: RefCell<Option<Value>> = RefCell::new(None);
     let companion: RefCell<Option<Value>> = RefCell::new(None);
-    run_exchange(
+    let notes: RefCell<Vec<String>> = RefCell::new(Vec::new());
+    let mut exchange = ExchangeTrace::default();
+    let result = run_exchange_traced(
         &mut run.command,
         &conversation.input,
         &bounds,
         cancel,
+        AGENT_REPLY_GRACE,
+        &mut exchange,
         |line| {
             let Ok(value) = serde_json::from_str::<Value>(line) else {
                 return false;
@@ -223,16 +233,32 @@ pub(super) fn probe(
             }
             if is_reply(&value) {
                 *reply.borrow_mut() = Some(value);
+            } else if is_error_like(&value) && notes.borrow().len() < MAX_NOTES {
+                notes.borrow_mut().push(truncate(&redact(line), LINE_LIMIT));
             }
             reply
                 .borrow()
                 .as_ref()
                 .is_some_and(|reply| !needs_companion(reply) || companion.borrow().is_some())
         },
-    )
-    .map_err(|failure| match failure {
+    );
+    trace.pid = exchange.pid;
+    trace.elapsed = exchange.elapsed;
+    trace.stderr_tail = stderr_tail(&exchange.stderr);
+    trace.notes = notes.take();
+    match &result {
+        Err(failure) => trace.stopped = stopped_by_us(failure, exchange.pid.is_some()),
+        // A program that exits by itself after its reply is the normal end of a reading.
+        Ok(_) => {
+            if let Some(AfterReply::Killed { after, why }) = &exchange.after_reply {
+                trace.stopped = Some(format!("killed {after:?} after its reply: {why}"));
+            }
+        }
+    }
+    result.map_err(|failure| match failure {
         // Claude Code's sign-in state is in a reply other than the one that is read.
         _ if agent == Agent::Claude && claude_signed_out(companion.borrow().as_ref()) => {
+            trace.reason = Some(signed_out_reason(agent, None, companion.borrow().as_ref()));
             not_signed_in(agent)
         }
         ExchangeFailure::TimedOut(_) => QuotaUnavailable::new(
@@ -251,7 +277,10 @@ pub(super) fn probe(
     let value = reply.take().ok_or_else(|| unreadable(agent))?;
     let companion = companion.take();
     (conversation.read)(&value, companion.as_ref()).map_err(|problem| match problem {
-        ReplyProblem::NotSignedIn => not_signed_in(agent),
+        ReplyProblem::NotSignedIn => {
+            trace.reason = Some(signed_out_reason(agent, Some(&value), companion.as_ref()));
+            not_signed_in(agent)
+        }
         ReplyProblem::Unreadable => unreadable(agent),
         ReplyProblem::NoWindows => QuotaUnavailable::new(
             code::NO_WINDOWS,
@@ -260,6 +289,81 @@ pub(super) fn probe(
         ),
         ReplyProblem::Error(detail) => failed(agent, &detail),
     })
+}
+
+/// Why Octoboard ended the process before it ended itself, from how the exchange failed;
+/// `started` is whether there was a process at all. A child that closed its output by itself was
+/// not ended by Octoboard. A process that had to be killed after its reply is told from the
+/// run's `after_reply`, not from a failure.
+fn stopped_by_us(failure: &ExchangeFailure, started: bool) -> Option<String> {
+    match failure {
+        ExchangeFailure::TimedOut(timeout) => Some(format!("no reply within {timeout:?}")),
+        ExchangeFailure::StdoutExceeded(limit) => Some(format!("output went past {limit} bytes")),
+        ExchangeFailure::Cancelled => Some("the daemon is stopping".to_string()),
+        ExchangeFailure::Failed(_) if started => Some("its output could not be read".to_string()),
+        ExchangeFailure::Failed(_) | ExchangeFailure::ClosedWithoutReply { .. } => None,
+    }
+}
+
+/// Whether a line other than the reply is an error or sign-in status message from the agent. Only
+/// what the agent plainly marks as such counts: a `type` of `auth_status` or `error`, or an
+/// `error` field.
+fn is_error_like(value: &Value) -> bool {
+    matches!(
+        value.get("type").and_then(Value::as_str),
+        Some("auth_status" | "error")
+    ) || value.get("error").is_some_and(|error| !error.is_null())
+}
+
+/// What the agent said that makes the account read as not signed in, in words fit for the log
+/// (see `diagnostics::redact`): for Claude Code the fields of `initialize`'s account that decide
+/// it with the usage request's error beside them, for the others the refusal of the quota
+/// request.
+fn signed_out_reason(agent: Agent, reply: Option<&Value>, account: Option<&Value>) -> String {
+    let field = |name: &str| {
+        account
+            .and_then(|account| account.get(name))
+            .map(|value| match value.as_str() {
+                Some(text) => truncate(&redact(text), 40),
+                None if value.is_null() => "none".to_string(),
+                None => "set".to_string(),
+            })
+            .unwrap_or_else(|| "absent".to_string())
+    };
+    match agent {
+        Agent::Claude => {
+            let mut reason = format!(
+                "initialize reported tokenSource {}, apiProvider {}, apiKeySource {}, \
+                 subscriptionType {}",
+                field("tokenSource"),
+                field("apiProvider"),
+                field("apiKeySource"),
+                field("subscriptionType")
+            );
+            if let Some(error) = reply.and_then(claude_response_error) {
+                reason.push_str(&format!(
+                    "; the usage request was refused: {}",
+                    truncate(&redact(&error), LINE_LIMIT)
+                ));
+            }
+            reason
+        }
+        Agent::Codex => "the rate limits request was refused for want of a sign-in and \
+            account/read reports no account"
+            .to_string(),
+        Agent::Grok => match reply.and_then(rpc_error_detail) {
+            Some(detail) => format!("the billing request was refused: {}", redact(&detail)),
+            None => "the billing request was refused".to_string(),
+        },
+    }
+}
+
+/// The error text of a Claude Code reply to a control request that answered with an error.
+fn claude_response_error(reply: &Value) -> Option<String> {
+    reply
+        .pointer("/response/error")
+        .and_then(Value::as_str)
+        .map(str::to_string)
 }
 
 pub(super) fn config_dir_missing(agent: Agent, dir: &str) -> QuotaUnavailable {
@@ -758,6 +862,7 @@ mod tests {
             None,
             crate::test_support::PATIENCE,
             &AtomicBool::new(false),
+            &mut ProbeTrace::default(),
         )
         .expect("a readable reply");
         assert_eq!(reading.plan.as_deref(), Some("max"));
@@ -865,6 +970,7 @@ mod tests {
             None,
             crate::test_support::PATIENCE,
             &AtomicBool::new(false),
+            &mut ProbeTrace::default(),
         )
     }
 
@@ -1106,6 +1212,7 @@ mod tests {
             None,
             crate::test_support::PATIENCE,
             &AtomicBool::new(false),
+            &mut ProbeTrace::default(),
         )
         .expect("a readable reply");
         assert_eq!(reading.plan.as_deref(), Some("plus"));
@@ -1139,12 +1246,16 @@ mod tests {
             .map(|line| serde_json::from_str::<Value>(line).unwrap())
             .map(|line| line["method"].as_str().unwrap().to_string())
             .collect();
-        // The reply ends the run, so the fake may stop before it has logged the last request.
+        // The run waits for the fake to exit once its input has ended, so every request is logged.
         assert_eq!(
-            methods[..3],
-            ["initialize", "initialized", "account/rateLimits/read"]
+            methods,
+            [
+                "initialize",
+                "initialized",
+                "account/rateLimits/read",
+                "account/read"
+            ]
         );
-        assert!(methods.get(3).is_none_or(|method| method == "account/read"));
     }
 
     /// A Codex reply holding the quota of `CODEX_REPLY` and `credits` as its
@@ -1297,6 +1408,7 @@ mod tests {
             None,
             crate::test_support::PATIENCE,
             &AtomicBool::new(false),
+            &mut ProbeTrace::default(),
         )
         .expect("a readable reply");
         assert_eq!(reading.plan.as_deref(), Some("SuperGrok"));
@@ -1346,6 +1458,7 @@ mod tests {
                 Some(&account_dir),
                 crate::test_support::PATIENCE,
                 &AtomicBool::new(false),
+                &mut ProbeTrace::default(),
             )
             .expect("a readable reply");
             assert_eq!(
@@ -1360,6 +1473,7 @@ mod tests {
                 None,
                 crate::test_support::PATIENCE,
                 &AtomicBool::new(false),
+                &mut ProbeTrace::default(),
             )
             .expect("a readable reply");
             assert_eq!(
@@ -1389,7 +1503,8 @@ mod tests {
                     &env,
                     None,
                     crate::test_support::PATIENCE,
-                    &AtomicBool::new(false)
+                    &AtomicBool::new(false),
+                    &mut ProbeTrace::default()
                 )),
                 code::UNREADABLE_REPLY,
                 "{agent:?}"
@@ -1412,7 +1527,14 @@ mod tests {
                         dir.display()
                     ),
                 );
-                let result = probe(agent, &env, None, SHORT, &AtomicBool::new(false));
+                let result = probe(
+                    agent,
+                    &env,
+                    None,
+                    SHORT,
+                    &AtomicBool::new(false),
+                    &mut ProbeTrace::default(),
+                );
                 dir.join("started")
                     .exists()
                     .then(|| unavailable_code(result))
@@ -1432,6 +1554,7 @@ mod tests {
                 None,
                 crate::test_support::PATIENCE,
                 &AtomicBool::new(false),
+                &mut ProbeTrace::default(),
             )
             .expect_err("no reply");
             assert_eq!(unavailable.code, code::COMMAND_FAILED, "{agent:?}");
@@ -1456,6 +1579,7 @@ mod tests {
             Some(&account),
             crate::test_support::PATIENCE,
             &AtomicBool::new(false),
+            &mut ProbeTrace::default(),
         )
         .expect_err("no reading");
         assert_eq!(unavailable.code, code::CONFIG_DIR_MISSING);
@@ -1482,6 +1606,7 @@ mod tests {
             None,
             crate::test_support::PATIENCE,
             &AtomicBool::new(false),
+            &mut ProbeTrace::default(),
         )
         .expect_err("refused");
         assert_eq!(unavailable.code, code::CONFIG_DIR_MISSING);
@@ -1498,9 +1623,108 @@ mod tests {
                 &env,
                 None,
                 SHORT,
-                &AtomicBool::new(false)
+                &AtomicBool::new(false),
+                &mut ProbeTrace::default()
             )),
             code::BINARY_NOT_FOUND
         );
+    }
+
+    #[test]
+    fn a_program_that_ignores_the_end_of_its_input_is_killed_and_the_trace_says_how_long_after() {
+        let dir = ScratchDir::new("quota-ignores-eof");
+        std::fs::write(dir.join("reply"), CLAUDE_REPLY).expect("reply");
+        let env = fake(
+            &dir,
+            Agent::Claude,
+            &format!(
+                "read a; read b; cat '{d}/reply'; exec /bin/sleep 300",
+                d = dir.display()
+            ),
+        );
+        let mut trace = ProbeTrace::default();
+        let reading = probe(
+            Agent::Claude,
+            &env,
+            None,
+            Duration::from_millis(3500),
+            &AtomicBool::new(false),
+            &mut trace,
+        );
+        assert!(reading.is_ok(), "{reading:?}");
+        let stopped = trace.stopped.expect("the program was killed");
+        assert!(
+            stopped.starts_with("killed ")
+                && stopped.ends_with(" after its reply: it did not exit in time"),
+            "{stopped}"
+        );
+        assert!(trace.pid.is_some());
+    }
+
+    #[test]
+    fn an_error_line_besides_the_reply_is_kept_redacted_in_the_notes() {
+        let dir = ScratchDir::new("quota-error-line");
+        std::fs::write(dir.join("reply"), CLAUDE_REPLY).expect("reply");
+        let env = fake(
+            &dir,
+            Agent::Claude,
+            &format!(
+                "while read line; do case \"$line\" in *get_usage*) \
+                 echo '{{\"type\":\"error\",\"message\":\"refresh failed for me@example.com\"}}'; \
+                 echo 'a plain line'; cat '{d}/reply';; esac; done",
+                d = dir.display()
+            ),
+        );
+        let mut trace = ProbeTrace::default();
+        probe(
+            Agent::Claude,
+            &env,
+            None,
+            crate::test_support::PATIENCE,
+            &AtomicBool::new(false),
+            &mut trace,
+        )
+        .expect("a readable reply");
+        assert_eq!(trace.notes.len(), 1, "{:?}", trace.notes);
+        assert!(trace.notes[0].contains("refresh failed"));
+        assert!(
+            !trace.notes[0].contains("me@example.com"),
+            "{:?}",
+            trace.notes
+        );
+        assert_eq!(trace.stopped, None);
+    }
+
+    #[test]
+    fn the_signed_out_reason_of_claude_names_the_fields_that_decided_it() {
+        let dir = ScratchDir::new("quota-claude-reason");
+        let init = json!({"type": "control_response", "response": {"subtype": "success",
+            "request_id": "r1", "response": {"account":
+                {"tokenSource": "none", "apiProvider": "firstParty",
+                 "email": "me@example.com"}}}});
+        let usage = json!({"type": "control_response", "response": {"subtype": "error",
+            "request_id": "r2", "error": "no credentials for me@example.com"}});
+        let env = replying_agent(
+            &dir,
+            Agent::Claude,
+            &[("initialize", &init), ("get_usage", &usage)],
+        );
+        let mut trace = ProbeTrace::default();
+        let result = probe(
+            Agent::Claude,
+            &env,
+            None,
+            crate::test_support::PATIENCE,
+            &AtomicBool::new(false),
+            &mut trace,
+        );
+        assert_eq!(unavailable_code(result), code::NOT_SIGNED_IN);
+        let reason = trace.reason.expect("a reason");
+        assert!(
+            reason.contains("tokenSource none, apiProvider firstParty, apiKeySource absent"),
+            "{reason}"
+        );
+        assert!(reason.contains("the usage request was refused"), "{reason}");
+        assert!(!reason.contains("me@example.com"), "{reason}");
     }
 }

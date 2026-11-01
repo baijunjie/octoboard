@@ -7,7 +7,7 @@ so their accounts never show any.
 
 ## How resets are read
 
-An account's resets come with its quota reading (see "How a quota is read" in `docs/product/account-quotas.md`): the
+An account's resets come with its quota reading (see "How a quota is read" in `docs/product/account-quota-readings.md`): the
 reply to Codex's `account/rateLimits/read` carries them beside the windows, so they are read whenever the quota is,
 with no request of their own. A reading holds them only while the account has at least one reset it can use; a reply
 that says nothing of them, or says it in a form that cannot be read, gives none and never fails the reading. From the
@@ -46,8 +46,8 @@ The line and button appear in two places:
   its **Usage** meters. The confirmation opens over the details dialog.
 
 They are not shown in Settings' accounts table, the account pickers, the selected session's quota indicator or the
-macOS menu bar icon and its menus, and a session's `get_account_quotas` tool says nothing of them (see "Reading quotas
-from a session" in `docs/product/account-quotas.md`).
+macOS menu bar icon and its menus, and a session's `get_account_quotas` tool says nothing of them (see
+`docs/product/reading-quotas-from-a-session.md`).
 
 ## Only the user redeems a reset
 
@@ -117,7 +117,7 @@ otherwise to where that dialog places focus when it opens.
 ## How a reset is redeemed
 
 The daemon redeems a reset by running `codex app-server` for the account the way a quota reading runs it (see "How a
-quota is read" and "What reading a quota leaves behind" in `docs/product/account-quotas.md`) and sending it
+quota is read" and "What reading a quota leaves behind" in `docs/product/account-quota-readings.md`) and sending it
 `account/rateLimitResetCredit/consume`:
 
 - it names the next reset of the held reading (see "How resets are read" above), or names none — leaving Codex to pick
@@ -126,7 +126,7 @@ quota is read" and "What reading a quota leaves behind" in `docs/product/account
 - Codex is given **60 seconds** to answer, as a reading is, after which the redeem fails as timed out;
 - one redeem runs on an account at a time; a second is refused while the first runs. A redeem counts towards the four
   readings, kicks and redeems that may run at once across the daemon (see "When quotas are read" in
-  `docs/product/account-quotas.md`);
+  `docs/product/account-quota-readings.md`);
 - none starts once the daemon has begun shutting down, and one running when it does is stopped.
 
 When Codex answers that the usage was reset, the daemon takes the redeemed reset out of the reading it holds (the count

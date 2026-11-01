@@ -3069,7 +3069,7 @@ directory.
   its last reading found it not logged in, or a change of its sharing is running, the reasons besides being turned off
   that automatic account selection passes an account over for. The result also carries `auto_select_account`, the
   setting of that name, read-only, so a session that cannot read `get_settings` knows whether an account it leaves out
-  is chosen for it. See "Reading quotas from a session" in `docs/product/account-quotas.md`.
+  is chosen for it. See `docs/product/reading-quotas-from-a-session.md`.
 - `show_page`, `list_pages` and `delete_pages` are the report panel's tools, offered to a console session and to a
   project coordinator, with or without a parent; a project worker has none. Pages are kept per session. `list_pages`
   lists the report pages the caller pushed, or with `page` answers one of them with its HTML. `delete_pages` withdraws

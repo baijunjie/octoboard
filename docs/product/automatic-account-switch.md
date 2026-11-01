@@ -87,7 +87,7 @@ including when recovery is confirmed while a switch to another account is being 
 
 The session stays stopped on its limit. While the setting remains on, Octoboard remembers that failed turn and can
 continue it after an account of the same agent has a fresh successful quota reading. It uses the existing readings
-in "When quotas are read" in `docs/product/account-quotas.md`; waiting adds no separate timer or quota requests.
+in "When quotas are read" in `docs/product/account-quota-readings.md`; waiting adds no separate timer or quota requests.
 
 - **The reading must begin after the failed turn was captured**, report at least one account-wide window, and give
   a finite used percentage below **100% in every account-wide window**: the five-hour window, account-wide weekly

@@ -1694,7 +1694,7 @@ first turn set a secret word; success means the model recalled it. Compression w
 
 Each CLI can say how much of an account's plan quota is used, over a channel meant for its own front ends. All three
 are marked experimental by their makers. What Octoboard does with a reading is under "How a quota is read" and "What
-reading a quota leaves behind" in `docs/product/account-quotas.md`. Measured against the default account of each on
+reading a quota leaves behind" in `docs/product/account-quota-readings.md`. Measured against the default account of each on
 Claude Code 2.1.302, Codex 0.162.1 and Grok Build 1.0.60, with the working directory set to the home directory and the
 agent's configuration-directory variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `GROK_HOME`) set to a pinned account's
 directory, or left alone for the default account. The CLI handles its own login, Keychain access and token refresh.
@@ -1821,7 +1821,7 @@ The server sends notifications of its own in between (`_x.ai/mcp/servers_updated
 one credit pool, not a session and a weekly window.
 
 **What a probe touches.** A probe is run repeatedly per account (see "When quotas are read" in
-`docs/product/account-quotas.md`), so what a start does matters. Measured on the same builds by listing the files each
+`docs/product/account-quota-readings.md`), so what a start does matters. Measured on the same builds by listing the files each
 probe changed in the agent's home and the processes alive in its process group when the reply arrived.
 
 - **Claude Code** syncs plugins on start (it rewrites `plugins/synced/…` and a `.in_use` marker per installed plugin
@@ -1831,8 +1831,9 @@ probe changed in the agent's home and the processes alive in its process group w
   read a different identity than the account's sessions use; the probe therefore leaves settings loading as it is. An
   `enabledPlugins` override through `--settings` did not stop the sync. `--strict-mcp-config` with an empty
   `--mcp-config` does keep the user's MCP servers from starting. So the plugin sync and the `sessions/` registration
-  stay; a later Claude Code start clears a registration whose process is gone (the probe is killed, so it leaves its own
-  until then). No session record is written, with `--no-session-persistence`.
+  stay. A probe that exits by itself once its stdin closes removes its own registration (measured with 2.1.316: an empty
+  `sessions/` after the exit); one that is killed leaves it until a later Claude Code start clears a registration whose
+  process is gone. No session record is written, with `--no-session-persistence`.
 - **Codex**, bare: the app server starts a plugin catalogue sync that runs `git ls-remote` over SSH against a plugin
   marketplace and writes `plugins/cache/…` and `.tmp/git-…`. With `features.plugins`, `features.remote_plugin`,
   `features.apps` and `features.hooks` set to false neither happens and the reply is unchanged. Still written:

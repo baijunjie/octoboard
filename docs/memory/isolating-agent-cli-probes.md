@@ -160,7 +160,7 @@ Applies to a probe that runs the daemon over a hand-built Grok home — a scratc
 
 **Initialise the home before taking any baseline of it.** The daemon reads every account's quota by running the
 agent's own CLI against the account's directory, the first time within about 15 seconds of its start and with no
-session involved (`docs/product/account-quotas.md`, "How a quota is read" and "When quotas are read"). For Grok that is
+session involved (`docs/product/account-quota-readings.md`, "How a quota is read" and "When quotas are read"). For Grok that is
 `grok agent --no-leader stdio`, and its first run in a home never run before initialises it: `README.md`, `docs/`,
 `installed-plugins/`, and `[marketplace] default_skills_installs_purged = true` appended to `config.toml`, following a
 symlink into the file it points at. A probe asserting that a shared `config.toml` comes through a session untouched

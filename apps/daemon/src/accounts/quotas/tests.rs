@@ -122,12 +122,72 @@ fn readings_of_accounts_no_longer_targeted_are_dropped() {
     state
         .account_quotas
         .recorded(&state, gone.clone(), quota_of(&gone, false));
+    for key in [&kept, &gone] {
+        state
+            .account_quotas
+            .lock()
+            .observed
+            .insert(key.clone(), diagnostics::Observed::default());
+    }
     state.account_quotas.change(&state, |inner| {
         retain_locked(inner, std::slice::from_ref(&kept))
     });
     let held = state.account_quotas.list();
     assert_eq!(held.len(), 1);
     assert_eq!(held[0].account, None);
+    let observed: Vec<Key> = state
+        .account_quotas
+        .lock()
+        .observed
+        .keys()
+        .cloned()
+        .collect();
+    assert_eq!(observed, [kept]);
+}
+
+#[test]
+fn a_superseded_claim_tells_the_log_nothing() {
+    let (state, _dir) = crate::test_support::app_state("quota-log-claim");
+    let key = key(Agent::Codex, Some("a"));
+    let claim = {
+        let mut inner = state.account_quotas.lock();
+        state
+            .account_quotas
+            .claim_locked(&mut inner, key.clone(), 1)
+    };
+    state
+        .account_quotas
+        .make_due(key.agent, key.account.as_deref());
+    let signed_out = AccountQuota {
+        unavailable: Some(QuotaUnavailable::new(code::NOT_SIGNED_IN, "no", &[])),
+        ..quota_of(&key, false)
+    };
+    state
+        .account_quotas
+        .log_reading(&claim, &signed_out, &diagnostics::ProbeTrace::default());
+    assert!(state.account_quotas.lock().observed.is_empty());
+}
+
+#[test]
+fn forgetting_an_account_forgets_what_the_log_was_told_of_it() {
+    let (state, _dir) = crate::test_support::app_state("quota-forget-observed");
+    let (kept, gone) = (key(Agent::Codex, None), key(Agent::Codex, Some("a")));
+    for key in [&kept, &gone] {
+        state
+            .account_quotas
+            .lock()
+            .observed
+            .insert(key.clone(), diagnostics::Observed::default());
+    }
+    state.account_quotas.forget_account(&state, "a");
+    let observed: Vec<Key> = state
+        .account_quotas
+        .lock()
+        .observed
+        .keys()
+        .cloned()
+        .collect();
+    assert_eq!(observed, [kept]);
 }
 
 pub(super) const NOW: i64 = 1_000_000;

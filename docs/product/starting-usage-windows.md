@@ -9,7 +9,7 @@ of the account's quota. The setting is off by default and applies to every agent
 
 ## When an account is kicked
 
-An account is kicked after any reading of it (see "When quotas are read" in `docs/product/account-quotas.md`), except
+An account is kicked after any reading of it (see "When quotas are read" in `docs/product/account-quota-readings.md`), except
 one a session asked for (see below), when all of these hold:
 
 - the setting is on;
@@ -21,9 +21,8 @@ one a session asked for (see below), when all of these hold:
   the request goes to one model and cannot start another model's limit;
 - that window has not been kicked in its current episode.
 
-A reading a session asked for with `get_account_quotas`' `refresh` (see "Reading quotas from a session" in
-`docs/product/account-quotas.md`) never kicks: when it shows an account these conditions would kick, the account is
-marked due instead, so the background poller reads it again at its next look, within about 15 seconds, and kicks it
+A reading a session asked for with `get_account_quotas`' `refresh` (see `docs/product/reading-quotas-from-a-session.md`) never kicks:
+when it shows an account these conditions would kick, the account is marked due instead, so the background poller reads it again at its next look, within about 15 seconds, and kicks it
 after that reading as it would after any other. What a session's request sets off is a reading and nothing more;
 spending quota to start a window stays the user's setting, acted on at the readings Octoboard takes itself.
 
@@ -41,7 +40,7 @@ reading after it.
 
 ## How a kick runs
 
-A kick runs the agent's CLI the way a reading does (see "How a quota is read" in `docs/product/account-quotas.md`), from
+A kick runs the agent's CLI the way a reading does (see "How a quota is read" in `docs/product/account-quota-readings.md`), from
 the home directory, as one request with no terminal: a one-word prompt, a one-line system prompt in place of the agent's
 own, as few tools as the CLI lets be left out (none at all for Claude Code and Grok Build), one turn, and, where the CLI
 can cap it, a reply of at most 128 output tokens. It runs the agent's non-interactive mode with its cheapest model at
@@ -60,7 +59,7 @@ it started are ended with it. None is started once shutdown has begun. A kick ru
 that called for it is shown at once and the reading after the kick follows when it ends. That reading is skipped when
 the daemon is shutting down, or when the account was removed or pointed at another directory meanwhile; when the
 account's login ended meanwhile, the login's own reading stands in for it (see "When quotas are read" in
-`docs/product/account-quotas.md`). Should the reading after a kick show another window that calls for a kick, the
+`docs/product/account-quota-readings.md`). Should the reading after a kick show another window that calls for a kick, the
 account is kicked again.
 
 ## What a kick leaves behind

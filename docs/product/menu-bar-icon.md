@@ -189,7 +189,7 @@ From top to bottom:
    come among the readings held, and each time a reading's age reaches another whole minute, so that while the menu
    is closed the countdowns and ages keep up with the clock to the minute and a window goes full at its reset.
    Opening the menu asks the daemon for a fresh reading, as opening the rail's panel or Settings' section does (see
-   "When quotas are read" in `docs/product/account-quotas.md`); since the menu never changes while open, what that
+   "When quotas are read" in `docs/product/account-quota-readings.md`); since the menu never changes while open, what that
    brings shows from the next time it is opened. The menu does not wait for the reply.
 3. **Open Octoboard**, which brings a window closed into the background back, as described under "Closing the window"
    in `docs/product/application-lifecycle.md`. A window that is shown, or minimized, is brought to the front, restored

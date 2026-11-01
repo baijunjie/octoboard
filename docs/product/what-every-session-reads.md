@@ -19,7 +19,7 @@ changes" and "Listing a project's branches" below).
 | `list_consoles` | — | Every console, each as `console` (its id), `name` and `yours` (whether it is the caller's own console). The id, or a name that names one console, is what a `console` argument takes. |
 | `list_projects` | `console?`, `project?`, `refresh?` | The projects of a console: the caller's own in full, another's only as far as needed to target one of its projects; optionally one project, and optionally with their git status checked first. See "Listing a console's projects" below. |
 | `list_archived` | `console?`, `project?`, `owner?`, `yours?`, `kind?`, `branch?`, `check_resumable?`, `limit?`, `before?` | The archived sessions of every console, console sessions included, whoever owns them, each with its owner, newest archived first, optionally narrowed, a page at a time. See "Listing archived sessions" below. |
-| `get_account_quotas` | `agent?`, `refresh?` | Each account's plan quota, optionally read again first. See "Reading quotas from a session" in `docs/product/account-quotas.md`. |
+| `get_account_quotas` | `agent?`, `refresh?` | Each account's plan quota, optionally read again first. See `docs/product/reading-quotas-from-a-session.md`. |
 
 The reads are not narrowed by role because sessions of any kind can work in the same project, and so the same working
 directory, at once — two console sessions can dispatch into it, say — and one that could not see the others' sessions

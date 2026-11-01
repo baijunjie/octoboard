@@ -4,6 +4,8 @@
 //! how a reply is read is `probe.rs`'s; this module keeps the readings, and `poll.rs` decides when
 //! to take them. Each reading also carries the email the account is signed in with, which
 //! `email.rs` takes from the agent's sign-in record whether or not the quota could be read.
+//! What the daemon's log is told of the readings (sign-in changes, failures, probes Octoboard
+//! ended) is `diagnostics.rs`'s, with redaction of anything the agent printed.
 //!
 //! Readings are runtime state: held in [`AccountQuotas`], never stored and never exported. A poller
 //! started with the daemon keeps them fresh, and `refresh_account_quotas` runs the same path on
@@ -52,6 +54,7 @@
 //! `poll.rs`'s: what makes an account due, the claims on the accounts that are, and the claim for
 //! a kick are all decided there, over the registry kept here.
 
+mod diagnostics;
 mod email;
 mod judgement;
 mod kick;
@@ -134,6 +137,9 @@ struct Inner {
     /// The windows of each account that have been kicked in an episode that has not ended: one
     /// that a reading shows with a reset time again is taken out.
     kicked: HashMap<Key, Vec<WindowId>>,
+    /// What the daemon's log has been told of each account's readings, so that only a change is
+    /// written (see `diagnostics.rs`).
+    observed: HashMap<Key, diagnostics::Observed>,
 }
 
 impl Inner {
@@ -175,6 +181,7 @@ fn retain_locked(inner: &mut Inner, wanted: &[Key]) -> bool {
     inner.entries.retain(|key, _| wanted.contains(key));
     inner.in_flight.retain(|key, _| wanted.contains(key));
     inner.kicked.retain(|key, _| wanted.contains(key));
+    inner.observed.retain(|key, _| wanted.contains(key));
     inner.entries.len() != before
 }
 
@@ -342,6 +349,21 @@ impl AccountQuotas {
         }
     }
 
+    /// Logs what the reading `quota`, taken by the probe `trace` describes under `claim`, changed
+    /// in the account's sign-in or in whether it can be read (see `diagnostics.rs`), unless the
+    /// claim no longer counts. Written after the lock is released.
+    fn log_reading(&self, claim: &Claim, quota: &AccountQuota, trace: &diagnostics::ProbeTrace) {
+        let events = {
+            let mut inner = self.lock();
+            if inner.in_flight.get(&claim.key) != Some(&claim.token) {
+                return;
+            }
+            let observed = inner.observed.entry(claim.key.clone()).or_default();
+            diagnostics::advance(observed, &diagnostics::classify(quota))
+        };
+        diagnostics::log_events(&claim.key, quota, trace, &events);
+    }
+
     fn claim_locked(&self, inner: &mut Inner, key: Key, wall: i64) -> Claim {
         inner.next_token += 1;
         inner.in_flight.insert(key.clone(), inner.next_token);
@@ -492,6 +514,9 @@ impl AccountQuotas {
                 .retain(|key, _| key.account.as_deref() != Some(id));
             inner
                 .kicked
+                .retain(|key, _| key.account.as_deref() != Some(id));
+            inner
+                .observed
                 .retain(|key, _| key.account.as_deref() != Some(id));
             inner.entries.len() != before
         });

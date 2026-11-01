@@ -130,7 +130,7 @@ five seconds, also when the directory turns out to be missing; one that does not
 the cause `signing_in`, and so does a login of another account pointed at the same directory.
 
 Before the move, the removal also holds back the short reads Octoboard runs with the agent's CLI under the directory —
-reading the account's quota (see `docs/product/account-quotas.md`), starting its usage windows (see
+reading the account's quota (see `docs/product/account-quota-readings.md`), starting its usage windows (see
 `docs/product/starting-usage-windows.md`) and listing its models (see "The models offered" in
 `docs/product/model-and-reasoning-effort.md`) — since one would create the directory again at its old path, and waits
 for those already running to end, without a time limit: starting a usage window can take up to a minute. A read held

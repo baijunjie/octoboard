@@ -150,7 +150,7 @@ modes" in `docs/product/per-agent-settings.md`). Nothing to log an account in wi
 document, so every account an import creates starts not logged in; nor are the default account's directory and whether
 the default account is turned off. The added agents, the accounts and their order, sharing and turned-off choices, and
 the default accounts' names travel only in the accounts region (see "The accounts" above). Account quota readings are
-not stored at all and are in no document either (see "How a quota is read" in `docs/product/account-quotas.md`).
+not stored at all and are in no document either (see "How a quota is read" in `docs/product/account-quota-readings.md`).
 
 ### The application settings an export carries
 

@@ -182,7 +182,7 @@ agent ("Claude Code accounts"): a row per account, in the saved order (see "Reor
 | Column | What a row shows |
 |---|---|
 | No heading (first column) | The account's drag grip (see "Reordering accounts" below). |
-| **Account** | The account's name and, when the agent names one, its plan as a badge; under them, when its reading carries one, the email the account is signed in with (see "The account's sign-in email" in `docs/product/account-quotas.md`), in smaller muted text on a single line. A name or email too long for its space fades at its end as in "Names too long for their space" in `docs/product/labels-and-tooltips.md`, the email with the whole address as its tooltip while it is cut. A row with no email has no line, nor room, for one. The name is in the muted text colour while the account is used up (see "A used-up account" in `docs/product/account-quotas.md`). |
+| **Account** | The account's name and, when the agent names one, its plan as a badge; under them, when its reading carries one, the email the account is signed in with (see "The account's sign-in email" in `docs/product/account-quota-readings.md`), in smaller muted text on a single line. A name or email too long for its space fades at its end as in "Names too long for their space" in `docs/product/labels-and-tooltips.md`, the email with the whole address as its tooltip while it is cut. A row with no email has no line, nor room, for one. The name is in the muted text colour while the account is used up (see "A used-up account" in `docs/product/account-quotas.md`). |
 | **Usage** | The account's compact usage bar, the same as an account picker's, with no numbers: the five-hour window with the account-wide weekly window's thinner bar beneath it, or one bar for the account-wide weekly window or the credit pool (see "In an account picker" in `docs/product/account-quotas.md`); assistive technology reads what remains of those windows in words. While the first reading is on its way it says usage is being read. Out-of-date windows, the dash that stands in when there is no window to draw, and the marks that follow them are as in "How an account's quota is shown" and "Quota states" in `docs/product/account-quotas.md`; a dash with no mark after it is read by assistive technology as "No usage reading". A used-up account's bar is grey and followed by a **Limit reached** badge (see "A used-up account" in `docs/product/account-quotas.md`). Model-specific windows are left to the account details dialog. |
 | **Status** | The account's login state (below) and, for an account known to be signed out, the **Log in** icon button (see `docs/product/logging-accounts-in.md`); while the account is turned off, a neutral **Disabled** badge in their place and no Log in icon button (Log in stays in the actions menu). |
 | **Disable** | The account's Disable switch (see "Turning an account off" below). The column's heading carries a "?" help tip. |
@@ -241,7 +241,7 @@ account it is opened on. The first line of its body is the account's name, follo
 the badge as in the table, or, while that is not known, "Checking…" while the first reading is on its way and "Unknown"
 otherwise — and the "Usage unavailable" mark when its reading failed with nothing read before. Whether the account is
 turned off is not shown here. Under that line, when the account's reading carries one, is the email it is signed in with
-(see "The account's sign-in email" in `docs/product/account-quotas.md`), muted, on a line of its own, wrapping within
+(see "The account's sign-in email" in `docs/product/account-quota-readings.md`), muted, on a line of its own, wrapping within
 the dialog when it is too long for one line. The next line is the account's directory; for the default account a "?"
 help tip follows it (see "The default account" above). For an account the user owns of an agent that is not available, a
 line under the directory says it is not usable until the agent is on `PATH`. Then comes **Usage** — the account's quota
@@ -322,9 +322,9 @@ While an account is turned off:
   `docs/product/account-quota-panel.md`); the menu bar icon's quota submenus do not list it, and their opening line
   draws no bars for it (see "The icon's menu" in `docs/product/menu-bar-icon.md`); the rail button's indicator and the
   menu bar icon draw none for it (see "The selected session's quota indicator" in `docs/product/account-quotas.md`);
-  and `get_account_quotas` does not list it, the caller's own account included (see "Reading quotas from a session"
-  in `docs/product/account-quotas.md`). The one exception is the selected session's own account while that session is
-  running on it — starting, working, waiting for the user or awaiting instructions, not interrupted or archived: the
+  and `get_account_quotas` does not list it, the caller's own account included (see
+  `docs/product/reading-quotas-from-a-session.md`). The one exception is the selected session's own account while
+  that session is running on it — starting, working, waiting for the user or awaiting instructions, not interrupted or archived: the
   rail's indicator and the menu bar icon still show its quota, and the quota panel and the menu bar icon's quota
   submenu still list it, marked **Disabled**; when it is also the current console's account, that submenu's opening
   line draws its bars.

@@ -149,7 +149,7 @@ fn a_directory_that_cannot_be_judged_missing_is_left_to_the_cli() {
         config_dir: Some(file.to_string_lossy().into_owned()),
     };
     let shell = move || Ok(env.clone());
-    let quota = read(&key, &shell, &AtomicBool::new(false));
+    let quota = read(&key, &shell, &AtomicBool::new(false)).0;
     assert_ne!(quota.unavailable.unwrap().code, code::CONFIG_DIR_MISSING);
     assert!(bin.join("runs").exists());
 }
@@ -182,7 +182,7 @@ fn the_email_is_read_when_the_quota_could_not_be() {
     let env = crate::test_support::fake_agent(&bin, "codex", "exit 1");
     let key = codex_account_with_email(&dir);
     let shell = move || Ok(env.clone());
-    let quota = read(&key, &shell, &AtomicBool::new(false));
+    let quota = read(&key, &shell, &AtomicBool::new(false)).0;
     assert_eq!(quota.unavailable.unwrap().code, code::COMMAND_FAILED);
     assert_eq!(quota.email.as_deref(), Some("me@example.com"));
 }
@@ -202,7 +202,7 @@ esac; done"#,
     );
     let key = codex_account_with_email(&dir);
     let shell = move || Ok(env.clone());
-    let quota = read(&key, &shell, &AtomicBool::new(false));
+    let quota = read(&key, &shell, &AtomicBool::new(false)).0;
     assert_eq!(quota.unavailable.unwrap().code, code::NOT_SIGNED_IN);
     assert_eq!(quota.email, None);
 }
@@ -214,7 +214,7 @@ fn a_missing_config_dir_has_no_email() {
     std::fs::remove_dir_all(dir.join("account")).unwrap();
     key.account = Some("gone".to_string());
     let shell = || Ok(HashMap::new());
-    let quota = read(&key, &shell, &AtomicBool::new(false));
+    let quota = read(&key, &shell, &AtomicBool::new(false)).0;
     assert_eq!(quota.unavailable.unwrap().code, code::CONFIG_DIR_MISSING);
     assert_eq!(quota.email, None);
 }
@@ -224,7 +224,7 @@ fn without_a_shell_environment_only_an_owned_account_has_an_email() {
     let dir = crate::test_support::ScratchDir::new("quota-email-no-shell");
     let owned = codex_account_with_email(&dir);
     let shell = || Err(anyhow::anyhow!("no shell"));
-    let quota = read(&owned, &shell, &AtomicBool::new(false));
+    let quota = read(&owned, &shell, &AtomicBool::new(false)).0;
     assert_eq!(
         quota.unavailable.unwrap().code,
         code::SHELL_ENVIRONMENT_FAILED
@@ -236,7 +236,7 @@ fn without_a_shell_environment_only_an_owned_account_has_an_email() {
         config_dir: None,
         ..owned
     };
-    let quota = read(&default, &shell, &AtomicBool::new(false));
+    let quota = read(&default, &shell, &AtomicBool::new(false)).0;
     assert_eq!(quota.email, None);
 }
 
@@ -755,7 +755,9 @@ fn an_account_whose_directory_is_gone_is_not_kicked() {
     assert!(err.to_string().contains("does not exist"), "{err}");
     assert_eq!(fixture.count("kicks"), 0);
     assert!(matches!(
-        read(&key, &*fixture.shell, &AtomicBool::new(false)).unavailable,
+        read(&key, &*fixture.shell, &AtomicBool::new(false))
+            .0
+            .unavailable,
         Some(unavailable) if unavailable.code == code::CONFIG_DIR_MISSING
     ));
 }

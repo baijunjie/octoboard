@@ -13,6 +13,7 @@ use std::time::{Duration, Instant};
 use anyhow::Context;
 use tokio::task::JoinSet;
 
+use super::diagnostics::{log_stop, ProbeTrace};
 use super::email::account_email;
 use super::judgement::is_account_state;
 use super::kick::{kick, KICK_TIMEOUT};
@@ -450,25 +451,31 @@ async fn read_account(
     let shell = shell.clone();
     let stopping = state.account_quotas.stopping.clone();
     let outcome = tokio::task::spawn_blocking(move || read(&key, &*shell, &stopping)).await;
+    let (quota, trace) = outcome.unwrap_or_else(|err| {
+        (
+            unavailable_quota(
+                &claim.key,
+                QuotaUnavailable::new(
+                    code::COMMAND_FAILED,
+                    format!("reading the quota failed: {err}"),
+                    &[
+                        ("agent", claim.key.agent.label()),
+                        ("detail", &err.to_string()),
+                    ],
+                ),
+            ),
+            ProbeTrace::default(),
+        )
+    });
+    // A probe the daemon ended is logged even when the shutdown was the reason.
+    log_stop(&claim.key, &trace);
     // A reading that the shutdown cut short says nothing about the account, so it is not recorded.
     if state.account_quotas.stopping.load(Ordering::Relaxed) {
         return None;
     }
-    let quota = outcome.unwrap_or_else(|err| {
-        unavailable_quota(
-            &claim.key,
-            QuotaUnavailable::new(
-                code::COMMAND_FAILED,
-                format!("reading the quota failed: {err}"),
-                &[
-                    ("agent", claim.key.agent.label()),
-                    ("detail", &err.to_string()),
-                ],
-            ),
-        )
-    });
     let key = claim.key.clone();
     drop(_slot);
+    state.account_quotas.log_reading(&claim, &quota, &trace);
     let _ = finish_reading(state, claim, quota);
     if kicks {
         state.account_quotas.claim_kick(state, &key)
@@ -550,19 +557,24 @@ async fn kick_and_read(state: &Arc<AppState>, shell: &ShellSource, claim: Claim)
     }
 }
 
-/// Reads one account's quota in the shell environment `shell` gives. Blocking: it runs a
-/// subprocess, which setting `cancel` stops.
+/// Reads one account's quota in the shell environment `shell` gives, with what the probe left to
+/// log (see `diagnostics.rs`). Blocking: it runs a subprocess, which setting `cancel` stops.
 fn read(
     key: &Key,
     shell: &(dyn Fn() -> anyhow::Result<HashMap<String, String>> + Send + Sync),
     cancel: &AtomicBool,
-) -> AccountQuota {
+) -> (AccountQuota, ProbeTrace) {
+    let mut trace = ProbeTrace::default();
     // Nothing is captured or started once the daemon is shutting down; the caller drops the result.
     if cancel.load(Ordering::Relaxed) {
-        return unavailable_quota(key, failed(key.agent, "was cancelled before it started"));
+        let quota = unavailable_quota(key, failed(key.agent, "was cancelled before it started"));
+        return (quota, trace);
     }
     if let Some(dir) = missing_config_dir(key) {
-        return unavailable_quota(key, config_dir_missing(key.agent, dir));
+        return (
+            unavailable_quota(key, config_dir_missing(key.agent, dir)),
+            trace,
+        );
     }
     let shell_env = shell();
     let result = match &shell_env {
@@ -572,6 +584,7 @@ fn read(
             key.config_dir.as_deref().map(Path::new),
             PROBE_TIMEOUT,
             cancel,
+            &mut trace,
         ),
         Err(err) => {
             let detail = format!("{err:#}");
@@ -597,7 +610,7 @@ fn read(
             account_email(key.agent, key.config_dir.as_deref().map(Path::new), env)
         }),
     };
-    match result {
+    let quota = match result {
         Ok(reading) => AccountQuota {
             agent: key.agent,
             account: key.account.clone(),
@@ -612,7 +625,8 @@ fn read(
             email,
             ..unavailable_quota(key, unavailable)
         },
-    }
+    };
+    (quota, trace)
 }
 
 /// The account's configuration directory when it is gone. Looked for before anything is run:

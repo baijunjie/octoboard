@@ -22,4 +22,4 @@
   - `new_session`'s named-agent handling.
 - **Reference docs**: `docs/product/hub-orchestration.md` ("The agent and account of a session a session starts",
   "Choosing the session a task goes to"), `docs/product/what-every-session-reads.md`,
-  `docs/product/account-quotas.md` ("Reading quotas from a session").
+  `docs/product/reading-quotas-from-a-session.md`.
