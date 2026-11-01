@@ -1051,13 +1051,8 @@ mod tests {
         kill_session_leftovers: bool,
         guard: &mut KillOnDrop,
     ) -> (super::PtyCore, libc::pid_t, libc::pid_t) {
-        let dir = std::env::temp_dir().join(format!(
-            "octoboardd-leftovers-{}-{kill_session_leftovers}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_support::ScratchDir::new("pty-leftovers");
         let pids = dir.join("pids");
-        std::fs::remove_file(&pids).ok();
         // The first helper stays in the leader's process group and ignores the hang-up; the
         // second is moved to a group of its own by job control, as a background task of an agent
         // is. Both keep the session.
@@ -1087,7 +1082,6 @@ mod tests {
             );
             std::thread::sleep(std::time::Duration::from_millis(10));
         };
-        std::fs::remove_dir_all(&dir).ok();
         let helpers: Vec<libc::pid_t> = listed
             .split_whitespace()
             .map(|pid| pid.parse().unwrap())
@@ -1156,21 +1150,13 @@ mod tests {
     /// The hook still sees the scratch directory, and the directory is gone afterwards.
     #[test]
     fn the_scratch_hook_runs_before_the_directory_is_removed() {
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        let dir = std::env::temp_dir().join(format!(
-            "octoboardd-scratch-hook-{}-{nanos}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).expect("scratch directory");
+        // The session's scratch directory is one inside the test's, which `PtyCore` removes once
+        // the process exits; the test's goes with the guard, the marker in it included.
+        let root = crate::test_support::ScratchDir::new("scratch-hook");
+        let dir = root.join("session");
+        std::fs::create_dir(&dir).expect("scratch directory");
         std::fs::write(dir.join("config.toml"), "kept").expect("file");
-        let marker = std::env::temp_dir().join(format!(
-            "octoboardd-scratch-hook-marker-{}-{nanos}",
-            std::process::id()
-        ));
-        std::fs::remove_file(&marker).ok();
+        let marker = root.join("marker");
         let dir_for_hook = dir.clone();
         let marker_for_hook = marker.clone();
         let mut cmd = portable_pty::CommandBuilder::new("/bin/bash");
@@ -1193,7 +1179,6 @@ mod tests {
         }
         assert_eq!(std::fs::read_to_string(&marker).expect("marker"), "kept");
         assert!(!dir.exists());
-        std::fs::remove_file(&marker).ok();
     }
 
     #[test]

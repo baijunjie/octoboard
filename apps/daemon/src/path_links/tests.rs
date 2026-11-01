@@ -603,7 +603,8 @@ mod with_state {
     fn the_roots_of_a_project_include_its_place_in_a_linked_worktree() {
         let fixture = Fixture::new();
         let repository = repo_with("path-links-repo", &[(b"a.ts", b"x")]);
-        let linked = ScratchDir::new("path-links-linked").join("tree");
+        let linked_parent = ScratchDir::new("path-links-linked");
+        let linked = linked_parent.join("tree");
         git(
             &repository,
             &[
@@ -749,7 +750,8 @@ mod with_state {
     fn opening_a_path_in_two_roots_is_refused_as_ambiguous() {
         let fixture = Fixture::new();
         let repository = repo_with("path-links-ambiguous", &[(b"a.ts", b"x")]);
-        let linked = ScratchDir::new("path-links-ambiguous-linked").join("tree");
+        let linked_parent = ScratchDir::new("path-links-ambiguous-linked");
+        let linked = linked_parent.join("tree");
         git(
             &repository,
             &[

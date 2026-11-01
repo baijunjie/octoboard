@@ -656,7 +656,7 @@ fn reconcile_leaves_a_tagged_process_in_a_kept_session_whose_leader_exited() {
 /// A reconcile asked for once the scanner thread runs, started by a launch, still runs.
 #[test]
 fn a_reconcile_asked_for_after_the_scanner_started_runs() {
-    let dir = ScratchDir::new("ledger-late-reconcile");
+    let mut dir = ScratchDir::new("ledger-late-reconcile");
     let left = detached("/bin/sleep", &["60"], &[]);
     let _guard = KillOnDrop(vec![left]);
     let id = identity(left);
@@ -674,6 +674,8 @@ fn a_reconcile_asked_for_after_the_scanner_started_runs() {
     )
     .unwrap();
     let ledger = ProcessLedger::new(&dir);
+    // The scanner thread holds the ledger through a tick, which writes the ledger file.
+    dir.removed_again_after(&ledger);
     ledger.start(false);
     ledger.start(true);
     assert_stops_running(left);
