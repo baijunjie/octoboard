@@ -1046,8 +1046,7 @@ fn is_wrong_time(err: &anyhow::Error) -> bool {
 /// of.
 fn note_to_session(agent: Agent, from: &str, to: &str) -> String {
     format!(
-        "{}, so Octoboard switched you to `{to}` by itself. Your conversation came with you, and \
-         nothing else about the session changed.",
+        "{}, so Octoboard switched you to `{to}`.",
         note_opening(agent, from)
     )
 }
@@ -1886,17 +1885,11 @@ mod tests {
             assert_eq!(fixture.worker().account_id.as_deref(), Some("claude-a"));
             assert_eq!(fixture.launched(), 1);
             let prompt = fixture.prompt_of(0).expect("a prompt to carry on");
-            assert!(
-                prompt.contains("your Claude Code account `Default` reached its usage limit"),
-                "{prompt}"
-            );
-            assert!(
-                prompt.contains("switched you to `Work A` by itself"),
-                "{prompt}"
-            );
-            assert!(
-                prompt.ends_with(crate::accounts::switch_continue::CONTINUE_AFTER_NOTICE),
-                "{prompt}"
+            assert_eq!(
+                prompt,
+                "Message from Octoboard: your Claude Code account `Default` reached its usage \
+                 limit, so Octoboard switched you to `Work A`.\n\nContinue the task you were \
+                 working on when it was interrupted; do not repeat work that is already complete."
             );
             let owner = output_containing(&fixture.owner, "switched it to");
             assert!(
@@ -2883,7 +2876,7 @@ mod tests {
             .unwrap();
 
         let heard = output_containing(&fixture.worker_process, "switched you to `B`");
-        assert!(heard.contains("switched you to `B` by itself"), "{heard}");
+        assert!(heard.contains("switched you to `B`."), "{heard}");
         fixture.state.close_turn("w", false);
         fixture
             .state
