@@ -50,8 +50,9 @@ export interface AlertOptions {
   recovery?: ErrorRecovery;
   /** The body in place of the failure's own words. */
   content?: ReactNode;
-  /** The call site's title beats the code's own `alertTitle`: for a dialog's submit or confirmation, whose alert always
-   * takes the dialog's title. */
+  /** The call site's title beats the code's own `alertTitle`: for a dialog's answer — a submit or a confirmation, or a
+   * refusal or go-ahead whose failure arrives once the dialog has closed — whose alert always takes the dialog's failure
+   * title. */
   keepTitle?: boolean;
 }
 

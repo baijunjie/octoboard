@@ -2230,6 +2230,10 @@ export const TRUST_REFUSED_CODES: readonly string[] = [
  * shown. */
 export const TRUST_NOT_WAITING = "trust_not_waiting";
 
+/** The go-ahead was given, but carrying the agent's trust entry into the user's store failed; the daemon also
+ * broadcasts it as a session notice. */
+export const TRUST_NOT_CARRIED_OVER = "trust_not_carried_over";
+
 /** An approval of a session request whose session is no longer waiting for it (withdrawn, or
  * timed out): nothing was carried out, which the user is told in a toast. */
 export const SESSION_REQUEST_NOT_WAITING = "session_request_not_waiting";

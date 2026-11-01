@@ -1490,6 +1490,9 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
           store.setState((state) => ({ shellTerminals: new Map([...state.shellTerminals].filter(([id]) => id !== body.shell_terminal)) }));
           return { type: "ack", id: null };
         }
+        case "answer_session_request":
+          if (scenario.sessionRequestAnswerError) return fail(scenario.sessionRequestAnswerError);
+          return { type: "ack", id: null };
         case "confirm_trust":
           if (body.trust_parent_dir === true && scenario.trustParentDirError) return fail(scenario.trustParentDirError);
           return { type: "ack", id: null };

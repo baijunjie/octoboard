@@ -396,6 +396,9 @@ Every session request's dialog behaves as follows:
 - **An approval that comes too late** — the request was withdrawn or timed out — does nothing, and an error alert about
   the requesting session says it is no longer waiting for an answer, so its request was not carried out. A refusal that
   comes too late shows nothing.
+- **A failed answer is titled for the answer.** Every error alert the window shows for an approval or a refusal that
+  failed, the late approval above included, is titled "Could not approve the request" or "Could not refuse the
+  request", whatever code the failure carries (see "The error alert" in `docs/product/error-alerts.md`).
 - **A request the window cannot describe is not offered**: one asking for something this version of the application
   does not know, or lacking what its kind needs to be described. No dialog is shown for it, and its call ends when the
   wait runs out (see "Waiting for the answer" above).

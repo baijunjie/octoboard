@@ -183,3 +183,20 @@ it("describes the folder option by its warning while ticked and speaks it once a
   await tick();
   expect(box.getAttribute("aria-describedby")!.split(" ")).toHaveLength(1);
 });
+
+// A go-ahead that fails once the dialog has closed is still titled for what the dialog was doing, whatever title the
+// failure's code carries.
+it("a go-ahead that fails keeps the dialog's failure title", async () => {
+  const failure = new DaemonRequestError("could not start", "launch_failed", { session: "s-1" });
+  const dialog = mount([prompt], () => Promise.reject(failure));
+  await confirm();
+  expect(dialog.toasts()).toEqual([[failure, { title: "Could not answer the trust confirmation", keepTitle: true, session: "s-1" }]]);
+});
+
+// Carrying the trust entry over failing is not a failed answer: it keeps its code's title, as its session notice does.
+it("a go-ahead whose trust entry is not carried over keeps the code's title", async () => {
+  const failure = new DaemonRequestError("not carried over", "trust_not_carried_over", { session: "s-1" });
+  const dialog = mount([prompt], () => Promise.reject(failure));
+  await confirm();
+  expect(dialog.toasts()).toEqual([[failure, { title: "Could not answer the trust confirmation", keepTitle: false, session: "s-1" }]]);
+});

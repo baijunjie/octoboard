@@ -1616,6 +1616,19 @@ describe("the fixture daemon's trust answers", () => {
   });
 });
 
+describe("the fixture daemon's session request answers", () => {
+  const answer = { type: "answer_session_request", request_id: "r-1", approve: true } as const;
+
+  it("refuses an answer with the error a scenario names", async () => {
+    const refusal = { code: "session_request_not_waiting", params: {}, message: "not waiting" };
+    await expect(createFixtureDaemon({ sessionRequestAnswerError: refusal, state: snapshotState({}) }).request(answer)).rejects.toMatchObject({ code: "session_request_not_waiting" });
+  });
+
+  it("acknowledges an answer otherwise", async () => {
+    await expect(createFixtureDaemon({ state: snapshotState({}) }).request(answer)).resolves.toEqual({ type: "ack", id: null });
+  });
+});
+
 describe("the fixture daemon's account login and default account name", () => {
   const settings = { ...DEFAULT_SETTINGS, default_clone_dir: "/Users/dev/Projects", added_agents: ["claude", "grok"] as ("claude" | "grok")[], accounts: [accountOf("work", "claude", "Work", "/Users/dev/.claude-work")] };
   const daemonWith = (outcome?: "succeeded" | "failed" | "timed_out") => createFixtureDaemon({ state: snapshotState({ settings }), loginOutcome: outcome });

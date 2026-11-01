@@ -250,7 +250,7 @@ export function useSessionRequestDialogProps(request: SessionRequest | undefined
       if (err instanceof DaemonRequestError && err.code === SESSION_REQUEST_ANSWERED) return;
       // Nothing was going to start for a refusal, so the session no longer waiting is no news.
       if (!approve && err instanceof DaemonRequestError && err.code === SESSION_REQUEST_NOT_WAITING) return;
-      raiseError(err, { title: t(approve ? "dialog.sessionRequest.approveFailedTitle" : "dialog.sessionRequest.refuseFailedTitle"), session: failureSubject(request, err) });
+      raiseError(err, { title: t(approve ? "dialog.sessionRequest.approveFailedTitle" : "dialog.sessionRequest.refuseFailedTitle"), keepTitle: true, session: failureSubject(request, err) });
     }
   };
 

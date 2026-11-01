@@ -276,6 +276,9 @@ export interface Fixture {
    * daemon refuses a folder it cannot vouch for; nothing is answered, so the dialog stays open. A go-ahead for the
    * project alone is not refused, and without this every go-ahead is acknowledged. */
   trustParentDirError?: FixtureError;
+  /** A refusal of `answer_session_request`, whether the dialog approves or refuses, as the daemon refuses an answer that
+   * cannot be carried out; the request is left as it was. Without it every answer is acknowledged. */
+  sessionRequestAnswerError?: FixtureError;
   /** A refused request to open a project's directory in the host's file manager. The fixture
    * otherwise acknowledges the request without opening any host application. */
   projectDirectoryOpenError?: FixtureError;

@@ -406,6 +406,23 @@ export const noticeScenarios: Scenario[] = [
     ],
   },
   {
+    id: "session-request-approve-failed",
+    group: TRUST,
+    category: "exceptional",
+    title: "Approving a session request failed",
+    description: "Start session was pressed and the daemon refused the approval because the asking session had stopped waiting. The error alert is titled \"Could not approve the request\", the dialog's own failure title, and not the refusal's own \"Request not carried out\". It names the session and its project as chips, says the session is no longer waiting for an answer, so its request was not carried out, and gives the remedy line.",
+    state: snapshotState({
+      consoles: [console_],
+      projects: [web, api, grokProject],
+      sessions: sessions.map((s) => s.id === "s-web-1" ? { ...s, status: "waiting_user" as const } : s),
+      sessionRequests: [
+        requestOf({ action: "start", session: "s-web-1", role: "project", console: console_.id, project: web.id, agent: "claude" }),
+      ],
+    }),
+    sessionRequestAnswerError: { code: "session_request_not_waiting", params: { session: "s-web-1" }, message: "This session is no longer waiting for an answer, so its request was not carried out." },
+    steps: [(ui) => ui.confirm()],
+  },
+  {
     id: "session-request-reopen-incomplete",
     group: TRUST,
     category: "exceptional",

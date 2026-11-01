@@ -123,10 +123,14 @@ the application reloads its state.
 
 Once the go-ahead has been given the dialog closes, whether or not the confirmation could be pressed — a confirmation is
 pressed at most once, so trying again from the dialog could not succeed. A failure is then shown in an error alert about
-the session. Two outcomes differ: the refusal of the folder before anything is pressed keeps the dialog open, and a
-go-ahead for a confirmation that is no longer waiting — already answered, whether from another client, in the terminal
-or by Octoboard itself — closes the dialog without any message when the box was unticked, since nothing went wrong; with
-the box ticked it shows a message saying the folder was not trusted, because that choice was not carried out.
+the session, titled "Could not answer the trust confirmation" whatever code the failure carries (see "The error alert"
+in `docs/product/error-alerts.md`) — except for Grok Build when the confirmation was answered and only carrying its
+trust entry into the user's store failed: that alert keeps the failure's own title, "Trust not carried over", the one
+the session notice of that failure has as an error alert (see "Carrying Grok Build's trust record" below). Two
+outcomes differ: the refusal of the folder before anything is pressed keeps the dialog open, and a go-ahead for a confirmation that is no longer waiting — already answered, whether from another
+client, in the terminal or by Octoboard itself — closes the dialog without any message when the box was unticked, since
+nothing went wrong; with the box ticked it shows a message, under the same title, saying the folder was not trusted,
+because that choice was not carried out.
 
 Prompts are shown one at a time, oldest first; closing one brings up the next. The application shows every prompt the
 daemon sends, unless the project already has its own permission; which projects a trusted folder covers is decided by
