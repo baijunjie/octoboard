@@ -2230,9 +2230,16 @@ export const TRUST_REFUSED_CODES: readonly string[] = [
  * shown. */
 export const TRUST_NOT_WAITING = "trust_not_waiting";
 
+/** The go-ahead could not be pressed in the agent's terminal; the daemon also broadcasts it as a session notice. */
+export const TRUST_ANSWER_FAILED = "trust_answer_failed";
+
 /** The go-ahead was given, but carrying the agent's trust entry into the user's store failed; the daemon also
  * broadcasts it as a session notice. */
 export const TRUST_NOT_CARRIED_OVER = "trust_not_carried_over";
+
+/** The codes a failed `confirm_trust` can be answered with that the daemon also broadcasts as a `session_notice`
+ * of the same code. */
+export const TRUST_FAILURE_CODES: ReadonlySet<string> = new Set([TRUST_ANSWER_FAILED, TRUST_NOT_CARRIED_OVER]);
 
 /** An approval of a session request whose session is no longer waiting for it (withdrawn, or
  * timed out): nothing was carried out, which the user is told in a toast. */

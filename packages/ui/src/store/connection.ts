@@ -6,9 +6,10 @@ import { daemonMessage } from "../errors/daemonMessage";
 import { daemonWsUrl, type DaemonAddress } from "../daemon";
 import { currentLanguage } from "../i18n/language";
 import type { Event, RequestBody } from "../protocol";
+import { createOwnTrustNotices } from "./ownTrustNotices";
 import { reducer, type Action } from "./reducer";
 import { createStateStore, type State } from "./state";
-import { broadcastToast, errorToast, type AlertOptions, type ToastRequest } from "./toasts";
+import { broadcastToast, errorToast, type AlertOptions, type BroadcastToastEvent, type ToastRequest } from "./toasts";
 
 /** The daemon connection and the state it feeds: one per window, created at startup (see
  * `main.tsx`) and alive until the window closes. The store is a vanilla one, so code outside React
@@ -57,12 +58,20 @@ export function createDaemon(address: DaemonAddress): Daemon {
     else toastListeners.forEach((listener) => listener(toast));
   };
 
+  const emitBroadcast = (event: BroadcastToastEvent) => emitToast(broadcastToast(event, store.getState(), currentLanguage()));
+  const ownTrustNotices = createOwnTrustNotices(emitBroadcast);
+
   client.onEvents(dispatchEvents);
   client.onEvent((event) => {
+    if (event.type === "snapshot") {
+      ownTrustNotices.reset();
+      return;
+    }
+    if (event.type === "session_notice" && ownTrustNotices.claim(event)) return;
     // A request's own `error` reply carries its request id and is delivered to its caller as a
     // rejected promise instead — only a genuine daemon broadcast (no id) is a toast.
     if (event.type === "session_notice" || (event.type === "error" && !event.id)) {
-      emitToast(broadcastToast(event, store.getState(), currentLanguage()));
+      emitBroadcast(event);
     }
   });
   client.onConnectionChange((state) => dispatch({ kind: "connection", state }));
@@ -71,12 +80,21 @@ export function createDaemon(address: DaemonAddress): Daemon {
     store,
     // A failure's message is worded here, in the language and with the names of the moment it
     // arrives, so every caller shows `err.message` as it always did.
-    request: (body) =>
-      client.request(body).catch((err: unknown) => {
-        if (!(err instanceof DaemonRequestError)) throw err;
-        const message = daemonMessage(currentLanguage(), err.code, err.params, err.message, store.getState());
-        throw new DaemonRequestError(message, err.code, err.params);
-      }),
+    request: (body) => {
+      const settleTrust = body.type === "confirm_trust" ? ownTrustNotices.begin(body.session) : undefined;
+      return client.request(body).then(
+        (reply) => {
+          settleTrust?.();
+          return reply;
+        },
+        (err: unknown) => {
+          settleTrust?.(err instanceof DaemonRequestError ? err.code : undefined);
+          if (!(err instanceof DaemonRequestError)) throw err;
+          const message = daemonMessage(currentLanguage(), err.code, err.params, err.message, store.getState());
+          throw new DaemonRequestError(message, err.code, err.params);
+        },
+      );
+    },
     raiseError: (error, alert) => emitToast(errorToast(error, alert)),
     toastNotice: (message, content) => emitToast({ kind: "notice", message, content }),
     onToast: (listener) => {

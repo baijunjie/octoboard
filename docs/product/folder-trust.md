@@ -126,11 +126,19 @@ pressed at most once, so trying again from the dialog could not succeed. A failu
 the session, titled "Could not answer the trust confirmation" whatever code the failure carries (see "The error alert"
 in `docs/product/error-alerts.md`) — except for Grok Build when the confirmation was answered and only carrying its
 trust entry into the user's store failed: that alert keeps the failure's own title, "Trust not carried over", the one
-the session notice of that failure has as an error alert (see "Carrying Grok Build's trust record" below). Two
-outcomes differ: the refusal of the folder before anything is pressed keeps the dialog open, and a go-ahead for a confirmation that is no longer waiting — already answered, whether from another
-client, in the terminal or by Octoboard itself — closes the dialog without any message when the box was unticked, since
-nothing went wrong; with the box ticked it shows a message, under the same title, saying the folder was not trusted,
-because that choice was not carried out.
+the session notice of that failure has as an error alert (see "Carrying Grok Build's trust record" below). Two outcomes
+differ: the refusal of the folder before anything is pressed keeps the dialog open, and a go-ahead for a confirmation
+that is no longer waiting — already answered, whether from another client, in the terminal or by Octoboard itself —
+closes the dialog without any message when the box was unticked, since nothing went wrong; with the box ticked it shows
+a message, under the same title, saying the folder was not trusted, because that choice was not carried out.
+
+Two of the failures that alert shows — the confirmation not pressed, and the trust entry not carried over — are also
+announced to every window as a notice on the session (see "How a confirmation is pressed" and "Carrying Grok Build's
+trust record" below). The window whose go-ahead failed tells it once, in that alert, and does not show that go-ahead's
+notice; other windows show the notice. A notice of either kind that is not the failure of this window's own go-ahead —
+such as Grok's entry failing to carry over after an earlier go-ahead's press was answered — is still shown. When the
+window reloads its state (a reconnect, or catching up after falling behind) while a go-ahead is being answered, its
+failure may be told both ways rather than risk losing a notice.
 
 Prompts are shown one at a time, oldest first; closing one brings up the next. The application shows every prompt the
 daemon sends, unless the project already has its own permission; which projects a trusted folder covers is decided by
