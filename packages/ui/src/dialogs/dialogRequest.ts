@@ -35,8 +35,9 @@ export type DialogRequest =
   | { kind: "unbind-session"; session: Session }
   | { kind: "delete-session"; session: Session }
   /** Every archived session of `project`, or every archived session bound to `consoleSession`, or
-   * with neither every archived console session of `console`. */
-  | { kind: "delete-archived"; console: Console; project?: Project; consoleSession?: Session; count: number };
+   * with neither every archived console session of `console`. How many there are is read from the
+   * store while the confirmation is open, since the archive can change under it. */
+  | { kind: "delete-archived"; console: Console; project?: Project; consoleSession?: Session };
 
 /** The dialog requests that open a session, which a quick create answers without the dialog. */
 export type NewSessionRequest = Extract<DialogRequest, { kind: "new-console-session" | "new-session" }>;

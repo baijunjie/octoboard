@@ -156,7 +156,7 @@ export function ArchiveView({
       ? t("archive.title.boundSessions", { name: isolate(sessionDisplayTitle(t, boundTo)) })
       : t("archive.title.consoleSessions", { name: isolate(owner.name) });
   const deleteAll = () =>
-    onOpenDialog({ kind: "delete-archived", console: owner, project, consoleSession: boundTo, count: archived.length });
+    onOpenDialog({ kind: "delete-archived", console: owner, project, consoleSession: boundTo });
 
   return (
     <section

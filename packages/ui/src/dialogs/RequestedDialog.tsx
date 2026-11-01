@@ -331,14 +331,20 @@ function DeleteSessionDialog({ session, withIt, onClose }: { session: Session; w
 }
 
 /** The confirmation of deleting many archived sessions at once, with the option of also moving the
- * agent's own records of them to the Trash. `withThem` counts the archived sessions that go along. */
+ * agent's own records of them to the Trash. `count` is how many the archive view lists, and
+ * `withThem` counts the archived sessions that go along; both are what the store holds now, as the
+ * daemon deletes whatever is archived in the scope when the deletion is confirmed. Once nothing is left to
+ * delete — another window or client emptied the archive meanwhile — the confirmation closes by itself, unless it
+ * is its own deletion that emptied it, which closes it once answered. */
 function DeleteArchivedDialog({
   dialog,
+  count,
   withThem,
   targets,
   onClose,
 }: {
   dialog: Extract<DialogRequest, { kind: "delete-archived" }>;
+  count: number;
   withThem: number;
   targets: Session[];
   onClose: () => void;
@@ -346,11 +352,17 @@ function DeleteArchivedDialog({
   const t = useT();
   const { request } = useDaemon();
   const { moveRecords, cleanup, lines, extraControl } = useSessionDeletionOptions(targets.map((s) => s.id));
+  // Its own deletion empties the archive too, which must not read as another client having emptied it.
+  const [confirming, setConfirming] = useState(false);
+  const gone = count === 0 && !confirming;
+  useEffect(() => {
+    if (gone) onClose();
+  }, [gone]);
   return (
     <ConfirmDialog
       title={t("dialog.deleteArchived.title")}
       errorTitle={t("dialog.deleteArchived.failedTitle")}
-      message={t("dialog.deleteArchived.message", { count: dialog.count })}
+      message={t("dialog.deleteArchived.message", { count })}
       consequences={(
         <ConfirmConsequences
           title={withThem > 0 ? t("dialog.deleteArchived.bound", { count: withThem }) : undefined}
@@ -363,14 +375,22 @@ function DeleteArchivedDialog({
       extraControl={(busy) => extraControl(busy, { label: t("dialog.deleteArchived.trashRecords"), hint: t("dialog.deleteArchived.trashRecordsNote") })}
       onCancel={onClose}
       onConfirm={async () => {
-        await request({
+        // Built outside the `try`: the React Compiler leaves a component with optional chaining inside one uncompiled.
+        const body = {
           type: "delete_archived_sessions",
           console: dialog.console.id,
           project: dialog.project?.id,
           console_session: dialog.consoleSession?.id,
           trash_agent_records: moveRecords,
           ...cleanup.choices,
-        });
+        } as const;
+        setConfirming(true);
+        try {
+          await request(body);
+        } catch (err) {
+          setConfirming(false);
+          throw err;
+        }
         onClose();
       }}
     />
@@ -546,7 +566,7 @@ export function RequestedDialog({
           ? boundArchivedSessions(all, dialog.consoleSession.id)
           : consoleSessions;
       const targets = Array.from(new Map(roots.flatMap((s) => [s, ...boundArchivedSessions(all, s.id)]).map((s) => [s.id, s])).values());
-      return <DeleteArchivedDialog dialog={dialog} withThem={withThem} targets={targets} onClose={onClose} />;
+      return <DeleteArchivedDialog dialog={dialog} count={roots.length} withThem={withThem} targets={targets} onClose={onClose} />;
     }
   }
 }

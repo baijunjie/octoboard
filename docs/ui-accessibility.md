@@ -1169,6 +1169,11 @@ succeed, such as New session when there is no agent to pick. If that state arise
 becomes a failure modal, below, explaining why, with only acknowledgement and no recovery action. This
 acknowledgement-only presentation retains structured error metadata and rich name references.
 
+A confirmation whose subject has gone by the time it would be confirmed, with nothing left that the confirmation could
+change, is not such a state: nothing failed, so it closes without a word rather than turning into a failure modal. The
+archive's Delete all confirmation closes this way once another window or client has emptied that archive, as a release
+from an owner does once the binding is already gone.
+
 **A failure that ends a dialog's purpose** — the dialog can no longer do what it was opened for — turns the dialog
 itself into a failure modal in the error alert dialog's form, never an ordinary modal with a danger Alert inside it:
 the danger icon in its header, a title naming the failure, the explanation as sentences in its body, the raw text

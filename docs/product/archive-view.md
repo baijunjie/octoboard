@@ -76,7 +76,11 @@ submenu. Focus mode's preview rows are described in "What both views show" in `d
   under it that are deleted with it; **Delete all** asks for confirmation, naming how many, then deletes every archived
   session in the view's scope — for a console session's archive, the archived sessions under it and not the console
   session itself; for a console's archived console sessions it also says how many archived sessions under them are
-  deleted with them. What deleting does and does not remove is in "Deleting archived sessions" in
+  deleted with them. Its counts are taken from the archive as it is now and follow it while the confirmation is open,
+  since what is deleted is whatever is archived in the scope when the deletion is confirmed. Once the scope has no
+  archived session left while the confirmation is open — such as everything deleted or reopened from another window
+  or client — the confirmation closes by itself; when its own confirmed deletion empties the archive, it closes once
+  that deletion has been answered. What deleting does and does not remove is in "Deleting archived sessions" in
   `docs/product/deleting-sessions.md`.
 - With nothing archived — including after everything has been deleted — the view stays open and says there are no
   archived sessions.

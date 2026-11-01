@@ -238,7 +238,7 @@ it("moves the agent's records to the Trash only when the checkbox is selected", 
 });
 
 it("moves the agents' records to the Trash only when the checkbox of deleting archived sessions is selected", async () => {
-  const { daemon } = mount({ kind: "delete-archived", console: console_, project, count: 2 }, []);
+  const { daemon } = mount({ kind: "delete-archived", console: console_, project }, [{ ...owner, status: "archived" }]);
   expect(checkbox().checked).toBe(false);
   await submitDialog();
   expect(daemon.request).toHaveBeenLastCalledWith({ type: "delete_archived_sessions", console: console_.id, project: project.id, trash_agent_records: false });
@@ -257,7 +257,7 @@ const archivedOwner = { ...owner, status: "archived" as const };
 // is ticked, and the request it sends.
 const TRASH_CONFIRMATIONS: Array<[string, DialogRequest, Session[], string, string, string]> = [
   ["deleting a session", { kind: "delete-session", session: archivedOwner }, [archivedOwner], "Delete", "Delete all", "delete_session"],
-  ["deleting all archived sessions", { kind: "delete-archived", console: console_, project, count: 2 }, [], "Delete all", "Delete all", "delete_archived_sessions"],
+  ["deleting all archived sessions", { kind: "delete-archived", console: console_, project }, [archivedOwner], "Delete all", "Delete all", "delete_archived_sessions"],
   ["removing a project", { kind: "delete-project", project }, [], "Remove", "Remove", "delete_project"],
   ["removing a project that has running sessions", { kind: "delete-project", project }, [{ ...owner, status: "working" }], "End and remove", "End and remove", "delete_project"],
 ];
@@ -287,7 +287,7 @@ it.each(TRASH_CONFIRMATIONS)("gives confirming %s its label for a ticked Trash o
 it.each<[string, DialogRequest, Session[], string, string]>([
   ["archiving a session", { kind: "archive-session", session: owner }, [owner], "Archive", "Archive and delete"],
   ["deleting a session", { kind: "delete-session", session: archivedOwner }, [archivedOwner], "Delete", "Delete all"],
-  ["deleting all archived sessions", { kind: "delete-archived", console: console_, project, count: 1 }, [archivedOwner], "Delete all", "Delete all"],
+  ["deleting all archived sessions", { kind: "delete-archived", console: console_, project }, [archivedOwner], "Delete all", "Delete all"],
 ])("labels confirming %s for a ticked force option, and back once it is unticked", async (_, dialog, sessions, plain, ticked) => {
   mount(dialog, sessions, [], {
     request: async (body) => body.type === "inspect_session_branches"
@@ -443,7 +443,7 @@ it("checks the native records of archived children as well as their owner", asyn
 
 it("keeps the bulk deletion confirmation but removes cleanup for a file-free scope", async () => {
   const archived = { ...owner, status: "archived" as const };
-  const { daemon } = mount({ kind: "delete-archived", console: console_, project, count: 1 }, [archived], [], {
+  const { daemon } = mount({ kind: "delete-archived", console: console_, project }, [archived], [], {
     request: async () => ({ type: "session_records_inspected", id: null, presence: "absent" }),
   });
   await act(async () => {});
@@ -470,7 +470,7 @@ it.each(["single", "bulk"] as const)("keeps keyboard focus in the %s confirmatio
   const waiting = new Promise<{ type: "session_records_inspected"; id: null; presence: "absent" }>((done) => { resolve = done; });
   mount(kind === "single"
     ? { kind: "delete-session", session: archived }
-    : { kind: "delete-archived", console: console_, project, count: 1 }, [archived], [], {
+    : { kind: "delete-archived", console: console_, project }, [archived], [], {
     request: () => waiting,
   });
   const option = checkbox();
@@ -529,7 +529,7 @@ const BRANCH_CONFIRMATIONS: Array<[string, DialogRequest, Record<string, unknown
   ["archiving a session", { kind: "archive-session", session: owner }, { type: "archive_session", session: owner.id }],
   ["deleting an archived session", { kind: "delete-session", session: { ...owner, status: "archived" } },
     { type: "delete_session", session: owner.id, trash_agent_records: false }],
-  ["deleting all archived sessions", { kind: "delete-archived", console: console_, project, count: 1 },
+  ["deleting all archived sessions", { kind: "delete-archived", console: console_, project },
     { type: "delete_archived_sessions", console: console_.id, project: project.id, trash_agent_records: false }],
 ];
 
@@ -1399,4 +1399,68 @@ it.each([
   expect(onClose).toHaveBeenCalledOnce();
   expect(daemon.raiseError).not.toHaveBeenCalled();
   expect(errorAlerts.getSnapshot()).toEqual([]);
+});
+
+it("counts the archived sessions it deletes as they are now, not as they were when it opened", () => {
+  const archivedIn = (id: string) => sessionOf(id, console_.id, project.id, id, "archived");
+  const { daemon } = mount({ kind: "delete-archived", console: console_, project }, [archivedIn("s-a"), archivedIn("s-b")]);
+  const message = () => document.body.querySelector("[role=alertdialog] p")?.textContent;
+  expect(message()).toContain("2 archived sessions will be deleted");
+  // A console session's agent archives another session while the confirmation is open.
+  act(() => daemon.store.setState((state) => ({ sessions: new Map([...state.sessions, ["s-c", archivedIn("s-c")]]) })));
+  expect(message()).toContain("3 archived sessions will be deleted");
+});
+
+// Nothing left to delete ends the confirmation's purpose: it closes rather than offering to delete nothing.
+it("closes by itself once another client empties the archive it would delete", () => {
+  const onClose = vi.fn();
+  const archived = sessionOf("s-a", console_.id, project.id, "s-a", "archived");
+  const { daemon } = mount({ kind: "delete-archived", console: console_, project }, [archived], [], { onClose });
+  expect(onClose).not.toHaveBeenCalled();
+  act(() => daemon.store.setState({ sessions: new Map() }));
+  expect(onClose).toHaveBeenCalledOnce();
+});
+
+// Its own deletion empties the archive before the daemon answers; the confirmation closes once answered, not before.
+it("closes once its own deletion is answered, though the archive empties before that", async () => {
+  const onClose = vi.fn();
+  const archived = sessionOf("s-a", console_.id, project.id, "s-a", "archived");
+  let answer!: (reply: unknown) => void;
+  const { daemon } = mount({ kind: "delete-archived", console: console_, project }, [archived], [], {
+    onClose,
+    request: async (body) => body.type === "delete_archived_sessions"
+      ? new Promise<never>((resolve) => { answer = resolve as (reply: unknown) => void; })
+      : { type: "session_records_inspected", id: null, presence: "absent" },
+  });
+  await act(async () => {});
+  await submitDialog();
+  act(() => daemon.store.setState({ sessions: new Map() }));
+  expect(onClose).not.toHaveBeenCalled();
+  await act(async () => answer({ type: "ack", id: null }));
+  expect(onClose).toHaveBeenCalledOnce();
+});
+
+// A deletion that fails once the archive has emptied meanwhile leaves nothing to confirm: the confirmation closes.
+it("closes once its own deletion fails over an archive emptied meanwhile", async () => {
+  const onClose = vi.fn();
+  const archived = sessionOf("s-a", console_.id, project.id, "s-a", "archived");
+  let refuse!: (error: unknown) => void;
+  const { daemon } = mount({ kind: "delete-archived", console: console_, project }, [archived], [], {
+    onClose,
+    request: async (body) => body.type === "delete_archived_sessions"
+      ? new Promise<never>((_, reject) => { refuse = reject; })
+      : { type: "session_records_inspected", id: null, presence: "absent" },
+  });
+  try {
+    await act(async () => {});
+    await submitDialog();
+    act(() => daemon.store.setState({ sessions: new Map() }));
+    expect(onClose).not.toHaveBeenCalled();
+    await act(async () => refuse(new DaemonRequestError("project not found", "project_not_found", {})));
+    expect(onClose).toHaveBeenCalledOnce();
+    // The failure is still told, though the confirmation it came from has closed.
+    expect(errorAlerts.getSnapshot()).toHaveLength(1);
+  } finally {
+    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
+  }
 });

@@ -27,8 +27,9 @@ parent render as before, and for most causes the lint reports nothing. In this c
   with `useLatest`, or a handler with `useStableHandler`, both in `packages/ui/src/components/hooks/useLatest.ts`; the value
   is set in a layout effect, so a reader during render or in a descendant's layout effect in the same commit still
   sees the previous one.
-- A `try` with a `finally`, or with no `catch`, anywhere in the function, nested callbacks included. Move the helper
-  that holds it to module level.
+- A `try` anywhere in the function, nested callbacks included, that has a `finally`, has no `catch`, or holds a
+  conditional, logical or optional-chaining expression (`?:`, `&&`, `||`, `??`, `?.`) inside the `try`/`catch`. Move
+  a helper that needs `finally` to module level; build any such value into a local before the `try`.
 - `??=`: write the assignment out.
 - A `useMemo` or `useCallback` whose body reads more than its dependency list names ("Existing memoization could not be
   preserved"): resolve the values into locals above it and read only those inside.
@@ -42,8 +43,9 @@ parent render as before, and for most causes the lint reports nothing. In this c
 
 To see what did not compile, give the compiler a `logger` — temporarily as
 `reactCompilerPreset({ logger: { logEvent(filename, event) { … } } })` in `packages/ui/vite.config.ts`, then build —
-and look for `CompileError` events in the files you changed; a few functions elsewhere are left uncompiled on purpose,
-each with a comment saying so.
+and look for `CompileError` events in the files you changed; or, without a build, run `@babel/core`'s `transformSync`
+from `packages/ui` over just those files with `babel-plugin-react-compiler` and the same `logger` (parser plugins
+`typescript` and `jsx`). A few functions elsewhere are left uncompiled on purpose, each with a comment saying so.
 
 ## Whatever every row of a list takes must keep its identity across daemon events
 

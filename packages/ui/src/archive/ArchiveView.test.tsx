@@ -85,7 +85,7 @@ it("deletes all of a console session's archive by naming that console session", 
   const deleteAll = Array.from(container.querySelectorAll("button")).find((b) => b.textContent === "Delete all");
   act(() => deleteAll?.click());
   expect(onOpenDialog).toHaveBeenCalledWith(
-    expect.objectContaining({ kind: "delete-archived", consoleSession: boundConsoleSession, project: undefined, count: boundArchived.length }),
+    expect.objectContaining({ kind: "delete-archived", consoleSession: boundConsoleSession, project: undefined }),
   );
 });
 
