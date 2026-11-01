@@ -100,29 +100,9 @@ export function FileViewer({
     </RowIconGroup>
   ) : null;
 
-  // The header holds navigation beside the title, the file's name with the tags of its change; under
-  // it, when the subject has one, the subtitle (where a compared change is from, which is a tag in
-  // meaning but far too long to sit in the tag group); and under that, in the body, the details
-  // (path, size, rename origin) beside the controls (Copy path, then the Markdown view, diff layout
-  // and word wrap choices), which float at the row's end. The details are separate items laid out like
-  // words around that float (`DetailItem`): they share the row with the controls to use the width
-  // beside them, and one too long for the space left moves down to a row of its own, where it has
-  // the whole width, rather than being squeezed against the others. Each item is one line cut by
-  // a fade, so only a detail that does not fit even alone is clipped.
-  // The block is the row beside the controls plus a row for each further line the dropped items
-  // need (short items that all miss the space beside the controls share one): two rows when a long
-  // path drops, three when a rename's long origin drops too, each taking 32 px of the code area
-  // from the dialog. That is accepted, because the milestone asks that a long detail take a row of
-  // its own rather than be squeezed, and capping it would squeeze one. The subtitle is a single line
-  // in the dialog's header, directly under the heading (`Dialog`'s `subtitle`), for a compared
-  // change and nothing for any other subject. Its height follows its text, and since the header
-  // is not the scroller it is not clipped by it.
-  // The notices about the whole file or change are marks right after the path, in one slot per tone so
-  // that they stand failed, then warned, then notes, whichever surface raises them (`FileNotice`); they
-  // stay outside the path's own fade, which cuts only the path.
-  // The header also gives up what it held before, each row one line that is never wrapped, so that
-  // moving between files could not move the code below; the code now moves when the rows needed
-  // differ from one file to the next, and between a compared change and a worktree one.
+  // The details use the full width and wrap compactly above the controls, whose final row stays
+  // next to the file content. Both paths fade at their start, preserving the file name.
+  // Notices stay outside that path fade, ordered failed, warned, then notes.
   // An untracked file is a change with an absent old side, which `changeStatus` calls added; the
   // list marks it untracked and says so in `subject.status`, which also holds while the content is
   // not read (yet). Without one, a change's sides give it, and a path in conflict has none to compare.
@@ -190,44 +170,37 @@ export function FileViewer({
       resetKey={subject.key}
     >
       <NoticeSlotsProvider>
-        <div ref={headerRef} data-viewer-description="" className="flow-root min-h-8 min-w-0 shrink-0 groove-b px-6 text-xs leading-8">
-          {/* Copy path, then fixed places for the Markdown view choice, the layout choice and the
-            wrap choice, then File manager and Default application, so Tab order matches the screen
-            whichever mounts first. The marks after the path come after those controls in the tab
-            order, for the same reason the controls come before the path in the source.
-            Copy path is here, not beside the path it copies, because the group sits at the row's end
-            and a button at the row's start would be tabbed to after the three at its end, against the
-            reading direction. The slots have no box of their own while empty, so they take none of
-            the gap. The group floats to the end of the row, ahead of the details in the source so
-            the line next to it is the one it shortens (a float shortens only the lines that follow
-            it). That puts the controls before the file's path for a screen reader, so Copy path is
-            met before the path it copies. That cost was weighed and accepted: the details are
-            independent, separately labelled facts, and Copy path and the other controls are labelled
-            on their own. */}
-          <RowIconGroup className="float-end h-8">
+        <div ref={headerRef} data-viewer-description="" className="flex min-w-0 shrink-0 flex-col groove-b px-6 text-xs leading-5">
+          <div data-viewer-details="" className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 pt-1.5">
+            <div data-viewer-file-summary="" className="flex w-full min-w-0 items-center gap-4">
+              <DetailItem className="min-w-0">
+                <PlainMarkedPath path={displayWirePath(subject.path)} icon={<FileTypeIcon path={subject.path} className="size-3.5 shrink-0 text-app-muted" />} />
+                <NoticeSlotBoxes />
+              </DetailItem>
+              {subject.stats && subject.stats.added + subject.stats.removed > 0 && (
+                <DetailItem className="shrink-0">
+                  <ChangeLineCounts stats={subject.stats} />
+                </DetailItem>
+              )}
+              {content.state === "file" && (
+                <DetailItem className="shrink-0">
+                  <StatusBadge separated={false}>
+                    {formatFileSize(language, content.body.size)}
+                  </StatusBadge>
+                </DetailItem>
+              )}
+            </div>
+            {renamedFrom !== undefined && <RenamedFrom path={renamedFrom} />}
+          </div>
+          {/* The final row keeps the controls next to the file content. Slots preserve their
+              order as the Markdown, diff layout and wrapping choices mount. */}
+          <RowIconGroup className="h-8 self-end">
             <CopyPathButton path={subject.path} />
             <div ref={setMarkdownViewSlot} className="contents" />
             <div ref={setLayoutSlot} className="contents" />
             {wrapClaimed && <WrapToggleHost />}
             {subject.host && <HostPathButtons host={subject.host} />}
           </RowIconGroup>
-          <DetailItem>
-            <PlainMarkedPath path={displayWirePath(subject.path)} icon={<FileTypeIcon path={subject.path} className="size-3.5 shrink-0 text-app-muted" />} />
-            <NoticeSlotBoxes />
-          </DetailItem>
-          {subject.stats && subject.stats.added + subject.stats.removed > 0 && (
-            <DetailItem>
-              <ChangeLineCounts stats={subject.stats} />
-            </DetailItem>
-          )}
-          {content.state === "file" && (
-            <DetailItem>
-              <StatusBadge separated={false}>
-                {formatFileSize(language, content.body.size)}
-              </StatusBadge>
-            </DetailItem>
-          )}
-          {renamedFrom !== undefined && <RenamedFrom path={renamedFrom} />}
         </div>
         <div className="flex min-h-0 flex-1 flex-col gap-3">
           <ControlsSlot value={controls}>

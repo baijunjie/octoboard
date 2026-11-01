@@ -7,6 +7,7 @@ import { FileTypeIcon } from "../components/icons/FileTypeIcon";
 import { IndicatorTooltip } from "../components/hint/IndicatorTooltip";
 import { ROW_ICON_BUTTON_CLASS } from "../components/controls/RowControls";
 import { TitledControl } from "../components/hint/TitledControl";
+import { PlainMarkedPath } from "../components/text/MarkedPath";
 import { type HostPath, useHostPathActions } from "../components/host/useHostPathActions";
 import { Message, useT } from "../i18n/react";
 import { displayWirePath } from "../wirePath";
@@ -97,17 +98,15 @@ export function renamedFromPath(change: ViewerChange): string | undefined {
   return change.old.state === "present" && change.new.state === "present" && change.old.path !== change.new.path ? change.old.path : undefined;
 }
 
-/** One detail of the header, an item of its own that flows around the view controls and can take a
- * row of its own when it does not fit beside them. The rename origin uses a separate wrapping
- * layout, since the full path must remain readable at a narrow window width. */
-export function DetailItem({ children }: { children: React.ReactNode }): React.ReactElement {
-  return <span className="me-4 inline-flex h-8 max-w-full items-center gap-1.5 whitespace-nowrap align-top text-app-muted">{children}</span>;
+/** One detail of the header, with paths allowed to shrink beside their fixed metadata. */
+export function DetailItem({ children, className = "" }: { children: React.ReactNode; className?: string }): React.ReactElement {
+  return <span className={`inline-flex h-5 max-w-full items-center gap-1.5 whitespace-nowrap text-app-muted ${className}`}>{children}</span>;
 }
 
 export function RenamedFrom({ path }: { path: string }): React.ReactElement {
   return (
-    <span className="me-4 inline-block min-h-8 max-w-[calc(100%-1rem)] whitespace-normal align-top text-app-muted">
-      <Message id="viewer.change.renamedFrom" params={{ path: <bdi dir="ltr" className="font-mono [overflow-wrap:anywhere]"><FileTypeIcon path={path} className="me-1.5 inline-block size-3.5 align-text-bottom text-app-muted" />{displayWirePath(path)}</bdi> }} />
+    <span className="flex h-5 min-w-0 max-w-full items-center gap-1.5 whitespace-nowrap text-app-muted">
+      <Message id="viewer.change.renamedFrom" params={{ path: <PlainMarkedPath path={displayWirePath(path)} icon={<FileTypeIcon path={path} className="size-3.5 shrink-0 text-app-muted" />} /> }} />
     </span>
   );
 }

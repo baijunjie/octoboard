@@ -28,14 +28,14 @@ The header has three parts, one under the other:
   A subject with no such commits has no such row at all, and the row costs the content below it that one line and no
   more. Its start aligns with the file-path icon in the details below. It is a single line that fades out where it
   is cut off and carries its full wording as its tooltip.
-- **The details** — the file's path within the project, its size and the path a rename came from — laid out beside the
-  **controls**, which hold the end of the row in a fixed order: **Copy path**, then the document-or-source choice for a
-  Markdown file (see `docs/product/markdown-documents.md`), then the diff's unified-or-split choice, then the wrap
-  choice (see "Wrapping long lines" below), then **File manager** and **Default application**. The size shows as a tag
-  of its own, drawn as the title's neutral stage tag is; a rename's origin reads as a sentence naming the path. Right
-  after the file's path stand the marks of the **notices about the whole file or change** on screen, one mark per notice
-  (see "Notices and stand-ins" below); they belong to the path's own item, and the path's fade cuts only the path, never
-  them. They come after the controls in the keyboard's order.
+- **The details** — the file's path within the project, its size and the path a rename came from — followed by the
+  **controls** on a separate final row directly above the content, aligned to its trailing side. Their fixed order is
+  **Copy path**, then the document-or-source choice for a Markdown file (see `docs/product/markdown-documents.md`),
+  then the diff's unified-or-split choice, then the wrap choice (see "Wrapping long lines" below), then **File manager**
+  and **Default application**. The size shows as a tag of its own, drawn as the title's neutral stage tag is; a rename's
+  origin reads as a sentence naming the path. Right after the file's path stand the marks of the **notices about the
+  whole file or change** on screen, one mark per notice (see "Notices and stand-ins" below); they belong to the path's
+  own item, and the path's fade cuts only the path, never them. They come before the controls in the keyboard's order.
 
 At most two of the three view choices are ever offered at once, since the document-or-source choice belongs to a whole
 Markdown file's body and the unified-or-split choice to a two-sided diff, and a Markdown diff keeps its source view
@@ -64,16 +64,14 @@ announced says what pressing does (see "Tooltips on icon-only controls" in `docs
 Neither says anything when it succeeds; a refusal or a failure raises the same error alert as from a row, with the same
 remedy for a file that is no longer there.
 
-The details share that row with the controls to use the width beside them, not to hold the header to one row. Each
-detail is an item of its own, and one too long for the space left beside the controls moves down to a row of its own,
-where it has the header's whole width; several can move down, so the header is one row of details, or two, or three.
-Each item is one line that is never wrapped: where it does not fit even on a row of its own it fades out rather than
-ending in an ellipsis and carries its full text as its tooltip — one fade and one tooltip per detail, not one for the
-row. The title and the subtitle fade the same way. A path — the file's own and a rename's origin — fades at its start
-instead, so the file's own name stays visible. Both paths show the same name- and extension-based icons as file rows
-(see "Rows and the keyboard" in `docs/product/project-pane.md`), with a generic file icon for unrecognized names. A cut
-detail, whichever edge it is cut at, runs as a marquee while the pointer is over it (see "Names too long for their
-space" in `docs/product/labels-and-tooltips.md`).
+The details use the header's full width. The current path, its notice marks and the line counts or file size always
+share one row: counts and size keep their width, and the path shrinks to fit. A rename's origin occupies the next row,
+with compact spacing between rows. Both paths stay on one line; when too long, each fades at its start so its file
+name stays visible, and carries its full path as its tooltip. The title and subtitle also stay on one line and fade
+rather than ending in an ellipsis, with their full text as their tooltip. Both paths show the same name- and
+extension-based icons as file rows (see "Rows and the keyboard" in `docs/product/project-pane.md`), with a generic file
+icon for unrecognized names. A cut path, title or subtitle runs as a marquee while the pointer is over it (see "Names
+too long for their space" in `docs/product/labels-and-tooltips.md`).
 
 **Moving from file to file can move the code below the header**, when the details of one file need a row that the next
 one's do not, or when one subject has the subtitle row and the next has none.

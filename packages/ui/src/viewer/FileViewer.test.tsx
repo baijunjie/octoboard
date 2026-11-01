@@ -746,8 +746,7 @@ it("puts the stage and the status in the title and the layout choice on the desc
 });
 
 // The tags are one group, closer to each other than the group is to the name, and each detail of the
-// description line is an item of its own, so one too long for the space beside the view controls can
-// move to a row of its own (layout is checked in WebKit); the paths carry the file icon. Where a
+// description line is an item of its own within the details column; the paths carry the file icon. Where a
 // compared change is from is no detail but the subtitle under the title.
 it("keeps the tags in one group and each detail as an item of its own, the paths with an icon", () => {
   const side = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file", body: { kind: "binary", size: 3 } });
@@ -760,9 +759,10 @@ it("keeps the tags in one group and each detail as an item of its own, the paths
   expect(tags[0].parentElement).toBe(tags[1].parentElement);
   expect(tags[0].parentElement!.children.length).toBe(2);
   const row = dialog()!.querySelector<HTMLElement>("[data-viewer-description]")!;
-  // The view controls come first in the source, floated to the row's end; they are what the details flow around.
-  const [controls, ...details] = [...row.children];
-  expect(controls.className).toContain("float-end");
+  // The full-width details precede the controls in both reading and keyboard order.
+  const [detailColumn, controls] = [...row.children];
+  expect(controls.querySelector("button")).not.toBeNull();
+  const details = [...detailColumn.children];
   expect(details.map((item) => item.textContent)).toEqual(["src/c.ts", "Renamed from src/old.ts"]);
   // The path and the rename origin carry the file icon.
   expect(details.filter((item) => item.querySelector("svg")).length).toBe(2);
@@ -854,7 +854,7 @@ it("shows where a compared change is from as a subtitle in the header, under the
 
 it("draws the size as a badge after the path", () => {
   show(binary);
-  const items = [...dialog()!.querySelector("[data-viewer-description]")!.children].slice(1);
+  const items = [...dialog()!.querySelector("[data-viewer-file-summary]")!.children];
   expect(items.map((item) => item.textContent)).toEqual(["bin/b.wasm", "3 bytes"]);
   expect(items[1].querySelector("[data-variant]")!.textContent).toBe("3 bytes");
 });
@@ -865,8 +865,8 @@ it("copies the project-relative path from the view-control group's first button,
   const writeText = vi.fn(async () => {});
   show(modified("src/dir/c.ts"), undefined, { clipboard: { writeText } });
   const copy = button("Copy path");
-  const [group, pathItem] = [...dialog()!.querySelector("[data-viewer-description]")!.children];
-  expect(group.className).toContain("float-end");
+  const [detailColumn, group] = [...dialog()!.querySelector("[data-viewer-description]")!.children];
+  const pathItem = detailColumn.querySelector("[data-viewer-file-summary]")!.firstElementChild!;
   expect(group.querySelector("button")).toBe(copy);
   expect(pathItem.querySelector("button")).toBeNull();
   expect(controlNamed("Copy path").length).toBe(1);
@@ -1065,7 +1065,7 @@ it("offers File manager and Default application last in the controls, on a subje
   const request = vi.fn(async () => ({ type: "ack", id: null }) as never);
   show(textFile("src/a.ts", "x", { project: "p", worktree: "w", path: "src/a.ts" }), undefined, { clipboard: { writeText: async () => {} }, request });
   await settled();
-  const group = dialog()!.querySelector("[data-viewer-description] .float-end")!;
+  const group = dialog()!.querySelector("[data-viewer-description]")!.lastElementChild!;
   const labels = [...group.querySelectorAll("button")].map((b) => b.getAttribute("aria-label"));
   expect(labels.slice(-2)).toEqual(["Open in file manager", "Open in default application"]);
   act(() => button("Open in file manager").click());
