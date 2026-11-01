@@ -14,8 +14,10 @@
 //! one the same way `is_git_repo` says: it has `.git` in its own directory.
 //!
 //! A watch that cannot be set up is logged and left out; the client's poll still covers that
-//! project. A project that is not a repository when it is added, or at daemon start, is picked up
-//! by the first check that finds it is one (`status::run_checks`).
+//! project, as it covers a change the platform never reports: under heavy load macOS
+//! delivers file events late or not at all, without flagging any as dropped. A project that is
+//! not a repository when it is added, or at daemon start, is picked up by the first check that
+//! finds it is one (`status::run_checks`).
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -377,7 +379,27 @@ fn reread(state: &AppState, project: &Project) {
 mod tests {
     use super::*;
     use crate::protocol::Event;
-    use crate::test_support::{app_state, git, repo_with, PATIENCE};
+    use crate::test_support::{app_state, git, repo_with};
+
+    /// How long a test waits for the watch to report a ref change. Long: while the
+    /// crate's tests run in parallel, macOS's file events go missing for tens of seconds at a time
+    /// and arrive up to two minutes late, with no flag saying any were dropped, and an FSEvents
+    /// stream of an unrelated process loses them at the same moments. A wait returns as soon as
+    /// the change is seen, so a passing run pays nothing for it.
+    const FILE_EVENT_PATIENCE: Duration = Duration::from_secs(150);
+
+    /// How long a test lets a ref change go unreported before it touches the ref again.
+    const RETOUCH: Duration = Duration::from_secs(2);
+
+    /// Rewrites `repo`'s `main` with the commit it already names, as `git` writes a ref (a lock
+    /// file renamed over it), so the watch is told of the same path again and nothing it reads
+    /// changes.
+    fn retouch_main(repo: &Path) {
+        let heads = repo.join(".git/refs/heads");
+        let commit = std::fs::read(heads.join("main")).expect("main is a loose ref");
+        std::fs::write(heads.join("main.lock"), commit).unwrap();
+        std::fs::rename(heads.join("main.lock"), heads.join("main")).unwrap();
+    }
 
     #[test]
     fn a_linked_worktree_keeps_its_head_apart_from_the_common_refs() {
@@ -434,16 +456,27 @@ mod tests {
 
         git(&repo, &["commit", "-q", "--allow-empty", "-m", "outside"]);
 
-        let deadline = Instant::now() + PATIENCE;
+        // The platform may never report the commit's own writes (see `FILE_EVENT_PATIENCE`), so
+        // the ref it moved is touched again until a re-read reports the commit.
+        let deadline = Instant::now() + FILE_EVENT_PATIENCE;
+        let mut retouch_at = Instant::now() + RETOUCH;
         loop {
-            let event = tokio::time::timeout_at(deadline, events.recv())
-                .await
-                .expect("a project_git_status arrives")
-                .unwrap();
-            if let Event::ProjectGitStatus { status } = event {
-                if status.ahead == 1 {
-                    assert_eq!(status.upstream.as_deref(), Some("origin/main"));
-                    break;
+            match tokio::time::timeout_at(retouch_at.min(deadline), events.recv()).await {
+                Ok(event) => {
+                    if let Event::ProjectGitStatus { status } = event.unwrap() {
+                        if status.ahead == 1 {
+                            assert_eq!(status.upstream.as_deref(), Some("origin/main"));
+                            break;
+                        }
+                    }
+                }
+                Err(_) => {
+                    assert!(
+                        Instant::now() < deadline,
+                        "a project_git_status with the commit arrives"
+                    );
+                    retouch_main(&repo);
+                    retouch_at = Instant::now() + RETOUCH;
                 }
             }
         }
