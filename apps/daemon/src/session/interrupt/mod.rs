@@ -53,6 +53,27 @@ const CTRL_C: &[u8] = b"\x03";
 /// turns.
 const SETTLE: Duration = Duration::from_secs(5);
 
+/// How long [`press`] waits for the turn to end: [`SETTLE`], except under test. A stand-in agent
+/// answers each key through a PTY, a `cat` and a polling thread, which under the suite's load can
+/// take longer than a real agent's hook, so tests wait up to `PATIENCE` (the wait returns as soon
+/// as the turn ends) and a test proving the window runs out lowers it with [`SETTLE_OVERRIDE`].
+/// Read on the caller's thread, before the press moves onto a blocking one.
+fn settle() -> Duration {
+    #[cfg(test)]
+    {
+        SETTLE_OVERRIDE
+            .with(std::cell::Cell::get)
+            .unwrap_or(crate::test_support::PATIENCE)
+    }
+    #[cfg(not(test))]
+    SETTLE
+}
+
+#[cfg(test)]
+thread_local! {
+    static SETTLE_OVERRIDE: std::cell::Cell<Option<Duration>> = const { std::cell::Cell::new(None) };
+}
+
 /// The pause between Grok's Ctrl-U and its Ctrl-C, so the two are read as two keys.
 const BETWEEN_KEYS: Duration = Duration::from_millis(100);
 
@@ -121,9 +142,10 @@ pub async fn interrupt_session(state: &Arc<AppState>, id: &str) -> Result<Interr
     };
     let agent = live.agent;
     let written = state.written_mid_turn(id);
+    let settle = settle();
     let pressed = {
         let state = state.clone();
-        tokio::task::spawn_blocking(move || press(&state, &live)).await?
+        tokio::task::spawn_blocking(move || press(&state, &live, settle)).await?
     }?;
     let status = state
         .session_record(id)
@@ -368,7 +390,7 @@ enum Pressed {
     Nothing(Held),
     /// Grok's composer was cleared with Ctrl-U and its Ctrl-C was not sent.
     OnlyCtrlU { draft: Draft, why: CtrlCHeld },
-    /// The interrupt key went in; `ended` says whether the turn ended within [`SETTLE`].
+    /// The interrupt key went in; `ended` says whether the turn ended within the [`settle`] window.
     Keys {
         draft: Draft,
         prompt: Restored,
@@ -387,9 +409,9 @@ enum Restored {
     Left,
 }
 
-/// Sends the agent's interrupt key, and waits up to [`SETTLE`] for the turn to end, clearing a
-/// prompt the agent restores meanwhile. **Blocks.**
-fn press(state: &Arc<AppState>, live: &Arc<LiveSession>) -> Result<Pressed> {
+/// Sends the agent's interrupt key, and waits up to `settle` ([`settle`]) for the turn to end,
+/// clearing a prompt the agent restores meanwhile. **Blocks.**
+fn press(state: &Arc<AppState>, live: &Arc<LiveSession>, settle: Duration) -> Result<Pressed> {
     let agent = live.agent;
     // Read before anything is looked at: a write by anyone else after this point means what was
     // looked at may no longer be true.
@@ -468,7 +490,7 @@ fn press(state: &Arc<AppState>, live: &Arc<LiveSession>) -> Result<Pressed> {
             None => return Ok(Pressed::Nothing(held(writes))),
         }
     }
-    let deadline = Instant::now() + SETTLE;
+    let deadline = Instant::now() + settle;
     let mut prompt = None;
     loop {
         // Before the turn is seen to end: the clearing is quicker than the title watch that ends

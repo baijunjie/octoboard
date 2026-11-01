@@ -626,7 +626,11 @@ async fn a_write_by_someone_else_between_the_keys_stops_the_next_one() {
 async fn a_session_still_working_after_the_key_is_reported() {
     let fixture = working("codex-still-working", Agent::Codex);
 
-    let result = interrupt_session(&fixture.state, "s").await.unwrap();
+    // Nothing answers the key, so the window only has to run out; a short one shows that.
+    SETTLE_OVERRIDE.with(|settle| settle.set(Some(Duration::from_millis(200))));
+    let result = interrupt_session(&fixture.state, "s").await;
+    SETTLE_OVERRIDE.with(|settle| settle.set(None));
+    let result = result.unwrap();
 
     assert!(!result.interrupted);
     assert_eq!(result.status, SessionStatus::Working);

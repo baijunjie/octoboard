@@ -43,9 +43,15 @@ in single seconds.
 - A test proving that a production timeout fires keeps that timeout short. When the fixture was
   killed before it reached the point under test, nothing was tested: run the whole scenario
   again until `PATIENCE` runs out rather than failing or lengthening the timeout.
-- Where the test cannot widen the window the production code times (a stand-in answering inside
-  the daemon's own timeouts), the fixture does its one-time setup first and uses only shell
-  builtins after it, so no exec lands inside that window.
+- Where a stand-in has to answer inside a window the production code times, widen that window
+  under test instead of racing it: the production code reads it through a getter that returns the
+  real figure, and under `#[cfg(test)]` returns `PATIENCE` unless a `thread_local!` override is
+  set; only the test proving the window runs out sets a short override (`settle` and
+  `SETTLE_OVERRIDE` in `apps/daemon/src/session/interrupt/mod.rs` are the shape). The override
+  reaches only the test's own thread, so the code reads the getter there and passes the value on
+  before the work moves onto `spawn_blocking` or another thread. Where a window cannot be routed
+  through such a getter, the fixture does its one-time setup first and uses only shell builtins
+  after it, so no exec lands inside that window.
 
 To recognise it: failures only under a parallel run, a run far slower than usual,
 `--test-threads=1` passing, and a trivial exec (`/usr/bin/true`) timed in a loop alongside the
