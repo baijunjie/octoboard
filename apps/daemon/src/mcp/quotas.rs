@@ -34,8 +34,9 @@ const SHARING_IN_PROGRESS: &str = "A change of its sharing settings is in progre
                                    when it has ended.";
 
 /// Every account of every agent a session could be opened on (or of `agent`, when the caller names
-/// one), with the reading held for it: the default account first, then the stored ones in the
-/// order they are kept. An account the user turned off is left out, the caller's own included: it
+/// one), with the reading held for it, in the order automatic account selection weighs them
+/// (`account_choice::account_candidates`): the order the user keeps them in, the ones it does not
+/// name after it. An account the user turned off is left out, the caller's own included: it
 /// is shown on the account settings page alone. An agent that is not installed or not added has
 /// none (the poller still reads one that is installed but not added); one not yet detected is
 /// listed, its accounts not read yet. An account is judged exhausted by the rule that keeps it
@@ -85,21 +86,31 @@ async fn get_account_quotas_with(
         {
             continue;
         }
-        let stored = accounts.iter().filter(|account| account.agent == agent);
-        let candidates = std::iter::once((
-            None,
-            None,
-            state.store.default_account_name(agent)?,
-            state.store.account_disabled(agent, None)?,
-        ))
-        .chain(stored.map(|account| {
-            (
-                Some(account.id.as_str()),
-                Some(account.config_dir.as_str()),
-                account.name.clone(),
-                account.disabled,
-            )
-        }));
+        let mut candidates = Vec::new();
+        for id in coordinator::account_choice::account_candidates(state, agent)? {
+            candidates.push(match id {
+                None => (
+                    None,
+                    None,
+                    state.store.default_account_name(agent)?,
+                    state.store.account_disabled(agent, None)?,
+                ),
+                Some(id) => {
+                    let Some(account) = accounts
+                        .iter()
+                        .find(|account| account.agent == agent && account.id == id)
+                    else {
+                        continue;
+                    };
+                    (
+                        Some(account.id.as_str()),
+                        Some(account.config_dir.as_str()),
+                        account.name.clone(),
+                        account.disabled,
+                    )
+                }
+            });
+        }
         for (id, config_dir, name, disabled) in candidates {
             if disabled {
                 continue;
@@ -326,6 +337,38 @@ mod tests {
         );
         assert_eq!(entry(&result, "codex", "codex-b")["exhausted"], false);
         assert_eq!(entry(&result, "codex", "default")["exhausted"], false);
+    }
+
+    /// The accounts are listed in the order automatic account selection weighs them: the order
+    /// the user keeps them in, not the order they were added in.
+    #[tokio::test]
+    async fn accounts_are_listed_in_the_order_the_user_keeps_them_in() {
+        let (state, _dir) = shared_console_state("quotas-order");
+        available(&state, &[Agent::Claude]);
+        insert_account(&state, Agent::Claude, "claude-a");
+        insert_account(&state, Agent::Claude, "claude-b");
+        state
+            .store
+            .reorder_accounts(
+                Agent::Claude,
+                &[
+                    Some("claude-b".to_string()),
+                    None,
+                    Some("claude-a".to_string()),
+                ],
+            )
+            .unwrap();
+
+        let result = get_account_quotas(&state, &arguments(json!({ "agent": "claude" })))
+            .await
+            .unwrap();
+        let ids: Vec<&Value> = result["accounts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|entry| &entry["account"])
+            .collect();
+        assert_eq!(ids, ["claude-b", "default", "claude-a"]);
     }
 
     /// A turned-off account is left out, the default account of its agent included; the others of

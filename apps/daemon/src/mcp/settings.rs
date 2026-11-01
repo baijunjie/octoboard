@@ -85,33 +85,37 @@ pub(super) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
     let accounts = state.store.list_accounts()?;
     let default_names = state.store.default_account_names()?;
     let disabled_defaults = state.store.disabled_default_accounts()?;
-    // The default account of each agent is no row, so it is added in front of that agent's others,
-    // under the id the tools' `accounts` arguments take for it.
-    let listed: Vec<Value> = Agent::ALL
-        .iter()
-        .flat_map(|agent| {
-            let default = json!({
-                "id": "default",
-                "agent": agent,
-                "name": default_account_name_in(&default_names, *agent),
-                "default": true,
-                "disabled": disabled_defaults.contains(agent.wire_name()),
-            });
-            let others = accounts
-                .iter()
-                .filter(|account| account.agent == *agent)
-                .map(|account| {
-                    json!({
-                        "id": account.id,
-                        "agent": account.agent,
-                        "name": account.name,
-                        "default": false,
-                        "disabled": account.disabled,
-                    })
-                });
-            std::iter::once(default).chain(others)
-        })
-        .collect();
+    // The default account of each agent is no row, so it is listed under the id the tools'
+    // `accounts` arguments take for it. Each agent's accounts come in the order automatic account
+    // selection weighs them.
+    let mut listed = Vec::new();
+    for agent in Agent::ALL {
+        for id in coordinator::account_choice::account_candidates(state, agent)? {
+            match id {
+                None => listed.push(json!({
+                    "id": "default",
+                    "agent": agent,
+                    "name": default_account_name_in(&default_names, agent),
+                    "default": true,
+                    "disabled": disabled_defaults.contains(agent.wire_name()),
+                })),
+                Some(id) => {
+                    if let Some(account) = accounts
+                        .iter()
+                        .find(|account| account.agent == agent && account.id == id)
+                    {
+                        listed.push(json!({
+                            "id": account.id,
+                            "agent": account.agent,
+                            "name": account.name,
+                            "default": false,
+                            "disabled": account.disabled,
+                        }));
+                    }
+                }
+            }
+        }
+    }
     Ok(json!({
         "auto_pull_repositories": state.store.auto_pull_repositories()?,
         "auto_delete_unresumable_archives": state.store.auto_delete_unresumable_archives()?,

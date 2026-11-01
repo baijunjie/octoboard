@@ -268,8 +268,12 @@ fn open_now(state: &Arc<AppState>, agent: Agent, account: Option<&str>) -> Resul
 /// finds candidates alike, the earlier one wins. Accounts the saved order does not name follow,
 /// the default account first and then the stored accounts as they are kept. The window's dialogs
 /// rank in the same order to preselect what this would pick (`packages/ui/src/accountChoices.ts`),
-/// so a change to the ranking or its order is made on both sides.
-fn account_candidates(state: &Arc<AppState>, agent: Agent) -> Result<Vec<Option<String>>> {
+/// so a change to the ranking or its order is made on both sides. The MCP tools that list accounts
+/// (`get_account_quotas`, `get_settings`) list them in this order too.
+pub(crate) fn account_candidates(
+    state: &Arc<AppState>,
+    agent: Agent,
+) -> Result<Vec<Option<String>>> {
     let mut candidates = vec![None];
     for account in state.store.list_accounts()? {
         if account.agent == agent {

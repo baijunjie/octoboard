@@ -444,9 +444,11 @@ read" above.
 Every session, of any kind, has the `get_account_quotas` tool, so an agent can check what an account has left before it
 picks one for `switch_session_account` or `handoff_session`. It takes an optional `agent` to list only that agent's
 accounts and an optional `refresh` (below), and answers with every account of every agent a session could be opened on
-that the user has not turned off, the default account first (`account` is `default`), whether or not a reading is held
-for it. An account the user turned off is not listed, with no exception for the caller's own account (see "Turning an
-account off" in `docs/product/agent-accounts.md`); a session finds the account it runs on with `get_session`, which
+that the user has not turned off, whether or not a reading is held for it (the default account's `account` is
+`default`). Each agent's accounts come in the order automatic account selection takes them in: the user's order of that
+agent's accounts, then those that order does not name (see "Which account a session uses" in
+`docs/product/opening-sessions.md`). An account the user turned off is not listed, with no exception for the caller's
+own account (see "Turning an account off" in `docs/product/agent-accounts.md`); a session finds the account it runs on with `get_session`, which
 left without a `session` reads the caller itself (see "Session records" in `docs/product/what-every-session-reads.md`).
 An agent that is not installed or not on the added list lists no accounts; one not detected yet lists its accounts as
 not read yet. Each entry gives the account's `account_name`, `plan`, `fetched_at` (milliseconds since the epoch, `null`

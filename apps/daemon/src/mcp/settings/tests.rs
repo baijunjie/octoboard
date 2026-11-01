@@ -728,3 +728,38 @@ async fn a_git_refresh_reports_the_checks_that_were_not_over_in_time() {
     let skipped = refresh_git_status_within(state, vec![project], Duration::ZERO).await;
     assert_eq!(skipped, json!({ "finished": true }));
 }
+
+/// `get_settings` lists each agent's accounts in the order automatic account selection weighs
+/// them: the order the user keeps them in, not the default account first.
+#[tokio::test]
+async fn get_settings_lists_the_accounts_in_the_order_the_user_keeps_them_in() {
+    let (state, _dir) = settings_state("app-settings-account-order");
+    let first = state.store.list_accounts().unwrap().remove(0);
+    let agent = first.agent;
+    let mut order: Vec<Option<String>> = state
+        .store
+        .list_accounts()
+        .unwrap()
+        .into_iter()
+        .filter(|account| account.agent == agent)
+        .map(|account| Some(account.id))
+        .rev()
+        .collect();
+    order.push(None);
+    state.store.reorder_accounts(agent, &order).unwrap();
+
+    let listed = call(&state, "a", "get_settings", &arguments(json!({})))
+        .await
+        .unwrap();
+    let ids: Vec<Option<String>> = listed["accounts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|account| account["agent"] == agent.wire_name())
+        .map(|account| match account["id"].as_str().unwrap() {
+            "default" => None,
+            id => Some(id.to_string()),
+        })
+        .collect();
+    assert_eq!(ids, order);
+}
