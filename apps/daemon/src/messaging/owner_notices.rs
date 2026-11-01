@@ -150,7 +150,8 @@ fn recovery_failed(session: &Session, reason: &str) -> String {
     format!(
         "{NOTICE_PREFIX}: session `{}` (\"{}\") could not resume after its account's usage quota \
          recovered. It is interrupted and its work is stopped. Reason: {reason}",
-        session.id, session.title
+        session.id,
+        sharing::one_line(&session.title)
     )
 }
 
@@ -809,7 +810,7 @@ mod tests {
         );
         assert_eq!(
             recovery_failed(&session, "the launch failed"),
-            "Message from Octoboard: session `session-7` (\"Fix the \"login\"\nretry\") could not \
+            "Message from Octoboard: session `session-7` (\"Fix the \"login\" retry\") could not \
              resume after its account's usage quota recovered. It is interrupted and its work is \
              stopped. Reason: the launch failed"
         );
