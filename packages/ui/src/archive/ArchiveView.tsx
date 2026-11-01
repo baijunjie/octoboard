@@ -22,6 +22,7 @@ import { inheritedLaunch, sessionModelEffort, sessionModelLabel } from "../sessi
 import { archivedSessionRows, boundArchivedSessions } from "../sessions/order";
 import { NESTED_ROW_CLASS, TreeRow } from "../sidebar/rows";
 import { useFlip } from "../sidebar/useFlip";
+import { ringForAutomaticFocus } from "../input/touchInput";
 
 /** How many rows the list adds each time its end scrolls into view. */
 const PAGE = 30;
@@ -101,6 +102,7 @@ export function ArchiveView({
   const scrollerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLLIElement>(null);
   const rootRef = useRef<HTMLElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
   // The view's own Escape below is a React handler, which an open tooltip's takes the key from.
   useEscapeWhileTooltipOpen(() => active ? rootRef.current : null, onClose);
   const more = shown < archived.length;
@@ -140,12 +142,25 @@ export function ArchiveView({
   }, [active]);
 
   // Deleting a row, or all of them, unmounts the button the dialog would hand focus back to, which
-  // drops it to `<body>`. The delay lets the dialog close and restore focus to a control that
-  // still exists (a cancelled one) first; only a focus still lost then is brought back here.
+  // drops it to `<body>`; a Delete all pressed with the pointer, which takes no focus, has the
+  // dialog hand it back to the ring-less section instead. The delay lets the dialog close and
+  // restore focus to a control that still exists (a cancelled one) first; only a focus still lost
+  // then, or left on the section by a dialog that deleted something, is brought here. It lands on
+  // Close, which is always present and shows a ring; the user did not ask for the move, so the ring
+  // is turned on. `dialogCount` is how many rows there were when the dialog opened, kept until the
+  // check after it closes.
+  const dialogCount = useRef<number | null>(null);
   useEffect(() => {
     if (!active) return;
+    if (dialogOpen && dialogCount.current === null) dialogCount.current = archived.length;
     const timer = setTimeout(() => {
-      if (document.activeElement === document.body) rootRef.current?.focus({ preventScroll: true });
+      const before = dialogCount.current;
+      if (!dialogOpen) dialogCount.current = null;
+      const deleted = !dialogOpen && before !== null && archived.length < before;
+      const focused = document.activeElement;
+      if (focused !== document.body && !(deleted && focused === rootRef.current)) return;
+      ringForAutomaticFocus();
+      closeRef.current?.focus({ preventScroll: true });
     }, 100);
     return () => clearTimeout(timer);
   }, [archived.length, dialogOpen, active]);
@@ -188,7 +203,7 @@ export function ArchiveView({
           </Button>
         )}
         <TitledControl title={t("common.close")}>
-          <Button isIconOnly size="sm" variant="ghost" aria-label={t("common.close")} onPress={onClose}>
+          <Button ref={closeRef} isIconOnly size="sm" variant="ghost" aria-label={t("common.close")} onPress={onClose}>
             <X aria-hidden="true" className="size-4" />
           </Button>
         </TitledControl>

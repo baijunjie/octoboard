@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
+import { setInteractionModality } from "react-aria";
+import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
@@ -30,39 +32,43 @@ vi.mock("../format/useNow", () => ({ useNow: () => 0 }));
 const OTHER_SESSIONS = [boundConsoleSession, otherConsoleSession, otherOwnerArchived, unboundArchived];
 
 /** Renders the view for `boundConsoleSession`'s own scope and returns its container, for a test to
- * query. The root is unmounted when the test ends. */
+ * query, and `rerender`, which renders it again with `changes` over the original arguments (changes
+ * do not carry over from one call to the next). The root is unmounted when the test ends. */
 function renderArchiveView(
   onOpenDialog: (dialog: DialogRequest) => void = () => {},
   onClose: () => void = () => {},
   sessions: Session[] = [...OTHER_SESSIONS, ...boundArchived],
   overrides: Partial<React.ComponentProps<typeof ArchiveView>> = {},
-): { container: HTMLElement } {
+): { container: HTMLElement; rerender: (changes: Partial<React.ComponentProps<typeof ArchiveView>>) => void } {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
   });
-  act(() =>
-    root.render(
-      <ArchiveView
-        console={console_}
-        boundTo={boundConsoleSession}
-        sessions={sessions}
-        consoles={new Map([[console_.id, console_]])}
-        projects={new Map()}
-        accounts={[]}
-        defaultNames={{}}
-        onSelect={() => {}}
-        onReopen={() => {}}
-        onOpenDialog={onOpenDialog}
-        dialogOpen={false}
-        onClose={onClose}
-        {...overrides}
-      />,
-    ),
-  );
-  return { container };
+  const render = (changes: Partial<React.ComponentProps<typeof ArchiveView>>) =>
+    act(() =>
+      root.render(
+        <ArchiveView
+          console={console_}
+          boundTo={boundConsoleSession}
+          sessions={sessions}
+          consoles={new Map([[console_.id, console_]])}
+          projects={new Map()}
+          accounts={[]}
+          defaultNames={{}}
+          onSelect={() => {}}
+          onReopen={() => {}}
+          onOpenDialog={onOpenDialog}
+          dialogOpen={false}
+          onClose={onClose}
+          {...overrides}
+          {...changes}
+        />,
+      ),
+    );
+  render({});
+  return { container, rerender: render };
 }
 
 it("lists a console session's own archived bound sessions, not its own archived row or an unrelated session", () => {
@@ -192,6 +198,56 @@ it.each(["header", "row"] as const)("runs only the hovered text in the archive %
   const labels = Array.from(surface.querySelectorAll<HTMLElement>(".overflow-hidden.whitespace-nowrap"));
   expect(labels).toHaveLength(2);
   expectIndependentMarquees(labels, [surface, ...surface.querySelectorAll("button, svg")]);
+});
+
+it("brings focus lost to the page back to the close button, with its ring shown", () => {
+  vi.useFakeTimers();
+  onTestFinished(() => { vi.useRealTimers(); });
+  const { container } = renderArchiveView();
+  act(() => vi.advanceTimersByTime(50));
+  expect(document.activeElement).toBe(container.querySelector("section[data-region='archive']"));
+  // What a deleted row's button leaves behind, with the last input a pointer press.
+  act(() => {
+    (document.activeElement as HTMLElement).blur();
+    setInteractionModality("pointer");
+  });
+  expect(document.activeElement).toBe(document.body);
+  act(() => vi.advanceTimersByTime(50));
+  expect(document.activeElement).toBe(container.querySelector("button[aria-label='Close']"));
+  expect(getInteractionModality()).toBe("keyboard");
+});
+
+// A Delete all pressed with the pointer takes no focus, so its dialog hands focus back to the section, which shows no
+// ring; once that dialog has deleted rows, focus goes on to Close as if it had been lost. A dialog that deleted
+// nothing leaves it there.
+it.each([
+  { what: "deleted every row", after: OTHER_SESSIONS, lands: "close" },
+  { what: "deleted nothing", after: undefined, lands: "section" },
+])("moves focus from the section to the close button only once a dialog that deleted rows closes ($what)", ({ after, lands }) => {
+  vi.useFakeTimers();
+  onTestFinished(() => { vi.useRealTimers(); });
+  const { container, rerender } = renderArchiveView();
+  act(() => vi.advanceTimersByTime(50));
+  const section = container.querySelector("section[data-region='archive']");
+  expect(document.activeElement).toBe(section);
+  act(() => setInteractionModality("pointer"));
+  rerender({ dialogOpen: true });
+  act(() => vi.advanceTimersByTime(100));
+  rerender({ dialogOpen: false, ...(after ? { sessions: after } : {}) });
+  act(() => vi.advanceTimersByTime(100));
+  expect(document.activeElement).toBe(lands === "close" ? container.querySelector("button[aria-label='Close']") : section);
+  expect(getInteractionModality()).toBe(lands === "close" ? "keyboard" : "pointer");
+});
+
+it("leaves focus that is on a control where it is when the fallback runs", () => {
+  vi.useFakeTimers();
+  onTestFinished(() => { vi.useRealTimers(); });
+  const { container } = renderArchiveView();
+  act(() => vi.advanceTimersByTime(50));
+  const row = container.querySelector<HTMLElement>("ul > li [role=button]")!;
+  act(() => row.focus());
+  act(() => vi.advanceTimersByTime(50));
+  expect(document.activeElement).toBe(row);
 });
 
 it("opens at the loaded page count and scroll offset it is restored to, and reports where it is scrolled", () => {

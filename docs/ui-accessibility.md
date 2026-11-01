@@ -570,7 +570,7 @@ A dialog opened from a control that never took focus, is disabled, or is gone by
 focus back to it: React Aria restores focus to what held it when the dialog opened, which is not the control after an
 accessibility activation or a `preventFocusOnPress` press, and finds nothing that takes it when the control is disabled
 or gone, so focus ends on `<body>`, where VoiceOver reads the whole web area instead of the control the user was on.
-Three hand-offs repair it. The login hand-off (`useLoginFocusReturn` in
+Four hand-offs repair it. The login hand-off (`useLoginFocusReturn` in
 `packages/ui/src/settings/accounts/AccountLoginButton.tsx`): the row's own Log in button is shown only while the account
 reads as signed out and is not turned off, and is disabled while a login runs, so after a success focus goes to the
 row's actions, and after a cancel to the Log in button once it is enabled again, else to the actions. The console
@@ -580,9 +580,12 @@ terminal closed through its busy confirmation is repaired once the confirmation 
 `packages/ui/src/terminal/shell/ShellTerminalPanel.tsx`): when the terminal's tab or view that the dialog gave focus
 back to has gone with it, focus goes to the shown tab after a close asked from a menu, or to the shown terminal after
 one asked from the terminal itself; the ring is turned on only as it moves focus, so a close the daemon refuses leaves
-focus where the dialog put it back, ringed or not as the press was. All three wait at least a frame past React Aria's
-restore and leave a restore that landed right alone; they act where focus is on `<body>`, and the login hand-off also
-where it is on its going button.
+focus where the dialog put it back, ringed or not as the press was. The archive view
+(`packages/ui/src/archive/ArchiveView.tsx`) sends focus to its header's Close, with the ring turned on, once a deletion
+has taken the control focus would go back to (a row's Delete, or Delete all), or after a deletion confirmed from a Delete
+all whose `preventFocusOnPress` press had its dialog hand focus back to the ring-less view itself. All four wait at least a frame past React Aria's restore and leave
+a restore that landed right alone; they act where focus is on `<body>`, the login hand-off also where it is on its going
+button, and the archive view also where it is on the view itself after a dialog that deleted rows.
 
 A dialog that the Agent accounts section opens by itself as Settings opens (the account settings dialog for View in
 Settings, a login found running, Add agent) saves its restore target before Settings' tabs exist, so on closing it hands
