@@ -329,8 +329,8 @@ whose agent gave up on the call by a time limit of its own, without any signal r
 came of its request (see "Waiting for the answer" above).
 
 No report is synthesised for the turn this message starts (see "When a session does not report" in
-`docs/product/reporting-to-owners.md`). On Claude Code that turn is recognised by the prompt it opens with; with Codex
-and Grok Build, whose prompts Octoboard does not read, the next turn to start is the one spared a report instead.
+`docs/product/reporting-to-owners.md`). On every agent that turn is recognised by the prompt it opens with; only
+when a turn starts without its prompt reaching Octoboard is the next turn to start the one spared a report instead.
 
 The turn in which Claude Code delivers the call's result after moving the call to the background, as described above,
 is not spared: that turn is reported on as any other, whether the caller continues work or ends after the handover.

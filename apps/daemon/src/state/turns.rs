@@ -389,8 +389,8 @@ mod tests {
         assert_eq!(state.close_turn("s", false), TurnClose::OwesReport);
     }
 
-    /// Where the agent's prompt is not read, there is nothing to tell the credited turn by, so the
-    /// next turn to start is the one credited.
+    /// Where the turn's start carries no prompt, there is nothing to tell the credited turn by, so
+    /// the next turn to start is the one credited.
     #[test]
     fn without_a_prompt_the_next_turn_spends_the_credit() {
         let (state, _dir) = app_state("state-turn-credit-fallback");
