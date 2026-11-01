@@ -419,7 +419,7 @@ describe("sample report relay", () => {
     message(0, 0.5);
     expect(send).toHaveBeenCalledExactlyOnceWith(
       { type: PREVIEW_MESSAGE.scroll, deltaY: 0, velocity: 0.5 },
-      "*",
+      "/",
     );
     send.mockClear();
     const stopMessage = (stop: unknown) =>
@@ -436,7 +436,7 @@ describe("sample report relay", () => {
     stopMessage(true);
     expect(send).toHaveBeenCalledExactlyOnceWith(
       { type: PREVIEW_MESSAGE.scroll, deltaY: 0, stop: true },
-      "*",
+      "/",
     );
   });
   it("leaves independently opened previews and their reports untouched", () => {
@@ -468,7 +468,7 @@ describe("sample report relay", () => {
     message(frame.contentWindow!);
     expect(send).toHaveBeenCalledExactlyOnceWith(
       { type: PREVIEW_MESSAGE.scroll, deltaY: 10 },
-      "*",
+      "/",
     );
     frame.srcdoc = reportDocument();
     await new Promise((resolve) => setTimeout(resolve, 0));

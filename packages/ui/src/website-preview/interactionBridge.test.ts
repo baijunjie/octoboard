@@ -107,7 +107,7 @@ describe("preview interaction relay", () => {
     message(report.contentWindow!, "pointer");
     message(report.contentWindow!, "keyboard");
     expect(send.mock.calls).toEqual(["pointer", "keyboard", "pointer", "keyboard"].map((modality) => [
-      { type: PREVIEW_MESSAGE.interaction, modality }, "*",
+      { type: PREVIEW_MESSAGE.interaction, modality }, "/",
     ]));
     send.mockClear();
     message(window, "keyboard");

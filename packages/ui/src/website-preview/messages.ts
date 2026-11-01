@@ -28,14 +28,19 @@ export type FeatureMessage =
   | { type: typeof FEATURE_MESSAGE.ready; feature: string }
   | { type: typeof FEATURE_MESSAGE.error; feature?: string };
 
+/** The frames are served from the website's own origin, and the page accepts a message only from its own frame on
+ * that origin; `"/"` delivers only to a page on the frame's own origin, so another site embedding a frame hears
+ * nothing. */
+const PAGE_ORIGIN = "/";
+
 /** Posts `message` from a frame to the page embedding it. */
 export function postPreviewMessage(parent: Window, message: PreviewMessage): void {
-  parent.postMessage(message, "*");
+  parent.postMessage(message, PAGE_ORIGIN);
 }
 
 /** Posts `message` from a feature frame to the page embedding it. */
 export function postFeatureMessage(parent: Window, message: FeatureMessage): void {
-  parent.postMessage(message, "*");
+  parent.postMessage(message, PAGE_ORIGIN);
 }
 
 const isFinitePart = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);

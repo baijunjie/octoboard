@@ -104,7 +104,11 @@ function startFling(initial: number) {
   flingFrame = requestAnimationFrame(step);
 }
 function receive(event: MessageEvent) {
-  if (event.source !== frame.value?.contentWindow) return;
+  if (
+    event.source !== frame.value?.contentWindow ||
+    event.origin !== window.location.origin
+  )
+    return;
   const message = readPreviewMessage(event.data);
   if (!message) return;
   if (message.type === PREVIEW_MESSAGE.interaction) {
