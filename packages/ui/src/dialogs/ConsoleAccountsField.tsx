@@ -3,7 +3,7 @@ import React, { useId, useRef, useState } from "react";
 
 import { Button } from "../components/controls/Button";
 import { choiceGroups, choiceKey, findEntry, storedAccount } from "../accountChoices";
-import { AGENT_LABEL, agentChoiceBadge, defaultAccountName, isAgentPickable, isDefaultAccountRenamed, listedPickerAgents } from "../agents";
+import { AGENT_LABEL, agentChoiceBadge, defaultAccountName, isAgentPickable, listedPickerAgents } from "../agents";
 import { AgentIcon } from "../components/icons/AgentIcon";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { StatusBadge } from "../components/status/StatusBadge";
@@ -109,14 +109,9 @@ export function ConsoleAccountsField({
                   // The row's name is hidden from assistive technology, and says here that the
                   // agent is not installed or not added.
                   describedBy={marked ? nameId : undefined}
-                  // An agent with only its default account offers just that one: under the name the user gave
-                  // it, else as "Default account".
                   // A turned-off account is hidden, but for the one the console pinned when the field opened (or pins
                   // now), which stays, marked.
-                  options={offered.map((entry) => {
-                    const label = offered.length === 1 && !isDefaultAccountRenamed(defaultNames, agent) ? t("dialog.console.defaultAccountOnly") : entry.name;
-                    return markDisabledPickable(t, { value: entry.key, label }, entry.disabled);
-                  })}
+                  options={offered.map((entry) => markDisabledPickable(t, { value: entry.key, label: entry.name }, entry.disabled))}
                   value={choiceKey({ agent, account: picked })}
                   onChange={(key) => {
                     const entry = findEntry(groups, key);

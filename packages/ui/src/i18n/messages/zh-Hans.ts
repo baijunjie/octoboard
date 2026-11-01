@@ -1287,7 +1287,6 @@ export const zhHans: Translation<"other"> = {
   "dialog.console.defaultAgentNote": "项目有自己的默认智能体时，使用项目的。",
   "dialog.console.accounts": "智能体默认账户",
   "dialog.console.accountsNote": "此控制台中各智能体的会话都使用这里的账户，除非项目或会话另行指定。",
-  "dialog.console.defaultAccountOnly": "默认账户",
   "dialog.console.manageAccounts": "管理账户",
   "dialog.console.avatar": "头像",
   "dialog.console.avatarChoose": "选择图片",

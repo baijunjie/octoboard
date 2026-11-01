@@ -65,7 +65,7 @@ it("shows one row per agent in the accounts table, each with its own account", a
   expect(picker("Codex account").textContent).toContain("Codex work");
   // Grok has only its default account, as the one option of its picker; the one way to Settings is for the whole
   // section, beside its title.
-  expect(picker("Grok Build account").textContent).toContain("Default account");
+  expect(picker("Grok Build account").textContent?.replace(/[\u2066-\u2069]/g, "")).toBe("Default");
   // An icon-only button, named by its label.
   expect(buttons().filter((b) => b.getAttribute("aria-label") === "Manage accounts" && b.textContent === "")).toHaveLength(1);
   expect(document.body.textContent).toContain("Agent default accounts");

@@ -153,11 +153,10 @@ sessions field is, its account picker where the Project sessions field is, spann
 narrower than 768 px each name sits above its picker.
 
 - Every agent's row has a picker of its accounts, in the saved display order (see "Reordering accounts" in
-  `docs/product/agent-accounts.md`). An agent with no account of its own still has the picker, with the default account
-  as its one option, and so does one whose other accounts are all turned off
-  and not held (below):
-  under the name the user gave the default account (see "The default account" in `docs/product/agent-accounts.md`),
-  else as "Default account".
+  `docs/product/agent-accounts.md`). Each option shows the account's name, including when it is the only option;
+  the default account follows "The default account" in `docs/product/agent-accounts.md`. An agent with no account of
+  its own still has the picker, with the default account as its one option, and so does one whose other accounts
+  are all turned off and not held (below).
 - Beside the section's title, where a "?" help tip would sit, an icon-only **Manage accounts** button (a key) opens
   Settings on its Agent accounts section, above the console dialog, which stays open beneath with its unsaved edits.
   Its tooltip and the name announced for it are both "Manage accounts". When Settings closes, keyboard focus returns

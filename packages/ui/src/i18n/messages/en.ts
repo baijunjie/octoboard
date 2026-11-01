@@ -1401,7 +1401,6 @@ export const en = {
   "dialog.console.defaultAgentNote": "A project with its own default agent uses that instead.",
   "dialog.console.accounts": "Agent default accounts",
   "dialog.console.accountsNote": "Every session of an agent in this console uses its account here, unless a project or the session picks another.",
-  "dialog.console.defaultAccountOnly": "Default account",
   "dialog.console.manageAccounts": "Manage accounts",
   "dialog.console.avatar": "Avatar",
   "dialog.console.avatarChoose": "Choose image",
