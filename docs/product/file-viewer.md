@@ -204,7 +204,8 @@ and the next change, and after the application restarts.
   none.
 - **While lines do not wrap, a long one is read by scrolling sideways with the pointer.** Those scrollers take no
   keyboard focus, and Left and Right in the viewer move between subjects (see "Moving between files" below), so from
-  the keyboard the way to the end of a long line is to turn wrapping on.
+  the keyboard the way to the end of a long line is to turn wrapping on. A short file or diff fills the available
+  content height, with its lines at the top and its horizontal scrollbar at the bottom of that area.
 - In the split layout, wrapped lines keep the two sides' rows level with each other.
 
 ## Selecting and copying

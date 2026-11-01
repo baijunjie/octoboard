@@ -117,7 +117,7 @@ function CodeFrame({
   const fade = useScrollFade({
     region: frame.region,
     style: { backgroundColor: CODE_THEMES[theme].background },
-    className: "relative min-h-0 flex-1 overflow-auto",
+    className: "relative flex min-h-0 flex-1 flex-col overflow-auto",
   });
   const [drawnFor, setDrawnFor] = useState<string>();
   const onDrawn = useCallback(() => setDrawnFor(resetKey), [resetKey]);

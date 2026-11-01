@@ -41,6 +41,17 @@ function readingCss(theme: "light" | "dark"): string {
 
 const FLUSH_TOP_CSS = "[data-code], [data-diff-type=\"split\"] { padding-top: 0 !important; }";
 
+// The horizontal scrollers live inside the shadow root. Grow them with the frame, keeping
+// their grid rows at the top rather than stretching short files' lines into the empty space.
+// Fenced code in a document keeps its intrinsic height and does not take these rules.
+const FILL_FRAME_CSS = `
+  :host { display: flex; flex-direction: column; flex: 1 0 auto; min-width: 0; }
+  [data-file], [data-diff] { flex: 1 0 auto; }
+  [data-file], [data-diff-type="single"] { display: flex; flex-direction: column; }
+  [data-code] { flex: 1 0 auto; align-self: stretch; align-content: start; }
+  [data-diff-type="split"][data-overflow="wrap"] { align-content: start; }
+`;
+
 /**
  * Diff colours that keep every token at 4.5:1 and mark a change by more than colour. The library
  * marks a changed word with a tint over the changed line's tint, and in the light appearance the
@@ -68,6 +79,7 @@ function diffCss(theme: "light" | "dark"): string {
       : "";
   return `${readingCss(theme)}
     ${FLUSH_TOP_CSS}
+    ${FILL_FRAME_CSS}
     ${lineTints}
     /* In the code column (\`[data-content]\`), whose parent \`[data-code]\` is the scroll container when
        lines are not wrapped. Sticky, like the gutter the label and chevrons sit in, so it stays at the visible
@@ -287,7 +299,7 @@ export const HighlightedFile = memo(function HighlightedFile({
   const selection = useMemo(() => (line === undefined ? undefined : { start: line, end: line }), [line]);
   const onPostRender = useDrawnCallback(onDrawn);
   const options = useMemo(
-    () => ({ ...BASE_OPTIONS, themeType: theme, overflow: overflowOption(wrap), disableLineNumbers: !lineNumbers, unsafeCSS: readingCss(theme) + (lineNumbers ? FLUSH_TOP_CSS : ""), onPostRender }) as const,
+    () => ({ ...BASE_OPTIONS, themeType: theme, overflow: overflowOption(wrap), disableLineNumbers: !lineNumbers, unsafeCSS: readingCss(theme) + (lineNumbers ? FLUSH_TOP_CSS + FILL_FRAME_CSS : ""), onPostRender }) as const,
     [theme, wrap, lineNumbers, onPostRender],
   );
   return (
