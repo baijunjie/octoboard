@@ -75,11 +75,23 @@ it("does not send on the Enter that confirms a composition", () => {
 
 const browse = () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Browse")!;
 
-it("opens the directory browser at the stored directory", async () => {
+// The picker opens where the field's text says, as every directory field's does (`pickerStart`): the stored directory
+// while nothing is typed, what is typed once it names a place, and the home directory otherwise.
+it.each([
+  { what: "the stored directory, untouched", typed: undefined, path: "~/Projects" },
+  { what: "a typed directory", typed: "/srv/repos", path: "/srv/repos" },
+  { what: "the home directory for text that names no place", typed: "repos", path: "~" },
+])("opens the directory browser at $what", async ({ typed, path }) => {
   request.mockClear();
-  mount();
+  const { input } = mount();
+  if (typed !== undefined) {
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, typed);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
   await act(async () => browse().click());
-  expect(request).toHaveBeenCalledWith({ type: "list_dir", path: "/home/dev/Projects" });
+  expect(request).toHaveBeenCalledWith({ type: "list_dir", path });
 });
 
 it("sends the directory picked in the browser once", async () => {

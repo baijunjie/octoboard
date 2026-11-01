@@ -314,11 +314,10 @@ The directory browser lists directories only — a project is a directory — in
 dot. Each entry is flagged with whether it is a git repository. Entries are sorted case-insensitively by name. The
 listing always comes from the host the projects live on, never from the application's own filesystem view.
 
-**Browse** beside a directory field — the project dialog's directory or parent directory, an account's directory, and a
-configuration import's Another directory field — opens the browser on the path the field holds, without its surrounding
-spaces, when that path is absolute, is `~` or starts with `~/`; on an empty field or anything else, such as a relative
-path, it opens on the home directory. Settings' **Default clone directory** opens it on the stored directory, whatever
-has been typed in the field since.
+**Browse** beside a directory field — the project dialog's directory or parent directory, an account's directory, a
+configuration import's Another directory field, and Settings' **Default clone directory** — opens the browser on the
+path the field holds, without its surrounding spaces, when that path is absolute, is `~` or starts with `~/`; on an
+empty field or anything else, such as a relative path, it opens on the home directory.
 
 In the browser, the listed directory's subdirectories are one list, with a parent-directory entry at its top except at
 the filesystem root — muted, marked with an up-arrow icon and labelled as the parent directory, which is also what it is

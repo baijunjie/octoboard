@@ -205,19 +205,19 @@ from a git URL and no other directory is named. It is `~/Projects` until the use
 directory in a monospace font, with the daemon host's home directory written as `~` under the same rules as in "How
 paths are shown" above, and the full path as the field's tooltip, while the pointer is on the field, whenever the two
 differ; the tooltip is in monospace like the field and reads left to right in every language (see "How a tooltip
-behaves" in
-`docs/product/labels-and-tooltips.md`). The daemon stores the
-directory expanded, as an absolute path without a trailing slash; a leading `~/` in what is sent is expanded again. The
-value is sent when the field loses focus or Enter is pressed, and at once when a directory is picked; a value equal to
-what the field shows unedited, or to the full path it stands for, sends nothing. Focus moving from the field into its
-Browse directory browser is not leaving it and sends nothing: a pick replaces what was typed and sends the picked
-directory, and a cancelled browser hands focus back to the field, whose next loss of focus sends what is typed. A mouse
-press on Browse leaves focus in the field until the browser opens. `Escape` while the field holds keyboard
-focus closes Settings and discards what was typed. It is the only exit that loses it: the close button, a press on the
-dimmed area around the dialog, and moving focus out of the field all save the typed path first. Once a send is answered
-the field shows the stored directory again, written as above. A value that is neither absolute nor starts with `~/` is
-refused with an error alert and the field returns to the stored one, and a blank value goes back to `~/Projects`. The
-browser opens on the nearest existing ancestor when the directory does not exist yet (see "Browsing directories" in
+behaves" in `docs/product/labels-and-tooltips.md`). The daemon stores the directory expanded, as an absolute path
+without a trailing slash; a leading `~/` in what is sent is expanded again. The value is sent when the field loses focus
+or Enter is pressed, and at once when a directory is picked; a value equal to what the field shows unedited, or to the
+full path it stands for, sends nothing. Focus moving from the field into its Browse directory browser is not leaving it
+and sends nothing: a pick replaces what was typed and sends the picked directory, and a cancelled browser hands focus
+back to the field, whose next loss of focus sends what is typed. A mouse press on Browse leaves focus in the field until
+the browser opens. `Escape` while the field holds keyboard focus closes Settings and discards what was typed. It is the
+only exit that loses it: the close button, a press on the dimmed area around the dialog, and moving focus out of the
+field all save the typed path first. Once a send is answered the field shows the stored directory again, written as
+above. A value that is neither absolute nor starts with `~/` is refused with an error alert and the field returns to the
+stored one, and a blank value goes back to `~/Projects`. Browse opens the browser on the path the field holds — the
+stored directory until something is typed — by the rules every directory field's Browse follows, which also say where it
+opens on a relative path or on a directory that does not exist yet (see "Browsing directories" in
 `docs/product/projects.md`). Where the directory applies is in "Associating a project" in the same document.
 
 ### Automatically pull repositories

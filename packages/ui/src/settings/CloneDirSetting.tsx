@@ -51,7 +51,7 @@ export function CloneDirSetting(): React.ReactElement {
       .finally(() => setDraft(latest.current));
   };
 
-  const directoryBrowse = useDirectoryBrowse(storedFull, (picked) => {
+  const directoryBrowse = useDirectoryBrowse(draft, (picked) => {
     setDraft(picked);
     save(picked);
   });
