@@ -457,6 +457,15 @@ pub struct Session {
     /// receives (`AppState::wire_session`), and absent otherwise.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub switching_account: bool,
+    /// Whether a launch of this session that is pending or under way will hand the agent a
+    /// prompt, so that it is `working` once it is up. A new open sets it from the first record
+    /// that announces the session; a relaunch sets it inside `relaunch_session_with`, once the
+    /// refusals are past and it is known the agent is handed a prompt (an instruction, a continue
+    /// prompt, or an owed owner notice). It is cleared when the launch's claim is released. Never
+    /// stored: it is filled in on the record a client receives (`AppState::wire_session`), and
+    /// absent otherwise.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub prompt_on_launch: bool,
     /// Whether this session has a conversation on the agent's side: a turn taken, or one resumed
     /// at open. Until it has, the agent has stored no conversation to resume: `claude --resume`
     /// on such an id fails outright with "No conversation found", and a session the user opened

@@ -1,8 +1,9 @@
-import { Archive, LoaderCircle, MessageCircleMore, Pause } from "lucide-react";
+import { Archive, CircleCheck, LoaderCircle, MessageCircleMore, Pause } from "lucide-react";
 import React from "react";
 
 import { useT } from "../../i18n/react";
-import { type ShownStatusKind, statusLabel } from "../../sessions/sessionLabel";
+import { statusLabel } from "../../sessions/sessionLabel";
+import { type ShownStatusKind } from "../../sessions/sessionStatus";
 import { IndicatorTooltip } from "../hint/IndicatorTooltip";
 import { WavingHand, WorkingDot } from "./statusGlyphs";
 
@@ -14,11 +15,14 @@ type Naming = { "aria-hidden": true } | { role: "img"; "aria-label": string };
 
 /** The glyph itself, one per status in the status table of docs/product/session-statuses.md, as
  * lucide glyphs and dots rather than emoji (the project keeps user-facing UI free of decorative
- * emoji, the same convention `CLAUDE.md` sets for committed prose). Idle is a speech bubble
- * (sitting at the prompt, waiting to be told), starting a turning arc (the agent is still being
- * launched), interrupted a pause sign (stopped where it was, and can be resumed from there), and
- * running in the background the working dot as a hollow ring in idle's green: at the prompt, but
- * with work still going. */
+ * emoji, the same convention `CLAUDE.md` sets for committed prose). Colour and form progress along the
+ * status order, so neighbours look related: a raised hand in orange for the session waiting for the
+ * user; in green, the statuses at the prompt, a check mark in a circle for done (its turn is over) and
+ * a speech bubble for idle (waiting to be told); a green ring with a dot in its centre for delegated
+ * (the sessions under it are working); a hollow blue ring for working in the background; the solid
+ * blue working dot; and, in the muted ink, a pause sign for interrupted (stopped where it was, and can
+ * be resumed from there) and a turning arc for starting. Every status has a shape of its own, so colour
+ * is never the only cue. */
 function statusGlyph(status: ShownStatusKind, naming: Naming): React.ReactElement {
   switch (status) {
     case "switching":
@@ -42,12 +46,21 @@ function statusGlyph(status: ShownStatusKind, naming: Naming): React.ReactElemen
       // HeroUI's success soft foreground, the colour of every glyph of that meaning (3.93:1 at the worst
       // of the surfaces it sits on, see `style.css`).
       return <MessageCircleMore {...naming} className={`${ICON_CLASS} text-success-soft-foreground`} />;
-    case "background":
-      // The same green as the bubble above; the hollow ring's shape tells it from the bubble and from the
-      // filled working dot as well.
+    case "done":
+      return <CircleCheck {...naming} className={`${ICON_CLASS} text-success-soft-foreground`} />;
+    case "delegated":
+      // The ring is the green of the prompt statuses; the dot in its centre tells it from the background
+      // ring, and holds still where the ping does not.
       return (
         <span {...naming} className="flex shrink-0">
-          <WorkingDot background />
+          <WorkingDot kind="delegated" />
+        </span>
+      );
+    case "background":
+      // A hollow ring in the working dot's blue: at the prompt, but with work still going.
+      return (
+        <span {...naming} className="flex shrink-0">
+          <WorkingDot kind="background" />
         </span>
       );
     case "interrupted":

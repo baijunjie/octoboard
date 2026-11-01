@@ -234,8 +234,10 @@ which the close gestures have no part in.
 
 - **While any session is *starting*, *working*, *waiting for the user* or *working in background*, quitting asks for
   confirmation.** One working in background counts because the quit would also end the work it left running (see
-  "Working in background" in `docs/product/session-statuses.md`). A session *awaiting instructions* does not count: it
-  is in the middle of nothing that is reported, and the quit still leaves it interrupted and resumable like the others.
+  "Working in background" in `docs/product/session-statuses.md`). Any other session at its prompt — *done*, *awaiting
+  instructions* or with *child sessions working* — does not count by itself: it is in the middle of nothing that is
+  reported, and the quit still leaves it interrupted and resumable like the others. One with child sessions working
+  holds the quit up only through the busy sessions under it, which count by their own status.
   The message says that quitting interrupts those sessions and that each stays resumable next time.
 - **While any shell terminal is busy, quitting asks for confirmation too** (see "Busy shells" in
   `docs/product/shell-terminals.md`); an idle shell terminal, or one whose shell has exited, does not count. With only
@@ -258,7 +260,7 @@ which the close gestures have no part in.
   started now, with no remedy and no **Report issue**. An automatic account switch, or its restore of the session, that
   the shutdown cuts short tells nobody (see "When the switch fails" in `docs/product/automatic-account-switch.md`).
 - With no session *starting*, *working*, *waiting for the user* or *working in background* — none at all, or only ones
-  *awaiting instructions* — and no busy shell terminal, quitting is immediate and asks nothing, and a window closed into
+  otherwise at their prompt — and no busy shell terminal, quitting is immediate and asks nothing, and a window closed into
   the background is not brought back for it.
 - While the daemon is not running — it failed to start, or has exited, or is being started again — every quit is
   immediate and asks nothing, and no daemon is started again after it.

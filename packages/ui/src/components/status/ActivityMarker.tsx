@@ -1,8 +1,9 @@
-import { Hand, LoaderCircle, MessageCircleMore } from "lucide-react";
+import { Check, Hand, LoaderCircle, MessageCircleMore } from "lucide-react";
 import React from "react";
 
 import { useT } from "../../i18n/react";
-import { activityLabel, type ShownStatusKind } from "../../sessions/sessionLabel";
+import { activityLabel } from "../../sessions/sessionLabel";
+import { type ShownStatusKind } from "../../sessions/sessionStatus";
 import type { Activity } from "../../sessions/order";
 import { IndicatorTooltip } from "../hint/IndicatorTooltip";
 import { WavingHand, WorkingDot } from "./statusGlyphs";
@@ -59,8 +60,10 @@ function activityMarker(activity: Activity): React.ReactElement | null {
   }
 }
 
-/** Inverted status glyphs stay legible over arbitrary avatar colours. Working and background work
- * differ by both fill colour and centre shape; only the centre breathes, keeping the badge steady.
+/** Inverted status glyphs stay legible over arbitrary avatar colours. Done wears its check mark on the
+ * idle badge's green. Delegated, background and working follow their glyphs' progression: a green disc
+ * with a ring around a dot, a blue disc with a hollow centre, and a blue disc with a solid centre; only
+ * the centre breathes, keeping the badge steady.
  * The avatar supplies its tooltip and accessible name, so the badge is decorative. */
 export function ActivityBadge({ status, className = "" }: { status: ShownStatusKind | undefined; className?: string }): React.ReactElement | null {
   const disc = `flex size-3.5 items-center justify-center rounded-full ${className}`;
@@ -77,6 +80,20 @@ export function ActivityBadge({ status, className = "" }: { status: ShownStatusK
           <MessageCircleMore strokeWidth={2.5} className="size-2.5" />
         </span>
       );
+    case "done":
+      return (
+        <span aria-hidden="true" className={`${disc} bg-success text-success-foreground`}>
+          <Check strokeWidth={2.5} className="size-2.5" />
+        </span>
+      );
+    case "delegated":
+      return (
+        <span aria-hidden="true" className={`${disc} bg-success text-success-foreground`}>
+          <span className="flex size-2.5 items-center justify-center rounded-full border-[1.5px] border-current motion-safe:animate-status-breathe">
+            <span className="size-1 rounded-full bg-current" />
+          </span>
+        </span>
+      );
     case "working":
       return (
         <span aria-hidden="true" className={`${disc} bg-accent text-accent-foreground`}>
@@ -85,7 +102,7 @@ export function ActivityBadge({ status, className = "" }: { status: ShownStatusK
       );
     case "background":
       return (
-        <span aria-hidden="true" className={`${disc} bg-success text-success-foreground`}>
+        <span aria-hidden="true" className={`${disc} bg-accent text-accent-foreground`}>
           <span className="size-2 rounded-full border-[1.5px] border-current motion-safe:animate-status-breathe" />
         </span>
       );

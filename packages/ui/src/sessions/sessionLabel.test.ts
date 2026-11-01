@@ -6,7 +6,7 @@ import { displayColumns } from "../i18n/displayColumns";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { Account } from "../protocol";
-import { sessionChoiceTitle, sessionAgentLabel, sessionAriaLabel, sessionDisplayTitle, sessionRowName, sessionShownStatusKind, sessionStatusKind, sessionWithLocation } from "./sessionLabel";
+import { sessionChoiceTitle, sessionAgentLabel, sessionAriaLabel, sessionDisplayTitle, sessionRowName, sessionWithLocation } from "./sessionLabel";
 
 const t: Translate = ((key: string, ...args: unknown[]) => format("en", key as never, args[0] as never)) as Translate;
 const accounts: Account[] = [accountOf("w", "claude", "Work", "/home/w")];
@@ -23,26 +23,14 @@ describe("sessionAgentLabel", () => {
 });
 
 
-describe("sessionShownStatusKind", () => {
-  it("shows a session switching its account as such over its own status, and leaves its status kind alone", () => {
-    const switching = sessionOf("s", "c", "p", "T", "interrupted", { switching_account: true });
-    expect(sessionShownStatusKind(switching)).toBe("switching");
-    expect(sessionStatusKind(switching)).toBe("interrupted");
-    expect(sessionShownStatusKind(sessionOf("s", "c", "p", "T", "interrupted"))).toBe("interrupted");
-  });
-});
-
-describe("sessionStatusKind", () => {
-  it("reads idle with work left running as running in the background, and nothing else", () => {
-    const tasks = [{ id: "b1" }];
-    expect(sessionStatusKind(sessionOf("s", "c", "p", "T", "idle", { background_tasks: tasks }))).toBe("background");
-    expect(sessionStatusKind(sessionOf("s", "c", "p", "T", "idle", { background_tasks: [] }))).toBe("idle");
-    expect(sessionStatusKind(sessionOf("s", "c", "p", "T", "working", { background_tasks: tasks }))).toBe("working");
-  });
-
-  it("puts the name into the row's accessible name", () => {
-    const session = sessionOf("s", "c", "p", "T", "idle", { background_tasks: [{ id: "b1" }] });
-    expect(sessionAriaLabel(t, "en", session, accounts, undefined, {})).toContain("Working in background");
+describe("sessionAriaLabel", () => {
+  it.each([
+    ["background", "Working in background"],
+    ["done", "Done"],
+    ["delegated", "Child sessions working"],
+  ] as const)("puts the %s status into the row's accessible name", (status, text) => {
+    const session = sessionOf("s", "c", "p", "T", "idle");
+    expect(sessionAriaLabel(t, "en", session, accounts, undefined, {}, status)).toContain(text);
   });
 });
 
@@ -56,7 +44,7 @@ describe("sessionDisplayTitle", () => {
     const session = sessionOf("s", "c", "p", "octoboard", "working", { terminal_title: "  شرح المعرض  " });
     const title = `${isolate("شرح المعرض")}｜${isolate("octoboard")}`;
     expect(sessionDisplayTitle(t, session)).toBe(title);
-    expect(sessionAriaLabel(t, "en", session, [], undefined, {})).toContain(isolate(title));
+    expect(sessionAriaLabel(t, "en", session, [], undefined, {}, "idle")).toContain(isolate(title));
     expect(sessionWithLocation(t, session, new Map(), new Map())).toContain(isolate(title));
     const zh: Translate = ((key: string, ...args: unknown[]) => format("zh-Hans", key as never, args[0] as never)) as Translate;
     expect(sessionDisplayTitle(zh, session)).toBe(title);
@@ -98,8 +86,8 @@ describe("sessionRowName", () => {
   const session = sessionOf("s", "c", "p", "Work", "idle");
   const lead = sessionOf("lead", "c", "p", "Lead", "idle");
   const hub = sessionOf("hub", "c", undefined, "Hub", "idle", { role: "console" });
-  const name = (owners: (typeof session | undefined)[]) => sessionRowName(t, "en", session, { accounts, defaultNames: {}, owners, modelLabel: "Opus 5.5 · high" });
-  const base = sessionAriaLabel(t, "en", session, accounts, undefined, {});
+  const name = (owners: (typeof session | undefined)[]) => sessionRowName(t, "en", session, { accounts, defaultNames: {}, owners, modelLabel: "Opus 5.5 · high", status: "idle" });
+  const base = sessionAriaLabel(t, "en", session, accounts, undefined, {}, "idle");
 
   it("names no owner, one owner or two, with the model line last", () => {
     expect(name([])).toBe(`${base}, Opus 5.5 · high`);

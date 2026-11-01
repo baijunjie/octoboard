@@ -9,7 +9,8 @@ import { InlineReference } from "../i18n/InlineReference";
 import { ImportConfigurationDialog } from "../configuration/ImportConfigurationDialog";
 import { Message, useT } from "../i18n/react";
 import { isLive, SESSION_BINDING_CHANGED, SESSION_NOT_BOUND, type Console as ConsoleRecord, type Project, type Session } from "../protocol";
-import { sessionDisplayTitle, sessionStatusKind } from "../sessions/sessionLabel";
+import { sessionDisplayTitle } from "../sessions/sessionLabel";
+import { runsInBackground } from "../sessions/sessionStatus";
 import {
   boundArchivedSessions,
   boundSessionsArchivedWith,
@@ -19,6 +20,7 @@ import {
   ordersByStatus,
 } from "../sessions/order";
 import { useProjectProcesses } from "../process/useProjectProcesses";
+import { indexSessions } from "../sessions/sessionIndex";
 import { useDaemon, useDaemonStore } from "../store";
 import { ConfirmConsequences, ConsequenceLines, SessionList } from "../components/dialog/ConfirmConsequences";
 import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
@@ -191,7 +193,7 @@ function ArchiveSessionDialog({ session, withIt, inspection, onClose }: {
     <ConfirmDialog
       title={t("dialog.archiveSession.title")}
       subject={<Message id="dialog.archiveSession.subject" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference> }} />}
-      message={t(sessionStatusKind(session) === "background" ? "dialog.archiveSession.messageBackground" : "dialog.archiveSession.message")}
+      message={t(runsInBackground(session) ? "dialog.archiveSession.messageBackground" : "dialog.archiveSession.message")}
       // Nothing in it: the sections are in `extraControl`, bound sessions first. It stays defined for the warning icon.
       consequences={null}
       confirmLabel={t(cleanup.forcing ? "dialog.archiveSession.confirmDelete" : "dialog.archiveSession.confirm")}
@@ -461,9 +463,10 @@ export function RequestedDialog({
       );
     case "delete-project": {
       // Read live: a session that starts or stops while the dialog is open joins or leaves the list.
+      const { delegatingIds } = indexSessions(sessions);
       const running = Array.from(sessions.values())
         .filter((s) => s.project_id === dialog.project.id && isLive(s.status))
-        .sort((a, b) => compareSessions(a, b, byStatus));
+        .sort((a, b) => compareSessions(a, b, delegatingIds, byStatus));
       return <DeleteProjectDialog project={dialog.project} running={running} onClose={onClose} />;
     }
     case "new-console-session":
@@ -524,7 +527,7 @@ export function RequestedDialog({
       // Read live: every unarchived session under this owner goes along, with running
       // processes ended too. Sessions opened or bound while the dialog is open join the list, and
       // the message follows background work starting or finishing in the session itself.
-      const withIt = boundSessionsArchivedWith(Array.from(sessions.values()), dialog.session.id);
+      const withIt = boundSessionsArchivedWith(Array.from(sessions.values()), dialog.session.id, indexSessions(sessions).delegatingIds);
       const session = sessions.get(dialog.session.id) ?? dialog.session;
       return <ArchiveSessionDialog session={session} withIt={withIt} inspection={dialog.inspection} onClose={onClose} />;
     }

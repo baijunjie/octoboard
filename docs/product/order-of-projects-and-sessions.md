@@ -11,12 +11,10 @@ which is on to begin with. While it is on, the order is the one below; how it di
 
 1. projects with at least one unarchived session first, including interrupted sessions;
 2. within each group, pinned projects first;
-3. then a project with a session waiting for the user;
-4. then a project with a session running and awaiting instructions, or still starting;
-5. then a project with a session working in background;
-6. then a project with a session working;
-7. then a project whose unarchived sessions are all interrupted;
-8. within each of those, by name, case-insensitively and in natural order, so that "item 2" comes before "item 10".
+3. then by its most urgent unarchived session's status, in the status order below: a project with a session waiting
+   for the user, then one with a session done, awaiting instructions, with child sessions working, working in
+   background, working, and last a project whose unarchived sessions are all interrupted;
+4. within each of those, by name, case-insensitively and in natural order, so that "item 2" comes before "item 10".
 
 Each rule applies only among projects the rules before it leave tied. A project's most urgent unarchived session
 sets its status priority, using the same order as sessions below. A project with an unarchived session comes before
@@ -29,8 +27,7 @@ keyboard focus inside one, or an open menu in one brings the whole inactive grou
 **Sessions** within a project are listed, by the same scheme:
 
 1. pinned sessions first;
-2. then by status: waiting for the user, then awaiting instructions and starting alike, then working in background,
-   then working, then interrupted;
+2. then by status, in the status order below;
 3. then the most recently started first.
 
 The console sessions section lists its console sessions by that same session scheme.
@@ -46,13 +43,43 @@ The order follows status changes as they happen. Row movement follows "Items mov
 `docs/product/collection-motion.md`. The rail's waiting count walks waiting sessions in this same order (see "The raised
 hand" in `docs/product/session-statuses.md`).
 
+## The status order
+
+Sessions that need a person to act or look come first, and sessions busy working, best left undisturbed, come last;
+interrupted sessions come last of all. The statuses are those of "Session statuses" in
+`docs/product/session-statuses.md`:
+
+1. waiting for the user;
+2. done;
+3. awaiting instructions;
+4. child sessions working;
+5. working in background;
+6. working;
+7. interrupted.
+
+Archived sessions are not in the lists this order ranks; they are listed separately.
+
+**Starting and switching account have no place of their own.** A session that is starting, or switching account, sorts
+with the status it will have once that is over:
+
+- with *working* when the launch will hand the agent a prompt: a new session opened with a task (a brief, an approved
+  session request's opening prompt, or the brief of a handoff), a relaunch that continues a turn after an account switch or a change of model and effort,
+  and a resume handed an instruction or a notice owed to the session as an owner;
+- otherwise with *done* when the session has a conversation;
+- otherwise with *awaiting instructions*.
+
+For an account switch or a change of model and effort, whether the relaunch continues a turn is decided only once the
+old process has stopped, so until then such a session sorts by whether it has a conversation. For a moment after its
+launch has finished, a session that was handed a prompt can read as at its prompt before its agent's first report moves
+it on to *working*, and sorts as such.
+
 ## Ordering without status
 
 With **Order the sidebar by status** off, no project and no session is ranked by its status; everything else above
 stands.
 
-- **Projects**: rules 3 to 7 are skipped, so within each group pinned projects come first, and pinned and unpinned
-  projects are each ordered by name as in rule 8. Projects with at least one unarchived session still come first, and
+- **Projects**: rule 3 is skipped, so within each group pinned projects come first, and pinned and unpinned
+  projects are each ordered by name as in rule 4. Projects with at least one unarchived session still come first, and
   the inactive projects still end the list as one dimmed group; a project still joins that group when its last
   unarchived session is archived and leaves it when a session in it is opened or resumed.
 - **Sessions**: rule 2 is skipped, so pinned sessions come first, then the most recently started first. That holds at

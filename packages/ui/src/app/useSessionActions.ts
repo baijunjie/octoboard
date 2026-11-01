@@ -2,6 +2,7 @@ import { useStableHandler } from "../components/hooks/useLatest";
 import { ownerForSession, type AsideOwner } from "../layout/asideOwner";
 import type { Console, Project, Session } from "../protocol";
 import { ordersByStatus } from "../sessions/order";
+import { indexSessions } from "../sessions/sessionIndex";
 import { focusAfterSelect } from "../sidebar/focus";
 import type { ArchiveScope, FocusTarget } from "../sidebar/types";
 import { useDaemon } from "../store";
@@ -90,7 +91,7 @@ export function useSessionActions({
 
   const selectNextWaiting = () => {
     const sessions = Array.from(store.getState().sessions.values());
-    const next = nextWaitingSession(waitingSessionsInTreeOrder(consoleList, projectList, sessions, ordersByStatus(store.getState().settings)), selectedSessionId);
+    const next = nextWaitingSession(waitingSessionsInTreeOrder(consoleList, projectList, sessions, indexSessions(store.getState().sessions).delegatingIds, ordersByStatus(store.getState().settings)), selectedSessionId);
     if (!next) return;
     selectSession(next);
     // Picked from the rail inside the open drawer, it closes it as a pick in the sidebar does.

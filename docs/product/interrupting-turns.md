@@ -1,7 +1,7 @@
 # Interrupting a session's turn
 
 An owner can stop the turn a session it owns is in the middle of, as the user pressing the agent's interrupt key in the
-terminal would. The session keeps its process and its conversation and goes back to *awaiting instructions*, for the
+terminal would. The session keeps its process and its conversation and goes back to its prompt, for the
 owner to redirect it with `instruct_session`. This is not the *interrupted* status: that is a session whose process has
 ended (see `docs/product/session-statuses.md`), and an interrupted turn leaves the process running.
 
@@ -38,7 +38,7 @@ What happens depends on where the session stands when the call is made:
 | The session | What happens |
 |---|---|
 | In a turn: *working* by its hooks | The agent's interrupt key is sent (see "The keys each agent gets" below). |
-| At its prompt — *awaiting instructions* or *working in background*, including one holding messages after a Grok Build error or behind a message left unsent | Nothing is sent; answered with `interrupted: false` and a note that there was nothing to interrupt. |
+| At its prompt — whichever status it shows there (see "Which status a session shows" in `docs/product/session-statuses.md`), including one holding messages after a Grok Build error or behind a message left unsent | Nothing is sent; answered with `interrupted: false` and a note that there was nothing to interrupt. |
 | Already being interrupted by another `interrupt_session` | Nothing is sent; answered with `interrupted: false`. |
 | Waiting for the user: its agent's permission prompt or question, a screen of the agent's own that only the user can answer, Codex's `Action Required` title, or a session request of its own waiting for the user's answer | Refused with `session_waiting_for_user`: a key would answer it in the user's place. |
 | Showing its folder-trust confirmation | Refused with `session_trust_pending`. |
@@ -100,7 +100,7 @@ Grok Build's `StopCancelled`, or, for the cancels that fire no hook event, from 
 title and from Grok Build's terminal title (see "Cancelling a Claude Code turn" and "Cancelling a Grok Build turn
 before its first token" in `docs/product/turns-hooks-do-not-report.md`). Either way:
 
-- the session is *awaiting instructions*, its process and conversation intact;
+- the session is at its prompt, its process and conversation intact;
 - the interrupted turn is not reported on: no report is synthesised for the owner for it (see "When a session does not
   report" in `docs/product/reporting-to-owners.md`);
 - messages Octoboard holds for the session are written once the interrupt is done (see "Messages during an interrupt"

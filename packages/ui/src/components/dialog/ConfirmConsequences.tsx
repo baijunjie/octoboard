@@ -8,12 +8,16 @@ import { useAnnouncement } from "../announce/useAnnouncement";
 import { useListMotion } from "../motion/useListMotion";
 import { useT } from "../../i18n/react";
 import type { Session } from "../../protocol";
-import { sessionAgentLabel, sessionDisplayTitle, sessionShownStatusKind } from "../../sessions/sessionLabel";
-import { useDaemonStore } from "../../store";
+import { sessionAgentLabel, sessionDisplayTitle } from "../../sessions/sessionLabel";
+import { useDaemonStore, useSessionShownStatus } from "../../store";
 
 /** A line the dialog's consequences add while an option is ticked: `key` names its kind, so a line
  * whose count changes stays the same line. */
 export type ConsequenceLine = { key: string; text: React.ReactNode };
+
+function SessionStatusIcon({ session }: { session: Session }): React.ReactElement {
+  return <StatusIcon status={useSessionShownStatus(session)} withTooltip touchPopover />;
+}
 
 /** The sessions a confirmation names, each with its agent's icon and title, plus a status glyph for live
  * sessions; archived sessions are already identified by the wording of what heads the list. */
@@ -27,7 +31,7 @@ export function SessionList({ sessions }: { sessions: Session[] }): React.ReactE
       {sessions.map((session) => (
         <li key={session.id} data-list-motion={session.id} className="flex min-w-0 items-center gap-2">
           {/* The list items are not pressable, so a tap on a mark opens the popover. */}
-          {session.status !== "archived" && <StatusIcon status={sessionShownStatusKind(session)} withTooltip touchPopover />}
+          {session.status !== "archived" && <SessionStatusIcon session={session} />}
           <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} touchPopover />
           {/* The icon is decorative, and nothing else here names the agent. The comma keeps the name apart from the
               title when the row is read as one phrase: a hidden element's trailing space is dropped in rendering. */}

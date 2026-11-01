@@ -3687,6 +3687,16 @@ export type Session = {
    */
   switching_account?: boolean,
   /**
+   * Whether a launch of this session that is pending or under way will hand the agent a
+   * prompt, so that it is `working` once it is up. A new open sets it from the first record
+   * that announces the session; a relaunch sets it inside `relaunch_session_with`, once the
+   * refusals are past and it is known the agent is handed a prompt (an instruction, a continue
+   * prompt, or an owed owner notice). It is cleared when the launch's claim is released. Never
+   * stored: it is filled in on the record a client receives (`AppState::wire_session`), and
+   * absent otherwise.
+   */
+  prompt_on_launch?: boolean,
+  /**
    * Whether this session has a conversation on the agent's side: a turn taken, or one resumed
    * at open. Until it has, the agent has stored no conversation to resume: `claude --resume`
    * on such an id fails outright with "No conversation found", and a session the user opened

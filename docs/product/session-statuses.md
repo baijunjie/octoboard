@@ -2,26 +2,55 @@
 
 | Status | Wire value | Glyph | Meaning |
 |---|---|---|---|
-| Starting | `starting` | a muted arc turning | A newly opened session — from the dialog, by an agent's `new_session`, or by an approved session request — whose agent is still being launched; it has no process yet. It becomes *awaiting instructions*, or *working* for a session started with a brief, once the process is up, and is removed again if the launch fails (see "Starting the session" in `docs/product/opening-sessions.md`). |
-| Working | `working` | an accent-coloured dot pulsing a fading copy of itself outward | The agent is executing a turn. |
-| Waiting for the user | `waiting_user` | a raised hand that waves now and then | The agent is waiting on a permission decision, including its folder-trust confirmation, or has asked the user a question through its own ask-the-user tool; or Octoboard is asking the user on the agent's behalf while the agent's call waits, which is a session request (see "Waiting for the answer" in `docs/product/session-requests.md`). |
-| Awaiting instructions | `idle` | a green speech bubble | The process is running and sitting at its prompt. |
-| Working in background | `idle`, with a non-empty `background_tasks` | the *working* glyph as a hollow green ring: a green ring pulsing a fading copy of itself outward | The process is sitting at its prompt, but its last turn ended with work still running in the background. Claude Code sessions only; see "Working in background" below. |
-| Switching account | any status except `archived`, with `switching_account` true | the *starting* arc | An account switch holds the session, or, in the window that confirmed the switch, the session waits for its turn in it (see "While a session is switching" in `docs/product/switching-session-accounts.md`). Shown in place of the session's own status, which it does not change and which the order of sessions still goes by. |
-| Interrupted | `interrupted` | a pause sign | No process is running, and it did not end by being archived. The session stays in its project's list (a console session, in the console sessions section) and can be resumed. |
+| Starting | `starting` | a grey arc turning | A newly opened session — from the dialog, by an agent's `new_session`, or by an approved session request — whose agent is still being launched; it has no process yet. Once the process is up it becomes *working* for a session started with a brief, *done* for one opened on an existing conversation, and *awaiting instructions* otherwise; it is removed again if the launch fails (see "Starting the session" in `docs/product/opening-sessions.md`). |
+| Working | `working` | a solid blue (accent) dot pinging a fading copy of itself outward | The agent is executing a turn. |
+| Waiting for the user | `waiting_user` | an orange (warning) raised hand that waves now and then | The agent is waiting on a permission decision, including its folder-trust confirmation, or has asked the user a question through its own ask-the-user tool; or Octoboard is asking the user on the agent's behalf while the agent's call waits, which is a session request (see "Waiting for the answer" in `docs/product/session-requests.md`). |
+| Done | `idle`, with `has_conversation` true | a green circle with a check mark | The process is running and sitting at its prompt with nothing left running in the background and no delegated work in progress, and the session has a conversation. See "Done, awaiting instructions and child sessions working" below. |
+| Awaiting instructions | `idle`, with `has_conversation` false | a green speech bubble | The process is running and sitting at its prompt, and the session has never had a conversation: it waits for its first instruction. |
+| Child sessions working | `idle`, while a session under it is starting, working or waiting for the user | a hollow green ring with a small filled green dot in its centre, pinging outward | The process is sitting at its prompt with nothing of its own left running, while work it delegated is in progress in the sessions under it. See "Done, awaiting instructions and child sessions working" below. |
+| Working in background | `idle`, with a non-empty `background_tasks` | a hollow blue (accent) ring, pinging outward | The process is sitting at its prompt, but its last turn ended with work still running in the background. Claude Code sessions only; see "Working in background" below. |
+| Switching account | any status except `archived`, with `switching_account` true | the *starting* arc | An account switch holds the session, or, in the window that confirmed the switch, the session waits for its turn in it (see "While a session is switching" in `docs/product/switching-session-accounts.md`). Shown in place of the session's own status, which it does not change; lists ranked by status sort it by the status it will have once the switch is over (see "The status order" in `docs/product/order-of-projects-and-sessions.md`). |
+| Interrupted | `interrupted` | a grey pause sign | No process is running, and it did not end by being archived. The session stays in its project's list (a console session, in the console sessions section) and can be resumed. |
 | Archived | `archived` | an archive box | Ended by being archived (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`). No longer listed among its project's sessions (a console session, no longer in the console sessions section); reached through the archive (see "Archived sessions" in `docs/product/archiving-and-resuming-sessions.md`) and can be reopened. |
 
-*Working*, *waiting for the user*, *awaiting instructions* and *working in background* mean a process is running, and
-*starting* means one is about to be; the last two mean none is, and both can be resumed.
+*Working* and *waiting for the user* mean a process is running, and so do the four statuses of a session **at its
+prompt** — *done*, *awaiting instructions*, *child sessions working* and *working in background*, all `idle` on the
+wire. *Starting* means a process is about to be; *interrupted* and *archived* mean none is, and both can be resumed.
+
+*Done*, *awaiting instructions*, *child sessions working* and *working in background* are told apart by the client
+alone: the daemon's `status` is `idle` for all four, and so is the `status` of every session record the session tools
+give (see "Session records" in `docs/product/what-every-session-reads.md`).
+
+## Which status a session shows
+
+A session shows the first of these that applies:
+
+1. *Switching account*, while an account switch holds it, over every status but *archived*.
+2. Its wire status, when that is not `idle`.
+3. *Working in background*, while it has work left running in the background (Claude Code only; for the other agents
+   this step never applies).
+4. *Child sessions working*, while a session under it is starting, working or waiting for the user.
+5. *Done*, when it has a conversation.
+6. *Awaiting instructions*.
+
+## Status glyphs
 
 The glyph stands for the status on the sidebar's rows, focus mode's cards, the top bar's breadcrumb and a confirmation's
 list of the sessions it affects. In a confirmation, archived sessions omit the status glyph; the warning identifies them
-as archived. The waving hand and the outward pulse stand still where the system asks for reduced motion, leaving the
-working glyph a plain accent-coloured dot and the *working in background* glyph a plain hollow green ring; working and
-awaiting instructions still differ by shape as well as by colour. The starting arc, which *switching account* shares,
-stands still there too and differs from the rest by shape. *Working in background* is the *working* glyph drawn as a
-hollow ring in *awaiting instructions*' green: it is told apart from *working*'s filled dot by shape as well as by
-colour, and from *awaiting instructions* by shape.
+as archived.
+
+**Colour and form progress gradually along the status order** (see "The status order" in
+`docs/product/order-of-projects-and-sessions.md`), so statuses next to each other look related: the orange hand of
+*waiting for the user*; then, in green, the check mark of *done*, the speech bubble of *awaiting instructions* and the
+ring with a centre dot of *child sessions working*; then, in blue, the hollow ring of *working in background* and the
+solid dot of *working*; then the grey pause of *interrupted*. *Starting* and *switching account* share a grey turning
+arc, and *archived* is an archive box. The ring of *child sessions working* is larger than the other dots, and its ping
+reaches less far, ending within the glyph's own slot.
+
+The waving hand, the pings and the turning arc stand still where the system asks for reduced motion. Every status still
+differs from the rest by shape, so colour is never the only cue: the filled dot of *working* from the hollow ring of
+*working in background*, that ring from the ring of *child sessions working* by the latter's centre dot, and the rings
+from the speech bubble and the check mark.
 
 **How the status reaches a user who does not read the glyph** differs by placement:
 
@@ -33,31 +62,36 @@ colour, and from *awaiting instructions* by shape.
   — the **sidebar's rows**, the **top bar's breadcrumb** and a **confirmation's list** (see "Tooltips on indicators" in
   `docs/product/labels-and-tooltips.md`). Focus mode's cards say the status in words already and carry none.
 
-Transitions:
+## Transitions
 
 - Opening a session puts it in *starting*; once its process is up it moves to *working* when it is handed an opening
-  prompt (a session started with `new_session`, or on another session's request that the user approved), and to
-  *awaiting instructions* otherwise, unless the agent's own first report has already moved it on (see "Starting the
-  session" in `docs/product/opening-sessions.md`). A launch that fails removes the session.
-- While the process runs, reports from the agent move the session between *working*, *waiting for the user* and
-  *awaiting instructions* — except while a folder-trust confirmation, Codex action prompt, a screen of the agent's that
-  only the user can answer or a session request holds it at *waiting for the user* (see "What the statuses are derived
-  from" below). A Claude Code session that would be *awaiting instructions* reads as *working in background* while it
-  has work left running there (see "Working in background" below).
+  prompt (a session started with `new_session`, or on another session's request that the user approved), to *done*
+  when it was opened on an existing conversation (see "Opening a new session on a found conversation" in
+  `docs/product/resuming-a-conversation-by-its-session-id.md`), and to *awaiting instructions* otherwise, unless the
+  agent's own first report has already moved it on (see "Starting the session" in `docs/product/opening-sessions.md`).
+  A launch that fails removes the session.
+- While the process runs, reports from the agent move the session between *working*, *waiting for the user* and its
+  prompt — except while a folder-trust confirmation, Codex action prompt, a screen of the agent's that only the user can
+  answer or a session request holds it at *waiting for the user* (see "What the statuses are derived from" below). At
+  its prompt it shows the status "Which status a session shows" above gives it: a session started with a brief is
+  *working*, then *done* once that turn is over; one opened by hand is *awaiting instructions* until its first turn.
 - The process ending for any reason other than archiving — the agent exiting on its own, a crash, the application
   quitting — leaves the session *interrupted*.
 - Archiving leaves the session *archived*. User-initiated archiving of an owner also ends and archives the sessions
   under it; agent-initiated archiving is refused while any descendant has a process running (see "Archiving,
   interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`).
-- Resuming an *interrupted* or *archived* session puts it in *awaiting instructions*, whichever of the two it came from.
-  A resume that is refused or fails to launch leaves the session exactly where it was, archived included. Resuming a
-  session whose owner is *archived* first does the same to its archived owners, the topmost first.
+- Resuming an *interrupted* or *archived* session brings it back at its prompt, whichever of the two it came from:
+  *done* where it has a conversation, *awaiting instructions* where it has none yet, and *working* once it takes up an
+  instruction the resume hands it. A resume that is refused or fails to launch leaves the session exactly where it was,
+  archived included. Resuming a session whose owner is *archived* first does the same to its archived owners, the
+  topmost first.
 - Switching a session to another account of its agent ends and relaunches its process without archiving it: it reads as
-  *interrupted* while the process is down and comes back in *awaiting instructions* — working again where it is sent the
-  prompt to continue its turn (see "Continuing after a switch" in `docs/product/switching-session-accounts.md`) — and a
-  switch that fails leaves it *interrupted* on the account it had (see `docs/product/switching-session-accounts.md`).
-- Changing a running session's model or reasoning effort shows it as *starting* until its restart finishes, then as
-  *awaiting instructions*, or *working* when it receives a prompt to continue. A failed relaunch leaves it
+  *interrupted* while the process is down and comes back at its prompt like a resumed session — *working* again where it
+  is sent the prompt to continue its turn (see "Continuing after a switch" in
+  `docs/product/switching-session-accounts.md`) — and a switch that fails leaves it *interrupted* on the account it had
+  (see `docs/product/switching-session-accounts.md`).
+- Changing a running session's model or reasoning effort shows it as *starting* until its restart finishes, then at its
+  prompt like a resumed session, or *working* when it receives a prompt to continue. A failed relaunch leaves it
   *interrupted* with its earlier launch choices; changing an interrupted session's choices leaves it interrupted (see
   "Changing a session's model and effort" in `docs/product/model-and-reasoning-effort.md`).
 - An agent's report never moves a session out of *interrupted* or *archived*: whether a stopped session is one or the
@@ -103,15 +137,16 @@ Where an agent reports nothing, the status simply stays at its last reported val
 limitations of what the agents expose rather than of this one:
 
 - A turn that ends with the agent asking a question **as plain prose** is indistinguishable from a finished turn on all
-  three agents, so such a session reads as *awaiting instructions* rather than waiting for the user.
+  three agents, so such a session reads as at its prompt — *done*, normally — rather than waiting for the user.
 - Grok Build's bash mode (`!`) fires no tool or turn events, so work done through it never shows in the status; Grok's
   turn-end backstop, which was seen to follow about a minute later in one run (see "When a session does not report" in
-  `docs/product/reporting-to-owners.md`), finds the session already awaiting instructions.
+  `docs/product/reporting-to-owners.md`), finds the session already at its prompt.
 - A question the agent asks through **its own ask-the-user tool** is reported by Claude Code and Grok Build but not by
   Codex, which has no such event; a Codex session asking that way reads as *working* unless its terminal title signals
   `Action Required`.
 - For status reporting, work left running in the background is followed for **Claude Code only**. A Grok Build or Codex
-  session whose turn ends with work still running reads as *awaiting instructions*, never *working in background*.
+  session whose turn ends with work still running reads as *done* (or another status at its prompt), never *working in
+  background*.
   Process cleanup follows every agent's launches separately (see "Automatic stopping and its boundaries" in
   `docs/product/background-processes.md`).
 
@@ -127,8 +162,8 @@ owner, no report is synthesized for that turn. Whether Grok produces that sequen
 A Claude Code turn can end while work it started is still running in the background — a shell command sent there (by the
 user, or by Claude Code when it runs past the tool's time limit), a Monitor, an MCP tool call still waiting, or a
 background agent. Claude Code lists that work as the turn ends, and as its background subagents start and stop between
-turns, and the session then reads as *working in background* instead of *awaiting instructions* until none of it is
-left. On the wire it is still `idle`; what sets it apart is the session's `background_tasks`, one entry per piece of
+turns, and the session then reads as *working in background* instead of *done* or any other status at its prompt
+until none of it is left. On the wire it is still `idle`; what sets it apart is the session's `background_tasks`, one entry per piece of
 work: `id`, and `type` and `description` where Claude Code gives them.
 
 **How the list is kept:**
@@ -146,7 +181,7 @@ work: `id`, and `type` and `description` where Claude Code gives them.
   internal helper agents are never listed. A subagent listed because it started carries its description only if an
   earlier report had named it.
 - A subagent stop that would leave nothing running takes effect only after about **2 seconds**, so one subagent handing
-  over to the next does not make the session flash to *awaiting instructions* in between; a turn end, a subagent
+  over to the next does not make the session flash to another status at its prompt in between; a turn end, a subagent
   starting, or another subagent stop within that time decides the list instead.
 - The list goes when the session's process ends — archived, interrupted, switched to another account or handed off.
   The launch's background work is stopped except for processes the user kept, under "Automatic stopping and its
@@ -156,10 +191,10 @@ work: `id`, and `type` and `description` where Claude Code gives them.
 - Clearing the conversation with `/clear` does not end work running in the background (measured on Claude Code 2.1.303),
   so the session keeps reading as *working in background*.
 
-**In every other respect it is a session awaiting instructions.** It takes a message straight away (see "Messages held
+**In every other respect it is like any other session at its prompt.** It takes a message straight away (see "Messages held
 until a session can take them" in `docs/product/message-delivery.md`), and it can be handed off (see "What can be handed
-off" in `docs/product/handing-off-sessions.md`). Unlike one awaiting instructions with nothing left running, archiving
-it asks for confirmation first (see "Archiving, interruption and resuming" in
+off" in `docs/product/handing-off-sessions.md`). Unlike one *done* or *awaiting instructions* with no session under it,
+archiving it asks for confirmation first (see "Archiving, interruption and resuming" in
 `docs/product/archiving-and-resuming-sessions.md`), quitting the application asks too (see "Quitting" in
 `docs/product/application-lifecycle.md`), and a turn that ends this way is not reported to its owner (see "When a
 session does not report" in `docs/product/reporting-to-owners.md`).
@@ -175,6 +210,45 @@ in a group of its own (see "The icon's menu" in `docs/product/menu-bar-icon.md`)
 
 Every session record the session tools give carries the list (see "Session records" in
 `docs/product/what-every-session-reads.md`).
+
+## Done, awaiting instructions and child sessions working
+
+**Done and awaiting instructions are told apart by whether the session has a conversation** (`has_conversation`). A
+session has one from the moment its agent reports the first prompt submitted, or from the moment it is opened or
+resumed on an existing conversation (see "Opening a new session on a found conversation" in
+`docs/product/resuming-a-conversation-by-its-session-id.md`), and keeps it: clearing the conversation with `/clear`
+does not take it away. A session with a conversation that is at its prompt, with nothing left running in the background
+and no delegated work in progress, is *done*; one that has never had a conversation is *awaiting instructions*. So:
+
+- a session opened by hand with no brief is *awaiting instructions* until its first turn, then *done* after it;
+- a session started with a brief is *working*, then *done* once its turn is over;
+- a session opened on a found conversation is *done* as soon as it is up;
+- resuming an *interrupted* or *archived* session that has a conversation, and the relaunch after an account switch or a
+  change of model and effort, bring it back *done* — or *working*, when it is sent a prompt to continue.
+
+**Child sessions working** is a session at its prompt, with nothing of its own left running in the background, while a
+session bound to it — or, at any depth, bound to one of those — is *starting*, *working* or *waiting for the user*.
+Sessions under it that are at their prompt (working in background included), *interrupted* or *archived* do not count.
+It takes precedence over *done* and *awaiting instructions*, and gives way to *working in background* (see "Which status
+a session shows" above).
+
+**Done and child sessions working are sessions at their prompt in every respect but their glyph and name.** Each
+takes a message straight away (see
+"Messages held until a session can take them" in `docs/product/message-delivery.md`) and can be handed off (see "What
+can be handed off" in `docs/product/handing-off-sessions.md`). Neither *done* nor *child sessions working* holds up a
+quit by itself; for *child sessions working*, the busy sessions under it do (see "Quitting" in
+`docs/product/application-lifecycle.md`). Archiving one with an unarchived session under it asks for confirmation, as
+for any owner (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`).
+
+Each has its own glyph and name wherever a session's status is shown or said, as *working in background* does, and its
+own badge on a console's avatar (see "The console switcher" in `docs/product/console-switcher.md`). **For activity
+summaries, both count as a session running, not working**, as *awaiting instructions* does: a collapsed project's
+activity marker shows the speech bubble for them (see "Project rows" in `docs/product/sidebar-project-rows.md`), and a
+switch strip chip, which shows only waiting and working, shows nothing for them (see "The switch strip" in
+`docs/product/focus-mode.md`). The sessions under one with child sessions working count by their own status, wherever
+they are. Project and session lists ranked by status give each a place of its own (see "The status order" in
+`docs/product/order-of-projects-and-sessions.md`), and the menu bar icon's menu lists each in a group of its own (see
+"The icon's menu" in `docs/product/menu-bar-icon.md`).
 
 ## The raised hand
 

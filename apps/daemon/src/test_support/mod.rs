@@ -1306,6 +1306,7 @@ pub(crate) fn bare_session(id: &str, role: Role) -> Session {
         record_titles: Default::default(),
         background_tasks: Vec::new(),
         switching_account: false,
+        prompt_on_launch: false,
         default_effort: None,
         orchestration_role: OrchestrationRole::Coordinator,
         context: None,

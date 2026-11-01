@@ -304,3 +304,59 @@ async fn a_starting_session_is_refused_as_an_owner() {
     drop(followup);
     wait_until(|| !state.is_launching(&owner.id)).await;
 }
+
+/// A session opened with a task is shown as handing its agent a prompt from the record that
+/// announces it until its launch is settled; one opened without a task never is.
+#[tokio::test]
+async fn a_session_opened_with_a_task_shows_as_prompting_until_it_is_launched() {
+    let (state, _dir) = state_for_opening("coordinator-open-prompting");
+    for (task, expected) in [(Some("do the work".to_string()), true), (None, false)] {
+        let mut events = state.subscribe();
+        let (live_tx, live_rx) = std::sync::mpsc::channel::<Arc<LiveSession>>();
+        let (opened, followup) = open_detached_with(
+            &state,
+            OpenRequest {
+                task,
+                ..open_request()
+            },
+            move |_| {
+                Ok(term::Launch {
+                    session: live_rx.recv().expect("a process"),
+                    agent_session_id: None,
+                    notice: None,
+                })
+            },
+        )
+        .await
+        .expect("opened");
+        let announced = loop {
+            match events.try_recv() {
+                Ok(Event::SessionUpserted { session }) if session.id == opened.id => {
+                    break session.prompt_on_launch;
+                }
+                Ok(_) => {}
+                Err(err) => panic!("the session was never announced: {err}"),
+            }
+        };
+        assert_eq!(announced, expected);
+        assert_eq!(state.is_prompted_on_launch(&opened.id), expected);
+        let mut after = state.subscribe();
+        live_tx
+            .send((*crate::test_support::idle_stand_in(&opened.id)).clone())
+            .unwrap();
+        drop(followup);
+        wait_until(|| !state.is_launching(&opened.id)).await;
+        assert!(!state.is_prompted_on_launch(&opened.id));
+        // Releasing the claim announces the session with the flag cleared, so the last record a
+        // client is sent of it no longer shows the launch as prompting.
+        let mut last = None;
+        while let Ok(event) = after.try_recv() {
+            if let Event::SessionUpserted { session } = event {
+                if session.id == opened.id {
+                    last = Some(session.prompt_on_launch);
+                }
+            }
+        }
+        assert_eq!(last, Some(false));
+    }
+}

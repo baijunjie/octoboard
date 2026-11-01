@@ -6,6 +6,7 @@ import { vi } from "vitest";
 
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { accountOf } from "../../fixtures/builders";
+import { delegatingSessionIds, sessionShownStatusKind } from "../../sessions/sessionStatus";
 import type { Account, AccountLogin, AccountQuota, AccountSharing, Agent, AgentAvailability, Console, Project, Session, Settings } from "../../protocol";
 
 export const request = vi.fn(() => Promise.resolve({}));
@@ -52,6 +53,8 @@ export const storeStandIn = (original: typeof import("../../store")) => ({
     return selector(state());
   },
   useDaemonStoreEqual: (selector: (s: unknown) => unknown) => selector(state()),
+  useDelegatingIds: () => delegatingSessionIds(sessions.values()),
+  useSessionShownStatus: (session: Session) => sessionShownStatusKind(session, delegatingSessionIds(sessions.values())),
   dismissAccountLogin: (...args: Parameters<typeof dismissAccountLogin>) => dismissAccountLogin(...args),
   trackAccountLogin: (...args: unknown[]) => trackAccountLogin(...args),
 });

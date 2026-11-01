@@ -625,7 +625,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "normal",
     title: "Switch account confirmation",
-    description: "Opened from the hub, which has a bound session. Under the message, a radio group \"Sessions to switch\" starts on \"This session and its sub-sessions\", its note counting 2 sessions that can switch (the hub and its bound session); the other option, \"Every session in this console\", counts 3 (the independent project session joins). Below the group, one line says only Claude Code sessions are switched and archived sessions and sessions already on this account are skipped; sessions of other consoles are not counted either. There is no progress bar: Confirm closes the dialog at once.",
+    description: "Opened from the hub, which has a bound session. Under the message, a radio group \"Sessions to switch\" starts on \"This session and its child sessions\", its note counting 2 sessions that can switch (the hub and its bound session); the other option, \"Every session in this console\", counts 3 (the independent project session joins). Below the group, one line says only Claude Code sessions are switched and archived sessions and sessions already on this account are skipped; sessions of other consoles are not counted either. There is no progress bar: Confirm closes the dialog at once.",
     state: switchAccountState,
     steps: openSwitchAccount("Release coordinator"),
   },
@@ -1262,7 +1262,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Archive view",
     category: "normal",
     title: "Archive a session running in the background",
-    description: "The session is idle, yet archiving it asks first, as it does a working one, and the message explains that its background work stops and how to continue the conversation: The work it is running in the background is stopped. To continue the conversation, restore the session from the archive. The row behind the dialog shows the pinging hollow green ring, listed below the idle Fix the summary layout; that one, with nothing running, has an Archive shortcut that archives at once, and this one has none.",
+    description: "The session is idle, yet archiving it asks first, as it does a working one, and the message explains that its background work stops and how to continue the conversation: The work it is running in the background is stopped. To continue the conversation, restore the session from the archive. The row behind the dialog shows the pinging hollow blue ring, listed below the Done Fix the summary layout; that one, with nothing running, has an Archive shortcut that archives at once, and this one has none.",
     state: backgroundArchiveState,
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: watcher.title })),

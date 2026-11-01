@@ -12,7 +12,8 @@ import { quotaOf, quotaWindow } from "../../fixtures/quotas";
 import { useCurrentLanguage, useT } from "../../i18n/react";
 import { AccountNameLine, AccountQuotaSummary, LoginStateBadge } from "../../quota/AccountQuotaSummary";
 import { AccountUsageBar } from "../../quota/AccountUsageBar";
-import { statusLabel, sessionShownStatusKind } from "../../sessions/sessionLabel";
+import { statusLabel } from "../../sessions/sessionLabel";
+import { delegatingSessionIds, sessionShownStatusKind } from "../../sessions/sessionStatus";
 import { liveSessions } from "../../sessions/order";
 import { DaemonProvider } from "../../store";
 import { useNow } from "../../format/useNow";
@@ -83,13 +84,15 @@ export function FeatureView({ feature }: { feature: string }): React.ReactElemen
       content = <section className="feature-surface usage-view"><PanelHeader title={t("rail.quota")} /><div className="usage-list">{readings.slice(0, 2).map((quota, index) => <div className="usage-item" key={quota.agent}><AccountNameLine name={["Claude Code", "Codex"][index]} quota={quota} showUpdated={false} /><AccountQuotaSummary quota={quota} single /></div>)}</div></section>;
       break;
     case "sessionStatus": {
-      const sessions = liveSessions([
+      const all = [
         sessionOf("build", workspace.id, "server", copy.serverTask, "working", { agent: "codex" }),
         sessionOf("review", workspace.id, "server", copy.review, "idle"),
         sessionOf("checks", workspace.id, "server", copy.orderChecks, "waiting_user", { agent: "grok" }),
-      ]);
+      ];
+      const delegating = delegatingSessionIds(all);
+      const sessions = liveSessions(all, delegating);
       content = <section className="feature-surface status-view">{sessions.map((session) => {
-        const status = sessionShownStatusKind(session);
+        const status = sessionShownStatusKind(session, delegating);
         return <div className="session-item" key={session.id}><SessionAgentIcon session={session} accounts={[]} defaultNames={{}} touchPopover={false} /><div className="session-copy"><div className="session-title">{session.title}</div><div className="session-state"><StatusIcon status={status} decorative /><span>{statusLabel(t, status)}</span></div></div></div>;
       })}</section>;
       break;

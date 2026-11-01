@@ -2,7 +2,7 @@ import { AGENT_MARKS } from "../components/icons/agentMarks";
 import { resolveCssColour, type Appearance } from "../preferences/cssColour";
 import type { StatusItemIcon, StatusItemMenu } from "../platform";
 import type { Agent } from "../protocol";
-import type { StatusKind } from "../sessions/sessionLabel";
+import type { StatusKind } from "../sessions/sessionStatus";
 import type { StatusItemMenuDraft } from "./statusItemMenu";
 
 /** What the shell's menu shows beside a line: the mark of a session's agent, and a heading's status
@@ -17,8 +17,8 @@ import type { StatusItemMenuDraft } from "./statusItemMenu";
 const SIZE = 18;
 const SCALE = 2;
 
-/** lucide's `Hand` and `MessageCircleMore`, the glyphs `StatusIcon` draws for the statuses that are
- * not a dot. */
+/** lucide's `Hand`, `MessageCircleMore` and `CircleCheck`, the glyphs `StatusIcon` draws for the statuses
+ * that are not a dot. `CircleCheck` has a shape that is not all paths, so it is given as markup. */
 const HAND = [
   "M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2",
   "M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2",
@@ -32,8 +32,10 @@ const BUBBLE = [
   "M16 12h.01",
 ];
 
-function stroked(paths: string[], colour: string): string {
-  const body = paths.map((d) => `<path d="${d}"/>`).join("");
+const CHECK = "<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"m16 9-5.5 5.5L8 12\"/>";
+
+function stroked(paths: string[] | string, colour: string): string {
+  const body = typeof paths === "string" ? paths : paths.map((d) => `<path d="${d}"/>`).join("");
   return `<g fill="none" stroke="${colour}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</g>`;
 }
 
@@ -49,13 +51,18 @@ function statusGlyph(status: StatusKind, appearance: Appearance): string | undef
     // The accent dot of `WorkingDot`, without the ping that cannot be drawn here.
     case "working":
       return accent && `<circle cx="12" cy="12" r="5" fill="${accent}"/>`;
-    // `WorkingDot`'s background ring: the same dot, hollow, in idle's green.
+    // `WorkingDot`'s background ring: the same dot, hollow, in the same blue.
     case "background":
-      return success && `<circle cx="12" cy="12" r="3.75" fill="none" stroke="${success}" stroke-width="2.5"/>`;
+      return accent && `<circle cx="12" cy="12" r="3.75" fill="none" stroke="${accent}" stroke-width="2.5"/>`;
+    // `WorkingDot`'s delegated glyph: a ring in idle's green around a dot.
+    case "delegated":
+      return success && `<circle cx="12" cy="12" r="6.5" fill="none" stroke="${success}" stroke-width="2"/><circle cx="12" cy="12" r="2.25" fill="${success}"/>`;
     case "waiting_user":
       return warning && stroked(HAND, warning);
     case "idle":
       return success && stroked(BUBBLE, success);
+    case "done":
+      return success && stroked(CHECK, success);
     default:
       return undefined;
   }

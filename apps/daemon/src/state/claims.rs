@@ -217,14 +217,33 @@ impl AppState {
         live.model_changes.contains(id)
     }
 
+    /// Notes that the launch the caller holds the claim of will hand the agent a prompt, which
+    /// every client is shown until the claim is released (`Session::prompt_on_launch`). Publishes
+    /// nothing, so a caller that has yet to announce the session can note it first; one that has
+    /// publishes the session itself.
+    pub fn expect_prompt_on_launch(&self, id: &str) {
+        let mut live = self.live.write().expect("live sessions lock poisoned");
+        if live.launching.contains(id) {
+            live.prompted_launches.insert(id.to_string());
+        }
+    }
+
+    /// Whether the launch holding the session's claim will hand the agent a prompt (see
+    /// [`Self::expect_prompt_on_launch`]).
+    pub fn is_prompted_on_launch(&self, id: &str) -> bool {
+        let live = self.live.read().expect("live sessions lock poisoned");
+        live.prompted_launches.contains(id)
+    }
+
     fn release_launch(&self, id: &str) {
         let mut live = self.live.write().expect("live sessions lock poisoned");
         live.launching.remove(id);
         live.switching.remove(id);
         let was_switching_account = live.account_switches.remove(id);
         let was_changing_model = live.model_changes.remove(id);
+        let was_prompted = live.prompted_launches.remove(id);
         drop(live);
-        if was_switching_account || was_changing_model {
+        if was_switching_account || was_changing_model || was_prompted {
             self.publish_session_by_id(id);
         }
         self.publish_account_sharing();

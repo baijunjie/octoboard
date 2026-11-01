@@ -4,8 +4,9 @@ import { displayColumns, ellipsize } from "../i18n/displayColumns";
 import { isolate } from "../i18n/isolate";
 import { joinPhrases } from "../i18n/joinPhrases";
 import type { Language } from "../i18n/languages";
-import type { Account, Console, Project, Session, SessionStatus, Settings } from "../protocol";
+import type { Account, Console, Project, Session, Settings } from "../protocol";
 import type { Activity } from "./order";
+import type { ShownStatusKind } from "./sessionStatus";
 
 /** Keeps the agent's current task beside the session name the user created. Each name is
  * isolated separately so mixed reading directions cannot reorder them across the separator.
@@ -94,29 +95,13 @@ export function sessionWithLocation(
   return t("session.withLocation", { session: isolate(ellipsize(title, room)), location: shortLocation });
 }
 
-/** What a status glyph and label stand for: the wire statuses, and *working in background*, which
- * is `idle` with work left running (`Session.background_tasks`) and has a glyph and a name of its
- * own. It is not a status of the daemon's: the session is as ready for a message as any idle one. */
-export type StatusKind = SessionStatus | "background";
-
-export function sessionStatusKind(session: Pick<Session, "status" | "background_tasks">): StatusKind {
-  return session.status === "idle" && session.background_tasks?.length ? "background" : session.status;
-}
-
-/** What a status glyph and label show: a `StatusKind`, or *switching account*, which a session
- * shows over its own status while an account switch holds it (`Session.switching_account`). Only
- * what is drawn follows it; ordering and the other decisions about a session go by `StatusKind`. */
-export type ShownStatusKind = StatusKind | "switching";
-
-export function sessionShownStatusKind(session: Pick<Session, "status" | "background_tasks" | "switching_account">): ShownStatusKind {
-  return session.switching_account && session.status !== "archived" ? "switching" : sessionStatusKind(session);
-}
-
 /** The catalog message naming each status, for the status table in docs/product/session-statuses.md. A row's own
  * `aria-label` wins over one on an element nested inside it, so the wire enum must never be the only place a status is
  * put into words. */
 const STATUS_KEY = {
   background: "session.status.background",
+  delegated: "session.status.delegated",
+  done: "session.status.done",
   switching: "session.status.switching",
   starting: "session.status.starting",
   working: "session.status.working",
@@ -174,11 +159,12 @@ export function sessionAriaLabel(
   accounts: Account[],
   owner: Session | undefined,
   defaultNames: Settings["default_account_names"],
+  status: ShownStatusKind,
 ): string {
   const base = t(session.pinned ? "sidebar.session.ariaLabelPinned" : "sidebar.session.ariaLabel", {
     title: isolate(sessionDisplayTitle(t, session)),
     agent: sessionAgentLabel(t, session, accounts, defaultNames),
-    status: statusLabel(t, sessionShownStatusKind(session)),
+    status: statusLabel(t, status),
   });
   return owner ? joinPhrases(language, [base, t("sidebar.session.boundTo", { name: isolate(sessionDisplayTitle(t, owner)) })]) : base;
 }
@@ -191,11 +177,11 @@ export function sessionRowName(
   t: Translate,
   language: Language,
   session: Session,
-  { accounts, defaultNames, owners, modelLabel }: { accounts: Account[]; defaultNames: Settings["default_account_names"]; owners: readonly (Session | undefined)[]; modelLabel: string },
+  { accounts, defaultNames, owners, modelLabel, status }: { accounts: Account[]; defaultNames: Settings["default_account_names"]; owners: readonly (Session | undefined)[]; modelLabel: string; status: ShownStatusKind },
 ): string {
   const [first, ...further] = owners.filter((owner) => owner !== undefined);
   return joinPhrases(language, [
-    sessionAriaLabel(t, language, session, accounts, first, defaultNames),
+    sessionAriaLabel(t, language, session, accounts, first, defaultNames, status),
     ...further.map((owner) => t("sidebar.session.boundTo", { name: isolate(sessionDisplayTitle(t, owner)) })),
     modelLabel,
   ]);

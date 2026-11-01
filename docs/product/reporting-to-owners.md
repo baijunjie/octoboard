@@ -191,7 +191,7 @@ to it.
 **A report left unsent archives nothing.** A report that would have archived the session, written into the owner's
 input but not sent to its conversation by the owner's agent — left in the input box or taken by a view of its background
 agents (see "A message written but not sent" in `docs/product/message-delivery.md`) —
-leaves the reporting session running and awaiting instructions, and its answer adds that the session was not archived
+leaves the reporting session running at its prompt, and its answer adds that the session was not archived
 because its owner has not read the report. The report still counts as the session's own for that turn, so no report is
 synthesised when the turn ends. Nothing archives the session later by itself, and it was told not to send the report
 again: a later qualifying report or an explicit archive, by its owner or the user, must do so. A report that was only

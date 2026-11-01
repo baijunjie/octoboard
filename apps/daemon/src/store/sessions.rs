@@ -792,6 +792,7 @@ pub(super) fn read_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         status: enum_from_row::<SessionStatus>(row, 9)?,
         background_tasks: Vec::new(),
         switching_account: false,
+        prompt_on_launch: false,
         default_effort: None,
         orchestration_role: enum_from_row::<OrchestrationRole>(row, 19)?,
         has_conversation: row.get(10)?,

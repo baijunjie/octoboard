@@ -5,8 +5,8 @@ import { PANE_ID } from "../layout/paneOverlay";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import type { Session } from "../protocol";
-import { sessionDisplayTitle, sessionShownStatusKind } from "../sessions/sessionLabel";
-import { useDaemonStore } from "../store";
+import { sessionDisplayTitle } from "../sessions/sessionLabel";
+import { useDaemonStore, useSessionShownStatus } from "../store";
 import { ChromeButton } from "./ChromeButton";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { HandOffOnUnmount } from "../components/focus/HandOffOnUnmount";
@@ -69,13 +69,14 @@ export function BareTitleBar(): React.ReactElement {
  * too long, the icon always stays. */
 function Breadcrumb({ session }: { session: Session }): React.ReactElement {
   const t = useT();
+  const status = useSessionShownStatus(session);
   const consoleName = useDaemonStore((s) => s.consoles.get(session.console_id)?.name);
   const projectName = useDaemonStore((s) => (session.project_id ? s.projects.get(session.project_id)?.name : undefined));
   const trail = session.role === "console" ? [consoleName, sessionDisplayTitle(t, session)] : [consoleName, projectName, sessionDisplayTitle(t, session)];
   return (
     <Trail names={trail.map((part) => part ?? "…")}>
       {/* Alone on the title bar, so a tap on it opens the popover. */}
-      <StatusIcon status={sessionShownStatusKind(session)} withTooltip touchPopover />
+      <StatusIcon status={status} withTooltip touchPopover />
     </Trail>
   );
 }

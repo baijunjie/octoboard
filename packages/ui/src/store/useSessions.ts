@@ -3,7 +3,7 @@ import { useShallow } from "zustand/react/shallow";
 import type { Session } from "../protocol";
 import { useDaemonStore } from "./react";
 import { consoleStatus } from "../sessions/order";
-import type { ShownStatusKind } from "../sessions/sessionLabel";
+import { sessionShownStatusKind, type ShownStatusKind } from "../sessions/sessionStatus";
 import { countWaitingInTree } from "../sessions/waiting";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 
@@ -36,7 +36,21 @@ export function useArchivedOwnerSessions(consoleId: string): Session[] {
 
 /** The avatar status selected from all sessions belonging to this console. */
 export function useConsoleStatus(consoleId: string): ShownStatusKind | undefined {
-  return useDaemonStore((s) => consoleStatus(sessionsOf(indexSessions(s.sessions).byConsole, consoleId)));
+  return useDaemonStore((s) => {
+    const index = indexSessions(s.sessions);
+    return consoleStatus(sessionsOf(index.byConsole, consoleId), index.delegatingIds);
+  });
+}
+
+/** The ids of the sessions with delegated work in progress (`delegatingSessionIds`): the same set
+ * until a session starts or stops delegating, for what ranks or names sessions by their status. */
+export function useDelegatingIds(): ReadonlySet<string> {
+  return useDaemonStore((s) => indexSessions(s.sessions).delegatingIds);
+}
+
+/** What `session` shows as its status: a kind, so a row renders again only when its kind changes. */
+export function useSessionShownStatus(session: Session): ShownStatusKind {
+  return useDaemonStore((s) => sessionShownStatusKind(session, indexSessions(s.sessions).delegatingIds));
 }
 
 /** Whether any session, in any status, is bound to the session `ownerId`. */

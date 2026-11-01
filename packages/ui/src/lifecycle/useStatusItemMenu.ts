@@ -6,6 +6,7 @@ import { useCurrentLanguage, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import type { Session } from "../protocol";
 import { ordersByStatus } from "../sessions/order";
+import { indexSessions } from "../sessions/sessionIndex";
 import { useDaemon } from "../store";
 import { withIcons } from "./statusItemIcons";
 import { buildStatusItemMenu } from "./statusItemMenu";
@@ -79,6 +80,7 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
         sessions: Array.from(sessions.values()),
         consoleMap: consoles,
         projectMap: projects,
+        delegating: indexSessions(sessions).delegatingIds,
         byStatus: ordersByStatus(settings),
         // Countdowns and ages are as of this push, which the clock alone also causes (`nextQuotaTick`).
         quota: { language, now, accounts: settings.accounts, accountOrder: settings.account_order, addedAgents: settings.added_agents, defaultAccountNames: settings.default_account_names, disabledDefaultAccounts: settings.disabled_default_accounts, agentAvailability, accountQuotas },

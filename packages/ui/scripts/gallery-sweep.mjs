@@ -359,11 +359,12 @@ async function checkArchivedReopen(page, language) {
   const labels = await page.evaluate(async (language) => {
     const { format } = await import("/src/i18n/catalog.ts");
     const { sessionAriaLabel } = await import("/src/sessions/sessionLabel.ts");
+    const { sessionShownStatusKind } = await import("/src/sessions/sessionStatus.ts");
     const { SCENARIOS } = await import("/src/gallery/fixtures/index.ts");
     const session = SCENARIOS.find((scenario) => scenario.id === "history-loaded").state.sessions.get("s-history");
     return {
       reopen: format(language, "sidebar.session.reopen"),
-      liveSession: sessionAriaLabel((key, params) => format(language, key, params), language, { ...session, status: "idle" }, []),
+      liveSession: sessionAriaLabel((key, params) => format(language, key, params), language, { ...session, status: "idle" }, [], undefined, undefined, sessionShownStatusKind({ ...session, status: "idle" }, new Set())),
     };
   }, language);
   // Found by its name in the terminal pane: the bar's button sits outside the live region that speaks its sentence.

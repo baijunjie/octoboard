@@ -6,6 +6,7 @@ import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { Account, AccountQuota, Agent, QuotaWindow, Session, SessionStatus } from "../protocol";
 import { displayColumns } from "../i18n/displayColumns";
+import { delegatingSessionIds } from "../sessions/sessionStatus";
 import { iconKeysOf } from "./statusItemIcons";
 import { buildStatusItemMenu, MAX_PER_SECTION, MAX_SESSION_LABEL_COLUMNS } from "./statusItemMenu";
 import { buildQuotaSubmenus, type StatusItemQuotaSource } from "./statusItemQuota";
@@ -28,11 +29,12 @@ const menuOf = (sessions: Session[], quota: StatusItemQuotaSource = NO_QUOTA) =>
     sessions,
     consoleMap: new Map(consoles.map((c) => [c.id, c])),
     projectMap: new Map(projects.map((p) => [p.id, p])),
+    delegating: delegatingSessionIds(sessions),
     byStatus: true,
   });
 
 const inProject = (id: string, status: SessionStatus, title = id, terminal_title?: string) =>
-  sessionOf(id, "c", "p", title, status, { terminal_title });
+  sessionOf(id, "c", "p", title, status, { terminal_title, has_conversation: false });
 
 describe("buildStatusItemMenu", () => {
   it("says so when no session is live", () => {
@@ -61,6 +63,22 @@ describe("buildStatusItemMenu", () => {
       ["Awaiting instructions (1)", "status:idle", ["i"]],
       ["Working in background (1)", "status:background", ["b"]],
       ["Working (1)", "status:working", ["w"]],
+    ]);
+  });
+
+  it("lists done and delegated sessions under headings of their own, between idle and background", () => {
+    const background = sessionOf("b", "c", "p", "b", "idle", { background_tasks: [{ id: "t1" }], has_conversation: false });
+    const done = sessionOf("d", "c", "p", "d", "idle", { has_conversation: true });
+    const owner = inProject("o", "idle");
+    const child = { ...inProject("k", "working"), bound_to: "o" };
+    const { sections } = menuOf([child, background, done, owner, inProject("i", "idle"), inProject("h", "waiting_user")]);
+    expect(sections.map((s) => [s.heading, s.icon, s.items.map((item) => item.session)])).toEqual([
+      ["Waiting for you (1)", "status:waiting_user", ["h"]],
+      ["Done (1)", "status:done", ["d"]],
+      ["Awaiting instructions (1)", "status:idle", ["i"]],
+      ["Child sessions working (1)", "status:delegated", ["o"]],
+      ["Working in background (1)", "status:background", ["b"]],
+      ["Working (1)", "status:working", ["k"]],
     ]);
   });
 
@@ -377,7 +395,7 @@ describe("buildStatusItemMenu quota submenus", () => {
     const quota = source({ accounts: [work], disabledDefaultAccounts: ["claude"], agentAvailability: available("claude"), accountQuotas: [quotaOf("claude", null), quotaOf("claude", "work")] });
     const on = (status: SessionStatus) => ({ ...inProject("s", status), account_id: "work", config_dir: "/w" });
     const menu = (status: SessionStatus) => buildStatusItemMenu(t, {
-      quota, consoles, projects, sessions: [on(status)], selectedSessionId: "s", byStatus: true,
+      quota, consoles, projects, sessions: [on(status)], selectedSessionId: "s", delegating: new Set(), byStatus: true,
       consoleMap: new Map(consoles.map((c) => [c.id, c])), projectMap: new Map(projects.map((p) => [p.id, p])),
     });
     const headers = (status: SessionStatus) => menu(status).submenus.flatMap((submenu) => submenu.items.filter((item) => item.kind === "header").map((item) => (item as { title: string }).title.replace(/[\u2068\u2069]/g, "")));
@@ -392,7 +410,7 @@ describe("buildStatusItemMenu quota submenus", () => {
     const quota = source({ accounts: [work], agentAvailability: available("claude"), accountQuotas: [quotaOf("claude", null), quotaOf("claude", "work")] });
     const on = (status: SessionStatus) => ({ ...inProject("s", status), account_id: "work", config_dir: "/w" });
     const menu = (status: SessionStatus) => buildStatusItemMenu(t, {
-      quota, consoles, projects, sessions: [on(status)], selectedSessionId: "s", byStatus: true,
+      quota, consoles, projects, sessions: [on(status)], selectedSessionId: "s", delegating: new Set(), byStatus: true,
       consoleMap: new Map(consoles.map((c) => [c.id, c])), projectMap: new Map(projects.map((p) => [p.id, p])),
     });
     expect(menu("idle").quota_label).toContain("Work");

@@ -61,6 +61,7 @@ impl AppState {
         session.status = self.shown_status(&session);
         session.background_tasks = self.shown_background_tasks(&session);
         session.switching_account = self.is_switching_account(&session.id);
+        session.prompt_on_launch = self.is_prompted_on_launch(&session.id);
         session.default_effort =
             if session.observed_model.is_some() && session.observed_effort.is_none() {
                 self.default_effort_of(&session.id)

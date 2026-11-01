@@ -45,7 +45,7 @@ the daemon's `protocol::bindings` test) by `protocol.contract.ts`; `appConfig.ts
 - `src/format/` — small pure formatting helpers (paths, relative time, sizes, `Reason`).
 - `src/agents/` — agent names, install pages, model and effort picker rules, per-agent launch settings.
 - `src/git/` — git workflow settings and git-badge wording, repository host links.
-- `src/sessions/` — pure session rules and wording (index, order, labels, colours, filtering, waiting).
+- `src/sessions/` — pure session rules and wording (index, order, labels, status derivation, colours, filtering, waiting).
 - `src/accounts/` — pure account rules (order, quota of an account, picker rules, quota formatting).
 - `src/errors/` — turning a failure into words: `codes.ts` (the one record per error code), daemon wording, the shared
   `ErrorPresentation`, recovery classification, issue-report address.

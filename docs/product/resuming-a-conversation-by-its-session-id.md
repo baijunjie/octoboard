@@ -136,7 +136,8 @@ account.
   decides the fields and the submit button as in "Finding the conversation" above.
 
 A session opened this way starts by resuming that conversation, and comes up at the agent's prompt like any session
-opened from the dialog. It **has a conversation from the moment it is opened**, not from its first turn: interrupted
+opened from the dialog. It **has a conversation from the moment it is opened**, not from its first turn: it reads as *done* once up (see
+"Done, awaiting instructions and child sessions working" in `docs/product/session-statuses.md`); interrupted
 before the user has typed anything, it resumes that conversation rather than starting a fresh one; it is never unused,
 so it is archived rather than deleted (see "Deleting an unused session" in `docs/product/deleting-sessions.md`);
 switching its account copies that conversation; and its relaunch is refused when its pinned config directory has gone

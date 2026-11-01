@@ -1,5 +1,5 @@
 import type { Agent } from "../protocol";
-import type { StatusKind } from "../sessions/sessionLabel";
+import type { StatusKind } from "../sessions/sessionStatus";
 
 /** The keys by which the menu's lines name their pictures in `StatusItemMenu.icons`; the pictures
  * themselves are drawn by `statusItemIcons.ts`. */

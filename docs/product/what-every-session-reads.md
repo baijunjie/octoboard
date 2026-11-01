@@ -344,7 +344,7 @@ from `orchestration_role`.
 
 Each record also carries `background_tasks`: for a Claude Code session working in background, the work it left running,
 each entry with `id` and, where Claude Code gives them, `type` and `description`; an empty list for every other session.
-Such a session's `status` is `idle`: it takes a message like any session awaiting instructions, but its work is not over
+Such a session's `status` is `idle`: it takes a message like any other session at its prompt, but its work is not over
 (see "Working in background" in `docs/product/session-statuses.md`).
 
 Each of these records also carries `context`, the session's context size as the window shows it (see "Session context
@@ -400,8 +400,8 @@ And each record carries what tells sessions apart and what an owner decides on:
 - `origin`: `console` for a session started with `new_session`; `user` for one the user opened and for one opened
   through `request_session` or `request_resume_session`. A session that takes another's place in a handoff carries the
   original's.
-- `has_conversation`: whether a turn was ever taken in the session. It does not say that the agent still holds the
-  conversation's record; a `reopen_session` that finds it gone is refused (`conversation_unresumable`).
+- `has_conversation`: whether a turn was ever taken in the session, or it was opened on an existing conversation. It
+  does not say that the agent still holds the conversation's record; a `reopen_session` that finds it gone is refused (`conversation_unresumable`).
 - `resumable`, in `get_session`'s record of an interrupted or archived session only — and in `list_archived`'s with
   `check_resumable` (see "Listing archived sessions" above): whether the agent still holds the conversation, looked up
   in its own records under the session's account as a reopen looks it up (see "When a conversation can no longer be

@@ -116,6 +116,7 @@ pub(crate) fn session_record(id: &str, project: &str) -> Session {
         record_titles: Default::default(),
         background_tasks: Vec::new(),
         switching_account: false,
+        prompt_on_launch: false,
         default_effort: None,
         orchestration_role: OrchestrationRole::Coordinator,
         context: None,

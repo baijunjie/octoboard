@@ -248,11 +248,12 @@ it("shows the console it is given, and a hover alone commits nothing", () => {
 it("lists a project session's own sessions under it, and the binding badge only for a console session's owner", () => {
   const { container, root } = mountSidebar({ sessions: [hub1, hub2, lead, ...team, unbound] });
   const rows = Array.from(container.querySelectorAll<HTMLElement>("[data-sessions] div[role=button]"));
-  // The lead session is ranked against the unbound session as ever (idle before interrupted) and
-  // its own sessions follow it, ranked among themselves (idle before working).
+  // The lead session, which has work delegated to its team, is ranked against the unbound session as
+  // ever (delegated before interrupted) and its own sessions follow it, ranked among themselves (done
+  // before working).
   expect(rows.map((row) => row.getAttribute("aria-label"))).toEqual([
-    `${isolate("Rework the gallery")} session, Claude Code (${isolate("Default")}), Awaiting instructions, Bound to ${isolate("Hub")}, Default model`,
-    `${isolate("Chase the flaky test")} session, Claude Code (${isolate("Default")}), Awaiting instructions, Bound to ${isolate("Rework the gallery")}, Default model`,
+    `${isolate("Rework the gallery")} session, Claude Code (${isolate("Default")}), Child sessions working, Bound to ${isolate("Hub")}, Default model`,
+    `${isolate("Chase the flaky test")} session, Claude Code (${isolate("Default")}), Done, Bound to ${isolate("Rework the gallery")}, Default model`,
     `${isolate("Measure the first paint")} session, Claude Code (${isolate("Default")}), Working, Bound to ${isolate("Rework the gallery")}, Default model`,
     `${isolate("Tidy the changelog")} session, Claude Code (${isolate("Default")}), Interrupted, Default model`,
   ]);

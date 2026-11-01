@@ -3,7 +3,7 @@ import { posix } from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { objectIdCheck } from "../fixtures/invariants";
-import { sessionStatusKind } from "../sessions/sessionLabel";
+import { delegatingSessionIds, sessionStatusKind } from "../sessions/sessionStatus";
 import { previewRepositories } from "./repositories";
 import { createPreviewDaemon } from "./daemon";
 import { createPreviewScenario } from "./scenarios";
@@ -398,11 +398,11 @@ describe("the website's eight independent repository fixtures", () => {
         const sessions = scenario.state!.sessions!;
         expect(
           Object.fromEntries(
-            [...sessions].map(([id, session]) => [id, sessionStatusKind(session)]),
+            [...sessions].map(([id, session]) => [id, sessionStatusKind(session, delegatingSessionIds(sessions.values()))]),
           ),
         ).toEqual({
           "preview-coordinator": "working",
-          "preview-admin-session": "idle",
+          "preview-admin-session": "done",
           "preview-merchant-session": "working",
           "preview-customer-session": "working",
           "preview-server-session": "working",
@@ -410,7 +410,7 @@ describe("the website's eight independent repository fixtures", () => {
           "preview-order-checks": "waiting_user",
           "preview-mobile-session": "working",
           "preview-tablet-session": "working",
-          "preview-pos-session": "idle",
+          "preview-pos-session": "done",
           "preview-kitchen-session": "working",
         });
         expect(sessions.get("preview-review")).toMatchObject({

@@ -125,7 +125,9 @@ but the agent's call, or the approval, is answered only once the launch has sett
 it fails.
 
 The dialog takes no task: once up, a session the user opens by hand is in *awaiting instructions*, sitting at the
-agent's prompt, and is given its work by typing into its terminal. Only a session started with `new_session` — by a
+agent's prompt, and is given its work by typing into its terminal; one opened on a found conversation is *done* instead,
+since it has a conversation from the start (see "Done, awaiting instructions and child sessions working" in
+`docs/product/session-statuses.md`). Only a session started with `new_session` — by a
 console session or a project session — or on another session's request that the user approved is handed an opening
 prompt, the brief it is started with (see "Handing out a task: the brief" in `docs/product/hub-orchestration.md` and "On
 approval" in `docs/product/session-requests.md`); once up, it is in *working*.

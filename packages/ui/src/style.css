@@ -1076,6 +1076,17 @@ html.pane-resizing * {
   }
 }
 
+/* Tailwind's ping at a smaller reach: the delegated ring (`statusGlyphs.tsx`) is 12px in a 16px slot,
+   which the stock ping's 2x would take to 24px. 4/3 ends its fading copy at the slot's edge, as the
+   other dots' copies end at theirs. Applied through `motion-safe:` only, like the ping. */
+@keyframes ping-small {
+  75%,
+  100% {
+    transform: scale(1.3333);
+    opacity: 0;
+  }
+}
+
 /* Paired glyphs in GitBadge's fixed clip make each directional loop continuous. The second
    glyph takes the first one's place at the boundary; reduced motion leaves one static glyph. */
 @keyframes pull-scroll {
@@ -1103,6 +1114,7 @@ html.pane-resizing * {
   --animate-spin-slow: spin 2s linear infinite;
   --animate-status-wave: status-wave 2.4s ease-in-out infinite;
   --animate-status-breathe: status-breathe 2.4s ease-in-out infinite;
+  --animate-ping-small: ping-small 1s cubic-bezier(0, 0, 0.2, 1) infinite;
   --animate-pull-scroll: pull-scroll 1.2s linear infinite;
   --animate-push-scroll: push-scroll 1.2s linear infinite;
   --animate-copy-icon-in: copy-icon-in 200ms ease;

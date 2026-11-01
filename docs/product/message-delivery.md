@@ -5,9 +5,9 @@ information shared by another session, a report panel form submission — and wh
 
 ## Messages held until a session can take them
 
-A session that is working, awaiting instructions or working in background takes a message straight away, unless one
-of the holds below applies to it, or it is a Claude Code session held behind a message its agent did not send (see "A
-message written but not sent" below). A message written mid-turn is taken by the agent: Claude Code and Grok Build
+A session that is working or at its prompt (done, awaiting instructions, with child sessions working, or working in
+background) takes a message straight away, unless one of the holds below applies to it, or it is a Claude Code
+session held behind a message its agent did not send (see "A message written but not sent" below). A message written mid-turn is taken by the agent: Claude Code and Grok Build
 queue it and run it once the turn ends, though Claude Code can also take it into the turn still running. Codex's
 independent queue runs it after the active turn. What becomes of such messages when an owner interrupts the turn is
 in "Messages during an interrupt" in `docs/product/interrupting-turns.md`.
@@ -272,8 +272,8 @@ Claude Code can take a message Octoboard writes and still not send it: the text 
 starts. Invisible characters are one cause, which their removal above is there to prevent; anything else that leaves a
 message unsent is caught the same way.
 
-**The check.** When Octoboard writes a message into a Claude Code session whose agent is at its prompt — awaiting
-instructions or working in background, not mid-turn — it waits up to about three seconds for the agent's hooks to report
+**The check.** When Octoboard writes a message into a Claude Code session whose agent is at its prompt — whichever
+status it shows there, not mid-turn — it waits up to about three seconds for the agent's hooks to report
 a prompt sent (`UserPromptSubmit`). This applies to every message Octoboard writes: an owner's instruction, a report,
 shared information, a report panel form submission, the instruction `reopen_session` hands over or the prompt to
 continue after an account switch when it is written rather than given as the launch prompt, the messages of a

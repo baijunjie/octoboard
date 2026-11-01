@@ -86,7 +86,7 @@ The first numbered section presents 16 feature cards in three groups, in this or
 
 Every card has a title, description and a focused visual, identified as illustrative sample data.
 Five visuals show application interface fragments: accounts, usage readings, session statuses, existing workflow
-files, and a Git diff. The status example puts a session waiting for the user first, a session awaiting instructions
+files, and a Git diff. The status example puts a session waiting for the user first, a session that is done
 second, and a working session last, following the application's ordering. The other eleven visuals illustrate the
 capability with account choices, conversation and handoff records, context usage, task continuity or coordination
 relationships. The quota-recovery example shows waiting, confirmation that quota is available, and continuing work;

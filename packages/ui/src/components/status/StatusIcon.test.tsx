@@ -2,7 +2,7 @@
 import { act } from "react";
 import { expect, it, vi } from "vitest";
 
-import type { StatusKind } from "../../sessions/sessionLabel";
+import type { StatusKind } from "../../sessions/sessionStatus";
 import { StatusIcon } from "./StatusIcon";
 import { enter, leave, mountForTooltip, openPopover, openTooltip, press, trigger, withFakeTimers } from "../hint/tooltipTestSupport";
 

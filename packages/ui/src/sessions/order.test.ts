@@ -3,8 +3,12 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { consoleOf } from "../fixtures/builders";
 import type { Project, Session, SessionStatus } from "../protocol";
-import { archiveNeedsConfirmation, countsAsWorking, isUnusedSession, consoleActivity, consoleStatus, INACTIVE_PROJECT_RANK, archivePreviewSessions, projectRank, liveConsoleSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, ordersByStatus, sessionsInTreeOrder, sortProjects, switchStrip } from "./order";
+import { archiveNeedsConfirmation, countsAsWorking, isUnusedSession, consoleActivity, consoleStatus, INACTIVE_PROJECT_RANK, STATUS_RANK, archivePreviewSessions, projectRank, liveConsoleSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, ordersByStatus, sessionsInTreeOrder, sortProjects, switchStrip } from "./order";
 import { FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
+import { delegatingSessionIds } from "./sessionStatus";
+
+/** No session delegates: the sessions of a test that does not look at delegated work. */
+const NONE: ReadonlySet<string> = new Set();
 
 const session = (id: string, status: SessionStatus, started_at: number, pinned = false, bound_to: string | null = null): Session => ({
   id,
@@ -58,7 +62,7 @@ describe("liveSessions", () => {
       session("archived", "archived", 10),
       session("waiting", "waiting_user", 3),
       session("pinned", "interrupted", 0, true),
-    ]);
+    ], NONE);
     expect(ordered.map((s) => s.id)).toEqual(["pinned", "waiting", "new-idle", "old-idle", "working", "interrupted"]);
   });
 
@@ -70,14 +74,14 @@ describe("liveSessions", () => {
       session("archived", "archived", 10),
       session("pinned-old", "working", 0, true),
       session("pinned-new", "interrupted", 2, true),
-    ], false);
+    ], NONE, false);
     expect(ordered.map((s) => s.id)).toEqual(["pinned-new", "pinned-old", "interrupted", "working", "old-waiting"]);
   });
 
   it("counts a session that is still starting as a running one, not as no session at all", () => {
     const starting = [session("starting", "starting", 1)];
-    expect(liveSessions(starting).map((s) => s.id)).toEqual(["starting"]);
-    expect(projectRank(starting)).not.toBe(INACTIVE_PROJECT_RANK);
+    expect(liveSessions(starting, NONE).map((s) => s.id)).toEqual(["starting"]);
+    expect(projectRank(starting, NONE)).not.toBe(INACTIVE_PROJECT_RANK);
     expect(consoleActivity(starting)).toBe("running");
   });
 
@@ -97,25 +101,25 @@ describe("consoleStatus", () => {
     ];
     const kinds = ["waiting_user", "idle", "background", "working"];
     for (let index = 0; index < ordered.length; index++) {
-      expect(consoleStatus(ordered.slice(index).reverse())).toBe(kinds[index]);
+      expect(consoleStatus(ordered.slice(index).reverse(), NONE)).toBe(kinds[index]);
     }
-    expect(liveSessions(ordered.map((s) => ({ ...s, pinned: false }))).map((s) => s.id))
+    expect(liveSessions(ordered.map((s) => ({ ...s, pinned: false })), NONE).map((s) => s.id))
       .toEqual(["waiting", "idle", "background", "working"]);
   });
 
-  it("omits starting from the avatar while keeping it next to idle in session order", () => {
+  it("omits starting from the avatar while ranking it with the idle session it will become in session order", () => {
     const starting = session("starting", "starting", 3);
     const idle = session("idle", "idle", 2);
     const working = session("working", "working", 1);
-    expect(consoleStatus([starting])).toBeUndefined();
-    expect(consoleStatus([starting, working])).toBe("working");
-    expect(liveSessions([working, starting, idle]).map((s) => s.id)).toEqual(["starting", "idle", "working"]);
+    expect(consoleStatus([starting], NONE)).toBeUndefined();
+    expect(consoleStatus([starting, working], NONE)).toBe("working");
+    expect(liveSessions([working, starting, idle], NONE).map((s) => s.id)).toEqual(["starting", "idle", "working"]);
   });
 
   it("omits inactive sessions and preserves the selected session's account-switch presentation", () => {
-    expect(consoleStatus([])).toBeUndefined();
-    expect(consoleStatus([session("paused", "interrupted", 1), session("archived", "archived", 2)])).toBeUndefined();
-    expect(consoleStatus([{ ...session("switching", "idle", 3), switching_account: true }])).toBe("switching");
+    expect(consoleStatus([], NONE)).toBeUndefined();
+    expect(consoleStatus([session("paused", "interrupted", 1), session("archived", "archived", 2)], NONE)).toBeUndefined();
+    expect(consoleStatus([{ ...session("switching", "idle", 3), switching_account: true }], NONE)).toBe("switching");
   });
 });
 
@@ -141,14 +145,14 @@ describe("a session running in the background", () => {
       session("interrupted", "interrupted", 40),
       session("waiting", "waiting_user", 4),
       session("pinned-work", "working", 0, true),
-    ]);
+    ], NONE);
     expect(ordered.map((s) => s.id)).toEqual(["pinned-work", "waiting", "idle", "new-bg", "bg", "working", "interrupted"]);
   });
 
   it("ranks a project between idle and foreground work while its console still shows work", () => {
-    expect(projectRank([background])).toBeLessThan(projectRank([session("w", "working", 1)]));
-    expect(projectRank([background])).toBeGreaterThan(projectRank([session("i", "idle", 2)]));
-    expect(projectRank([background, session("i", "idle", 2)])).toBe(projectRank([session("i", "idle", 2)]));
+    expect(projectRank([background], NONE)).toBeLessThan(projectRank([session("w", "working", 1)], NONE));
+    expect(projectRank([background], NONE)).toBeGreaterThan(projectRank([session("i", "idle", 2)], NONE));
+    expect(projectRank([background, session("i", "idle", 2)], NONE)).toBe(projectRank([session("i", "idle", 2)], NONE));
     expect(consoleActivity([background])).toBe("working");
   });
 });
@@ -206,7 +210,7 @@ describe("boundSessionsArchivedWith", () => {
       session("other-owner", "working", 9, false, "elsewhere"),
       session("old-child", "archived", 10, false, "lead"),
     ];
-    expect(boundSessionsArchivedWith(sessions, "s-console").map((s) => s.id)).toEqual(["bound-live", "lead", "under-archived", "under-lead-live", "under-live", "under-lead"]);
+    expect(boundSessionsArchivedWith(sessions, "s-console", NONE).map((s) => s.id)).toEqual(["bound-live", "lead", "under-archived", "under-lead-live", "under-live", "under-lead"]);
   });
 });
 
@@ -260,6 +264,7 @@ describe("sortProjects", () => {
     const ordered = sortProjects(
       [project("d", "delta"), project("a10", "item 10"), project("b", "beta"), project("a2", "item 2"), project("c", "charlie"), project("z", "zulu", true)],
       (p) => sessions[p.id] ?? [],
+      NONE,
     );
     expect(ordered.map((p) => p.id)).toEqual(["c", "d", "b", "z", "a2", "a10"]);
   });
@@ -274,11 +279,11 @@ describe("sortProjects", () => {
     const ordered = sortProjects([
       project("empty", "alpha", true), project("archived", "beta"),
       project("interrupted", "zulu"), project("pinned", "pinned", true), project("working", "working"),
-    ], (p) => sessions[p.id] ?? []);
+    ], (p) => sessions[p.id] ?? [], NONE);
     expect(ordered.map((p) => p.id)).toEqual(["pinned", "working", "interrupted", "empty", "archived"]);
-    expect(projectRank(sessions.interrupted)).toBeLessThan(INACTIVE_PROJECT_RANK);
-    expect(projectRank(sessions.archived)).toBe(INACTIVE_PROJECT_RANK);
-    expect(projectRank([])).toBe(INACTIVE_PROJECT_RANK);
+    expect(projectRank(sessions.interrupted, NONE)).toBeLessThan(INACTIVE_PROJECT_RANK);
+    expect(projectRank(sessions.archived, NONE)).toBe(INACTIVE_PROJECT_RANK);
+    expect(projectRank([], NONE)).toBe(INACTIVE_PROJECT_RANK);
   });
 
   it("keeps active projects first and pinned first within each group, but ranks none by status, when the sidebar does not order by status", () => {
@@ -292,6 +297,7 @@ describe("sortProjects", () => {
     const ordered = sortProjects(
       [project("d", "delta"), project("x", "xray"), project("b", "beta"), project("z", "zulu", true), project("c", "charlie"), project("p", "papa", true), project("a", "alpha")],
       (p) => sessions[p.id] ?? [],
+      NONE,
       false,
     );
     expect(ordered.map((p) => p.id)).toEqual(["p", "b", "c", "d", "z", "a", "x"]);
@@ -307,7 +313,7 @@ describe("sessionsInTreeOrder", () => {
       { ...session("a-new", "working", 2), project_id: "a" },
       { ...session("b-waiting", "waiting_user", 3), project_id: "b" },
     ];
-    const ids = (byStatus: boolean) => sessionsInTreeOrder(consoles, projects, sessions, () => true, byStatus).map((s) => s.id);
+    const ids = (byStatus: boolean) => sessionsInTreeOrder(consoles, projects, sessions, () => true, NONE, byStatus).map((s) => s.id);
     expect(ids(true)).toEqual(["b-waiting", "a-old", "a-new"]);
     expect(ids(false)).toEqual(["a-new", "a-old", "b-waiting"]);
   });
@@ -336,7 +342,7 @@ describe("liveSessionRows", () => {
       session("pinned-under-unbound", "idle", 3, true, "unbound"),
       session("archived-under-unbound", "archived", 4, false, "unbound"),
       session("under-an-owner-elsewhere", "idle", 5, false, "s-console"),
-    ]);
+    ], NONE);
     expect(rows.map((row) => [row.session.id, row.under?.id])).toEqual([
       ["newer-unbound", undefined],
       ["under-an-owner-elsewhere", undefined],
@@ -352,7 +358,7 @@ describe("liveSessionRows", () => {
       session("newer", "interrupted", 9),
       session("under-old", "waiting_user", 2, false, "owner"),
       session("under-new", "interrupted", 3, false, "owner"),
-    ], false);
+    ], NONE, false);
     expect(rows.map((row) => [row.session.id, row.under?.id])).toEqual([
       ["newer", undefined],
       ["owner", undefined],
@@ -366,7 +372,7 @@ describe("liveSessionRows", () => {
       session("unbound", "idle", 1),
       session("under-unbound", "idle", 2, false, "unbound"),
       session("a-third-level", "idle", 3, false, "under-unbound"),
-    ]);
+    ], NONE);
     expect(rows.map((row) => [row.session.id, row.under?.id])).toEqual([
       ["unbound", undefined],
       ["under-unbound", "unbound"],
@@ -400,15 +406,15 @@ describe("boundElsewhere", () => {
     { name: "leaves out unbound, archived, unknown-owner and archived-owner sessions", sessions: [session("a", "idle", 1), session("b", "archived", 2, false, "hub-1"), session("c", "idle", 3, false, "gone"), session("d", "idle", 4, false, "hub-old")], expected: undefined },
     { name: "counts a lead session's own sessions with the console session above them", sessions: [session("lead", "idle", 1, false, "hub-1"), session("under-lead", "idle", 2, false, "lead"), session("under-unbound", "idle", 3, false, "unbound"), session("unbound", "idle", 4)], expected: { count: 2, owners: [["hub-1", 2]] } },
   ])("$name", ({ sessions, expected }) => {
-    const summary = boundElsewhere(sessions, owners);
+    const summary = boundElsewhere(sessions, owners, NONE);
     expect(summary && { count: summary.count, owners: summary.owners.map((o) => [o.owner.id, o.count]) }).toEqual(expected);
   });
 
   it("names the owners newest first, whatever their status, when the sidebar does not order by status", () => {
     const busy = new Map([{ ...owner("hub-old", 1), status: "waiting_user" as const }, owner("hub-new", 2)].map((o) => [o.id, o]));
     const sessions = [session("a", "idle", 1, false, "hub-old"), session("b", "idle", 2, false, "hub-new")];
-    expect(boundElsewhere(sessions, busy)?.owners.map((o) => o.owner.id)).toEqual(["hub-old", "hub-new"]);
-    expect(boundElsewhere(sessions, busy, false)?.owners.map((o) => o.owner.id)).toEqual(["hub-new", "hub-old"]);
+    expect(boundElsewhere(sessions, busy, NONE)?.owners.map((o) => o.owner.id)).toEqual(["hub-old", "hub-new"]);
+    expect(boundElsewhere(sessions, busy, NONE, false)?.owners.map((o) => o.owner.id)).toEqual(["hub-new", "hub-old"]);
   });
 });
 
@@ -427,6 +433,7 @@ describe("focusGroups", () => {
         in_("a-archived-under-mine", "a", "archived", "a-mine"),
       ],
       "hub",
+      NONE,
     );
     expect(groups.map((g) => [g.project.id, g.sessions.map((row) => [row.session.id, row.under?.id])])).toEqual([
       ["a", [["a-mine", undefined], ["a-under-mine", "a-mine"]]],
@@ -436,6 +443,7 @@ describe("focusGroups", () => {
       [project("a", "alpha"), project("b", "beta")],
       [in_("a-mine", "a", "idle", "hub"), in_("b-mine", "b", "working", "hub")],
       "hub",
+      NONE,
       false,
     );
     expect(byName.map((g) => g.project.id)).toEqual(["a", "b"]);
@@ -498,5 +506,56 @@ describe("switchStrip", () => {
       c: "waiting",
       d: undefined,
     });
+  });
+});
+
+describe("STATUS_RANK", () => {
+  it("lists what wants a person first, then work elsewhere, then work, then no process, archived at the very end", () => {
+    const byRank = (Object.keys(STATUS_RANK) as (keyof typeof STATUS_RANK)[]).sort((a, b) => STATUS_RANK[a] - STATUS_RANK[b]);
+    expect(byRank).toEqual(["waiting_user", "done", "idle", "delegated", "background", "working", "interrupted", "archived"]);
+    expect(INACTIVE_PROJECT_RANK).toBe(STATUS_RANK.archived);
+  });
+
+  it("orders sessions by the kind they show, a starting or switching one by the kind it will become", () => {
+    const sessions = [
+      session("working", "working", 1),
+      { ...session("background", "idle", 2), background_tasks: [{ id: "b" }] },
+      session("delegating", "idle", 3),
+      session("child", "working", 4, false, "delegating"),
+      { ...session("switching", "idle", 5), switching_account: true },
+      { ...session("switching-done", "interrupted", 5), switching_account: true, has_conversation: true },
+      session("starting", "starting", 6),
+      session("interrupted", "interrupted", 7),
+      session("fresh", "idle", 8),
+      { ...session("done", "idle", 9), has_conversation: true },
+      session("waiting", "waiting_user", 10),
+    ];
+    const delegating = delegatingSessionIds(sessions);
+    expect(liveSessions(sessions, delegating).map((s) => s.id)).toEqual([
+      "waiting", "done", "switching-done", "fresh", "starting", "switching", "delegating", "background", "child", "working", "interrupted",
+    ]);
+  });
+
+  it.each(["starting", "switching"] as const)("ranks a %s session as working with a prompt on launch, else done with a conversation, else idle", (kind) => {
+    const of = (extra: Partial<Session>): Session =>
+      kind === "starting" ? { ...session("s", "starting", 1), ...extra } : { ...session("s", "interrupted", 1), switching_account: true, ...extra };
+    const rankIn = (extra: Partial<Session>) => projectRank([of(extra)], NONE);
+    expect(rankIn({ prompt_on_launch: true, has_conversation: true })).toBe(STATUS_RANK.working);
+    expect(rankIn({ has_conversation: true })).toBe(STATUS_RANK.done);
+    expect(rankIn({ has_conversation: false })).toBe(STATUS_RANK.idle);
+  });
+
+  it("takes the most urgent kind for a project and for the console's avatar", () => {
+    const sessions = [session("parent", "idle", 1), session("child", "working", 2, false, "parent")];
+    const delegating = delegatingSessionIds(sessions);
+    expect(projectRank([sessions[0]], delegating)).toBe(STATUS_RANK.delegated);
+    expect(consoleStatus([sessions[0]], delegating)).toBe("delegated");
+    expect(consoleStatus([{ ...sessions[0], has_conversation: true }], NONE)).toBe("done");
+  });
+
+  it("does not count delegated work, or a done session, as working", () => {
+    const parent = session("parent", "idle", 1);
+    expect(countsAsWorking(parent)).toBe(false);
+    expect(consoleActivity([parent])).toBe("running");
   });
 });

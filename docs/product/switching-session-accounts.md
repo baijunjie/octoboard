@@ -18,7 +18,7 @@ logged in" there), nor onto a turned-off one (see "Turning an account off" in `d
 The confirmation is titled "Switch account"; its body's first sentence names the session and the account it will be
 switched to. It asks which sessions to switch, as two options of a radio group; the first is selected by default:
 
-- **This session and its sub-sessions** — the session and every session under it: those bound to it, those bound to
+- **This session and its child sessions** — the session and every session under it: those bound to it, those bound to
   them, and so on to any depth, reached through archived sessions as well.
 - **Every session in this console** — every session of the same agent in that console: console sessions, project
   sessions, whether independent or reporting to a parent, across all projects in the console.
@@ -98,6 +98,9 @@ While a session is shown as switching:
 
 - its sidebar row, focus mode card, breadcrumb and its entry in a confirmation's list of sessions show the *switching
   account* status in place of its own (see `docs/product/session-statuses.md`);
+- where sessions are ranked by status, it sorts with the status it will have once the switch is over — with *working*
+  once its relaunch is to continue its turn, otherwise with *done* or *awaiting instructions* by whether it has a
+  conversation (see "The status order" in `docs/product/order-of-projects-and-sessions.md`);
 - its terminal is covered by the loading cover with a spinner, saying that the session is switching its account,
   whatever state its connection passes through meanwhile, and takes no input: no key reaches the session's process.
   The terminal offers no Resume. When the session stops being shown as switching, the cover gives way to whatever the
@@ -125,7 +128,7 @@ names; it has no counterpart of the confirmation's choices of several sessions.
 The session is sent no message about the switch, and neither is the caller, which has the result instead. Where the
 switch cut a turn off, or the turn had stopped on the plan's usage limit, the session is sent the prompt to continue
 its task (see "Continuing after a switch" below), and the caller must not send it one of its own; otherwise it comes
-back *awaiting instructions* like any resumed session, any turn it was in the middle of cut off, and the caller sends
+back at its prompt like any resumed session, any turn it was in the middle of cut off, and the caller sends
 it its next step with `instruct_session`. The result's `note` says which of the two it was. A session with no conversation
 yet (see "Carrying the conversation" below) starts a fresh one on the new account. The call is answered once the
 switch's outcome is known — after the user's answer, where the user is asked — which can take a few seconds (see
@@ -235,8 +238,8 @@ background are carried over to the relaunch rather than stopped (see "Automatic 
 `docs/product/background-processes.md`), copies the session's conversation into the target account's config directory,
 records the new account and directory on the session, and relaunches it as a resume does, with everything Octoboard
 injects reassembled. It archives nothing: while the process is down the session reads as *interrupted*, and it comes
-back in *awaiting instructions* like any resumed session, unless it is sent the prompt to continue its turn (see
-"Continuing after a switch" below). It is sent no message about the switch itself. Ending an owner's process this way
+back at its prompt like any resumed session — *done*, where it has a conversation — unless it is sent the prompt to
+continue its turn (see "Continuing after a switch" below). It is sent no message about the switch itself. Ending an owner's process this way
 does not itself switch or archive the sessions bound to it; a confirmation whose set takes them in switches each of them
 separately.
 

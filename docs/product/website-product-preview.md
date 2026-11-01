@@ -15,10 +15,10 @@ coordinator. Its working Codex session is selected. On desktop, the Files and Te
 the agent terminal, with Files above Terminal. The Terminal panel contains a sample `zsh` shell whose `pwd` and
 `git branch --show-current` output match the project's directory and branch.
 
-Seven sessions, including the coordinator, are working. The sessions for Promotion console and Checkout register await
-instructions after completing their current checks, with integration feedback still pending. Restaurant order API's
-order-validation review session awaits instructions while a test watcher (`pnpm test --watch`) runs in the background,
-so it shows as working in background. Its order-checking session waits for the user to confirm the discount rule. These
+Seven sessions, including the coordinator, are working. The sessions for Promotion console and Checkout register are
+done, having completed their current checks, with integration feedback still pending. Restaurant order API's
+order-validation review session is at its prompt while a test watcher (`pnpm test --watch`) runs in the background, so
+it shows as working in background. Its order-checking session waits for the user to confirm the discount rule. These
 statuses retain their application meanings in `docs/product/session-statuses.md`.
 
 Each session's agent terminal imitates its agent's own terminal interface: Claude Code, Codex and Grok Build each
@@ -32,7 +32,7 @@ then a state that follows the session's status:
   timer starts from a different sample elapsed time. Progress counts from when the preview loaded, so reopening a
   session shows the steps already reached instead of replaying them, and a tab returning from the background catches
   up at once.
-- A session awaiting instructions shows its finished summary and an empty input area; the order-validation review
+- A session at its prompt shows its finished summary and an empty input area; the order-validation review
   session's terminal also names its running background task (`pnpm test --watch`).
 - The order-checking session waiting for the user shows its agent's question on whether meal deals can be combined
   with member discounts, with numbered choices and keeping them separate selected.

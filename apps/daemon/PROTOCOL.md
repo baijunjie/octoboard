@@ -496,6 +496,7 @@ Session { id, agent, agent_session_id?, console_id, project_id?, host_id,
           status: "starting"|"working"|"waiting_user"|"idle"|"interrupted"|"archived",
           background_tasks?: BackgroundTask[],   // only with status "idle"; absent when none
           switching_account?: true,   // while an account switch holds the session; absent otherwise
+          prompt_on_launch?: true,    // while a launch that will hand the agent a prompt holds the session; absent otherwise
           has_conversation, bound_to?, colour?: "<family>", ordinal?,
           account_id?, config_dir?, model?: string|null, effort?: string|null, pinned, locked, started_at, ended_at? }
 BackgroundTask { id, type?, description? }
@@ -647,6 +648,19 @@ daemon's memory only, never stored, and does not change `status`, which reads `i
 Taking and releasing the claim are each announced with a `session_upserted`, and a `snapshot` carries it for a switch
 that is under way. The other operations that claim a session (a handoff, a handover of branches, a binding change) do
 not set it.
+
+`Session.prompt_on_launch` is `true` while a launch of the session that will hand the agent a prompt is under way, so
+that the session is `working` once it is up, and is absent otherwise. It lets a client order a session that shows
+`starting` (a launch, or a relaunch for an account switch or a change of model and effort) by the status it is about
+to have. It is set for a new session opened with a task (a brief, an approved session request's opening prompt, a
+handoff's brief) from the record that first announces it, and for a relaunch given an instruction (the prompt to carry
+on a turn after a switch or a change of model and effort, a resume's instruction) from the moment the relaunch is
+decided to carry it. A relaunch with an owed owner notice carries the flag too, even without a caller's instruction,
+since the notice is handed to the agent as a prompt. For a switch or a change of model and effort that is only after the old process has ended, since
+whether its turn is carried on is read from the conversation then, so a switch is first announced as
+`switching_account` without it. It ends when the launch's claim is released, announced with a `session_upserted`, and
+is absent for a session the user opened without a task, a resume without an instruction, and a relaunch that carries
+nothing on. It is held in the daemon's memory only and never stored.
 
 One daemon collector checks live sources at a one-second interval, reading only newly completed JSONL lines and skipping
 unchanged files. Updates appear when the agent writes its own record, which may be after a model call or turn completes;

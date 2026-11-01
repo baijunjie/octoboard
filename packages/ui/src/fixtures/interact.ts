@@ -7,6 +7,7 @@ import { panelId } from "../panels/stackState";
 import type { PanelKind } from "../layout/panelKind";
 import { DORMANT_STATUSES, LIVE_STATUSES, type AccountQuota, type Agent, type AgentAvailability, type Event as DaemonEvent, type GitStatus } from "../protocol";
 import { activityLabel, statusLabel } from "../sessions/sessionLabel";
+import { type ShownStatusKind } from "../sessions/sessionStatus";
 import { eventKey, type Binding } from "../shortcuts/binding";
 import { ACTIVITIES } from "../sessions/order";
 import type { Daemon, State } from "../store";
@@ -904,7 +905,8 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       }, `No session titled ${title} in a dialog's callout list with a status glyph to hover`);
       // A glyph without `withTooltip` is the same `role="img"` first child, and hovering it opens nothing.
       const shown = doc.querySelector("[role=tooltip]")?.textContent;
-      const statuses = [...LIVE_STATUSES, ...DORMANT_STATUSES];
+      // The wire statuses and the kinds the client derives from `idle`, which a callout's glyph may show too.
+      const statuses: ShownStatusKind[] = [...LIVE_STATUSES, ...DORMANT_STATUSES, "background", "delegated", "done", "switching"];
       if (!shown || !statuses.some((status) => statusLabel(t, status) === shown)) {
         throw new Error(`The status glyph of ${title} has no tooltip: its last tooltip is ${shown ? `"${shown}"` : "none"}`);
       }

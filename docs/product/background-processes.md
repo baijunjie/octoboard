@@ -1,7 +1,7 @@
 # Background processes
 
 Octoboard follows the processes started by every agent launch, including servers, previews, watchers and tool helpers.
-They belong to that launch even when the agent is awaiting instructions, the command that started them has exited, or
+They belong to that launch even when the agent is at its prompt, the command that started them has exited, or
 they have detached into another terminal session. This does not depend on the agent reporting background tasks or
 remembering to clean them up. The status an agent reports is separate (see "Working in background" in
 `docs/product/session-statuses.md`). The user sees, stops and keeps these processes in the right pane's Processes panel

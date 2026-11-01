@@ -280,7 +280,7 @@ function ArchiveRow({
   const agentLine = sessionAccountModelLine(t, session, accounts, defaultNames, modelLabel);
   return (
     <TreeRow
-      ariaLabel={sessionRowName(t, language, session, { accounts, defaultNames, owners: [under], modelLabel })}
+      ariaLabel={sessionRowName(t, language, session, { accounts, defaultNames, owners: [under], modelLabel, status: "archived" })}
       describedBy={context ? `${contextId} ${datesId}` : datesId}
       selected={selected}
       onActivate={() => onSelect(session)}

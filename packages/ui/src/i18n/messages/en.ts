@@ -780,6 +780,8 @@ export const en = {
   "session.status.waitingUser": "Waiting for you",
   "session.status.idle": "Awaiting instructions",
   "session.status.background": "Working in background",
+  "session.status.delegated": "Child sessions working",
+  "session.status.done": "Done",
   "session.status.switching": "Switching account…",
   "session.status.interrupted": "Interrupted",
   "session.status.archived": "Archived",
@@ -1581,7 +1583,7 @@ export const en = {
   "dialog.switchAccount.confirm": "Switch",
   "dialog.switchAccount.scopeConsole": "Every session in this console",
   "dialog.switchAccount.scopeLabel": "Sessions to switch",
-  "dialog.switchAccount.scopeSession": "This session and its sub-sessions",
+  "dialog.switchAccount.scopeSession": "This session and its child sessions",
   "dialog.switchAccount.countSession": {
     one: "{count} session can switch.",
     other: "{count} sessions can switch.",

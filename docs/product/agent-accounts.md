@@ -324,7 +324,7 @@ While an account is turned off:
   menu bar icon draw none for it (see "The selected session's quota indicator" in `docs/product/account-quotas.md`);
   and `get_account_quotas` does not list it, the caller's own account included (see
   `docs/product/reading-quotas-from-a-session.md`). The one exception is the selected session's own account while
-  that session is running on it — starting, working, waiting for the user or awaiting instructions, not interrupted or archived: the
+  that session is running on it — starting, working, waiting for the user or at its prompt, not interrupted or archived: the
   rail's indicator and the menu bar icon still show its quota, and the quota panel and the menu bar icon's quota
   submenu still list it, marked **Disabled**; when it is also the current console's account, that submenu's opening
   line draws its bars.

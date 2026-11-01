@@ -90,6 +90,12 @@ pub(crate) async fn relaunch_session_with(
     // until the first prompt submission, so an optimistic `working` would never be corrected.
     session.status = SessionStatus::Idle;
     session.ended_at = None;
+    // Marked only here, once the refusals are past and whether the agent is handed a prompt is
+    // known; the session is announced again with the launch's outcome below.
+    if instruction.is_some() {
+        state.expect_prompt_on_launch(id);
+        state.publish_session_by_id(id);
+    }
     if state
         .store
         .update_session_lifecycle_if(id, previous_status, SessionStatus::Idle, None)?

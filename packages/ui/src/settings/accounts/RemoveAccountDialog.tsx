@@ -15,6 +15,7 @@ import { errorPresentation, type ErrorPresentation } from "../../errors/errorPre
 import { Message, useT } from "../../i18n/react";
 import { isLive, type Account, type AccountTrashOutcome } from "../../protocol";
 import { compareSessions, ordersByStatus } from "../../sessions/order";
+import { indexSessions } from "../../sessions/sessionIndex";
 import { useDaemon, useDaemonStore } from "../../store";
 
 /** What removing account `accountId` with its directory moved to the Trash would be let or refused now, asked afresh
@@ -104,9 +105,10 @@ export function RemoveAccountDialog({ account, onRemoved, onCancel }: { account:
   const sessions = useDaemonStore((s) => s.sessions);
   const byStatus = useDaemonStore((s) => ordersByStatus(s.settings));
   // Read live: a session that starts or ends while the dialog is open joins or leaves the list.
+  const { delegatingIds } = indexSessions(sessions);
   const running = Array.from(sessions.values())
     .filter((s) => s.agent === account.agent && isLive(s.status) && (s.account_id === account.id || s.config_dir === account.config_dir))
-    .sort((a, b) => compareSessions(a, b, byStatus));
+    .sort((a, b) => compareSessions(a, b, delegatingIds, byStatus));
   const inspection = useAccountTrashInspection(account.id, trash);
   const afterErrorAlert = useAfterErrorAlert();
   const alertId = useId();

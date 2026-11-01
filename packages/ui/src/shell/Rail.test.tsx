@@ -17,7 +17,7 @@ const main = consoleOf("c-1", "Main");
 /** Mounts a rail with one console, holding a session in each of `statuses`, whose avatar's pointer
  * hover floats the hidden sidebar in when `hoverOpensSidebar`. Returns the console's avatar button. */
 function avatarOf(statuses: (SessionStatus | "background")[], hoverOpensSidebar = false): HTMLButtonElement {
-  const sessions = statuses.map((status, index) => sessionOf(`s-${index}`, main.id, undefined, `Hub ${index}`, status === "background" ? "idle" : status, status === "background" ? { background_tasks: [{ id: "watcher" }] } : {}));
+  const sessions = statuses.map((status, index) => sessionOf(`s-${index}`, main.id, undefined, `Hub ${index}`, status === "background" ? "idle" : status, status === "background" ? { background_tasks: [{ id: "watcher" }] } : { has_conversation: false }));
   const daemon = { store: createStateStore({ sessions: new Map(sessions.map((session) => [session.id, session])) }) } as Daemon;
   const container = mountForTooltip(
     <PlatformProvider value={{ kind: "browser" }}>

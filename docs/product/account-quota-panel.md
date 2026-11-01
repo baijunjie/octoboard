@@ -22,7 +22,7 @@ behaves" in `docs/product/labels-and-tooltips.md`), at its own width, with its c
   `docs/product/agent-accounts.md`), the default account under the name the user gave it or else "Default" (see "The
   default account" there), leaving out every account the user turned off (see "Turning an account off" in
   `docs/product/agent-accounts.md`). The one exception is the account
-  the selected session is running on — starting, working, waiting for the user or awaiting instructions: while it does,
+  the selected session is running on — starting, working, waiting for the user or at its prompt: while it does,
   that account is listed even when it is turned off, with a warning-coloured **Disabled** badge after its neutral,
   bordered plan badge, and its agent keeps its tab for it. When the session stops running there, the row goes, and the
   tab with it when it was the agent's only row; keyboard focus on that tab, or inside the panel, moves to the tab now

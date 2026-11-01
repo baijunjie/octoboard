@@ -2,7 +2,7 @@ use super::*;
 use crate::agents::launch_settings::normalize_session_launch_setting;
 use crate::coordinator::test_support::{code_of, console, project_of};
 use crate::git_workflow::{GitWorkflowSettings, GitWorkflowSettingsChanges};
-use crate::protocol::{error_code, Agent, Role, Session, SessionStatus};
+use crate::protocol::{error_code, Agent, Event, Role, Session, SessionStatus};
 use crate::session::term;
 use crate::test_support::{
     bare_session, console_with_project_and_accounts, fake_live_session, idle_stand_in,
@@ -328,5 +328,66 @@ async fn a_claude_resume_takes_its_instruction_as_the_launch_prompt() {
         let launches = launches.lock().unwrap();
         assert_eq!(launches[0].2.as_deref(), prompt, "{id}");
         assert_eq!(state.queued_count(id), queued, "{id}");
+    }
+}
+
+/// Clients are shown a relaunch as handing the agent a prompt exactly while it is under way and
+/// given an instruction (a carried-on turn, say), and not once its claim is released.
+#[tokio::test]
+async fn a_relaunch_shows_as_prompting_only_while_it_is_given_an_instruction() {
+    use crate::test_support::{stand_in_launch, Launched, StandIn};
+    use std::sync::Mutex;
+    let (state, _dir) = console_with_project_and_accounts("coordinator-relaunch-prompting");
+    for (id, instruction) in [("carried", Some("carry on")), ("plain", None)] {
+        state
+            .store
+            .insert_session(&project_session(
+                id,
+                Agent::Claude,
+                SessionStatus::Interrupted,
+            ))
+            .unwrap();
+        let launches = Arc::new(Mutex::new(Vec::<Launched>::new()));
+        let started = Arc::new(Mutex::new(Vec::<StandIn>::new()));
+        let shown = Arc::new(Mutex::new(None));
+        let claim = state.begin_launch(id).unwrap();
+        relaunch_session_with(
+            &state,
+            &claim,
+            id,
+            instruction,
+            true,
+            None,
+            None,
+            stand_in_launch(&started, &launches, {
+                let (state, shown, id) = (state.clone(), shown.clone(), id.to_string());
+                move || {
+                    let record = state.session_record(&id).unwrap();
+                    *shown.lock().unwrap() = Some(state.wire_session(record).prompt_on_launch);
+                }
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(*shown.lock().unwrap(), Some(instruction.is_some()), "{id}");
+        let mut events = state.subscribe();
+        drop(claim);
+        // Releasing the claim announces the session with the flag cleared, when it was set.
+        let mut cleared = false;
+        while let Ok(event) = events.try_recv() {
+            if let Event::SessionUpserted { session } = event {
+                if session.id == id {
+                    assert!(!session.prompt_on_launch, "{id}");
+                    cleared = true;
+                }
+            }
+        }
+        assert_eq!(cleared, instruction.is_some(), "{id}");
+        assert!(
+            !state
+                .wire_session(state.session_record(id).unwrap())
+                .prompt_on_launch,
+            "{id}"
+        );
     }
 }

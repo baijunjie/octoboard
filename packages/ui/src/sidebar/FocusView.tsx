@@ -22,11 +22,11 @@ import type { NewSessionRequest } from "../dialogs/dialogRequest";
 import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
-import { activityLabelKey, sessionAccountModelLine, sessionDisplayTitle, sessionRowName, sessionShownStatusKind, statusLabel } from "../sessions/sessionLabel";
+import { activityLabelKey, sessionAccountModelLine, sessionDisplayTitle, sessionRowName, statusLabel } from "../sessions/sessionLabel";
 import { sessionModelLabel } from "../sessions/sessionModel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
-import { useHasBoundSessions, useProjectSessions, useSessionProjectId } from "../store";
-import { useDaemon, useDaemonStore, useDaemonStoreEqual, useSessionLaunch } from "../store";
+import { useDelegatingIds, useHasBoundSessions, useProjectSessions, useSessionProjectId } from "../store";
+import { useDaemon, useDaemonStore, useDaemonStoreEqual, useSessionLaunch, useSessionShownStatus } from "../store";
 import { BindingBadge } from "../components/status/BindingBadge";
 import { GitBadge } from "./GitBadge";
 import { projectMenu } from "./menus";
@@ -128,11 +128,12 @@ export function ProjectFocusView({
   const gitStatus = useDaemonStore((s) => s.gitStatuses.get(project.id));
   const includeConsoleSessions = projectFocusIncludeConsoleSessions.useValue();
   const byStatus = useDaemonStore((s) => ordersByStatus(s.settings));
-  const live = liveSessionRows(includeConsoleSessions ? sessions : notUnderConsoleSession(sessions, owners), byStatus);
+  const delegating = useDelegatingIds();
+  const live = liveSessionRows(includeConsoleSessions ? sessions : notUnderConsoleSession(sessions, owners), delegating, byStatus);
   const byId = new Map(sessions.map((session) => [session.id, session]));
   const consoleOwner = (session: Session) => consoleSessionAbove(session, (id) => byId.get(id) ?? owners.get(id));
   const archived = archivedSessions(sessions);
-  const elsewhere = boundElsewhere(sessions, owners, byStatus);
+  const elsewhere = boundElsewhere(sessions, owners, delegating, byStatus);
   const noAgentToStart = useNoAgentToStart();
   const newSession = (): NewSessionRequest => ({ kind: "new-session", console: parentConsole, project, binding: { kind: "unbound" } });
   const viewAll = () => handlers.onOpenArchive({ console: project.console_id, project: project.id });
@@ -238,7 +239,8 @@ export function ConsoleSessionFocusView({
   // between two sessions renders those groups alone.
   const selectedProjectId = useSessionProjectId(selectedSessionId);
   const byStatus = useDaemonStore((s) => ordersByStatus(s.settings));
-  const groups = focusGroups(projects, sessions, consoleSession.id, byStatus);
+  const delegating = useDelegatingIds();
+  const groups = focusGroups(projects, sessions, consoleSession.id, delegating, byStatus);
   const liveCount = groups.reduce((sum, group) => sum + group.sessions.length, 0);
   const archived = boundArchivedSessions(sessions, consoleSession.id);
   const newSession = (project: Project): NewSessionRequest => ({ kind: "new-session", console: parentConsole, project, binding: { kind: "bound", to: consoleSession } });
@@ -399,7 +401,10 @@ const FocusProjectGroup = memo(function FocusProjectGroup({
   const { store } = useDaemon();
   // Read as `ProjectFocusView` does, for the Git badge and submenu.
   const gitStatus = useDaemonStore((s) => s.gitStatuses.get(project.id));
-  const boundHere = useDaemonStoreEqual((s) => focusGroupRows(sessionsOf(indexSessions(s.sessions).byConsole, parentConsole.id), project, consoleSessionId, ordersByStatus(s.settings)));
+  const boundHere = useDaemonStoreEqual((s) => {
+    const index = indexSessions(s.sessions);
+    return focusGroupRows(sessionsOf(index.byConsole, parentConsole.id), project, consoleSessionId, index.delegatingIds, ordersByStatus(s.settings));
+  });
   const sessions = useProjectSessions(project.id);
   const archived = boundArchivedSessions(sessions, consoleSessionId);
   const newSessionHere = (): NewSessionRequest | undefined => {
@@ -606,13 +611,14 @@ const SessionCard = memo(function SessionCard({
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const hasBound = useHasBoundSessions(session.id);
+  const status = useSessionShownStatus(session);
   const rowRef = useRef<HTMLDivElement>(null);
   const launch = useSessionLaunch(session);
   const modelLabel = sessionModelLabel(t, session.agent, launch);
   const agentLine = sessionAccountModelLine(t, session, accounts, defaultNames, modelLabel);
   // The row is one button, so the model line beside the agent's mark reaches assistive technology
   // only through the row's name, where it comes last; the account is already in its first part.
-  const name = sessionRowName(t, language, session, { accounts, defaultNames, owners: [under ?? consoleOwner, under && consoleOwner], modelLabel });
+  const name = sessionRowName(t, language, session, { accounts, defaultNames, owners: [under ?? consoleOwner, under && consoleOwner], modelLabel, status });
   const showPin = session.pinned && !own;
   // A console session's card shows its own colour; a project session's shows its console owner's.
   const badgeOwner = own ? session : consoleOwner;
@@ -626,8 +632,8 @@ const SessionCard = memo(function SessionCard({
       onActivate={() => handlers.onSelectSession(session)}
       className="min-h-8 flex-col gap-1 border border-transparent shadow-(--panel-shadow) px-[calc(var(--row-content-inset)-1px)] py-[7px] data-selected:border-accent-soft-foreground"
     >
-      <RowIconLine icon={<StatusIcon status={sessionShownStatusKind(session)} decorative />}>
-        <span className="text-xs font-medium text-app-muted">{statusLabel(t, sessionShownStatusKind(session))}</span>
+      <RowIconLine icon={<StatusIcon status={status} decorative />}>
+        <span className="text-xs font-medium text-app-muted">{statusLabel(t, status)}</span>
         <span className="flex-1" />
         {/* The controls reach 4px past the status line above and below so it keeps the agent line's
             height, leaving the card's top and bottom edges the same distance from their text. */}
@@ -683,7 +689,7 @@ function ArchivedRow({
       ref={rowRef}
       describedBy={session.ended_at != null ? metadataId : undefined}
       // The model and effort are in the agent mark's tooltip only, so the row's name carries them too.
-      ariaLabel={sessionRowName(t, language, session, { accounts, defaultNames, owners: [], modelLabel: sessionModelLabel(t, session.agent, launch) })}
+      ariaLabel={sessionRowName(t, language, session, { accounts, defaultNames, owners: [], modelLabel: sessionModelLabel(t, session.agent, launch), status: "archived" })}
       selected={selected}
       onActivate={() => handlers.onSelectSession(session)}
     >

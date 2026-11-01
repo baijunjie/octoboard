@@ -13,24 +13,27 @@ console or the welcome screen's (see `docs/product/welcome-screen.md`) — becom
 one created from another client is only added to the rail.
 
 An avatar carries a **14 px circular badge** at its bottom end corner for one session chosen from all the console's
-sessions, its console sessions included. The status priority is **waiting for the user, awaiting instructions, working
-in background, then working**, with the most recently started session breaking a tie. Pinning, project grouping and
-the sidebar's choice to order by status or date do not affect that choice. Starting, interrupted and archived sessions
-are excluded, so a console with only starting sessions has no badge. Session rows still place starting alongside
-awaiting instructions (see "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`).
+sessions, its console sessions included. The status priority is the status order of "Order of projects and sessions"
+in `docs/product/order-of-projects-and-sessions.md` — **waiting for the user, done, awaiting instructions, child
+sessions working, working in background, then working** — with the most recently started session breaking a tie. Starting,
+interrupted and archived sessions are excluded, so a console with only starting sessions has no badge. A session
+switching account is ranked, as it is there, by the status it will have once the switch is over. Pinning, project
+grouping and the sidebar's choice to order by status or date do not affect that choice.
 
 | Chosen session's status | Badge |
 |---|---|
 | Waiting for the user | A contrasting waving hand on a yellow disc |
+| Done | A contrasting check mark on a green disc |
 | Awaiting instructions | A contrasting speech bubble on a green disc |
-| Working in background | A green disc with a contrasting hollow centre, 8 px across |
+| Child sessions working | A green disc with a contrasting ring around a contrasting dot |
+| Working in background | A blue disc with a contrasting hollow centre, 8 px across |
 | Working | A blue disc with a contrasting solid centre, 6 px across |
 
 If the chosen session is switching account, the badge instead shows a turning arc on a neutral disc, and its status
-text says it is switching account. The choice still goes by the session's underlying status, as session ordering does
-(see "Session statuses" in `docs/product/session-statuses.md`).
+text says it is switching account.
 
-Only the centre of a working or working-in-background badge breathes: its opacity eases from 100% to 90% and back over
+Only the centre of a working, working-in-background or child-sessions-working badge breathes (for child sessions
+working, the ring with its dot): its opacity eases from 100% to 90% and back over
 2.4 seconds, repeating while the disc and centre keep their size. There is no outward ripple. Where the system asks
 for reduced motion, the centres remain fully opaque, the hand does not wave and the switching arc does not turn.
 

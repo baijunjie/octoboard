@@ -148,8 +148,8 @@ unlike a hand the agent itself raised it holds nothing back: a message addressed
 than queued (see "Messages held until a session can take them" in `docs/product/message-delivery.md`).
 
 Once the request has ended, the session's status follows its own agent again, from wherever the agent was last seen to
-be while the hand was up — *working* where it is still in the turn that made the call, *awaiting instructions* where it
-has since reported itself at its prompt, or where a Claude Code prompt declined during the wait left it (see "Declining
+be while the hand was up — *working* where it is still in the turn that made the call, at its prompt where it
+has since reported itself there, or where a Claude Code prompt declined during the wait left it (see "Declining
 a Claude Code prompt or question" in `docs/product/turns-hooks-do-not-report.md`). That is also where the session is
 left when no further event from the agent arrives at all — as when a request times out after its agent gave up on the
 call.

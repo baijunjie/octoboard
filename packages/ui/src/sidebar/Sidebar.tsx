@@ -36,10 +36,10 @@ import type { PanePeek } from "../layout/usePaneToggles";
 import { onReducedMotion, prefersReducedMotion } from "../components/motion/reducedMotion";
 import { effectiveTags, matchesFilter, tagVocabulary } from "../sessions/projectFiltering";
 import type { Console, Project, Session } from "../protocol";
-import { activityLabelKey, sessionDisplayTitle, sessionRowName, sessionShownStatusKind } from "../sessions/sessionLabel";
+import { activityLabelKey, sessionDisplayTitle, sessionRowName } from "../sessions/sessionLabel";
 import { sessionModelLabel } from "../sessions/sessionModel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
-import { useDaemonStore, useSessionLaunch } from "../store";
+import { useDaemonStore, useDaemonStoreEqual, useSessionLaunch, useSessionShownStatus } from "../store";
 import { BindingBadge } from "../components/status/BindingBadge";
 import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { GitBadge } from "./GitBadge";
@@ -635,8 +635,11 @@ function ConsoleSessionsSection({
   const listRef = useFlip<HTMLDivElement>();
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
-  const consoleSessions = useOwnerSessions(thisConsole.id);
-  const byStatus = useDaemonStore((s) => ordersByStatus(s.settings));
+  // Only the rows themselves, so a status event that leaves this list as it was renders nothing here.
+  const live = useDaemonStoreEqual((s) => {
+    const index = indexSessions(s.sessions);
+    return liveSessions(sessionsOf(index.byConsole, thisConsole.id).filter((x) => x.role === "console"), index.delegatingIds, ordersByStatus(s.settings));
+  });
   // With no agent added and installed, starting a console session would only be refused by the
   // daemon the moment it tried — so the action is disabled here instead, and `agents.noneAdded` (an
   // installed agent waits to be added) or `agents.noneFound` (none is installed) is shown. It is
@@ -645,7 +648,6 @@ function ConsoleSessionsSection({
   // agent removed, or a `PATH` change) stays live and keeps `liveSessions` from being empty.
   const noAgents = noAgentState(agentAvailability, addedAgents);
   const blocked = noAgents !== undefined;
-  const live = liveSessions(consoleSessions, byStatus);
   const openNew = () => handlers.onOpenConsoleSession(thisConsole);
 
   return (
@@ -683,8 +685,8 @@ function ConsoleSessionsSection({
 function useProjectRanks(projects: Project[]): number[] {
   return useDaemonStore(
     useShallow((s) => {
-      const { byProject } = indexSessions(s.sessions);
-      return projects.map((p) => projectRank(sessionsOf(byProject, p.id)));
+      const { byProject, delegatingIds } = indexSessions(s.sessions);
+      return projects.map((p) => projectRank(sessionsOf(byProject, p.id), delegatingIds));
     }),
   );
 }
@@ -775,8 +777,10 @@ const ProjectNode = memo(function ProjectNode({
   // session leaves this row, its menu and its rows alone.
   const sessions = useProjectSessions(project.id);
   const rowRef = useRef<HTMLDivElement>(null);
-  const byStatus = useDaemonStore((s) => ordersByStatus(s.settings));
-  const rows = liveSessionRows(sessions, byStatus);
+  const rows = useDaemonStoreEqual((s) => {
+    const index = indexSessions(s.sessions);
+    return liveSessionRows(sessionsOf(index.byProject, project.id), index.delegatingIds, ordersByStatus(s.settings));
+  });
   const lastRootIndex = rows.reduce((last, row, index) => row.under ? last : index, -1);
   const archived = archivedSessions(sessions);
   const activity = consoleActivity(sessions);
@@ -895,18 +899,19 @@ const SessionRow = memo(function SessionRow({
   const rowRef = useRef<HTMLDivElement>(null);
   const badgeOwner = session.role === "console" ? session : owner?.role === "console" ? owner : undefined;
   const launch = useSessionLaunch(session);
+  const status = useSessionShownStatus(session);
   return (
     <TreeRow
       ref={rowRef}
       describedBy={hasVisibleContext(session.context) ? metadataId : undefined}
       // The model and effort are in the agent mark's tooltip only, so the row's name carries them too.
-      ariaLabel={sessionRowName(t, language, session, { accounts, defaultNames, owners: [owner], modelLabel: sessionModelLabel(t, session.agent, launch) })}
+      ariaLabel={sessionRowName(t, language, session, { accounts, defaultNames, owners: [owner], modelLabel: sessionModelLabel(t, session.agent, launch), status })}
       selected={selected}
       locked={session.locked}
       onActivate={() => handlers.onSelectSession(session)}
     >
       {/* No touch popover on the marks of a pressable row: a tap on one is the row's press. */}
-      <StatusIcon status={sessionShownStatusKind(session)} decorative withTooltip touchPopover={false} />
+      <StatusIcon status={status} decorative withTooltip touchPopover={false} />
       <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} launch={launch} touchPopover={false} />
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <RowLabel title={sessionDisplayTitle(t, session)} className="min-w-0">{sessionDisplayTitle(t, session)}</RowLabel>

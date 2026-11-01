@@ -380,6 +380,7 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         record_titles: Default::default(),
         background_tasks: Vec::new(),
         switching_account: false,
+        prompt_on_launch: false,
         default_effort: None,
         context: None,
         observed_model: None,
@@ -446,6 +447,9 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         session
     };
     let claim = state.begin_launch(&session.id)?;
+    if task.is_some() {
+        state.expect_prompt_on_launch(&session.id);
+    }
     state.publish_session(&session);
     Ok(StartingSession {
         claim,

@@ -64,6 +64,7 @@ async fn deleting_a_project_with_stop_sessions_refuses_a_launch_in_flight() {
             record_titles: Default::default(),
             background_tasks: Vec::new(),
             switching_account: false,
+            prompt_on_launch: false,
             default_effort: None,
             orchestration_role: OrchestrationRole::Coordinator,
             context: None,

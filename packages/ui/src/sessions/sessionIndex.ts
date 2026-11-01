@@ -1,4 +1,5 @@
 import type { Session } from "../protocol";
+import { delegatingSessionIds } from "./sessionStatus";
 
 /** The sessions of a store's `sessions` map grouped the ways the lists read them, so a component
  * takes its own group instead of filtering every session on every daemon event. */
@@ -9,6 +10,8 @@ export interface SessionIndex {
   byConsole: ReadonlyMap<string, Session[]>;
   /** The ids of the sessions some session is bound to (`bound_to`), in any status. */
   boundOwnerIds: ReadonlySet<string>;
+  /** The ids of the sessions with delegated work in progress (`delegatingSessionIds`). */
+  delegatingIds: ReadonlySet<string>;
 }
 
 /** No sessions, as one shared array that is never edited. */
@@ -57,6 +60,7 @@ export function indexSessions(sessions: ReadonlyMap<string, Session>): SessionIn
   const values = Array.from(sessions.values());
   const owners = new Set<string>();
   for (const session of values) if (session.bound_to) owners.add(session.bound_to);
+  const delegating = delegatingSessionIds(values);
   const previous = latest;
   const index: SessionIndex = {
     byProject: reuseGroups(group(values, (s) => s.project_id), previous?.byProject),
@@ -65,6 +69,10 @@ export function indexSessions(sessions: ReadonlyMap<string, Session>): SessionIn
       previous && previous.boundOwnerIds.size === owners.size && [...owners].every((id) => previous.boundOwnerIds.has(id))
         ? previous.boundOwnerIds
         : owners,
+    delegatingIds:
+      previous && previous.delegatingIds.size === delegating.size && [...delegating].every((id) => previous.delegatingIds.has(id))
+        ? previous.delegatingIds
+        : delegating,
   };
   indexes.set(sessions, index);
   latest = index;

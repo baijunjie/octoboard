@@ -21,6 +21,9 @@ pub(super) struct LiveSessions {
     /// The sessions in `switching` held by an account switch, which clients are shown
     /// (`Session::switching_account`).
     pub(super) account_switches: HashSet<String>,
+    /// The sessions in `launching` whose launch will hand the agent a prompt
+    /// (`Session::prompt_on_launch`).
+    pub(super) prompted_launches: HashSet<String>,
     /// The sessions in `switching` that a change of their model is restarting, which clients are
     /// shown starting ([`AppState::mark_model_change`]).
     pub(super) model_changes: HashSet<String>,

@@ -410,6 +410,10 @@ export interface Session {
   /** Whether an account switch holds the session right now (see `switch_session_account`); absent
    * when none does. */
   switching_account?: boolean;
+  /** Whether the launch under way will hand the agent a prompt, so the session will be working
+   * once it is up: a new session with a brief, or a relaunch that carries on a turn, is given an
+   * instruction or has an owner notice owed; absent otherwise. */
+  prompt_on_launch?: boolean;
   has_conversation: boolean;
   /** The parent session this session reports to: a console session of the same console or a
    * coordinator of the same project. `null` means independent. Binding, transfer and

@@ -31,7 +31,7 @@ error say, switches nothing and never shows the session as switching.
   session.
 - **Each such turn is a trigger of its own**: nothing holds off a second switch after the first.
 
-**Which sessions.** A session is switched only while it has a process that is *working* or *awaiting instructions*,
+**Which sessions.** A session is switched only while it has a process that is *working* or at its prompt,
 nothing is launching, resuming or switching it, it is still on the account whose limit stopped the turn, and no change
 of the sharing of the default configuration runs on its account or on the target (see "When a change is carried out"
 in `docs/product/sharing-the-default-configuration.md`). A turn that stops on the limit while a launch, a resume or a
