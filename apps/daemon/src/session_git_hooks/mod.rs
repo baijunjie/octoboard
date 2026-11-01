@@ -1,6 +1,6 @@
-//! What tells the daemon which session's git created a branch: a directory of hook dispatchers
-//! that a project session's agent points `core.hooksPath` at through its environment, and the
-//! variables that do the pointing.
+//! What tells the daemon which session's git created a branch, and when it moved the refs a
+//! project's branch header reads: a directory of hook dispatchers that a project session's agent
+//! points `core.hooksPath` at through its environment, and the variables that do the pointing.
 //!
 //! The variables go on the agent's process alone, so they reach whatever that process starts —
 //! the agent's shell, a script, a background job — and nothing else: no repository, no
@@ -14,7 +14,9 @@
 //! user hook git would silently skip: the names are the ones this daemon knows, together with every
 //! one the installed git's own documentation lists. Each copy runs the hook the user's own
 //! configuration names (see the script), and `reference-transaction` reports the branches a
-//! committed transaction created by starting `octoboardd git-ref` in the background. When the
+//! committed transaction created, and whether it touched `HEAD`, a local branch or a
+//! remote-tracking branch (which has the repository's projects re-read,
+//! `crate::project_git::ref_moves`), by starting `octoboardd git-ref` in the background. When the
 //! user's hook has passed, a prepared transaction that moves an existing branch and a push of
 //! branches (`pre-push`) are run past the revert gate by starting `octoboardd gate-hook` in the
 //! foreground; only a status of 3 from it refuses the update.

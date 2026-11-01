@@ -1,12 +1,14 @@
 //! The git work the daemon does on a project's own repository: the status checks and their branch
 //! header ([`status`], [`header`]), fetching and fast-forwarding, pushing ([`push`]), switching
 //! branches ([`switch`]), restoring ([`restore`]), the project's remotes ([`remote`],
-//! [`remote_url`]), watching its refs ([`watch`]) and cloning ([`clone`]). The runners the others
-//! share for a project's repository are here.
+//! [`remote_url`]), re-reading its refs when the platform reports them changed ([`watch`]) or a
+//! session's git reports moving them ([`ref_moves`]), and cloning ([`clone`]). The runners the
+//! others share for a project's repository are here.
 
 pub mod clone;
 pub mod header;
 pub mod push;
+pub mod ref_moves;
 pub mod remote;
 pub mod remote_url;
 pub mod restore;

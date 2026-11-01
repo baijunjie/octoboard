@@ -13,69 +13,19 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use crate::git_workflow::{Development, GitWorkflowSettingsChanges};
 use crate::protocol::Role;
 use crate::session_git_hooks::fixture::{
     commit_file, gated_fixture, numbered, project, project_with_remote, rev, session_record,
-    set_revert_gate, succeeds, system_exec_path, write_hook, Fixture,
+    set_revert_gate, succeeds, system_exec_path, write_hook, Daemon, Fixture,
 };
 use crate::session_git_hooks::gate_inputs::{inputs, GateRequest};
 use crate::session_git_hooks::{interpreter, render, write_dir, Rendering, BUILT_IN_HOOKS};
-use crate::state::AppState;
 use crate::test_support::{fixture_git, git, ScratchDir, TEST_KEY};
 use crate::wire_path;
 
-// -- the daemon the gate-hook asks ----------------------------------------------
-
-/// The daemon's router served from a thread of this test process, until dropped.
-struct Daemon {
-    port: u16,
-    stop: Option<tokio::sync::oneshot::Sender<()>>,
-    thread: Option<std::thread::JoinHandle<()>>,
-}
-
-impl Daemon {
-    fn start(state: &Arc<AppState>) -> Self {
-        let state = Arc::clone(state);
-        let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
-        let (ready, port) = std::sync::mpsc::channel();
-        let thread = std::thread::spawn(move || {
-            tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(2)
-                .enable_all()
-                .build()
-                .unwrap()
-                .block_on(async move {
-                    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-                    ready.send(listener.local_addr().unwrap().port()).unwrap();
-                    axum::serve(listener, crate::server::router(state))
-                        .with_graceful_shutdown(async {
-                            let _ = stopped.await;
-                        })
-                        .await
-                        .unwrap();
-                });
-        });
-        Self {
-            port: port.recv().unwrap(),
-            stop: Some(stop),
-            thread: Some(thread),
-        }
-    }
-}
-
-impl Drop for Daemon {
-    fn drop(&mut self) {
-        if let Some(stop) = self.stop.take() {
-            let _ = stop.send(());
-        }
-        if let Some(thread) = self.thread.take() {
-            let _ = thread.join();
-        }
-    }
-}
+// -- the gate-hook process --------------------------------------------------------
 
 /// A port nothing listens on.
 fn closed_port() -> u16 {

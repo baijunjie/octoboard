@@ -80,7 +80,8 @@ use git_files::{first_reflog_entry, reflog_has_message};
 const REPORT_SLACK_SECS: i64 = 60;
 
 /// What a session's `reference-transaction` hook reports of a committed transaction: the branches
-/// it created, and where git ran the hook. Paths and reference names are wire paths.
+/// it created, whether it moved any of the refs a branch header reads, and where git ran the hook.
+/// Paths and reference names are wire paths.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RefReport {
     /// The directory git ran the hook in: the top of the worktree, or the repository itself when it
@@ -95,6 +96,11 @@ pub struct RefReport {
     #[serde(default)]
     pub head: Option<String>,
     pub refs: Vec<CreatedRef>,
+    /// Whether the transaction touched `HEAD`, a local branch or a remote-tracking branch, which
+    /// has the repository's projects re-read (`crate::project_git::ref_moves`); absent from a
+    /// dispatcher that reports creations alone.
+    #[serde(default)]
+    pub moved: bool,
     /// When the report was made, in seconds since the epoch.
     pub unix_time: i64,
 }

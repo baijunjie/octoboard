@@ -40,9 +40,11 @@ pub(super) async fn hook_callback(
     axum::http::StatusCode::OK
 }
 
-/// A session's git reporting the branches it created (`octoboardd git-ref`). Recorded on the
-/// blocking pool, since it reads the repository's files and writes the store; the reply carries
-/// nothing, and the process that posted it exits whatever it is.
+/// A session's git reporting the branches it created and whether it moved refs a branch header
+/// reads (`octoboardd git-ref`). Handled on the blocking pool, since it reads the repository's
+/// files and writes the store; a move schedules a re-read of the repository's projects
+/// (`crate::project_git::ref_moves`). The reply carries nothing, and the process that posted it
+/// exits whatever it is.
 pub(super) async fn git_ref_callback(
     Path(session_id): Path<String>,
     State(state): State<Arc<AppState>>,
@@ -52,7 +54,16 @@ pub(super) async fn git_ref_callback(
         return axum::http::StatusCode::BAD_REQUEST;
     };
     tokio::task::spawn_blocking(move || {
-        crate::branch_origin::ref_created(&state, &session_id, &report);
+        if report.moved {
+            if let Some(repository) =
+                crate::branch_origin::reported_repository(&report.cwd, report.git_dir.as_deref())
+            {
+                crate::project_git::ref_moves::moved(&state, repository);
+            }
+        }
+        if !report.refs.is_empty() {
+            crate::branch_origin::ref_created(&state, &session_id, &report);
+        }
     });
     axum::http::StatusCode::OK
 }

@@ -174,6 +174,9 @@ pub struct AppState {
     /// The repositories' refs under watch, so a commit made outside the daemon is re-read
     /// (`crate::project_git::watch`).
     pub git_watch: crate::project_git::watch::Watch,
+    /// The repositories a session's git has reported moving refs of, with their re-read due or
+    /// running (`crate::project_git::ref_moves`).
+    pub ref_moves: crate::project_git::ref_moves::RefMoves,
     /// Each agent's availability and what its default account currently resolves to, derived once
     /// per daemon start (`crate::agents::availability`) and broadcast by its own event on change;
     /// never a field of `Store`'s settings row, which only the user's own updates write. Always
@@ -313,6 +316,7 @@ impl AppState {
             record_hints: Default::default(),
             context_windows: Default::default(),
             git_watch: Default::default(),
+            ref_moves: Default::default(),
             agent_availability: RwLock::new(
                 Agent::ALL
                     .into_iter()

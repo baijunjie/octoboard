@@ -3,8 +3,10 @@
 # point core.hooksPath at this directory through GIT_CONFIG_COUNT, and every hook name git can
 # look for is a copy of this script. Each copy runs the hook the user's own configuration names,
 # exactly where git itself would have found it. A reference transaction that creates branches also
-# tells Octoboard which ones the session's git has just created, and one that moves an existing
-# branch, like a push of branches, is run past the revert gate once the user's own hook has passed.
+# tells Octoboard which ones the session's git has just created, one that touches HEAD, a branch or
+# a remote-tracking branch has Octoboard re-read the repository's branch header, and one that moves
+# an existing branch, like a push of branches, is run past the revert gate once the user's own hook
+# has passed.
 set -f
 octo_name=${0##*/}
 octo_dir=${0%/*}
@@ -235,6 +237,24 @@ octo_moves_branch() {
 	return 1
 }
 
+# Whether the input updates a ref a branch header reads: HEAD, a local branch or a remote-tracking
+# branch. The reference name is the last word of a line, and neither value before it starts a word
+# with refs/ (a symbolic one is ref:refs/...).
+octo_touches_header() {
+	if [ -n "$octo_spool" ]; then
+		grep -Eq ' (HEAD|refs/heads/.+|refs/remotes/.+)$' "$octo_spool"
+		return
+	fi
+	IFS=$octo_nl
+	for octo_line in $octo_input; do
+		case $octo_line in
+		*' HEAD' | *' refs/heads/'?* | *' refs/remotes/'?*) unset IFS && return 0 ;;
+		esac
+	done
+	unset IFS
+	return 1
+}
+
 # Whether the input, the lines `<local ref> <local sha> <remote ref> <remote sha>` of a push, has
 # a local value to push to a reference below refs/heads/, which a deletion has not.
 octo_pushes_branch() {
@@ -276,6 +296,8 @@ if [ -n "$octo_watch" ]; then
 	octo_refs=
 	octo_names=
 	octo_forced=
+	octo_created=
+	octo_head=
 	IFS=$octo_nl
 	for octo_line in $octo_lines; do
 		octo_old=${octo_line%% *}
@@ -328,7 +350,6 @@ if [ -n "$octo_watch" ]; then
 			fi
 		else
 			octo_marks=
-			octo_head=
 			if [ -f "$octo_known" ]; then
 				while IFS= read -r octo_line; do
 					octo_marks=$octo_marks$octo_line$octo_nl
@@ -338,7 +359,6 @@ if [ -n "$octo_watch" ]; then
 			fi
 			# Every branch has to be in what prepared wrote, so that a file another process of
 			# the same id left behind is never taken for this transaction's.
-			octo_created=
 			octo_complete=1
 			octo_ref=
 			for octo_word in $octo_refs; do
@@ -353,11 +373,18 @@ if [ -n "$octo_watch" ]; then
 				esac
 				octo_ref=
 			done
-			if [ -n "$octo_complete" ] && [ -n "$octo_created" ]; then
-				# In the background with every descriptor let go, so git never waits for it.
-				@EXE@ git-ref --session "$@SESSION_VARIABLE@" --port "$@PORT_VARIABLE@" \
-					--key "$@KEY_VARIABLE@" ${octo_head:+--head "$octo_head"} -- $octo_created </dev/null >/dev/null 2>&1 &
-			fi
+			[ -n "$octo_complete" ] || octo_created=
+		fi
+	fi
+
+	if [ "$1" = committed ]; then
+		octo_moved=
+		octo_touches_header && octo_moved=1
+		if [ -n "$octo_moved" ] || [ -n "$octo_created" ]; then
+			# In the background with every descriptor let go, so git never waits for it.
+			@EXE@ git-ref --session "$@SESSION_VARIABLE@" --port "$@PORT_VARIABLE@" \
+				--key "$@KEY_VARIABLE@" ${octo_moved:+--moved} ${octo_head:+--head "$octo_head"} \
+				-- $octo_created </dev/null >/dev/null 2>&1 &
 		fi
 	fi
 

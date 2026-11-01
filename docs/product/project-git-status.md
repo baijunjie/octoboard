@@ -211,12 +211,26 @@ the ahead/behind counts are read again from the repository — locally, nothing 
 every window showing the project. So a commit raises the ahead count at once, and a push started right after it is
 drawn on that count (see "Pushing the current branch" in `docs/product/project-git-actions.md`).
 
+**Git run inside a project session reports its own ref changes.** Under heavy load the system can deliver the watch's
+file events late or not at all, so a project session's git does not depend on them: every transaction it completes that
+updates `HEAD`, a local branch or a remote-tracking branch — a commit, a merge or fast-forward, a rebase, a branch
+switched, created or deleted, a fetch or pull — is reported to the daemon through the session's git hooks (see "The
+session's git hooks" in `docs/product/branch-responsible-session.md`), and every project in the repository it ran in
+is re-read the same way, locally: the main working copy and each linked worktree that is a project, of any console.
+Reports of one repository are gathered: the read comes once they have been quiet for 300 milliseconds, and never later
+than 2 seconds after the first, so a long rebase or a script committing in a loop still shows as it goes. At most four
+repositories are re-read this way at once. The report is sent in the background once git has finished, so git never
+waits on it, and a daemon that is not running or a report that fails changes nothing for git. Only a git that reaches
+the session's hooks reports anything (see "What attribution needs" in `docs/product/branch-responsible-session.md`),
+and a git older than 2.46 reports no switch to an existing branch that changes no other ref, since it runs no hook for
+that. The watch covers those, as it covers git run outside sessions, and the checks still run on their interval.
+
 This is not a check: the five-minute interval and the one-minute floor do not apply to it, it never pulls, even with
 **Automatically pull repositories** on, and it leaves the project's recorded remote URL alone. Every project of every
 console is watched, whether or not its console is current and whether or not a window is connected. A directory is a
 git repository here by the badge's rule (see "What one check does" above). Watching starts when the daemon starts,
 when a project is added, and, for a directory that becomes a repository later, at the first check that finds it one;
-it ends when the project, or its console, is deleted. A project whose refs cannot be watched is left to the checks. A
+it ends when the project, or its console, is deleted. A project whose refs cannot be watched is left to the checks and to its sessions' reports (above). A
 project whose `.git` has gone is not re-read: its badge keeps what it showed until its next check reports that the
 directory is not a repository.
 

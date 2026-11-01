@@ -2599,22 +2599,24 @@ that leaves this URL out would skip the hook silently, so such a launch (the use
 managed settings file are read) is given the command form instead; a policy delivered by MDM profile or the claude.ai
 console cannot be read, and is a known limitation.
 
-## `POST /git-ref/:session` — a session's git reporting branches it created
+## `POST /git-ref/:session` — a session's git reporting branches it created and refs it moved
 
 Not part of the application's interface. This is how `octoboardd git-ref --session <id> --port <port> --key <key>`,
 which a project session's `reference-transaction` hook dispatcher starts in the background, reports a committed
-transaction's created branches:
+transaction's created branches, and, with `--moved`, that it touched `HEAD`, a local branch or a remote-tracking branch:
 
 ```
-{ cwd, git_dir?, head?, refs: [{ name, oid }], unix_time }
+{ cwd, git_dir?, head?, refs: [{ name, oid }], moved?, unix_time }
 ```
 
 `cwd` is the directory git ran the hook in and `git_dir` the `GIT_DIR` it set, if any (relative to `cwd` when
 relative), both wire paths; `head` is the branch (`refs/heads/...`, a wire path) the git had checked out while the
 transaction was prepared, absent for a detached `HEAD`; `refs` holds each created reference's full name (a wire path)
-and the object id it was created at; `unix_time` is when the report was made, in seconds. Answers `200` with an empty
-body, or `400` for a body that does not parse, and records the report afterwards as "Comparing two branches" describes;
-the reporter ignores the answer. Beside the responsible session, each recorded branch keeps its target branch, the local
+and the object id it was created at, and may be empty; `moved` (absent means `false`) has every project of the
+repository git ran in re-read and published as a `project_git_status`, locally and coalesced per repository
+(`docs/product/project-git-status.md`, "Following changes to the repository's refs"); `unix_time` is when the report
+was made, in seconds. Answers `200` with an empty body, or `400` for a body that does not parse, and records the
+created branches afterwards as "Comparing two branches" describes; the reporter ignores the answer. Beside the responsible session, each recorded branch keeps its target branch, the local
 branch it was created from (read from the first line of its reflog, `branch: Created from <start>`: a local branch, the
 local branch behind a remote-tracking one, or for `HEAD` the reported `head`; a reftable repository has no reflog and
 takes `head` whatever the start point was), and its fork point, the reported commit.

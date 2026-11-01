@@ -1,6 +1,7 @@
 //! What the tests of the hook dispatchers, and of the attribution their reports feed, share: the
 //! dispatchers written for a stand-in `octoboardd`, a repository with sessions whose `git` runs
-//! under them, and the reports and gate calls the stand-in collects.
+//! under them, the reports and gate calls the stand-in collects, and the daemon's router served
+//! for the dispatchers' real calls to reach.
 
 use std::collections::BTreeSet;
 use std::ffi::OsString;
@@ -263,19 +264,24 @@ impl Fixture {
         );
     }
 
-    /// The reports the stand-in has received once there are `count` of them.
+    /// The reports of created branches the stand-in has received once there are `count` of them.
+    /// A report of moved refs alone, which every commit of a session's git makes, is left out.
     pub(crate) fn reports(&self, count: usize) -> Vec<(String, RefReport)> {
         let deadline = std::time::Instant::now() + PATIENCE;
         loop {
             let text = std::fs::read_to_string(&*self.reports).unwrap_or_default();
-            let lines: Vec<&str> = text.lines().collect();
-            if lines.len() >= count {
-                return lines.into_iter().map(parse_report).collect();
+            let reports: Vec<(String, RefReport)> = text
+                .lines()
+                .map(parse_report)
+                .filter(|(_, report)| !report.refs.is_empty())
+                .collect();
+            if reports.len() >= count {
+                return reports;
             }
             assert!(
                 std::time::Instant::now() < deadline,
                 "{} of {count} reports arrived",
-                lines.len()
+                reports.len()
             );
             std::thread::sleep(Duration::from_millis(10));
         }
@@ -320,6 +326,7 @@ pub(crate) fn parse_report(line: &str) -> (String, RefReport) {
         .iter()
         .position(|a| *a == "--head")
         .map(|at| std::ffi::OsStr::new(args[at + 1]));
+    let moved = args.contains(&"--moved");
     let refs: Vec<OsString> = args[args.iter().position(|a| *a == "--").unwrap() + 1..]
         .iter()
         .map(OsString::from)
@@ -329,6 +336,7 @@ pub(crate) fn parse_report(line: &str) -> (String, RefReport) {
         &cwd,
         git_dir,
         head,
+        moved,
         &refs,
         now_millis() / 1000,
     );
@@ -407,4 +415,52 @@ pub(crate) fn gated_fixture() -> Fixture {
     let fixture = Fixture::new();
     set_revert_gate(&fixture, true);
     fixture
+}
+
+/// The daemon's router served from a thread of this test process, until dropped.
+pub(crate) struct Daemon {
+    pub(crate) port: u16,
+    stop: Option<tokio::sync::oneshot::Sender<()>>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Daemon {
+    pub(crate) fn start(state: &Arc<AppState>) -> Self {
+        let state = Arc::clone(state);
+        let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
+        let (ready, port) = std::sync::mpsc::channel();
+        let thread = std::thread::spawn(move || {
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(2)
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(async move {
+                    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+                    ready.send(listener.local_addr().unwrap().port()).unwrap();
+                    axum::serve(listener, crate::server::router(state))
+                        .with_graceful_shutdown(async {
+                            let _ = stopped.await;
+                        })
+                        .await
+                        .unwrap();
+                });
+        });
+        Self {
+            port: port.recv().unwrap(),
+            stop: Some(stop),
+            thread: Some(thread),
+        }
+    }
+}
+
+impl Drop for Daemon {
+    fn drop(&mut self) {
+        if let Some(stop) = self.stop.take() {
+            let _ = stop.send(());
+        }
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
 }

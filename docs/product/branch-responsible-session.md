@@ -256,6 +256,10 @@ process outside the agent's tree.
 - **The revert gate runs after the user's hook.** Once the user's `reference-transaction` hook has passed a
   transaction that moves an existing branch, or the user's `pre-push` hook has passed a push of branches, the
   dispatcher runs the revert gate, which can still refuse it (see `docs/product/revert-gate.md`).
+- **Moved refs reach the branch badge.** A completed transaction that updates `HEAD`, a local branch or a
+  remote-tracking branch is also reported, in the background like a creation, so the projects of that repository have
+  their branch badge re-read at once (see "Following changes to the repository's refs" in
+  `docs/product/project-git-status.md`).
 - **A dispatcher refuses rather than skipping a hook.** When it cannot tell, from the configuration, where the user's
   hook is, it asks git; if git cannot answer, the dispatcher fails, saying it could not find out where that hook is,
   which fails whatever that hook can stop — a commit, say.

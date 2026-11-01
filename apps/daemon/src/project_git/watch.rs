@@ -15,9 +15,10 @@
 //!
 //! A watch that cannot be set up is logged and left out; the client's poll still covers that
 //! project, as it covers a change the platform never reports: under heavy load macOS
-//! delivers file events late or not at all, without flagging any as dropped. A project that is
-//! not a repository when it is added, or at daemon start, is picked up by the first check that
-//! finds it is one (`status::run_checks`).
+//! delivers file events late or not at all, without flagging any as dropped. A session's own git
+//! does not wait on either: its hooks report the refs it moves (`super::ref_moves`). A project
+//! that is not a repository when it is added, or at daemon start, is picked up by the first check
+//! that finds it is one (`status::run_checks`).
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};

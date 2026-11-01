@@ -1,4 +1,5 @@
 mod gate;
+mod reread;
 
 use std::process::Command;
 
@@ -179,8 +180,8 @@ fn a_users_reference_transaction_hook_still_aborts_and_nothing_is_reported() {
     assert!(seen.contains(" refs/heads/allowed\n"), "{seen}");
 }
 
-/// A sandbox may refuse every write outside the workspace: the dispatcher then reports nothing,
-/// says nothing, and leaves the user's hook to run as it would.
+/// A sandbox may refuse every write outside the workspace: the dispatcher then reports no
+/// creation, says nothing, and leaves the user's hook to run as it would.
 #[test]
 fn a_state_directory_that_cannot_be_written_costs_only_the_report() {
     let fixture = Fixture::new();

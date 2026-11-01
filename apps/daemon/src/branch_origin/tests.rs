@@ -271,7 +271,7 @@ fn a_forced_update_of_an_existing_branch_is_not_a_creation() {
     assert_eq!(
         fixture.reports(1).len(),
         1,
-        "the forced update was never reported"
+        "the forced update was never reported as a creation"
     );
 }
 

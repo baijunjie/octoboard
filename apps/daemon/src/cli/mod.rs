@@ -37,8 +37,9 @@ pub(crate) enum Command {
         #[arg(long)]
         key: String,
     },
-    /// Report the branches a session's git has just created. This is what the session's
-    /// `reference-transaction` hook dispatcher starts; it is not meant to be run by hand.
+    /// Report the branches a session's git has just created, and whether it moved the refs a
+    /// project's branch header reads. This is what the session's `reference-transaction` hook
+    /// dispatcher starts; it is not meant to be run by hand.
     GitRef {
         #[arg(long)]
         session: String,
@@ -50,6 +51,9 @@ pub(crate) enum Command {
         /// The branch (`refs/heads/...`) the git that made them had checked out.
         #[arg(long)]
         head: Option<std::ffi::OsString>,
+        /// The transaction touched `HEAD`, a local branch or a remote-tracking branch.
+        #[arg(long)]
+        moved: bool,
         /// Each created reference's name followed by the object id it was created at.
         #[arg(last = true)]
         refs: Vec<std::ffi::OsString>,
@@ -143,9 +147,10 @@ pub(crate) fn run(command: Command) -> Result<()> {
             port,
             key,
             head,
+            moved,
             refs,
         } => {
-            session_git_hooks::ref_mode::run(&session, port, &key, head.as_deref(), &refs);
+            session_git_hooks::ref_mode::run(&session, port, &key, head.as_deref(), moved, &refs);
             Ok(())
         }
         // Both run synchronously inside the user's git, which waits for their exit status.
