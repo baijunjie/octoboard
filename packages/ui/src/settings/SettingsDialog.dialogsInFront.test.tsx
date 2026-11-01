@@ -31,7 +31,11 @@ beforeEach(() => {
   settings.accounts = [account("claude-work", "claude"), account("codex-work", "codex")];
   accountLogins.length = 0;
   document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
-  onTestFinished(() => { document.documentElement.style.removeProperty("--breakpoint-docked"); });
+  document.documentElement.style.setProperty("--breakpoint-phone", "594px");
+  onTestFinished(() => {
+    document.documentElement.style.removeProperty("--breakpoint-docked");
+    document.documentElement.style.removeProperty("--breakpoint-phone");
+  });
 });
 
 /** Opens Settings on the Agent accounts section as a press on a control of another dialog does: that control goes in

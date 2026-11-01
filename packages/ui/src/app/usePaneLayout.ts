@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useState } from "react";
 import { useStableHandler } from "../components/hooks/useLatest";
 import type { AsideOwner } from "../layout/asideOwner";
 import { useDockedPanelVisible } from "../layout/panelVisibility";
-import { useIsNarrow } from "../layout/breakpoint";
+import { useIsNarrow } from "../breakpoint";
 import { useAsideFloats } from "../layout/paneWidth";
 import { usePaneToggles } from "../layout/usePaneToggles";
 import { maximizedKind, openPanel, OWNER_KINDS, restoreStack, shownKinds, stackedKinds, toggleKind, unavailableKinds as unavailableKindsOf, type OwnerKind, type PanelKind } from "../panels/stackState";

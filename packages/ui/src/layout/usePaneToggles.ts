@@ -5,7 +5,7 @@ import { keepsEscape } from "../components/focus/keepsEscape";
 import { useLatest } from "../components/hooks/useLatest";
 import { isImeKey } from "../imeKey";
 import { CANNOT_HOVER } from "../touchInput";
-import { minWidthQuery, useIsNarrow, useMediaQuery } from "./breakpoint";
+import { minWidthQuery, useIsNarrow, useMediaQuery } from "../breakpoint";
 import { useDockedPanelVisible } from "./panelVisibility";
 import { type ConsolePeek, useConsolePeek } from "./useConsolePeek";
 import { MODAL_OPEN } from "./useRegionCycle";

@@ -45,10 +45,12 @@ function mount(first: { nonce: number; section: SettingsSectionId | undefined; a
   const show = (navigation: typeof first) => act(() => root.render(<SettingsDialog navigation={navigation} onClose={() => {}} />));
   taken.count = 0;
   document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "594px");
   vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: media.startsWith("(min-width:"), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
   onTestFinished(() => {
     vi.unstubAllGlobals();
     document.documentElement.style.removeProperty("--breakpoint-docked");
+    document.documentElement.style.removeProperty("--breakpoint-phone");
   });
   show(first);
   onTestFinished(() => {

@@ -668,7 +668,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Browser General settings",
-    description: "The Language row follows Appearance, then Markdown style starts on Tailwind. The \"Order the sidebar by status\" switch follows it, on, with the description that says sessions and projects move as their status changes. The archive-cleanup switch follows sidebar status ordering, on, with the description that says what is deleted and when. It is the last row.",
+    description: "The Language row follows Appearance, then Markdown style starts on Tailwind. The \"Order the sidebar by status\" switch follows it, on, with the description that says sessions and projects move as their status changes. The archive-cleanup switch follows sidebar status ordering, on, with the description that says what is deleted and when. It is the last row. Below phone width, Settings fills the window without an outer inset; at tablet widths it retains a modest inset, and wider windows keep the desktop dialog layout.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),

@@ -91,9 +91,11 @@ it("opens Settings at the agent accounts from the section's Manage accounts butt
   // The Settings dialog sizes itself by a breakpoint the stylesheet defines.
   vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: true, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
   document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "594px");
   onTestFinished(() => {
     vi.unstubAllGlobals();
     document.documentElement.style.removeProperty("--breakpoint-docked");
+    document.documentElement.style.removeProperty("--breakpoint-phone");
   });
   render();
   await clickButton((b) => b.getAttribute("aria-label") === "Manage accounts");
@@ -105,9 +107,11 @@ it("opens Settings at the agent accounts from the section's Manage accounts butt
 it("keeps the console dialog open and unsaved while an account is added in the Settings over it", async () => {
   vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: true, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
   document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "594px");
   onTestFinished(() => {
     vi.unstubAllGlobals();
     document.documentElement.style.removeProperty("--breakpoint-docked");
+    document.documentElement.style.removeProperty("--breakpoint-phone");
   });
   const request = render(consoleOf("c-1", "Main"), [], (body) => Promise.resolve(body.type === "list_dir"
     ? { type: "dir_listing", id: null, path: "/home/dev", entries: [] }
@@ -134,9 +138,11 @@ it("keeps the console dialog open and unsaved while an account is added in the S
 it("restores Manage accounts after virtual activation followed by a pointer backdrop dismissal", async () => {
   vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: true, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
   document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "594px");
   onTestFinished(() => {
     vi.unstubAllGlobals();
     document.documentElement.style.removeProperty("--breakpoint-docked");
+    document.documentElement.style.removeProperty("--breakpoint-phone");
   });
   render();
   await trackMountRefocus()();

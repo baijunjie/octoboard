@@ -45,6 +45,7 @@ window.matchMedia ??= (query: string) =>
   ({ matches: false, media: query, addEventListener() {}, removeEventListener() {} }) as unknown as MediaQueryList;
 
 beforeEach(() => {
+  document.documentElement.style.setProperty("--breakpoint-phone", "594px");
   markdownView.set("document");
   localStorage.clear();
 });

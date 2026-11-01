@@ -8,6 +8,7 @@ import { RowIconGroup } from "../components/controls/RowControls";
 import { StatusBadge } from "../components/status/StatusBadge";
 import { Dialog } from "../components/dialog/Dialog";
 import { useCurrentLanguage, useT } from "../i18n/react";
+import { minWidthQuery, useMediaQuery } from "../breakpoint";
 import { displayWirePath, wireBaseName } from "../wirePath";
 import { useRendererScope } from "./codeRenderer";
 import { changeStatus, type ViewerSubject } from "./content";
@@ -56,6 +57,7 @@ export function FileViewer({
   location?: Omit<MarkdownLocation, "path">;
 }): React.ReactElement {
   const t = useT();
+  const fullScreen = !useMediaQuery(() => minWidthQuery("phone"));
   const language = useCurrentLanguage();
   // The user's last choice, kept across files and restarts (`diffLayout`).
   const layout = diffLayout.useValue();
@@ -119,6 +121,7 @@ export function FileViewer({
   return (
     <Dialog
       size="viewer"
+      fullScreen={fullScreen}
       headerLeading={navigationControls}
       title={
         <>
@@ -157,7 +160,7 @@ export function FileViewer({
           <div data-viewer-subtitle="" className="col-span-full flex min-w-0 items-center text-xs text-app-muted">
             <FadeOverflow
               as="span"
-              className="min-w-0"
+              className="min-w-0 [&_code]:break-all"
               titleWhenClipped={subject.source}
             >
               {subject.source}
@@ -170,7 +173,7 @@ export function FileViewer({
       resetKey={subject.key}
     >
       <NoticeSlotsProvider>
-        <div ref={headerRef} data-viewer-description="" className="flex min-w-0 shrink-0 flex-col groove-b px-6 text-xs leading-5">
+        <div ref={headerRef} data-viewer-description="" className="flex min-w-0 shrink-0 flex-col groove-b px-6 max-phone:px-3 text-xs leading-5">
           <div data-viewer-details="" className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 pt-1.5">
             <div data-viewer-file-summary="" className="flex w-full min-w-0 items-center gap-4">
               <DetailItem className="min-w-0">

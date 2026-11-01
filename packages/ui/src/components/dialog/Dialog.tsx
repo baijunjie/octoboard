@@ -200,6 +200,7 @@ function DialogFrame({
   dismissable = true,
   focusesItselfOnOpen,
   topLayerAtMount,
+  fullScreen = false,
 }: {
   /** Text, or an element for a title that needs markup of its own (a file name kept left to right). */
   title: string | React.ReactElement;
@@ -212,8 +213,10 @@ function DialogFrame({
   children: BodyChildren;
   /** `wide` is `lg` widened for content laid out across it: a list of rows that each carry a path,
    * or groups of fields side by side; `viewer` is a frame for content rather than a form: it fills
-   * the window inside a margin, up to a width that still reads as a dialog over the app. */
+   * the window on phones, and otherwise keeps a margin and a maximum readable width. */
   size?: "sm" | "md" | "lg" | "wide" | "viewer";
+  /** Uses the modal's native full size, including its edge-to-edge transition. */
+  fullScreen?: boolean;
   /** A confirmation that interrupts the user: HeroUI's `AlertDialog`, announced as an alert dialog. */
   alert?: boolean;
   /** The dialog is a failure modal, announced and described as an alert dialog whatever frame it is in. */
@@ -348,13 +351,21 @@ function DialogFrame({
   );
 
   const heading = <Frame.Heading className="min-w-0 [overflow-wrap:anywhere]">{title as BodyChildren}</Frame.Heading>;
+  // The fullscreen viewer pulls its close button closer to the corner, so its heading keeps the
+  // same gap to it with a narrower inset and a wider end padding. Only one end padding is emitted:
+  // HeroUI merges the header's classes and would keep just the last.
+  // HeroUI's alert dialog has no `full` size, so the union of the two containers' props rejects it;
+  // only the viewer, never an alert, goes full screen, and its frame is then the modal.
+  const containerSize = (fullScreen ? "full" : size === "viewer" || size === "wide" ? "lg" : size) as React.ComponentProps<typeof AlertDialog.Container>["size"];
+  const headerInset = size !== "viewer" ? "" : fullScreen ? "mx-3 mt-3 " : "mx-6 mt-6 ";
+  const headerEndPadding = size === "viewer" && fullScreen ? "pe-8" : "pe-6";
   // Keep the modal parts together: HeroUI spaces them through adjacent-sibling selectors.
   const content = (
     <>
       {/* HeroUI places the close button over the header's end without reserving room for it, so
           the heading is padded clear of it; a long title (a session's name, say) has to wrap
           anywhere, since a name with no place to break would run out of the dialog. */}
-      <Frame.Header className={`${size === "viewer" ? "mx-6 mt-6 " : ""}${headerLeading ? "grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-1 pe-6" : subtitle ? "gap-1 pe-6" : "pe-6"}`}>
+      <Frame.Header className={`${headerInset}${headerLeading ? "grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-1 " : subtitle ? "gap-1 " : ""}${headerEndPadding}`}>
         {headerLeading}
         {heading}
         {subtitle}
@@ -371,7 +382,8 @@ function DialogFrame({
       onOpenChange={(open) => !open && dismissable && onClose()}
       data-react-aria-top-layer={topLayer ? "true" : undefined}
     >
-      {/* HeroUI pads the container 40px from `sm` up, which below the `docked` breakpoint leaves too
+      {/* On phones the viewer fills the container without margins or rounded corners.
+          HeroUI pads the container 40px from `sm` up, which below the `docked` breakpoint leaves too
           little of a narrow window for code; the viewer asks for a 16px margin there and the 40px
           one above it. The narrow margin is a `max-docked:` utility, not an `sm:` one paired with a
           `docked:` twin: a `docked:` utility loses to an `sm:` twin on the same property, and the
@@ -382,22 +394,24 @@ function DialogFrame({
           (`style.css`): without that the strip, stacked above the dialog as well as above the
           backdrop, would cross the dialog's own bottom edge and swallow the presses landing
           there. */}
-      <Frame.Container size={size === "viewer" || size === "wide" ? "lg" : size} className={size === "viewer" ? "max-docked:p-4" : undefined}>
+      <Frame.Container size={containerSize} className={!fullScreen && size === "viewer" ? "max-docked:p-4" : undefined}>
         <Frame.Dialog
           {...(failing && { role: "alertdialog" })}
           aria-describedby={alerting ? bodyId : undefined}
           className={
-            size === "viewer"
-              ? "control-fills overflow-hidden p-0 h-[calc(100dvh-32px-var(--bottom-chrome-height))] w-[calc(100vw-32px)] max-w-none docked:h-[calc(100dvh-80px-var(--bottom-chrome-height))] docked:w-[min(1440px,calc(100vw-80px))]"
-              : size === "wide"
-                ? "control-fills max-w-3xl"
-                : "control-fills"
+            fullScreen
+              ? "control-fills overflow-hidden p-0"
+              : size === "viewer"
+                ? "control-fills overflow-hidden p-0 h-[calc(100dvh-32px-var(--bottom-chrome-height))] w-[calc(100vw-32px)] max-w-none docked:h-[calc(100dvh-80px-var(--bottom-chrome-height))] docked:w-[min(1440px,calc(100vw-80px))]"
+                : size === "wide"
+                  ? "control-fills max-w-3xl"
+                  : "control-fills"
           }
         >
           <span ref={markerRef} hidden />
           {dismissable && <TitledControl title={t("common.close")}>
             {/* Named explicitly so it always matches the tooltip. */}
-            <Frame.CloseTrigger aria-label={t("common.close")} />
+            <Frame.CloseTrigger aria-label={t("common.close")} className={fullScreen ? "top-2 end-3" : undefined} />
           </TitledControl>}
           {onSubmit ? (
             // A key held down repeats: the press that opened the dialog (a menu item takes Enter and
@@ -451,6 +465,7 @@ export function Dialog({ failure, ...props }: DialogFrameProps & {
     <DialogFrame
       failing
       size={props.size}
+      fullScreen={props.fullScreen}
       alert={props.alert}
       topLayerAtMount={props.topLayerAtMount}
       resetKey={failure.message}

@@ -10,7 +10,7 @@ import { dialogAround } from "../components/dialog/dialogElement";
 import { useEscapeWhileTooltipOpen } from "../components/dialog/useEscapeWhileTooltipOpen";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useT } from "../i18n/react";
-import { useIsNarrow } from "../layout/breakpoint";
+import { minWidthQuery, useIsNarrow, useMediaQuery } from "../breakpoint";
 import { AboutSection } from "./AboutSection";
 import { AccountsNavigationContext } from "./accounts/AccountsNavigationContext";
 import { AgentAccountsSection, AGENT_STRIP_HEIGHT } from "./accounts/AgentAccountsSection";
@@ -60,11 +60,11 @@ export type SettingsSectionId = (typeof SECTIONS)[number]["id"];
  * padding's; `stickyHeadingHeight` is the height of such a heading (see `FadedScroller`). */
 function SectionPanel({ id, stickyHeadingHeight, children }: { id: string; stickyHeadingHeight?: number; children: React.ReactNode }): React.ReactElement {
   return (
-    <Tabs.Panel id={id} className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <Tabs.Panel id={id} className="flex min-h-0 min-w-0 flex-1 flex-col max-phone:p-0">
       <FadedScroller
         stickyHeadingHeight={stickyHeadingHeight}
         stickySurface="overlay"
-        className="min-h-0 flex-1 px-4 py-(--section-padding) [--section-padding:calc(var(--spacing)*4)] docked:px-8 docked:[--section-padding:calc(var(--spacing)*6)]"
+        className="min-h-0 flex-1 px-4 py-(--section-padding) [--section-padding:calc(var(--spacing)*4)] max-phone:px-3 max-phone:[--section-padding:calc(var(--spacing)*3)] docked:px-8 docked:[--section-padding:calc(var(--spacing)*6)]"
       >{children}</FadedScroller>
     </Tabs.Panel>
   );
@@ -102,6 +102,7 @@ export function SettingsDialog({
   const t = useT();
   const tabScrollLabels = useTabScrollLabels();
   const isNarrow = useIsNarrow();
+  const fullScreen = !useMediaQuery(() => minWidthQuery("phone"));
   const [sectionId, setSectionId] = useState<string>(navigation?.section ?? initialSection);
   const addAgentOnOpen = navigation?.addAgent ?? false;
   // Both ask the Agent accounts section to take focus, in place of the section's tab.
@@ -166,21 +167,17 @@ export function SettingsDialog({
 
   return (
     <Modal.Backdrop isOpen onOpenChange={(open) => !open && onClose()}>
-      {/* HeroUI pads the container 40px from `sm` up; narrow, the dialog fills the window inside a
-          16px margin on every side instead, so the padding stays 16px until `docked`. It is a
-          `max-docked:` utility because a `docked:` one loses to an `sm:` twin on the same property.
-          The height also gives way to the connection banner's strip, which the container ends above.
-          Narrow, these are the same rules `components/dialog/Dialog.tsx` states for a dialog that fills the
-          window, down to the numbers, so the two move together. */}
-      <Modal.Container className="max-docked:p-4">
+      {/* Native full size removes phone margins and uses an edge-to-edge transition. Wider
+          windows retain their inset layout; the container ends above the bottom notices. */}
+      <Modal.Container size={fullScreen ? "full" : undefined} className={fullScreen ? undefined : "max-docked:p-4"}>
         <Modal.Dialog
           aria-label={t("settings.title")}
-          className="control-fills flex h-[calc(100dvh-32px-var(--bottom-chrome-height))] w-[calc(100vw-32px)] max-w-none flex-col overflow-hidden p-0 docked:h-[min(85vh,calc(100vh-96px-var(--bottom-chrome-height)))] docked:w-[min(1000px,calc(100vw-96px))] docked:flex-row"
+          className={`control-fills flex flex-col overflow-hidden p-0 ${fullScreen ? "" : "h-[calc(100dvh-32px-var(--bottom-chrome-height))] w-[calc(100vw-32px)] max-w-none docked:h-[min(85vh,calc(100vh-96px-var(--bottom-chrome-height)))] docked:w-[min(1000px,calc(100vw-96px))] docked:flex-row"}`}
         >
           <span ref={markerRef} hidden />
           <TitledControl title={t("common.close")}>
             {/* The panels' positioned scrollers overlap this corner. Keep the close button above them. */}
-            <Modal.CloseTrigger aria-label={t("common.close")} className="z-10" />
+            <Modal.CloseTrigger aria-label={t("common.close")} className="z-10 max-phone:top-4.5 max-phone:end-3" />
           </TitledControl>
           <Tabs
             orientation={isNarrow ? "horizontal" : "vertical"}
@@ -194,7 +191,7 @@ export function SettingsDialog({
                 `self-start` keeps the column at its own height rather than the dialog's, which is
                 what bounds how many sections fit — see `SECTIONS`. */}
             <Tabs.ListContainer
-              className="ms-4 me-12 mt-3 min-w-0 shrink-0 max-docked:w-max max-docked:max-w-[calc(100%-4rem)] max-docked:self-start docked:my-6 docked:me-0 docked:w-48 docked:self-start"
+              className="ms-4 me-12 mt-3 min-w-0 shrink-0 max-phone:ms-3 max-phone:mt-2 max-phone:max-w-[calc(100%-3.75rem)] max-docked:w-max max-docked:max-w-[calc(100%-4rem)] max-docked:self-start docked:my-6 docked:me-0 docked:w-48 docked:self-start"
               render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}
             >
               {/* HeroUI sizes a vertical list to its widest tab; it fills the column here, and its

@@ -1,7 +1,9 @@
 # File viewer
 
-The **file viewer** is a read-only dialog nearly as large as the window (at most 1440 px wide) that shows one file, or
-one change, at a time. It is opened from three places:
+The **file viewer** is a read-only dialog that shows one file, or one change, at a time. Below 594 px window width it
+fills the available window area, without outer margins, rounded corners or a shadow; connection and update notices
+at the bottom remain outside it. At wider widths it is nearly as large as the window, at most 1440 px wide. It is
+opened from three places:
 
 - **a file's row in the project pane's Files mode**, by a click or Enter on the row (see "A row's actions" in
   `docs/product/project-pane.md`);
@@ -25,9 +27,9 @@ The header has three parts, one under the other:
   shrink, so the name is what the fade cuts.
 - **A subtitle**, a line of its own directly under the title, which carries one thing only: the commits a committed
   change is read from. It belongs to the title as a tag does, but is far too long to sit among them.
-  A subject with no such commits has no such row at all, and the row costs the content below it that one line and no
-  more. Its start aligns with the file-path icon in the details below. It is a single line that fades out where it
-  is cut off and carries its full wording as its tooltip.
+  A subject with no such commits has no such row at all. Its start aligns with the file-path icon in the details
+  below. Long branch and commit identifiers can wrap across lines, breaking between characters to use the available
+  width. Where the subtitle is still cut off it fades out and carries its full wording as its tooltip.
 - **The details** — the file's path within the project, its size and the path a rename came from — followed by the
   **controls** on a separate final row directly above the content, aligned to its trailing side. Their fixed order is
   **Copy path**, then the document-or-source choice for a Markdown file (see `docs/product/markdown-documents.md`),
@@ -67,8 +69,8 @@ remedy for a file that is no longer there.
 The details use the header's full width. The current path, its notice marks and the line counts or file size always
 share one row: counts and size keep their width, and the path shrinks to fit. A rename's origin occupies the next row,
 with compact spacing between rows. Both paths stay on one line; when too long, each fades at its start so its file
-name stays visible, and carries its full path as its tooltip. The title and subtitle also stay on one line and fade
-rather than ending in an ellipsis, with their full text as their tooltip. Both paths show the same name- and
+name stays visible, and carries its full path as its tooltip. The title stays on one line and fades rather than
+ending in an ellipsis, with its full text as its tooltip. Both paths show the same name- and
 extension-based icons as file rows (see "Rows and the keyboard" in `docs/product/project-pane.md`), with a generic file
 icon for unrecognized names. A cut path, title or subtitle runs as a marquee while the pointer is over it (see "Names
 too long for their space" in `docs/product/labels-and-tooltips.md`).

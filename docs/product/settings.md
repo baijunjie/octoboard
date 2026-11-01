@@ -24,13 +24,14 @@ change all but the last two (see "Application settings: `get_settings` and `upda
 ## In a narrow window
 
 Below 1394 px — the width under which the sidebar floats (see "Below 1394 px: the sidebar floats" in
-`docs/product/sidebar-drawer.md`) — the dialog fills the window inside a 16 px margin on every side, and the list of
-sections becomes a row of tabs along its top, above the selected section. When the tabs do not fit the row's width, the
-row scrolls sideways, fading at the end with more beyond it (see "The surfaces that fade" in
-`docs/product/scrolling-surfaces.md`), and the selected section's tab is scrolled into view when the dialog opens. While
-the connection banner's strip is on screen the dialog keeps that 16 px clear of the strip's top edge instead of the
-window's bottom edge, and is that much shorter (see "What an open dialog, menu or popover covers" in
-`docs/product/window-layout.md`).
+`docs/product/sidebar-drawer.md`) — the list of sections becomes a row of tabs along the dialog's top, above the
+selected section. From 594 px up to that breakpoint, the dialog fills the window inside a 16 px margin on every side.
+Below 594 px it fills the available window area without outer margins, rounded corners or a shadow. In either case,
+connection and update notices at the bottom remain outside the dialog: the full-screen view ends above them, and the
+inset view keeps its 16 px margin above them (see "What an open dialog, menu or popover covers" in
+`docs/product/window-layout.md`). When the tabs do not fit the row's width, the row scrolls sideways, fading at the end
+with more beyond it (see "The surfaces that fade" in `docs/product/scrolling-surfaces.md`), and the selected section's
+tab is scrolled into view when the dialog opens.
 
 Below 640 px each setting row puts its control under its name and its line of text instead of beside them.
 

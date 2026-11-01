@@ -822,7 +822,11 @@ it("lets Manage accounts recovery dismiss a stale editor and focus the real Sett
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
-  onTestFinished(() => { document.documentElement.style.removeProperty("--breakpoint-docked"); });
+  document.documentElement.style.setProperty("--breakpoint-phone", "594px");
+  onTestFinished(() => {
+    document.documentElement.style.removeProperty("--breakpoint-docked");
+    document.documentElement.style.removeProperty("--breakpoint-phone");
+  });
   vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: media.startsWith("(min-width:"), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
   onTestFinished(() => { vi.unstubAllGlobals(); });
   let nonce = 1;

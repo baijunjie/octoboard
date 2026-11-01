@@ -2,7 +2,7 @@ import { AGENT_OPTIONS } from "../agents";
 import { gitBadgeAriaLabel, gitFailureLabel, gitFailureShown } from "../gitStatusLabel";
 import { format, type MessageArgs, type MessageKey } from "../i18n/catalog";
 import type { Language } from "../i18n/languages";
-import { minWidthQuery } from "../layout/breakpoint";
+import { minWidthQuery } from "../breakpoint";
 import { panelId, type PanelKind } from "../panels/stackState";
 import { DORMANT_STATUSES, LIVE_STATUSES, type AccountQuota, type Agent, type AgentAvailability, type Event as DaemonEvent, type GitStatus } from "../protocol";
 import { activityLabel, statusLabel } from "../sessionLabel";

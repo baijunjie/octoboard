@@ -89,6 +89,7 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  document.documentElement.style.setProperty("--breakpoint-phone", "594px");
   // The layout choice outlives a viewer, so a test that makes one must not leave it for the next.
   diffLayout.set("unified");
   wordWrap.set(false);
