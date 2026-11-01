@@ -169,18 +169,34 @@ fn scan(
     end: Option<u64>,
     unfinished: bool,
     read_a_line: &mut bool,
-    mut visit: impl FnMut(u64, &str) -> ControlFlow<()>,
+    visit: impl FnMut(u64, &str) -> ControlFlow<()>,
 ) -> std::io::Result<u64> {
     let mut reader = open(path, offset)?;
     if let Some(end) = end {
         reader = Box::new(reader.take(end.saturating_sub(offset)));
     }
+    scan_reader(reader, offset, unfinished, read_a_line, visit)
+}
+
+/// [`scan`] over `reader`, which is positioned at `offset`. A read the OS interrupted is retried,
+/// as `BufRead::read_until` does: it is no failure of the file.
+fn scan_reader(
+    mut reader: impl BufRead,
+    offset: u64,
+    unfinished: bool,
+    read_a_line: &mut bool,
+    mut visit: impl FnMut(u64, &str) -> ControlFlow<()>,
+) -> std::io::Result<u64> {
     let mut complete = offset;
     let mut position = offset;
     let mut line = Vec::new();
     let mut oversized = false;
     loop {
-        let buffer = reader.fill_buf()?;
+        let buffer = match reader.fill_buf() {
+            Ok(buffer) => buffer,
+            Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(err) => return Err(err),
+        };
         if buffer.is_empty() {
             if unfinished && !oversized {
                 if let Ok(line) = std::str::from_utf8(&line) {
@@ -291,5 +307,71 @@ mod tests {
         })
         .unwrap();
         assert_eq!(lines, ["a\n", "b"]);
+    }
+
+    /// A reader that hands out `chunks` one per `fill_buf`, `None` standing for a read the OS
+    /// interrupted.
+    struct Interrupting {
+        chunks: std::collections::VecDeque<Option<&'static [u8]>>,
+        consumed: usize,
+    }
+
+    impl Read for Interrupting {
+        fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+            unreachable!("the scan reads through `fill_buf`")
+        }
+    }
+
+    impl BufRead for Interrupting {
+        fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+            match self.chunks.front() {
+                None => Ok(&[]),
+                Some(None) => {
+                    self.chunks.pop_front();
+                    Err(std::io::ErrorKind::Interrupted.into())
+                }
+                Some(Some(chunk)) => Ok(&chunk[self.consumed..]),
+            }
+        }
+
+        fn consume(&mut self, amount: usize) {
+            self.consumed += amount;
+            if let Some(Some(chunk)) = self.chunks.front() {
+                if self.consumed == chunk.len() {
+                    self.chunks.pop_front();
+                    self.consumed = 0;
+                }
+            }
+        }
+    }
+
+    /// A read the OS interrupts is retried, mid-line too: the lines are read whole and the offset
+    /// is past them, not a failure.
+    #[test]
+    fn an_interrupted_read_is_retried() {
+        let reader = Interrupting {
+            chunks: [
+                None,
+                Some(&b"first\nsec"[..]),
+                None,
+                Some(&b"ond\n"[..]),
+                None,
+            ]
+            .into(),
+            consumed: 0,
+        };
+        let mut lines = Vec::new();
+        let mut read_a_line = false;
+        let read = scan_reader(reader, 10, false, &mut read_a_line, |position, line| {
+            lines.push((position, line.to_string()));
+            ControlFlow::Continue(())
+        })
+        .unwrap();
+        assert_eq!(
+            lines,
+            [(10, "first\n".to_string()), (16, "second\n".to_string())]
+        );
+        assert_eq!(read, 10 + "first\nsecond\n".len() as u64);
+        assert!(read_a_line);
     }
 }
