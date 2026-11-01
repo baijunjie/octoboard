@@ -318,10 +318,7 @@ fn update_account(
         // Reading the account, the checks and the write are one step: another create or update
         // cannot slip between them.
         let _writes = state.lock_account_writes();
-        let mut account = state
-            .store
-            .get_account(id)?
-            .ok_or_else(|| CodedError::unknown_account(id))?;
+        let mut account = state.store.require_account(id)?;
         let mut changed = false;
         let mut dir_changed = false;
         if let Some(name) = name {
@@ -353,7 +350,7 @@ fn update_account(
         state.account_quotas.forget_account(state, id);
         let _ = state.account_logins.cancel(agent, Some(id.to_string()));
         // What runs under the account's directory is now what runs under the new one.
-        crate::accounts::shared_config::publish(state);
+        state.publish_account_sharing();
     }
     broadcast_settings(state)?;
     Ok(())
@@ -370,11 +367,7 @@ pub(super) async fn update_account_requested(
     // the new directory is known to be acceptable.
     let _sharing = match &config_dir {
         Some(dir) => {
-            let agent = state
-                .store
-                .get_account(&account)?
-                .ok_or_else(|| CodedError::unknown_account(&account))?
-                .agent;
+            let agent = state.store.require_account(&account)?.agent;
             let dir = normalize_account_dir(agent, dir)?;
             check_account_dir_unique(state, agent, &dir, Some(&account))?;
             if let Some(name) = &name {
@@ -390,10 +383,7 @@ pub(super) async fn update_account_requested(
 }
 
 fn delete_account(state: &Arc<AppState>, id: &str) -> Result<()> {
-    let account = state
-        .store
-        .get_account(id)?
-        .ok_or_else(|| CodedError::unknown_account(id))?;
+    let account = state.store.require_account(id)?;
     let affected_consoles: Vec<String> = state
         .store
         .list_consoles()?
@@ -410,7 +400,7 @@ fn delete_account(state: &Arc<AppState>, id: &str) -> Result<()> {
         .collect();
     state.store.delete_account(id)?;
     state.account_quotas.forget_account(state, id);
-    crate::accounts::shared_config::publish(state);
+    state.publish_account_sharing();
     let _ = state
         .account_logins
         .cancel(account.agent, Some(id.to_string()));
@@ -480,10 +470,7 @@ pub(super) fn refresh_account_quotas(
             }
         }
         (None, Some(account)) => {
-            let stored = state
-                .store
-                .get_account(&account)?
-                .ok_or_else(|| CodedError::unknown_account(&account))?;
+            let stored = state.store.require_account(&account)?;
             quotas::Scope {
                 agent: Some(stored.agent),
                 account: Some(account),

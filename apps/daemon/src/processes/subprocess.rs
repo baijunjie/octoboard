@@ -134,25 +134,18 @@ impl Leader {
 /// Like it, a command whose output is still held open by something it started after it has
 /// exited fails, its group killed, rather than returning output that may stop short.
 pub fn run_with_timeout(command: &mut Command, timeout: Duration) -> Result<Output> {
-    run_unbounded(command, timeout, Reach::ProcessGroup, None)
+    run_unbounded(command, timeout, None)
 }
 
 /// [`run_with_timeout`] with `input` written to the command's stdin, which is closed after it.
 /// For a command that is handed a list on stdin and answers on stdout (`git cat-file --batch`).
 pub fn run_with_input(command: &mut Command, input: Vec<u8>, timeout: Duration) -> Result<Output> {
-    run_unbounded(command, timeout, Reach::ProcessGroup, Some(input))
-}
-
-/// [`run_with_timeout`] for an agent CLI: it reaches the command's whole session
-/// ([`Reach::Session`]) rather than its process group.
-pub fn run_agent_with_timeout(command: &mut Command, timeout: Duration) -> Result<Output> {
-    run_unbounded(command, timeout, Reach::Session, None)
+    run_unbounded(command, timeout, Some(input))
 }
 
 fn run_unbounded(
     command: &mut Command,
     timeout: Duration,
-    reach: Reach,
     input: Option<Vec<u8>>,
 ) -> Result<Output> {
     static NEVER: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -160,7 +153,7 @@ fn run_unbounded(
         timeout,
         stdout_limit: usize::MAX,
         stderr_limit: usize::MAX,
-        reach,
+        reach: Reach::ProcessGroup,
     };
     run_bounded_with(command, &bounds, &NEVER, input).map_err(BoundedFailure::into_error)
 }
@@ -178,6 +171,24 @@ pub struct Bounds {
     /// is read and thrown away rather than failing the run.
     pub stderr_limit: usize,
     pub reach: Reach,
+}
+
+/// How much of an agent CLI query's stderr [`Bounds::agent_query`] keeps for the failure that
+/// reports it.
+const AGENT_STDERR_LIMIT: usize = 4096;
+
+impl Bounds {
+    /// The bounds of a short query of an agent CLI: `timeout`, at most `stdout_limit` of output,
+    /// the first `AGENT_STDERR_LIMIT` of its stderr, and a stop that reaches the CLI's whole
+    /// session ([`Reach::Session`]).
+    pub fn agent_query(timeout: Duration, stdout_limit: usize) -> Self {
+        Self {
+            timeout,
+            stdout_limit,
+            stderr_limit: AGENT_STDERR_LIMIT,
+            reach: Reach::Session,
+        }
+    }
 }
 
 /// Why [`run_bounded`] did not produce an output. Each case has killed what the run reaches first.

@@ -36,6 +36,46 @@ pub enum Delivery {
     Kept,
 }
 
+/// Who sent what a [`Delivery::note`] is about, which decides whether it warns against sending it
+/// again.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SentBy {
+    /// The session the note is for: what is queued or kept arrives by itself, and sending it
+    /// again would deliver it twice.
+    Reader,
+    /// Octoboard, on the reader's behalf, so there is nothing for the reader to send again.
+    Octoboard,
+}
+
+impl Delivery {
+    /// What a session is told became of `what`, delivered to `to`: `what` begins a sentence ("The
+    /// message", "Your report") and `to` names the session it went to within one ("this
+    /// session", "its owner"). One wording per outcome wherever a session is told what became of
+    /// a delivery, so that it reads every one the same way and knows when not to send again.
+    pub(crate) fn note(self, what: &str, to: &str, sent_by: SentBy) -> String {
+        let (so, and) = match sent_by {
+            SentBy::Reader => (", so do not send it again", "; do not send it again"),
+            SentBy::Octoboard => ("", ""),
+        };
+        match self {
+            Delivery::Written => format!("{what} was delivered to {to}."),
+            Delivery::Queued => format!(
+                "{what} is queued: {to} cannot take a message right now. It will be delivered as \
+                 soon as {to} can take one{so}."
+            ),
+            Delivery::Unsent => format!(
+                "{what} was written into the input of {to}, but {to}'s agent did not send it to \
+                 the conversation (it is in the input box, or went to a view of its background \
+                 agents), so {to} has not read it. The user has been told to check {to}{and}."
+            ),
+            Delivery::Kept => format!(
+                "{what} is kept for {to}, which is interrupted with no process running: it will be \
+                 delivered once {to} is resumed{so}."
+            ),
+        }
+    }
+}
+
 /// What a sender is told when a drain it triggered ran into a message the agent only partly took.
 ///
 /// It does not say whose message was the one that failed, because the drain writes whatever is queued

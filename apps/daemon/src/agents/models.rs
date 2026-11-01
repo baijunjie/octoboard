@@ -37,10 +37,11 @@ use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
+use crate::accounts::cli_run::{self, NotRun};
 use crate::adapter;
 use crate::agents::layout::GROK_MODELS_CACHE;
 use crate::env_shell;
-use crate::processes::subprocess::{run_bounded, BoundedFailure, Bounds, Reach};
+use crate::processes::subprocess::{run_bounded, BoundedFailure, Bounds};
 use crate::protocol::{models_unavailable_code as code, Agent, AgentModel, ModelsUnavailable};
 
 /// How long a catalogue command may run. The commands answer in well under a second from a
@@ -191,9 +192,7 @@ pub(crate) fn list(
                 if ids.is_empty() {
                     return Err(unreadable(agent));
                 }
-                let home = config_dir
-                    .map(Path::to_path_buf)
-                    .unwrap_or_else(|| adapter::default_account_dir(agent, shell_env));
+                let home = adapter::account_dir(agent, config_dir, shell_env);
                 // Read after the command, which is what refreshes it.
                 let cache =
                     crate::hostfs::read_regular_text(&home.join(GROK_MODELS_CACHE), OUTPUT_LIMIT)
@@ -227,43 +226,28 @@ fn run(
     args: &[&str],
     timeout: Duration,
 ) -> Result<String, ModelsUnavailable> {
-    // The account's directory must not change sharing under the CLI while it runs, and the
-    // listing never runs under a pinned directory that is missing, like the quota read:
-    // Grok would create it, and Codex refuses it.
-    let _reading =
-        crate::accounts::shared_config::admitted_reading(config_dir).map_err(|missing| {
-            failed(
-                agent,
-                &format!(
-                    "the account's configuration directory {} does not exist",
-                    missing.0.display()
+    let mut run =
+        cli_run::admitted_command(agent, shell_env, config_dir, args).map_err(|refused| {
+            match refused {
+                NotRun::DirMissing(_) => failed(agent, &refused.detail()),
+                NotRun::BinaryNotFound(binary) => ModelsUnavailable::new(
+                    code::BINARY_NOT_FOUND,
+                    refused.detail(),
+                    &[("binary", binary)],
                 ),
-            )
+            }
         })?;
-    let mut command =
-        adapter::account_command(agent, shell_env, config_dir, args).map_err(|binary| {
-            ModelsUnavailable::new(
-                code::BINARY_NOT_FOUND,
-                format!("`{binary}` was not found on PATH in the shell environment"),
-                &[("binary", binary)],
-            )
-        })?;
-
-    let bounds = Bounds {
-        timeout,
-        stdout_limit: OUTPUT_LIMIT,
-        stderr_limit: 4096,
-        reach: Reach::Session,
-    };
+    let bounds = Bounds::agent_query(timeout, OUTPUT_LIMIT);
     let never = std::sync::atomic::AtomicBool::new(false);
-    let output = run_bounded(&mut command, &bounds, &never).map_err(|failure| match failure {
-        BoundedFailure::TimedOut(_) => ModelsUnavailable::new(
-            code::TIMED_OUT,
-            format!("{} did not list its models in time", agent.label()),
-            &[("agent", agent.label())],
-        ),
-        other => failed(agent, &other.to_string()),
-    })?;
+    let output =
+        run_bounded(&mut run.command, &bounds, &never).map_err(|failure| match failure {
+            BoundedFailure::TimedOut(_) => ModelsUnavailable::new(
+                code::TIMED_OUT,
+                format!("{} did not list its models in time", agent.label()),
+                &[("agent", agent.label())],
+            ),
+            other => failed(agent, &other.to_string()),
+        })?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let detail = stderr.trim().lines().next_back().unwrap_or_default();

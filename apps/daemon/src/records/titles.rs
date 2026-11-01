@@ -5,11 +5,11 @@
 //! knowledge.
 
 use std::collections::{HashMap, HashSet};
-use std::io::BufRead;
+use std::ops::ControlFlow;
 use std::path::Path;
 
 use crate::adapter::AgentAdapter;
-use crate::records::line_file::{Change, LineFile};
+use crate::records::line_file::{self, Change, LineFile};
 use crate::titles::RecordTitles;
 
 /// The longest title taken from a record's name for the conversation.
@@ -41,20 +41,21 @@ impl Titles {
         }
     }
 
-    /// The opening prompt of the record file at `path` (read whole through its decompression when
-    /// Codex compressed it), for a conversation whose record continues in a later file.
+    /// The opening prompt of the record file at `path` (read through its decompression when
+    /// Codex compressed it, a line past the line limit skipped), for a conversation whose record
+    /// continues in a later file.
     pub fn first_prompt_of(adapter: &dyn AgentAdapter, path: &Path) -> Option<String> {
-        let mut reader = crate::records::line_file::open(path, 0).ok()?;
-        let mut line = String::new();
-        loop {
-            line.clear();
-            if reader.read_line(&mut line).ok()? == 0 {
-                return None;
+        let mut found = None;
+        line_file::read_whole_until(path, None, |line| {
+            found = prompt_of(adapter, line);
+            if found.is_some() {
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
             }
-            if let Some(prompt) = prompt_of(adapter, &line) {
-                return Some(prompt);
-            }
-        }
+        })
+        .ok()?;
+        found
     }
 
     /// Takes the small JSON file that names a conversation.
@@ -296,5 +297,46 @@ mod tests {
         let long = prompt_title(&"word ".repeat(40)).unwrap();
         assert_eq!(long.chars().count(), MAX_PROMPT_CHARS);
         assert!(long.ends_with("word…"));
+    }
+
+    fn first_prompt(content: &str) -> Option<String> {
+        let path = crate::test_support::ScratchFile::new("titles-first-prompt", "session.jsonl");
+        std::fs::write(&path, content).unwrap();
+        Titles::first_prompt_of(adapter_for(Agent::Claude).as_ref(), &path)
+    }
+
+    fn user_line(text: &str) -> String {
+        format!(r#"{{"type":"user","message":{{"role":"user","content":"{text}"}}}}"#)
+    }
+
+    /// The first prompt is found past lines that give none, also as an unfinished last line.
+    #[test]
+    fn the_first_prompt_is_found_past_lines_that_give_none() {
+        let content = format!("not json\n{}\n{}", user_line("First"), user_line("Second"));
+        assert_eq!(first_prompt(&content).as_deref(), Some("First"));
+        assert_eq!(first_prompt(&user_line("Only")).as_deref(), Some("Only"));
+        assert_eq!(first_prompt("not json\n"), None);
+        let missing = std::env::temp_dir().join("octoboard-titles-missing.jsonl");
+        let adapter = adapter_for(Agent::Claude);
+        assert_eq!(Titles::first_prompt_of(adapter.as_ref(), &missing), None);
+    }
+
+    /// A line that is not UTF-8 is skipped, and the prompt after it is still found.
+    #[test]
+    fn a_line_that_is_not_utf8_is_skipped_on_the_way_to_the_first_prompt() {
+        let path = crate::test_support::ScratchFile::new("titles-not-utf8", "session.jsonl");
+        let mut content = b"\xff\xfe\n".to_vec();
+        content.extend_from_slice(user_line("After").as_bytes());
+        std::fs::write(&path, content).unwrap();
+        let prompt = Titles::first_prompt_of(adapter_for(Agent::Claude).as_ref(), &path);
+        assert_eq!(prompt.as_deref(), Some("After"));
+    }
+
+    /// A line past the line limit is skipped, and the prompt after it is still found.
+    #[test]
+    fn a_line_past_the_limit_is_skipped_on_the_way_to_the_first_prompt() {
+        let long = user_line(&"x".repeat(crate::records::line_file::LINE_LIMIT));
+        let content = format!("{long}\n{}\n", user_line("After"));
+        assert_eq!(first_prompt(&content).as_deref(), Some("After"));
     }
 }

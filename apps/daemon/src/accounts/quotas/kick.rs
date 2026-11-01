@@ -12,9 +12,9 @@ use std::time::Duration;
 
 use anyhow::bail;
 
-use super::probe::{CODEX_QUIET_FEATURES, STDERR_LIMIT};
-use crate::adapter;
-use crate::processes::subprocess::{run_bounded, BoundedFailure, Bounds, Reach};
+use crate::accounts::cli_run;
+use crate::agents::codex_app_server::CODEX_QUIET_FEATURES;
+use crate::processes::subprocess::{run_bounded, BoundedFailure, Bounds};
 use crate::protocol::Agent;
 
 /// How long a kick may take: the CLI's start, which can be slow on a loaded machine, and a model
@@ -201,30 +201,16 @@ pub(super) fn kick(
     cancel: &AtomicBool,
 ) -> anyhow::Result<()> {
     let KickCommand { args, env } = kick_command(agent);
-    // The account's directory must not change sharing under the CLI while it runs.
-    let _reading =
-        crate::accounts::shared_config::admitted_reading(config_dir).map_err(|missing| {
-            anyhow::anyhow!(
-                "the account's configuration directory {} does not exist",
-                missing.0.display()
-            )
-        })?;
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
-    let mut command =
-        adapter::account_command(agent, shell_env, config_dir, &args).map_err(|binary| {
-            anyhow::anyhow!("`{binary}` was not found on PATH in the shell environment")
+    let mut run = cli_run::admitted_command(agent, shell_env, config_dir, &args)
+        .map_err(|refused| anyhow::anyhow!(refused.detail()))?;
+    run.command.envs(env);
+    let bounds = Bounds::agent_query(timeout, OUTPUT_LIMIT);
+    let output =
+        run_bounded(&mut run.command, &bounds, cancel).map_err(|failure| match failure {
+            BoundedFailure::Failed(err) => err,
+            other => anyhow::anyhow!("{} {other}", agent.label()),
         })?;
-    command.envs(env);
-    let bounds = Bounds {
-        timeout,
-        stdout_limit: OUTPUT_LIMIT,
-        stderr_limit: STDERR_LIMIT,
-        reach: Reach::Session,
-    };
-    let output = run_bounded(&mut command, &bounds, cancel).map_err(|failure| match failure {
-        BoundedFailure::Failed(err) => err,
-        other => anyhow::anyhow!("{} {other}", agent.label()),
-    })?;
     if !output.status.success() {
         let detail = String::from_utf8_lossy(&output.stderr);
         bail!(
@@ -240,6 +226,7 @@ pub(super) fn kick(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::adapter;
     use crate::test_support::{fake_agent, ScratchDir};
 
     /// Long enough for a fake agent to start on a loaded machine, short enough to wait out.

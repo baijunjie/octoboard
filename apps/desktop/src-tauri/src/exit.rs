@@ -5,7 +5,7 @@
 //! does it need to wait:
 //!
 //! - Cmd+Q and the app menu's Quit item (`on_menu_event` in `lib.rs`), along with the menu bar
-//!   icon's Quit (`tray.rs`), which takes the same path.
+//!   icon's Quit (`tray/`), which takes the same path.
 //! - The Dock icon's own Quit plus a system-initiated logout/restart/shutdown
 //!   (`application_should_terminate` below, installed onto AppKit's own delegate).
 //! - `RunEvent::ExitRequested` (also handled in `lib.rs`), which in practice only ever serves

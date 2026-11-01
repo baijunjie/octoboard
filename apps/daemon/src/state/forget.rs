@@ -39,7 +39,7 @@ impl AppState {
     fn forget_held_for_session(&self, id: &str) {
         self.forget_saved_output(id);
         self.forget_left_for_limit(id);
-        crate::accounts::shared_config::forget_session(self, id);
+        self.forget_sharing_activity(id);
         self.forget_handoff_package(id);
         self.forget_request_hand(id);
     }

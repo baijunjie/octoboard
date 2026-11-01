@@ -66,7 +66,6 @@ pub(super) fn octopus(attention: bool, quota: Option<Quota>) -> Image<'static> {
 }
 
 /// AppKit tints this independent template layer orange, including without a readable quota.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub(super) fn dot_png() -> Option<Vec<u8>> {
     let mut canvas = RgbaImage::new(SIDE, SIDE);
     for y in 0..SIDE {

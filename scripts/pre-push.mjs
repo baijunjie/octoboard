@@ -1,7 +1,8 @@
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { git as defaultGit } from "./git.mjs";
 
 const objectId = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i;
 const deleted = /^0+$/;
@@ -17,21 +18,13 @@ export function parseUpdates(input) {
   });
 }
 
-function gitCommand(...args) {
-  try {
-    return execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
-  } catch {
-    return null;
-  }
-}
-
 function verifyCommand(args) {
   const result = spawnSync("pnpm", ["verify", ...args], { stdio: "inherit" });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error("Push verification failed; fix the checks before pushing.");
 }
 
-export function verifyPush(input, remoteName, remoteUrl, { git = gitCommand, verify = verifyCommand } = {}) {
+export function verifyPush(input, remoteName, remoteUrl, { git = defaultGit, verify = verifyCommand } = {}) {
   // Tags are not verified here: the release workflow checks the tagged commit itself.
   const updates = parseUpdates(input).filter((update) => !deleted.test(update.localSha) && !update.remoteRef.startsWith("refs/tags/"));
   if (!updates.length) return;

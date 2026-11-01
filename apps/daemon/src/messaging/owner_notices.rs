@@ -1,9 +1,10 @@
 //! The notices Octoboard writes about who a session reports to: to an owner about one of its
-//! sessions — it ended on its own, it waits for the user, its switch to another account failed —
-//! and to a session whose owner changed, or to the owner that lost it, with whose it is now and the
-//! tools that leaves it. A session that was told at launch who it reports to is not told again by
-//! anything else, so one with no process when its owner changes is left owed its notice, built at
-//! its next launch from the binding as it stands then.
+//! sessions — it ended on its own, it waits for the user, Octoboard switched it to another account
+//! at its usage limit or resumed it once its quota recovered, or could not — and to a session
+//! whose owner changed, or to the owner that lost it, with whose it is now and the tools that
+//! leaves it. A session that was told at launch who it reports to is not told again by anything
+//! else, so one with no process when its owner changes is left owed its notice, built at its next
+//! launch from the binding as it stands then.
 
 use std::sync::Arc;
 
@@ -14,7 +15,7 @@ use crate::messaging::delivery::{
     self, is_archived_refusal, rebound_owner, write_notice_to_owner, Delivery, WhenBlocked,
 };
 use crate::messaging::sharing;
-use crate::messaging::texts::{waiting_opening, NOTICE_PREFIX, WAITING_PHRASE};
+use crate::messaging::texts::{capitalised, waiting_opening, NOTICE_PREFIX, WAITING_PHRASE};
 use crate::protocol::{Agent, Role, Session, SessionStatus};
 use crate::state::AppState;
 
@@ -63,6 +64,94 @@ pub fn tell_owner_the_switch_failed(state: &Arc<AppState>, session: &Session, re
             reopen_session = mcp::qualified_tool_name(owner.agent, "reopen_session"),
         )
     });
+}
+
+/// Tells the owner of `session` that Octoboard switched it to the account `to` by itself when its
+/// account `from` reached its usage limit, as [`tell_owner`] does. `continued` is whether its
+/// relaunch carried a prompt to continue the task its turn stopped on.
+///
+/// **Blocks** on writing into the owner.
+pub fn tell_owner_it_was_switched(
+    state: &Arc<AppState>,
+    session: &Session,
+    from: &str,
+    to: &str,
+    continued: bool,
+) {
+    tell_owner(state, session, |owner| {
+        it_was_switched(owner, session, from, to, continued)
+    });
+}
+
+/// The notice of [`tell_owner_it_was_switched`] for `owner`.
+fn it_was_switched(
+    owner: &Session,
+    session: &Session,
+    from: &str,
+    to: &str,
+    continued: bool,
+) -> String {
+    format!(
+        "{NOTICE_PREFIX}: {named} reached the usage limit of its {} account `{from}`, so \
+         Octoboard switched it to `{to}` by itself. Its conversation came with it. {}",
+        session.agent.label(),
+        if continued {
+            "Its turn had stopped on the limit, so it was sent a prompt to continue that task: \
+             do not send it one yourself."
+                .to_string()
+        } else {
+            format!(
+                "It is back awaiting instructions, so send it the next step with `{}` if it \
+                 has one pending.",
+                mcp::qualified_tool_name(owner.agent, "instruct_session")
+            )
+        },
+        named = sharing::named_session(session),
+    )
+}
+
+/// Tells the owner of `session` that it resumed by itself on its own account once that account's
+/// usage quota recovered, as [`tell_owner`] does. `continued` is whether it was sent a prompt to
+/// continue.
+///
+/// **Blocks** on writing into the owner.
+pub fn tell_owner_it_resumed_on_recovery(
+    state: &Arc<AppState>,
+    session: &Session,
+    continued: bool,
+) {
+    tell_owner(state, session, |_| resumed_on_recovery(session, continued));
+}
+
+/// The notice of [`tell_owner_it_resumed_on_recovery`].
+fn resumed_on_recovery(session: &Session, continued: bool) -> String {
+    let continuation = if continued {
+        "It was sent a prompt to continue; do not send it one yourself."
+    } else {
+        "It is awaiting instructions."
+    };
+    format!(
+        "{NOTICE_PREFIX}: session `{}` resumed automatically after its account's usage quota \
+         recovered. {continuation}",
+        session.id
+    )
+}
+
+/// Tells the owner of `session` that it could not be resumed on its own account once that
+/// account's usage quota recovered, for `reason`, as [`tell_owner`] does.
+///
+/// **Blocks** on writing into the owner.
+pub fn tell_owner_the_recovery_failed(state: &Arc<AppState>, session: &Session, reason: &str) {
+    tell_owner(state, session, |_| recovery_failed(session, reason));
+}
+
+/// The notice of [`tell_owner_the_recovery_failed`].
+fn recovery_failed(session: &Session, reason: &str) -> String {
+    format!(
+        "{NOTICE_PREFIX}: session `{}` (\"{}\") could not resume after its account's usage quota \
+         recovered. It is interrupted and its work is stopped. Reason: {reason}",
+        session.id, session.title
+    )
 }
 
 /// Tells the owner of the session `id` that it waits for the user, which no report says: the
@@ -137,23 +226,72 @@ fn project_tools(agent: Agent, worker: bool) -> String {
         .join(", ")
 }
 
-/// The sentence that tells a session it can no longer start or drive sessions, with the tools it
-/// has left.
-pub(crate) fn lost_tools(agent: Agent) -> String {
+/// The sentence that tells a session that has just become a worker that it can no longer start or
+/// drive sessions, with the tools it has left; what comes before it says it is a worker.
+fn lost_tools(agent: Agent) -> String {
     format!(
-        "Your role is worker. You can no longer start or drive sessions: of Octoboard's tools \
-         you now have {}, and a call of any other is refused. Any pages you pushed to the \
-         report panel were withdrawn with the tools for them.",
+        "You can no longer start or drive sessions: of Octoboard's tools you now have {}, and a \
+         call of any other is refused. Any pages you pushed to the report panel were withdrawn \
+         with the tools for them.",
         project_tools(agent, true)
     )
 }
 
+/// The sentence that tells a session whose parent session has just changed what its role is now:
+/// the tools it lost, when the change made a worker of a coordinator, else that its role stays.
+/// `was_worker` is whether it was a worker before, which one told at its next launch is not known
+/// to have been, so a worker is then told of the tools as one that lost them.
+pub(crate) fn role_after_owner_change(session: &Session, was_worker: bool) -> String {
+    if !session.is_worker() {
+        "Your role remains coordinator: you can create and manage child sessions.".to_string()
+    } else if was_worker {
+        "Your role remains worker: you cannot create or manage child sessions.".to_string()
+    } else {
+        format!("Your role is worker. {}", lost_tools(session.agent))
+    }
+}
+
+/// What a session launched with no parent session is to do now that it has one, in the words of
+/// its `agent`'s tool names, to follow a colon after the parent session is named: take work only
+/// from it and report to it, what ending a round with `done` does, and, for a `coordinator`, that
+/// it keeps its child sessions, else the tools it lost. Its role description, recorded at launch,
+/// says it is independent, so this says it replaces that.
+pub(crate) fn duties_under_new_parent(agent: Agent, coordinator: bool) -> String {
+    let tool = |name: &str| mcp::qualified_tool_name(agent, name);
+    let report = tool("report");
+    let ending = if coordinator {
+        format!(
+            "`done` with no open items archives you, and is refused while a session you started \
+             is not archived; `needs_decision` or open items leave you running. You keep your \
+             child sessions and go on driving them with `{}` and the tools that go with it.",
+            tool("new_session"),
+        )
+    } else {
+        format!(
+            "`done` with no open items archives you; `needs_decision` or open items leave you \
+             running. {}",
+            lost_tools(agent)
+        )
+    };
+    format!(
+        "take work only from it, or from the user typing in this terminal, and report to it with \
+         `{report}` once per round of work. This replaces anything your role description says \
+         about being independent and not calling `{report}`. {ending}"
+    )
+}
+
+/// The clause that tells a coordinator that its reporting relationship is independent, for a
+/// notice to go on to say what that means for it.
+pub(crate) const INDEPENDENT_COORDINATOR_ROLE: &str =
+    "Your role is coordinator and your reporting relationship is independent";
+
 /// The sentence that tells a session whose it is from now on, in the words of its `agent`'s tool
-/// names.
+/// names; `owner` names the parent session, and the sentence begins with it.
 pub(crate) fn owner_from_now_on(agent: Agent, owner: &str) -> String {
     format!(
         "{owner} is your parent session from now on: take work only from it, or from the user \
          typing in this terminal, and report to it with `{report}`.",
+        owner = capitalised(owner),
         report = mcp::qualified_tool_name(agent, "report"),
     )
 }
@@ -221,15 +359,11 @@ pub(crate) fn owner_notice(state: &Arc<AppState>, session: &Session) -> Result<S
         Some(owner) => sharing::named_session(&owner),
         None => format!("`{owner_id}`"),
     };
-    let tools = if session.is_worker() {
-        format!(" {}", lost_tools(session.agent))
-    } else {
-        " Your role is coordinator: you can create and manage child sessions.".to_string()
-    };
     Ok(format!(
         "{NOTICE_PREFIX}: your parent session has changed while you were not running. {owner} \
-         This replaces what you were told of your parent session when you were started.{tools}",
+         This replaces what you were told of your parent session when you were started. {role}",
         owner = owner_from_now_on(session.agent, &owner),
+        role = role_after_owner_change(session, false),
     ))
 }
 
@@ -293,16 +427,15 @@ fn released_text(released: &Session, note: Option<&str>) -> String {
         None => String::new(),
     };
     format!(
-        "{NOTICE_PREFIX}: you have no parent session now. Your role is coordinator and your \
-         reporting relationship is independent. You were released from the session you reported \
-         to, and you are the user's own session: take work only from the user typing in this \
-         terminal, and do not call `{report}`, which is refused for a session with no parent \
-         session. This replaces what you were told of your parent session when you were \
-         started. You can start and drive sessions of your own with `{new_session}` and the \
-         tools that go with it (call `{get_session}` once with no arguments first, so that your \
-         tool list catches up), and you can still tell your former parent session something \
-         with `{send_message}`, which it weighs rather than obeys; of Octoboard's tools you now \
-         have {tools}.{note}",
+        "{NOTICE_PREFIX}: you have no parent session now. {INDEPENDENT_COORDINATOR_ROLE}. You \
+         were released from the session you reported to, and you are the user's own session: take \
+         work only from the user typing in this terminal, and do not call `{report}`, which is \
+         refused for a session with no parent session. This replaces what you were told of your \
+         parent session when you were started. You can start and drive sessions of your own with \
+         `{new_session}` and the tools that go with it (call `{get_session}` once with no \
+         arguments first, so that your tool list catches up), and you can still tell your former \
+         parent session something with `{send_message}`, which it weighs rather than obeys; of \
+         Octoboard's tools you now have {tools}.{note}",
         report = tool("report"),
         get_session = tool("get_session"),
         new_session = tool("new_session"),
@@ -633,6 +766,85 @@ mod tests {
         assert_eq!(
             waiting_notice_session("Message from Octoboard: other"),
             None
+        );
+    }
+
+    /// The notices of an automatic account switch and of a quota recovery, word for word: an
+    /// owner reads them for what to do next, and whether to send the session a prompt itself. The
+    /// tool the owner is pointed to is named in its own agent's words (a Grok owner, a Claude
+    /// session), not the session's.
+    #[test]
+    fn the_notices_of_an_automatic_switch_and_a_recovery_are_worded_as_fixed() {
+        let session = project_session("Fix the \"login\"\nretry");
+        let owner = Session {
+            id: "hub".to_string(),
+            agent: Agent::Grok,
+            ..project_session("hub")
+        };
+        assert_eq!(
+            it_was_switched(&owner, &session, "Work A", "Work B", true),
+            "Message from Octoboard: the project session `session-7` (\"Fix the \"login\" retry\") \
+             reached the usage limit of its Claude Code account `Work A`, so Octoboard switched it \
+             to `Work B` by itself. Its conversation came with it. Its turn had stopped on the \
+             limit, so it was sent a prompt to continue that task: do not send it one yourself."
+        );
+        assert_eq!(
+            it_was_switched(&owner, &session, "Work A", "Work B", false),
+            "Message from Octoboard: the project session `session-7` (\"Fix the \"login\" retry\") \
+             reached the usage limit of its Claude Code account `Work A`, so Octoboard switched it \
+             to `Work B` by itself. Its conversation came with it. It is back awaiting \
+             instructions, so send it the next step with `octoboard__instruct_session` if it has \
+             one pending."
+        );
+        assert_eq!(
+            resumed_on_recovery(&session, true),
+            "Message from Octoboard: session `session-7` resumed automatically after its \
+             account's usage quota recovered. It was sent a prompt to continue; do not send it one \
+             yourself."
+        );
+        assert_eq!(
+            resumed_on_recovery(&session, false),
+            "Message from Octoboard: session `session-7` resumed automatically after its \
+             account's usage quota recovered. It is awaiting instructions."
+        );
+        assert_eq!(
+            recovery_failed(&session, "the launch failed"),
+            "Message from Octoboard: session `session-7` (\"Fix the \"login\"\nretry\") could not \
+             resume after its account's usage quota recovered. It is interrupted and its work is \
+             stopped. Reason: the launch failed"
+        );
+    }
+
+    /// What a session is told of its role when its parent session changed while it was not
+    /// running, or when it was released, word for word as far as the role goes.
+    #[tokio::test]
+    async fn a_session_told_of_a_new_parent_or_a_release_is_told_its_role_word_for_word() {
+        let (state, _dir, _hub) = team_state(
+            "owner-notice-role-words",
+            &[("lead", "hub", true, SessionStatus::Interrupted)],
+        );
+        let lead = state.session_record("lead").unwrap();
+        assert_eq!(
+            owner_notice(&state, &lead).unwrap(),
+            "Message from Octoboard: your parent session has changed while you were not running. \
+             The console session `hub` (\"hub\") is your parent session from now on: take work \
+             only from it, or from the user typing in this terminal, and report to it with \
+             `mcp__octoboard__report`. This replaces what you were told of your parent session \
+             when you were started. Your role remains coordinator: you can create and manage \
+             child sessions."
+        );
+        let released = Session {
+            bound_to: None,
+            ..lead
+        };
+        let text = released_text(&released, None);
+        assert!(
+            text.starts_with(
+                "Message from Octoboard: you have no parent session now. Your role is coordinator \
+                 and your reporting relationship is independent. You were released from the \
+                 session you reported to, and you are the user's own session: "
+            ),
+            "{text}"
         );
     }
 }

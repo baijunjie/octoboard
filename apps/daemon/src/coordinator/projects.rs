@@ -114,10 +114,7 @@ pub async fn add_project(
         check_launch,
         check_text_limits,
     } = request;
-    let console = state
-        .store
-        .get_console(&console_id)?
-        .ok_or_else(|| CodedError::unknown_console(&console_id))?;
+    let console = state.store.require_console(&console_id)?;
     // Blank is no name: it is ignored for a parent directory, and a single project takes its
     // directory's own.
     let name = name
@@ -322,14 +319,8 @@ pub async fn update_project(
     }
     let mut verified = Vec::new();
     loop {
-        let mut project = state
-            .store
-            .get_project(id)?
-            .ok_or_else(|| CodedError::unknown_project(id))?;
-        let console = state
-            .store
-            .get_console(&project.console_id)?
-            .ok_or_else(|| CodedError::unknown_console(&project.console_id))?;
+        let mut project = state.store.require_project(id)?;
+        let console = state.store.require_console(&project.console_id)?;
         // Compare against the latest record on every pass: unchanged legacy text must not block
         // unrelated settings, including after a launch check has yielded.
         if let Some(name) = &name {
@@ -396,10 +387,7 @@ pub async fn update_project(
         // Read back rather than sent as `project`: the stored record carries what this write
         // does not touch (the remote URL, the trust consent), which another path may have just
         // changed.
-        let stored = state
-            .store
-            .get_project(id)?
-            .ok_or_else(|| CodedError::unknown_project(id))?;
+        let stored = state.store.require_project(id)?;
         state.broadcast(Event::ProjectUpserted {
             project: stored.clone(),
         });
@@ -421,10 +409,7 @@ pub(super) async fn delete_project(
     inspection: Option<String>,
 ) -> Result<()> {
     let _removal = state.claim_session_removal();
-    let deleted = state
-        .store
-        .get_project(&id)?
-        .ok_or_else(|| CodedError::unknown_project(&id))?;
+    let deleted = state.store.require_project(&id)?;
     let in_project = |session: &Session| session.project_id.as_deref() == Some(&id);
     ensure_unlocked(state.store.list_sessions()?.into_iter().filter(in_project))?;
     // A session still being launched has no process to stop, so it refuses either way.
@@ -554,10 +539,7 @@ pub(super) async fn inspect_project_removal(
     request_id: Option<String>,
     project: String,
 ) -> Result<Option<Event>> {
-    let project = state
-        .store
-        .get_project(&project)?
-        .ok_or_else(|| CodedError::unknown_project(&project))?;
+    let project = state.store.require_project(&project)?;
     // A removal that would be refused takes nothing along: its refusal is the answer, and
     // a client lists nothing for it. One a path that could not be resolved decided is kept
     // for the removal to repeat, so it takes nothing along either.
@@ -737,10 +719,7 @@ fn stop_project_sessions(
 /// being checked is left alone. The statuses follow as `project_git_status` broadcasts, so this
 /// returns as soon as the checks are started rather than waiting for them.
 pub(super) fn refresh_git_status(state: &Arc<AppState>, console_id: &str) -> Result<()> {
-    state
-        .store
-        .get_console(console_id)?
-        .ok_or_else(|| CodedError::unknown_console(console_id))?;
+    state.store.require_console(console_id)?;
     let projects: Vec<Project> = state
         .store
         .list_projects()?

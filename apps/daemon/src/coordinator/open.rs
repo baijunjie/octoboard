@@ -212,17 +212,11 @@ pub(super) fn resolve_open_with(
     request: &OpenRequest,
     enforce_quota: bool,
 ) -> Result<ResolvedOpen> {
-    let console = state
-        .store
-        .get_console(&request.console_id)?
-        .ok_or_else(|| CodedError::unknown_console(&request.console_id))?;
+    let console = state.store.require_console(&request.console_id)?;
 
     let (role, cwd, project, default_title) = match &request.project_id {
         Some(project_id) => {
-            let project = state
-                .store
-                .get_project(project_id)?
-                .ok_or_else(|| CodedError::unknown_project(project_id))?;
+            let project = state.store.require_project(project_id)?;
             let cwd = PathBuf::from(&project.path);
             let title = project.name.clone();
             (Role::Project, cwd, Some(project), title)

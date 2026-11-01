@@ -12,13 +12,14 @@ A project session with a parent reports a round of work with `report`, whether i
 The report is written into its **parent session** — a console session or project coordinator — named by the
 reporting relationship rather than looked up, since a console may
 hold several console sessions. It arrives as a user message naming the reporting session's id, its title and project,
-the status, the open items, and then the summary. The reporting session is told that it was delivered, that it was
-accepted and will reach its owner as soon as the owner can take a message, that it was kept for its owner, which is
-interrupted, and is delivered once the owner is resumed, so it must not be sent again (see "Reports and notices for an
-interrupted owner" below), or that it was written into the owner's input but the owner's agent did not send it to the
-conversation, so the owner has not read it, the user has been told, and it must not be sent again (see "A message
-written but not sent" and "A message a dialog discarded or a view took" in `docs/product/message-delivery.md`). The
-note calls the owner a console session or a project session according to which it is.
+the status, the open items, and then the summary. The reporting session is told that it was delivered; that it is
+queued and will reach its owner as soon as the owner can take a message; that it was kept for its owner, which is
+interrupted, and is delivered once the owner is resumed (see "Reports and notices for an interrupted owner" below); or
+that it was written into the owner's input but the owner's agent did not send it to the conversation, so the owner has
+not read it and the user has been told to check the owner (see "A message written but not sent" and "A message a dialog
+discarded or a view took" in `docs/product/message-delivery.md`). Every outcome but the first tells it not to send the
+report again. The note names the owner by its id, calling it a console session or a project session according to which
+it is.
 
 Reporting is refused, or fails without accepting the report, when:
 

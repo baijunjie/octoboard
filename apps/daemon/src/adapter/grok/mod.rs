@@ -102,7 +102,7 @@ use crate::agents::layout;
 use crate::mcp;
 use crate::protocol::{error_code, Agent, CodedError, TerminalAppearance};
 use crate::session::trust::CarriedTrust;
-use home::{build_grok_home, canonical_cwd, default_grok_home};
+use home::{build_grok_home, canonical_cwd};
 use sandbox::require_unsandboxed;
 use writeback::shared_config_writeback;
 pub use writeback::SharedConfigWriteback;
@@ -221,9 +221,7 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: &Path) -> Result<LaunchPlan> {
     if let Some(dir) = pinned {
         require_initialized_grok_home(dir)?;
     }
-    let source_home = pinned
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| default_grok_home(spec));
+    let source_home = super::account_dir(Agent::Grok, pinned, spec.shell_env);
     require_unsandboxed(spec, &source_home, system_dir)?;
     let grok_home = build_grok_home(spec, &source_home)?;
 

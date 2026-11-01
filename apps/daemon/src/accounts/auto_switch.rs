@@ -15,10 +15,8 @@ use crate::coordinator::{
     account_switch::{NoLongerDue, SwitchOnlyIf},
     launch::LaunchEdit,
 };
-use crate::mcp;
 use crate::messaging::delivery::{self, WhenBlocked};
 use crate::messaging::owner_notices;
-use crate::messaging::sharing;
 use crate::messaging::texts::NOTICE_PREFIX;
 use crate::protocol::{
     error_code, error_parts, notice_code, Agent, CodedError, Notice, Session, SessionStatus,
@@ -859,16 +857,7 @@ async fn switch_to_with_recovery(
     if same_account {
         let (state, moved) = (state.clone(), moved.clone());
         tokio::task::spawn_blocking(move || {
-            let continuation = if continued {
-                "It was sent a prompt to continue; do not send it one yourself."
-            } else {
-                "It is awaiting instructions."
-            };
-            owner_notices::tell_owner(&state, &moved, |_| {
-                format!(
-                "{NOTICE_PREFIX}: session `{}` resumed automatically after its account's usage \
-                 quota recovered. {continuation}", moved.id)
-            });
+            owner_notices::tell_owner_it_resumed_on_recovery(&state, &moved, continued)
         })
         .await?;
         return Ok(true);
@@ -933,12 +922,7 @@ async fn tell_recovery_failed(state: &Arc<AppState>, session: &Session, err: &an
     coordinator::open::report_failed_launch(state, session, err);
     let (state, session, reason) = (state.clone(), session.clone(), format!("{err:#}"));
     let _ = tokio::task::spawn_blocking(move || {
-        owner_notices::tell_owner(&state, &session, |_| {
-            format!(
-            "{NOTICE_PREFIX}: session `{}` (\"{}\") could not resume after its account's usage \
-             quota recovered. It is interrupted and its work is stopped. Reason: {reason}",
-            session.id, session.title)
-        });
+        owner_notices::tell_owner_the_recovery_failed(&state, &session, &reason)
     })
     .await;
 }
@@ -1103,25 +1087,7 @@ fn tell_sessions(
             state.clear_turn_credit(&moved.id, &opening);
         }
     }
-    owner_notices::tell_owner(state, moved, |owner| {
-        format!(
-            "{NOTICE_PREFIX}: {session} reached the usage limit of its {} account `{from}`, so \
-             Octoboard switched it to `{to}` by itself. Its conversation came with it. {}",
-            moved.agent.label(),
-            if continued {
-                "Its turn had stopped on the limit, so it was sent a prompt to continue that task: \
-                 do not send it one yourself."
-                    .to_string()
-            } else {
-                format!(
-                    "It is back awaiting instructions, so send it the next step with `{}` if it \
-                     has one pending.",
-                    mcp::qualified_tool_name(owner.agent, "instruct_session")
-                )
-            },
-            session = sharing::named_session(moved),
-        )
-    });
+    owner_notices::tell_owner_it_was_switched(state, moved, from, to, continued);
 }
 
 /// Writes `text` into the session `id`, queued until it can take it. Whether it was accepted.

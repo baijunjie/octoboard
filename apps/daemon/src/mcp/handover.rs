@@ -2,7 +2,9 @@
 //! `handover_branches`: from itself to a session of its own, from one to itself, or from one of its
 //! sessions to another. Only the branch records move; no session is replaced (that is
 //! `handoff_session`), and nothing in git or on disk changes. The checks on the branches named,
-//! which `new_session` and `request_session` make too, are here as well.
+//! which `new_session` and `request_session` make too, are here as well, and so is what
+//! `handover_processes` shares with it: the two sessions read under their claims (`Parties`),
+//! telling them what moved, and refusing a `from` in the middle of a turn.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -21,7 +23,7 @@ use crate::messaging::delivery::{self, WhenBlocked};
 use crate::messaging::sharing::named_session;
 use crate::messaging::texts::NOTICE_PREFIX;
 use crate::protocol::{error_code, CodedError, Project, Role, Session, SessionStatus};
-use crate::state::AppState;
+use crate::state::{AppState, LaunchClaim, OutboxHold};
 use crate::wire_path;
 
 use super::args::{optional_string, optional_string_list};
@@ -128,24 +130,8 @@ pub(super) async fn handover_branches(
 ) -> Result<Value> {
     let branches = branch_names(arguments, "branches")?
         .ok_or_else(|| anyhow!("`branches` is required and must name at least one branch"))?;
-    let from_id = party(state, caller, arguments, "from")?.id;
-    let to_id = party(state, caller, arguments, "to")?.id;
-    if from_id == to_id {
-        bail!("`from` and `to` are the same session, `{from_id}`; there is nothing to hand over");
-    }
-
-    // Everything above can be stale by the time the branches move: a claim keeps another switch
-    // or handoff off a session, and `from` takes no message that starts a turn, while everything
-    // is read and checked again.
-    let _from_claim = (from_id != caller.id)
-        .then(|| state.begin_switch(&from_id))
-        .transpose()?;
-    let _to_claim = (to_id != caller.id)
-        .then(|| state.begin_switch(&to_id))
-        .transpose()?;
-    let hold = (from_id != caller.id).then(|| state.hold_outbox(&from_id));
-    let from = party(state, caller, arguments, "from")?;
-    let to = party(state, caller, arguments, "to")?;
+    let mut parties = Parties::claim(state, caller, arguments)?;
+    let (from, to) = (parties.from.clone(), parties.to.clone());
     if to.status == SessionStatus::Archived {
         bail!(
             "{} is archived and cannot be responsible for branches; reopen it first",
@@ -153,7 +139,12 @@ pub(super) async fn handover_branches(
         );
     }
     if from.id != caller.id {
-        refuse_if_at_work(state, &from)?;
+        refuse_if_at_work(
+            state,
+            &from,
+            "goes on writing to the worktrees of its branches. Hand them over once it is \
+             awaiting instructions, or has been interrupted",
+        )?;
     }
     let from_project = project_of(state, &from)?;
     let to_project = project_of(state, &to)?;
@@ -182,8 +173,8 @@ pub(super) async fn handover_branches(
     };
 
     let standing = standing_of(state, &handover.repository, &moved.moved).await;
-    let untold = tell(state, caller, &from, &to, &standing, &handover.targets).await;
-    drop(hold);
+    let messages = messages(caller, &from, &to, &standing, &handover.targets);
+    let untold = parties.tell(state, caller, messages, "branch").await;
 
     let mut answer = json!({
         "from": from.id,
@@ -215,13 +206,7 @@ pub(super) async fn handover_branches(
             named_branches(&moved.unmoved)
         ));
     }
-    for session in &untold {
-        note.push_str(&format!(
-            " Octoboard could not send {} a message about the handover: tell it yourself once it \
-             can take a message.",
-            named_session(session)
-        ));
-    }
+    note.push_str(&untold_note(&untold));
     answer["note"] = json!(note);
     Ok(answer)
 }
@@ -238,6 +223,114 @@ pub(super) fn party(
         Some(wanted) if wanted != caller.id => resolve_owned_session(state, caller, &wanted),
         _ => state.session_record(&caller.id),
     }
+}
+
+/// The two sessions of a handover, `from` and `to` (each the caller or a session it owns), read
+/// under claims that keep a relaunch, a switch or a handoff off each one that is not the caller,
+/// with the messages of a `from` other than the caller held so that none starts a turn while the
+/// handover is checked again and made. The claims last as long as this does.
+pub(super) struct Parties {
+    pub(super) from: Session,
+    pub(super) to: Session,
+    // Declared before the claims, which drop in declaration order: the held messages are released
+    // first, while the sessions are still claimed.
+    hold: Option<OutboxHold>,
+    _to_claim: Option<LaunchClaim>,
+    _from_claim: Option<LaunchClaim>,
+}
+
+impl Parties {
+    /// Reads `from` and `to` from `arguments`, refusing one session as both, then claims them and
+    /// reads them again: everything read before the claims can be stale by the time anything
+    /// moves.
+    pub(super) fn claim(
+        state: &Arc<AppState>,
+        caller: &Session,
+        arguments: &Map<String, Value>,
+    ) -> Result<Self> {
+        let from_id = party(state, caller, arguments, "from")?.id;
+        let to_id = party(state, caller, arguments, "to")?.id;
+        if from_id == to_id {
+            bail!(
+                "`from` and `to` are the same session, `{from_id}`; there is nothing to hand over"
+            );
+        }
+        let _from_claim = (from_id != caller.id)
+            .then(|| state.begin_switch(&from_id))
+            .transpose()?;
+        let _to_claim = (to_id != caller.id)
+            .then(|| state.begin_switch(&to_id))
+            .transpose()?;
+        let hold = (from_id != caller.id).then(|| state.hold_outbox(&from_id));
+        Ok(Self {
+            from: party(state, caller, arguments, "from")?,
+            to: party(state, caller, arguments, "to")?,
+            hold,
+            _to_claim,
+            _from_claim,
+        })
+    }
+
+    /// Tells `from` and `to` what moved, `messages` holding what each is told in that order,
+    /// unless one is the caller, which knows from the result; then lets `from`'s held messages go.
+    /// `what` names the handover in the log.
+    ///
+    /// Returns the sessions that could not be told, as they are on record now, for the result to
+    /// name ([`untold_note`]): one with no process, or one that took no message. The records are
+    /// right either way.
+    pub(super) async fn tell(
+        &mut self,
+        state: &Arc<AppState>,
+        caller: &Session,
+        messages: [String; 2],
+        what: &str,
+    ) -> Vec<Session> {
+        let mut untold = Vec::new();
+        for (session, text) in [&self.from, &self.to].into_iter().zip(messages) {
+            if session.id == caller.id {
+                continue;
+            }
+            // Read again: the status in hand is from before the move.
+            let current = state
+                .store
+                .get_session(&session.id)
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| session.clone());
+            if current.status.is_dormant() {
+                untold.push(current);
+                continue;
+            }
+            if let Err(err) =
+                delivery::write_message_off_runtime(state, &session.id, text, WhenBlocked::Queue)
+                    .await
+            {
+                tracing::warn!(
+                    session = %session.id,
+                    %err,
+                    "telling a session of a {what} handover failed"
+                );
+                untold.push(current);
+            }
+        }
+        drop(self.hold.take());
+        untold
+    }
+}
+
+/// What a handover's result says of each session in `untold`, which [`Parties::tell`] could not
+/// tell: that the caller is to.
+pub(super) fn untold_note(untold: &[Session]) -> String {
+    untold
+        .iter()
+        .map(|session| {
+            format!(
+                " Octoboard could not send {} a message about the handover: tell it yourself \
+                 once it can take a message.",
+                named_session(session)
+            )
+        })
+        .collect()
 }
 
 /// The project of `session`, whose repository the branches are in. A console session is in no
@@ -284,21 +377,19 @@ async fn refuse_unless_in_the_repository(
     Ok(())
 }
 
-/// A session in the middle of a turn — working, starting, or held up for the user (a permission
-/// prompt, a question, a session request waiting) — goes on writing to the worktrees of its
-/// branches, so it is not asked to give one up. Both the record and the status the agent is at
-/// count: a prompt the agent shows (Codex's "Action Required" terminal title) can be seen before
-/// the record has caught up with it.
-fn refuse_if_at_work(state: &Arc<AppState>, from: &Session) -> Result<()> {
+/// Refuses `from` when it is in the middle of a turn — working, starting, or held up for the user
+/// (a permission prompt, a question, a session request waiting) — since such a session goes on
+/// using what it would be asked to give up, as `why` says after "a session in the middle of a
+/// turn". Both the record and the status the agent is at count: a prompt the agent shows (Codex's
+/// "Action Required" terminal title) can be seen before the record has caught up with it.
+pub(super) fn refuse_if_at_work(state: &Arc<AppState>, from: &Session, why: &str) -> Result<()> {
     let Some(busy) = busy_phrase(state, from) else {
         return Ok(());
     };
     Err(CodedError::raised(
         error_code::SESSION_WORKING,
         format!(
-            "{} is {busy}: a session in the middle of a turn goes on writing to the worktrees of \
-             its branches. Hand them over once it is awaiting instructions, or has been \
-             interrupted",
+            "{} is {busy}: a session in the middle of a turn {why}",
             named_session(from),
         ),
         &[("session", &from.id)],
@@ -308,7 +399,7 @@ fn refuse_if_at_work(state: &Arc<AppState>, from: &Session) -> Result<()> {
 /// How `session` is occupied when it is in the middle of a turn, as a phrase after "is", or
 /// `None` when it is not: working, starting, or held up for the user. Both the record and the
 /// status the agent is at count.
-pub(super) fn busy_phrase(state: &Arc<AppState>, session: &Session) -> Option<&'static str> {
+fn busy_phrase(state: &Arc<AppState>, session: &Session) -> Option<&'static str> {
     [session.status, state.agent_status(session)]
         .into_iter()
         .find_map(|status| match status {
@@ -383,20 +474,15 @@ fn standing_lines(
         .collect()
 }
 
-/// Tells `from` and `to` what moved, unless one is the caller, which knows from the result. `to` is
-/// also told each branch's target branch (`targets`, by wire path), the one it merges the branch
-/// into.
-///
-/// Returns the sessions that could not be told, for the result to name: one with no process, or
-/// one that took no message. The records are right either way.
-async fn tell(
-    state: &Arc<AppState>,
+/// What `from` and `to` are told of the branches that moved, for [`Parties::tell`]. `to` is also
+/// told each branch's target branch (`targets`, by wire path), the one it merges the branch into.
+fn messages(
     caller: &Session,
     from: &Session,
     to: &Session,
     standing: &[(String, String, Worktree)],
     targets: &HashMap<String, String>,
-) -> Vec<Session> {
+) -> [String; 2] {
     let names: Vec<String> = standing
         .iter()
         .map(|(_, branch, _)| branch.clone())
@@ -410,57 +496,23 @@ async fn tell(
     let lines = standing_lines(standing, None);
     let lines_with_targets = standing_lines(standing, Some(targets));
     let owner = named_session(caller);
-    let messages = [
-        (
-            from,
-            format!(
-                "{NOTICE_PREFIX}: {owner}, your owner, handed the {noun} {named} over to \
-                 {to}. You are no longer responsible for {them}: do not touch {them} or the \
-                 worktrees {them} {is} checked out in, and leave any uncommitted changes there as \
-                 they are.{lines}",
-                to = named_session(to),
-                is = if names.len() == 1 { "is" } else { "are" },
-            ),
+    [
+        format!(
+            "{NOTICE_PREFIX}: {owner}, your owner, handed the {noun} {named} over to \
+             {to}. You are no longer responsible for {them}: do not touch {them} or the \
+             worktrees {them} {is} checked out in, and leave any uncommitted changes there as \
+             they are.{lines}",
+            to = named_session(to),
+            is = if names.len() == 1 { "is" } else { "are" },
         ),
-        (
-            to,
-            format!(
-                "{NOTICE_PREFIX}: {owner}, your owner, handed the {noun} {named} over to \
-                 you from {from}. You are now the session responsible for {them}, and the previous \
-                 session no longer is. Your owner will tell you what to do with {them}.\
-                 {lines_with_targets}",
-                from = named_session(from),
-            ),
+        format!(
+            "{NOTICE_PREFIX}: {owner}, your owner, handed the {noun} {named} over to \
+             you from {from}. You are now the session responsible for {them}, and the previous \
+             session no longer is. Your owner will tell you what to do with {them}.\
+             {lines_with_targets}",
+            from = named_session(from),
         ),
-    ];
-    let mut untold = Vec::new();
-    for (session, text) in messages {
-        if session.id == caller.id {
-            continue;
-        }
-        // Read again: the status in hand is from before the move.
-        let current = state
-            .store
-            .get_session(&session.id)
-            .ok()
-            .flatten()
-            .unwrap_or_else(|| session.clone());
-        if current.status.is_dormant() {
-            untold.push(current);
-            continue;
-        }
-        if let Err(err) =
-            delivery::write_message_off_runtime(state, &session.id, text, WhenBlocked::Queue).await
-        {
-            tracing::warn!(
-                session = %session.id,
-                %err,
-                "telling a session of a branch handover failed"
-            );
-            untold.push(current);
-        }
-    }
-    untold
+    ]
 }
 
 #[cfg(test)]
@@ -678,7 +730,7 @@ mod tests {
             .unwrap();
         fixture.branch("left-of-lead", "old-lead-kid");
 
-        fixture
+        let result = fixture
             .call(
                 "lead",
                 json!({ "branches": ["left-of-lead"], "from": "old-lead-kid" }),
@@ -686,6 +738,16 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(fixture.responsible_for("left-of-lead"), "lead");
+        // The archived session has no process to be told in, and the result says so.
+        let note = result["note"].as_str().unwrap();
+        assert!(
+            note.ends_with(
+                " Octoboard could not send the project session `old-lead-kid` (\"Work \
+                 old-lead-kid\") a message about the handover: tell it yourself once it can take \
+                 a message."
+            ),
+            "{note}"
+        );
 
         let err = fixture
             .call(

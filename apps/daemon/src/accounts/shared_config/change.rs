@@ -9,8 +9,7 @@ use anyhow::Result;
 
 use super::link::{self, Cause, DirsError, Failure};
 use super::{
-    cli_reads, default_dir, describe, in_use, moves, not_shareable, sharing_in_progress, status,
-    take_back,
+    cli_reads, default_dir, describe, in_use, moves, not_shareable, sharing_in_progress, take_back,
 };
 use crate::protocol::{Account, SharingFailure};
 use crate::state::{broadcast_settings, AccountSharingLock, AppState};
@@ -74,14 +73,14 @@ impl<'a> Changing<'a> {
 
     pub(crate) fn end(mut self, failure: Option<SharingFailure>) {
         self.ended = true;
-        status::end_change(self.state, self.account, failure);
+        self.state.end_sharing_change(self.account, failure);
     }
 }
 
 impl Drop for Changing<'_> {
     fn drop(&mut self) {
         if !self.ended {
-            status::set_progress(self.state, self.account, None);
+            self.state.set_sharing_progress(self.account, None);
         }
     }
 }

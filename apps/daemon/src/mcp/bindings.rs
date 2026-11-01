@@ -12,13 +12,14 @@ use anyhow::Result;
 use serde_json::{json, Map, Value};
 
 use crate::coordinator::{self, bindings::Released};
-use crate::messaging::delivery::{self, Delivery};
+use crate::messaging::delivery::{self, Delivery, SentBy};
 use crate::messaging::owner_notices::{
-    lost_tools, owner_from_now_on, tell_now_or_leave, tell_released,
+    duties_under_new_parent, owner_from_now_on, role_after_owner_change, tell_now_or_leave,
+    tell_released,
 };
 use crate::messaging::reporting::{self, ReportStatus};
 use crate::messaging::sharing;
-use crate::messaging::texts::NOTICE_PREFIX;
+use crate::messaging::texts::{capitalised, NOTICE_PREFIX};
 use crate::protocol::{OrchestrationRole, Session};
 use crate::state::AppState;
 
@@ -28,22 +29,16 @@ use super::exec::resolve::resolve_owned_session;
 /// The most characters of the parting note of a `release_session`.
 const MAX_NOTE_CHARS: usize = 4000;
 
-/// What a delivery to `who` came to, for the sender's result. `None` is a session with no process,
-/// which is told when it next starts.
-fn told(delivery: &Result<Option<Delivery>>, who: &str) -> String {
+/// What became of `what`, a notice to `to`, for the sender's result. `None` is a session with no
+/// process, which is told when it next starts.
+fn told(delivery: &Result<Option<Delivery>>, what: &str, to: &str) -> String {
     match delivery {
-        Ok(Some(Delivery::Written)) => format!("{who} was told."),
-        Ok(Some(Delivery::Queued)) => {
-            format!("{who} will be told as soon as it can take a message.")
-        }
-        Ok(Some(Delivery::Kept)) => format!("{who} is not running, and will be told once resumed."),
-        Ok(Some(Delivery::Unsent)) => format!(
-            "{who} was not told: the message was written into its input, but its agent did not \
-             send it to the conversation (it is in the input box, or went to a view of its \
-             background agents). The user has been told to check the session."
+        Ok(Some(delivery)) => delivery.note(what, to, SentBy::Octoboard),
+        Ok(None) => format!(
+            "{} is not running, and will be told when it next starts.",
+            capitalised(to)
         ),
-        Ok(None) => format!("{who} is not running, and will be told when it next starts."),
-        Err(err) => format!("{who} could not be told ({err:#})."),
+        Err(err) => format!("{} could not be told ({err:#}).", capitalised(to)),
     }
 }
 
@@ -61,17 +56,11 @@ pub(super) async fn transfer_session(
     let (moved, owner, running) =
         coordinator::bindings::transfer_session(state, &session.id, &caller.id, to)?;
 
-    let tools = if !session.is_worker() && moved.is_worker() {
-        format!(" {}", lost_tools(moved.agent))
-    } else if moved.is_worker() {
-        " Your role remains worker: you cannot create or manage child sessions.".to_string()
-    } else {
-        " Your role remains coordinator: you can create and manage child sessions.".to_string()
-    };
+    let role = role_after_owner_change(&moved, session.is_worker());
     let to_session = format!(
         "{NOTICE_PREFIX}: your parent session has changed. {from} handed you over to {to}. \
          {owner_now} This replaces what you were told of your parent session when you were \
-         started; `{from_id}` no longer drives you.{tools}",
+         started; `{from_id}` no longer drives you. {role}",
         from = sharing::named_session(caller),
         to = sharing::named_session(&owner),
         owner_now = owner_from_now_on(moved.agent, "It"),
@@ -108,8 +97,12 @@ pub(super) async fn transfer_session(
         "Handed over: `{id}` now reports to {to} and is no longer yours. {child} {owner}",
         id = moved.id,
         to = sharing::named_session(&owner),
-        child = told(&child, "It"),
-        owner = told(&told_owner, "Its new parent session"),
+        child = told(&child, "The notice of the handover", "the session"),
+        owner = told(
+            &told_owner,
+            "The notice of the handover",
+            "its new parent session"
+        ),
     );
     if told_owner.is_err() {
         result_note.push_str(&format!(
@@ -163,7 +156,7 @@ pub(super) async fn release_session(
              you, though `{send_message}` can still tell it something. {told}",
             id = released.id,
             send_message = super::qualified_tool_name(caller.agent, "send_message"),
-            told = told(&delivery, "It"),
+            told = told(&delivery, "The notice of the release", "the session"),
         ),
     }))
 }
@@ -213,47 +206,13 @@ pub(super) async fn bind_to_session(
     let tool = |name: &str| super::qualified_tool_name(bound.agent, name);
     // Nothing after the binding fails the call: the session is bound by now, so a first report
     // that was not delivered, for whatever reason, is the session's to send.
-    let first = match delivered {
-        Ok((_, Delivery::Unsent)) => {
-            "Your summary was written into its input as your first report, but its agent did not \
-             send it to the conversation, so it has not read it; the user has been told. Do not \
-             send it again."
-                .to_string()
-        }
-        Ok((_, Delivery::Kept)) => "It is not running, so your summary is kept for it as your \
-                                    first report and delivered once it is resumed; do not send it \
-                                    again."
-            .to_string(),
-        Ok(_) => "Your summary was sent to it as your first report.".to_string(),
-        Err(err) => format!(
-            "Your summary could not be delivered to it ({err:#}), so send it yourself with `{}`.",
-            tool("report")
-        ),
-    };
-    let what_now = if coordinator {
-        format!(
-            "`done` with no open items archives this session, and is refused while a session you \
-             started is not archived; `needs_decision` or open items leave it running. You keep \
-             the sessions you started and go on driving them with `{new_session}` and the \
-             tools that go with it.",
-            new_session = tool("new_session"),
-        )
-    } else {
-        format!(
-            "`done` with no open items archives this session; `needs_decision` or open items \
-             leave it running. {}",
-            lost_tools(bound.agent)
-        )
-    };
+    let first = first_report_note(&delivered, &tool("report"));
     let note = format!(
-        "Your role is {role}. You now report to {owner}. {first} It is your parent session: \
-         take work from it, or from the user typing in this terminal, and report to it with \
-         `{report}` once per round of work. This replaces anything your role description says \
-         about being independent and not calling `{report}`. {what_now} You have a parent \
-         session now, so do not call `{bind}` again.",
+        "Your role is {role}. You now report to {owner}, your parent session: {duties} {first} \
+         You have a parent session now, so do not call `{bind}` again.",
         owner = sharing::named_session(&owner),
         role = if coordinator { "coordinator" } else { "worker" },
-        report = tool("report"),
+        duties = duties_under_new_parent(bound.agent, coordinator),
         bind = tool("bind_to_session"),
     );
     Ok(json!({
@@ -262,6 +221,22 @@ pub(super) async fn bind_to_session(
         "orchestration_role": bound.orchestration_role,
         "note": note,
     }))
+}
+
+/// What the result of `bind_to_session` says of the caller's summary, delivered to its new owner as
+/// its first report; `report` is the tool by which the caller sends one itself.
+fn first_report_note(delivered: &Result<(String, Delivery)>, report: &str) -> String {
+    match delivered {
+        Ok((_, delivery)) => delivery.note(
+            "Your summary, as your first report,",
+            "your new parent session",
+            SentBy::Reader,
+        ),
+        Err(err) => format!(
+            "Your summary could not be delivered to your new parent session ({err:#}), so send it \
+             yourself with `{report}`."
+        ),
+    }
 }
 
 #[cfg(test)]
@@ -307,7 +282,10 @@ mod tests {
             Some("b")
         );
         let told = output_containing(&of_a, "your parent session has changed");
-        assert!(told.contains("your parent session has changed"), "{told}");
+        assert!(
+            told.contains(" Your role remains worker: you cannot create or manage child sessions."),
+            "{told}"
+        );
         let handed = output_containing(&b, "Half of the endpoints");
         assert!(
             handed.contains("> Half of the endpoints are done."),
@@ -335,7 +313,7 @@ mod tests {
         let _a = running(&state, "a");
         let _b = running(&state, "b");
         let _starter = running(&state, "starter");
-        let _loose = running(&state, "loose");
+        let loose = running(&state, "loose");
         let bound = call(
             &state,
             "loose",
@@ -347,11 +325,33 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(bound["orchestration_role"], "coordinator");
-        assert!(bound["note"]
-            .as_str()
-            .unwrap()
-            .contains("Your role is coordinator"));
-        for (caller, parent, expected) in [("a", "b", "coordinator"), ("b", "starter", "worker")] {
+        assert_eq!(
+            bound["note"],
+            "Your role is coordinator. You now report to the console session `a` (\"Hub\"), your \
+             parent session: take work only from it, or from the user typing in this terminal, \
+             and report to it with `mcp__octoboard__report` once per round of work. This \
+             replaces anything your role description says about being independent and not \
+             calling `mcp__octoboard__report`. `done` with no open items archives you, and is \
+             refused while a session you started is not archived; `needs_decision` or open items \
+             leave you running. You keep your child sessions and go on driving them with \
+             `mcp__octoboard__new_session` and the tools that go with it. Your summary, as your \
+             first report, was delivered to your new parent session. You have a parent session \
+             now, so do not call `mcp__octoboard__bind_to_session` again."
+        );
+        for (caller, parent, expected, role) in [
+            (
+                "a",
+                "b",
+                "coordinator",
+                " Your role remains coordinator: you can create and manage child sessions.",
+            ),
+            (
+                "b",
+                "starter",
+                "worker",
+                " Your role is worker. You can no longer start or drive sessions",
+            ),
+        ] {
             let moved = call(
                 &state,
                 caller,
@@ -363,6 +363,18 @@ mod tests {
             .await
             .unwrap();
             assert_eq!(moved["orchestration_role"], expected);
+            let told = output_containing(
+                &loose,
+                &format!(
+                    "handed you over to the {}",
+                    if parent == "starter" {
+                        "project session `starter`"
+                    } else {
+                        "console session `b`"
+                    }
+                ),
+            );
+            assert!(told.contains(role), "{told}");
             let record = call(&state, "loose", "get_session", &Map::new())
                 .await
                 .unwrap();
@@ -586,6 +598,18 @@ mod tests {
             note.contains("can no longer start or drive sessions"),
             "{note}"
         );
+        assert!(
+            note.starts_with(
+                "Your role is worker. You now report to the project session `starter` (\"Work \
+                 starter\"), your parent session: take work only from it, or from the user typing \
+                 in this terminal, and report to it with `mcp__octoboard__report` once per round \
+                 of work. This replaces anything your role description says about being \
+                 independent and not calling `mcp__octoboard__report`. `done` with no open items \
+                 archives you; `needs_decision` or open items leave you running. You can no \
+                 longer start or drive sessions"
+            ),
+            "{note}"
+        );
         assert!(note.contains("`mcp__octoboard__report`"), "{note}");
         assert!(note.contains("pages you pushed"), "{note}");
         // Its pages are withdrawn with the tools for them, and the panels are told.
@@ -610,5 +634,77 @@ mod tests {
         .await
         .expect_err("no longer offered");
         assert!(err.to_string().contains("is not a tool"), "{err}");
+    }
+
+    /// What the caller of a change of owner is told became of each notice, and of its summary
+    /// sent as its first report, word for word.
+    #[test]
+    fn the_caller_is_told_what_became_of_each_notice_word_for_word() {
+        let notice = |delivery| told(&delivery, "The notice of the handover", "the session");
+        assert_eq!(
+            notice(Ok(Some(Delivery::Written))),
+            "The notice of the handover was delivered to the session."
+        );
+        assert_eq!(
+            notice(Ok(Some(Delivery::Queued))),
+            "The notice of the handover is queued: the session cannot take a message right now. \
+             It will be delivered as soon as the session can take one."
+        );
+        assert_eq!(
+            notice(Ok(Some(Delivery::Kept))),
+            "The notice of the handover is kept for the session, which is interrupted with no \
+             process running: it will be delivered once the session is resumed."
+        );
+        assert_eq!(
+            notice(Ok(Some(Delivery::Unsent))),
+            "The notice of the handover was written into the input of the session, but the \
+             session's agent did not send it to the conversation (it is in the input box, or went \
+             to a view of its background agents), so the session has not read it. The user has \
+             been told to check the session."
+        );
+        assert_eq!(
+            notice(Ok(None)),
+            "The session is not running, and will be told when it next starts."
+        );
+        assert_eq!(
+            notice(Err(anyhow::anyhow!("the pipe broke"))),
+            "The session could not be told (the pipe broke)."
+        );
+
+        let first = |delivery: Delivery| {
+            first_report_note(&Ok((String::new(), delivery)), "mcp__octoboard__report")
+        };
+        assert_eq!(
+            first(Delivery::Written),
+            "Your summary, as your first report, was delivered to your new parent session."
+        );
+        assert_eq!(
+            first(Delivery::Queued),
+            "Your summary, as your first report, is queued: your new parent session cannot take a \
+             message right now. It will be delivered as soon as your new parent session can take \
+             one, so do not send it again."
+        );
+        assert_eq!(
+            first(Delivery::Unsent),
+            "Your summary, as your first report, was written into the input of your new parent \
+             session, but your new parent session's agent did not send it to the conversation (it \
+             is in the input box, or went to a view of its background agents), so your new parent \
+             session has not read it. The user has been told to check your new parent session; do \
+             not send it again."
+        );
+        assert_eq!(
+            first(Delivery::Kept),
+            "Your summary, as your first report, is kept for your new parent session, which is \
+             interrupted with no process running: it will be delivered once your new parent \
+             session is resumed, so do not send it again."
+        );
+        assert_eq!(
+            first_report_note(
+                &Err(anyhow::anyhow!("the pipe broke")),
+                "mcp__octoboard__report"
+            ),
+            "Your summary could not be delivered to your new parent session (the pipe broke), so \
+             send it yourself with `mcp__octoboard__report`."
+        );
     }
 }

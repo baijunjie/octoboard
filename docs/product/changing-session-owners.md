@@ -205,21 +205,28 @@ ending without a `report` produces no synthesised report (see "When a session do
 `docs/product/reporting-to-owners.md`).
 
 The call returns `owner`, `owner_kind`, `orchestration_role` (`coordinator` or `worker`) and a `note` telling the caller
-its role and that it now reports to that parent and whether its summary was sent as its first report — or was written
-into the owner's input as its first report but not sent to its conversation by the owner's agent, so the owner has not
-read it, the user has been told, and it is not to be sent again (see "A message written but not sent" in
-`docs/product/message-delivery.md`) — or, the owner having been interrupted by then, was kept for it as its first report
-and is delivered once it is resumed, not to be sent again (see "Reports and notices for an interrupted owner" in
-`docs/product/reporting-to-owners.md`); that from now on the owner is the one it takes work from, or the user typing in
-its terminal, and it reports to it with `report` once per round of work, which replaces what its role description says
-about being independent and not calling `report`; that `done` with no open items archives it, subject to "Automatic
-archiving" in `docs/product/reporting-to-owners.md` — refused for a coordinator with a parent while a session it started
-is not archived and no lock blocks automatic archiving — while `needs_decision` or open items leave it running; that a
-coordinator with a parent keeps driving its own sessions with `new_session` and the tools that go with it, and that any
-other can no longer start or drive sessions, with the list of the Octoboard tools it has left, and that any pages it
-pushed to the report panel were withdrawn with the tools for them; and not to call `bind_to_session` again. Once the
-caller is bound, the binding stands: a summary that could not be delivered is reported in the note, with the reason, and
-the caller is told to send it with `report` itself.
+its role and that it now reports to that parent; that from now on it takes work only from the owner, or from the user
+typing in its terminal, and reports to it with `report` once per round of work, which replaces what its role description
+says about being independent and not calling `report`; that `done` with no open items archives it, subject to
+"Automatic archiving" in `docs/product/reporting-to-owners.md` — refused for a coordinator with a parent while a session
+it started is not archived and no lock blocks automatic archiving — while `needs_decision` or open items leave it
+running; that a coordinator with a parent keeps its child sessions and goes on driving them with `new_session` and the
+tools that go with it, and that any other can no longer start or drive sessions, with the list of the Octoboard tools it
+has left, and that any pages it pushed to the report panel were withdrawn with the tools for them; what became of its
+summary as its first report; and not to call `bind_to_session` again. The first report is one of:
+
+- delivered to the owner;
+- queued, the owner being unable to take a message right now, and delivered as soon as it can (see "Messages held until
+  a session can take them" in `docs/product/message-delivery.md`);
+- written into the owner's input but not sent to its conversation by the owner's agent, so the owner has not read it and
+  the user has been told to check the owner (see "A message written but not sent" in
+  `docs/product/message-delivery.md`);
+- kept for the owner, interrupted by then, and delivered once it is resumed (see "Reports and notices for an interrupted
+  owner" in `docs/product/reporting-to-owners.md`).
+
+Every outcome but the first tells the caller not to send it again. Once the caller is bound, the binding stands: a
+summary that could not be delivered is reported in the note, with the reason, and the caller is told to send it with
+`report` itself.
 
 ## When a binding changes while a session runs
 

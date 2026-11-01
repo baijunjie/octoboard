@@ -88,10 +88,7 @@ pub async fn list(state: &Arc<AppState>, target: ProcessTarget) -> Result<Vec<Pr
             if let Some(trees) = state.process_ledger.listed_lately(&key, floor) {
                 return Ok(trees);
             }
-            let project = state
-                .store
-                .get_project(&project_id)?
-                .ok_or_else(|| CodedError::unknown_project(&project_id))?;
+            let project = state.store.require_project(&project_id)?;
             let sessions: Vec<String> = state
                 .store
                 .list_sessions()?

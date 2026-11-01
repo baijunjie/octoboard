@@ -14,7 +14,7 @@
 //!   in as different people leave no way to tell which one the CLI uses, so there is no email then.
 
 use std::collections::{BTreeSet, HashMap};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
@@ -40,23 +40,12 @@ pub(super) fn account_email(
     match agent {
         Agent::Claude => claude_email(&read_json(&global_config_file(shell_env, config_dir))?),
         Agent::Codex => codex_email(&read_json(
-            &account_dir(agent, config_dir, shell_env).join(CODEX_SIGN_IN_FILE),
+            &adapter::account_dir(agent, config_dir, shell_env).join(CODEX_SIGN_IN_FILE),
         )?),
         Agent::Grok => grok_email(&read_json(
-            &account_dir(agent, config_dir, shell_env).join(GROK_SIGN_IN_FILE),
+            &adapter::account_dir(agent, config_dir, shell_env).join(GROK_SIGN_IN_FILE),
         )?),
     }
-}
-
-/// The account's configuration directory: `config_dir`, or the default one for `shell_env`.
-fn account_dir(
-    agent: Agent,
-    config_dir: Option<&Path>,
-    shell_env: &HashMap<String, String>,
-) -> PathBuf {
-    config_dir
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| adapter::default_account_dir(agent, shell_env))
 }
 
 fn read_json(file: &Path) -> Option<Value> {

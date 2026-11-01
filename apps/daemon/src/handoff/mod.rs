@@ -21,14 +21,13 @@ pub(crate) mod package_file;
 #[cfg(test)]
 mod tests;
 
-use std::io::Write;
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::{bail, Result};
 
 use crate::branch_origin::session_branches::{self, BranchState, Worktree};
+use crate::hostfs::replace::{replace_file, Permissions};
 use crate::protocol::{Agent, Role, Session};
 use crate::records::conversation::{self, Conversation, Speaker, Todo};
 use crate::records::{conversation_branch, Branch, Locator};
@@ -466,22 +465,8 @@ fn write_in(dir: &Path, key: &str, text: &str) -> Result<PathBuf> {
     };
     // A leading dot keeps a half-written file apart from every key.
     let partial = dir.join(format!(".partial-{}", NEXT.fetch_add(1, Ordering::Relaxed)));
-    let written = std::fs::create_dir_all(dir)
-        .and_then(|()| {
-            let mut file = std::fs::OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .mode(0o600)
-                .open(&partial)?;
-            file.write_all(text.as_bytes())?;
-            file.sync_all()
-        })
-        .and_then(|()| std::fs::rename(&partial, &path));
-    if let Err(err) = written {
-        std::fs::remove_file(&partial).ok();
-        return Err(err.into());
-    }
+    std::fs::create_dir_all(dir)?;
+    replace_file(&path, &partial, text.as_bytes(), Permissions::Private)?;
     Ok(path)
 }
 

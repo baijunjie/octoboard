@@ -5,7 +5,7 @@ use rusqlite::{params, OptionalExtension, Row};
 
 use super::rows::{column_slot, enum_from_row, enum_from_row_opt, enum_to_text, launch_from_row};
 use super::Store;
-use crate::protocol::{Agent, Console, PerAgent};
+use crate::protocol::{Agent, CodedError, Console, PerAgent};
 
 const CONSOLE_COLUMNS: &str = "id, name, workdir, default_agent,
                                claude_account_id, codex_account_id, grok_account_id,
@@ -123,6 +123,12 @@ impl Store {
         Ok(console)
     }
 
+    /// The console `id`, or the `unknown_console` refusal when there is none.
+    pub fn require_console(&self, id: &str) -> Result<Console> {
+        self.get_console(id)?
+            .ok_or_else(|| CodedError::unknown_console(id))
+    }
+
     pub fn list_consoles(&self) -> Result<Vec<Console>> {
         let conn = self.lock();
         let mut stmt = conn.prepare(&format!(
@@ -156,8 +162,33 @@ fn read_console(row: &Row<'_>) -> rusqlite::Result<Console> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocol::{error_code, error_parts};
 
     use crate::store::test_support::*;
+
+    /// A console that is stored is read back, and one that is not is refused with the
+    /// `unknown_console` error naming the id that was asked for.
+    #[test]
+    fn requiring_a_console_reads_a_stored_one_and_refuses_an_unknown_one_with_its_code() {
+        let path = temp_db("require-console");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+
+        assert_eq!(
+            store.require_console("console-1").expect("stored").id,
+            "console-1"
+        );
+
+        let refused = store.require_console("nope").expect_err("unknown");
+        assert_eq!(
+            error_parts(&refused),
+            error_parts(&CodedError::unknown_console("nope"))
+        );
+        assert_eq!(error_parts(&refused).0, error_code::UNKNOWN_CONSOLE);
+        assert_eq!(error_parts(&refused).2, "unknown console nope");
+    }
 
     /// A console's console session model and effort round-trip through update, insert and a
     /// reopening, each of the six independent.

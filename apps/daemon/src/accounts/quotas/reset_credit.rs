@@ -12,12 +12,10 @@ use std::time::Duration;
 
 use serde_json::{json, Value};
 
-use super::probe::{
-    codex_initialize, codex_initialized, is_response, rpc_error_detail, CODEX_APP_SERVER_ARGS,
-    OUTPUT_LIMIT, PROBE_TIMEOUT, STDERR_LIMIT,
-};
-use crate::adapter;
-use crate::processes::subprocess::{run_exchange, Bounds, ExchangeFailure, Reach};
+use super::probe::{is_response, rpc_error_detail, OUTPUT_LIMIT, PROBE_TIMEOUT};
+use crate::accounts::cli_run::{self, NotRun};
+use crate::agents::codex_app_server::{self, CODEX_APP_SERVER_ARGS};
+use crate::processes::subprocess::{run_exchange, Bounds, ExchangeFailure};
 use crate::protocol::{Agent, ResetCreditOutcome};
 
 /// How long a use may take: the app server's start and one request to the backend, as long as a
@@ -55,37 +53,27 @@ pub(super) fn consume(
             "the use was cancelled before it started".to_string(),
         ));
     }
-    // The account's directory must not change sharing under the CLI while it runs.
-    let _reading =
-        crate::accounts::shared_config::admitted_reading(config_dir).map_err(|missing| {
-            Failure::Failed(format!(
-                "the account's configuration directory {} does not exist",
-                missing.0.display()
-            ))
+    let mut run = cli_run::admitted_command(agent, shell_env, config_dir, CODEX_APP_SERVER_ARGS)
+        .map_err(|refused| match refused {
+            NotRun::BinaryNotFound(binary) => Failure::BinaryNotFound(binary.to_string()),
+            NotRun::DirMissing(_) => Failure::Failed(refused.detail()),
         })?;
-    let mut command = adapter::account_command(agent, shell_env, config_dir, CODEX_APP_SERVER_ARGS)
-        .map_err(|binary| Failure::BinaryNotFound(binary.to_string()))?;
     let mut params = json!({"idempotencyKey": idempotency_key});
     if let Some(credit_id) = credit_id {
         params["creditId"] = json!(credit_id);
     }
     let input = [
-        codex_initialize(),
-        codex_initialized(),
+        codex_app_server::initialize(),
+        codex_app_server::initialized(),
         json!({"jsonrpc": "2.0", "id": 2, "method": "account/rateLimitResetCredit/consume",
             "params": params}),
     ]
     .iter()
     .map(Value::to_string)
     .collect::<Vec<_>>();
-    let bounds = Bounds {
-        timeout,
-        stdout_limit: OUTPUT_LIMIT,
-        stderr_limit: STDERR_LIMIT,
-        reach: Reach::Session,
-    };
+    let bounds = Bounds::agent_query(timeout, OUTPUT_LIMIT);
     let reply: RefCell<Option<Value>> = RefCell::new(None);
-    run_exchange(&mut command, &input, &bounds, cancel, |line| {
+    run_exchange(&mut run.command, &input, &bounds, cancel, |line| {
         let Ok(value) = serde_json::from_str::<Value>(line) else {
             return false;
         };
@@ -125,6 +113,7 @@ fn unreadable() -> Failure {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::adapter;
     use crate::test_support::{fake_agent, ScratchDir};
 
     const SHORT: Duration = Duration::from_millis(700);

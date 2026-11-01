@@ -7,7 +7,7 @@ use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
 
 use crate::mcp::args::{required_str, string_list};
-use crate::messaging::delivery::{self, Delivery, WhenBlocked};
+use crate::messaging::delivery::{self, Delivery, SentBy, WhenBlocked};
 use crate::messaging::reporting::{self, ReportStatus};
 use crate::messaging::sharing::{self, OwnerCopy};
 use crate::protocol::{error_code, CodedError, Session, SessionStatus};
@@ -61,24 +61,8 @@ fn point_to_reopen(err: anyhow::Error, target: &Session) -> anyhow::Error {
 /// What the caller is told of a message for a session. A queued one is reported rather than
 /// refused: queuing is the designed behaviour for a session that is waiting for the user, and
 /// nagging it is exactly what the caller must not do.
-fn delivery_note(outcome: Delivery) -> &'static str {
-    match outcome {
-        Delivery::Written => "Delivered.",
-        Delivery::Queued => {
-            "Queued: this session cannot take a message right now. It will be delivered as soon \
-             as it can, so do not send it again."
-        }
-        Delivery::Unsent => {
-            "Not sent: the message was written into this session's input, but its agent did not \
-             send it to the conversation (it is in the input box, or went to a view of its \
-             background agents), so the session has not read it. The user has been told to check \
-             the session; do not send it again."
-        }
-        Delivery::Kept => {
-            "Queued: this session is interrupted, with no process running. It is kept, and \
-             delivered once the session is resumed, so do not send it again."
-        }
-    }
+fn delivery_note(outcome: Delivery) -> String {
+    outcome.note("The message", "this session", SentBy::Reader)
 }
 
 pub(super) async fn send_message(
@@ -99,26 +83,25 @@ pub(super) async fn send_message(
         sharing::deliver_info(&owned_state, &caller_id, &target_id, &text)
     })
     .await??;
-    let mut note = delivery_note(outcome).to_string();
+    let note = format!("{}{}", delivery_note(outcome), owner_copy_note(&copy));
+    Ok(json!({ "delivered": outcome == Delivery::Written, "note": note }))
+}
+
+/// What the result of `send_message` adds of the copy sent to the receiver's owner.
+fn owner_copy_note(copy: &OwnerCopy) -> String {
     match copy {
-        OwnerCopy::NotNeeded => {}
-        OwnerCopy::Sent(Delivery::Written) => note.push_str(" Its owner was sent a copy."),
-        OwnerCopy::Sent(Delivery::Queued) => note.push_str(
-            " Its owner's copy is queued, and will arrive as soon as the owner can take it.",
-        ),
-        OwnerCopy::Sent(Delivery::Kept) => {
-            note.push_str(" Its owner's copy is kept, and will arrive once the owner is resumed.")
+        OwnerCopy::NotNeeded => String::new(),
+        OwnerCopy::Sent(delivery) => {
+            format!(
+                " {}",
+                delivery.note("A copy", "its owner", SentBy::Octoboard)
+            )
         }
-        OwnerCopy::Sent(Delivery::Unsent) => note.push_str(
-            " Its owner's copy was written into the owner's input but not sent to its \
-             conversation; the user has been told.",
-        ),
-        OwnerCopy::Failed(reason) => note.push_str(&format!(
+        OwnerCopy::Failed(reason) => format!(
             " Its owner could not be sent a copy ({reason}); the information itself was not \
              affected."
-        )),
+        ),
     }
-    Ok(json!({ "delivered": outcome == Delivery::Written, "note": note }))
 }
 
 pub(super) async fn report(

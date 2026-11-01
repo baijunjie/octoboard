@@ -80,7 +80,6 @@ pub(crate) use poll::finish_probe_for_test;
 use poll::MAX_CONCURRENT_CLI_RUNS;
 pub use poll::{kick_held, refresh, refresh_requested, spawn, Scope};
 pub(crate) use poll::{refresh_on_demand, ShellSource};
-pub(crate) use probe::CODEX_APP_SERVER_ARGS;
 pub(crate) use reset_credit::CONSUME_TIMEOUT as RESET_CREDIT_TIMEOUT;
 pub(crate) use use_credit::use_reset_credit;
 

@@ -259,7 +259,7 @@ fn a_pinned_grok_home_that_has_gone_or_was_never_initialized_refuses_the_launch(
 /// Unlike `with_default_home`, the home here is stripped to an empty directory — no
 /// `sessions/`, no `auth.json` — so the check is actually exercised rather than skipped by
 /// construction, and the test stays off the machine's real `~/.grok`: leaving `GROK_HOME`
-/// unset would fall through to `default_grok_home`'s `home_dir().join(".grok")`, which this
+/// unset would fall through to `default_account_dir`'s `home_dir().join(".grok")`, which this
 /// test does not own and cannot assume either way about.
 #[test]
 fn the_default_home_is_not_checked_for_initialization() {

@@ -55,10 +55,7 @@ use super::{
 use crate::agents::layout;
 use crate::mcp;
 use crate::protocol::{Agent, ClaudeApprovalMode};
-use settings::{
-    http_hooks_allowed, settings_files, untrusted_workspace_notice, user_config_dir,
-    user_status_line,
-};
+use settings::{http_hooks_allowed, settings_files, untrusted_workspace_notice, user_status_line};
 
 /// The events that carry the session states Octoboard shows. `StopFailure` is registered next to
 /// `Stop` because the two are mutually exclusive — a turn ending in an API error fires only
@@ -190,7 +187,7 @@ impl ClaudeAdapter {
     /// command is given the directories the user's settings files are in, worked out here as for
     /// the rest of this launch, and reads the files themselves again on every run.
     fn status_line(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> serde_json::Value {
-        let user_dir = user_config_dir(spec, pinned);
+        let user_dir = super::account_dir(Agent::Claude, pinned, spec.shell_env);
         let own = user_status_line(&user_dir, spec.cwd).unwrap_or_default();
         let mut line = serde_json::Map::new();
         line.insert("type".to_owned(), json!("command"));

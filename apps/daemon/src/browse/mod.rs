@@ -559,10 +559,7 @@ fn parse_path(path: &str) -> Result<RelPath> {
 }
 
 fn stored_project(state: &AppState, project: &str) -> Result<Project> {
-    state
-        .store
-        .get_project(project)?
-        .ok_or_else(|| CodedError::unknown_project(project))
+    state.store.require_project(project)
 }
 
 fn project_source(

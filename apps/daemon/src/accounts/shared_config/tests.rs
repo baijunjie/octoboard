@@ -1333,7 +1333,9 @@ async fn conversations_are_taken_back_from_a_default_records_directory_that_is_a
 
 /// The account's sharing state as a client connecting now would be told it.
 fn sharing_state(fixture: &Fixture, agent: Agent) -> crate::protocol::AccountSharing {
-    states(&fixture.state)
+    fixture
+        .state
+        .account_sharing_states()
         .unwrap()
         .into_iter()
         .find(|sharing| sharing.account == account_id(agent))
@@ -1416,7 +1418,7 @@ async fn a_change_is_refused_while_the_account_is_being_signed_in() {
     let fixture = Fixture::new();
     let (_, account) = claude_setup(&fixture);
     let signing_in = running_long(Some(&account));
-    publish(&fixture.state);
+    fixture.state.publish_account_sharing();
     let in_use = sharing_state(&fixture, Agent::Claude)
         .in_use
         .expect("in use");
@@ -2119,7 +2121,7 @@ async fn a_working_session_blocks_a_change_and_is_left_running() {
             );
             assert!(running.look_for_dialog().current.is_some());
         }
-        publish(&fixture.state);
+        fixture.state.publish_account_sharing();
         let in_use = sharing_state(&fixture, Agent::Claude)
             .in_use
             .expect("in use");

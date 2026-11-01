@@ -7,13 +7,11 @@ use std::path::PathBuf;
 use super::{Cwd, Identity, Proc};
 
 pub(super) fn list() -> Option<Vec<Proc>> {
-    let pids = all_pids()?;
+    let pids = crate::processes::pids::all()?;
     // SAFETY: `geteuid` only reads.
     let uid = unsafe { libc::geteuid() };
     Some(
         pids.into_iter()
-            // Pid 0 is the kernel, which `getsid(0)` would answer for the caller instead.
-            .filter(|&pid| pid > 0)
             .filter_map(|pid| {
                 let info = bsd_info(pid)?;
                 if info.pbi_uid != uid {
@@ -36,32 +34,6 @@ pub(super) fn list() -> Option<Vec<Proc>> {
             })
             .collect(),
     )
-}
-
-/// Every pid on the system. A listing that fills the buffer may have been cut short, since a
-/// process missing from it reads as gone, so it is taken again with more room.
-fn all_pids() -> Option<Vec<libc::pid_t>> {
-    // SAFETY: a null buffer of size 0 only asks how many processes there are.
-    let count = unsafe { libc::proc_listallpids(std::ptr::null_mut(), 0) };
-    if count <= 0 {
-        return None;
-    }
-    let mut room = count as usize * 2 + 256;
-    for _ in 0..4 {
-        let mut pids = vec![0 as libc::pid_t; room];
-        let size = (pids.len() * std::mem::size_of::<libc::pid_t>()) as libc::c_int;
-        // SAFETY: `pids` is writable for `size` bytes.
-        let filled = unsafe { libc::proc_listallpids(pids.as_mut_ptr().cast(), size) };
-        if filled <= 0 {
-            return None;
-        }
-        if (filled as usize) < pids.len() {
-            pids.truncate(filled as usize);
-            return Some(pids);
-        }
-        room *= 2;
-    }
-    None
 }
 
 pub(super) fn start_of(pid: i32) -> Option<u64> {

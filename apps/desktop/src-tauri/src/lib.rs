@@ -3,7 +3,7 @@
 //! shell's own log file (`diagnostics.rs`), the native menu bar (`menu.rs`), the window's
 //! remembered size and position (`window_state.rs`), the exit-confirmation flow (`exit.rs`),
 //! running in the background once the window is closed (`background.rs`) behind a menu bar icon
-//! (`tray.rs`), the macOS privacy permissions the agents in its terminals can need
+//! (`tray/`), the macOS privacy permissions the agents in its terminals can need
 //! (`permissions.rs`), the system's save and open dialogs for the configuration document
 //! (`configuration_file.rs`), looking for, downloading and installing a new version (`updater.rs`),
 //! and the webview's content rule list that keeps report pages off the web (`page_isolation.rs`,
@@ -18,7 +18,7 @@
 //! `frontend_exit_heartbeat` and `confirm_quit` (both in `exit.rs`), `bring_to_front` and
 //! `set_run_in_background` (a single boolean, the Settings switch; both in `background.rs`) are
 //! bare signals, `set_menu_labels` (in `menu.rs`) is the UI's menu text, and `set_tray_menu` (in
-//! `tray.rs`) is the text of the menu bar icon's menu, with the opaque ids of the sessions it
+//! `tray/`) is the text of the menu bar icon's menu, with the opaque ids of the sessions it
 //! lists, which `tray-session-chosen` hands back, its quota submenus, and the pictures beside its
 //! lines, drawn by the UI; `tray-menu-opened` tells the UI the menu is opening. That is display
 //! material the UI words and draws from the sessions and quotas it already shows, as it does the
@@ -42,8 +42,6 @@ mod permissions;
 mod recovery;
 mod sidecar;
 mod tray;
-#[cfg(target_os = "macos")]
-mod tray_lines;
 mod updater;
 mod window_state;
 

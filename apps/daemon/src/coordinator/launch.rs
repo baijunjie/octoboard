@@ -230,21 +230,12 @@ pub(crate) fn launch_settings(
 ) -> Result<(Option<String>, Option<String>)> {
     let inherited = match &session.project_id {
         Some(project_id) => {
-            let project = state
-                .store
-                .get_project(project_id)?
-                .ok_or_else(|| CodedError::unknown_project(project_id))?;
-            let console = state
-                .store
-                .get_console(&session.console_id)?
-                .ok_or_else(|| CodedError::unknown_console(&session.console_id))?;
+            let project = state.store.require_project(project_id)?;
+            let console = state.store.require_console(&session.console_id)?;
             project_launch_settings(&project, &console, session.agent)
         }
         None => {
-            let console = state
-                .store
-                .get_console(&session.console_id)?
-                .ok_or_else(|| CodedError::unknown_console(&session.console_id))?;
+            let console = state.store.require_console(&session.console_id)?;
             // A console session's own pair: each agent has its own model names.
             console.launch.get(session.agent).clone()
         }
@@ -320,18 +311,10 @@ pub(super) fn session_scope(
     session: &Session,
 ) -> Result<(Option<Project>, Console)> {
     let project = match &session.project_id {
-        Some(project_id) => Some(
-            state
-                .store
-                .get_project(project_id)?
-                .ok_or_else(|| CodedError::unknown_project(project_id))?,
-        ),
+        Some(project_id) => Some(state.store.require_project(project_id)?),
         None => None,
     };
-    let console = state
-        .store
-        .get_console(&session.console_id)?
-        .ok_or_else(|| CodedError::unknown_console(&session.console_id))?;
+    let console = state.store.require_console(&session.console_id)?;
     Ok((project, console))
 }
 
@@ -383,10 +366,7 @@ fn launch_git_workflow_settings(
     else {
         return Ok(None);
     };
-    let project = state
-        .store
-        .get_project(project_id)?
-        .ok_or_else(|| CodedError::unknown_project(project_id))?;
+    let project = state.store.require_project(project_id)?;
     Ok(Some(crate::git_workflow::effective(
         &state.store,
         &project,
@@ -562,17 +542,11 @@ pub(super) async fn came_up(live: &LiveSession, settle: Duration) -> bool {
 fn session_cwd(state: &Arc<AppState>, session: &Session) -> Result<PathBuf> {
     match &session.project_id {
         Some(project_id) => {
-            let project = state
-                .store
-                .get_project(project_id)?
-                .ok_or_else(|| CodedError::unknown_project(project_id))?;
+            let project = state.store.require_project(project_id)?;
             Ok(PathBuf::from(project.path))
         }
         None => {
-            let console = state
-                .store
-                .get_console(&session.console_id)?
-                .ok_or_else(|| CodedError::unknown_console(&session.console_id))?;
+            let console = state.store.require_console(&session.console_id)?;
             Ok(PathBuf::from(console.workdir))
         }
     }

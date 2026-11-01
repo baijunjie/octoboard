@@ -11,7 +11,6 @@ use crate::adapter::files::canonical_project;
 use crate::adapter::{LaunchSpec, HOOK_TIMEOUT_SECS};
 use crate::agents::layout::{GROK_CONFIG_FILE, GROK_TRUST_STORE};
 use crate::mcp;
-use crate::protocol::Agent;
 
 /// Entries Octoboard owns in its `GROK_HOME` rather than linking to the user's.
 const COPIED_ENTRIES: &[&str] = &[GROK_CONFIG_FILE, GROK_TRUST_STORE];
@@ -71,15 +70,6 @@ pub(super) fn build_grok_home(spec: &LaunchSpec<'_>, source_home: &Path) -> Resu
     write_hooks(&farm, spec.hook_script)?;
 
     Ok(farm)
-}
-
-/// The user's own Grok home when the session pins none, read from the launch environment rather
-/// than the daemon's: `GROK_HOME` is a user setting, and the daemon's own copy of it may belong to
-/// another Octoboard session's farm when the daemon was started from inside one. Shared with
-/// `crate::agents::availability`, which shows the same directory as the default account's before
-/// any session has opened.
-pub(super) fn default_grok_home(spec: &LaunchSpec<'_>) -> PathBuf {
-    crate::adapter::default_account_dir(Agent::Grok, spec.shell_env)
 }
 
 /// Appends Octoboard's MCP server to the farm's own `config.toml`. Appended rather than written

@@ -12,7 +12,7 @@ use crate::adapter::files::{
 };
 use crate::adapter::LaunchSpec;
 use crate::agents::layout;
-use crate::protocol::{notice_code, Notice};
+use crate::protocol::{notice_code, Agent, Notice};
 
 /// The configuration directory in effect for this launch's Claude Code, when there is one: the
 /// session's, else one the user's own shell exports.
@@ -35,13 +35,6 @@ fn home_dir(shell_env: &HashMap<String, String>) -> PathBuf {
         .filter(|home| !home.is_empty())
         .map(PathBuf::from)
         .unwrap_or_else(crate::paths::home_dir)
-}
-
-/// The configuration directory this launch's Claude Code reads its user settings from: the one in
-/// effect, else `~/.claude`.
-pub(super) fn user_config_dir(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> PathBuf {
-    explicit_config_dir(spec.shell_env, pinned)
-        .unwrap_or_else(|| home_dir(spec.shell_env).join(layout::CLAUDE.default_dir))
 }
 
 /// A settings file Claude Code reads: one the project keeps, read through `browse::live`, or one
@@ -124,7 +117,10 @@ pub(super) fn settings_files(
     } else {
         "/etc/claude-code"
     });
-    let mut files = Vec::from(own_settings_files(&user_config_dir(spec, pinned), project));
+    let mut files = Vec::from(own_settings_files(
+        &crate::adapter::account_dir(Agent::Claude, pinned, spec.shell_env),
+        project,
+    ));
     files.push(SettingsFile::Other(managed.join("managed-settings.json")));
     // The entries Claude Code takes from the drop-in directory (read out of Claude Code 2.1.312):
     // files and links named `*.json`, not hidden.

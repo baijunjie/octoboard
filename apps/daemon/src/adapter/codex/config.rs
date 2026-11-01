@@ -2,14 +2,12 @@
 //! migration table.
 
 use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::adapter::files::{
     is_agent_config_dir, read_bounded_text, read_regular_text, SMALL_FILE_LIMIT,
 };
-use crate::adapter::LaunchSpec;
 use crate::agents::layout;
-use crate::protocol::Agent;
 use crate::records::line_file::JSON_FILE_LIMIT;
 
 /// The `notice.model_migrations` table for the models cache in `codex_home`: every model that has
@@ -124,14 +122,4 @@ pub(super) fn project_server_names(project: &Path, codex_home: &Path) -> Option<
         }
     }
     Some(names)
-}
-
-/// The Codex home this launch will read: the session's pinned directory, else the user's own, read
-/// from the launch environment rather than the daemon's — the daemon's own `CODEX_HOME` may belong
-/// to an agent session it was started from.
-pub(super) fn codex_home(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> PathBuf {
-    if let Some(dir) = pinned {
-        return dir.to_path_buf();
-    }
-    crate::adapter::default_account_dir(Agent::Codex, spec.shell_env)
 }

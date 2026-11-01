@@ -14,6 +14,7 @@ use serde_json::{json, Value};
 use tokio_tungstenite::tungstenite::{self, Message, WebSocket};
 
 use crate::adapter::codex::PrivateServerPlan;
+use crate::agents::codex_app_server;
 use crate::terminal::ptyio::PartialWrite;
 
 const RPC_TIMEOUT: Duration = Duration::from_secs(5);
@@ -378,14 +379,10 @@ impl Rpc {
             next_id: 0,
             deadline,
         };
-        rpc.request(
-            "initialize",
-            json!({
-                "clientInfo":{"name":"octoboard","version":env!("CARGO_PKG_VERSION")},
-                "capabilities":{"experimentalApi":true},
-            }),
-        )?;
-        rpc.write(json!({"jsonrpc":"2.0","method":"initialized"}))?;
+        let mut params = codex_app_server::initialize_params();
+        params["capabilities"] = json!({"experimentalApi": true});
+        rpc.request("initialize", params)?;
+        rpc.write(codex_app_server::initialized())?;
         Ok(rpc)
     }
 

@@ -206,7 +206,7 @@ fn claude_should_continue(entries: &[Value], usage_limit_only: bool) -> bool {
 fn codex_should_continue(record: &Path, usage_limit_only: bool) -> std::io::Result<bool> {
     // What the last turn has shown so far: `None` before any turn.
     let mut last: Option<CodexTurn> = None;
-    line_file::read_to(record, u64::MAX, |line| {
+    line_file::read_from(record, 0, |line| {
         // Most of a rollout is model traffic; only its events bear on this.
         if !line.contains(r#""type":"event_msg""#) {
             return;
@@ -258,7 +258,7 @@ enum CodexTurn {
 fn grok_should_continue(record: &Path, usage_limit_only: bool) -> std::io::Result<bool> {
     // What the last prompt's turn has shown so far: `None` before any prompt.
     let mut last: Option<GrokTurn> = None;
-    line_file::read_to(&record.join("updates.jsonl"), u64::MAX, |line| {
+    line_file::read_from(&record.join("updates.jsonl"), 0, |line| {
         let Ok(entry) = serde_json::from_str::<Value>(line) else {
             return;
         };

@@ -1,11 +1,13 @@
 //! The host role's filesystem work that has no better home: expanding what the user typed into a
-//! path, telling "nothing is there" from other errors, normalising a path's text, reading a regular
-//! file without blocking (as bytes or as text), and refusing a path that is not a directory. The
-//! rest lives beside it: `identity` and `place` tell directories apart whatever their paths look
-//! like, `listing` browses directories, finds the git repositories under a parent and detects which
-//! agent a directory is set up for, and `trash` moves a file or directory to the Trash.
+//! path, telling "nothing is there" from other errors, normalising a path's text, reading a source
+//! within a bound, reading a regular file without blocking (as bytes or as text), and refusing a
+//! path that is not a directory. The rest lives beside it: `identity` and `place` tell directories
+//! apart whatever their paths look like, `listing` browses directories, finds the git repositories
+//! under a parent and detects which agent a directory is set up for, `replace` replaces a file
+//! whole, and `trash` moves a file or directory to the Trash.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
 
 use anyhow::Result;
 
@@ -14,6 +16,7 @@ use crate::protocol::{error_code, CodedError};
 pub mod identity;
 pub mod listing;
 pub mod place;
+pub mod replace;
 pub mod trash;
 
 /// Expands a leading `~` and makes the path absolute. The UI sends whatever the user typed.
@@ -73,19 +76,64 @@ pub fn open_regular(path: &Path) -> std::io::Result<std::fs::File> {
 /// The bytes of the regular file at `path` (see [`open_regular`]), refused when it holds more than
 /// `limit`.
 pub fn read_regular(path: &Path, limit: usize) -> std::io::Result<Vec<u8>> {
-    use std::io::Read;
-
     let too_large = || std::io::Error::new(std::io::ErrorKind::InvalidData, "file too large");
     let file = open_regular(path)?;
-    if file.metadata()?.len() > limit as u64 {
+    let len = file.metadata()?.len();
+    if len > limit as u64 {
         return Err(too_large());
     }
-    let mut bytes = Vec::new();
-    file.take(limit as u64 + 1).read_to_end(&mut bytes)?;
-    if bytes.len() > limit {
-        return Err(too_large());
+    read_bounded(file, limit, len, None).map_err(|err| match err {
+        ReadFailure::Exceeded => too_large(),
+        ReadFailure::Io(err) => err,
+        ReadFailure::Cancelled => std::io::Error::from(std::io::ErrorKind::Interrupted),
+    })
+}
+
+/// Why [`read_bounded`] read nothing.
+#[derive(Debug)]
+pub enum ReadFailure {
+    Exceeded,
+    Cancelled,
+    Io(std::io::Error),
+}
+
+/// The size of each read, and how often a cancel is noticed.
+const READ_CHUNK: usize = 64 * 1024;
+
+/// Reads `source` to its end, holding at most `limit` bytes: one byte more and the read stops
+/// there, whatever the source would still give. A file that grows while it is read is therefore
+/// bounded by the read, not by the size it had when it was opened. The buffer is sized from
+/// `expected` and grown at most once, straight to the limit, so it never holds more than that.
+/// `cancel`, when there is one, is checked before each chunk; `None` is a read that cannot be
+/// cancelled.
+pub fn read_bounded(
+    mut source: impl std::io::Read,
+    limit: usize,
+    expected: u64,
+    cancel: Option<&AtomicBool>,
+) -> Result<Vec<u8>, ReadFailure> {
+    let mut bytes = Vec::with_capacity(expected.min(limit as u64) as usize + 1);
+    let mut chunk = vec![0u8; READ_CHUNK];
+    loop {
+        if cancel.is_some_and(|cancel| cancel.load(std::sync::atomic::Ordering::Relaxed)) {
+            return Err(ReadFailure::Cancelled);
+        }
+        let room = (limit - bytes.len() + 1).min(READ_CHUNK);
+        match source.read(&mut chunk[..room]) {
+            Ok(0) => return Ok(bytes),
+            Ok(n) => {
+                if bytes.len() + n > bytes.capacity() {
+                    bytes.reserve_exact(limit + 1 - bytes.len());
+                }
+                bytes.extend_from_slice(&chunk[..n]);
+                if bytes.len() > limit {
+                    return Err(ReadFailure::Exceeded);
+                }
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(err) => return Err(ReadFailure::Io(err)),
+        }
     }
-    Ok(bytes)
 }
 
 /// The text of a file the project does not own (an agent's configuration, cache or install,
@@ -125,4 +173,48 @@ pub fn require_directory(path: &Path) -> Result<()> {
         return Err(not_a_directory(path));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::ScratchDir;
+
+    #[test]
+    fn a_regular_file_is_read_up_to_its_limit_and_refused_past_it() {
+        let dir = ScratchDir::new("hostfs-read-regular");
+        let path = dir.join("file");
+        std::fs::write(&path, "0123456789").unwrap();
+        assert_eq!(read_regular(&path, 10).unwrap(), b"0123456789");
+        let err = read_regular(&path, 9).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+        assert_eq!(err.to_string(), "file too large");
+    }
+
+    /// A source that gives more than the limit is stopped one byte past it, whatever length it was
+    /// expected to have, and a cancel is noticed before the next chunk.
+    #[test]
+    fn a_bounded_read_stops_past_its_limit_and_at_a_cancel() {
+        let outcome = read_bounded(std::io::repeat(b'x'), 1000, 3, None);
+        assert!(matches!(outcome, Err(ReadFailure::Exceeded)));
+        let bytes = read_bounded(&b"0123456789"[..], 10, 0, None).unwrap();
+        assert_eq!(bytes, b"0123456789");
+        let cancel = AtomicBool::new(true);
+        let outcome = read_bounded(&b"0123456789"[..], 10, 10, Some(&cancel));
+        assert!(matches!(outcome, Err(ReadFailure::Cancelled)));
+    }
+
+    /// A FIFO is refused at once rather than waited on for a writer, and a directory is refused.
+    #[test]
+    fn anything_but_a_regular_file_is_refused() {
+        let dir = ScratchDir::new("hostfs-read-regular-fifo");
+        let fifo = dir.join("fifo");
+        let name = std::ffi::CString::new(fifo.as_os_str().as_encoded_bytes()).unwrap();
+        // SAFETY: `name` is a valid NUL-terminated path.
+        assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+        for path in [fifo.as_path(), &dir] {
+            let err = read_regular(path, 10).unwrap_err();
+            assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput, "{path:?}");
+        }
+    }
 }

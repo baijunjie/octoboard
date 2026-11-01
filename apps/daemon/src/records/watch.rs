@@ -9,17 +9,20 @@
 //! does not parse or has a shape the caller does not recognise is simply not a finding; nothing
 //! here may abort a watch over a file it does not understand. A line can run to hundreds of KB (a
 //! tool's output), so a caller's line check should rule most lines out with a plain
-//! `str::contains` before it pays for a JSON parse.
+//! `str::contains` before it pays for a JSON parse; one past `line_file::LINE_LIMIT` is skipped
+//! without reaching the line check, as no record that long is one a watch looks for. A watched
+//! record is a live one, which an agent never compresses: offsets are compared with its on-disk
+//! length, which a decompressed stream's would not match.
 //!
 //! [`scan_lines`] is the pure half: a path, an offset and a line check in, what was found among the
 //! lines added since and where to read from next out. [`spawn`] is what calls it on a timer.
 
-use std::fs::File;
-use std::io::{self, Read, Seek, SeekFrom};
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::records::line_file;
 use crate::state::AppState;
 
 /// What one scan of a record found.
@@ -33,31 +36,20 @@ pub struct Scan<T> {
 }
 
 /// Reads whatever full lines were appended to the record at `path` since `offset`, and runs
-/// `line_found` over each. An error is an I/O error opening or reading the file, `NotFound`
-/// included, not a line that fails to parse.
+/// `line_found` over each, without its newline. An error is an I/O error opening or reading the
+/// file, `NotFound` included, not a line that fails to parse.
 pub fn scan_lines<T>(
     path: &Path,
     offset: u64,
     mut line_found: impl FnMut(&str) -> Option<T>,
 ) -> io::Result<Scan<T>> {
-    let mut file = File::open(path)?;
-    file.seek(SeekFrom::Start(offset))?;
-    let mut added = Vec::new();
-    file.read_to_end(&mut added)?;
-
-    let mut consumed = 0usize;
     let mut found = None;
-    while let Some(end) = added[consumed..].iter().position(|&byte| byte == b'\n') {
-        let line = &added[consumed..consumed + end];
-        consumed += end + 1;
-        if let Some(hit) = std::str::from_utf8(line).ok().and_then(&mut line_found) {
+    let offset = line_file::read_from(path, offset, |line| {
+        if let Some(hit) = line_found(line.strip_suffix('\n').unwrap_or(line)) {
             found = Some(hit);
         }
-    }
-    Ok(Scan {
-        found,
-        offset: offset + consumed as u64,
-    })
+    })?;
+    Ok(Scan { found, offset })
 }
 
 /// Where a watch starts reading, which also decides how it recovers from a file that shrank and
@@ -117,8 +109,9 @@ pub struct Watch {
 /// file that is not there yet is waited for is [`Start`]'s to say. Returns the watch's generation,
 /// or `None` when the record could not be read and no watch was started.
 ///
-/// The scan runs on a blocking worker: on a long session the added bytes run to megabytes, which
-/// must not sit on the runtime's threads. A read that fails for any other reason ends the watch.
+/// The scan runs on a blocking worker: on a long session the added bytes run to megabytes, whose
+/// reading must not sit on the runtime's threads. A read that fails for any other reason ends the
+/// watch.
 pub fn spawn<T, P, A>(
     state: &Arc<AppState>,
     session_id: &str,
@@ -246,6 +239,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::fs::File;
     use std::io::Write;
 
     use super::*;
@@ -321,6 +315,22 @@ mod tests {
         let second = scan_lines(&path, first.offset, is_hit).expect("scan");
         assert_eq!(second.found, Some(()));
         assert_eq!(second.offset, (LINE.len() + HIT.len()) as u64);
+    }
+
+    /// A line past the limit never reaches the check, a finding in it included, and the lines
+    /// after it are still read; the offset moves past it.
+    #[test]
+    fn a_line_past_the_limit_is_skipped_and_the_lines_after_it_are_read() {
+        let long = format!("{}{HIT}", "x".repeat(line_file::LINE_LIMIT));
+        let path = record("long", &format!("{LINE}{long}"));
+        let scan = scan_lines(&path, 0, is_hit).expect("scan");
+        assert_eq!(scan.found, None);
+        assert_eq!(scan.offset, (LINE.len() + long.len()) as u64);
+
+        let path = record("long-then-hit", &format!("{long}{HIT}"));
+        let scan = scan_lines(&path, 0, is_hit).expect("scan");
+        assert_eq!(scan.found, Some(()));
+        assert_eq!(scan.offset, (long.len() + HIT.len()) as u64);
     }
 
     /// The entry condition of a watch armed before the agent has created the file.

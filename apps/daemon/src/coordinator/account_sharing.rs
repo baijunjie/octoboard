@@ -12,9 +12,8 @@ use anyhow::Result;
 use crate::accounts::dirs::account_dir_key;
 use crate::accounts::shared_config::{
     account_in_use, carry_out, default_dir, entries, in_use, is_same_directory, lock_account,
-    lock_agent, not_shareable, own_conversations, set_progress, sharing_failed,
-    sharing_in_progress, start_change, still_sharing, try_lock_agent, Changing,
-    FailureCause as Cause, Locked, Refused,
+    lock_agent, not_shareable, own_conversations, sharing_failed, sharing_in_progress,
+    still_sharing, try_lock_agent, Changing, FailureCause as Cause, Locked, Refused,
 };
 use crate::processes::ledger::HeldForLaunch;
 use crate::protocol::{
@@ -40,10 +39,7 @@ pub async fn set(state: &Arc<AppState>, account: Option<String>, share: bool) ->
         return Err(not_shareable(None));
     };
     loop {
-        let account = state
-            .store
-            .get_account(&id)?
-            .ok_or_else(|| CodedError::unknown_account(&id))?;
+        let account = state.store.require_account(&id)?;
         if let Some(locked) = state.sharing_locked(&id) {
             return Err(sharing_in_progress(&locked));
         }
@@ -59,10 +55,7 @@ pub async fn set(state: &Arc<AppState>, account: Option<String>, share: bool) ->
         }
         let mut locked = lock_account(state, &account, &account_in_use)?;
         // Judged before the lock: an account repointed meanwhile is judged again.
-        let current = state
-            .store
-            .get_account(&id)?
-            .ok_or_else(|| CodedError::unknown_account(&id))?;
+        let current = state.store.require_account(&id)?;
         if !same_directory(&current, &account) {
             continue;
         }
@@ -114,7 +107,7 @@ async fn change(
         item: item.map(str::to_string),
     };
     let set_phase =
-        |phase, done| set_progress(state, &account.id, Some(progress(phase, done, None)));
+        |phase, done| state.set_sharing_progress(&account.id, Some(progress(phase, done, None)));
     // Until the choice is recorded, the progress is all the change has told: refused or stopped
     // before that, it leaves the last failure as it was.
     let changing = Changing::new(state, &account.id);
@@ -151,11 +144,7 @@ async fn change(
             async {
                 state.store.set_account_sharing(&account.id, share, true)?;
                 broadcast_settings(state)?;
-                start_change(
-                    state,
-                    &account.id,
-                    progress(SharingPhase::Changing, 0, None),
-                );
+                state.start_sharing_change(&account.id, progress(SharingPhase::Changing, 0, None));
                 if let Some(hold) = &locked.hold {
                     let waiter = hold.waiter();
                     tokio::task::spawn_blocking(move || waiter.wait_for_reads()).await?;
@@ -164,7 +153,7 @@ async fn change(
                     let (state, id) = (state.clone(), account.id.clone());
                     move |done, item: &str| {
                         let progress = progress(SharingPhase::Changing, done, Some(item));
-                        set_progress(&state, &id, Some(progress))
+                        state.set_sharing_progress(&id, Some(progress))
                     }
                 };
                 let changed = Account {

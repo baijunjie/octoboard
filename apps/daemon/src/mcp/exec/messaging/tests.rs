@@ -33,7 +33,7 @@ async fn information_for_an_interrupted_session_is_kept_for_its_resume() {
         note.contains("interrupted") && note.contains("resumed"),
         "{note}"
     );
-    assert!(note.contains("sent a copy"), "{note}");
+    assert!(note.contains("A copy was delivered to its owner"), "{note}");
     assert_eq!(state.store.kept_messages("of-a").unwrap().len(), 1);
     assert!(output_containing(&console_a, "the port moved").contains("Copy of information"));
 
@@ -82,7 +82,7 @@ async fn the_copy_for_an_interrupted_owner_is_kept() {
     assert!(result["note"]
         .as_str()
         .unwrap()
-        .contains("copy is kept, and will arrive once the owner is resumed"));
+        .contains("A copy is kept for its owner, which is interrupted"));
     assert_eq!(state.store.kept_messages("a").unwrap().len(), 1);
 }
 
@@ -198,7 +198,7 @@ async fn information_is_framed_and_copied_to_the_receivers_owner() {
 
     // Unbound receiver: framed, and there is no owner to copy.
     let result = share("starter", "loose").await.unwrap();
-    assert_eq!(result["note"], "Delivered.");
+    assert_eq!(result["note"], "The message was delivered to this session.");
     let seen = output_containing(&loose, "the port moved");
     assert!(
         seen.contains("Information from session starter — Work starter"),
@@ -208,7 +208,10 @@ async fn information_is_framed_and_copied_to_the_receivers_owner() {
 
     // Receiver owned by a console session: that session is sent the copy.
     let result = share("loose", "of-a").await.unwrap();
-    assert!(result["note"].as_str().unwrap().contains("sent a copy"));
+    assert!(result["note"]
+        .as_str()
+        .unwrap()
+        .contains("A copy was delivered to its owner"));
     assert!(output_containing(&of_a, "the port moved").contains("not your owner"));
     let copy = output_containing(&console_a, "the port moved");
     assert!(
@@ -225,7 +228,7 @@ async fn information_is_framed_and_copied_to_the_receivers_owner() {
 
     // From the owner itself: no "not your owner", and a note with no copy in it.
     let result = share("starter", "mine").await.unwrap();
-    assert_eq!(result["note"], "Delivered.");
+    assert_eq!(result["note"], "The message was delivered to this session.");
     let seen = output_containing(&mine, "is your owner");
     assert!(seen.contains("Information from session starter"), "{seen}");
 }
@@ -261,4 +264,62 @@ async fn an_owner_that_cannot_be_copied_does_not_fail_the_delivery() {
     .await
     .expect_err("not running");
     assert!(err.to_string().contains("not running"), "{err}");
+}
+
+/// What the sender of a message is told became of it and of its owner's copy, word for word: the
+/// sender acts on it, and must not send again what is queued or kept.
+#[test]
+fn the_sender_is_told_what_became_of_a_message_word_for_word() {
+    use super::{delivery_note, owner_copy_note};
+    use crate::messaging::delivery::Delivery;
+    use crate::messaging::sharing::OwnerCopy;
+
+    assert_eq!(
+        delivery_note(Delivery::Written),
+        "The message was delivered to this session."
+    );
+    assert_eq!(
+        delivery_note(Delivery::Queued),
+        "The message is queued: this session cannot take a message right now. It will be \
+         delivered as soon as this session can take one, so do not send it again."
+    );
+    assert_eq!(
+        delivery_note(Delivery::Unsent),
+        "The message was written into the input of this session, but this session's agent did \
+         not send it to the conversation (it is in the input box, or went to a view of its \
+         background agents), so this session has not read it. The user has been told to check \
+         this session; do not send it again."
+    );
+    assert_eq!(
+        delivery_note(Delivery::Kept),
+        "The message is kept for this session, which is interrupted with no process running: it \
+         will be delivered once this session is resumed, so do not send it again."
+    );
+
+    assert_eq!(owner_copy_note(&OwnerCopy::NotNeeded), "");
+    assert_eq!(
+        owner_copy_note(&OwnerCopy::Sent(Delivery::Written)),
+        " A copy was delivered to its owner."
+    );
+    assert_eq!(
+        owner_copy_note(&OwnerCopy::Sent(Delivery::Queued)),
+        " A copy is queued: its owner cannot take a message right now. It will be delivered as \
+         soon as its owner can take one."
+    );
+    assert_eq!(
+        owner_copy_note(&OwnerCopy::Sent(Delivery::Kept)),
+        " A copy is kept for its owner, which is interrupted with no process running: it will be \
+         delivered once its owner is resumed."
+    );
+    assert_eq!(
+        owner_copy_note(&OwnerCopy::Sent(Delivery::Unsent)),
+        " A copy was written into the input of its owner, but its owner's agent did not send it \
+         to the conversation (it is in the input box, or went to a view of its background \
+         agents), so its owner has not read it. The user has been told to check its owner."
+    );
+    assert_eq!(
+        owner_copy_note(&OwnerCopy::Failed("it is archived".to_string())),
+        " Its owner could not be sent a copy (it is archived); the information itself was not \
+         affected."
+    );
 }

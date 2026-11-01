@@ -95,7 +95,7 @@ impl AppState {
 
     /// Whether `session`, its stored record, is working (`Some(true)`), idle (`Some(false)`), or has
     /// no process, for telling whether its account's sharing state changed.
-    pub(crate) fn activity_of(&self, session: &Session) -> Option<bool> {
+    pub(super) fn activity_of(&self, session: &Session) -> Option<bool> {
         self.live_session(&session.id)
             .map(|process| !self.is_idle_with(session, &process))
     }
@@ -178,7 +178,7 @@ impl AppState {
         if is_current {
             // Its call has nobody left to return to.
             crate::session_request::withdraw_for_session(self, &session.id);
-            crate::accounts::shared_config::publish(self);
+            self.publish_account_sharing();
         }
         self.forget_session_bookkeeping(&session.id);
     }

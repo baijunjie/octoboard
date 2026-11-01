@@ -88,16 +88,18 @@ pub(super) fn boot_id() -> Option<String> {
 }
 
 pub(super) fn list() -> Option<Vec<Proc>> {
-    let entries = std::fs::read_dir("/proc").ok()?;
+    let pids = crate::processes::pids::all()?;
     // SAFETY: `geteuid` only reads.
     let uid = unsafe { libc::geteuid() };
     Some(
-        entries
-            .flatten()
-            .filter_map(|entry| {
-                let pid: i32 = entry.file_name().to_str()?.parse().ok()?;
+        pids.into_iter()
+            .filter_map(|pid| {
                 // `/proc/<pid>` belongs to the process's effective user.
-                if entry.metadata().ok()?.uid() != uid {
+                if std::fs::symlink_metadata(format!("/proc/{pid}"))
+                    .ok()?
+                    .uid()
+                    != uid
+                {
                     return None;
                 }
                 let stat = stat(pid)?;

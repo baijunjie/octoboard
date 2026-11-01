@@ -8,6 +8,7 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
+use crate::hostfs::replace::{replace_beside, Permissions};
 use crate::protocol::Agent;
 
 /// The registries `agent` keeps, by the shared directory item they sit in and their path inside
@@ -42,21 +43,7 @@ pub(super) fn repoint(registry: &Path, from: &[PathBuf], to: &Path) -> io::Resul
     written.push('\n');
     // A registry that is itself a link is written where it leads, keeping the link.
     let target = std::fs::canonicalize(registry)?;
-    let temporary = target.with_file_name(format!(
-        ".{}.octoboard-{}",
-        target
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default(),
-        std::process::id()
-    ));
-    std::fs::write(&temporary, written)?;
-    if let Ok(metadata) = std::fs::metadata(&target) {
-        std::fs::set_permissions(&temporary, metadata.permissions()).ok();
-    }
-    std::fs::rename(&temporary, &target).inspect_err(|_| {
-        std::fs::remove_file(&temporary).ok();
-    })
+    replace_beside(&target, written.as_bytes(), Permissions::KeptOrDefault)
 }
 
 fn rewrite(value: &mut serde_json::Value, from: &[PathBuf], to: &Path) -> bool {

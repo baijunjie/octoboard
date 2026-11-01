@@ -103,7 +103,6 @@
 //! retried behind the person's back.
 
 use std::collections::{HashMap, HashSet};
-use std::io::Write;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -129,7 +128,6 @@ mod screen;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use carry::write_replacing;
 pub use carry::CarriedTrust;
 use carry::*;
 use place::*;
@@ -854,10 +852,7 @@ pub async fn confirm(
             &[],
         ));
     };
-    let mut project = state
-        .store
-        .get_project(project_id)?
-        .ok_or_else(|| CodedError::unknown_project(project_id))?;
+    let mut project = state.store.require_project(project_id)?;
 
     let directory = if trust_parent_dir {
         Some(parent_to_trust(state, &project.path).await?)

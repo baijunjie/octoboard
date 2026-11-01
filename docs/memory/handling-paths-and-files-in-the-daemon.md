@@ -79,6 +79,25 @@ A refusal from these readers does not mean the agent cannot read the file. Where
 the unsafe answer (an allowlist it may hold would be skipped), a regular file that is there but refused takes the safe
 side.
 
+## Read an agent's record only through `records::line_file`
+
+Applies to daemon code that reads the content of an agent's record (a Claude transcript, a Codex rollout, a Grok
+session file). Never `BufRead::read_line`, `read_until`, `lines()` or a whole-file read on it: a record line can be
+arbitrarily long (an embedded image, a pasted file), and those hold the whole line in memory; and a Codex rollout may
+be a `.jsonl.zst` that only `line_file::open` decompresses. Use `LineFile` for a file read again as it grows, and
+`read_to`, `read_from` or `read_whole_until` for a one-off pass; each skips a line past `LINE_LIMIT` and goes on after
+it, so a reader decides only what to do with the lines it is handed.
+
+## Replace a file whole only through `hostfs::replace`
+
+Applies to daemon code that writes a file by staging it and renaming it over the old one — state the daemon keeps,
+a configuration file it rewrites for an agent, anything a reader must see old or new and never half. Do not write the
+staging and rename by hand: call `hostfs::replace::replace_file` (with a staging name of your own, where a sweep looks
+for it) or `replace_beside`, choosing `Permissions::Private` for content that can hold secrets and a `Kept*` variant
+for a file the user or an agent may have given a mode. Hand-written copies kept drifting from it: no flush before the
+rename (a crash can leave the target empty), a mode given only at open (cut by the umask, ignored for a staging file
+left by a crash), the staging file left behind when a step failed.
+
 ## Decide whether two account directories are one by `account_dir_key`, never by comparing their text
 
 Applies to daemon code that asks whether two agent configuration directories are the same one — an account's

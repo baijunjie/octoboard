@@ -491,6 +491,28 @@ mod tests {
         );
     }
 
+    /// `claude auth status` is read within a bound like every other short query of an agent CLI:
+    /// one that floods its output confirms nothing.
+    #[tokio::test]
+    async fn a_sign_in_check_that_floods_its_output_confirms_nothing() {
+        let body = CLAUDE_SIGNS_IN.replace(
+            r#"echo '{"loggedIn":true}'; exit 0;;"#,
+            &format!(
+                r#"echo '{{"loggedIn":true}}'; head -c {} /dev/zero | tr '\0' ' '; exit 0;;"#,
+                64 * 1024
+            ),
+        );
+        let setup = setup("login-claude-flooded-status", Agent::Claude, &body);
+        let mut events = setup.state.subscribe();
+        setup.start(Agent::Claude, None, LOGIN_TIMEOUT).unwrap();
+        let ended = until_ended(&mut events).await.pop().unwrap();
+        assert_eq!(ended.status, LoginStatus::Failed);
+        assert_eq!(
+            failure_code(&ended),
+            crate::protocol::login_failure_code::NOT_CONFIRMED
+        );
+    }
+
     #[tokio::test]
     async fn a_cli_that_fails_reports_its_last_line() {
         let setup = setup(

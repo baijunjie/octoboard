@@ -9,6 +9,7 @@ import {
   assertProducedSince,
   bundleDir,
   findBundle,
+  infoPlistValue,
   tauriBuild,
   withoutAppleVariables,
   withoutUpdaterArtifacts,
@@ -53,7 +54,7 @@ if (existsSync(destination) || isSymlink(destination)) {
   if (isSymlink(destination) || !lstatSync(destination).isDirectory()) {
     throw new Error(`Refusing to replace a symlink or non-directory: ${destination}`);
   }
-  const installedId = execFileSync("/usr/libexec/PlistBuddy", ["-c", "Print :CFBundleIdentifier", path.join(destination, "Contents", "Info.plist")], { encoding: "utf8" }).trim();
+  const installedId = infoPlistValue(destination, "CFBundleIdentifier");
   if (installedId !== config.identifier) throw new Error(`Refusing to replace another application: ${destination}`);
 }
 

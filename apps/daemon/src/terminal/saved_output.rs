@@ -5,10 +5,10 @@
 //! Nothing here is ever an error to the caller: a file that is missing, unreadable or unwritable
 //! only means there is no saved output to show, so failures are logged and swallowed.
 
-use std::io::Write;
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+
+use crate::hostfs::replace::{replace_file, Permissions};
 
 /// Prefix of a file still being written. A leading dot keeps it apart from every session id, so a
 /// half-written file is never read as one.
@@ -37,22 +37,11 @@ impl SavedOutput {
             "{PARTIAL_PREFIX}{}",
             self.next_partial.fetch_add(1, Ordering::Relaxed)
         ));
+        // Terminal output can hold secrets, so it is the owner's alone.
         let written = std::fs::create_dir_all(&self.dir)
-            .and_then(|()| {
-                // Terminal output can hold secrets, so it is the owner's alone.
-                let mut file = std::fs::OpenOptions::new()
-                    .write(true)
-                    .create(true)
-                    .truncate(true)
-                    .mode(0o600)
-                    .open(&partial)?;
-                file.write_all(output)?;
-                file.sync_all()
-            })
-            .and_then(|()| std::fs::rename(&partial, &path));
+            .and_then(|()| replace_file(&path, &partial, output, Permissions::Private));
         if let Err(err) = written {
             tracing::warn!(session = %id, path = %path.display(), %err, "saving the session's last output failed");
-            std::fs::remove_file(&partial).ok();
         }
     }
 

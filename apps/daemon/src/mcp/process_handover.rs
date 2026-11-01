@@ -9,15 +9,14 @@ use std::time::Duration;
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
 
-use crate::messaging::delivery::{self, WhenBlocked};
 use crate::messaging::sharing::named_session;
 use crate::messaging::texts::NOTICE_PREFIX;
 use crate::processes::ledger::{MoveRefused, ProcessTree};
-use crate::protocol::{error_code, CodedError, Session, SessionStatus};
+use crate::protocol::{Session, SessionStatus};
 use crate::state::AppState;
 
 use super::args::optional_string_list;
-use super::handover::{busy_phrase, party};
+use super::handover::{refuse_if_at_work, untold_note, Parties};
 
 /// Moves the process trees `processes` names from `from` to `to`, each the caller or a session it
 /// owns. Needs no approval: the caller owns every session but itself.
@@ -34,25 +33,8 @@ pub(super) async fn handover_processes(
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
     let ids = tree_ids(arguments)?;
-    let from_id = party(state, caller, arguments, "from")?.id;
-    let to_id = party(state, caller, arguments, "to")?.id;
-    if from_id == to_id {
-        bail!("`from` and `to` are the same session, `{from_id}`; there is nothing to hand over");
-    }
-
-    // Read again under the claims, which keep a relaunch, a switch or a handoff off both sessions
-    // while the trees move.
-    let _from_claim = (from_id != caller.id)
-        .then(|| state.begin_switch(&from_id))
-        .transpose()?;
-    let _to_claim = (to_id != caller.id)
-        .then(|| state.begin_switch(&to_id))
-        .transpose()?;
-    // `from` takes no message that starts a turn while the checks are made again and the trees
-    // move, as for `handover_branches`.
-    let hold = (from_id != caller.id).then(|| state.hold_outbox(&from_id));
-    let from = party(state, caller, arguments, "from")?;
-    let to = party(state, caller, arguments, "to")?;
+    let mut parties = Parties::claim(state, caller, arguments)?;
+    let (from, to) = (parties.from.clone(), parties.to.clone());
     for session in [&from, &to] {
         if session.status == SessionStatus::Archived {
             bail!(
@@ -77,7 +59,12 @@ pub(super) async fn handover_processes(
         }
     }
     if from.id != caller.id {
-        refuse_if_at_work(state, &from)?;
+        refuse_if_at_work(
+            state,
+            &from,
+            "may be using the processes it started. Hand them over once it is awaiting \
+             instructions",
+        )?;
     }
 
     let moved = {
@@ -117,8 +104,14 @@ pub(super) async fn handover_processes(
         .iter()
         .filter(|tree| moved.contains(&tree.id))
         .collect();
-    let untold = tell(state, caller, &from, &to, &moved).await;
-    drop(hold);
+    let untold = parties
+        .tell(
+            state,
+            caller,
+            messages(caller, &from, &to, &moved),
+            "process",
+        )
+        .await;
 
     let words = Words::for_count(moved.len());
     let mut note = format!(
@@ -137,13 +130,7 @@ pub(super) async fn handover_processes(
         words.are,
         named_session(&from),
     );
-    for session in &untold {
-        note.push_str(&format!(
-            " Octoboard could not send {} a message about the handover: tell it yourself once it \
-             can take a message.",
-            named_session(session)
-        ));
-    }
+    note.push_str(&untold_note(&untold));
     Ok(json!({
         "from": from.id,
         "to": to.id,
@@ -178,24 +165,6 @@ fn quoted(ids: &[String]) -> String {
         .map(|id| format!("`{id}`"))
         .collect::<Vec<_>>()
         .join(", ")
-}
-
-/// A session in the middle of a turn — working, starting, or held up for the user — may be using
-/// the processes it started, so it is not asked to give one up. Both the record and the status
-/// the agent is at count, as for `handover_branches`.
-fn refuse_if_at_work(state: &Arc<AppState>, from: &Session) -> Result<()> {
-    let Some(busy) = busy_phrase(state, from) else {
-        return Ok(());
-    };
-    Err(CodedError::raised(
-        error_code::SESSION_WORKING,
-        format!(
-            "{} is {busy}: a session in the middle of a turn may be using the processes it \
-             started. Hand them over once it is awaiting instructions",
-            named_session(from),
-        ),
-        &[("session", &from.id)],
-    ))
 }
 
 /// The words that agree with how many process trees moved.
@@ -246,66 +215,36 @@ impl Words {
     }
 }
 
-/// Tells `from` and `to` what moved, unless one is the caller, which knows from the result.
-/// Returns the sessions that could not be told.
-async fn tell(
-    state: &Arc<AppState>,
-    caller: &Session,
-    from: &Session,
-    to: &Session,
-    moved: &[String],
-) -> Vec<Session> {
+/// What `from` and `to` are told of the process trees `moved`, for `Parties::tell`.
+fn messages(caller: &Session, from: &Session, to: &Session, moved: &[String]) -> [String; 2] {
     let owner = named_session(caller);
     let words = Words::for_count(moved.len());
     let named = quoted(moved);
-    let messages = [
-        (
-            from,
-            format!(
-                "{NOTICE_PREFIX}: {owner}, your owner, handed the {} {named} you started over to \
-                 {}. {} no longer yours: do not stop {} or rely on {}; {} running for {}.",
-                words.noun_phrase(),
-                named_session(to),
-                words.they_are_capitalised,
-                words.them,
-                words.them,
-                words.they_keep,
-                named_session(to),
-            ),
+    [
+        format!(
+            "{NOTICE_PREFIX}: {owner}, your owner, handed the {} {named} you started over to \
+             {}. {} no longer yours: do not stop {} or rely on {}; {} running for {}.",
+            words.noun_phrase(),
+            named_session(to),
+            words.they_are_capitalised,
+            words.them,
+            words.them,
+            words.they_keep,
+            named_session(to),
         ),
-        (
-            to,
-            format!(
-                "{NOTICE_PREFIX}: {owner}, your owner, handed the {} {named} over to you from {}. \
-                 {} yours now and {} running: {} stopped when your process ends. `get_session` \
-                 lists {} in `processes`. Your owner will tell you what to do with {}.",
-                words.noun_phrase(),
-                named_session(from),
-                words.they_are_capitalised,
-                words.keep,
-                words.they_are,
-                words.them,
-                words.them,
-            ),
+        format!(
+            "{NOTICE_PREFIX}: {owner}, your owner, handed the {} {named} over to you from {}. \
+             {} yours now and {} running: {} stopped when your process ends. `get_session` \
+             lists {} in `processes`. Your owner will tell you what to do with {}.",
+            words.noun_phrase(),
+            named_session(from),
+            words.they_are_capitalised,
+            words.keep,
+            words.they_are,
+            words.them,
+            words.them,
         ),
-    ];
-    let mut untold = Vec::new();
-    for (session, text) in messages {
-        if session.id == caller.id {
-            continue;
-        }
-        if let Err(err) =
-            delivery::write_message_off_runtime(state, &session.id, text, WhenBlocked::Queue).await
-        {
-            tracing::warn!(
-                session = %session.id,
-                %err,
-                "telling a session of a process handover failed"
-            );
-            untold.push(session.clone());
-        }
-    }
-    untold
+    ]
 }
 
 #[cfg(test)]
@@ -445,6 +384,39 @@ mod tests {
         );
         state.process_ledger.end_launch(&to.launch_id);
         assert_stops_running(pid_of(&tree));
+    }
+
+    /// A party recorded as interrupted by the time it is told is not written to: the result names
+    /// it, as it is on record, for the caller to tell.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_party_recorded_as_interrupted_is_left_for_the_caller_to_tell() {
+        let (state, dir) = fixture("handover-processes-untold");
+        let _caller = running(&state, "a");
+        let (_from, tree) = running_leaving_one(&state, &dir, "kid");
+        let _guard = KillOnDrop(vec![pid_of(&tree)]);
+        let to = running(&state, "other-kid");
+        let mut ended = state.session_record("other-kid").unwrap();
+        ended.status = SessionStatus::Interrupted;
+        ended.title = "Renamed".to_string();
+        state.store.update_session(&ended).unwrap();
+
+        let result = call(
+            &state,
+            "a",
+            json!({ "processes": [tree], "from": "kid", "to": "other-kid" }),
+        )
+        .await
+        .unwrap();
+
+        let note = result["note"].as_str().unwrap();
+        assert!(
+            note.ends_with(
+                " Octoboard could not send the project session `other-kid` (\"Renamed\") a \
+                 message about the handover: tell it yourself once it can take a message."
+            ),
+            "{note}"
+        );
+        assert_eq!(to.input_writes(), 0);
     }
 
     /// Everything that is refused moves nothing.

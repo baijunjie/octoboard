@@ -6,7 +6,7 @@ use rusqlite::{params, OptionalExtension, Row};
 use super::rows::{column_slot, enum_from_row, enum_from_row_opt, enum_to_text, launch_from_row};
 use super::Store;
 use crate::git_workflow::GitWorkflowOverride;
-use crate::protocol::{Agent, PerAgent, Project, ProjectAccount, ProjectSource};
+use crate::protocol::{Agent, CodedError, PerAgent, Project, ProjectAccount, ProjectSource};
 
 const PROJECT_COLUMNS: &str = "id, console_id, host_id, name, path, default_agent, source,
                                remote_url, claude_account_id, codex_account_id, grok_account_id,
@@ -148,6 +148,12 @@ impl Store {
         Ok(project)
     }
 
+    /// The project `id`, or the `unknown_project` refusal when there is none.
+    pub fn require_project(&self, id: &str) -> Result<Project> {
+        self.get_project(id)?
+            .ok_or_else(|| CodedError::unknown_project(id))
+    }
+
     /// The paths of this console's projects, as stored: absolute and lexically normalised.
     pub fn project_paths(&self, console_id: &str) -> Result<Vec<String>> {
         let conn = self.lock();
@@ -256,8 +262,34 @@ fn tags_from_text(project_id: &str, text: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocol::{error_code, error_parts};
 
     use crate::store::test_support::*;
+
+    /// A project that is stored is read back, and one that is not is refused with the
+    /// `unknown_project` error naming the id that was asked for.
+    #[test]
+    fn requiring_a_project_reads_a_stored_one_and_refuses_an_unknown_one_with_its_code() {
+        let path = temp_db("require-project");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        store.insert_project(&project(false)).expect("project");
+
+        assert_eq!(
+            store.require_project("project-1").expect("stored").id,
+            "project-1"
+        );
+
+        let refused = store.require_project("nope").expect_err("unknown");
+        assert_eq!(
+            error_parts(&refused),
+            error_parts(&CodedError::unknown_project("nope"))
+        );
+        assert_eq!(error_parts(&refused).0, error_code::UNKNOWN_PROJECT);
+        assert_eq!(error_parts(&refused).2, "unknown project nope");
+    }
 
     /// The three states of a project's account for an agent round-trip through insert, update and
     /// read, each agent's independent, and the id column never holds anything but an account id.

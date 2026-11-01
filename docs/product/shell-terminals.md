@@ -69,8 +69,8 @@ A running shell is **busy** while it runs something: the terminal's foreground p
 (a program started in the foreground), or a process the shell started, or one of that process's descendants, still has
 the terminal open as its stdin, stdout or stderr, which covers a job left running in the background, such as a server.
 A process whose descriptors the daemon is not allowed to inspect (one run with `sudo`, say) makes the shell busy,
-and so does a shell with more descendants than one check will look at, because what cannot be ruled out is asked
-about. A helper the prompt keeps beside the shell with all three streams redirected away from the terminal
+and so does a shell with more descendants than one check will look at, or one whose descendants could not be listed,
+because what cannot be ruled out is asked about. A helper the prompt keeps beside the shell with all three streams redirected away from the terminal
 (powerlevel10k's `gitstatusd`) does not count, nor does a job started the same way (`</dev/null >log 2>&1 &`); a job
 with only its output redirected (`npm run dev > dev.log 2>&1 &`) still holds the terminal as its stdin, so it counts. A
 shell sitting at its prompt with nothing started is not busy, and neither is one that has exited. The daemon checks

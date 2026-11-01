@@ -12,6 +12,8 @@
 use std::os::unix::process::CommandExt;
 use std::process::Command;
 
+use super::pids;
+
 /// Has `command` start in a session of its own (`setsid()`), which it leads, and so in a process
 /// group of its own too. Not to be combined with `process_group`: a process that already leads a
 /// group cannot start a session.
@@ -87,7 +89,7 @@ pub(crate) fn signal_group(leader: libc::pid_t, signal: libc::c_int) {
 pub(crate) fn group_has_members(leader: libc::pid_t) -> Option<bool> {
     // SAFETY: `getpgid` only reads; a pid that is gone in the meantime reports an error.
     Some(
-        candidates()?
+        pids::all()?
             .into_iter()
             .any(|pid| pid != leader && unsafe { libc::getpgid(pid) } == leader),
     )
@@ -133,7 +135,7 @@ pub(crate) fn kill_members(leader: libc::pid_t) -> Swept {
     const MAX_PASSES: usize = 3;
     let mut signalled = std::collections::HashSet::new();
     for _ in 0..MAX_PASSES {
-        let Some(candidates) = candidates() else {
+        let Some(candidates) = pids::all() else {
             return Swept {
                 killed: signalled.len(),
                 complete: false,
@@ -162,39 +164,4 @@ pub(crate) fn kill_members(leader: libc::pid_t) -> Swept {
         killed: signalled.len(),
         complete: true,
     }
-}
-
-/// Every process id on the system, a superset of a session's or a group's members for the caller
-/// to filter with `getsid` or `getpgid`, or `None` when the system cannot list them.
-#[cfg(target_os = "linux")]
-fn candidates() -> Option<Vec<libc::pid_t>> {
-    let entries = std::fs::read_dir("/proc").ok()?;
-    Some(
-        entries
-            .flatten()
-            .filter_map(|entry| entry.file_name().to_str()?.parse().ok())
-            .collect(),
-    )
-}
-
-/// As the Linux one, from `libproc`.
-#[cfg(target_os = "macos")]
-fn candidates() -> Option<Vec<libc::pid_t>> {
-    // SAFETY: a null buffer of size 0 only asks how many processes there are.
-    let count = unsafe { libc::proc_listallpids(std::ptr::null_mut(), 0) };
-    if count <= 0 {
-        return None;
-    }
-    // Room beyond that count for processes started since.
-    let mut pids = vec![0 as libc::pid_t; count as usize + 256];
-    let size = (pids.len() * std::mem::size_of::<libc::pid_t>()) as libc::c_int;
-    // SAFETY: `pids` is writable for `size` bytes.
-    let filled = unsafe { libc::proc_listallpids(pids.as_mut_ptr().cast(), size) };
-    if filled <= 0 {
-        return None;
-    }
-    pids.truncate(filled as usize);
-    // Pid 0 is the kernel, which `getsid(0)` would answer for the caller instead.
-    pids.retain(|&pid| pid > 0);
-    Some(pids)
 }

@@ -12,7 +12,8 @@ use std::sync::Mutex;
 
 use anyhow::{Context, Result};
 
-use crate::protocol::{Agent, CodedError, Console};
+use crate::hostfs::replace::{replace_file, Permissions};
+use crate::protocol::{Agent, Console};
 use crate::store::Store;
 
 use super::role::RoleOptions;
@@ -380,9 +381,7 @@ pub fn refresh_console_session_instructions(store: &Store, console_id: &str) -> 
     let _writing = INSTRUCTION_FILE_WRITES
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let console = store
-        .get_console(console_id)?
-        .ok_or_else(|| CodedError::unknown_console(console_id))?;
+    let console = store.require_console(console_id)?;
     write_console_session_instructions_from_settings(store, &console)
 }
 
@@ -419,13 +418,14 @@ pub(crate) fn write_console_session_instructions(
     let workdir = Path::new(&console.workdir);
 
     let path = workdir.join(INSTRUCTION_FILE);
-    let temp_path = temp_name_beside(workdir, INSTRUCTION_FILE);
-    std::fs::write(
-        &temp_path,
-        console_session_instructions(console.console_session_prompt.as_deref(), options),
+    let text = console_session_instructions(console.console_session_prompt.as_deref(), options);
+    replace_file(
+        &path,
+        &temp_name_beside(workdir, INSTRUCTION_FILE),
+        text.as_bytes(),
+        Permissions::KeptOrDefault,
     )
-    .with_context(|| format!("writing {}", temp_path.display()))?;
-    rename_over(&temp_path, &path)?;
+    .with_context(|| format!("writing {}", path.display()))?;
 
     // A symlink that already points at the file is left alone. Anything else at that name — an
     // earlier build's regular file, or a link elsewhere — is replaced by one made under a
@@ -437,7 +437,9 @@ pub(crate) fn write_console_session_instructions(
     let temp_link = temp_name_beside(workdir, CLAUDE_INSTRUCTION_FILE);
     std::os::unix::fs::symlink(INSTRUCTION_FILE, &temp_link)
         .with_context(|| format!("linking {}", temp_link.display()))?;
-    rename_over(&temp_link, &link)
+    rename_over(&temp_link, &link).inspect_err(|_| {
+        std::fs::remove_file(&temp_link).ok();
+    })
 }
 
 /// A unique name beside `name` in `dir`, for a file to be written in full and then renamed over it.
@@ -668,6 +670,42 @@ mod tests {
             std::fs::read_link(workdir.join("CLAUDE.md")).unwrap(),
             Path::new("AGENTS.md")
         );
+    }
+
+    /// Rewriting the instruction file keeps the permissions the user gave it.
+    #[test]
+    fn a_rewritten_instruction_file_keeps_its_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let workdir = ScratchDir::new("console-instructions-mode");
+        let console = console(Agent::Claude, &workdir);
+        write_console_session_instructions(&console, &RoleOptions::default()).unwrap();
+        let file = workdir.join("AGENTS.md");
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o640)).unwrap();
+        write_console_session_instructions(&console, &RoleOptions::default()).unwrap();
+        assert_eq!(
+            std::fs::metadata(&file).unwrap().permissions().mode() & 0o7777,
+            0o640
+        );
+    }
+
+    /// A link that cannot be renamed into place (a directory sits at its name) is not left behind
+    /// under its temporary name.
+    #[test]
+    fn a_link_that_cannot_be_renamed_into_place_is_removed() {
+        let workdir = ScratchDir::new("console-instructions-link-failed");
+        let console = console(Agent::Claude, &workdir);
+        let blocker = workdir.join("CLAUDE.md");
+        std::fs::create_dir(&blocker).unwrap();
+        std::fs::write(blocker.join("inside"), "kept").unwrap();
+        write_console_session_instructions(&console, &RoleOptions::default()).unwrap_err();
+        let mut names: Vec<_> = workdir
+            .read_dir()
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        assert_eq!(names, ["AGENTS.md", "CLAUDE.md"]);
     }
 
     /// The guidance on asking the user is in the file only while the setting is on, comes after

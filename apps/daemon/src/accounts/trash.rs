@@ -86,10 +86,7 @@ const CONFIRMING: Looking = Looking {
 /// Refuses while any of account `id`'s sessions has a process or is being launched, resumed or
 /// switched (`account_has_running_sessions`).
 fn refuse_running_sessions(state: &AppState, id: &str) -> Result<()> {
-    let account = state
-        .store
-        .get_account(id)?
-        .ok_or_else(|| CodedError::unknown_account(id))?;
+    let account = state.store.require_account(id)?;
     let running = state
         .running_sessions()?
         .iter()
@@ -142,10 +139,7 @@ async fn judged_now(
     id: &str,
     looking: Looking,
 ) -> Result<std::result::Result<Option<PathBuf>, Refusal>> {
-    let account = state
-        .store
-        .get_account(id)?
-        .ok_or_else(|| CodedError::unknown_account(id))?;
+    let account = state.store.require_account(id)?;
     let mut defaults = Vec::new();
     for agent in Agent::ALL {
         defaults.push((
@@ -387,10 +381,7 @@ fn trash_failed(path: &str, detail: &str, cause: Option<&str>) -> anyhow::Error 
 
 /// [`move_directory`], waiting `login_wait` for the sign-in to end.
 async fn moved_waiting(state: &Arc<AppState>, id: &str, login_wait: Duration) -> Result<()> {
-    let account = state
-        .store
-        .get_account(id)?
-        .ok_or_else(|| CodedError::unknown_account(id))?;
+    let account = state.store.require_account(id)?;
     let judged = judged_now(state, id, CONFIRMING)
         .await?
         .map_err(|refusal| refusal.raised())?;

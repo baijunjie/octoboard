@@ -29,10 +29,11 @@ use tokio::process::{Child, ChildStdin};
 use tokio::sync::{mpsc, Notify};
 
 use super::Key;
-use crate::accounts::quotas::CODEX_APP_SERVER_ARGS;
 use crate::adapter;
+use crate::agents::codex_app_server::{self, CODEX_APP_SERVER_ARGS};
 use crate::agents::layout::GROK_SIGN_IN_FILE;
 use crate::processes::leader;
+use crate::processes::subprocess::{run_bounded, Bounds};
 use crate::protocol::{login_failure_code as code, Agent, LoginFailure, LoginStatus};
 use crate::state::AppState;
 
@@ -59,6 +60,9 @@ const CANCEL_GRACE: Duration = Duration::from_secs(2);
 
 /// How long `claude auth status` may take.
 const STATUS_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// The most `claude auth status` may print: a short JSON object.
+const STATUS_OUTPUT_LIMIT: usize = 64 * 1024;
 
 /// How often a CLI that has been killed is looked at for having exited, which is found out
 /// without reaping it so that what it left in its session can be killed first (see
@@ -99,7 +103,7 @@ struct SigningIn {
 
 impl SigningIn {
     fn new(state: Arc<AppState>, run: crate::accounts::shared_config::Run) -> Self {
-        crate::accounts::shared_config::publish(&state);
+        state.publish_account_sharing();
         Self {
             state,
             run: Some(run),
@@ -110,7 +114,7 @@ impl SigningIn {
 impl Drop for SigningIn {
     fn drop(&mut self) {
         drop(self.run.take());
-        crate::accounts::shared_config::publish(&self.state);
+        self.state.publish_account_sharing();
     }
 }
 
@@ -301,7 +305,9 @@ impl Flow {
     async fn claude_signed_in(&self) -> bool {
         let mut command = self.command(&["auth", "status"]);
         let output = tokio::task::spawn_blocking(move || {
-            crate::processes::subprocess::run_agent_with_timeout(&mut command, STATUS_TIMEOUT)
+            let never = std::sync::atomic::AtomicBool::new(false);
+            let bounds = Bounds::agent_query(STATUS_TIMEOUT, STATUS_OUTPUT_LIMIT);
+            run_bounded(&mut command, &bounds, &never)
         })
         .await;
         let Ok(Ok(output)) = output else {
@@ -406,10 +412,8 @@ impl Flow {
             Err(err) => return self.failed(&format!("it could not be started: {err}")),
         };
         let requests = [
-            json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
-                "params": {"clientInfo": {"name": "octoboard",
-                    "version": env!("CARGO_PKG_VERSION")}}}),
-            json!({"jsonrpc": "2.0", "method": "initialized"}),
+            codex_app_server::initialize(),
+            codex_app_server::initialized(),
             json!({"jsonrpc": "2.0", "id": 2, "method": "account/login/start",
                 "params": {"type": "chatgpt"}}),
         ];

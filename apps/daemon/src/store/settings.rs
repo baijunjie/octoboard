@@ -262,140 +262,6 @@ impl Store {
         Ok(true)
     }
 
-    pub fn auto_pull_repositories(&self) -> Result<bool> {
-        Ok(self.lock().query_row(
-            "SELECT auto_pull_repositories FROM settings WHERE id = ?1",
-            params![SETTINGS_ID],
-            |row| row.get(0),
-        )?)
-    }
-
-    /// Whether the setting actually changed.
-    pub fn set_auto_pull_repositories(&self, value: bool) -> Result<bool> {
-        let conn = self.lock();
-        let current: bool = conn.query_row(
-            "SELECT auto_pull_repositories FROM settings WHERE id = ?1",
-            params![SETTINGS_ID],
-            |row| row.get(0),
-        )?;
-        if current == value {
-            return Ok(false);
-        }
-        conn.execute(
-            "UPDATE settings SET auto_pull_repositories = ?2 WHERE id = ?1",
-            params![SETTINGS_ID, value],
-        )?;
-        Ok(true)
-    }
-
-    pub fn auto_delete_unresumable_archives(&self) -> Result<bool> {
-        Ok(self.lock().query_row(
-            "SELECT auto_delete_unresumable_archives FROM settings WHERE id = ?1",
-            params![SETTINGS_ID],
-            |row| row.get(0),
-        )?)
-    }
-
-    /// Whether the setting actually changed.
-    pub fn set_auto_delete_unresumable_archives(&self, value: bool) -> Result<bool> {
-        let changed = self.lock().execute(
-            "UPDATE settings SET auto_delete_unresumable_archives = ?2 \
-             WHERE id = ?1 AND auto_delete_unresumable_archives != ?2",
-            params![SETTINGS_ID, value],
-        )?;
-        Ok(changed > 0)
-    }
-
-    pub fn auto_approve_session_requests(&self) -> Result<bool> {
-        Ok(self.lock().query_row(
-            "SELECT auto_approve_session_requests FROM settings WHERE id = ?1",
-            params![SETTINGS_ID],
-            |row| row.get(0),
-        )?)
-    }
-
-    /// Whether the setting actually changed.
-    pub fn set_auto_approve_session_requests(&self, value: bool) -> Result<bool> {
-        let changed = self.lock().execute(
-            "UPDATE settings SET auto_approve_session_requests = ?2 \
-             WHERE id = ?1 AND auto_approve_session_requests != ?2",
-            params![SETTINGS_ID, value],
-        )?;
-        Ok(changed > 0)
-    }
-
-    pub fn auto_approve_resume_requests(&self) -> Result<bool> {
-        Ok(self.lock().query_row(
-            "SELECT auto_approve_resume_requests FROM settings WHERE id = ?1",
-            params![SETTINGS_ID],
-            |row| row.get(0),
-        )?)
-    }
-
-    /// Whether the setting actually changed.
-    pub fn set_auto_approve_resume_requests(&self, value: bool) -> Result<bool> {
-        let changed = self.lock().execute(
-            "UPDATE settings SET auto_approve_resume_requests = ?2 \
-             WHERE id = ?1 AND auto_approve_resume_requests != ?2",
-            params![SETTINGS_ID, value],
-        )?;
-        Ok(changed > 0)
-    }
-
-    pub fn auto_approve_account_switches(&self) -> Result<bool> {
-        Ok(self.lock().query_row(
-            "SELECT auto_approve_account_switches FROM settings WHERE id = ?1",
-            params![SETTINGS_ID],
-            |row| row.get(0),
-        )?)
-    }
-
-    /// Whether the setting actually changed.
-    pub fn set_auto_approve_account_switches(&self, value: bool) -> Result<bool> {
-        let changed = self.lock().execute(
-            "UPDATE settings SET auto_approve_account_switches = ?2 \
-             WHERE id = ?1 AND auto_approve_account_switches != ?2",
-            params![SETTINGS_ID, value],
-        )?;
-        Ok(changed > 0)
-    }
-
-    pub fn auto_approve_handoffs(&self) -> Result<bool> {
-        Ok(self.lock().query_row(
-            "SELECT auto_approve_handoffs FROM settings WHERE id = ?1",
-            params![SETTINGS_ID],
-            |row| row.get(0),
-        )?)
-    }
-
-    /// Whether the setting actually changed.
-    pub fn set_auto_approve_handoffs(&self, value: bool) -> Result<bool> {
-        let changed = self.lock().execute(
-            "UPDATE settings SET auto_approve_handoffs = ?2 \
-             WHERE id = ?1 AND auto_approve_handoffs != ?2",
-            params![SETTINGS_ID, value],
-        )?;
-        Ok(changed > 0)
-    }
-
-    pub fn ask_questions_as_choices(&self) -> Result<bool> {
-        Ok(self.lock().query_row(
-            "SELECT ask_questions_as_choices FROM settings WHERE id = ?1",
-            params![SETTINGS_ID],
-            |row| row.get(0),
-        )?)
-    }
-
-    /// Whether the setting actually changed.
-    pub fn set_ask_questions_as_choices(&self, value: bool) -> Result<bool> {
-        let changed = self.lock().execute(
-            "UPDATE settings SET ask_questions_as_choices = ?2 \
-             WHERE id = ?1 AND ask_questions_as_choices != ?2",
-            params![SETTINGS_ID, value],
-        )?;
-        Ok(changed > 0)
-    }
-
     /// The tag of the language the user last picked for the interface, as a client reported it;
     /// `None` until one has.
     pub fn interface_language(&self) -> Result<Option<String>> {
@@ -412,78 +278,6 @@ impl Store {
             "UPDATE settings SET interface_language = ?2 \
              WHERE id = ?1 AND interface_language IS NOT ?2",
             params![SETTINGS_ID, tag],
-        )?;
-        Ok(changed > 0)
-    }
-
-    pub fn auto_select_account(&self) -> Result<bool> {
-        Ok(self.lock().query_row(
-            "SELECT auto_select_account FROM settings WHERE id = ?1",
-            params![SETTINGS_ID],
-            |row| row.get(0),
-        )?)
-    }
-
-    /// Whether the setting actually changed.
-    pub fn set_auto_select_account(&self, value: bool) -> Result<bool> {
-        let changed = self.lock().execute(
-            "UPDATE settings SET auto_select_account = ?2 \
-             WHERE id = ?1 AND auto_select_account != ?2",
-            params![SETTINGS_ID, value],
-        )?;
-        Ok(changed > 0)
-    }
-
-    pub fn auto_switch_on_usage_limit(&self) -> Result<bool> {
-        Ok(self.lock().query_row(
-            "SELECT auto_switch_on_usage_limit FROM settings WHERE id = ?1",
-            params![SETTINGS_ID],
-            |row| row.get(0),
-        )?)
-    }
-
-    /// Whether the setting actually changed.
-    pub fn set_auto_switch_on_usage_limit(&self, value: bool) -> Result<bool> {
-        let changed = self.lock().execute(
-            "UPDATE settings SET auto_switch_on_usage_limit = ?2 \
-             WHERE id = ?1 AND auto_switch_on_usage_limit != ?2",
-            params![SETTINGS_ID, value],
-        )?;
-        Ok(changed > 0)
-    }
-
-    pub fn sidebar_order_by_status(&self) -> Result<bool> {
-        Ok(self.lock().query_row(
-            "SELECT sidebar_order_by_status FROM settings WHERE id = ?1",
-            params![SETTINGS_ID],
-            |row| row.get(0),
-        )?)
-    }
-
-    /// Whether the setting actually changed.
-    pub fn set_sidebar_order_by_status(&self, value: bool) -> Result<bool> {
-        let changed = self.lock().execute(
-            "UPDATE settings SET sidebar_order_by_status = ?2 \
-             WHERE id = ?1 AND sidebar_order_by_status != ?2",
-            params![SETTINGS_ID, value],
-        )?;
-        Ok(changed > 0)
-    }
-
-    pub fn auto_start_quota_windows(&self) -> Result<bool> {
-        Ok(self.lock().query_row(
-            "SELECT auto_start_quota_windows FROM settings WHERE id = ?1",
-            params![SETTINGS_ID],
-            |row| row.get(0),
-        )?)
-    }
-
-    /// Whether the setting actually changed.
-    pub fn set_auto_start_quota_windows(&self, value: bool) -> Result<bool> {
-        let changed = self.lock().execute(
-            "UPDATE settings SET auto_start_quota_windows = ?2 \
-             WHERE id = ?1 AND auto_start_quota_windows != ?2",
-            params![SETTINGS_ID, value],
         )?;
         Ok(changed > 0)
     }
@@ -520,6 +314,65 @@ impl Store {
             params![SETTINGS_ID, value],
         )?;
         Ok(true)
+    }
+}
+
+/// The settings that are a plain switch, each a column of the settings row named as its getter is:
+/// `$get` reads it, and `$set` writes it, answering whether the stored value changed. A switch
+/// added to the settings row is one line here, with its column in the schema.
+macro_rules! bool_settings {
+    ($($get:ident, $set:ident;)*) => {
+        impl Store {
+            $(
+                pub fn $get(&self) -> Result<bool> {
+                    self.read_bool_setting(concat!(
+                        "SELECT ", stringify!($get), " FROM settings WHERE id = ?1"
+                    ))
+                }
+
+                /// Whether the setting actually changed.
+                pub fn $set(&self, value: bool) -> Result<bool> {
+                    self.write_bool_setting(
+                        concat!(
+                            "UPDATE settings SET ", stringify!($get), " = ?2 WHERE id = ?1 AND ",
+                            stringify!($get), " != ?2"
+                        ),
+                        value,
+                    )
+                }
+            )*
+        }
+    };
+}
+
+bool_settings! {
+    auto_pull_repositories, set_auto_pull_repositories;
+    auto_delete_unresumable_archives, set_auto_delete_unresumable_archives;
+    auto_approve_session_requests, set_auto_approve_session_requests;
+    auto_approve_resume_requests, set_auto_approve_resume_requests;
+    auto_approve_account_switches, set_auto_approve_account_switches;
+    auto_approve_handoffs, set_auto_approve_handoffs;
+    ask_questions_as_choices, set_ask_questions_as_choices;
+    auto_select_account, set_auto_select_account;
+    auto_switch_on_usage_limit, set_auto_switch_on_usage_limit;
+    sidebar_order_by_status, set_sidebar_order_by_status;
+    auto_start_quota_windows, set_auto_start_quota_windows;
+}
+
+impl Store {
+    /// The switch `sql` selects from the settings row, the statement `bool_settings!` builds for
+    /// its column.
+    fn read_bool_setting(&self, sql: &'static str) -> Result<bool> {
+        Ok(self
+            .lock()
+            .query_row(sql, params![SETTINGS_ID], |row| row.get(0))?)
+    }
+
+    /// Runs `sql`, the statement `bool_settings!` builds to write a column only when it differs
+    /// from `value`. Whether it did.
+    fn write_bool_setting(&self, sql: &'static str, value: bool) -> Result<bool> {
+        let changed = self.lock().execute(sql, params![SETTINGS_ID, value])?;
+        Ok(changed > 0)
     }
 }
 

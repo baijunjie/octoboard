@@ -7,6 +7,7 @@ use anyhow::{Context, Result};
 
 use crate::adapter::files::{read_regular_text, SMALL_FILE_LIMIT};
 use crate::agents::layout::GROK_CONFIG_FILE;
+use crate::hostfs::replace::{replace_beside, Permissions};
 
 /// Keys a sharing account's session may copy from its `config.toml` onto the shared file.
 ///
@@ -152,7 +153,8 @@ impl SharedConfigWriteback {
         if !self.still_shares() {
             return Ok(());
         }
-        crate::session::trust::write_replacing(target, &merged)
+        replace_beside(target, merged.as_bytes(), Permissions::KeptOrPrivate)
+            .with_context(|| format!("writing {}", target.display()))
     }
 
     /// The account entry is still a link that resolves to the file it resolved to at launch. A

@@ -23,9 +23,9 @@ Per-package commands are in that package's doc.
   that owns every agent process and all of Octoboard's data, reached by every client only through the WebSocket/HTTP
   protocol in [`apps/daemon/PROTOCOL.md`](../apps/daemon/PROTOCOL.md).
 - [`apps/desktop/`](../apps/desktop/README.md) — `@octoboard/desktop`, the Tauri 2 shell of the macOS desktop
-  application: window, native menu, menu bar icon, `octoboardd` sidecar and its restart when it dies, exit flow, macOS privacy grants, in-app
-  updates, and the build, install, release and release-publishing scripts; it loads the UI from `packages/ui/` and has
-  no UI of its own.
+  application: window, native menu, menu bar icon, `octoboardd` sidecar and its restart when it dies, exit flow, macOS
+  privacy grants, in-app updates, and the build, install, release and release-publishing scripts; it loads the UI from
+  `packages/ui/` and has no UI of its own.
 - [`apps/web/`](../apps/web/README.md) — `@octoboard/web`, the public Nuxt website: localized product and privacy pages
   generated as static files for GitHub Pages, including a fixture-backed preview built from the shared React UI.
 - [`apps/ios/`](../apps/ios/README.md) — placeholder for the native iOS client; no content, not a workspace package.
@@ -44,9 +44,10 @@ Per-package commands are in that package's doc.
 ## Repository-level code and configuration
 
 - [`scripts/`](../scripts/) — repository-level commands and hook helpers: `env.mjs` (shared env-file reader),
-  `test-rust.mjs` (Rust tests), `clippy-rust.mjs` (Rust lint with warnings denied), `format-staged.mjs` (staged-file
-  formatting), `pre-push.mjs` (push verification), and `verify.mjs` with `verify/` (checks selected from changed inputs,
-  plus the application release checks).
+  `git.mjs` (the one way the repository scripts run `git`, which `verify.mjs`, `pre-push.mjs`, `verify/tree.mjs` and
+  the desktop release publishing go through), `test-rust.mjs` (Rust tests), `clippy-rust.mjs` (Rust lint with warnings
+  denied), `format-staged.mjs` (staged-file formatting), `pre-push.mjs` (push verification), and `verify.mjs` with
+  `verify/` (checks selected from changed inputs, plus the application release checks).
 - [`.githooks/`](../.githooks/) — git hook entry points: `hook.sh` dispatches pre-commit to `scripts/format-staged.mjs`
   and pre-push to `scripts/pre-push.mjs`; `install.sh` installs them into the common hooks directory (and migrates
   older clones), and `auto-install.sh` runs it on `pnpm install` in the main checkout.

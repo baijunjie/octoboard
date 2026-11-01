@@ -255,8 +255,8 @@ pub fn refuse_unlaunchable_account(agent: Agent, pinned: Option<&Path>) -> Resul
 /// exists only for the duration of a process.
 ///
 /// Shared by `crate::agents::availability`, which shows it as the default account's directory
-/// before any session has opened, and by `grok::home::default_grok_home`, which a launch with no
-/// pinned account builds the farm from.
+/// before any session has opened, and by [`account_dir`], which a launch with no pinned account
+/// resolves its directory through.
 pub fn default_account_dir(agent: Agent, shell_env: &HashMap<String, String>) -> PathBuf {
     let layout = layout(agent);
     if let Some(dir) = shell_env
@@ -273,6 +273,16 @@ pub fn default_account_dir(agent: Agent, shell_env: &HashMap<String, String>) ->
     home.join(layout.default_dir)
 }
 
+/// The directory of an account of `agent` as a session of it would see it: `pinned`, the account's
+/// own, else the default account's ([`default_account_dir`]) resolved from `shell_env`.
+pub fn account_dir(
+    agent: Agent,
+    pinned: Option<&Path>,
+    shell_env: &HashMap<String, String>,
+) -> PathBuf {
+    pinned.map_or_else(|| default_account_dir(agent, shell_env), Path::to_path_buf)
+}
+
 /// A command running `agent`'s binary with `args` the way a session of the account would run it,
 /// for a short query of the CLI rather than a launch: the binary resolved on `shell_env`'s
 /// `PATH`, the environment the snapshot's and no more, the account's directory exported under
@@ -282,9 +292,9 @@ pub fn default_account_dir(agent: Agent, shell_env: &HashMap<String, String>) ->
 /// binary's name when it does not resolve.
 ///
 /// A caller running it outside a session or its launch claim holds
-/// [`crate::accounts::shared_config::admitted_reading`] for the whole run: otherwise a change to
-/// the account's sharing can move what the CLI opens, such as Codex's state database and history,
-/// from under it.
+/// [`crate::accounts::shared_config::admitted_reading`] for the whole run, as
+/// [`crate::accounts::cli_run::admitted_command`] does: otherwise a change to the account's
+/// sharing can move what the CLI opens, such as Codex's state database and history, from under it.
 pub fn account_command(
     agent: Agent,
     shell_env: &HashMap<String, String>,
@@ -735,5 +745,24 @@ pub mod tests {
                 PathBuf::from("/elsewhere")
             );
         }
+    }
+
+    /// An account's own directory is what its sessions run in, whatever the shell exports; the
+    /// default account's follows the shell.
+    #[test]
+    fn a_pinned_account_dir_wins_over_the_default_one() {
+        use crate::protocol::Agent;
+        let shell = HashMap::from([
+            ("HOME".to_string(), "/home/user".to_string()),
+            ("CLAUDE_CONFIG_DIR".to_string(), "/exported".to_string()),
+        ]);
+        assert_eq!(
+            super::account_dir(Agent::Claude, Some(std::path::Path::new("/pinned")), &shell),
+            PathBuf::from("/pinned")
+        );
+        assert_eq!(
+            super::account_dir(Agent::Claude, None, &shell),
+            PathBuf::from("/exported")
+        );
     }
 }

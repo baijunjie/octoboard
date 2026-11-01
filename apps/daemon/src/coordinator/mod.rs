@@ -65,7 +65,7 @@ use crate::env_shell;
 use crate::host_open;
 use crate::hostfs;
 use crate::project_git;
-use crate::protocol::{Agent, CodedError, Event, ModelChangeOutcome, Origin, RequestBody};
+use crate::protocol::{Agent, Event, ModelChangeOutcome, Origin, RequestBody};
 use crate::records;
 use crate::records::history;
 use crate::session::trust;
@@ -815,10 +815,7 @@ async fn handle_inner(
         }
 
         RequestBody::PullProjectBranch { project } => {
-            let project = state
-                .store
-                .get_project(&project)?
-                .ok_or_else(|| CodedError::unknown_project(&project))?;
+            let project = state.store.require_project(&project)?;
             project_git::status::pull_project_now(state, project);
             Ok(None)
         }
@@ -860,10 +857,7 @@ async fn handle_inner(
         }
 
         RequestBody::OpenProjectTerminal { project } => {
-            let project = state
-                .store
-                .get_project(&project)?
-                .ok_or_else(|| CodedError::unknown_project(&project))?;
+            let project = state.store.require_project(&project)?;
             let path = project.path;
             tokio::task::spawn_blocking(move || {
                 host_open::terminal::open_directory(Path::new(&path))
@@ -873,10 +867,7 @@ async fn handle_inner(
         }
 
         RequestBody::OpenProjectDirectory { project } => {
-            let project = state
-                .store
-                .get_project(&project)?
-                .ok_or_else(|| CodedError::unknown_project(&project))?;
+            let project = state.store.require_project(&project)?;
             let path = project.path;
             tokio::task::spawn_blocking(move || host_open::paths::open(Path::new(&path))).await??;
             Ok(None)
@@ -930,10 +921,7 @@ async fn handle_inner(
         }
 
         RequestBody::PushProjectBranch { project } => {
-            let project = state
-                .store
-                .get_project(&project)?
-                .ok_or_else(|| CodedError::unknown_project(&project))?;
+            let project = state.store.require_project(&project)?;
             let state = Arc::clone(state);
             tokio::task::spawn_blocking(move || {
                 project_git::push::push_current_branch(&state, &project)
@@ -943,10 +931,7 @@ async fn handle_inner(
         }
 
         RequestBody::SwitchProjectBranch { project, branch } => {
-            let project = state
-                .store
-                .get_project(&project)?
-                .ok_or_else(|| CodedError::unknown_project(&project))?;
+            let project = state.store.require_project(&project)?;
             let state = Arc::clone(state);
             tokio::task::spawn_blocking(move || {
                 project_git::switch::switch_branch(&state, &project, &branch)
@@ -956,10 +941,7 @@ async fn handle_inner(
         }
 
         RequestBody::RestoreProjectChanges { project } => {
-            let project = state
-                .store
-                .get_project(&project)?
-                .ok_or_else(|| CodedError::unknown_project(&project))?;
+            let project = state.store.require_project(&project)?;
             let state = Arc::clone(state);
             tokio::task::spawn_blocking(move || {
                 project_git::restore::restore_project(&state, &project)

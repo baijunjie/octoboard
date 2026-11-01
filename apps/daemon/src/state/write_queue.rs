@@ -308,7 +308,7 @@ impl AppState {
     /// whether the session is working.
     fn note_activity(&self, id: &str) {
         if let Ok(Some(session)) = self.store.get_session(id) {
-            crate::accounts::shared_config::note_session(self, &session);
+            self.note_sharing_activity(&session);
         }
     }
 

@@ -6,6 +6,7 @@
 //! usage limit).
 
 pub(crate) mod auto_switch;
+pub(crate) mod cli_run;
 pub(crate) mod dirs;
 pub(crate) mod login;
 pub(crate) mod quotas;

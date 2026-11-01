@@ -501,12 +501,10 @@ fn project_roots(state: &crate::state::AppState, project: &str, fresh: bool) -> 
 
 /// Refuses a project the daemon does not know, the one failure that is the request's own.
 fn known(state: &crate::state::AppState, project: Option<&str>) -> Result<()> {
-    match project {
-        Some(project) if state.store.get_project(project)?.is_none() => {
-            Err(CodedError::unknown_project(project))
-        }
-        _ => Ok(()),
+    if let Some(project) = project {
+        state.store.require_project(project)?;
     }
+    Ok(())
 }
 
 /// Answers each of `paths`, in order, with what it names.

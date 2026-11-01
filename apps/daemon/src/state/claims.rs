@@ -134,7 +134,7 @@ impl AppState {
             ));
         }
         drop(live);
-        crate::accounts::shared_config::publish(self);
+        self.publish_account_sharing();
         Ok(LaunchClaim {
             state: self.clone(),
             id: id.to_string(),
@@ -161,7 +161,7 @@ impl AppState {
         }
         live.switching.insert(id.to_string());
         drop(live);
-        crate::accounts::shared_config::publish(self);
+        self.publish_account_sharing();
         Ok(LaunchClaim {
             state: self.clone(),
             id: id.to_string(),
@@ -227,7 +227,7 @@ impl AppState {
         if was_switching_account || was_changing_model {
             self.publish_session_by_id(id);
         }
-        crate::accounts::shared_config::publish(self);
+        self.publish_account_sharing();
     }
 
     /// Claims the session for one interrupt, or `None` while another holds it. The claim ends when

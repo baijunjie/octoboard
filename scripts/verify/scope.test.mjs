@@ -42,6 +42,7 @@ const CASES = [
   ["package.json", ALL_PACKAGES],
   ["scripts/env.mjs", ["verify", "ui", "desktop"], ["ui"]],
   ["scripts/env.d.mts", ["verify", "ui", "desktop"]],
+  ["scripts/git.mjs", ["verify", "desktop"]],
   ["scripts/test-rust.mjs", ["verify", "daemon", "native"]],
   ["scripts/clippy-rust.mjs", ["verify", "daemon", "native"]],
   [".githooks/hook.sh", ["verify"]],

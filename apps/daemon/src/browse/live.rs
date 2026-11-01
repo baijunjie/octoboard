@@ -21,7 +21,7 @@
 
 use std::ffi::CStr;
 use std::fs::{self, File, Metadata};
-use std::io::{self, Read};
+use std::io;
 use std::os::fd::IntoRawFd;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{FileTypeExt, MetadataExt};
@@ -32,6 +32,7 @@ use anyhow::Result;
 
 use crate::browse::source::file_id;
 use crate::browse::{budget, ignored, json_escaped_len, BrowseGit, Cancelled};
+use crate::hostfs::{read_bounded, ReadFailure};
 use crate::protocol::{error_code, BrowseEntry, CodedError, EntryKind, LinkTarget};
 use crate::wire_path::{self, RelPath};
 
@@ -147,11 +148,12 @@ pub(super) fn read_resolved(
     if !opened.is_file() || file_id(&opened) != file_id(&before) {
         return Err(changed(path));
     }
-    let bytes = read_bounded(&file, limit, opened.len(), cancel).map_err(|err| match err {
-        ReadFailure::Exceeded => too_large(limit, None),
-        ReadFailure::Cancelled => anyhow::Error::new(Cancelled),
-        ReadFailure::Io(err) => io_failure(path, &err),
-    })?;
+    let bytes =
+        read_bounded(&file, limit, opened.len(), Some(cancel)).map_err(|err| match err {
+            ReadFailure::Exceeded => too_large(limit, None),
+            ReadFailure::Cancelled => anyhow::Error::new(Cancelled),
+            ReadFailure::Io(err) => io_failure(path, &err),
+        })?;
     let after = file.metadata().map_err(|err| io_failure(path, &err))?;
     if version(&opened) != version(&after) || bytes.len() as u64 != after.len() {
         return Err(changed(path));
@@ -193,50 +195,6 @@ fn entry_version(stat: &libc::stat) -> String {
         (stat.st_mtime as i64, stat.st_mtime_nsec as i64),
         (stat.st_ctime as i64, stat.st_ctime_nsec as i64),
     )
-}
-
-#[derive(Debug)]
-pub enum ReadFailure {
-    Exceeded,
-    Cancelled,
-    Io(io::Error),
-}
-
-/// The size of each read, and how often a cancel is noticed.
-const READ_CHUNK: usize = 64 * 1024;
-
-/// Reads `source` to its end, holding at most `limit` bytes: one byte more and the read stops
-/// there, whatever the source would still give. A file that grows while it is read is therefore
-/// bounded by the read, not by the size it had when it was opened. The buffer is sized from
-/// `expected` and grown at most once, straight to the limit, so it never holds more than that.
-pub fn read_bounded(
-    mut source: impl Read,
-    limit: usize,
-    expected: u64,
-    cancel: &AtomicBool,
-) -> Result<Vec<u8>, ReadFailure> {
-    let mut bytes = Vec::with_capacity(expected.min(limit as u64) as usize + 1);
-    let mut chunk = vec![0u8; READ_CHUNK];
-    loop {
-        if cancel.load(Ordering::Relaxed) {
-            return Err(ReadFailure::Cancelled);
-        }
-        let room = (limit - bytes.len() + 1).min(READ_CHUNK);
-        match source.read(&mut chunk[..room]) {
-            Ok(0) => return Ok(bytes),
-            Ok(n) => {
-                if bytes.len() + n > bytes.capacity() {
-                    bytes.reserve_exact(limit + 1 - bytes.len());
-                }
-                bytes.extend_from_slice(&chunk[..n]);
-                if bytes.len() > limit {
-                    return Err(ReadFailure::Exceeded);
-                }
-            }
-            Err(err) if err.kind() == io::ErrorKind::Interrupted => {}
-            Err(err) => return Err(ReadFailure::Io(err)),
-        }
-    }
 }
 
 /// A directory listing, possibly cut at a budget.

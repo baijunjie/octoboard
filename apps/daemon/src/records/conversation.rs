@@ -10,11 +10,12 @@
 //! not parse is skipped, so a record still being written, or one in a shape this does not know,
 //! yields what could be read rather than a failure.
 
-use std::io::BufRead;
+use std::ops::ControlFlow;
 
 use serde_json::Value;
 
 use crate::protocol::Agent;
+use crate::records::line_file;
 use crate::records::Stretch;
 
 /// One item of a todo list.
@@ -114,28 +115,21 @@ pub fn read_stretches(agent: Agent, stretches: &[Stretch]) -> std::io::Result<Co
 
 /// Calls `visit` with each line of `stretches` that parses, in order: each file, and of it the
 /// first `cut` bytes when there is one (a Codex thread's earlier segments end where the next picks
-/// up), decompressing a Codex rollout that Codex has compressed. A stretch that fails part-way (a
-/// compressed record cut short) yields what was read before it; one that fails before anything of
-/// it was read is the error.
+/// up), decompressing a Codex rollout that Codex has compressed. A line past the line limit is
+/// skipped, like one that does not parse. A stretch that fails part-way (a compressed record cut
+/// short) yields what was read before it; one that fails before a line of it was read is the
+/// error.
 pub fn for_each_line(stretches: &[Stretch], mut visit: impl FnMut(&Value)) -> std::io::Result<()> {
     for Stretch { path, cut } in stretches {
-        let reader = crate::records::line_file::open(path, 0)?;
-        let mut reader: Box<dyn BufRead> = match cut {
-            Some(bytes) => Box::new(std::io::Read::take(reader, *bytes)),
-            None => reader,
-        };
-        let mut line = Vec::new();
-        let mut lines = 0;
-        loop {
-            line.clear();
-            match reader.read_until(b'\n', &mut line) {
-                Ok(0) => break,
-                Ok(_) => lines += 1,
-                Err(_) if lines > 0 => break,
-                Err(err) => return Err(err),
-            }
-            if let Ok(value) = serde_json::from_slice::<Value>(&line) {
+        let read = line_file::read_whole_until(path, *cut, |line| {
+            if let Ok(value) = serde_json::from_str::<Value>(line) {
                 visit(&value);
+            }
+            ControlFlow::Continue(())
+        });
+        if let Err(failure) = read {
+            if !failure.read_a_line {
+                return Err(failure.error);
             }
         }
     }
@@ -670,5 +664,112 @@ mod tests {
 
         assert!(!conversation.messages.is_empty());
         assert!(conversation.messages.len() < 40_000);
+    }
+
+    /// A compressed stretch that fails after reading only lines that are skipped yields nothing and
+    /// the other stretches are still read, like a record cut short after lines that parsed.
+    #[test]
+    fn a_stretch_that_fails_after_only_skipped_lines_yields_nothing_and_the_read_goes_on() {
+        let dir = crate::test_support::ScratchDir::new("conversation-skipped-then-failed");
+        let broken = dir.join("broken.jsonl.zst");
+        std::fs::write(&broken, cut_short_after(b"\xff\xfe\n")).unwrap();
+        let whole = dir.join("whole.jsonl");
+        std::fs::write(&whole, format!("{}\n", user_line("after"))).unwrap();
+        let stretches = [
+            Stretch {
+                path: broken,
+                cut: None,
+            },
+            Stretch {
+                path: whole,
+                cut: None,
+            },
+        ];
+
+        let conversation = read_stretches(Agent::Claude, &stretches).unwrap();
+
+        assert_eq!(conversation.messages, [say(Speaker::User, "after")]);
+    }
+
+    /// A stretch that fails inside its first line, before a line of it was read, is the error.
+    #[test]
+    fn a_stretch_that_fails_inside_its_first_line_is_the_error() {
+        let dir = crate::test_support::ScratchDir::new("conversation-failed-in-first-line");
+        let broken = dir.join("broken.jsonl.zst");
+        let unfinished = user_line("unfinished");
+        std::fs::write(&broken, cut_short_after(unfinished.as_bytes())).unwrap();
+        let stretches = [Stretch {
+            path: broken,
+            cut: None,
+        }];
+
+        assert!(read_stretches(Agent::Claude, &stretches).is_err());
+    }
+
+    /// A zstd record that decompresses to `content` and then fails: one whole frame holding
+    /// `content`, followed by half of a second one.
+    fn cut_short_after(content: &[u8]) -> Vec<u8> {
+        let mut packed = zstd::encode_all(content, 0).unwrap();
+        let next = zstd::encode_all(&b"more lines\n"[..], 0).unwrap();
+        packed.extend_from_slice(&next[..next.len() / 2]);
+        packed
+    }
+
+    fn user_line(text: &str) -> String {
+        format!(r#"{{"type":"user","message":{{"role":"user","content":"{text}"}}}}"#)
+    }
+
+    /// Lines that do not parse are skipped, the last line counts without its newline, and a stretch
+    /// ends at its cut.
+    #[test]
+    fn lines_are_read_through_the_cut_and_the_unfinished_last_one() {
+        let path = crate::test_support::ScratchFile::new("conversation-lines", "session.jsonl");
+        let (one, two, three) = (user_line("one"), user_line("two"), user_line("three"));
+        std::fs::write(&path, format!("{one}\nnot json\n{two}\n{three}")).unwrap();
+        let said = |cut| {
+            let stretches = [Stretch {
+                path: path.to_path_buf(),
+                cut,
+            }];
+            let conversation = read_stretches(Agent::Claude, &stretches).unwrap();
+            conversation.messages
+        };
+        assert_eq!(
+            said(None),
+            [
+                say(Speaker::User, "one"),
+                say(Speaker::User, "two"),
+                say(Speaker::User, "three")
+            ]
+        );
+        let cut = (one.len() + "\nnot json\n".len() + two.len() + 1) as u64;
+        assert_eq!(
+            said(Some(cut)),
+            [say(Speaker::User, "one"), say(Speaker::User, "two")]
+        );
+        let missing = path.with_file_name("missing.jsonl");
+        let stretches = [Stretch {
+            path: missing,
+            cut: None,
+        }];
+        assert!(read_stretches(Agent::Claude, &stretches).is_err());
+    }
+
+    /// A line past the line limit is skipped like one that does not parse, and the lines after it
+    /// are still read.
+    #[test]
+    fn a_line_past_the_limit_is_skipped() {
+        let path = crate::test_support::ScratchFile::new("conversation-long", "session.jsonl");
+        let long = user_line(&"x".repeat(crate::records::line_file::LINE_LIMIT));
+        std::fs::write(
+            &path,
+            format!("{}\n{long}\n{}\n", user_line("one"), user_line("two")),
+        )
+        .unwrap();
+        let conversation = read(Agent::Claude, &path).unwrap();
+        assert_eq!(
+            conversation.messages,
+            [say(Speaker::User, "one"), say(Speaker::User, "two")]
+        );
     }
 }

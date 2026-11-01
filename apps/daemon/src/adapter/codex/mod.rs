@@ -76,9 +76,7 @@ use crate::agents::layout;
 use crate::mcp;
 use crate::protocol::{error_code, Agent, CodedError};
 use claude_compatibility::{claude_compatibility_instructions, reserved_env};
-use config::{
-    codex_home, model_migrations, project_server_names, read_config, server_names, ConfigFile,
-};
+use config::{model_migrations, project_server_names, read_config, server_names, ConfigFile};
 use private_server::private_server_supported;
 
 pub use private_server::PrivateServerPlan;
@@ -312,7 +310,9 @@ impl AgentAdapter for CodexAdapter {
             super::MCP_TOOL_TIMEOUT_SECS
         ));
 
-        let home = codex_home(spec, pinned);
+        // Read from the launch environment rather than the daemon's: the daemon's own `CODEX_HOME`
+        // may belong to an agent session it was started from.
+        let home = super::account_dir(Agent::Codex, pinned, spec.shell_env);
         let config = read_config(&home);
         // Set only for a pinned directory; otherwise the shell snapshot's own value, if any,
         // stands.

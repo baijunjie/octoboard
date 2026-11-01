@@ -7,7 +7,8 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 use super::rows::{enum_from_row, enum_from_row_opt, enum_from_text, enum_to_text};
 use super::Store;
 use crate::protocol::{
-    Agent, ConsoleSessionColour, OrchestrationRole, Origin, Role, Session, SessionStatus,
+    Agent, CodedError, ConsoleSessionColour, OrchestrationRole, Origin, Role, Session,
+    SessionStatus,
 };
 use crate::titles::RecordTitles;
 
@@ -657,6 +658,12 @@ impl Store {
         Ok(session)
     }
 
+    /// The session `id`, or the `unknown_session` refusal when there is none.
+    pub fn require_session(&self, id: &str) -> Result<Session> {
+        self.get_session(id)?
+            .ok_or_else(|| CodedError::unknown_session(id))
+    }
+
     /// A session other than `except` that records `agent_session_id` as its agent's conversation
     /// id, live or archived and of any project, if there is one.
     pub fn session_by_agent_session_id(
@@ -815,8 +822,35 @@ pub(super) fn read_session(row: &Row<'_>) -> rusqlite::Result<Session> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocol::{error_code, error_parts};
 
     use crate::store::test_support::*;
+
+    /// A session that is stored is read back, and one that is not is refused with the
+    /// `unknown_session` error naming the id that was asked for.
+    #[test]
+    fn requiring_a_session_reads_a_stored_one_and_refuses_an_unknown_one_with_its_code() {
+        let path = temp_db("require-session");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        store.insert_project(&project(false)).expect("project");
+        store.insert_session(&session(None)).expect("session");
+
+        assert_eq!(
+            store.require_session("session-1").expect("stored").id,
+            "session-1"
+        );
+
+        let refused = store.require_session("nope").expect_err("unknown");
+        assert_eq!(
+            error_parts(&refused),
+            error_parts(&CodedError::unknown_session("nope"))
+        );
+        assert_eq!(error_parts(&refused).0, error_code::UNKNOWN_SESSION);
+        assert_eq!(error_parts(&refused).2, "unknown session nope");
+    }
 
     /// A session without overrides inherits. Overrides, including explicit nulls, survive
     /// unrelated writes, account changes and opening the database again.

@@ -28,14 +28,16 @@ pub(super) fn is_busy(process: &ShellProcess) -> bool {
 }
 
 /// Whether any descendant of `shell` satisfies `holds`, walking the tree depth first. Reaching
-/// `MAX_DESCENDANTS` with descendants left unlooked-at counts as holding: what cannot be ruled
-/// out is asked about.
+/// `MAX_DESCENDANTS` with descendants left unlooked-at, or a listing of children that failed
+/// (`None`), counts as holding: what cannot be ruled out is asked about.
 fn descendant_holds(
     shell: libc::pid_t,
-    mut children: impl FnMut(libc::pid_t) -> Vec<libc::pid_t>,
+    mut children: impl FnMut(libc::pid_t) -> Option<Vec<libc::pid_t>>,
     mut holds: impl FnMut(libc::pid_t) -> bool,
 ) -> bool {
-    let mut pending = children(shell);
+    let Some(mut pending) = children(shell) else {
+        return true;
+    };
     let mut seen = 0;
     while let Some(pid) = pending.pop() {
         if seen == MAX_DESCENDANTS {
@@ -45,7 +47,10 @@ fn descendant_holds(
             return true;
         }
         seen += 1;
-        pending.extend(children(pid));
+        let Some(found) = children(pid) else {
+            return true;
+        };
+        pending.extend(found);
     }
     false
 }
@@ -59,8 +64,8 @@ fn refused(error: &std::io::Error) -> bool {
 }
 
 #[cfg(target_os = "macos")]
-fn children_source(_shell: libc::pid_t) -> impl FnMut(libc::pid_t) -> Vec<libc::pid_t> {
-    children
+fn children_source(_shell: libc::pid_t) -> impl FnMut(libc::pid_t) -> Option<Vec<libc::pid_t>> {
+    |pid| Some(children(pid))
 }
 
 #[cfg(target_os = "macos")]
@@ -151,21 +156,21 @@ fn holds_terminal(pid: libc::pid_t, slave: &Path) -> bool {
 }
 
 /// Reads children from the kernel's list when this kernel keeps one, decided once per check from
-/// the shell's own entry, and from a single pass over `/proc` otherwise.
+/// the shell's own entry, and from a single pass over `/proc` otherwise, which answers `None`
+/// when the pass failed.
 #[cfg(target_os = "linux")]
-fn children_source(shell: libc::pid_t) -> impl FnMut(libc::pid_t) -> Vec<libc::pid_t> {
+fn children_source(shell: libc::pid_t) -> impl FnMut(libc::pid_t) -> Option<Vec<libc::pid_t>> {
     // The list is absent on a kernel built without `CONFIG_PROC_CHILDREN`.
     let listed = std::fs::read_to_string(format!("/proc/{shell}/task/{shell}/children")).is_ok();
     let mut by_parent = None;
     move |pid| {
         if listed {
-            listed_children(pid)
+            Some(listed_children(pid))
         } else {
             by_parent
                 .get_or_insert_with(children_by_parent)
-                .get(&pid)
-                .cloned()
-                .unwrap_or_default()
+                .as_ref()
+                .map(|map| map.get(&pid).cloned().unwrap_or_default())
         }
     }
 }
@@ -189,21 +194,12 @@ fn listed_children(pid: libc::pid_t) -> Vec<libc::pid_t> {
         .collect()
 }
 
-/// Every process's children, from the parent each one's `stat` names.
+/// Every process's children, from the parent each one's `stat` names; `None` when the processes
+/// could not be listed.
 #[cfg(target_os = "linux")]
-fn children_by_parent() -> std::collections::HashMap<libc::pid_t, Vec<libc::pid_t>> {
+fn children_by_parent() -> Option<std::collections::HashMap<libc::pid_t, Vec<libc::pid_t>>> {
     let mut by_parent = std::collections::HashMap::<libc::pid_t, Vec<libc::pid_t>>::new();
-    let Ok(entries) = std::fs::read_dir("/proc") else {
-        return by_parent;
-    };
-    for entry in entries.flatten() {
-        let Some(child) = entry
-            .file_name()
-            .to_str()
-            .and_then(|name| name.parse::<libc::pid_t>().ok())
-        else {
-            continue;
-        };
+    for child in crate::processes::pids::all()? {
         let Ok(stat) = std::fs::read_to_string(format!("/proc/{child}/stat")) else {
             continue;
         };
@@ -218,7 +214,7 @@ fn children_by_parent() -> std::collections::HashMap<libc::pid_t, Vec<libc::pid_
             by_parent.entry(parent).or_default().push(child);
         }
     }
-    by_parent
+    Some(by_parent)
 }
 
 #[cfg(target_os = "linux")]
@@ -232,8 +228,8 @@ fn holds_terminal(pid: libc::pid_t, slave: &Path) -> bool {
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-fn children_source(_shell: libc::pid_t) -> impl FnMut(libc::pid_t) -> Vec<libc::pid_t> {
-    |_| Vec::new()
+fn children_source(_shell: libc::pid_t) -> impl FnMut(libc::pid_t) -> Option<Vec<libc::pid_t>> {
+    |_| Some(Vec::new())
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
@@ -248,15 +244,15 @@ mod tests {
     #[test]
     fn a_walk_past_the_cap_reads_as_holding() {
         // Every process has one child, forever, and none holds the terminal.
-        assert!(descendant_holds(1, |pid| vec![pid + 1], |_| false));
+        assert!(descendant_holds(1, |pid| Some(vec![pid + 1]), |_| false));
     }
 
     #[test]
     fn a_tree_within_the_cap_holds_only_through_a_member_that_does() {
         let children = |pid: libc::pid_t| match pid {
-            1 => vec![2, 3],
-            3 => vec![4],
-            _ => Vec::new(),
+            1 => Some(vec![2, 3]),
+            3 => Some(vec![4]),
+            _ => Some(Vec::new()),
         };
         assert!(!descendant_holds(1, children, |_| false));
         assert!(descendant_holds(1, children, |pid| pid == 4));
@@ -264,7 +260,15 @@ mod tests {
 
     #[test]
     fn the_shell_itself_is_not_looked_at() {
-        assert!(!descendant_holds(1, |_| Vec::new(), |_| true));
+        assert!(!descendant_holds(1, |_| Some(Vec::new()), |_| true));
+    }
+
+    #[test]
+    fn a_listing_of_children_that_failed_reads_as_holding() {
+        assert!(descendant_holds(1, |_| None, |_| false));
+        // The failure is met below the shell, after a member that does not hold.
+        let children = |pid: libc::pid_t| (pid == 1).then(|| vec![2]);
+        assert!(descendant_holds(1, children, |_| false));
     }
 
     #[cfg(any(target_os = "macos", target_os = "linux"))]

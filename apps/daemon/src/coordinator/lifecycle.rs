@@ -506,10 +506,7 @@ fn delete_archived_sessions(
     console_session_id: Option<&str>,
 ) -> Result<Vec<Session>> {
     let _removal = state.claim_session_removal();
-    state
-        .store
-        .get_console(console_id)?
-        .ok_or_else(|| CodedError::unknown_console(console_id))?;
+    state.store.require_console(console_id)?;
     if project_id.is_some() && console_session_id.is_some() {
         return Err(CodedError::raised(
             error_code::CONFLICTING_FIELDS,
@@ -518,10 +515,7 @@ fn delete_archived_sessions(
         ));
     }
     if let Some(project_id) = project_id {
-        let project = state
-            .store
-            .get_project(project_id)?
-            .ok_or_else(|| CodedError::unknown_project(project_id))?;
+        let project = state.store.require_project(project_id)?;
         if project.console_id != console_id {
             return Err(CodedError::unknown_project(project_id));
         }

@@ -29,6 +29,7 @@ use uuid::Uuid;
 use crate::coordinator::{self, open::OpenRequest};
 use crate::mcp::qualified_tool_name;
 use crate::messaging::delivery::{self, WhenBlocked};
+use crate::messaging::owner_notices::{duties_under_new_parent, INDEPENDENT_COORDINATOR_ROLE};
 use crate::messaging::sharing::{named_session, one_line, place_of, quote};
 use crate::messaging::texts::NOTICE_PREFIX;
 use crate::protocol::{
@@ -428,18 +429,12 @@ pub(super) async fn tell(
 
     let mut held = String::new();
     match &owner {
-        Some(owner) if receiving.orchestration_role == OrchestrationRole::Coordinator => held.push_str(&format!(
-            "\n- Your role is coordinator and your parent session is {owner}: take work only from \
-             it, or from the user typing in this terminal, and report to it with `{report}` once \
-             per round of work. This replaces anything your role description says about being \
-             independent and not calling `{report}`. `done` with no open items archives you, and is \
-             refused while a session you started is not archived; `needs_decision` or open items \
-             leave you running. You keep your child sessions and go on driving them with \
-             `{new_session}` and the tools that go with it.",
-            owner = named_session(owner),
-            report = tool(receiving.agent, "report"),
-            new_session = tool(receiving.agent, "new_session"),
-        )),
+        Some(owner) if receiving.orchestration_role == OrchestrationRole::Coordinator => held
+            .push_str(&format!(
+                "\n- Your role is coordinator and your parent session is {}: {}",
+                named_session(owner),
+                duties_under_new_parent(receiving.agent, true),
+            )),
         Some(owner) => held.push_str(&format!(
             "\n- Your role is worker and your parent session is {}: take work only from it, or \
              from the user typing in this terminal, and report to it with `{}`. You cannot create \
@@ -447,10 +442,10 @@ pub(super) async fn tell(
             named_session(owner),
             tool(receiving.agent, "report"),
         )),
-        None => held.push_str(
-            "\n- Your role is coordinator and you work independently: you answer directly to the \
-             user and have no parent session.",
-        ),
+        None => held.push_str(&format!(
+            "\n- {INDEPENDENT_COORDINATOR_ROLE}: you answer directly to the user and have no \
+             parent session."
+        )),
     }
     match &moved.branches {
         Ok(branches) if branches.is_empty() => {}

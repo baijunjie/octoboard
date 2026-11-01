@@ -20,6 +20,7 @@ import { copyFileSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSyn
 import os from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
+import { gitChecked } from "../../../scripts/git.mjs";
 import { appDir, appVersion, findBundle, repoRoot, universalBundleDir as bundleDir } from "./bundle.mjs";
 import {
   archiveName,
@@ -102,7 +103,7 @@ if (dryRun) {
 }
 
 const gh = (...args) => execFileSync("gh", ["--repo", repo, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-const git = (...args) => execFileSync("git", args, { cwd: repoRoot, encoding: "utf8" }).trim();
+const git = (...args) => gitChecked(repoRoot, ...args);
 // A release's draft and immutable flags and its assets' names and sizes, or null when there is no such release.
 // Only "release not found" says there is none; anything else (no network, no login) is not an answer.
 const releaseInfo = (releaseTag) => {

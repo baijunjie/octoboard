@@ -56,13 +56,16 @@ export function assertProducedSince(bundle, startedAt) {
   }
 }
 
+// The value of `key` in the `.app`'s `Info.plist`.
+export function infoPlistValue(app, key) {
+  return execFileSync("/usr/libexec/PlistBuddy", ["-c", `Print :${key}`, path.join(app, "Contents", "Info.plist")], {
+    encoding: "utf8",
+  }).trim();
+}
+
 // The version the `.app` says it is (`CFBundleShortVersionString`), which is what the build was made from.
 export function appVersion(app) {
-  return execFileSync(
-    "/usr/libexec/PlistBuddy",
-    ["-c", "Print :CFBundleShortVersionString", path.join(app, "Contents", "Info.plist")],
-    { encoding: "utf8" },
-  ).trim();
+  return infoPlistValue(app, "CFBundleShortVersionString");
 }
 
 // Removes the update archives and signatures of earlier builds from `dir`. Their names carry no version, and an

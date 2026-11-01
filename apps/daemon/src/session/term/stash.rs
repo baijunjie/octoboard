@@ -30,8 +30,7 @@ pub(super) fn supported(agent: Agent, spec: &LaunchSpec<'_>, plan: &LaunchPlan) 
         .rev()
         .find(|(key, _)| key == variable)
         .map(|(_, value)| std::path::PathBuf::from(value))
-        .or_else(|| spec.config_dir.map(std::path::Path::to_path_buf))
-        .unwrap_or_else(|| adapter::default_account_dir(agent, spec.shell_env));
+        .unwrap_or_else(|| adapter::account_dir(agent, spec.config_dir, spec.shell_env));
     if directory.as_os_str().is_empty() {
         return false;
     }

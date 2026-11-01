@@ -152,9 +152,7 @@ pub(crate) async fn locate_conversation(
     project: &str,
     agent_session_id: &str,
 ) -> Result<ConversationLocation> {
-    if state.store.get_project(project)?.is_none() {
-        return Err(CodedError::unknown_project(project));
-    }
+    state.store.require_project(project)?;
     let id = parse_conversation_id(agent_session_id)?;
     if let Some(holder) = state.store.session_by_agent_session_id(&id, None)? {
         return Ok(held_conversation(&holder, project));

@@ -318,9 +318,7 @@ impl Selection {
 /// is (see `config_document::import`).
 pub fn build(store: &Store, selection: &Selection) -> Result<ConfigurationDocument> {
     let mut consoles = match &selection.consoles {
-        ConsoleScope::One(id) => vec![store
-            .get_console(id)?
-            .ok_or_else(|| CodedError::unknown_console(id))?],
+        ConsoleScope::One(id) => vec![store.require_console(id)?],
         ConsoleScope::All => store.list_consoles()?,
         ConsoleScope::None => Vec::new(),
     };

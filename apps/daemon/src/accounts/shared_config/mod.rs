@@ -22,7 +22,6 @@ mod link;
 mod locks;
 mod moves;
 mod registries;
-mod status;
 mod take_back;
 #[cfg(test)]
 mod tests;
@@ -45,16 +44,12 @@ pub(crate) use cli_reads::{is_held, reading_account};
 pub use launch::before_launch;
 pub(crate) use link::entries;
 pub use link::{Cause as FailureCause, Failure as FailedItem};
-pub use status::{forget_session, note_session, publish, states};
-pub(crate) use status::{set_progress, start_change};
 pub(crate) use take_back::own_conversations;
 
 /// What the daemon holds in memory of the accounts' sharing.
 #[derive(Default)]
 pub struct Sharing {
     locks: locks::Locks,
-    states: status::States,
-    activity: status::Activity,
     /// What resumes the sessions a change ended, in place of starting their agents.
     #[cfg(test)]
     pub(crate) relaunch: std::sync::Mutex<Option<Launcher>>,

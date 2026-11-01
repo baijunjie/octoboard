@@ -4,10 +4,11 @@
 // consumers' checks without builds and with the UI and Rust tests narrowed to the changed files (the
 // check before a local merge; the push still verifies in full), --dry-run prints the plan, and --fresh
 // ignores earlier passes. Formatting belongs to the pre-commit hook.
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { git, run } from "./git.mjs";
 import { changedFiles, requirePushedTree, resolveBase, resolveRemoteTargetBase } from "./verify/changes.mjs";
 import { acquireSlot, describeWait } from "./verify/lock.mjs";
 import { clearFailure, failedFiles, narrowedFiles, readFailure, recordFailure, REPORT_ENV } from "./verify/rerun.mjs";
@@ -32,12 +33,6 @@ if (flag("--quick") && (flag("--full") || flag("--release"))) {
   console.error("verify: --quick cannot be combined with --full or --release");
   process.exit(2);
 }
-
-function run(command, commandArgs) {
-  const result = spawnSync(command, commandArgs, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  return result.status === 0 ? result.stdout.trim() : null;
-}
-const git = (...gitArgs) => run("git", gitArgs);
 
 const root = git("rev-parse", "--show-toplevel");
 if (!root) {

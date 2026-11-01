@@ -126,6 +126,21 @@ test("every path the quick lists name exists", () => {
   for (const test of CRATE_WIDE_TESTS.daemon) for (const file of test.covers) assert.ok(existsSync(path.join(root, "apps/daemon", file)), file);
 });
 
+test("every crate-wide filter is the path of a module that defines the test it exists for", () => {
+  const crateDirs = { daemon: "apps/daemon", native: "apps/desktop/src-tauri" };
+  const sources = (directory) => walk(directory).filter((file) => file.endsWith(".rs"));
+  for (const [crate, tests] of Object.entries(CRATE_WIDE_TESTS)) {
+    for (const { filter, test: name } of tests) {
+      const modulePath = path.posix.join(crateDirs[crate], "src", ...filter.split("::").filter(Boolean));
+      // A module is its file, its directory, or both.
+      const files = [...(existsSync(path.join(root, modulePath)) ? sources(modulePath) : []), ...[`${modulePath}.rs`].filter((file) => existsSync(path.join(root, file)))];
+      assert.notEqual(files.length, 0, `${filter} names no module of the ${crate} crate; the filter has to follow its test`);
+      const defined = new RegExp(String.raw`#\[(?:tokio::)?test(?:\([^\]]*\))?\](?:\s*#\[[^\]]*\])*\s*(?:async\s+)?fn ${name}\b`);
+      assert.ok(files.some((file) => defined.test(read(file))), `${filter} holds no test named ${name}; the entry has to follow its test`);
+    }
+  }
+});
+
 test("the files the UI's vitest configuration names are all untraceable, and nothing else is listed", () => {
   const config = read("packages/ui/vite.config.ts");
   const named = new Set(["packages/ui/vite.config.ts"]);

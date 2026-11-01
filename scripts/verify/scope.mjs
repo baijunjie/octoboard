@@ -77,6 +77,7 @@ export const RULES = [
   { match: ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "rustfmt.toml", ".cargo/", /\/Cargo\.toml$/], consumers: RUST_PACKAGES, why: "the Cargo workspace, its feature set and toolchain are shared by both crates" },
   { match: ["pnpm-lock.yaml", "pnpm-workspace.yaml", "patches/", "eslint.config.mjs"], consumers: JS_PACKAGES, why: "dependency versions and the lint rules apply to every JavaScript package" },
   { match: ["package.json"], consumers: ALL_PACKAGES, why: "holds the scripts of every package, including `test:rust`, and the shared dev dependencies" },
+  { match: ["scripts/git.mjs"], consumers: ["verify", "desktop"], why: "imported by `scripts/verify.mjs`, `scripts/pre-push.mjs` and `scripts/verify/tree.mjs`, and by the desktop release publishing script" },
   { match: ["scripts/env.mjs", "scripts/env.d.mts"], consumers: ["verify", "ui", "desktop"], why: "imported by `scripts/verify/lock.mjs`, `packages/ui/vite.config.ts` (its declaration types that import) and the desktop release scripts" },
   { match: ["scripts/test-rust.mjs", "scripts/clippy-rust.mjs"], consumers: ["verify", ...RUST_PACKAGES], why: "the commands the Rust check steps run, linted with the scripts" },
   { match: [".githooks/"], consumers: ["verify"], why: "the hook entry point is exercised by the pre-push tests; nothing else reads it" },

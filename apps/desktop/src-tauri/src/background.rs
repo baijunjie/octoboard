@@ -2,7 +2,7 @@
 //! window's close button hides the window and takes the app out of the Dock instead of quitting.
 //! Cmd+W and the Window menu's Close Window item are the same gesture: `menu.rs` builds that item
 //! with Tauri's predefined `close_window_with_text`, which carries ⌘W and arrives as the same
-//! `CloseRequested` as the button. The app stays reachable through the menu bar icon (`tray.rs`),
+//! `CloseRequested` as the button. The app stays reachable through the menu bar icon (`tray/`),
 //! the Dock icon or a reopen from the Finder or Spotlight, all of which bring the window back
 //! through `show_main_window`. The UI's `bringToFront` does too, through `bring_to_front`, for the
 //! exit confirmation of a quit that came while the window was hidden and for the notice that the

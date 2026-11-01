@@ -30,8 +30,9 @@ use std::time::Duration;
 
 use serde_json::{json, Value};
 
-use crate::adapter;
-use crate::processes::subprocess::{run_exchange, Bounds, ExchangeFailure, Reach};
+use crate::accounts::cli_run::{self, NotRun};
+use crate::agents::codex_app_server;
+use crate::processes::subprocess::{run_exchange, Bounds, ExchangeFailure};
 use crate::protocol::{
     quota_unavailable_code as code, Agent, QuotaUnavailable, QuotaWindow, QuotaWindowKind,
     ResetCredit, ResetCredits,
@@ -48,39 +49,8 @@ pub(super) const PROBE_TIMEOUT: Duration = Duration::from_secs(60);
 /// to hundreds of kilobytes.
 pub(super) const OUTPUT_LIMIT: usize = 8 * 1024 * 1024;
 
-/// How much of a probe's or a kick's stderr is kept for the failure that reports it.
-pub(super) const STDERR_LIMIT: usize = 4096;
-
 const SESSION_MINUTES: u32 = 5 * 60;
 const WEEK_MINUTES: u32 = 7 * 24 * 60;
-
-/// The Codex configuration overrides that keep it from reaching out on start: the plugin catalogue
-/// sync (which runs `git ls-remote` over SSH), apps, and the user's hooks. Set as configuration
-/// rather than `--disable`, which refuses a feature name the installed Codex does not know, where
-/// an unknown configuration key is ignored.
-pub(super) const CODEX_QUIET_FEATURES: &[&str] = &[
-    "-c",
-    "features.plugins=false",
-    "-c",
-    "features.remote_plugin=false",
-    "-c",
-    "features.apps=false",
-    "-c",
-    "features.hooks=false",
-];
-
-/// How Codex's app server is started, here and for signing an account in.
-pub(crate) const CODEX_APP_SERVER_ARGS: &[&str] = &APP_SERVER_ARGS;
-
-const APP_SERVER_ARGS: [&str; 1 + CODEX_QUIET_FEATURES.len()] = {
-    let mut args = ["app-server"; 1 + CODEX_QUIET_FEATURES.len()];
-    let mut i = 0;
-    while i < CODEX_QUIET_FEATURES.len() {
-        args[i + 1] = CODEX_QUIET_FEATURES[i];
-        i += 1;
-    }
-    args
-};
 
 /// What a readable reply holds.
 #[derive(Debug, PartialEq)]
@@ -163,10 +133,10 @@ fn conversation(agent: Agent) -> Conversation {
             read: read_claude,
         },
         Agent::Codex => Conversation {
-            args: CODEX_APP_SERVER_ARGS,
+            args: codex_app_server::CODEX_APP_SERVER_ARGS,
             input: lines(vec![
-                codex_initialize(),
-                codex_initialized(),
+                codex_app_server::initialize(),
+                codex_app_server::initialized(),
                 json!({"jsonrpc": "2.0", "id": 2, "method": "account/rateLimits/read"}),
                 json!({"jsonrpc": "2.0", "id": 3, "method": "account/read", "params": {}}),
             ]),
@@ -205,17 +175,6 @@ fn is_second_response(value: &Value) -> bool {
     is_response(value, 2)
 }
 
-/// The `initialize` request that opens a conversation with `codex app-server` (id 1).
-pub(super) fn codex_initialize() -> Value {
-    json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
-        "params": {"clientInfo": {"name": "octoboard", "version": env!("CARGO_PKG_VERSION")}}})
-}
-
-/// The `initialized` notification that follows [`codex_initialize`].
-pub(super) fn codex_initialized() -> Value {
-    json!({"jsonrpc": "2.0", "method": "initialized"})
-}
-
 /// The JSON-RPC response to the request with `id`.
 pub(super) fn is_response(value: &Value, id: i64) -> bool {
     value.get("id").and_then(Value::as_i64) == Some(id) && value.get("method").is_none()
@@ -231,23 +190,16 @@ pub(super) fn probe(
     cancel: &AtomicBool,
 ) -> Result<Reading, QuotaUnavailable> {
     let conversation = conversation(agent);
-    // The account's directory must not change sharing under the CLI while it runs.
-    let _reading = crate::accounts::shared_config::admitted_reading(config_dir)
-        .map_err(|missing| config_dir_missing(agent, &missing.0.to_string_lossy()))?;
-    let mut command = adapter::account_command(agent, shell_env, config_dir, conversation.args)
-        .map_err(|binary| {
-            QuotaUnavailable::new(
+    let mut run = cli_run::admitted_command(agent, shell_env, config_dir, conversation.args)
+        .map_err(|refused| match refused {
+            NotRun::DirMissing(dir) => config_dir_missing(agent, &dir.to_string_lossy()),
+            NotRun::BinaryNotFound(binary) => QuotaUnavailable::new(
                 code::BINARY_NOT_FOUND,
-                format!("`{binary}` was not found on PATH in the shell environment"),
+                refused.detail(),
                 &[("binary", binary)],
-            )
+            ),
         })?;
-    let bounds = Bounds {
-        timeout,
-        stdout_limit: OUTPUT_LIMIT,
-        stderr_limit: STDERR_LIMIT,
-        reach: Reach::Session,
-    };
+    let bounds = Bounds::agent_query(timeout, OUTPUT_LIMIT);
     let (is_reply, companion_of, needs_companion) = (
         conversation.is_reply,
         conversation.companion,
@@ -257,21 +209,27 @@ pub(super) fn probe(
     // arrive in either order.
     let reply: RefCell<Option<Value>> = RefCell::new(None);
     let companion: RefCell<Option<Value>> = RefCell::new(None);
-    run_exchange(&mut command, &conversation.input, &bounds, cancel, |line| {
-        let Ok(value) = serde_json::from_str::<Value>(line) else {
-            return false;
-        };
-        if let Some(part) = companion_of(&value) {
-            *companion.borrow_mut() = Some(part);
-        }
-        if is_reply(&value) {
-            *reply.borrow_mut() = Some(value);
-        }
-        reply
-            .borrow()
-            .as_ref()
-            .is_some_and(|reply| !needs_companion(reply) || companion.borrow().is_some())
-    })
+    run_exchange(
+        &mut run.command,
+        &conversation.input,
+        &bounds,
+        cancel,
+        |line| {
+            let Ok(value) = serde_json::from_str::<Value>(line) else {
+                return false;
+            };
+            if let Some(part) = companion_of(&value) {
+                *companion.borrow_mut() = Some(part);
+            }
+            if is_reply(&value) {
+                *reply.borrow_mut() = Some(value);
+            }
+            reply
+                .borrow()
+                .as_ref()
+                .is_some_and(|reply| !needs_companion(reply) || companion.borrow().is_some())
+        },
+    )
     .map_err(|failure| match failure {
         // Claude Code's sign-in state is in a reply other than the one that is read.
         _ if agent == Agent::Claude && claude_signed_out(companion.borrow().as_ref()) => {
@@ -733,6 +691,7 @@ fn read_grok(reply: &Value, initialize_meta: Option<&Value>) -> Result<Reading, 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::adapter;
     use crate::test_support::{fake_agent, until_the_shell_ran, ScratchDir};
 
     const CLAUDE_REPLY: &str = include_str!("../../../testdata/claude_get_usage_reply.json");

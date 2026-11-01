@@ -42,6 +42,7 @@ mod record_watch;
 mod requests;
 mod sessions;
 mod sharing_lock;
+mod sharing_status;
 mod stalled;
 mod status;
 #[cfg(test)]
@@ -81,6 +82,7 @@ use self::background::BackgroundWork;
 use self::git_status::{GitCheck, GitStatuses};
 use self::left_for_limit::AccountLeft;
 use self::live::LiveSessions;
+use self::sharing_status::SharingStatus;
 use self::turns::TurnState;
 use self::write_queue::SEND_WAIT;
 
@@ -202,9 +204,11 @@ pub struct AppState {
     /// only. A plain mutex, never held across an `.await`.
     accounts_being_removed: Mutex<HashMap<String, (crate::protocol::Account, usize)>>,
     /// What the accounts' changes of sharing of the default configuration hold: one lock per
-    /// agent over the default directory, and each account's progress and last failure
-    /// (`crate::accounts::shared_config`). Held in memory only.
+    /// agent over the default directory (`crate::accounts::shared_config`). Held in memory only.
     pub account_sharing: crate::accounts::shared_config::Sharing,
+    /// Each account's sharing state as clients were last told it, with its change's progress and
+    /// last failure (`sharing_status.rs`). Held in memory only.
+    sharing_status: SharingStatus,
     /// The shell terminals running, or exited and not yet closed (`crate::terminal::shell`). Held
     /// in memory only: each is a process of this daemon's.
     pub shell_terminals: crate::terminal::shell::ShellTerminals,
@@ -334,6 +338,7 @@ impl AppState {
             account_logins: Default::default(),
             accounts_being_removed: Default::default(),
             account_sharing: Default::default(),
+            sharing_status: Default::default(),
             shell_terminals: Default::default(),
             directory_looks: Default::default(),
             path_link_roots: Default::default(),

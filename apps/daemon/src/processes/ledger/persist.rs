@@ -2,13 +2,12 @@
 //! directory's daemon's tags from any other's, and the processes attributed and kept, so a daemon
 //! started after a restart or a crash can stop what the previous one left.
 
-use std::io::Write;
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
 use super::table::Identity;
+use crate::hostfs::replace::{replace_file, Permissions};
 
 const INSTANCE_FILE: &str = "instance-id";
 pub(super) const LEDGER_FILE: &str = "process-ledger.json";
@@ -153,20 +152,10 @@ fn write_atomically(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    let partial = path.with_extension("partial");
-    let written = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(&partial)
-        .and_then(|mut file| {
-            file.write_all(bytes)?;
-            file.sync_all()
-        })
-        .and_then(|()| std::fs::rename(&partial, path));
-    if written.is_err() {
-        std::fs::remove_file(&partial).ok();
-    }
-    written
+    replace_file(
+        path,
+        &path.with_extension("partial"),
+        bytes,
+        Permissions::Private,
+    )
 }

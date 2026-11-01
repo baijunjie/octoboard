@@ -25,9 +25,7 @@ pub enum Deletion {
 impl AppState {
     /// Reads a session record, failing with a message the UI can show when it is gone.
     pub fn session_record(&self, id: &str) -> Result<Session> {
-        self.store
-            .get_session(id)?
-            .ok_or_else(|| CodedError::unknown_session(id))
+        self.store.require_session(id)
     }
 
     pub fn publish_session(&self, session: &Session) {
@@ -55,7 +53,7 @@ impl AppState {
             }
         }
         if let Ok(Some(session)) = self.store.get_session(id) {
-            crate::accounts::shared_config::note_session(self, &session);
+            self.note_sharing_activity(&session);
         }
     }
 
@@ -141,7 +139,7 @@ impl AppState {
         self.quota_recovery.cancel(id);
         if let Some(session) = self.store.set_session_account(id, account_id, config_dir)? {
             self.publish_session(&session);
-            crate::accounts::shared_config::publish(self);
+            self.publish_account_sharing();
         }
         Ok(())
     }

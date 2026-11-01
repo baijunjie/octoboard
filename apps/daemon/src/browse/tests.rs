@@ -871,8 +871,8 @@ fn a_file_or_blob_over_the_byte_budget_is_refused() {
 #[test]
 fn a_file_read_stops_at_its_budget_however_much_the_source_would_give() {
     let endless = std::io::repeat(b'x');
-    let outcome = live::read_bounded(endless, 1000, 0, &AtomicBool::new(false));
-    assert!(matches!(outcome, Err(live::ReadFailure::Exceeded)));
+    let outcome = crate::hostfs::read_bounded(endless, 1000, 0, Some(&AtomicBool::new(false)));
+    assert!(matches!(outcome, Err(crate::hostfs::ReadFailure::Exceeded)));
 }
 
 #[test]

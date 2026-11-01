@@ -1,7 +1,7 @@
 //! The rows of the menu bar icon's menus. A line that cannot be chosen is a disabled menu item,
 //! which AppKit draws in the disabled grey and which a title colour cannot change; a menu item
 //! with a view of its own is not dimmed and never highlights. So once muda has built the menu
-//! (`finish_menu` in `tray.rs`, the first time it opens after each rebuild), the lines that
+//! (`finish_menu` in `tray/finish.rs`, the first time it opens after each rebuild), the lines that
 //! cannot be chosen become views: a session section's heading (`heading_row`) is its picture and
 //! its text in the secondary colour; in a submenu (`dress_submenu`) an account's header is one
 //! line of the same in the small size of a section header, with when its reading was taken
@@ -14,7 +14,7 @@
 //! as its title, and nothing inside the row is an accessibility element. The texts are therefore
 //! drawn (`RowText`), not `NSTextField`s, whose cells stay exposed as static texts of their own
 //! whatever the field is marked as. The non-element picture view (`picture_view`) is shared with
-//! the attention dot `tray.rs` lays over the menu bar icon.
+//! the attention dot `tray/status_item.rs` lays over the menu bar icon.
 //!
 //! Quota submenu opening lines keep AppKit's native interactive row. A capsule embedded in their
 //! attributed title shows the current console's account quota without replacing submenu tracking,
@@ -32,7 +32,7 @@ use objc2_app_kit::{
 };
 use objc2_foundation::{NSDictionary, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString};
 
-use crate::tray::{AgentKind, MeterLayer, SubmenuItem};
+use super::model::{AgentKind, MeterLayer, SubmenuItem, TraySubmenu};
 
 /// The narrowest a row is, in points; a row whose text needs more is as wide as it needs, and the
 /// menu is as wide as its widest row.
@@ -526,11 +526,7 @@ fn opener_gap(menu_width: f64, text_x: f64, text_width: f64) -> f64 {
 /// Keeps AppKit's own interactive row, including submenu tracking, highlighting and keyboard
 /// handling. A title attachment is just ink inside that row, rather than a custom view that
 /// would have to reimplement those interactions.
-pub fn dress_quota_openers(
-    menu: &NSMenu,
-    models: &[crate::tray::TraySubmenu],
-    mtm: MainThreadMarker,
-) {
+pub fn dress_quota_openers(menu: &NSMenu, models: &[TraySubmenu], mtm: MainThreadMarker) {
     let items = menu.itemArray();
     let openers: Vec<_> = items
         .iter()

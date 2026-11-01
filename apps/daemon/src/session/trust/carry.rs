@@ -274,37 +274,11 @@ pub(super) fn lock_store(store: &Path) -> Result<std::fs::File> {
     }
 }
 
-/// Replaces `target` with `text` in one step: written beside it under a name of its own, with the
-/// permissions the file had (the owner's alone for a new one), then renamed over it.
-pub(crate) fn write_replacing(target: &Path, text: &str) -> Result<()> {
-    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+/// Replaces `target` with `text` in one step, keeping the permissions the file had (the owner's
+/// alone for a new one).
+fn write_replacing(target: &Path, text: &str) -> Result<()> {
+    use crate::hostfs::replace::{replace_beside, Permissions};
 
-    let directory = target
-        .parent()
-        .ok_or_else(|| anyhow!("{} has no directory", target.display()))?;
-    let name = target
-        .file_name()
-        .ok_or_else(|| anyhow!("{} has no file name", target.display()))?
-        .to_string_lossy();
-    let staged = directory.join(format!(".{name}.octoboard-{}", std::process::id()));
-    let mode = std::fs::metadata(target)
-        .map(|metadata| metadata.permissions().mode() & 0o7777)
-        .unwrap_or(0o600);
-    let written = (|| -> Result<()> {
-        let mut file = std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(mode)
-            .open(&staged)?;
-        file.write_all(text.as_bytes())?;
-        file.sync_all()?;
-        std::fs::set_permissions(&staged, std::fs::Permissions::from_mode(mode))?;
-        std::fs::rename(&staged, target)?;
-        Ok(())
-    })();
-    if written.is_err() {
-        std::fs::remove_file(&staged).ok();
-    }
-    written.with_context(|| format!("writing {}", target.display()))
+    replace_beside(target, text.as_bytes(), Permissions::KeptOrPrivate)
+        .with_context(|| format!("writing {}", target.display()))
 }

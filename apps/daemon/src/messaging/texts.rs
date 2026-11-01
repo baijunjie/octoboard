@@ -27,6 +27,14 @@ pub(crate) use notice_prefix;
 /// [`notice_prefix!`] as a value.
 pub(crate) const NOTICE_PREFIX: &str = notice_prefix!();
 
+/// `text` with its first letter capitalised, to begin a sentence.
+pub(crate) fn capitalised(text: &str) -> String {
+    let mut chars = text.chars();
+    chars.next().map_or_else(String::new, |first| {
+        first.to_uppercase().chain(chars).collect()
+    })
+}
+
 /// How [`render_brief`] begins.
 pub(crate) const BRIEF_OPENING: &str = "## Goal";
 

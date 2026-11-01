@@ -280,7 +280,8 @@ async fn an_unbound_project_session_hands_its_branches_and_sessions_to_the_recei
         "`two`",
         "`owned`",
         "`owned-archived`",
-        "no parent session",
+        "- Your role is coordinator and your reporting relationship is independent: you answer \
+         directly to the user and have no parent session.",
     ] {
         assert!(held.contains(expected), "lacks {expected}: {held}");
     }
@@ -325,7 +326,14 @@ async fn a_lead_session_is_replaced_by_a_lead_session_of_the_same_console_sessio
     let held = fixture.output_of(&receiving.id, "what it held is yours now");
     assert!(
         held.contains(
-            "Your role is coordinator and your parent session is the console session `hub`"
+            "- Your role is coordinator and your parent session is the console session `hub` \
+             (\"Session hub\"): take work only from it, or from the user typing in this \
+             terminal, and report to it with `mcp__octoboard__report` once per round of work. \
+             This replaces anything your role description says about being independent and not \
+             calling `mcp__octoboard__report`. `done` with no open items archives you, and is \
+             refused while a session you started is not archived; `needs_decision` or open items \
+             leave you running. You keep your child sessions and go on driving them with \
+             `mcp__octoboard__new_session` and the tools that go with it."
         ),
         "{held}"
     );

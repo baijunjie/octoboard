@@ -414,10 +414,7 @@ fn without_credentials_in(text: &str) -> String {
 /// [`describe_git_status`]). The agent, account and launch settings are given as stored, with what
 /// they resolve to under the console in `effective`: a project session cannot read the console.
 pub(super) fn describe_project(state: &Arc<AppState>, project: &Project) -> Result<Value> {
-    let console = state
-        .store
-        .get_console(&project.console_id)?
-        .ok_or_else(|| CodedError::unknown_console(&project.console_id))?;
+    let console = state.store.require_console(&project.console_id)?;
     Ok(json!({
         "project": project.id,
         "name": project.name,

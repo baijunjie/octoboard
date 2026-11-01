@@ -160,10 +160,7 @@ pub async fn update_console(
     }
     let mut verified = Vec::new();
     loop {
-        let mut console = state
-            .store
-            .get_console(id)?
-            .ok_or_else(|| CodedError::unknown_console(id))?;
+        let mut console = state.store.require_console(id)?;
         if let Some(name) = &name {
             console.name = name.clone();
         }
@@ -212,10 +209,7 @@ pub async fn update_console(
         }
         state.store.update_console(&console)?;
         // Read back rather than sent as `console`: the record is what clients are told it is.
-        let stored = state
-            .store
-            .get_console(id)?
-            .ok_or_else(|| CodedError::unknown_console(id))?;
+        let stored = state.store.require_console(id)?;
         state.broadcast(Event::ConsoleUpserted {
             console: stored.clone(),
         });
@@ -243,10 +237,7 @@ pub(super) async fn delete_console(state: &Arc<AppState>, id: String) -> Result<
             .into_iter()
             .filter(|session| session.console_id == id),
     )?;
-    let console = state
-        .store
-        .get_console(&id)?
-        .ok_or_else(|| CodedError::unknown_console(&id))?;
+    let console = state.store.require_console(&id)?;
     if state.has_live_sessions_where(|session| session.console_id == id)? {
         return Err(CodedError::raised(
             error_code::CONSOLE_HAS_RUNNING_SESSIONS,

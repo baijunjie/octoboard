@@ -22,7 +22,9 @@ use std::sync::Arc;
 use anyhow::{bail, Result};
 
 use crate::branch_cleanup;
-use crate::messaging::delivery::{is_archived_refusal, rebound_owner, write_to_owner, Delivery};
+use crate::messaging::delivery::{
+    is_archived_refusal, rebound_owner, write_to_owner, Delivery, SentBy,
+};
 use crate::messaging::texts::REPORT_OPENING;
 use crate::protocol::{error_code, CodedError, Session, SessionStatus};
 use crate::state::{AppState, TurnClose};
@@ -232,39 +234,7 @@ fn deliver_and_archive(
         (Vec::new(), Vec::new())
     };
 
-    let mut note = match (delivery, finished) {
-        (Delivery::Written, true) => {
-            format!("Reported to the {owner_kind}. This session is now archived.")
-        }
-        (Delivery::Written, false) => format!("Reported to the {owner_kind}."),
-        (Delivery::Queued, true) => format!(
-            "Report accepted; the {owner_kind} will see it as soon as it can take a message. \
-             This session is now archived."
-        ),
-        (Delivery::Queued, false) => format!(
-            "Report accepted; the {owner_kind} will see it as soon as it can take a message."
-        ),
-        (Delivery::Kept, true) => format!(
-            "Report kept for the {owner_kind} `{}`, which is not running: it is delivered once \
-             the {owner_kind} is resumed, so do not send it again. This session is now archived.",
-            owner.id
-        ),
-        (Delivery::Kept, false) => format!(
-            "Report kept for the {owner_kind} `{}`, which is not running: it is delivered once \
-             the {owner_kind} is resumed, so do not send it again.",
-            owner.id
-        ),
-        (Delivery::Unsent, _) => format!(
-            "Your report was written into the {owner_kind}'s input, but its agent did not send it \
-             to the conversation, so the {owner_kind} has not read it; the user has been told. Do \
-             not send it again.{}",
-            if held_back {
-                " This session was not archived, because its owner has not read the report."
-            } else {
-                ""
-            }
-        ),
-    };
+    let mut note = report_note(delivery, finished, held_back, &owner_kind, &owner.id);
     if changed_meanwhile {
         note.push_str(
             " This session was not archived: while the report was delivered, it or a session under \
@@ -278,6 +248,30 @@ fn deliver_and_archive(
         ));
     }
     Ok((note, archived, delivery))
+}
+
+/// What a reporter is told became of its report, delivered as `delivery` to its owner `owner_id`,
+/// of the kind `owner_kind`, and whether that archived it: `finished`, or not for being
+/// `held_back` because the owner has not read it.
+fn report_note(
+    delivery: Delivery,
+    finished: bool,
+    held_back: bool,
+    owner_kind: &str,
+    owner_id: &str,
+) -> String {
+    let mut note = delivery.note(
+        "Your report",
+        &format!("the {owner_kind} `{owner_id}`"),
+        SentBy::Reader,
+    );
+    if held_back {
+        note.push_str(" This session was not archived, because its owner has not read the report.");
+    }
+    if finished {
+        note.push_str(" This session is now archived.");
+    }
+    note
 }
 
 /// Whether neither `session` nor any session under it is locked, which a `done` report needs to
@@ -1244,5 +1238,61 @@ mod tests {
         );
         assert_eq!(state.queued_count("hub"), 0);
         server.join().unwrap();
+    }
+
+    /// What a reporter is told became of its report, word for word, archived or not.
+    #[test]
+    fn the_reporter_is_told_what_became_of_its_report_word_for_word() {
+        let note = |delivery, finished, held_back| {
+            report_note(delivery, finished, held_back, "console session", "hub")
+        };
+        assert_eq!(
+            note(Delivery::Written, true, false),
+            "Your report was delivered to the console session `hub`. This session is now archived."
+        );
+        assert_eq!(
+            note(Delivery::Written, false, false),
+            "Your report was delivered to the console session `hub`."
+        );
+        assert_eq!(
+            note(Delivery::Queued, true, false),
+            "Your report is queued: the console session `hub` cannot take a message right now. It \
+             will be delivered as soon as the console session `hub` can take one, so do not send \
+             it again. This session is now archived."
+        );
+        assert_eq!(
+            note(Delivery::Queued, false, false),
+            "Your report is queued: the console session `hub` cannot take a message right now. It \
+             will be delivered as soon as the console session `hub` can take one, so do not send \
+             it again."
+        );
+        assert_eq!(
+            note(Delivery::Kept, true, false),
+            "Your report is kept for the console session `hub`, which is interrupted with no \
+             process running: it will be delivered once the console session `hub` is resumed, so \
+             do not send it again. This session is now archived."
+        );
+        assert_eq!(
+            note(Delivery::Kept, false, false),
+            "Your report is kept for the console session `hub`, which is interrupted with no \
+             process running: it will be delivered once the console session `hub` is resumed, so \
+             do not send it again."
+        );
+        assert_eq!(
+            note(Delivery::Unsent, false, true),
+            "Your report was written into the input of the console session `hub`, but the console \
+             session `hub`'s agent did not send it to the conversation (it is in the input box, \
+             or went to a view of its background agents), so the console session `hub` has not \
+             read it. The user has been told to check the console session `hub`; do not send it \
+             again. This session was not archived, because its owner has not read the report."
+        );
+        assert_eq!(
+            note(Delivery::Unsent, false, false),
+            "Your report was written into the input of the console session `hub`, but the console \
+             session `hub`'s agent did not send it to the conversation (it is in the input box, \
+             or went to a view of its background agents), so the console session `hub` has not \
+             read it. The user has been told to check the console session `hub`; do not send it \
+             again."
+        );
     }
 }

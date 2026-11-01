@@ -173,6 +173,12 @@ impl Store {
         Ok(account)
     }
 
+    /// The account `id`, or the `unknown_account` refusal when there is none.
+    pub fn require_account(&self, id: &str) -> Result<Account> {
+        self.get_account(id)?
+            .ok_or_else(|| CodedError::unknown_account(id))
+    }
+
     /// The directory of the account `account_id` names, `None` for the default account, which pins
     /// nothing, and for an id that is no longer on record.
     pub fn account_dir(&self, account_id: &Option<String>) -> Result<Option<String>> {
@@ -253,9 +259,37 @@ fn read_account(row: &Row<'_>) -> rusqlite::Result<Account> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::{Agent, ProjectAccount};
+    use crate::protocol::{error_code, error_parts, Agent, ProjectAccount};
 
     use crate::store::test_support::*;
+
+    /// An account that is stored is read back, and one that is not is refused with the
+    /// `unknown_account` error naming the id that was asked for.
+    #[test]
+    fn requiring_an_account_reads_a_stored_one_and_refuses_an_unknown_one_with_its_code() {
+        let path = temp_db("require-account");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_account(&account(
+                "claude-acct",
+                Agent::Claude,
+                "/home/u/.claude-alt",
+            ))
+            .expect("account");
+
+        assert_eq!(
+            store.require_account("claude-acct").expect("stored").id,
+            "claude-acct"
+        );
+
+        let refused = store.require_account("nope").expect_err("unknown");
+        assert_eq!(
+            error_parts(&refused),
+            error_parts(&CodedError::unknown_account("nope"))
+        );
+        assert_eq!(error_parts(&refused).0, error_code::UNKNOWN_ACCOUNT);
+        assert_eq!(error_parts(&refused).2, "unknown account nope");
+    }
 
     /// Removing an account clears every console's and project's reference to it, in the same step,
     /// so no reader is ever left pointing at an id the `accounts` table no longer has.
