@@ -123,7 +123,8 @@ The session is relaunched on the new account and carries on with the turn the li
 it that Octoboard switched it from the one account to the other by itself, that its conversation came along and that
 nothing else changed, and then asks it to continue its task, as any switch that continues a turn does. A session whose
 turn the switch's rules do not continue is sent that notice as a message instead, telling it to carry on or to wait
-for its next instruction.
+for its next instruction. No report is synthesised for the turn that message starts (see "When a session does not
+report" in `docs/product/reporting-to-owners.md`).
 
 - **Its owner**, when it has one that is not archived, is written a message naming the session and both accounts, saying
   the conversation came along and either that the session was sent a prompt to continue its task, so the owner is not to

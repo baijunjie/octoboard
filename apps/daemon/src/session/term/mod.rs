@@ -442,7 +442,7 @@ pub(crate) fn is_blank_once_stripped(text: &str) -> bool {
 }
 
 /// The text of a message with what `frame_message` strips taken out.
-fn stripped(text: &str) -> String {
+pub(crate) fn stripped(text: &str) -> String {
     invisible::strip_invisible(&strip_control_chars(text))
 }
 

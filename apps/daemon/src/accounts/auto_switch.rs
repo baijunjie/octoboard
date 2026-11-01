@@ -1062,9 +1062,17 @@ fn is_wrong_time(err: &anyhow::Error) -> bool {
 /// of.
 fn note_to_session(agent: Agent, from: &str, to: &str) -> String {
     format!(
-        "{NOTICE_PREFIX}: your {} account `{from}` reached its usage limit, so Octoboard switched \
-         you to `{to}` by itself. Your conversation came with you, and nothing else about the \
-         session changed.",
+        "{}, so Octoboard switched you to `{to}` by itself. Your conversation came with you, and \
+         nothing else about the session changed.",
+        note_opening(agent, from)
+    )
+}
+
+/// How [`note_to_session`] begins, which, as written, credits the turn the note opens: credited by
+/// the notice prefix alone, the turn of whichever notice reached the session first would spend it.
+fn note_opening(agent: Agent, from: &str) -> String {
+    format!(
+        "{NOTICE_PREFIX}: your {} account `{from}` reached its usage limit",
         agent.label()
     )
 }
@@ -1082,14 +1090,17 @@ fn tell_sessions(
     continued: bool,
 ) {
     if !continued {
-        // The turn this opens is the notice's own, which needs no report back.
-        state.credit_turn_opened_by(&moved.id, NOTICE_PREFIX.to_string());
+        // The turn this opens is the notice's own, which needs no report back. Credited as written:
+        // the write strips what an account name may carry (a direction mark, a joiner), and the
+        // prompt the turn reports is the stripped text.
+        let opening = crate::session::term::stripped(&note_opening(moved.agent, from));
+        state.credit_turn_opened_by(&moved.id, opening.clone());
         let own = format!(
             "{note} Carry on with what you were doing, or wait for your next instruction if you \
              had none."
         );
         if !tell(state, &moved.id, &own) {
-            state.clear_turn_credit(&moved.id, NOTICE_PREFIX);
+            state.clear_turn_credit(&moved.id, &opening);
         }
     }
     owner_notices::tell_owner(state, moved, |owner| {
@@ -2909,6 +2920,73 @@ mod tests {
         fixture
             .state
             .turn_started("w", Some(&note_to_session(Agent::Claude, "A", "B")));
+        assert_eq!(
+            fixture.state.close_turn("w", false),
+            crate::state::TurnClose::Reported
+        );
+    }
+
+    /// The turn the note opens is credited by the note's own opening, so a turn another notice
+    /// opens first still owes its report and leaves the credit to the note's turn.
+    #[tokio::test]
+    async fn another_notices_turn_does_not_spend_the_notes_credit() {
+        let fixture = Fixture::new("auto-switch-note-credit", SessionStatus::Idle);
+        let worker = fixture.worker();
+        fixture.state.turn_started("w", Some("work"));
+
+        let (state, note) = (
+            fixture.state.clone(),
+            note_to_session(Agent::Claude, "A", "B"),
+        );
+        tokio::task::spawn_blocking(move || tell_sessions(&state, &worker, "A", "B", &note, false))
+            .await
+            .unwrap();
+        output_containing(&fixture.worker_process, "switched you to `B`");
+        fixture.state.close_turn("w", false);
+
+        fixture.state.turn_started(
+            "w",
+            Some(&format!(
+                "{NOTICE_PREFIX}: your parent session has changed."
+            )),
+        );
+        assert_eq!(
+            fixture.state.close_turn("w", false),
+            crate::state::TurnClose::OwesReport
+        );
+        fixture
+            .state
+            .turn_started("w", Some(&note_to_session(Agent::Claude, "A", "B")));
+        assert_eq!(
+            fixture.state.close_turn("w", false),
+            crate::state::TurnClose::Reported
+        );
+    }
+
+    /// An account name with a character the write strips (here a zero-width non-joiner) still
+    /// credits the note's turn, which reports the stripped text as its prompt.
+    #[tokio::test]
+    async fn a_note_naming_an_account_the_write_strips_still_credits_its_turn() {
+        let fixture = Fixture::new("auto-switch-note-stripped", SessionStatus::Idle);
+        let worker = fixture.worker();
+        fixture.state.turn_started("w", Some("work"));
+        let from = "Work\u{200C}Two";
+
+        let (state, note) = (
+            fixture.state.clone(),
+            note_to_session(Agent::Claude, from, "B"),
+        );
+        tokio::task::spawn_blocking(move || {
+            tell_sessions(&state, &worker, from, "B", &note, false)
+        })
+        .await
+        .unwrap();
+        output_containing(&fixture.worker_process, "switched you to `B`");
+        fixture.state.close_turn("w", false);
+
+        let written = crate::session::term::stripped(&note_to_session(Agent::Claude, from, "B"));
+        assert!(!written.contains('\u{200C}'));
+        fixture.state.turn_started("w", Some(&written));
         assert_eq!(
             fixture.state.close_turn("w", false),
             crate::state::TurnClose::Reported

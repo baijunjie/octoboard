@@ -207,6 +207,11 @@ impl AppState {
     /// nothing to report back on and whose prompt opens with `opening`. The credit is spent by that
     /// turn's start (see `turn_started`) and otherwise goes with the session's bookkeeping when its
     /// process ends. Crediting the same turn again changes nothing.
+    ///
+    /// `opening` is specific to that one text, not a prefix other texts share, such as the notice
+    /// prefix: the turn of whichever of them starts first would spend it. Text from outside it
+    /// embeds (an account name) is passed as written into the session, through
+    /// `session::term::stripped`, since the prompt a turn reports is the stripped text.
     pub fn credit_turn_opened_by(&self, id: &str, opening: String) {
         let mut turns = self.turns.lock().expect("turn lock poisoned");
         let credits = &mut turns.entry(id.to_string()).or_default().credits;
