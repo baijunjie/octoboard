@@ -52,9 +52,10 @@ redemption confirmation; Kitchen display has station tickets, printer-job status
 repository includes tests for its own role; frontend repositories also include components, API clients, domain rules
 and web configuration, while Restaurant order API includes HTTP validation, database queries and migrations.
 
-Files can be opened in the real viewer, and the source shown there agrees with the corresponding diff. All sample
-repositories exist only in memory; their displayed source is not executed. The examples do not provide working
-restaurant services, payment devices or printers.
+Files can be found by name with the Files panel's filter (see "Filtering by file name" in
+`docs/product/project-pane.md`) and opened in the real viewer, and the source shown there agrees with the corresponding
+diff. All sample repositories exist only in memory; their displayed source is not executed. The examples do not provide
+working restaurant services, payment devices or printers.
 
 Selecting the coordinator and opening its report panel shows a progress report in every scene. The report separates
 each project's implemented results from its ongoing integration checks or pending feedback. It presents sample

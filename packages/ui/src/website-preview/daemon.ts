@@ -7,6 +7,7 @@ import { previewRepositories } from "./repositories";
 const browseRequests = new Set([
   "get_project_source",
   "list_project_dir",
+  "search_project_files",
   "read_project_file",
   "list_project_changes",
   "read_project_change",

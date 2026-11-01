@@ -167,6 +167,26 @@ describe("the website's eight independent repository fixtures", () => {
     },
   );
 
+  it.each([...previewRepositories])(
+    "searches %s's own files by name",
+    async (id) => {
+      const path = primaryFiles[id];
+      const name = posix.basename(path);
+      await expect(
+        daemon().request({
+          type: "search_project_files",
+          project: id,
+          query: name.toUpperCase(),
+        }),
+      ).resolves.toMatchObject({
+        type: "project_file_matches",
+        project: id,
+        paths: expect.arrayContaining([path]),
+        complete: true,
+      });
+    },
+  );
+
   it("does not leak another project's files, worktrees or revisions after project switches", async () => {
     const api = daemon();
     for (const id of [...previewRepositories.keys(), "preview-admin"]) {
