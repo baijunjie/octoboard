@@ -581,9 +581,13 @@ export class TerminalController {
     return undefined;
   }
 
-  /** Checks the destination again after a clipboard read and lets xterm apply bracketed paste. */
+  /**
+   * Checks the destination again after a clipboard read and lets xterm apply bracketed paste. Empty
+   * text is pasted too, as a native paste of a clipboard without text is: a program such as an agent's
+   * input reads an empty bracketed paste as the cue to fetch an image from the clipboard itself.
+   */
   paste(text: string, sessionId: string): void {
-    if (this.inputSessionId !== sessionId || !text) return;
+    if (this.inputSessionId !== sessionId) return;
     this.term.paste(text);
   }
 

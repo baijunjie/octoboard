@@ -20,6 +20,9 @@ vi.mock("@tauri-apps/api/event", () => ({
   },
 }));
 
+const readText = vi.fn();
+vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ readText: () => readText() }));
+
 afterEach(() => {
   invoke.mockReset();
   listeners.clear();
@@ -163,4 +166,14 @@ it("reports nothing when the shell cannot be asked", async () => {
   const { onDaemonExited } = await registerExit(Promise.reject(new Error("not allowed")));
   await settle();
   expect(onDaemonExited).not.toHaveBeenCalled();
+});
+
+it("reads a clipboard without text as empty text, as a native paste does", async () => {
+  readText.mockRejectedValue("The clipboard contents were not available in the requested format or the clipboard is empty.");
+  await expect(tauriPlatform().clipboard!.readText!()).resolves.toBe("");
+});
+
+it("still rejects a clipboard read that failed for another reason", async () => {
+  readText.mockRejectedValue("The native clipboard is not accessible due to being held by another party.");
+  await expect(tauriPlatform().clipboard!.readText!()).rejects.toBe("The native clipboard is not accessible due to being held by another party.");
 });

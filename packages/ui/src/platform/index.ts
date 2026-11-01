@@ -249,7 +249,9 @@ export interface ClipboardCapability {
   /** Puts `text` on the clipboard; rejects when the environment refuses (no permission, no
    * focused document). */
   writeText(text: string): Promise<void>;
-  /** Reads text only when the user chooses Paste; may ask for permission or reject. */
+  /** Reads text only when the user chooses Paste; may ask for permission or reject. A clipboard
+   * holding no text (empty, or only an image) answers `""` rather than rejecting, as the clipboard
+   * a native paste hands the page does. */
   readText?(): Promise<string>;
 }
 

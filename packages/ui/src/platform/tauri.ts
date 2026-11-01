@@ -234,13 +234,23 @@ function tauriNotifications(): NotificationCapability {
   };
 }
 
+/** How the clipboard plugin rejects a read when the clipboard holds no text: it passes on only the
+ * message of `arboard::Error::ContentNotAvailable`, which names no kind to tell it by.
+ * The text follows the arboard release `Cargo.lock` resolves: check it whenever that changes. */
+const NO_TEXT_ON_CLIPBOARD = "The clipboard contents were not available in the requested format or the clipboard is empty.";
+
 /** Through the shell's plugin, not `navigator.clipboard`: the web API is only offered to a secure
  * context, and the packaged window's custom scheme is not reliably counted as one. */
 function tauriClipboard(): ClipboardCapability {
   return {
     async readText() {
       const { readText } = await import("@tauri-apps/plugin-clipboard-manager");
-      return readText();
+      try {
+        return await readText();
+      } catch (err) {
+        if (String(err) === NO_TEXT_ON_CLIPBOARD) return "";
+        throw err;
+      }
     },
     async writeText(text) {
       const { writeText } = await import("@tauri-apps/plugin-clipboard-manager");

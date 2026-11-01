@@ -520,6 +520,14 @@ it("pastes through xterm into a connecting session, retaining bracketed paste", 
   expect(bytes.map((entry) => new TextDecoder().decode(entry))).toEqual(["\x1b[200~first\nsecond\x1b[201~"]);
 });
 
+it("hands empty text to xterm too, as a native paste of an image-only clipboard does", () => {
+  controller.attach("s-image", url("s-image"), false);
+  lastSocket().open();
+  controller.paste("", "s-image");
+  const bytes = lastSocket().sent.filter((entry) => ArrayBuffer.isView(entry)) as Uint8Array[];
+  expect(bytes.map((entry) => new TextDecoder().decode(entry))).toEqual(["\x1b[200~\x1b[201~"]);
+});
+
 it("drops paste after its destination changed or input became unavailable", () => {
   controller.attach("s-new", url("s-new"), false);
   lastSocket().open();
