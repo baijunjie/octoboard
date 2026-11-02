@@ -53,8 +53,8 @@ use super::{
     NamedTitle, HOOK_TIMEOUT_SECS,
 };
 use crate::agents::layout;
-use crate::mcp;
 use crate::protocol::{Agent, ClaudeApprovalMode};
+use crate::session_tools;
 use settings::{http_hooks_allowed, settings_files, untrusted_workspace_notice, user_status_line};
 
 /// The events that carry the session states Octoboard shows. `StopFailure` is registered next to
@@ -158,7 +158,7 @@ impl ClaudeAdapter {
         // outranks this `allow`, so nothing else the session may need approval for is widened.
         let mut settings = json!({
             "hooks": hooks,
-            "permissions": { "allow": [format!("mcp__{}", mcp::SERVER_KEY)] },
+            "permissions": { "allow": [format!("mcp__{}", session_tools::catalogue::SERVER_KEY)] },
         });
         if spec.approval_mode == Some(ClaudeApprovalMode::Bypass) {
             settings["skipDangerousModePermissionPrompt"] = json!(true);
@@ -211,7 +211,7 @@ impl ClaudeAdapter {
         let (command, args) = super::mcp_server_command(spec);
         json!({
             "mcpServers": {
-                mcp::SERVER_KEY: {
+                session_tools::catalogue::SERVER_KEY: {
                     "type": "stdio",
                     "command": command,
                     "args": args,
@@ -369,7 +369,7 @@ impl AgentAdapter for ClaudeAdapter {
         args.push("--mcp-config".to_string());
         args.push(Self::mcp_config_json(spec));
         args.push("--append-system-prompt".to_string());
-        args.push(mcp::role::role_description(
+        args.push(session_tools::role::role_description(
             spec.role,
             spec.owner.as_ref(),
             Agent::Claude,
@@ -989,7 +989,7 @@ mod tests {
             .expect("--mcp-config is passed");
         let config: serde_json::Value =
             serde_json::from_str(&plan.args[at + 1]).expect("the MCP config is JSON");
-        let server = &config["mcpServers"][mcp::SERVER_KEY];
+        let server = &config["mcpServers"][session_tools::catalogue::SERVER_KEY];
         assert_eq!(server["type"], "stdio");
         assert_eq!(server["command"], fixture.self_exe);
         let args: Vec<String> = serde_json::from_value(server["args"].clone()).expect("args");
@@ -1009,7 +1009,7 @@ mod tests {
             .expect("--append-system-prompt is passed");
         assert_eq!(
             plan.args[at + 1],
-            mcp::role::role_description(
+            session_tools::role::role_description(
                 fixture.role,
                 fixture.owner.as_ref(),
                 Agent::Claude,

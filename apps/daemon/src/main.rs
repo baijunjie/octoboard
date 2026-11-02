@@ -41,6 +41,7 @@ mod server;
 mod session;
 mod session_git_hooks;
 mod session_request;
+mod session_tools;
 mod state;
 mod store;
 mod terminal;

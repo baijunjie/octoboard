@@ -85,6 +85,7 @@ const LAYERS: &[(&str, &[&str])] = &[
             "records",
             "session",
             "session_git_hooks",
+            "session_tools",
             "titles",
         ],
     ),
@@ -239,13 +240,6 @@ const UPWARD: &[Upward] = &[
                  switch and launch, the path a switch the user asks for takes",
     },
     Upward {
-        from: "adapter",
-        to: "mcp",
-        scope: Scope::Items(&["Owner", "SERVER_KEY", "role", "stdio::CALL_TIMEOUT"]),
-        reason: "an adapter writes the agent's MCP server entry and role text from mcp's server \
-                 key, role descriptions and call timeout",
-    },
-    Upward {
         from: "handoff",
         to: "coordinator",
         scope: Scope::Items(&["bindings", "lifecycle", "open"]),
@@ -253,30 +247,11 @@ const UPWARD: &[Upward] = &[
                  coordinator's own open and lifecycle",
     },
     Upward {
-        from: "handoff",
-        to: "mcp",
-        scope: Scope::Items(&["qualified_tool_name"]),
-        reason: "the text handed to the receiving session names MCP tools as its agent sees them",
-    },
-    Upward {
         from: "messaging",
         to: "coordinator",
         scope: Scope::Items(&["bindings", "lifecycle"]),
         reason: "messaging::reporting acts on a worker's final report, archiving its team, \
                  through the coordinator's bindings and lifecycle",
-    },
-    Upward {
-        from: "messaging",
-        to: "mcp",
-        scope: Scope::Items(&["qualified_tool_name", "tools_for"]),
-        reason: "the notices sessions are sent name MCP tools as each agent sees them",
-    },
-    Upward {
-        from: "session",
-        to: "mcp",
-        scope: Scope::Items(&["Owner"]),
-        reason: "a launch carries whom the worker reports to, which its MCP role text is \
-                 written from",
     },
 ];
 

@@ -307,7 +307,7 @@ fn the_role_text_travels_in_rules() {
         .expect("--rules is passed");
     assert_eq!(
         plan.args[at + 1],
-        mcp::role::role_description(
+        session_tools::role::role_description(
             fixture.role,
             fixture.owner.as_ref(),
             Agent::Grok,

@@ -145,8 +145,10 @@ A client reports its language:
 
 The first launch's pick from the system is not reported by itself; it reaches the daemon only through the report on
 connecting. The held language is not carried by a configuration export (see "The application settings an export
-carries" in `docs/product/configuration-export-and-import.md`), and agents can neither read nor change it (see "Who
-reads and changes what" in `docs/product/agent-settings-tools.md`).
+carries" in `docs/product/configuration-export-and-import.md`). A console session reads it and changes it through
+the settings tools, under the same rule about offered tags (see "Application settings: `get_settings` and
+`update_settings`" in `docs/product/agent-settings-tools.md`); such a change, like a client's report, changes no
+window's own language.
 
 ## What is translated so far
 

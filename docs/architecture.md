@@ -66,9 +66,9 @@ directory and the variable naming it, where a session's records lie in it, the f
 descriptor per agent (`agents/layout.rs`). The rest of the daemon still holds per-agent knowledge wherever the agents
 behave differently, among them: recognising their screens and dialogs (`session/`, `titles/`), reading their hook
 payloads (`hooks/`), reading their records (`records/`), their sign-in, quota and account-switching protocols
-(`accounts/`), the Octoboard tool naming, instruction file and role text injected into them (`mcp/`), launching one and
-switching its account (`coordinator/`), their model catalogues (`agents/models.rs`) and detecting a project's agent
-(`hostfs/listing.rs`). An agent without hook support would degrade to an ordinary terminal session
+(`accounts/`), the Octoboard tool naming, instruction file and role text injected into them (`session_tools/`),
+launching one and switching its account (`coordinator/`), their model catalogues (`agents/models.rs`) and detecting a
+project's agent (`hostfs/listing.rs`). An agent without hook support would degrade to an ordinary terminal session
 with no status and no automatic reporting.
 
 ## Layers

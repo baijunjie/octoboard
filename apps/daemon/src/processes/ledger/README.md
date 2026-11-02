@@ -12,7 +12,7 @@ change of an account's sharing) enter through `apps/daemon/src/coordinator/launc
 through `apps/daemon/src/handoff/operation.rs`, environment tagging through `apps/daemon/src/session/term/mod.rs`,
 process-end cleanup and shutdown through `apps/daemon/src/coordinator/exit_watch.rs` and
 `apps/daemon/src/state/process_exit.rs`, startup reconciliation through `apps/daemon/src/main.rs`, and the owner's moves
-of trees through `apps/daemon/src/mcp/process_handover.rs`.
+of trees through `apps/daemon/src/mcp/tools/handover/processes.rs`.
 
 Where things are: `mod.rs` the types, the launch lifecycle, reconciliation and `ForgetLaunch`, `attribute.rs` the rules
 that attribute processes to launches, `scan.rs` the scan of the table, the scanner thread and the stop of what ended

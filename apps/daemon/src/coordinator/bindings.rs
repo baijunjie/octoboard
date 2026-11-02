@@ -7,9 +7,9 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use crate::coordinator::pages;
-use crate::mcp;
 use crate::messaging::owner_notices;
 use crate::protocol::{error_code, CodedError, OrchestrationRole, Role, Session, SessionStatus};
+use crate::session_tools;
 use crate::state::AppState;
 
 /// What a new session should be bound to: always `None` for a console session, which is never
@@ -419,15 +419,18 @@ pub(super) async fn release_requested(state: &Arc<AppState>, id: String) -> Resu
 /// with an unbound project session's role description and tools, which a lead session does on
 /// every launch, as at its first. An owner that is no longer on record reads as a console session:
 /// the text is the generic one, and a report to it fails on its own.
-pub(super) fn owner_of(state: &Arc<AppState>, session: &Session) -> Result<Option<mcp::Owner>> {
+pub(super) fn owner_of(
+    state: &Arc<AppState>,
+    session: &Session,
+) -> Result<Option<session_tools::Owner>> {
     let Some(owner_id) = session.bound_to.as_ref().filter(|_| session.is_worker()) else {
         return Ok(None);
     };
     Ok(Some(match state.store.get_session(owner_id)? {
-        Some(owner) if owner.role == Role::Project => mcp::Owner::Project {
+        Some(owner) if owner.role == Role::Project => session_tools::Owner::Project {
             session_id: owner.id,
         },
-        _ => mcp::Owner::Console,
+        _ => session_tools::Owner::Console,
     }))
 }
 

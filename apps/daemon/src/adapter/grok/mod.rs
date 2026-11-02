@@ -99,9 +99,9 @@ use anyhow::Result;
 
 use super::{AgentAdapter, LaunchPlan, LaunchSpec};
 use crate::agents::layout;
-use crate::mcp;
 use crate::protocol::{error_code, Agent, CodedError, TerminalAppearance};
 use crate::session::trust::CarriedTrust;
+use crate::session_tools;
 use home::{build_grok_home, canonical_cwd};
 use sandbox::require_unsandboxed;
 use writeback::shared_config_writeback;
@@ -246,7 +246,7 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: &Path) -> Result<LaunchPlan> {
     // passed on every launch anyway, so a session whose record predates the current text is
     // not left without a role.
     args.push("--rules".to_string());
-    args.push(mcp::role::role_description(
+    args.push(session_tools::role::role_description(
         spec.role,
         spec.owner.as_ref(),
         Agent::Grok,

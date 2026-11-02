@@ -13,13 +13,17 @@ or starts the work anyway where nothing refuses it.
   has a new error code, the UI classifies that code too.
 - Daemon choices made without asking: automatic account selection (`account_can_open` in
   `apps/daemon/src/coordinator/account_choice.rs`), the MCP fallback to the calling session's account
-  (`callers_account` and `automatic_choice` in `apps/daemon/src/mcp/exec/sessions.rs`), and the descriptions of that
-  fallback in the MCP tool descriptions and schemas (`apps/daemon/src/mcp/mod.rs`) and in `apps/daemon/PROTOCOL.md`.
+  (`callers_account` and `automatic_choice` in `apps/daemon/src/mcp/tools/sessions.rs`), and the descriptions of that
+  fallback in the MCP tool descriptions and schemas (`apps/daemon/src/session_tools/catalogue/`) and in
+  `apps/daemon/PROTOCOL.md`.
+- What agents are told before they pick: `list_agents`'s `can_open` and `cannot_open_reason` (`agent_accounts` in
+  `apps/daemon/src/mcp/tools/agents.rs`), which re-derive each reason inline rather than calling `account_can_open`,
+  and the list of reasons in its description (`apps/daemon/src/session_tools/catalogue/reads.rs`).
 - Daemon work that spends an account: starting usage windows automatically (`AccountQuotas::kick_allowed` in
   `apps/daemon/src/accounts/quotas/poll.rs`, which both the kick itself and the due mark an on-demand refresh leaves for
   the poller consult).
-- UI rules in `packages/ui/src/accounts/accountChoices.ts`: the choice groups, `avoidUnavailableAccount`, `settledInitialChoice`
-  and the switch-menu entries.
+- UI rules in `packages/ui/src/accounts/accountChoices.ts`: the choice groups, `avoidUnavailableAccount`,
+  `settledInitialChoice` and the switch-menu entries.
 - UI pickers and flows that use those rules: the new-session dialog (`useLaunchChoice`), quick create
   (`packages/ui/src/dialogs/openSessionRequest.ts`), the switch-account dialog and menu, and the default-account
   pickers of the console dialog (`ConsoleAccountsField.tsx`) and the project dialog. The last two were missed at

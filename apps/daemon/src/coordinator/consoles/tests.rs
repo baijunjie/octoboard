@@ -2,11 +2,11 @@ use super::*;
 use crate::coordinator::handle;
 use crate::coordinator::projects::{update_project, ProjectChanges};
 use crate::coordinator::test_support::{console, console_workdir};
-use crate::mcp;
 use crate::protocol::{
     error_code, Agent, CodedError, Launch, LaunchChange, PerAgent, Project, ProjectAccount,
     ProjectSource, RequestBody,
 };
+use crate::session_tools;
 use crate::store::LOCAL_HOST_ID;
 use std::path::Path;
 
@@ -331,9 +331,9 @@ async fn a_console_session_prompt_is_left_set_or_cleared_by_an_update() {
     assert_eq!(stored().as_deref(), Some("Be brief."));
     assert_eq!(
         file(),
-        mcp::console_instructions::console_session_instructions(
+        session_tools::console_instructions::console_session_instructions(
             Some("Be brief."),
-            &mcp::role::RoleOptions {
+            &session_tools::role::RoleOptions {
                 ask_as_choices: true,
                 ..Default::default()
             }
@@ -344,9 +344,9 @@ async fn a_console_session_prompt_is_left_set_or_cleared_by_an_update() {
     assert_eq!(stored().as_deref(), Some("Be brief."));
     assert_eq!(
         file(),
-        mcp::console_instructions::console_session_instructions(
+        session_tools::console_instructions::console_session_instructions(
             Some("Be brief."),
-            &mcp::role::RoleOptions {
+            &session_tools::role::RoleOptions {
                 ask_as_choices: true,
                 ..Default::default()
             }
@@ -357,9 +357,9 @@ async fn a_console_session_prompt_is_left_set_or_cleared_by_an_update() {
     assert_eq!(stored(), None);
     assert_eq!(
         file(),
-        mcp::console_instructions::console_session_instructions(
+        session_tools::console_instructions::console_session_instructions(
             None,
-            &mcp::role::RoleOptions {
+            &session_tools::role::RoleOptions {
                 ask_as_choices: true,
                 ..Default::default()
             }
@@ -372,9 +372,9 @@ async fn a_console_session_prompt_is_left_set_or_cleared_by_an_update() {
     assert_eq!(stored().as_deref(), Some("Answer in French."));
     assert_eq!(
         file(),
-        mcp::console_instructions::console_session_instructions(
+        session_tools::console_instructions::console_session_instructions(
             Some("Answer in French."),
-            &mcp::role::RoleOptions {
+            &session_tools::role::RoleOptions {
                 ask_as_choices: true,
                 ..Default::default()
             }
@@ -387,9 +387,9 @@ async fn a_console_session_prompt_is_left_set_or_cleared_by_an_update() {
     assert_eq!(stored(), None);
     assert_eq!(
         file(),
-        mcp::console_instructions::console_session_instructions(
+        session_tools::console_instructions::console_session_instructions(
             None,
-            &mcp::role::RoleOptions {
+            &session_tools::role::RoleOptions {
                 ask_as_choices: true,
                 ..Default::default()
             }

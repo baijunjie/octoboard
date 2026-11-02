@@ -215,7 +215,7 @@ pub(crate) async fn run_unasked(
 }
 
 /// Runs the operation of `tool`, which must finish once started, on a task of its own and answers
-/// what it returns: the call is cancelled by dropping it (see `mcp::exec::call`), and with it a
+/// what it returns: the call is cancelled by dropping it (see `mcp::dispatch::call`), and with it a
 /// call's future at whichever `.await` it had reached, which must not leave the operation half
 /// done. When
 /// the call is gone by the time the operation ends, the outcome (the result's `note`, or the

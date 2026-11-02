@@ -144,7 +144,7 @@ pub(super) async fn mcp_call(
         _ => serde_json::Map::new(),
     };
     let mut answer =
-        match crate::mcp::exec::call(&state, &session_id, &request.tool, &arguments).await {
+        match crate::mcp::dispatch::call(&state, &session_id, &request.tool, &arguments).await {
             Ok(result) => serde_json::json!({ "ok": true, "result": result }),
             // The whole context chain, because this text is the only account the model gets of
             // why its call did not work.

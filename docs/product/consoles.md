@@ -100,6 +100,11 @@ A chosen image is cropped to its centred square and scaled to 128 x 128 pixels i
 any size or shape of picture is accepted; a file that is not a readable image is refused in the dialog. As with the
 other fields, an avatar that was not touched is left as it is when the console is saved.
 
+The daemon stores an avatar as an image `data:` URL (one beginning `data:image/`) of at most 256 KiB, with surrounding
+whitespace trimmed; a blank one means none. It refuses any other text (`icon_not_an_image`) and a longer one
+(`icon_too_large`), whoever sets it: the dialog, a console session's `update_console` (see "The console's own settings:
+`get_console` and `update_console`" in `docs/product/agent-settings-tools.md`) or an import.
+
 ## Console session instructions
 
 A console can carry instructions of the user's own for its console sessions — how to work, report or phrase things —
@@ -253,8 +258,9 @@ sessions keep the agent they were started with (see "Console sessions and projec
 session pair a project session's, only when that value is inherited (see `docs/product/model-and-reasoning-effort.md`).
 The name cannot be cleared: saving an empty name is rejected.
 
-The console session can change the same settings of its own console except the avatar and the console session
-instructions (see "The console's own settings: `get_console` and `update_console`" in
+The console session can change the same settings of its own console except the console session instructions; it can
+set or remove the avatar but never reads the image back (see "The console's own settings: `get_console` and
+`update_console`" in
 `docs/product/agent-settings-tools.md`).
 
 An account, a model and an effort are saved only when they are changed: saving a console with a picker untouched

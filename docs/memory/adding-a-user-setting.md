@@ -2,15 +2,17 @@
 
 ## A new setting goes into the agents' settings tools unless only the user may change it
 
-When you add a setting the user can change — application-wide, a console's or a project's — expose it to agents in the
-same change: the read tool returns it and the update tool takes it (for an application setting, `get_settings` and
-`update_settings` in `apps/daemon/src/mcp/settings.rs`, their schema and description in `apps/daemon/src/mcp/mod.rs`,
-and the MCP field list in `apps/daemon/PROTOCOL.md`). Leave it out only when it falls under what must be done by the
-user personally, as decided in `docs/product/agent-settings-tools.md`, section "Who reads and changes what"; if you are
-unsure whether it does, ask rather than leave it out.
+When you add a setting the user can change — application-wide, a console's or a project's — expose it to agents in
+the same change: the read tool returns it and the update tool takes it (for an application setting, `get_settings` and
+`update_settings` in `apps/daemon/src/mcp/tools/settings.rs`, their schema and description in
+`apps/daemon/src/session_tools/catalogue/settings.rs`, and the MCP field list in `apps/daemon/PROTOCOL.md`). Leave it
+out of the update tool only when the rule in `docs/product/agent-settings-tools.md`, section "Who reads and changes
+what", makes it the user's alone, and out of the read tool too only where that section says so. That rule goes by which
+section of Settings the setting sits in and whether it is a permission setting, so settle where the setting goes in
+Settings before deciding. If you are unsure, ask rather than leave it out.
 
-Do not take a neighbouring setting that the tools leave out as precedent: accounts, trusted folders and the like are
-left out because they are the user's own, not because settings are opt-in to the tools.
+Do not take a setting the tools leave out as precedent on its own: settings are not opt-in to the tools, and one is left
+out only because that rule makes it the user's alone.
 
 ## A new application setting travels in the settings region of a configuration export
 
@@ -38,7 +40,8 @@ application setting that is not machine-local is added, in the same change, to:
   on / off descriptions, an optional help tip, and a `configuration.import.settings.consequence.<name>` message saying
   what turning it on then does, added to `packages/ui/src/i18n/messages/en.ts` and `zh-Hans.ts`. The import review, the
   import result and the settings page all render from that entry; on the settings page the switch is
-  `<DaemonSwitchSetting field="…" />` (`packages/ui/src/settings/DaemonSwitchSetting.tsx`), not a component of its own. A setting that is not a switch (like the git workflow settings or keyboard
-  shortcuts) instead gets its own line in both `packages/ui/src/configuration/ImportSettings.tsx` (the review's
-  Application settings tab) and `ImportResult.tsx`: always shown for a required field (like the git workflow line),
-  shown only when the document carries the setting for an optional one.
+  `<DaemonSwitchSetting field="…" />` (`packages/ui/src/settings/DaemonSwitchSetting.tsx`), not a component of its
+  own. A setting that is not a switch (like the git workflow settings or keyboard shortcuts) instead gets its own line
+  in both `packages/ui/src/configuration/ImportSettings.tsx` (the review's Application settings tab) and
+  `ImportResult.tsx`: always shown for a required field (like the git workflow line), shown only when the document
+  carries the setting for an optional one.

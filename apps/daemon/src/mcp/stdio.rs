@@ -2,7 +2,7 @@
 //! process per session.
 //!
 //! It owns no state of its own but which catalogue it announces. That comes from
-//! [`super::tools_for`] for the role and binding it was launched with, and follows the binding as
+//! [`tools_for`] for the role and binding it was launched with, and follows the binding as
 //! the daemon reports it with every answer: a session whose binding changes while it runs has its
 //! agent told the tool list changed (`notifications/tools/list_changed`), for an agent that reads
 //! it again on that. The daemon checks every call against the binding as it stands either way.
@@ -22,7 +22,6 @@
 use std::borrow::Cow;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
 
 use rmcp::model::{
     CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
@@ -34,12 +33,8 @@ use rmcp::{ErrorData, RoleServer, ServerHandler, ServiceExt};
 use serde_json::{json, Value};
 
 use crate::protocol::Role;
-
-/// The limit that ends a call forwarded to the daemon. Generous on purpose: `add_project` with a
-/// `git` source runs a `git clone`, which is minutes on a large repository. A launch may raise an
-/// agent's own shorter limit above this one, so that this one decides; how the limits are ordered
-/// is in apps/daemon/PROTOCOL.md's "`POST /mcp/:token` — Octoboard's MCP tools" section.
-pub(crate) const CALL_TIMEOUT: Duration = Duration::from_secs(600);
+use crate::session_tools::catalogue::{tool_by_name, tools_for, SERVER_KEY, WITHDRAWN_ON_CANCEL};
+use crate::session_tools::CALL_TIMEOUT;
 
 /// Runs the server until the agent closes the connection.
 pub fn run(
@@ -94,8 +89,7 @@ impl ServerHandler for OctoboardMcp {
                 .build(),
         )
         .with_server_info(
-            Implementation::new(super::SERVER_KEY, env!("CARGO_PKG_VERSION"))
-                .with_title("Octoboard"),
+            Implementation::new(SERVER_KEY, env!("CARGO_PKG_VERSION")).with_title("Octoboard"),
         )
     }
 
@@ -113,7 +107,7 @@ impl ServerHandler for OctoboardMcp {
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, ErrorData> {
-        let tools = super::tools_for(self.role, self.worker.load(Ordering::Relaxed))
+        let tools = tools_for(self.role, self.worker.load(Ordering::Relaxed))
             .iter()
             .map(|tool| {
                 Tool::new(
@@ -153,11 +147,11 @@ impl ServerHandler for OctoboardMcp {
         }))
         .map_err(|err| ErrorData::internal_error(err.to_string(), None))?;
         let path = format!("/mcp/{}", self.token);
-        // Only the calls in `WITHDRAWN_ON_CANCEL` are withdrawn when cancelled: those waiting for the
-        // user's answer. The daemon runs any other call to its end whatever becomes of its
+        // Only the calls in `WITHDRAWN_ON_CANCEL` are withdrawn when cancelled: those waiting for
+        // the user's answer. The daemon runs any other call to its end whatever becomes of its
         // connection, so that connection is left to carry the answer.
         let cancelled = async {
-            if super::WITHDRAWN_ON_CANCEL.contains(&&*request.name) {
+            if WITHDRAWN_ON_CANCEL.contains(&&*request.name) {
                 context.ct.cancelled().await;
             } else {
                 std::future::pending::<()>().await;
@@ -201,7 +195,7 @@ impl OctoboardMcp {
     fn is_known_tool(&self, name: &str) -> bool {
         [true, false]
             .into_iter()
-            .any(|worker| super::tool_by_name(self.role, worker, name).is_some())
+            .any(|worker| tool_by_name(self.role, worker, name).is_some())
     }
 
     /// Takes the capability the daemon's answer reports, and says whether it changed the

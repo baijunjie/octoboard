@@ -5,8 +5,8 @@ use serde_json::json;
 use super::*;
 use crate::branch_origin::repo_key;
 use crate::git::repo_files::repository_of;
-use crate::mcp::Owner;
 use crate::protocol::{Account, Availability, OrchestrationRole, Role};
+use crate::session_tools::Owner;
 use crate::test_support::{
     app_state, branch_made_by, branch_made_from, console, heard_after_marker, insert_project,
     output_containing, repo_with, running, stand_in_launch, Launched, ScratchDir, StandIn,

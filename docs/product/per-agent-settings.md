@@ -26,8 +26,8 @@ tag used on one agent is offered for the others; a typed tag matching an offered
 
 Each change is saved as it is made, as the agent's whole list; the field stays usable meanwhile. While a save is
 unanswered the field shows the list last asked for, so changes made in quick succession build on one another. Once the
-saves are answered it shows the stored tags, and a list another window or a console session set meanwhile is shown then
-and built on by the next change. A failed save is shown in an error alert titled "Could not save the tags", and once no
+saves are answered it shows the stored tags, and a list another window set meanwhile is shown then and built on by the
+next change. A failed save is shown in an error alert titled "Could not save the tags", and once no
 later change is still being saved the field goes back to the stored tags.
 
 The tags are kept by the daemon with the other application settings, so every window shows the same ones, and a change
@@ -35,8 +35,8 @@ reaches them at once; they survive a restart. **Removing an agent keeps its tags
 again (see "Reordering and removing an agent" in `docs/product/agent-accounts.md`); a removed agent's tags are not
 offered for the other agents. Every session reads the tags of the agents a session could be opened on, with their
 accounts, through `list_agents`, which does not list a removed agent (see
-`docs/product/listing-agents-from-a-session.md`). Like Claude compatibility, a console session may read and change
-them (see "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`), and a
+`docs/product/listing-agents-from-a-session.md`). Like Claude compatibility, a console session may read them but not
+change them (see "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`), and a
 configuration export that includes the application settings carries them (see "The application settings an export
 carries" in `docs/product/configuration-export-and-import.md`).
 
@@ -116,8 +116,8 @@ including an account switch; a running process keeps what it was started with. W
 `docs/product/per-agent-launch-specifics.md`. Octoboard writes none of Claude Code's, Codex's or Grok Build's
 configuration files for it.
 
-The choices are kept by the daemon, so every window shows the same. Unlike the approval modes, a console session may
-read and change them (see "Application settings: `get_settings` and `update_settings`" in
+The choices are kept by the daemon, so every window shows the same. A console session may read them, unlike the
+approval modes, but not change them (see "Application settings: `get_settings` and `update_settings`" in
 `docs/product/agent-settings-tools.md`), and a configuration export that includes the application settings carries
 the explicit choices (see "The application settings an export carries" in
 `docs/product/configuration-export-and-import.md`).

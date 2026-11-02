@@ -2745,11 +2745,10 @@ async fn messages_held_for_a_session_that_is_not_relaunched_are_dropped_and_told
 
 #[tokio::test]
 async fn a_session_being_restarted_is_described_to_agents_as_starting() {
-    use crate::mcp::exec::resolve::describe_session;
-    use crate::mcp::reads::list_sessions;
+    use crate::mcp::dispatch::call;
     let fixture = Fixture::new();
     claude_setup(&fixture);
-    let caller = fixture.session("caller", Agent::Claude);
+    fixture.session("caller", Agent::Claude);
     let running = idle_session(&fixture, "idle", Agent::Claude);
     let account = fixture.record(Agent::Claude);
     let (_, mut lock) = fixture
@@ -2770,18 +2769,26 @@ async fn a_session_being_restarted_is_described_to_agents_as_starting() {
         fixture.state.shown_status(&session),
         SessionStatus::Starting
     );
-    let described = describe_session(
+    let described = call(
         &fixture.state,
-        &session,
-        &caller,
-        &Default::default(),
-        &Default::default(),
+        "caller",
+        "get_session",
+        &serde_json::json!({ "session": "idle" })
+            .as_object()
+            .unwrap()
+            .clone(),
     )
+    .await
     .unwrap();
     assert_eq!(described["status"], "starting");
-    let listed = list_sessions(&fixture.state, &caller, &Default::default())
-        .await
-        .unwrap();
+    let listed = call(
+        &fixture.state,
+        "caller",
+        "list_sessions",
+        &Default::default(),
+    )
+    .await
+    .unwrap();
     assert_eq!(listed["sessions"][0]["session"], "idle");
     assert_eq!(listed["sessions"][0]["status"], "starting");
 
@@ -2791,31 +2798,41 @@ async fn a_session_being_restarted_is_described_to_agents_as_starting() {
         fixture.state.shown_status(&session),
         SessionStatus::Interrupted
     );
-    let listed = list_sessions(&fixture.state, &caller, &Default::default())
-        .await
-        .unwrap();
+    let listed = call(
+        &fixture.state,
+        "caller",
+        "list_sessions",
+        &Default::default(),
+    )
+    .await
+    .unwrap();
     assert!(listed["sessions"].as_array().unwrap().is_empty());
 }
 
 #[tokio::test]
 async fn the_hold_a_sharing_change_takes_on_a_queue_is_told_apart_from_a_handoffs() {
-    use crate::mcp::exec::resolve::describe_session;
+    use crate::mcp::dispatch::call;
     use crate::state::WriteHold;
     let fixture = Fixture::new();
     claude_setup(&fixture);
-    let caller = fixture.session("caller", Agent::Claude);
+    fixture.session("caller", Agent::Claude);
     let _running = idle_session(&fixture, "idle", Agent::Claude);
-    let session = fixture.state.store.get_session("idle").unwrap().unwrap();
     let held = |fixture: &Fixture| {
-        describe_session(
-            &fixture.state,
-            &session,
-            &caller,
-            &Default::default(),
-            &Default::default(),
-        )
-        .unwrap()["writes_held"]["reason"]
-            .clone()
+        let state = fixture.state.clone();
+        async move {
+            call(
+                &state,
+                "caller",
+                "get_session",
+                &serde_json::json!({ "session": "idle" })
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            )
+            .await
+            .unwrap()["writes_held"]["reason"]
+                .clone()
+        }
     };
     assert_eq!(fixture.state.write_hold("idle"), None);
 
@@ -2824,12 +2841,12 @@ async fn the_hold_a_sharing_change_takes_on_a_queue_is_told_apart_from_a_handoff
         fixture.state.write_hold("idle"),
         Some(WriteHold::SharingChange)
     );
-    assert_eq!(held(&fixture), "sharing_change");
+    assert_eq!(held(&fixture).await, "sharing_change");
     drop(hold);
 
     let hold = fixture.state.hold_outbox("idle");
     assert_eq!(fixture.state.write_hold("idle"), Some(WriteHold::Handoff));
-    assert_eq!(held(&fixture), "handoff");
+    assert_eq!(held(&fixture).await, "handoff");
     drop(hold);
 }
 

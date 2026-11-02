@@ -19,16 +19,16 @@ tool is in the tool tables of `docs/product/hub-orchestration.md`, and the reads
   another console's projects it reads only each one's id, name, description and tags (see "Listing a console's
   projects" in `docs/product/what-every-session-reads.md`).
 
-**One rule decides which settings the tools expose: an agent may help the user configure most of Octoboard, but not what
-must be done by the user personally.** Every setting of a console, its projects and the application that the sections
-below list is exposed under that rule. What must be done by the user personally is never available through these tools,
-to any session:
+**One rule decides which settings the tools expose: the settings of Settings' Agent behavior and Agent accounts
+sections, and the permission settings (approval modes, trusted folders and a project's trust permission), are the user's
+alone, as are removing a project, creating or deleting a console and a console's console session instructions; an agent
+may help the user configure everything else.**
+Every setting of a console, its projects and the application that the sections below list as changeable is exposed under
+that rule. What is the user's alone is never changed through these tools, by any session:
 
-- changing a project's directory, source, host or remote URL;
 - giving or taking away a project's trust permission;
 - removing a project;
 - creating or deleting a console;
-- setting or removing a console's avatar;
 - reading, setting or clearing a console's console session instructions (see "Console session instructions" in
   `docs/product/consoles.md`);
 - adding, editing or removing an account, or turning one off or back on;
@@ -38,6 +38,11 @@ to any session:
   opened, or a session handed off to it, at all, from the window or by an agent's tool: a session could otherwise add
   an agent the user removed or never added and start sessions on it, and which agents Octoboard runs, and in what
   order they are offered, is the user's own choice;
+- changing whether a new session's account is chosen automatically (see "Automatically select an account" in
+  `docs/product/settings.md`), an agent's Claude compatibility (see "Claude compatibility" in
+  `docs/product/per-agent-settings.md`) or an agent's tags (see "Agent tags" in the same document), since which agents
+  and accounts spend the user's quota, and how, is the user's choice. `get_settings` still returns all three, read-only:
+  a session weighs them when it chooses an agent or an account;
 - reading or changing Claude Code's approval mode or Codex's approval reviewer (see "Approval modes" in
   `docs/product/per-agent-settings.md`), since a session could otherwise lift the permission prompts of the sessions
   launched after it, its own next resume included, for instance by switching Claude Code to Approve everything;
@@ -51,12 +56,13 @@ to any session:
   account's quota without asking;
 - reading or changing whether sessions are asked to put their questions as choices (see "Ask questions as choices" in
   `docs/product/settings.md`), since that shapes what sessions are told, and a session could otherwise switch off the
-  rule it is given;
-- reading or changing the language the daemon holds for the user (see "The language the daemon holds" in
-  `docs/product/language.md`), since that shapes what sessions are told, as the rule above does.
+  rule it is given.
 
-Each of those stays the user's own, in the UI. Nor do the tools reach what a window keeps for itself rather than the
-daemon, such as the appearance, Markdown style, the window's own language and keyboard shortcuts.
+Each of those stays the user's own, in the UI. A project's directory, source, host and remote URL are not settings of
+either kind: they are chosen when the project is associated, by the user or by `add_project`, and nobody, the user
+included, can edit them afterwards (see "Editing a project" in `docs/product/projects.md`). Nor do the tools reach what a
+window keeps for itself rather than the daemon, such as the appearance, Markdown style, the window's own language and
+keyboard shortcuts.
 
 The console session's instructions tell it that projects, its console and the application settings belong to the
 user: it changes one only when asked to, says what it changed, and treats accounts and trusted folders as read-only.
@@ -181,8 +187,10 @@ session takes for each value neither it nor its project sets — `has_icon`, whe
 working directory. Neither the avatar itself nor the console's console session instructions are ever returned.
 
 `update_console` takes any of `name` (a blank one is refused), `default_agent` (an agent; it cannot be cleared),
-`project_session_agent` (an agent, or `null` to follow `default_agent` again), `accounts`, `launch` and
-`project_session_launch`, leaves the rest as it is, and answers as `get_console` does.
+`project_session_agent` (an agent, or `null` to follow `default_agent` again), `accounts`, `launch`,
+`project_session_launch` and `icon` — the console's avatar, as an image `data:` URL under the rules in "Avatar" in
+`docs/product/consoles.md`, or `null` or a blank string to remove it — leaves the rest as it is, and answers as
+`get_console` does.
 
 ## Application settings: `get_settings` and `update_settings`
 
@@ -192,35 +200,33 @@ working directory. Neither the avatar itself nor the console's console session i
 |---|---|
 | `auto_pull_repositories` | Whether projects behind their upstream are pulled (fast-forwarded) on their own (see "Automatically pulling repositories" in `docs/product/project-git-status.md`). |
 | `auto_delete_unresumable_archives` | Whether archived sessions whose conversation is gone are deleted on their own (see "Deleting archived sessions whose conversation is gone" in `docs/product/deleting-sessions.md`). |
-| `auto_select_account` | Whether a new session whose account was not named chooses a usable account automatically, preferring the initial agent's soonest weekly reset and trying another added agent when needed (see "Automatically select an account" in `docs/product/settings.md` and "Which account a session uses" in `docs/product/opening-sessions.md`). |
+| `auto_select_account` | Whether a new session whose account was not named chooses a usable account automatically, preferring the initial agent's soonest weekly reset and trying another added agent when needed (see "Automatically select an account" in `docs/product/settings.md` and "Which account a session uses" in `docs/product/opening-sessions.md`). Read-only. |
+| `interface_language` | The language the daemon holds for the user, as its tag, or `null` while it holds none (see "The language the daemon holds" in `docs/product/language.md`). |
 | `sidebar_order_by_status` | Whether the user's sidebar ranks sessions and projects by status (see "Order the sidebar by status" in `docs/product/settings.md` and "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`). |
 | `default_clone_dir` | The default clone directory (see "Default clone directory" in `docs/product/settings.md`). |
 | `git_workflow` | The application-wide git workflow settings, as `development`, `squash_before_delivery`, `rebase_before_merge`, `delivery` and `revert_gate` (see "The five settings" in `docs/product/git-workflow-settings.md`); `squash_before_delivery`, `rebase_before_merge` and `delivery` apply only while `development` is not `in_place`; `revert_gate` applies whatever `development` is. |
-| `claude_compatibility` | For each agent other than Claude Code, by its name (`codex`, `grok`), whether its sessions load Claude Code's configuration: the value in effect, the default included while the user has made no choice (see "Claude compatibility" in `docs/product/per-agent-settings.md`). |
-| `agent_tags` | For each added agent that has tags, by its name (`claude`, `codex`, `grok`), its tags as a list, in the user's order (see "Agent tags" in `docs/product/per-agent-settings.md`); every agent's while the list of added agents is undecided. An agent without tags, and a removed agent, has no entry. |
+| `claude_compatibility` | For each agent other than Claude Code, by its name (`codex`, `grok`), whether its sessions load Claude Code's configuration: the value in effect, the default included while the user has made no choice (see "Claude compatibility" in `docs/product/per-agent-settings.md`). Read-only. |
+| `agent_tags` | For each added agent that has tags, by its name (`claude`, `codex`, `grok`), its tags as a list, in the user's order (see "Agent tags" in `docs/product/per-agent-settings.md`); every agent's while the list of added agents is undecided. An agent without tags, and a removed agent, has no entry. Read-only. |
 | `accounts` | Every account, each with `id`, `agent`, `name`, `default` and `disabled`, which is true for an account the user turned off, so that no new session can be opened on it (see "Turning an account off" in `docs/product/agent-accounts.md`). Each agent's accounts come in the order automatic account selection takes them in: the user's order of that agent's accounts, then those that order does not name (see "Which account a session uses" in `docs/product/opening-sessions.md`). The default account is listed with the id `default` and, as its `name`, the name the user gave it, else `Default` (see "The default account" in `docs/product/agent-accounts.md`). An account's directory is never given. |
 | `trusted_directories` | The trusted folders (see "Trusted folders" in `docs/product/folder-trust.md`). Read-only. |
 
-`update_settings` takes `auto_pull_repositories`, `auto_delete_unresumable_archives`, `auto_select_account`,
-`sidebar_order_by_status`, `default_clone_dir`, `git_workflow`, `claude_compatibility` and `agent_tags`, under the rules
-of the same settings in Settings: the switches take `true` or `false`, a clone directory must be absolute or start with
-`~/`, and a blank one goes back to the built-in default. `git_workflow` is an object of any of the five git workflow
-settings, with the values `update_project`'s takes (`squash_before_delivery`, `rebase_before_merge` and `delivery` apply
-only while `development` is not `in_place`, and keep their values while it is); an item left out, or given as `null`,
-stays as it is. `claude_compatibility` is an object of `codex` and `grok`, each `true` or `false`; an agent left out
-stays as it is, and an agent given is recorded as the user's choice, which then holds whatever agents are added, as
-turning its switch in Settings does. `agent_tags` is an object keyed by agent (`claude`, `codex`, `grok`), each a list
-of tags that replaces that agent's tags, normalised as the Tags row's are; an empty list clears them, and an agent left
-out stays as it is. A refused value leaves the others unapplied too. An `auto_approve_session_requests`,
-`auto_approve_resume_requests`, `auto_approve_account_switches`, `auto_approve_handoffs`, `auto_start_quota_windows`,
-`auto_switch_on_usage_limit`, `ask_questions_as_choices` or `interface_language` argument is ignored — the setting stays
-as it is, `get_settings` never lists any of them, and the rest of the call applies as usual. Turning
+`update_settings` takes `auto_pull_repositories`, `auto_delete_unresumable_archives`, `interface_language`,
+`sidebar_order_by_status`, `default_clone_dir` and `git_workflow`, under the rules of the same settings in Settings: the
+switches take `true` or `false`, a clone directory must be absolute or start with `~/`, and a blank one goes back to the
+built-in default. `interface_language` is a tag of an offered language (see "The offered languages" in
+`docs/product/language.md`), surrounding whitespace ignored; any other text, a blank one included, is refused. It
+changes the language the daemon holds, as a client's report does, and no window's language: each window keeps the one
+it shows. `git_workflow` is an object of any of the five git workflow settings, with the values `update_project`'s takes
+(`squash_before_delivery`, `rebase_before_merge` and `delivery` apply only while `development` is not `in_place`, and
+keep their values while it is); an item left out, or given as `null`, stays as it is. A refused value leaves the others
+unapplied too. An `auto_approve_session_requests`, `auto_approve_resume_requests`, `auto_approve_account_switches`,
+`auto_approve_handoffs`, `auto_start_quota_windows`, `auto_switch_on_usage_limit`, `ask_questions_as_choices`,
+`auto_select_account`, `claude_compatibility` or `agent_tags` argument is ignored, whatever its value — the setting
+stays as it is and the rest of the call applies as usual; `get_settings` lists only the last three, read-only. Turning
 `auto_pull_repositories` on fast-forwards the projects already known to be behind at once, as turning the switch on in
 Settings does, which changes files in the user's repositories. Turning `auto_delete_unresumable_archives` on deletes
-nothing at once, and turning it off stops a deletion pass under way, exactly as the switch in Settings does. Turning
-`auto_select_account` on or off changes no session already open; it is read when a later `new_session`,
-`request_session` or `handoff_session` leaves the account out (see "Which account a session uses" in
-`docs/product/opening-sessions.md`). The call answers as `get_settings` does.
+nothing at once, and turning it off stops a deletion pass under way, exactly as the switch in Settings does. The call
+answers as `get_settings` does.
 
 ## When a change takes effect
 
@@ -232,8 +238,8 @@ afterwards. A changed `project_session_launch` reaches a project session at its 
 session sets that value itself. A changed `development`, `squash_before_delivery`, `rebase_before_merge` or `delivery`,
 application-wide or a project's own, is sure to reach only project sessions begun after it (see "When a change reaches a
 session" in `docs/product/git-workflow-settings.md`). A changed `revert_gate` reaches running sessions at once (see "The
-switch" in `docs/product/revert-gate.md`). A changed `claude_compatibility` reaches a session of that agent when it next
-starts or resumes, an account switch included.
+switch" in `docs/product/revert-gate.md`). A changed `interface_language` reaches sessions as a change made from a
+window does (see "The guidance on the user's language" in `docs/product/launching-agents.md`).
 
 ## Refusals
 
@@ -242,7 +248,4 @@ tool. Besides the refusals above, an argument of the wrong type — a boolean, a
 is refused with a reason rather than read as left out. So is a `git_workflow` object, for a project or
 application-wide, that holds a key other than the five git workflow settings, a `development` other than `in_place`,
 `branch` and `worktree`, or a `delivery` other than `ask`, `merge` and `pull_request`,
-so that a misspelt item is not taken for a change that changed nothing. So is a `claude_compatibility` object that
-names `claude`, which has no such setting, or anything that is not an agent, or holds a value other than `true` or
-`false`; and an `agent_tags` object that names anything that is not an agent, or holds a value other than a list of
-texts.
+so that a misspelt item is not taken for a change that changed nothing.

@@ -47,7 +47,7 @@ pub struct LaunchRequest {
     pub agent: Agent,
     pub role: Role,
     /// Who the session reports to, if anyone; see `LaunchSpec::owner`.
-    pub owner: Option<crate::mcp::Owner>,
+    pub owner: Option<crate::session_tools::Owner>,
     /// The project's effective git workflow settings; see `LaunchSpec::git_workflow`.
     pub git_workflow: Option<crate::git_workflow::GitWorkflowSettings>,
     /// See `LaunchSpec::ask_questions_as_choices`.

@@ -257,7 +257,7 @@ fn the_role_text_is_added_as_a_developer_message_not_a_replaced_system_prompt() 
     let overrides = overrides(&plan.args);
     assert!(overrides.iter().any(|o| o.starts_with(&format!(
         "developer_instructions={}",
-        toml_string(&mcp::role::role_description(
+        toml_string(&session_tools::role::role_description(
             fixture.role,
             fixture.owner.as_ref(),
             Agent::Codex,
@@ -289,7 +289,7 @@ fn claude_compatibility_appends_the_instructions_naming_the_claude_config_dir() 
     let mut spec = fixture.spec();
     spec.claude_compatibility = true;
     let on = instructions(&CodexAdapter.plan(&spec).unwrap());
-    let role = toml_string(&mcp::role::role_description(
+    let role = toml_string(&session_tools::role::role_description(
         fixture.role,
         fixture.owner.as_ref(),
         Agent::Codex,

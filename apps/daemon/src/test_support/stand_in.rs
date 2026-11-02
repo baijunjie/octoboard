@@ -200,7 +200,7 @@ pub(crate) fn fake_live_session(
 }
 
 /// What a stand-in launch was asked for: the session, its owner and its opening prompt.
-pub(crate) type Launched = (String, Option<crate::mcp::Owner>, Option<String>);
+pub(crate) type Launched = (String, Option<crate::session_tools::Owner>, Option<String>);
 
 /// A launch that starts a stand-in process for the session asked for, for the operations that
 /// start an agent (`term::launch` cannot in a test). The process is kept in `started` and the

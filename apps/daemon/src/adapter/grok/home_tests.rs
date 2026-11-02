@@ -111,7 +111,10 @@ fn the_servers_tool_timeout_sits_above_octoboards_own_call_limit() {
     // its header the key would be a top-level one, setting the limit for every MCP server the
     // user has.
     let table = config
-        .split(&format!("[mcp_servers.{}]\n", mcp::SERVER_KEY))
+        .split(&format!(
+            "[mcp_servers.{}]\n",
+            session_tools::catalogue::SERVER_KEY
+        ))
         .nth(1)
         .expect("Octoboard's table")
         .split("\n[")

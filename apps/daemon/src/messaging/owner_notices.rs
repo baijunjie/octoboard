@@ -10,13 +10,13 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
-use crate::mcp;
 use crate::messaging::delivery::{
     self, is_archived_refusal, rebound_owner, write_notice_to_owner, Delivery, WhenBlocked,
 };
 use crate::messaging::sharing;
 use crate::messaging::texts::{capitalised, waiting_opening, NOTICE_PREFIX, WAITING_PHRASE};
 use crate::protocol::{Agent, Role, Session, SessionStatus};
+use crate::session_tools::catalogue;
 use crate::state::AppState;
 
 /// Tells the owner of `session` that its process ended without anyone asking it to, so that the
@@ -32,8 +32,8 @@ pub fn tell_owner_it_ended(state: &Arc<AppState>, session: &Session) {
              doing stopped with it. Look at it with `{get_session}`, and relaunch it with \
              `{reopen_session}` if the work should go on.",
             session = sharing::named_session(session),
-            get_session = mcp::qualified_tool_name(owner.agent, "get_session"),
-            reopen_session = mcp::qualified_tool_name(owner.agent, "reopen_session"),
+            get_session = catalogue::qualified_tool_name(owner.agent, "get_session"),
+            reopen_session = catalogue::qualified_tool_name(owner.agent, "reopen_session"),
         )
     });
 }
@@ -60,8 +60,8 @@ pub fn tell_owner_the_switch_failed(state: &Arc<AppState>, session: &Session, re
              with `{get_session}`, and relaunch it with `{reopen_session}` if the work should go \
              on.",
             session = sharing::named_session(session),
-            get_session = mcp::qualified_tool_name(owner.agent, "get_session"),
-            reopen_session = mcp::qualified_tool_name(owner.agent, "reopen_session"),
+            get_session = catalogue::qualified_tool_name(owner.agent, "get_session"),
+            reopen_session = catalogue::qualified_tool_name(owner.agent, "reopen_session"),
         )
     });
 }
@@ -103,7 +103,7 @@ fn it_was_switched(
             format!(
                 "It is back awaiting instructions, so send it the next step with `{}` if it \
                  has one pending.",
-                mcp::qualified_tool_name(owner.agent, "instruct_session")
+                catalogue::qualified_tool_name(owner.agent, "instruct_session")
             )
         },
         named = sharing::named_session(session),
@@ -220,9 +220,9 @@ pub(crate) fn tell_owner(
 /// The tools a project session has, as a worker or not, by the names its agent shows them, for
 /// telling a session whose binding has just changed what it has.
 fn project_tools(agent: Agent, worker: bool) -> String {
-    mcp::tools_for(Role::Project, worker)
+    catalogue::tools_for(Role::Project, worker)
         .iter()
-        .map(|tool| format!("`{}`", mcp::qualified_tool_name(agent, tool.name)))
+        .map(|tool| format!("`{}`", catalogue::qualified_tool_name(agent, tool.name)))
         .collect::<Vec<_>>()
         .join(", ")
 }
@@ -258,7 +258,7 @@ pub(crate) fn role_after_owner_change(session: &Session, was_worker: bool) -> St
 /// it keeps its child sessions, else the tools it lost. Its role description, recorded at launch,
 /// says it is independent, so this says it replaces that.
 pub(crate) fn duties_under_new_parent(agent: Agent, coordinator: bool) -> String {
-    let tool = |name: &str| mcp::qualified_tool_name(agent, name);
+    let tool = |name: &str| catalogue::qualified_tool_name(agent, name);
     let report = tool("report");
     let ending = if coordinator {
         format!(
@@ -293,7 +293,7 @@ pub(crate) fn owner_from_now_on(agent: Agent, owner: &str) -> String {
         "{owner} is your parent session from now on: take work only from it, or from the user \
          typing in this terminal, and report to it with `{report}`.",
         owner = capitalised(owner),
-        report = mcp::qualified_tool_name(agent, "report"),
+        report = catalogue::qualified_tool_name(agent, "report"),
     )
 }
 
@@ -410,7 +410,7 @@ pub(crate) async fn tell_former_owner(
          with `{send_message}`, which it weighs rather than obeys. Do not count on it any more, \
          and treat any work you handed it as left with the user.",
         released = sharing::named_session(released),
-        send_message = mcp::qualified_tool_name(owner.agent, "send_message"),
+        send_message = catalogue::qualified_tool_name(owner.agent, "send_message"),
     );
     delivery::write_message_off_runtime(state, owner_id, text, WhenBlocked::Queue)
         .await
@@ -419,7 +419,7 @@ pub(crate) async fn tell_former_owner(
 
 /// The notice of a release, ending with the former owner's parting `note` when there is one.
 fn released_text(released: &Session, note: Option<&str>) -> String {
-    let tool = |name: &str| mcp::qualified_tool_name(released.agent, name);
+    let tool = |name: &str| catalogue::qualified_tool_name(released.agent, name);
     let note = match note {
         Some(note) => format!(
             " Your former parent session left this note:\n\n{note}\n— end of the note —",

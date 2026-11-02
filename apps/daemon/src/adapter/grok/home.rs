@@ -10,7 +10,7 @@ use super::HOOK_EVENTS;
 use crate::adapter::files::{canonical_project, LARGE_FILE_LIMIT};
 use crate::adapter::{LaunchSpec, HOOK_TIMEOUT_SECS};
 use crate::agents::layout::{GROK_CONFIG_FILE, GROK_TRUST_STORE};
-use crate::mcp;
+use crate::session_tools;
 
 /// Entries Octoboard owns in its `GROK_HOME` rather than linking to the user's.
 const COPIED_ENTRIES: &[&str] = &[GROK_CONFIG_FILE, GROK_TRUST_STORE];
@@ -112,7 +112,7 @@ fn append_mcp_server(config: &Path, spec: &LaunchSpec<'_>) -> Result<()> {
     content.push_str(&format!(
         "\n[mcp_servers.{key}]\ncommand = {command}\nargs = [{args}]\n\
          tool_timeout_sec = {tool_timeout}\n",
-        key = mcp::SERVER_KEY,
+        key = session_tools::catalogue::SERVER_KEY,
         tool_timeout = crate::adapter::MCP_TOOL_TIMEOUT_SECS,
         command = json!(command),
         args = args

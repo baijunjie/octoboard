@@ -4,7 +4,7 @@
 //! where each agent keeps its files is [`crate::agents::layout`], and the per-agent knowledge of
 //! how the agents otherwise behave lives with the modules that need it, among them their screens
 //! and dialogs, hook payloads, records, sign-in and quota protocols, tool naming and role text
-//! (`crate::mcp`), launch and account switch (`crate::coordinator`), model catalogues
+//! (`crate::session_tools`), launch and account switch (`crate::coordinator`), model catalogues
 //! (`crate::agents::models`) and the detection of a project's agent (`crate::hostfs::listing`).
 //!
 //! Three things are injected into every agent: the status hooks, the Octoboard MCP server, and a role
@@ -56,11 +56,11 @@ use std::time::Duration;
 use anyhow::Result;
 
 use crate::git_workflow::GitWorkflowSettings;
-use crate::mcp::Owner;
 use crate::protocol::{
     error_code, Agent, ApprovalReviewer, ClaudeApprovalMode, CodedError, Notice, Role,
     TerminalAppearance,
 };
+use crate::session_tools::Owner;
 
 /// Everything an adapter needs to assemble one launch.
 pub struct LaunchSpec<'a> {
@@ -153,8 +153,8 @@ pub struct LaunchSpec<'a> {
 
 impl LaunchSpec<'_> {
     /// What the launch adds to the role description beyond the role and owner.
-    pub fn role_options(&self) -> crate::mcp::role::RoleOptions<'_> {
-        crate::mcp::role::RoleOptions {
+    pub fn role_options(&self) -> crate::session_tools::role::RoleOptions<'_> {
+        crate::session_tools::role::RoleOptions {
             git_workflow: self.git_workflow.as_ref(),
             ask_as_choices: self.ask_questions_as_choices,
             user_language: self.user_language,
@@ -163,7 +163,7 @@ impl LaunchSpec<'_> {
 }
 
 /// What an agent's own time limit on a call to Octoboard's tools is set to, for every agent that
-/// has such a limit: `mcp::stdio::CALL_TIMEOUT` plus a margin, so Octoboard's forwarding limit is
+/// has such a limit: `session_tools::CALL_TIMEOUT` plus a margin, so Octoboard's forwarding limit is
 /// the one that ends a call rather than the agent's own default, whichever side of it that default
 /// falls on. Derived from `CALL_TIMEOUT` so it stays above it if that is raised. The margin covers
 /// a call in normal operation, not a daemon that stalls partway through a response: `CALL_TIMEOUT`
@@ -178,11 +178,11 @@ impl LaunchSpec<'_> {
 /// updating those tests: the new value has to hold for every agent, against what that agent's
 /// section records about its own limit.
 pub const MCP_TOOL_TIMEOUT_SECS: u64 =
-    crate::mcp::stdio::CALL_TIMEOUT.as_secs() + MCP_TOOL_TIMEOUT_MARGIN.as_secs();
+    crate::session_tools::CALL_TIMEOUT.as_secs() + MCP_TOOL_TIMEOUT_MARGIN.as_secs();
 
 const MCP_TOOL_TIMEOUT_MARGIN: Duration = Duration::from_secs(60);
 
-const _: () = assert!(MCP_TOOL_TIMEOUT_SECS > crate::mcp::stdio::CALL_TIMEOUT.as_secs());
+const _: () = assert!(MCP_TOOL_TIMEOUT_SECS > crate::session_tools::CALL_TIMEOUT.as_secs());
 
 /// The command and arguments every adapter registers as this session's MCP server. The session's
 /// identity travels in argv: Claude Code and Grok do export a session id to an MCP child, but
@@ -398,8 +398,8 @@ pub mod tests {
     use std::path::PathBuf;
 
     use super::LaunchSpec;
-    use crate::mcp::Owner;
     use crate::protocol::TerminalAppearance;
+    use crate::session_tools::Owner;
 
     /// Runs each file case in a killable process: a regressed FIFO open must not strand a test
     /// thread. The parent owns the temporary root, including fixtures a killed child cannot drop.

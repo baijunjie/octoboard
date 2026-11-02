@@ -27,7 +27,6 @@ use anyhow::{anyhow, Result};
 use uuid::Uuid;
 
 use crate::coordinator::{self, open::OpenRequest};
-use crate::mcp::qualified_tool_name;
 use crate::messaging::delivery::{self, WhenBlocked};
 use crate::messaging::owner_notices::{duties_under_new_parent, INDEPENDENT_COORDINATOR_ROLE};
 use crate::messaging::sharing::{named_session, one_line, place_of, quote};
@@ -37,6 +36,7 @@ use crate::protocol::{
     TerminalAppearance,
 };
 use crate::session::term;
+use crate::session_tools::catalogue::qualified_tool_name;
 use crate::state::{AppState, OutboxHold};
 
 /// What a handoff is asked for. The receiving session is another agent's; `account`, `model` and

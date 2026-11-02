@@ -65,13 +65,13 @@ use uuid::Uuid;
 
 use crate::branch_origin::handover::{move_branches, Handover};
 use crate::coordinator::{self, open::OpenRequest};
-use crate::mcp::qualified_tool_name;
 use crate::messaging::delivery::{self, WhenBlocked};
 use crate::messaging::texts;
 use crate::protocol::{
     error_code, Agent, CodedError, Event, Role, Session, SessionRequestAction,
     SessionRequestEnding, SessionStatus,
 };
+use crate::session_tools::catalogue::qualified_tool_name;
 use crate::state::AppState;
 use crate::time::now_millis;
 
@@ -84,14 +84,14 @@ use outcome::{
 };
 
 /// How long a call waits for the user's answer. Octoboard's own value, for every agent alike, and
-/// kept below `mcp::stdio`'s `CALL_TIMEOUT` with room left for an approval given at the last
+/// kept below `session_tools::CALL_TIMEOUT` with room left for an approval given at the last
 /// moment to be carried out — launching the session included — before that forwarding gives up.
 /// An agent's own limit is not obeyed; the launch sets it above that forwarding limit instead,
 /// whichever side the agent's own default falls on (apps/daemon/PROTOCOL.md's
 /// "`POST /mcp/:token` — Octoboard's MCP tools" section has the ordering).
 pub const ANSWER_TIME_LIMIT: Duration = Duration::from_secs(8 * 60);
 
-const _: () = assert!(ANSWER_TIME_LIMIT.as_secs() < crate::mcp::stdio::CALL_TIMEOUT.as_secs());
+const _: () = assert!(ANSWER_TIME_LIMIT.as_secs() < crate::session_tools::CALL_TIMEOUT.as_secs());
 
 /// How many ended requests are remembered, for telling a late answer what became of its request.
 /// Far more than could be on screen at once; the rest are forgotten oldest first.
@@ -609,7 +609,7 @@ pub async fn ask_for_session(
 /// `action` and waits up to `limit` for the answer, as [`ask_for_session`] does. What it could
 /// never be carried out for is refused before the user is asked: here for a session to start and
 /// for the session a record would open, and by the caller for a session that holds the
-/// conversation (`mcp::resume_request` judges it).
+/// conversation (`mcp::tools::resume_request` judges it).
 pub(crate) async fn ask_to_approve(
     state: &Arc<AppState>,
     caller: &Session,

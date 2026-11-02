@@ -74,8 +74,8 @@ use serde_json::json;
 use super::files::{canonical_project, read_regular_text, SMALL_FILE_LIMIT};
 use super::{AgentAdapter, LaunchPlan, LaunchSpec, HOOK_TIMEOUT_SECS};
 use crate::agents::layout;
-use crate::mcp;
 use crate::protocol::{error_code, Agent, CodedError};
+use crate::session_tools;
 use claude_compatibility::{claude_compatibility_instructions, reserved_env};
 use config::{model_migrations, project_server_names, read_config, server_names, ConfigFile};
 use private_server::private_server_supported;
@@ -269,7 +269,7 @@ impl AgentAdapter for CodexAdapter {
         args.push("--dangerously-bypass-hook-trust".to_string());
 
         let (mcp_command, mcp_args) = super::mcp_server_command(spec);
-        let key = mcp::SERVER_KEY;
+        let key = session_tools::catalogue::SERVER_KEY;
         server_args.push("-c".to_string());
         server_args.push(format!(
             "mcp_servers.{key}.command={}",
@@ -361,7 +361,7 @@ impl AgentAdapter for CodexAdapter {
             server_args.push(format!("notice.model_migrations={upgrades}"));
         }
 
-        let mut instructions = mcp::role::role_description(
+        let mut instructions = session_tools::role::role_description(
             spec.role,
             spec.owner.as_ref(),
             Agent::Codex,

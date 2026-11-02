@@ -15,11 +15,14 @@ sections, in order, are **General**, **Git**, **Agent accounts**, **Agent behavi
 **Permissions**, **Notifications**, **Keyboard shortcuts**, **Configuration** and **About**; the dialog opens on
 General unless it was asked to open on another section.
 
-A console session can read the default clone directory, the automatic pulling of repositories, the automatic deletion of
-archived sessions whose conversation is gone, automatic account selection, the ordering of the sidebar by status, the
-application-wide git workflow settings, the agent accounts (without their directories) and the trusted folders, and
-change all but the last two (see "Application settings: `get_settings` and `update_settings`" in
-`docs/product/agent-settings-tools.md`).
+A console session can read and change the default clone directory, the automatic pulling of repositories, the
+automatic deletion of archived sessions whose conversation is gone, the ordering of the sidebar by status, the
+application-wide git workflow settings and the language the daemon holds for the user (see "The language the daemon
+holds" in `docs/product/language.md`). It can read, but not change, automatic account selection, Claude compatibility,
+the agent tags, the agent accounts (without their directories) and the trusted folders. The switches of Agent behavior,
+the approval modes, and the switches that switch accounts at the usage limit and start usage windows, it can neither
+read nor change (see "Who reads and changes what" and
+"Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`).
 
 ## In a narrow window
 
@@ -288,7 +291,9 @@ agents, to add, edit, rename and remove accounts, to turn an account off and on,
 tags, permission approval and Claude compatibility, each account's plan quota and each account's details, and the three
 switches **Automatically select an account**, **Automatically switch accounts at the usage limit** and **Start usage
 windows automatically**. Where those switches sit, and what the rest of the section shows and offers, are in
-`docs/product/agent-accounts.md`.
+`docs/product/agent-accounts.md`. Every setting of the section is the user's alone: no agent changes one through the
+settings tools, though a console session reads some of them (see "Who reads and changes what" in
+`docs/product/agent-settings-tools.md`).
 
 ### Automatically select an account
 
@@ -297,8 +302,8 @@ account, preferring the account of its initial agent whose weekly quota resets s
 only when that agent has no usable account. While the switch is off the row's description says what turning it on will
 do, and while it is on it says what is happening now: a new session uses the account whose weekly limit resets soonest,
 so usage left before a reset is not wasted. The daemon stores it as `auto_select_account` and keeps it, so every window
-shows the same. Unlike the switches in Agent behavior, a console session may read and change it, and a configuration
-export that includes the application settings carries it (see "Application settings: `get_settings` and
+shows the same. A console session may read it but not change it, as with every setting of Agent accounts, and a
+configuration export that includes the application settings carries it (see "Application settings: `get_settings` and
 `update_settings`" in `docs/product/agent-settings-tools.md` and "The application settings an export carries" in
 `docs/product/configuration-export-and-import.md`). Which account is chosen, and who applies the choice, are in "Which
 account a session uses" in `docs/product/opening-sessions.md`. Turning it on or off changes no session already open. It

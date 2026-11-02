@@ -10,6 +10,7 @@ use crate::protocol::{
     error_code, Agent, CodedError, OrchestrationRole, Project, ProjectSource, RequestBody, Role,
     Session, SessionStatus,
 };
+use crate::session_tools;
 use crate::store::LOCAL_HOST_ID;
 use crate::test_support::{
     bare_session, console_session, console_with_project_and_accounts, project_session,
@@ -642,7 +643,7 @@ async fn a_no_process_session_is_told_of_its_new_owner_when_it_next_starts() {
 
     // A transfer, which a session with no process takes.
     let args = serde_json::json!({ "session": "handed", "to": "hub-2", "note": "carry on" });
-    let result = mcp::exec::call(&state, "hub", "transfer_session", args.as_object().unwrap())
+    let result = mcp::dispatch::call(&state, "hub", "transfer_session", args.as_object().unwrap())
         .await
         .unwrap();
     assert!(
@@ -777,7 +778,7 @@ async fn a_no_process_release_keeps_the_parting_note_for_the_next_launch() {
 
     // The tool drops a blank note before the release.
     let args = serde_json::json!({ "session": "blank", "note": "   " });
-    mcp::exec::call(&state, "hub", "release_session", args.as_object().unwrap())
+    mcp::dispatch::call(&state, "hub", "release_session", args.as_object().unwrap())
         .await
         .unwrap();
     assert_eq!(state.store.owner_notice_note("blank").unwrap(), None);
@@ -889,7 +890,7 @@ async fn a_release_by_the_user_tells_a_running_owner() {
         "{told}"
     );
     assert!(told.contains("left with the user"), "{told}");
-    let send_message = mcp::qualified_tool_name(Agent::Claude, "send_message");
+    let send_message = session_tools::catalogue::qualified_tool_name(Agent::Claude, "send_message");
     assert!(told.contains(&format!("`{send_message}`")), "{told}");
     assert_eq!(
         state.store.get_session("plain").unwrap().unwrap().bound_to,
@@ -972,7 +973,7 @@ fn a_lead_session_launches_as_an_unbound_project_session() {
     assert_eq!(owner_of(&state, &lead).unwrap(), None);
     assert_eq!(
         owner_of(&state, &of_lead).unwrap(),
-        Some(mcp::Owner::Project {
+        Some(session_tools::Owner::Project {
             session_id: "lead".to_string()
         })
     );

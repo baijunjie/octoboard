@@ -155,12 +155,25 @@ the captured agent screens and records tests replay.
   directories and commands (`codex/claude_mcp.rs` is Codex's use of Claude Code's MCP servers). Other per-agent
   differences live where they are used (screens and dialogs in `session/` and `titles/`, hook payloads in `hooks/`,
   records in `records/`, sign-in, quota and account switching in `accounts/`, tool naming, the instruction file and role
-  text in `mcp/`, launch and account switch in `coordinator/`, model catalogues in `agents/models.rs` and detecting a
-  project's agent in `hostfs/listing.rs`).
-- `src/mcp/` — the Octoboard MCP server a session drives Octoboard with: `mod.rs` the tool catalogue and which tools a
-  role sees, `exec/` dispatch of one call through the same coordinator and reporting functions the control socket uses,
-  then one file per tool family (reads, project changes and branches, handoff and handover, bindings, settings, pages,
-  `stdio.rs` the `mcp` mode).
+  text in `session_tools/`, launch and account switch in `coordinator/`, model catalogues in `agents/models.rs` and
+  detecting a project's agent in `hostfs/listing.rs`).
+- `src/session_tools/` — the static description of the Octoboard MCP tools and what sessions are told of them:
+  `catalogue/` the tool catalogue (`mod.rs` which tools a role sees, then one file per tool family and `schemas.rs`
+  the shared schema builders), `role.rs` the role description, `console_instructions.rs` the console session's
+  instruction text, and `Owner` and `CALL_TIMEOUT` in `mod.rs`.
+- `src/mcp/` — the Octoboard MCP server a session drives Octoboard with, over the catalogue in `src/session_tools/`:
+  - `dispatch.rs` checks and runs one call through the same coordinator and reporting functions the control socket uses.
+  - `tools/` has one file per tool or small group of related tools, named for it — for example `sessions.rs`,
+    `messaging.rs`, `archive.rs`, `bindings.rs`, `handoff.rs`, `handover/` (branches and process trees), `settings.rs`,
+    `pages.rs`, `account_switch.rs`, `session_model.rs`, `history.rs`, `agents.rs` and `models.rs`, and the reads
+    (`reads.rs`, `project_changes.rs`, `project_branches.rs`, `session_branches.rs`). Two files are shared wording and
+    helpers rather than tools: `relaunch.rs` (what the tools that relaunch a session tell the caller) and
+    `project_browse.rs` (which project a repository read may touch, and running its browse request).
+  - `lookup.rs` reads the arguments of a call (including the per-agent ones) and finds the records they name,
+    `resolve_account` and `page_bounds` among them; `views.rs` describes a session, project or console back to the
+    agent and holds the result fields tools share.
+  - `console_instructions.rs` writes the console session's instruction file, `stdio.rs` is the `mcp` mode and
+    `test_support.rs` the tests' shared fixtures.
 
 ## Dependency direction
 
@@ -199,7 +212,7 @@ the rest of its type is read as production code, which can only add an edge, nev
 | storage | `git_workflow`, `store` |
 | state | `state` |
 | workspace | `branch_cleanup`, `branch_origin`, `browse`, `host_tools`, `path_links`, `project_git`, `project_trash`, `revert_gate`, `terminal`, `trash_safety` |
-| agent sessions | `accounts`, `adapter`, `agents`, `handoff`, `hooks`, `messaging`, `records`, `session`, `session_git_hooks`, `titles` |
+| agent sessions | `accounts`, `adapter`, `agents`, `handoff`, `hooks`, `messaging`, `records`, `session`, `session_git_hooks`, `session_tools`, `titles` |
 | control | `config_document`, `coordinator`, `mcp`, `session_request` |
 | entry | `cli`, `server` |
 
@@ -223,12 +236,8 @@ the rest of its type is read as production code, which can only add an edge, nev
 | `state` | `session` | `term::FRAGMENT_HAZARD` | the notice for a dropped write queue explains the hazard in the words the session's own write uses |
 | `state` | `titles` | `project_names`, `resolve` | a session's title is resolved where `AppState` publishes it |
 | `accounts` | `coordinator` | `account_choice`, `account_switch`, `launch::LaunchEdit`, `open::report_failed_launch`, `restart::record_needs_shell_env` | `accounts::auto_switch` answers a usage limit with the coordinator's account switch and launch, the path a switch the user asks for takes |
-| `adapter` | `mcp` | `Owner`, `SERVER_KEY`, `role`, `stdio::CALL_TIMEOUT` | an adapter writes the agent's MCP server entry and role text from mcp's server key, role descriptions and call timeout |
 | `handoff` | `coordinator` | `bindings`, `lifecycle`, `open` | a handoff opens the receiving session and archives the original through the coordinator's own open and lifecycle |
-| `handoff` | `mcp` | `qualified_tool_name` | the text handed to the receiving session names MCP tools as its agent sees them |
 | `messaging` | `coordinator` | `bindings`, `lifecycle` | `messaging::reporting` acts on a worker's final report, archiving its team, through the coordinator's bindings and lifecycle |
-| `messaging` | `mcp` | `qualified_tool_name`, `tools_for` | the notices sessions are sent name MCP tools as each agent sees them |
-| `session` | `mcp` | `Owner` | a launch carries whom the worker reports to, which its MCP role text is written from |
 
 ## Where new code goes
 
@@ -237,8 +246,9 @@ the rest of its type is read as production code, which can only add an edge, nev
   `protocol::bindings` test with `OCTOBOARD_WRITE_BINDINGS=1` (the same test fails when the file is stale).
 - A new code the daemon names a failure or notice by: a `pub const` of the matching module in `src/protocol/codes.rs`
   (the only place a `Code` is made); the UI needs its record and wording in the same change.
-- A new MCP tool: the catalogue in `src/mcp/mod.rs` and its dispatch under `src/mcp/exec/` or a tool file; it calls the
-  coordinator or reporting function the control socket uses rather than reimplementing it.
+- A new MCP tool: the catalogue in `src/session_tools/catalogue/`, its dispatch in `src/mcp/dispatch.rs` and the tool
+  in a file of `src/mcp/tools/`; it calls the coordinator or reporting function the control socket uses rather than
+  reimplementing it.
 - A new table or column: raise `SCHEMA_VERSION` in `src/store/schema.rs`, append the step from the previous version to
   `MIGRATIONS`, keep the previous schema as `src/store/schema/v{N}.sql` (the migration tests build a database from every
   past one), and edit the file of its table family. A database at an older version is backed up as
@@ -279,7 +289,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Clean a project's or an agent's tag list before storing it | `normalise_tags` (`src/coordinator/validate.rs`) |
 | Word what became of a delivery | `Delivery::note` (`src/messaging/delivery.rs`) |
 | Word a notice to an owner, or a session's role after its parent changed | `src/messaging/owner_notices.rs` (`tell_owner_*`, `role_after_owner_change`, `duties_under_new_parent`) |
-| Share the steps of the two handover tools | `Parties` and friends in `src/mcp/handover.rs` |
+| Share the steps of the two handover tools | `Parties` and friends in `src/mcp/tools/handover/mod.rs` |
 | Change a session's model and effort; resume checks | `coordinator::model_change::set_session_model`; `coordinator::resume::check_can_resume` and `locate_conversation` |
 | Drop a live session | `coordinator::exit_watch::unregister_live`, which runs `AppState::remove_live` and `after_live_removed` around withdrawing the session's request |
 | Re-read projects when a session's git moves refs | `project_git::ref_moves::moved` |

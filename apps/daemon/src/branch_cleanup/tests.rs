@@ -1618,7 +1618,7 @@ fn arguments(value: Value) -> Map<String, Value> {
 #[tokio::test]
 async fn an_agents_archive_never_forces_and_names_what_it_left() {
     let (fixture, root) = agent_fixture("cleanup-agent-archive");
-    let answer = crate::mcp::exec::call(
+    let answer = crate::mcp::dispatch::call(
         &fixture.state,
         "owner",
         "archive_session",
@@ -1642,7 +1642,7 @@ async fn archiving_oneself_names_what_will_stay() {
     let owner_root = fixture.worktree("own", "owner");
     std::fs::write(owner_root.join("new.txt"), "untracked\n").unwrap();
     crate::coordinator::lifecycle::archive_session(&fixture.state, "worker").unwrap();
-    let answer = crate::mcp::exec::call(&fixture.state, "owner", "archive_self", &Map::new())
+    let answer = crate::mcp::dispatch::call(&fixture.state, "owner", "archive_self", &Map::new())
         .await
         .unwrap();
     let left = answer["branches_left"].as_array().unwrap();
@@ -1654,7 +1654,7 @@ async fn archiving_oneself_names_what_will_stay() {
 async fn a_done_report_names_what_will_stay() {
     let (fixture, root) = agent_fixture("cleanup-agent-report");
     let _owner = running(&fixture.state, "owner");
-    let answer = crate::mcp::exec::call(
+    let answer = crate::mcp::dispatch::call(
         &fixture.state,
         "worker",
         "report",

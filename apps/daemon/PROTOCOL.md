@@ -1081,9 +1081,9 @@ session in its instruction file after the guidance on asking and before the user
 session is launched like the settings above, so a change of the language reaches only sessions begun afterwards. Every
 `title` argument (`new_session`, `handoff_session`, `rename_session`, `request_session` and `request_resume_session`)
 keeps the same static description: the language of a name is the one the section names where the session has one, else
-the one the user writes in. The field is not visible to agents (`get_settings` omits it, `update_settings` ignores it)
-and a configuration export does not carry it: a client reports it. A settings key the daemon does not know is
-ignored on import.
+the one the user writes in. A console session reads and changes it through the MCP settings tools (`get_settings`,
+`update_settings`), held to the same offered tags. A configuration export does not carry it. A settings key the daemon
+does not know is ignored on import.
 `sidebar_order_by_status` (default `true`) is whether the client's sidebar
 orders sessions and projects by status. The daemon only stores and serves it; the ordering is the client's. Off, the
 sidebar ranks no session or project by status: sessions go pinned first, then most recently started, and projects keep

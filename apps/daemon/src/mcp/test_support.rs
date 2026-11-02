@@ -1,16 +1,54 @@
 //! Fixtures the MCP tests of more than one module share.
 
-use crate::mcp::exec::call;
+use crate::mcp::dispatch::call;
 use crate::protocol::{
-    Agent, Console, Event, OrchestrationRole, Origin, Project, ProjectSource, Role, Session,
-    SessionStatus,
+    Account, Agent, Console, Event, OrchestrationRole, Origin, Project, ProjectSource, QuotaWindow,
+    QuotaWindowKind, Role, Session, SessionStatus,
 };
 use crate::session_request;
 use crate::state::AppState;
 use crate::store::LOCAL_HOST_ID;
-use crate::test_support::ScratchDir;
-use serde_json::{Map, Value};
-use std::sync::Arc;
+use crate::test_support::{running, Launched, ScratchDir, StandIn};
+use anyhow::Result;
+use serde_json::{json, Map, Value};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+pub(super) type Launches = Arc<Mutex<Vec<Launched>>>;
+pub(super) type Started = Arc<Mutex<Vec<StandIn>>>;
+
+/// The conversation file of the session `prepare_relaunch` gives one, relative to the default
+/// account's directory.
+pub(super) const CONVERSATION: &str = "projects/slug/a0000000-0000-4000-8000-000000000001.jsonl";
+
+/// An account that is enabled and shares nothing of the agent's default configuration.
+pub(super) fn account(
+    id: impl Into<String>,
+    agent: Agent,
+    name: impl Into<String>,
+    config_dir: impl Into<String>,
+) -> Account {
+    Account {
+        id: id.into(),
+        agent,
+        name: name.into(),
+        config_dir: config_dir.into(),
+        share_default_config: false,
+        share_default_config_incomplete: false,
+        disabled: false,
+    }
+}
+
+/// A weekly quota window with `used_percent` of it spent, which `resets_at` renews.
+pub(super) fn weekly(used_percent: f64, resets_at: i64) -> QuotaWindow {
+    QuotaWindow {
+        kind: QuotaWindowKind::Weekly,
+        label: None,
+        used_percent,
+        resets_at: Some(resets_at),
+        window_minutes: Some(10_080),
+    }
+}
 
 pub(super) fn console() -> Console {
     Console {
@@ -246,8 +284,8 @@ pub(super) fn peer_state(name: &str) -> (Arc<AppState>, ScratchDir) {
     (state, dir)
 }
 
-/// `peer_state` with `starter` bound to the console session `a` as its lead session, still
-/// owning `mine`.
+/// `peer_state` with `starter` bound to the console session `a` as a coordinator with a parent,
+/// still owning `mine`.
 pub(super) fn lead_state(name: &str) -> (Arc<AppState>, ScratchDir) {
     let (state, dir) = peer_state(name);
     state
@@ -288,15 +326,12 @@ pub(super) fn settings_state(name: &str) -> (Arc<AppState>, ScratchDir) {
         .unwrap();
     state
         .store
-        .insert_account(&crate::protocol::Account {
-            id: "acct-codex".to_string(),
-            agent: Agent::Codex,
-            name: "Work".to_string(),
-            config_dir: "/secret/codex".to_string(),
-            share_default_config: false,
-            share_default_config_incomplete: false,
-            disabled: false,
-        })
+        .insert_account(&account(
+            "acct-codex",
+            Agent::Codex,
+            "Work",
+            "/secret/codex",
+        ))
         .unwrap();
     crate::project_git::remote::record_remote_url(
         &state,
@@ -316,4 +351,58 @@ pub(super) async fn refused(
         .await
         .expect_err("refused")
         .to_string()
+}
+
+/// Makes the fixture's console and `projects` start in `dir`, which exists, since a relaunch is
+/// refused at a working directory that does not, and puts a conversation of `session` in the
+/// default account, whose directory the returned shell snapshot names.
+pub(super) fn prepare_relaunch(
+    state: &Arc<AppState>,
+    dir: &ScratchDir,
+    session: &str,
+    projects: &[&str],
+) -> impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static {
+    let mut console = state.store.get_console("console-1").unwrap().unwrap();
+    console.workdir = dir.to_string_lossy().into_owned();
+    state.store.update_console(&console).unwrap();
+    for project in projects {
+        if let Some(mut project) = state.store.get_project(project).unwrap() {
+            project.path = dir.to_string_lossy().into_owned();
+            state.store.update_project(&project).unwrap();
+        }
+    }
+    let default = dir.join("default-claude");
+    std::fs::create_dir_all(default.join(CONVERSATION).parent().unwrap()).unwrap();
+    std::fs::write(default.join(CONVERSATION), "conversation").unwrap();
+    let mut record = state.session_record(session).unwrap();
+    record.has_conversation = true;
+    record.agent_session_id = Some("a0000000-0000-4000-8000-000000000001".to_string());
+    state.store.update_session(&record).unwrap();
+    default_env(dir)
+}
+
+/// The shell environment `prepare_relaunch` makes the default account's directory come from, for a
+/// relaunch that reads it again, so that no test reads the real one.
+pub(super) fn default_env(
+    dir: &ScratchDir,
+) -> impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static {
+    let env = HashMap::from([(
+        "CLAUDE_CONFIG_DIR".to_string(),
+        dir.join("default-claude").to_string_lossy().into_owned(),
+    )]);
+    move || Ok(env)
+}
+
+/// A stand-in for the session's process whose end the daemon notices, as a relaunch needs.
+pub(super) fn live_and_watched(state: &Arc<AppState>, id: &str) -> StandIn {
+    let live = running(state, id);
+    crate::coordinator::exit_watch::watch_exit(state, live.clone());
+    live
+}
+
+/// Every session of the store as it is, for what a refusal must leave alone.
+pub(super) fn sessions_as_stored(state: &Arc<AppState>) -> Value {
+    let mut sessions = state.store.list_sessions().unwrap();
+    sessions.sort_by(|a, b| a.id.cmp(&b.id));
+    json!(sessions)
 }

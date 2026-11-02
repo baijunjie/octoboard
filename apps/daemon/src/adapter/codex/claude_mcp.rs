@@ -106,7 +106,10 @@ pub fn codex_servers(
     let mut pool = EnvPool::new(shell_env, launch_env, reserved);
     let mut out = Servers::default();
     for (index, (name, raw)) in load(shell_env, cwd).into_iter().enumerate() {
-        if name == crate::mcp::SERVER_KEY || taken(&name) || !is_codex_name(&name) {
+        if name == crate::session_tools::catalogue::SERVER_KEY
+            || taken(&name)
+            || !is_codex_name(&name)
+        {
             continue;
         }
         let mut staged = pool.clone();
