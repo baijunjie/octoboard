@@ -30,13 +30,20 @@ pub struct RecordUpdate {
     pub observed_boundary: Option<String>,
 }
 
+/// The `last_turn_abnormal` assignment of a write that ends the session's process: a turn in
+/// progress at that moment (the agent `working`, or `waiting_user` on a prompt or question inside
+/// it) was cut short, so it ended abnormally; any other status keeps what the last turn left.
+/// SQLite evaluates it against the row as it was before the write.
+const CUT_SHORT_TURN: &str = "last_turn_abnormal = CASE WHEN status IN ('working', 'waiting_user')
+                                                      THEN 1 ELSE last_turn_abnormal END";
+
 pub(super) const SESSION_COLUMNS: &str =
     "id, agent, agent_session_id, console_id, project_id, host_id,
                                role, origin, title, status, has_conversation, bound_to, colour,
                                ordinal, account_id, config_dir, pinned, started_at, ended_at,
                                orchestration_role, terminal_title, model, effort, model_override,
                                effort_override, context, record_title, record_prompt, locked,
-                               observed_model, observed_effort";
+                               observed_model, observed_effort, last_turn_abnormal";
 
 impl Store {
     /// Inserts a session that is not a console session, or a console session whose colour and
@@ -127,6 +134,7 @@ impl Store {
         let changed = self.lock().execute(
             "UPDATE sessions SET agent = ?2, agent_session_id = ?3, title = ?4, status = ?5,
                                  has_conversation = ?6, started_at = ?7, ended_at = ?8,
+                                 last_turn_abnormal = ?9,
                                  context = CASE WHEN agent = ?2 AND agent_session_id IS ?3 THEN context ELSE NULL END,
                                  record_title = CASE WHEN agent = ?2 AND agent_session_id IS ?3 THEN record_title ELSE NULL END,
                                  record_prompt = CASE WHEN agent = ?2 AND agent_session_id IS ?3 THEN record_prompt ELSE NULL END,
@@ -143,6 +151,7 @@ impl Store {
                 session.has_conversation,
                 session.started_at,
                 session.ended_at,
+                session.paused,
             ],
         )?;
         Ok(changed > 0)
@@ -209,15 +218,16 @@ impl Store {
         )
     }
 
-    /// Forgets the session's conversation, its id and what the agent's records gave it, as for a
-    /// session that has had no turn. Returns the record as it now stands, or `None` when the
-    /// session is gone.
+    /// Forgets the session's conversation, its id and what the agent's records gave it, how its
+    /// last turn ended included, as for a session that has had no turn. Returns the record as it
+    /// now stands, or `None` when the session is gone.
     pub fn forget_conversation(&self, id: &str) -> Result<Option<Session>> {
         self.update_session_row(
             id,
             "UPDATE sessions SET has_conversation = 0, agent_session_id = NULL, context = NULL,
                                  record_title = NULL, record_prompt = NULL, observed_model = NULL,
-                                 observed_effort = NULL, observed_boundary = NULL
+                                 observed_effort = NULL, observed_boundary = NULL,
+                                 last_turn_abnormal = 0
              WHERE id = ?1",
             params![id],
         )
@@ -226,41 +236,88 @@ impl Store {
     /// Moves a session to `status`, which must not be a no-process status, but only while the
     /// session has a process and is at another status. A running session's status follows its
     /// agent's events, which arrive on tasks of their own; matching in the statement means one that
-    /// lands after an archive or an exit cannot bring the session back to life. Returns the record
-    /// as it now stands, or `None` when nothing changed or the session is gone.
+    /// lands after an archive or an exit cannot bring the session back to life. Any status but
+    /// `Idle` moves the session off its prompt and clears `last_turn_abnormal` in the same write.
+    /// Returns the record as it now stands, or `None` when nothing changed or the session is gone.
     pub fn set_running_status(&self, id: &str, status: SessionStatus) -> Result<Option<Session>> {
+        self.write_running_status(id, status, true)
+    }
+
+    /// [`Self::set_running_status`] to `WaitingUser` for a hand raised over the agent by something
+    /// other than its own status (a waiting session request): the agent has not left its prompt,
+    /// so `last_turn_abnormal` stays as its last turn left it.
+    pub fn hold_waiting_user(&self, id: &str) -> Result<Option<Session>> {
+        self.write_running_status(id, SessionStatus::WaitingUser, false)
+    }
+
+    /// The write of [`Self::set_running_status`], clearing `last_turn_abnormal` off the prompt
+    /// only when `agents_own` (the status is the agent's own).
+    fn write_running_status(
+        &self,
+        id: &str,
+        status: SessionStatus,
+        agents_own: bool,
+    ) -> Result<Option<Session>> {
         debug_assert!(!status.has_no_process());
         self.update_session_row(
             id,
-            "UPDATE sessions SET status = ?2
+            "UPDATE sessions SET status = ?2,
+                                 last_turn_abnormal = CASE WHEN ?6 = 0 OR ?2 = ?5
+                                                           THEN last_turn_abnormal ELSE 0 END
              WHERE id = ?1 AND status != ?2 AND status NOT IN (?3, ?4)",
             params![
                 id,
                 enum_to_text(&status),
                 enum_to_text(&SessionStatus::Interrupted),
                 enum_to_text(&SessionStatus::Archived),
+                enum_to_text(&SessionStatus::Idle),
+                agents_own,
             ],
         )
     }
 
-    /// Archives the session as of `ended_at`, from whatever status it is at; a locked session is
-    /// refused by the schema. Returns the record as it now stands, or `None` when the session is
-    /// gone.
+    /// Records whether the session's last turn ended abnormally, while the session has a process:
+    /// what a turn of a process that has ended did is settled by the end itself (see
+    /// [`Self::record_session_exit`]). Returns the record as it now stands when the flag changed,
+    /// `None` when it did not, the session has no process or it is gone.
+    pub fn set_last_turn_abnormal(&self, id: &str, abnormal: bool) -> Result<Option<Session>> {
+        self.update_session_row(
+            id,
+            "UPDATE sessions SET last_turn_abnormal = ?2
+             WHERE id = ?1 AND last_turn_abnormal != ?2 AND status NOT IN (?3, ?4)",
+            params![
+                id,
+                abnormal,
+                enum_to_text(&SessionStatus::Interrupted),
+                enum_to_text(&SessionStatus::Archived),
+            ],
+        )
+    }
+
+    /// Archives the session as of `ended_at`, from whatever status it is at, a turn in progress
+    /// recorded as cut short (`CUT_SHORT_TURN`); a locked session is refused by the schema.
+    /// Returns the record as it now stands, or `None` when the session is gone.
     pub fn archive_session(&self, id: &str, ended_at: i64) -> Result<Option<Session>> {
         self.update_session_row(
             id,
-            "UPDATE sessions SET status = ?2, ended_at = ?3 WHERE id = ?1",
+            &format!(
+                "UPDATE sessions SET status = ?2, ended_at = ?3, {CUT_SHORT_TURN} WHERE id = ?1"
+            ),
             params![id, enum_to_text(&SessionStatus::Archived), ended_at],
         )
     }
 
     /// Interrupts the session as of `ended_at`, unless it is archived: an archive is the user's
-    /// decision and outlasts the process going away. Returns the record as it now stands, or
-    /// `None` when the session is archived or gone.
+    /// decision and outlasts the process going away. A turn in progress is recorded as cut short
+    /// (`CUT_SHORT_TURN`). Returns the record as it now stands, or `None` when the session is
+    /// archived or gone.
     pub fn interrupt_session(&self, id: &str, ended_at: i64) -> Result<Option<Session>> {
         self.update_session_row(
             id,
-            "UPDATE sessions SET status = ?2, ended_at = ?3 WHERE id = ?1 AND status != ?4",
+            &format!(
+                "UPDATE sessions SET status = ?2, ended_at = ?3, {CUT_SHORT_TURN}
+                 WHERE id = ?1 AND status != ?4"
+            ),
             params![
                 id,
                 enum_to_text(&SessionStatus::Interrupted),
@@ -271,7 +328,8 @@ impl Store {
     }
 
     /// Records that the session's process ended at `ended_at`: an archived session stays archived,
-    /// anything else becomes interrupted. Returns the status the session was at and the record as
+    /// anything else becomes interrupted, and a turn in progress is recorded as having ended
+    /// abnormally (`CUT_SHORT_TURN`). Returns the status the session was at and the record as
     /// it now stands, or `None` when the session is gone; both are read under the write's lock.
     pub fn record_session_exit(
         &self,
@@ -287,8 +345,11 @@ impl Store {
             return Ok(None);
         };
         conn.execute(
-            "UPDATE sessions SET status = CASE WHEN status = ?2 THEN status ELSE ?3 END, ended_at = ?4
-             WHERE id = ?1",
+            &format!(
+                "UPDATE sessions SET status = CASE WHEN status = ?2 THEN status ELSE ?3 END,
+                                     ended_at = ?4, {CUT_SHORT_TURN}
+                 WHERE id = ?1"
+            ),
             params![
                 id,
                 enum_to_text(&SessionStatus::Archived),
@@ -421,17 +482,46 @@ impl Store {
     /// writing — which a write after a separate [`Self::get_session`] can be.
     /// `None` means the session was something other than `expected`, or is gone. Asking for the
     /// status it already has counts as a move, so a caller that would gain nothing from that should
-    /// not ask.
+    /// not ask. As with [`Self::set_running_status`], any status but `Idle` clears
+    /// `last_turn_abnormal`.
     pub fn update_session_status_if(
         &self,
         id: &str,
         expected: SessionStatus,
         status: SessionStatus,
     ) -> Result<Option<Session>> {
+        self.move_session_status_if(id, expected, status, None)
+    }
+
+    /// [`Self::update_session_status_if`] to `Idle` for a turn that ended abnormally, recording
+    /// that in the same write.
+    pub fn pause_session_if(&self, id: &str, expected: SessionStatus) -> Result<Option<Session>> {
+        self.move_session_status_if(id, expected, SessionStatus::Idle, Some(true))
+    }
+
+    /// The write of [`Self::update_session_status_if`], setting `last_turn_abnormal` to `abnormal`
+    /// where one is given.
+    fn move_session_status_if(
+        &self,
+        id: &str,
+        expected: SessionStatus,
+        status: SessionStatus,
+        abnormal: Option<bool>,
+    ) -> Result<Option<Session>> {
         let conn = self.lock();
         let moved = conn.execute(
-            "UPDATE sessions SET status = ?3 WHERE id = ?1 AND status = ?2",
-            params![id, enum_to_text(&expected), enum_to_text(&status)],
+            "UPDATE sessions SET status = ?3,
+                                 last_turn_abnormal = CASE WHEN ?5 IS NOT NULL THEN ?5
+                                                           WHEN ?3 = ?4 THEN last_turn_abnormal
+                                                           ELSE 0 END
+             WHERE id = ?1 AND status = ?2",
+            params![
+                id,
+                enum_to_text(&expected),
+                enum_to_text(&status),
+                enum_to_text(&SessionStatus::Idle),
+                abnormal,
+            ],
         )?;
         if moved == 0 {
             return Ok(None);
@@ -698,10 +788,14 @@ impl Store {
 
     /// Moves every session that a previous daemon left mid-flight to `interrupted`. The daemon
     /// owns the agent processes, so none of them survived its exit — whatever the stored status
-    /// says. Archived sessions are already without a process on purpose and are left alone.
+    /// says — and a turn one was in was cut short. Archived sessions are already without a process
+    /// on purpose and are left alone.
     pub fn mark_live_sessions_interrupted(&self) -> Result<usize> {
         let changed = self.lock().execute(
-            "UPDATE sessions SET status = ?1, ended_at = ?2 WHERE status NOT IN (?1, ?3)",
+            &format!(
+                "UPDATE sessions SET status = ?1, ended_at = ?2, {CUT_SHORT_TURN}
+                 WHERE status NOT IN (?1, ?3)"
+            ),
             params![
                 enum_to_text(&SessionStatus::Interrupted),
                 crate::protocol::now_millis(),
@@ -738,9 +832,10 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
             (id, agent, agent_session_id, console_id, project_id, host_id, role, origin, title,
              status, has_conversation, bound_to, colour, ordinal, account_id, config_dir, pinned,
              started_at, ended_at, orchestration_role, terminal_title, model, effort, model_override,
-             effort_override, context, record_title, record_prompt, locked, observed_model, observed_effort)
+             effort_override, context, record_title, record_prompt, locked, observed_model, observed_effort,
+             last_turn_abnormal)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
-                 ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31)",
+                 ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32)",
         params![
             session.id,
             enum_to_text(&session.agent),
@@ -773,6 +868,7 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
             session.locked,
             session.observed_model,
             session.observed_effort,
+            session.paused,
         ],
     )?;
     Ok(())
@@ -792,7 +888,7 @@ pub(super) fn read_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         status: enum_from_row::<SessionStatus>(row, 9)?,
         background_tasks: Vec::new(),
         switching_account: false,
-        paused: false,
+        paused: row.get(31)?,
         prompt_on_launch: false,
         default_effort: None,
         orchestration_role: enum_from_row::<OrchestrationRole>(row, 19)?,
@@ -1068,6 +1164,146 @@ mod tests {
             .unwrap()
             .is_none());
         drop(store);
+    }
+
+    /// Whether the last turn ended abnormally survives the store being opened again and the
+    /// relaunch back to the prompt; a status off the prompt clears it, `Idle` keeps it, and a
+    /// session without a process takes no flag of a turn.
+    #[test]
+    fn how_the_last_turn_ended_is_stored_and_cleared_off_the_prompt() {
+        let path = temp_db("session-last-turn");
+        {
+            let store = Store::open(&path).expect("store");
+            store
+                .insert_console(&console(None, None, None))
+                .expect("console");
+            store.insert_session(&session(None)).expect("insert");
+            let paused = store
+                .set_last_turn_abnormal("session-1", true)
+                .unwrap()
+                .expect("set");
+            assert!(paused.paused);
+            assert!(
+                store
+                    .set_last_turn_abnormal("session-1", true)
+                    .unwrap()
+                    .is_none(),
+                "an unchanged flag is no change"
+            );
+            store.interrupt_session("session-1", 10).unwrap();
+            assert!(
+                store
+                    .set_last_turn_abnormal("session-1", false)
+                    .unwrap()
+                    .is_none(),
+                "a session without a process takes no flag"
+            );
+        }
+        let store = Store::open(&path).expect("reopened");
+        let relaunched = store
+            .update_session_lifecycle_if(
+                "session-1",
+                SessionStatus::Interrupted,
+                SessionStatus::Idle,
+                None,
+            )
+            .unwrap()
+            .expect("relaunched");
+        assert!(relaunched.paused, "the flag outlives the process");
+
+        // Idle keeps it; any status off the prompt clears it, in either status write.
+        store
+            .set_running_status("session-1", SessionStatus::WaitingUser)
+            .unwrap();
+        assert!(!store.require_session("session-1").unwrap().paused);
+        store.set_last_turn_abnormal("session-1", true).unwrap();
+        store
+            .set_running_status("session-1", SessionStatus::Idle)
+            .unwrap();
+        assert!(store.require_session("session-1").unwrap().paused);
+        let working = store
+            .update_session_status_if("session-1", SessionStatus::Idle, SessionStatus::Working)
+            .unwrap()
+            .expect("moved");
+        assert!(!working.paused);
+
+        // A conditional pause sets it with the move, and only when the session moved.
+        assert!(store
+            .pause_session_if("session-1", SessionStatus::WaitingUser)
+            .unwrap()
+            .is_none());
+        assert!(!store.require_session("session-1").unwrap().paused);
+        let paused = store
+            .pause_session_if("session-1", SessionStatus::Working)
+            .unwrap()
+            .expect("moved");
+        assert_eq!(paused.status, SessionStatus::Idle);
+        assert!(paused.paused);
+        let idle = store
+            .update_session_status_if("session-1", SessionStatus::Idle, SessionStatus::Idle)
+            .unwrap()
+            .expect("moved");
+        assert!(idle.paused, "a move to idle keeps it");
+
+        // A hand raised over the agent is not the agent leaving its prompt.
+        let held = store.hold_waiting_user("session-1").unwrap().expect("held");
+        assert_eq!(held.status, SessionStatus::WaitingUser);
+        assert!(held.paused, "a request's hand keeps it");
+
+        // A conversation forgotten takes how its last turn ended with it.
+        let forgotten = store
+            .forget_conversation("session-1")
+            .unwrap()
+            .expect("forgotten");
+        assert!(!forgotten.paused);
+    }
+
+    /// Each way a process ends records a turn in progress — the agent working, or waiting on the
+    /// user inside it — as cut short, and leaves the flag as the last turn left it at any other
+    /// status.
+    #[test]
+    fn a_process_ending_mid_turn_records_the_turn_as_cut_short() {
+        type End = fn(&Store);
+        let ends: [(&str, End); 4] = [
+            ("exit", |store| {
+                store.record_session_exit("session-1", 10).unwrap();
+            }),
+            ("interrupt", |store| {
+                store.interrupt_session("session-1", 10).unwrap();
+            }),
+            ("archive", |store| {
+                store.archive_session("session-1", 10).unwrap();
+            }),
+            ("daemon gone", |store| {
+                store.mark_live_sessions_interrupted().unwrap();
+            }),
+        ];
+        for (label, end) in ends {
+            for (status, before, after) in [
+                (SessionStatus::Working, false, true),
+                (SessionStatus::WaitingUser, false, true),
+                (SessionStatus::Idle, false, false),
+                (SessionStatus::Idle, true, true),
+                (SessionStatus::Starting, false, false),
+            ] {
+                let path = temp_db("session-cut-short");
+                let store = Store::open(&path).expect("store");
+                store
+                    .insert_console(&console(None, None, None))
+                    .expect("console");
+                store
+                    .insert_session(&Session {
+                        status,
+                        paused: before,
+                        ..session(None)
+                    })
+                    .expect("insert");
+                end(&store);
+                let ended = store.require_session("session-1").unwrap();
+                assert!(ended.status.has_no_process(), "{label} {status:?}");
+                assert_eq!(ended.paused, after, "{label} {status:?} {before}");
+            }
+        }
     }
 
     /// Information held for an interrupted session is read oldest first, survives the store being

@@ -115,7 +115,7 @@ async fn a_session_record_says_whether_it_is_paused_or_dormant() {
 
     with_status(state, "lead", SessionStatus::Idle);
     assert_eq!(get().await["paused"], false);
-    live.mark_paused(true);
+    state.set_paused("lead", true);
     let paused = get().await;
     assert_eq!(paused["status"], "idle");
     assert_eq!(paused["paused"], true);

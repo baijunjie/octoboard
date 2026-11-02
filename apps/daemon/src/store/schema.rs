@@ -156,6 +156,10 @@ CREATE TABLE sessions (
     observed_boundary TEXT,
     status           TEXT NOT NULL,
     has_conversation INTEGER NOT NULL DEFAULT 0,
+    -- 1 while the session's last turn ended abnormally: cancelled, declined, stopped on a
+    -- usage limit, failed, or cut short by its process ending mid-turn. Cleared by a
+    -- status off the prompt and by a turn that ends normally (see `Session::paused`).
+    last_turn_abnormal INTEGER NOT NULL DEFAULT 0,
     -- The console session this (project) session reports to, or NULL outside the
     -- orchestration. Always NULL for a console session itself. No `REFERENCES`, because
     -- what follows a console session is decided by the coordinator, not by the

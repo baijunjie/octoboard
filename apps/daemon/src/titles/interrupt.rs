@@ -338,7 +338,7 @@ mod tests {
         replay(&fixture.live, CANCEL_TITLES);
         assert!(reaches(&fixture.state, SessionStatus::Idle).await);
         assert!(
-            fixture.live.is_paused(),
+            fixture.state.last_turn_abnormal("s"),
             "a cancelled turn leaves it paused"
         );
     }
@@ -367,7 +367,7 @@ mod tests {
         assert!(!reaches(&fixture.state, SessionStatus::Idle).await);
         assert_eq!(status(&fixture.state), Some(SessionStatus::WaitingUser));
         assert!(
-            !fixture.live.is_paused(),
+            !fixture.state.last_turn_abnormal("s"),
             "a write that moved nothing leaves no mark"
         );
     }
@@ -425,7 +425,7 @@ mod tests {
         replay(&fixture.live, GROK_CANCEL_TITLES);
         assert!(reaches(&fixture.state, SessionStatus::Idle).await);
         assert!(
-            fixture.live.is_paused(),
+            fixture.state.last_turn_abnormal("s"),
             "a cancelled turn leaves it paused"
         );
         assert_eq!(fixture.state.close_turn("s", true), TurnClose::NoTurn);

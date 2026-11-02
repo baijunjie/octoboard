@@ -407,9 +407,9 @@ export interface Session {
   /** What an `idle` session has left running in the background; absent when none, and for every
    * other status. The session takes a message like any idle one, but its work is not over. */
   background_tasks?: BackgroundTask[];
-  /** Whether an `idle` session's last turn ended abnormally (cancelled, declined, a usage-limit stop
-   * or a failure); absent otherwise, and for every other status. It takes a message like any idle
-   * one. */
+  /** Whether an `idle` session's last turn ended abnormally (cancelled, declined, a usage-limit stop,
+   * a failure, or cut short by its process ending mid-turn, which a resume brings back); absent
+   * otherwise, and for every other status. It takes a message like any idle one. */
   paused?: boolean;
   /** Whether an account switch holds the session right now (see `switch_session_account`); absent
    * when none does. */

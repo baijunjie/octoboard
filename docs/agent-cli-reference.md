@@ -863,6 +863,18 @@ list:
   the resolved `subagentType` is not the one the caller asked for, so a matcher written against a requested name never
   matches; and a parent's `Stop` is no promise that its subagents have finished.
 
+### Quitting at the prompt
+
+Quitting an agent cleanly at its prompt fires no `UserPromptSubmit` on any of the three agents (measured on Claude Code
+2.1.316 and 2.1.274, Codex 0.163.0 and Grok Build 1.0.70, each in an isolated probe), so the session's last reported
+status at a clean quit is still its prompt. The quits measured were `/exit`, `/quit`, Ctrl+D, Ctrl+C and a bare
+`exit`, plus Ctrl+Q on Grok Build. What fires instead:
+
+- Claude Code — `SessionEnd` with `reason` `prompt_input_exit`.
+- Codex — `SessionEnd` with `reason` `other`; with the TUI attached to an app-server (`--remote`), quitting only
+  detaches it ("Disconnected from this task"), and `SessionEnd` fires when the server ends.
+- Grok — `SessionEnd`, then `Stop` with `reason` `shutdown`.
+
 ## Moving a conversation to another config directory
 
 All three agents resume a conversation under a second config directory when **the session's own record** is copied

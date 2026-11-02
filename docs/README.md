@@ -283,7 +283,7 @@ Where to start, by question:
 - [Writing daemon tests](memory/writing-daemon-tests.md) — fixtures that are real processes: sharing one exec'd script,
   bounding waits by `PATIENCE` and waiting for the condition itself, signal windows in fixtures, stand-in markers,
   seeded model lists, keeping tests off the real agent CLI, testing budgets by lowering them.
-- [Writing daemon code](memory/writing-daemon-code.md) — where live state lives, store writes, timing, threads, process
+- [Writing daemon code](memory/writing-daemon-code.md) — which session state is stored and which lives in memory, where live state lives, store writes, timing, threads, process
   cleanup and linting.
 - [Writing desktop shell code](memory/writing-desktop-shell-code.md) — main-thread queuing, native hooks into Tauri
   internals and native menu width.

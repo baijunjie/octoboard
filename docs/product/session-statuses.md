@@ -6,10 +6,10 @@
 | Working | `working` | a solid blue (accent) dot pinging a fading copy of itself outward | The agent is executing a turn. |
 | Waiting for the user | `waiting_user` | an orange (warning) raised hand that waves now and then | The agent is waiting on a permission decision, including its folder-trust confirmation, or has asked the user a question through its own ask-the-user tool; or Octoboard is asking the user on the agent's behalf while the agent's call waits, which is a session request (see "Waiting for the answer" in `docs/product/session-requests.md`). |
 | Dormant | `dormant` | an orange (warning) "zz", two Zs rising | The terminal of a running Claude Code session shows one of its views of its background agents, and the session is held there until the user leaves it. See "Dormant" below. |
-| Paused | `idle`, with `paused` true | a green pause sign in a circle | The process is sitting at its prompt after a turn that ended abnormally — cancelled, ended by a declined prompt, stopped on a usage limit or failed. See "Paused" below. |
+| Paused | `idle`, with `paused` true | a green pause sign in a circle | The process is sitting at its prompt after a turn that ended abnormally — cancelled, ended by a declined prompt, stopped on a usage limit, failed, or cut short by the session's process ending. See "Paused" below. |
 | Done | `idle`, with `has_conversation` true | a green circle with a check mark | The process is running and sitting at its prompt with nothing left running in the background and no delegated work in progress, and the session has a conversation. See "Done, awaiting instructions and child sessions working" below. |
 | Awaiting instructions | `idle`, with `has_conversation` false | a green speech bubble | The process is running and sitting at its prompt, and the session has never had a conversation: it waits for its first instruction. |
-| Child sessions working | `idle`, while a session under it is starting, working, waiting for the user or dormant | a hollow green ring with a filled green dot in its centre, pinging outward | The process is sitting at its prompt with nothing of its own left running, while work it delegated is in progress in the sessions under it. See "Done, awaiting instructions and child sessions working" below. |
+| Child sessions working | `idle`, while a session under it is starting, working, waiting for the user, dormant or has work left running in the background | a hollow green ring with a filled green dot in its centre, pinging outward | The process is sitting at its prompt with nothing of its own left running, while work it delegated is in progress in the sessions under it. See "Done, awaiting instructions and child sessions working" below. |
 | Working in background | `idle`, with a non-empty `background_tasks` | a hollow green ring, pinging outward | The process is sitting at its prompt, but its last turn ended with work still running in the background. Claude Code sessions only; see "Working in background" below. |
 | Switching account | any status except `archived`, with `switching_account` true | the *starting* arc | An account switch holds the session, or, in the window that confirmed the switch, the session waits for its turn in it (see "While a session is switching" in `docs/product/switching-session-accounts.md`). Shown in place of the session's own status, which it does not change; lists ranked by status sort it by the status it will have once the switch is over (see "The status order" in `docs/product/order-of-projects-and-sessions.md`). |
 | Interrupted | `interrupted` | a grey pause sign, with no circle | No process is running, and it did not end by being archived. The session stays in its project's list (a console session, in the console sessions section) and can be resumed. |
@@ -34,7 +34,8 @@ A session shows the first of these that applies:
 3. *Paused*, while `paused` is true.
 4. *Working in background*, while it has work left running in the background (Claude Code only; for the other agents
    this step never applies).
-5. *Child sessions working*, while a session under it is starting, working, waiting for the user or dormant.
+5. *Child sessions working*, while a session under it is starting, working, waiting for the user, dormant or has work
+   left running in the background.
 6. *Done*, when it has a conversation.
 7. *Awaiting instructions*.
 
@@ -98,13 +99,14 @@ from the bare pause of *interrupted*.
   is over; one opened by hand is *awaiting instructions* until its first turn; a turn that ends abnormally leaves it
   *paused* until the next one (see "Paused" above).
 - The process ending for any reason other than archiving — the agent exiting on its own, a crash, the application
-  quitting — leaves the session *interrupted*.
+  quitting — leaves the session *interrupted*. A turn it was in the middle of then counts as having ended abnormally
+  (see "Paused" below).
 - Archiving leaves the session *archived*. User-initiated archiving of an owner also ends and archives the sessions
   under it; agent-initiated archiving is refused while any descendant has a process running (see "Archiving,
   interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`).
 - Resuming an *interrupted* or *archived* session brings it back at its prompt, whichever of the two it came from:
-  *done* where it has a conversation, *awaiting instructions* where it has none yet, and *working* once it takes up an
-  instruction the resume hands it. A resume that is refused or fails to launch leaves the session exactly where it was,
+  *paused* where its last turn ended abnormally, *done* where it has a conversation otherwise, *awaiting instructions*
+  where it has none yet, and *working* once it takes up an instruction the resume hands it. A resume that is refused or fails to launch leaves the session exactly where it was,
   archived included. Resuming a session whose owner is *archived* first does the same to its archived owners, the
   topmost first.
 - Switching a session to another account of its agent ends and relaunches its process without archiving it: it reads as
@@ -216,7 +218,8 @@ work: `id`, and `type` and `description` where Claude Code gives them.
 
 **In every other respect it is like any other session at its prompt.** It takes a message straight away (see "Messages held
 until a session can take them" in `docs/product/message-delivery.md`), and it can be handed off (see "What can be handed
-off" in `docs/product/handing-off-sessions.md`). Unlike one *done* or *awaiting instructions* with no session under it,
+off" in `docs/product/handing-off-sessions.md`). The session it is bound to reads as *child sessions working* (see "Done,
+awaiting instructions and child sessions working" below). Unlike one *done* or *awaiting instructions* with no session under it,
 archiving it asks for confirmation first (see "Archiving, interruption and resuming" in
 `docs/product/archiving-and-resuming-sessions.md`), quitting the application asks too (see "Quitting" in
 `docs/product/application-lifecycle.md`), and a turn that ends this way is not reported to its owner (see "When a
@@ -242,12 +245,14 @@ and no delegated work in progress, is *done*; one that has never had a conversat
 - a session started with a brief is *working*, then *done* once its turn is over;
 - a session opened on a found conversation is *done* as soon as it is up;
 - resuming an *interrupted* or *archived* session that has a conversation, and the relaunch after an account switch or a
-  change of model and effort, bring it back *done* — or *working*, when it is sent a prompt to continue.
+  change of model and effort, bring it back *done* — or *working*, when it is sent a prompt to continue, and *paused*
+  when its last turn ended abnormally (see "Paused" below).
 
 **Child sessions working** is a session at its prompt, with nothing of its own left running in the background, while a
 session bound to it — or, at any depth, bound to one of those — is *starting*, *working*, *waiting for the user* or
-*dormant*. Sessions under it that are at their prompt (paused and working in background included), *interrupted* or
-*archived* do not count. It takes precedence over *done* and *awaiting instructions*, and gives way to *paused* and
+*dormant*, or is at its prompt with work left running in the background, whether it shows *working in background* or
+*paused*, since that work is still going. Sessions under it that are at their prompt with nothing left running in the
+background, *interrupted* or *archived* do not count. It takes precedence over *done* and *awaiting instructions*, and gives way to *paused* and
 *working in background* (see "Which status a session shows" above).
 
 **Done and child sessions working are sessions at their prompt in every respect but their glyph and name.** Each
@@ -267,25 +272,40 @@ status, wherever they are.
 
 **Paused is a session at its prompt whose last turn ended abnormally**: cancelled — by the user in the terminal, or by an
 owner's `interrupt_session` (see `docs/product/interrupting-turns.md`) — ended by a declined permission prompt or
-question, stopped on a usage limit, or failed, such as on an overloaded model or a network or API error. On the wire it
+question, stopped on a usage limit, failed, such as on an overloaded model or a network or API error, or cut short by
+the session's process ending while the turn was in progress. On the wire it
 is `idle` with `paused: true`; the flag names no reason, and neither does the window: the glyph's tooltip, a focus
 mode's card and every accessible name say only that it is paused.
 
-**What sets it** is the end of the turn as the agent reports it — Claude Code's `StopFailure` hook event, Codex's
-`Interrupt`, Grok Build's `StopCancelled` and `StopFailure` — or as Octoboard recovers it where no hook reports it: a
-Claude Code decline or cancel, a Grok Build cancel before its first token, and a Codex turn that ended in an error (see
-`docs/product/turns-hooks-do-not-report.md`).
+**What sets it:**
+
+- the end of the turn as the agent reports it — Claude Code's `StopFailure` hook event, Codex's `Interrupt`, Grok
+  Build's `StopCancelled` and `StopFailure` — or as Octoboard recovers it where no hook reports it: a Claude Code
+  decline or cancel, a Grok Build cancel before its first token, and a Codex turn that ended in an error (see
+  `docs/product/turns-hooks-do-not-report.md`);
+- the session losing its process while its agent was last reported *working* or *waiting for the user*: the agent exiting or
+  crashing, the session being interrupted or archived, the application quitting, or the daemon going down. A session
+  force-quit in the middle of a turn reads as *interrupted* and, once resumed, comes back *paused* rather than *done*.
+  A process that ends while the session is at its prompt — the agent quit from its prompt, say — leaves the flag as the
+  last turn left it.
 
 **What clears it:**
 
-- the next turn beginning, or anything else that moves the session's own status off its prompt, such as a permission
-  prompt its hooks report;
+- the next turn beginning, or anything else that moves the agent's own status off its prompt, such as a permission
+  prompt its hooks report. A waiting session request holding the session at *waiting for the user* is not its agent's
+  own status and does not clear it (see "Waiting for the answer" in `docs/product/session-requests.md`): where the
+  agent is still at its prompt when the request ends, the session reads as paused again;
 - a turn ending normally, whether or not it leaves work running in the background;
-- a Claude Code session beginning a fresh conversation, as after `/clear`;
-- the process ending, for any reason: it is kept on the running process only, never stored, so a relaunch — a resume, an
-  account switch, a change of model and effort or of its account's sharing — starts without it.
+- a Claude Code session beginning a fresh conversation: a fresh start, or `/clear`. Resuming or compacting the
+  conversation, `/compact` included, leaves it;
+- the agent no longer having the session's conversation, so that its next launch opens a fresh one.
 
 Grok Build's turn-end backstop and its turn end at shutdown neither set nor clear it.
+
+**It is kept with the session, not with its process**, so it outlives the process ending: a resume, an account switch,
+a change of model and effort or of its account's sharing that brings the session back at its prompt brings it back
+paused when its last turn ended abnormally. A session that is sent a prompt to continue its turn on the relaunch reads
+as *working* instead, and the turn that follows decides the flag afresh.
 
 **It shows only while the session would otherwise be at its prompt.** A wait that only the session's screen shows, or a
 view that shows it *dormant*, takes its place without clearing it, so the session reads as paused again once that is
@@ -294,8 +314,10 @@ gone.
 **In every other respect it is a session at its prompt**: it takes a message straight away (see "Messages held until a
 session can take them" in `docs/product/message-delivery.md`), can be handed off (see "What can be handed off" in
 `docs/product/handing-off-sessions.md`), is archived at once when nothing else asks for a confirmation (see "Archiving,
-interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`), holds up no quit by itself (see
-"Quitting" in `docs/product/application-lifecycle.md`), and does not make its owner read as *child sessions working*.
+interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`), and holds up no quit by itself (see
+"Quitting" in `docs/product/application-lifecycle.md`). A paused session that still has work running in the background is
+the exception: quitting asks for confirmation for it, as for *working in background*, and its owner reads as *child
+sessions working*.
 
 ## Dormant
 

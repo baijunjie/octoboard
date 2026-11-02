@@ -181,7 +181,7 @@ pub(crate) fn describe_session(
         "origin": session.origin,
         "status": shown,
         // Whether an idle session's last turn ended abnormally; false for every other status.
-        "paused": state.shown_paused(&session.id, shown),
+        "paused": state.shown_paused(session, shown),
         // What an idle session has left running in the background: it takes a message like any
         // idle session, but its work is not over. Empty for every other status.
         "background_tasks": state.shown_background_tasks(&session.id, shown),

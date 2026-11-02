@@ -234,7 +234,8 @@ which the close gestures have no part in.
 
 - **While any session is *starting*, *working*, *waiting for the user*, *dormant* or *working in background*, quitting
   asks for confirmation.** One working in background counts because the quit would also end the work it left running
-  (see "Working in background" in `docs/product/session-statuses.md`), and a dormant one because its background agents
+  (see "Working in background" in `docs/product/session-statuses.md`), and so does a *paused* one that still has work
+  running in the background; a dormant one counts because its background agents
   may be at work (see "Dormant" in `docs/product/session-statuses.md`). Any other session at its prompt — *paused*,
   *done*, *awaiting instructions* or with *child sessions working* — does not count by itself: it is in the middle of nothing that is
   reported, and the quit still leaves it interrupted and resumable like the others. One with child sessions working

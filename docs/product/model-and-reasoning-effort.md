@@ -188,7 +188,8 @@ yet starts fresh. It shows as starting in every window and in session reads from
 session, including time spent checking the settings, until it ends. A refusal before the restart restores its prior
 presentation. A turn the restart cuts off, or one stopped by a usage limit, receives a prompt to continue its task, the
 same one a switch of account sends (see "Continuing after a switch" in `docs/product/switching-session-accounts.md`);
-otherwise the session comes back at its prompt — *done* where it has a conversation, *awaiting instructions* where it
+otherwise the session comes back at its prompt — *paused* where its last turn ended abnormally (see "Paused" in
+`docs/product/session-statuses.md`), *done* where it has a conversation otherwise, *awaiting instructions* where it
 has none yet. While it shows as starting, a session ranked by status sorts with what it will be once the restart is
 over (see "The status order" in `docs/product/order-of-projects-and-sessions.md`). The processes the session's agent
 left running in the background are carried over to the restarted session rather than stopped, as in an account switch, and kept as project processes

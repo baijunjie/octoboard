@@ -23,10 +23,8 @@ impl AppState {
             return Ok(());
         }
         hands.entry(id.to_string()).or_insert(session.status);
-        if let Some(session) = self
-            .store
-            .set_running_status(id, SessionStatus::WaitingUser)?
-        {
+        // The agent's own status has not moved, so how its last turn ended stays as it was.
+        if let Some(session) = self.store.hold_waiting_user(id)? {
             self.publish_session(&session);
         }
         Ok(())
@@ -85,6 +83,7 @@ mod tests {
     use crate::hooks::BackgroundTasksChange;
     use crate::protocol::SessionStatus;
     use crate::state::test_support::{insert_record, session_record, subagent};
+    use crate::state::AppState;
     use crate::test_support::app_state;
 
     /// A session request holds the record at waiting for the user while its agent stays idle: its
@@ -105,5 +104,24 @@ mod tests {
             .unwrap();
         state.raise_request_hand("w").unwrap();
         assert!(!state.is_idle("w"));
+    }
+
+    /// A request's hand is not the agent leaving its prompt: a paused session keeps the flag under
+    /// it, hidden while the hand is up, and is shown paused again once it is lowered.
+    #[tokio::test]
+    async fn a_request_hand_keeps_the_paused_flag_of_an_idle_agent() {
+        let (state, dir) = app_state("request-hand-paused");
+        insert_record(&state, &dir, "s", SessionStatus::Idle);
+        state.set_paused("s", true);
+        let shown = |state: &AppState| state.wire_session(state.session_record("s").unwrap());
+
+        state.raise_request_hand("s").unwrap();
+        assert_eq!(shown(&state).status, SessionStatus::WaitingUser);
+        assert!(!shown(&state).paused);
+        assert!(state.last_turn_abnormal("s"));
+
+        state.lower_request_hand("s");
+        assert_eq!(shown(&state).status, SessionStatus::Idle);
+        assert!(shown(&state).paused);
     }
 }

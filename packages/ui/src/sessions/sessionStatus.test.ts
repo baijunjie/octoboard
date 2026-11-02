@@ -64,11 +64,30 @@ describe("delegatingSessionIds", () => {
     expect([...delegatingSessionIds([at("owner", "idle"), at("child", status, "owner")])]).toEqual(["owner"]);
   });
 
-  it("does not count children that are idle, paused, idle with background work, interrupted or archived", () => {
+  it("marks the owner of an idle session with work left running in the background, paused or not", () => {
+    for (const paused of [false, true]) {
+      const child = sessionOf("bg", "c", "p", "bg", "idle", { bound_to: "owner", paused, background_tasks: [{ id: "b" }] });
+      expect(delegatingSessionIds([at("owner", "idle"), child])).toEqual(new Set(["owner"]));
+    }
+  });
+
+  it("marks every owner above a session working in the background, which reads as delegated over done", () => {
+    const sessions = [
+      at("hub", "idle"),
+      sessionOf("lead", "c", "p", "lead", "idle", { bound_to: "hub", has_conversation: true }),
+      sessionOf("worker", "c", "p", "worker", "idle", { bound_to: "lead", has_conversation: true, background_tasks: [{ id: "b" }] }),
+    ];
+    const delegating = delegatingSessionIds(sessions);
+    expect(delegating).toEqual(new Set(["hub", "lead"]));
+    expect(sessionStatusKind(sessions[1], delegating)).toBe("delegated");
+    expect(sessionStatusKind(sessions[2], delegating)).toBe("background");
+  });
+
+  it("does not count children that are idle, paused, interrupted or archived with nothing left running", () => {
     const children = [
       at("idle", "idle", "owner"),
       sessionOf("paused", "c", "p", "paused", "idle", { bound_to: "owner", paused: true }),
-      sessionOf("bg", "c", "p", "bg", "idle", { bound_to: "owner", background_tasks: [{ id: "b" }] }),
+      sessionOf("ended", "c", "p", "ended", "interrupted", { bound_to: "owner", background_tasks: [{ id: "b" }] }),
       at("stopped", "interrupted", "owner"),
       at("gone", "archived", "owner"),
     ];

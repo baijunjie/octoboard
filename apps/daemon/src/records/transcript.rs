@@ -661,7 +661,8 @@ mod tests {
     /// A stand-in session is registered and watched the same way in every test below; this bundles
     /// the common setup so each test only has to state what is different about it.
     struct Fixture {
-        live: StandIn,
+        /// Kept so the stand-in registered for the session lives as long as the test.
+        _live: StandIn,
         state: Arc<AppState>,
         _dir: ScratchDir,
         path: PathBuf,
@@ -677,7 +678,7 @@ mod tests {
             let path = dir.join("transcript.jsonl");
             std::fs::write(&path, "").expect("empty transcript");
             Self {
-                live,
+                _live: live,
                 state,
                 _dir: dir,
                 path,
@@ -741,7 +742,7 @@ mod tests {
         .await;
         assert!(applied, "the rejection must be applied");
         assert!(
-            fixture.live.is_paused(),
+            fixture.state.last_turn_abnormal("s"),
             "a declined prompt leaves it paused"
         );
     }
@@ -924,7 +925,10 @@ mod tests {
             reaches(&fixture.state, SessionStatus::Idle).await,
             "the interrupt must be applied"
         );
-        assert!(fixture.live.is_paused(), "an interrupt leaves it paused");
+        assert!(
+            fixture.state.last_turn_abnormal("s"),
+            "an interrupt leaves it paused"
+        );
     }
 
     /// An interrupt already in the transcript when the watch is armed belongs to an earlier turn,

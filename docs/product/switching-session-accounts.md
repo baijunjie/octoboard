@@ -238,7 +238,8 @@ background are carried over to the relaunch rather than stopped (see "Automatic 
 `docs/product/background-processes.md`), copies the session's conversation into the target account's config directory,
 records the new account and directory on the session, and relaunches it as a resume does, with everything Octoboard
 injects reassembled. It archives nothing: while the process is down the session reads as *interrupted*, and it comes
-back at its prompt like any resumed session — *done*, where it has a conversation — unless it is sent the prompt to
+back at its prompt like any resumed session — *done* where it has a conversation, *paused* where its last turn ended
+abnormally (see "Paused" in `docs/product/session-statuses.md`) — unless it is sent the prompt to
 continue its turn (see "Continuing after a switch" below). It is sent no message about the switch itself. Ending an owner's process this way
 does not itself switch or archive the sessions bound to it; a confirmation whose set takes them in switches each of them
 separately.

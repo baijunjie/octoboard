@@ -3708,11 +3708,16 @@ export type Session = {
    */
   switching_account?: boolean,
   /**
-   * Whether the session's process is at its prompt (`idle`) after a turn that ended abnormally:
-   * cancelled by the user or an owner's interrupt, a declined permission prompt or question that
-   * ended the turn, a usage-limit stop, or a failure. It lasts until the next turn begins, a
-   * turn ends normally, or a Claude Code `SessionStart` begins a fresh conversation. Never stored: it is filled in on the record a client receives
-   * (`AppState::wire_session`) from the live process, and absent otherwise.
+   * Whether the session is at its prompt (`idle`) after a turn that ended abnormally: cancelled
+   * by the user or an owner's interrupt, a declined permission prompt or question that ended
+   * the turn, a usage-limit stop, a failure, or the process ending while the turn was in
+   * progress (the agent `working` or `waiting_user`). It lasts until the session's own status
+   * moves off its prompt (the next turn begins), a turn ends normally, a Claude Code
+   * `SessionStart` begins a fresh conversation, or the agent no longer has the conversation
+   * and the next launch opens a fresh one, and outlives the process: a session resumed
+   * after its process ended mid-turn comes back paused. The store keeps it whatever the
+   * status, as `last_turn_abnormal`; the record a client receives (`AppState::wire_session`)
+   * carries it only while the status shown is `idle`, and is absent otherwise.
    */
   paused?: boolean,
   /**

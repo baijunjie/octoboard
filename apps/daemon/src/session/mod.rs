@@ -137,11 +137,6 @@ pub struct LiveSession {
     /// this process's end: the end is recorded and the owner, if it was to be told, has been sent
     /// the notice (written to it or queued for it) or could not be.
     exit_settled: AtomicBool,
-    /// Set when the agent's last turn ended abnormally (cancelled, declined, a usage limit, a
-    /// failure) and cleared when a turn ends normally, a Claude Code `SessionStart` begins a fresh
-    /// conversation, or the session moves out of idle; see
-    /// `AppState::set_paused`. Per process, so a relaunch starts without it.
-    paused: AtomicBool,
 }
 
 impl std::ops::Deref for LiveSession {
@@ -218,7 +213,6 @@ impl LiveSession {
             ended_on_purpose: AtomicBool::new(false),
             watched_under_claim: AtomicBool::new(false),
             exit_settled: AtomicBool::new(false),
-            paused: AtomicBool::new(false),
         }
     }
 
@@ -315,17 +309,6 @@ impl LiveSession {
     pub(crate) fn shows_agents_view(&self) -> bool {
         self.agent_dialog()
             .is_some_and(|dialog| dialog.is_agents_view())
-    }
-
-    /// Whether the agent's last turn ended abnormally and nothing has begun since; see
-    /// `AppState::set_paused`.
-    pub(crate) fn is_paused(&self) -> bool {
-        self.paused.load(Ordering::Acquire)
-    }
-
-    /// Sets the flag [`Self::is_paused`] reads, and says whether it changed.
-    pub(crate) fn mark_paused(&self, paused: bool) -> bool {
-        self.paused.swap(paused, Ordering::AcqRel) != paused
     }
 
     pub(crate) fn needs_user_action(&self) -> bool {

@@ -406,20 +406,30 @@ pub enum TurnOutcome {
     /// Grok's `StopFailure`).
     Abnormal,
     /// An ordinary stop at the prompt, including a Claude Code `Stop` that leaves background
-    /// tasks running, and a Claude Code `SessionStart`, which begins a fresh conversation.
+    /// tasks running, and a Claude Code `SessionStart` that begins a fresh conversation.
     Normal,
 }
 
 /// How the turn this event ends came to an end, or `None` when the event ends none: it is then no
-/// reason to set or clear the flag. A Claude Code `SessionStart` (the conversation begun afresh,
-/// after `/clear`, say) is a normal outcome: a fresh conversation has no stopped turn. A Grok
-/// `Stop` at teardown (`reason: "shutdown"`) and its `idle_prompt` backstop, which also fires after
-/// an ordinary `Stop`, say nothing of how a turn ended. Claude Code's interrupt and declined
-/// prompts fire no event; those are recovered from its transcript (`crate::records::transcript`).
+/// reason to set or clear the flag. A Claude Code `SessionStart` that begins a fresh conversation
+/// (`source` `startup`, or `clear` after `/clear`) is a normal outcome: a fresh conversation has
+/// no stopped turn. One that carries the conversation on (`resume`, `compact`) ends no turn, so a
+/// session resumed after its last turn was cut short comes back paused. A Grok `Stop` at teardown
+/// (`reason: "shutdown"`) and its `idle_prompt` backstop, which also fires after an ordinary
+/// `Stop`, say nothing of how a turn ended. Claude Code's interrupt and declined prompts fire no
+/// event; those are recovered from its transcript (`crate::records::transcript`).
 pub fn turn_outcome(agent: Agent, event: &str, payload: &Value) -> Option<TurnOutcome> {
     match (agent, event) {
         (Agent::Claude, "StopFailure") => Some(TurnOutcome::Abnormal),
-        (Agent::Claude, "Stop" | "SessionStart") => Some(TurnOutcome::Normal),
+        (Agent::Claude, "Stop") => Some(TurnOutcome::Normal),
+        (Agent::Claude, "SessionStart")
+            if matches!(
+                payload.get("source").and_then(Value::as_str),
+                Some("startup" | "clear")
+            ) =>
+        {
+            Some(TurnOutcome::Normal)
+        }
         (Agent::Codex, "Interrupt") => Some(TurnOutcome::Abnormal),
         (Agent::Codex, "Stop") => Some(TurnOutcome::Normal),
         (Agent::Grok, "StopCancelled" | "StopFailure") => Some(TurnOutcome::Abnormal),
@@ -529,7 +539,31 @@ mod tests {
         for (agent, event, payload, expected) in [
             (Agent::Claude, "StopFailure", &none, Some(Abnormal)),
             (Agent::Claude, "Stop", &none, Some(Normal)),
-            (Agent::Claude, "SessionStart", &none, Some(Normal)),
+            (
+                Agent::Claude,
+                "SessionStart",
+                &json!({ "source": "clear" }),
+                Some(Normal),
+            ),
+            (
+                Agent::Claude,
+                "SessionStart",
+                &json!({ "source": "startup" }),
+                Some(Normal),
+            ),
+            (
+                Agent::Claude,
+                "SessionStart",
+                &json!({ "source": "resume" }),
+                None,
+            ),
+            (
+                Agent::Claude,
+                "SessionStart",
+                &json!({ "source": "compact" }),
+                None,
+            ),
+            (Agent::Claude, "SessionStart", &none, None),
             (Agent::Claude, "Stop", &with_tasks, Some(Normal)),
             (Agent::Claude, "Notification", &idle_prompt, None),
             (Agent::Claude, "UserPromptSubmit", &none, None),

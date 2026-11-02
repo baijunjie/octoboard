@@ -15,15 +15,16 @@ export function runsInBackground(session: Pick<Session, "status" | "background_t
 }
 
 /** The ids of the sessions with delegated work in progress: those some session in `sessions` that is
- * starting, working, dormant or waiting for the user is bound to, directly or through the sessions between
- * (`bound_to`), whatever their own status. One pass: each such session walks up its chain of owners.
- * The chain carries a seen set, so a binding that leads back on itself ends the walk. */
+ * starting, working, dormant, waiting for the user or idle with work left running in the background
+ * (`runsInBackground`) is bound to, directly or through the sessions between (`bound_to`), whatever their own
+ * status. One pass: each such session walks up its chain of owners. The chain carries a seen set, so a binding
+ * that leads back on itself ends the walk. */
 export function delegatingSessionIds(sessions: Iterable<Session>): ReadonlySet<string> {
   const byId = new Map<string, Session>();
   const active: Session[] = [];
   for (const session of sessions) {
     byId.set(session.id, session);
-    if (session.status === "starting" || session.status === "working" || session.status === "waiting_user" || session.status === "dormant") active.push(session);
+    if (session.status === "starting" || session.status === "working" || session.status === "waiting_user" || session.status === "dormant" || runsInBackground(session)) active.push(session);
   }
   const delegating = new Set<string>();
   for (const session of active) {

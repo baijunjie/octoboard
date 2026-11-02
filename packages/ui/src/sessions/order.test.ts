@@ -547,7 +547,8 @@ describe("switchStrip", () => {
       b: "delegated",
       c: "waiting_user",
       d: "interrupted",
-      e: "idle",
+      // Its session's background work is work it delegated.
+      e: "delegated",
       f: "paused",
       g: "starting",
     });

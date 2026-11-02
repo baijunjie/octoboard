@@ -1,11 +1,24 @@
 # Writing daemon code
 
+## A state a session can rest in after its process is gone is stored, never held in memory
+
+Before choosing where a session's state or flag lives, ask whether the session can still be in that state once its
+process has stopped — paused (last turn ended abnormally), done, interrupted. Such a state goes in a column of the
+`sessions` row, so it reads the same after the process ends, the daemon restarts or the session is resumed; holding it
+on `LiveSession` or a map on `AppState` loses it with the process, and a resume shows another state. Only a state the
+process ending always moves the session out of — working, a live waiting-for-user prompt, dormant, background tasks,
+an account switch under way — may live in process memory. (Source: user instruction)
+
+When such a state follows from how a turn ended, do not rely on the agent's hook for it alone: a process killed
+mid-turn fires no hook, so every write that records the process ending has to set it too, from the status stored at
+that moment.
+
 ## Live state the daemon derives goes on `AppState`, never into a stored record
 
-A piece of per-entity state the daemon reads off the outside world and does not persist — a project's git status, a
-repository's branch, anything recomputed rather than written by the user — is held in its own map on `AppState`
-(`apps/daemon/src/state/mod.rs`), never in a column of the `Console`, `Project` or `Session` row. It reaches clients in
-one of two shapes:
+A piece of per-entity state the daemon reads off the outside world, does not persist, and that ends with the process
+or is recomputed — a project's git status, a repository's branch, anything recomputed rather than written by the
+user — is held in its own map on `AppState` (`apps/daemon/src/state/mod.rs`), never in a column of the `Console`,
+`Project` or `Session` row. It reaches clients in one of two shapes:
 
 - An event of its own carrying the whole derived record, replayed inside `snapshot` so a reconnecting client never has
   to ask for it separately. This is the shape for anything about a console or a project; the git statuses are the

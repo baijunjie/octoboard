@@ -350,8 +350,8 @@ Such a session's `status` is `idle`: it takes a message like any other session a
 (see "Working in background" in `docs/product/session-statuses.md`).
 
 Each record also carries `paused`: `true` for a session whose `status` is `idle` and whose last turn ended abnormally —
-cancelled, ended by a declined prompt, stopped on a usage limit or failed — and `false` for every other. It names no
-reason. Such a session takes a message like any other at its prompt (see "Paused" in
+cancelled, ended by a declined prompt, stopped on a usage limit, failed, or cut short by its process ending in the
+middle of it, which a reopen brings back — and `false` for every other. It names no reason. Such a session takes a message like any other at its prompt (see "Paused" in
 `docs/product/session-statuses.md`).
 
 Each of these records also carries `context`, the session's context size as the window shows it (see "Session context

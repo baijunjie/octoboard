@@ -194,7 +194,8 @@ macro_rules! session_record_fields {
          leave it alone), `idle` (awaiting instructions), `interrupted` (its process ended) or \
          `archived`; `reopen_session` reopens either when it is yours. `paused` is true for an \
          `idle` session whose last turn ended abnormally (cancelled, declined, stopped on a \
-         usage limit or failed): it takes messages like any idle session. `account` is the \
+         usage limit, failed, or cut short by its process ending mid-turn, which a reopen \
+         brings back): it takes messages like any idle session. `account` is the \
          account the session runs on, an account's id or `default` for the agent's default \
          account as `list_agents` lists them, with its `account_name`; \
          `switch_session_account` refuses the account a session is on already. \

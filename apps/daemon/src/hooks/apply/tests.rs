@@ -787,7 +787,7 @@ async fn an_abnormal_turn_end_pauses_the_session_until_the_next_turn_or_a_normal
             Some((SessionStatus::Working, false)),
             "{label}"
         );
-        assert!(!live.is_paused());
+        assert!(!state.last_turn_abnormal("s"));
 
         // Ended abnormally again, then normally: the second end is published although the status
         // stays idle.
@@ -811,7 +811,7 @@ async fn an_abnormal_turn_end_pauses_the_session_until_the_next_turn_or_a_normal
             Some((SessionStatus::Idle, true)),
             "{label}"
         );
-        assert!(live.is_paused());
+        assert!(state.last_turn_abnormal("s"));
     }
 }
 
@@ -851,9 +851,9 @@ async fn events_that_end_no_turn_leave_the_paused_flag_alone() {
         let live = crate::test_support::fake_live_session("s", agent, 80, 24, "sleep 30");
         state.register_live(live.clone());
         apply_hook(&state, "s", ends_abnormally.as_bytes());
-        assert!(live.is_paused());
+        assert!(state.last_turn_abnormal("s"));
         apply_hook(&state, "s", silent.as_bytes());
-        assert!(live.is_paused(), "{agent:?} {silent}");
+        assert!(state.last_turn_abnormal("s"), "{agent:?} {silent}");
         assert!(
             state
                 .wire_session(state.session_record("s").unwrap())
@@ -862,8 +862,9 @@ async fn events_that_end_no_turn_leave_the_paused_flag_alone() {
     }
 }
 
-/// A Claude Code `SessionStart` (a new conversation after `/clear`) has no stopped turn, so it
-/// clears the paused flag and publishes that for a session that is idle already.
+/// A Claude Code `SessionStart` that begins a new conversation (after `/clear`) has no stopped
+/// turn, so it clears the paused flag and publishes that for a session that is idle already; one
+/// that resumes or compacts the conversation leaves it.
 #[tokio::test]
 async fn a_new_claude_conversation_clears_the_paused_flag() {
     let (state, dir) = app_state("hook-paused-session-start");
@@ -881,11 +882,22 @@ async fn a_new_claude_conversation_clears_the_paused_flag() {
     let live = crate::test_support::fake_live_session("s", Agent::Claude, 80, 24, "sleep 30");
     state.register_live(live.clone());
     apply_hook(&state, "s", br#"{"hook_event_name": "StopFailure"}"#);
-    assert!(live.is_paused());
+    assert!(state.last_turn_abnormal("s"));
+
+    // A resume or a compaction carries the conversation on, so the turn cut short stays the last.
+    for source in ["resume", "compact"] {
+        let start = format!(r#"{{"hook_event_name": "SessionStart", "source": "{source}"}}"#);
+        apply_hook(&state, "s", start.as_bytes());
+        assert!(state.last_turn_abnormal("s"), "{source}");
+    }
 
     let mut events = state.subscribe();
-    apply_hook(&state, "s", br#"{"hook_event_name": "SessionStart"}"#);
-    assert!(!live.is_paused());
+    apply_hook(
+        &state,
+        "s",
+        br#"{"hook_event_name": "SessionStart", "source": "clear"}"#,
+    );
+    assert!(!state.last_turn_abnormal("s"));
     let mut last = None;
     while let Ok(event) = events.try_recv() {
         if let Event::SessionUpserted { session } = event {
