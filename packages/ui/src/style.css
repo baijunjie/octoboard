@@ -584,9 +584,18 @@ html {
   --sidebar-fill-hover: oklch(0 0 0 / 0.12);
   --control-fill: oklch(0.92 0.004 286);
   --control-fill-hover: oklch(0.89 0.004 286);
-  /* A hand-built card lying on the panel's surface (a process row): lighter than the panel in both themes,
-     white in light. Its dark value is in the dark block. */
+  /* A hand-built card lying on the panel's surface (a process row, a focus-mode session card): lighter than the
+     panel in both themes, white in light. Its dark value is in the dark block.
+     `--panel-row-hover` / `--panel-row-selected` are an interactive card's hover and selected fills, in place of a
+     row's `--panel-hover` / `--panel-selected`: those darken a light row towards the sidebar, which a card already
+     lighter than the sidebar would sink back into. In light the hover tint stays faint (1.05:1 off the sidebar,
+     1.06:1 off the card; the selected fill is 1.03:1 off the sidebar) and the selected fill is an accent tint rather than a darker grey, so it reads by hue
+     and by the card's accent border, not by sinking to the sidebar's grey. `--app-muted` holds 5.58:1 on the
+     selected fill and 5.70:1 on the hover one; the "⋯" button's translucent `--default` fills stack on either at
+     the same ratios as on the card at rest (1.20:1 and 1.31:1). */
   --panel-row: var(--surface);
+  --panel-row-hover: oklch(0 0 0 / 0.025);
+  --panel-row-selected: color-mix(in oklab, var(--accent) 7%, var(--panel-row));
 }
 
 .dark,
@@ -615,6 +624,9 @@ html {
      the lighter the card the lower. That shortfall in dark is kept by the user's decision; see
      docs/ui-accessibility.md, "Conformance level and exceptions". */
   --panel-row: oklch(0.29 0.006 286);
+  /* Dark: 1.22:1 (hover) and 1.23:1 (selected) off the sidebar; `--app-muted` 4.69:1 and 4.65:1 on them. */
+  --panel-row-hover: oklch(1 0 0 / 0.045);
+  --panel-row-selected: color-mix(in oklab, var(--accent) 12%, var(--panel-row));
   --control-fill-hover: oklch(0.36 0.006 286);
   /* The dark floating surfaces and what is drawn on them (see the rule that applies them, below), and the edge every
      dark overlay takes in place of HeroUI's faint inset line: a hairline and a drop shadow, which sets one floating
@@ -625,6 +637,13 @@ html {
   --floating-edge: oklch(0.36 0.006 286);
   --floating-secondary: oklch(0.23 0.006 286);
   --overlay-shadow: inset 0 0 0 1px oklch(1 0 0 / 0.08), 0 1px 3px oklch(0 0 0 / 0.3), 0 8px 24px -4px oklch(0 0 0 / 0.45);
+}
+
+/* An interactive card on `--panel-row` (a focus-mode session card) takes the card fills where a row's hover and
+   selected tints would be, so a `TreeRow` drawn as a card keeps its own state classes. */
+.panel-row-fills {
+  --panel-hover: var(--panel-row-hover);
+  --panel-selected: var(--panel-row-selected);
 }
 
 /* The fills of HeroUI's `--default` family inside the sidebar and report panel. A ghost button's hover and pressed

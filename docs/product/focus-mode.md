@@ -63,11 +63,12 @@ dot shares that alignment; a title without one starts at the card’s leading co
 titles follow "Names too long for their space" in `docs/product/labels-and-tooltips.md`. The agent's icon has the same
 tooltip as on a session row, listing the account, model and effort under the agent's name (see "Session rows" in
 `docs/product/sidebar-session-rows.md`). Clicking a card selects the session. They are in the order of "Order of
-projects and sessions" in `docs/product/order-of-projects-and-sessions.md`. Cards have an opaque background distinct
-from the sidebar's, which stays opaque while they move, so text from other cards, the console-session summary or the
-archive does not show through them. Cards have no outline: each is set apart by the same soft shadow as the content
-panel's edges (see "The window chrome and the content panel" in `docs/product/window-layout.md`), and the selected card
-is outlined in the accent colour.
+projects and sessions" in `docs/product/order-of-projects-and-sessions.md`. Cards have an opaque background lighter
+than the sidebar's in both themes, the same card surface as the Processes panel's cards; it stays opaque while they
+move, so text from other cards, the console-session summary or the archive does not show through them. Cards have no
+outline: each is set apart by the same soft shadow as the content panel's edges (see "The window chrome and the content
+panel" in `docs/product/window-layout.md`). A hovered card takes a faint tint, and the selected card is outlined in the
+accent colour and filled with a light tint of it.
 
 A card for a session **bound to a project session the same view lists** is **inset under that session's card** and
 follows it, as a session row is under its owner's row (see "Project rows" in `docs/product/sidebar-project-rows.md`). A

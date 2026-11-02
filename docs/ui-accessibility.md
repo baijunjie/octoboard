@@ -1817,9 +1817,15 @@ An unarchived locked session communicates its state through a persistent warning
 accessible name and tooltip. Hovering or keyboard-focusing the button changes the glyph to an open lock; unlocking
 hands keyboard focus to the row before the button disappears. Keyboard focus keeps its own visible ring.
 
-Focus-mode session cards use the opaque `--panel` surface over the sidebar's `--panel-sidebar`, with the existing
-hover and selected tints on top. Their titles use the shared single-line fading label, including its full-name
-tooltip and hover marquee, rather than an ellipsis or a line clamp.
+Focus-mode session cards lie on `--panel-row`, as the Processes panel's cards do (below), over the sidebar's
+`--panel-sidebar`. A row's `--panel-hover` / `--panel-selected` would darken a light card back towards the sidebar's
+grey, so a card takes its own fills, `--panel-row-hover` and `--panel-row-selected` (`.panel-row-fills`): a faint tint
+for hover, and an accent tint for selected, which reads by hue and by the accent border rather than by luminance
+(light: 1.05:1 and 1.03:1 off the sidebar; dark: 1.22:1 and 1.23:1). Neither fill is held to 3:1: hover is a hover
+tint, and the selected state is carried by the accent border. `--app-muted` text holds 4.5:1 on each in both
+appearances (lowest 4.65:1, dark selected), and the "⋯" button's translucent fills stack on them at the same ratios as
+on the card at rest. Their titles use the shared single-line fading label, including its full-name tooltip and hover
+marquee, rather than an ellipsis or a line clamp.
 
 The Processes panel's process cards are hand-built on `--panel-row`: the surface (white) in light, and in dark
 `oklch(0.29 0.006 286)`, one step above the panel's `oklch(0.27)` so the card still reads as raised, with the panel

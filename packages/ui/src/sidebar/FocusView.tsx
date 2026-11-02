@@ -269,7 +269,7 @@ export function ConsoleSessionFocusView({
           its terminal and report panel from this view, and its lock, actions and context size live on the
           card. The strip above supplies the top gap when it is drawn. */}
       <div className={`shrink-0 px-(--row-fill-inset) pb-2 ${strip.length > 1 ? "" : "pt-2"}`}>
-        <div className="relative rounded-lg bg-panel">
+        <div className="relative rounded-lg bg-(--panel-row)">
           <SessionCard handlers={handlers} session={consoleSession} selected={consoleSession.id === selectedSessionId} own />
         </div>
       </div>
@@ -513,10 +513,10 @@ function BoundElsewhere({
 /** A focus mode's sessions as cards, in the order given, a session bound to a project session inset
  * under its owner. One flat list rather than a list nested inside the owner's card: the reorder
  * animation reads the list's direct children (`useFlip`), so a level of its own would leave a team
- * unanimated while its statuses change. The moving wrapper supplies an opaque base beneath
- * the card's translucent state fills,
- * so overlapping cards cannot show each other's text during a reorder. The list's stacking context
- * keeps the summary and archive from painting over cards moving beyond the list's new bounds. */
+ * unanimated while its statuses change. The moving wrapper supplies an opaque base beneath the
+ * card's translucent hover tint, so overlapping cards cannot show each other's text during a
+ * reorder. The list's stacking context keeps the summary and archive from painting over cards
+ * moving beyond the list's new bounds. */
 function SessionCards({
   handlers,
   sessions,
@@ -532,7 +532,7 @@ function SessionCards({
   return (
     <div ref={listRef} className="relative z-1 flex flex-col gap-2">
       {sessions.map(({ session, under }) => (
-        <div key={session.id} data-flip={session.id} className={`relative rounded-lg bg-panel ${under ? `session-nested-card ${NESTED_INSET_CLASS}` : ""}`}>
+        <div key={session.id} data-flip={session.id} className={`relative rounded-lg bg-(--panel-row) ${under ? `session-nested-card ${NESTED_INSET_CLASS}` : ""}`}>
           <SessionCard handlers={handlers} session={session} under={under} selected={session.id === selectedSessionId} consoleOwner={consoleOwner?.(session)} />
         </div>
       ))}
@@ -629,7 +629,7 @@ const SessionCard = memo(function SessionCard({
       selected={selected}
       locked={session.locked}
       onActivate={() => handlers.onSelectSession(session)}
-      className="min-h-8 flex-col gap-1 border border-transparent shadow-(--panel-shadow) px-[calc(var(--row-content-inset)-1px)] py-[7px] data-selected:border-accent-soft-foreground"
+      className="min-h-8 flex-col gap-1 border border-transparent shadow-(--panel-shadow) panel-row-fills px-[calc(var(--row-content-inset)-1px)] py-[7px] data-selected:border-accent-soft-foreground"
     >
       <RowIconLine icon={<StatusIcon status={status} decorative />}>
         <span className="text-xs font-medium text-app-muted">{statusLabel(t, status)}</span>
