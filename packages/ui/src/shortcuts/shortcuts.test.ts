@@ -155,6 +155,8 @@ describe("validation", () => {
     expect(check(defaultBinding("back"))).toEqual({ reason: "conflict", with: "back" });
     expect(check({ code: "KeyV", primary: true })).toEqual({ reason: "conflict", with: "paste" });
     expect(check({ code: "KeyH", primary: true, alt: true })).toEqual({ reason: "conflict", with: "hideOthers" });
+    // Find in file is the file viewer's own, so no command can take the key the viewer's dialog listens for.
+    expect(check({ code: "KeyF", primary: true })).toEqual({ reason: "conflict", with: "find" });
   });
 
   it("looks at the bindings as they stand, so a freed combination can be taken", () => {

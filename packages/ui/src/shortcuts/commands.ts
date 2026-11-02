@@ -55,7 +55,11 @@ const REBINDABLE = [
 
 export type CommandId = (typeof REBINDABLE)[number]["id"];
 
-/** The keys the window or the native menu own, listed but not changeable. */
+/** The file viewer's Find in file: its key acts nowhere else, so it is listed for no other command to take. The
+ * viewer's dialog matches the key by hand (`isFind`, `viewer/useFind.ts`), held to this entry by a test. */
+export const FIND_BINDING: Binding = primary("KeyF");
+
+/** The keys the window, the native menu or one view owns, listed but not changeable. */
 const FIXED: readonly Omit<ShortcutCommand, "rebindable">[] = [
   { id: "nextRegion", label: "settings.shortcuts.command.nextRegion", group: "navigation", binding: { code: "F6" }, availability: "always" },
   { id: "previousRegion", label: "settings.shortcuts.command.previousRegion", group: "navigation", binding: { code: "F6", shift: true }, availability: "always" },
@@ -65,6 +69,7 @@ const FIXED: readonly Omit<ShortcutCommand, "rebindable">[] = [
   { id: "copy", label: "settings.shortcuts.command.copy", group: "editing", binding: primary("KeyC"), availability: "nativeMenu" },
   { id: "paste", label: "settings.shortcuts.command.paste", group: "editing", binding: primary("KeyV"), availability: "nativeMenu" },
   { id: "selectAll", label: "settings.shortcuts.command.selectAll", group: "editing", binding: primary("KeyA"), availability: "nativeMenu" },
+  { id: "find", label: "settings.shortcuts.command.find", group: "editing", binding: FIND_BINDING, availability: "always" },
   { id: "hide", label: "settings.shortcuts.command.hide", group: "window", binding: primary("KeyH"), availability: "nativeMenu" },
   { id: "hideOthers", label: "settings.shortcuts.command.hideOthers", group: "window", binding: primary("KeyH", { alt: true }), availability: "nativeMenu" },
   { id: "fullScreen", label: "settings.shortcuts.command.fullScreen", group: "window", binding: primary("KeyF", { other: true }), availability: "nativeMenu" },

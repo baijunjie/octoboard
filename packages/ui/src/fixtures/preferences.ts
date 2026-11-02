@@ -34,6 +34,8 @@ export interface Preferences {
   projectBrowsers?: Record<string, { mode: "files" | "git"; byCommit?: boolean }>;
   /** How a rendered Markdown document is styled; Tailwind, the original look, when unset. */
   markdownStyle?: MarkdownStyle;
+  /** The layout diffs open in; unified when unset. */
+  diffLayout?: "unified" | "split";
   /** Closing the window keeps the app running in the background; off by default. */
   runInBackground?: boolean;
   /** The release channel the application updates from; stable when unset. */

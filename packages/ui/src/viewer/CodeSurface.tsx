@@ -13,6 +13,7 @@ import { LayoutToggle, type DiffLayout } from "./diffLayout";
 import type { ExpansionStatus, SeparatorLabels } from "./expansion";
 import { FrameSurface } from "./FrameSurface";
 import { hasHunks, linesAfterLastHunk, withoutNoNewlineMarkers } from "./patch";
+import { FIND_REGION } from "./findDom";
 import { focusFirstSeparatorControl, scrollTextToLine, scrollToLine } from "./rendererDom";
 import { isSelectAll, selectCode } from "./selectAll";
 import { FileNotice, type NoticeTone } from "./notices";
@@ -66,7 +67,7 @@ export function PlainText({
   }, [line, scrollKey]);
   return (
     <FrameSurface focused={frame.region.focused}>
-      <pre dir="ltr" {...fade} onKeyDown={frame.onKeyDown}>
+      <pre dir="ltr" {...fade} {...FIND_REGION} onKeyDown={frame.onKeyDown}>
         {text}
       </pre>
     </FrameSurface>
@@ -124,7 +125,7 @@ function CodeFrame({
   const drawn = drawnFor === resetKey;
   return (
     <FrameSurface focused={frame.region.focused}>
-      <div dir="ltr" {...fade} onKeyDown={frame.onKeyDown}>
+      <div dir="ltr" {...fade} {...FIND_REGION} onKeyDown={frame.onKeyDown}>
         {!drawn && <LoadingOverlay />}
         <Suspense fallback={null}>{children(onDrawn)}</Suspense>
       </div>

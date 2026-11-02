@@ -120,10 +120,12 @@ application buttons below. These are:
 - the file viewer's File manager and Default application buttons, whose tooltip is the short "File manager" or "Default
   application" that names the action in a project pane row's menu, while the name announced for each says what pressing
   it does, "Open in file manager" or "Open in default application" (see "The header" in `docs/product/file-viewer.md`);
-- the file viewer's three view controls, the Files mode's two — its file-name filter toggle and the include-ignored
+- the file viewer's four view controls, the Files mode's two — its file-name filter toggle and the include-ignored
   toggle in its filter field — and the Git mode's three view toggles — the one that shows and hides the change filter
   field, Group by folder and Group by commit — whose tooltip is the name they announce and alternates with their state
   (see "Two-state icon toggles" below);
+- the buttons of the file viewer's find bar — Match case, Whole word, Use regular expression, Previous match, Next match
+  and Close find (see "The find bar" in `docs/product/finding-in-the-file-viewer.md`);
 - the two controls of the console dialog's Avatar field (see "Avatar" in `docs/product/consoles.md`) — the round control
   itself, named for choosing an image while it is empty and for replacing it once one is picked, and the delete button
   over its corner, named for removing the image;
@@ -229,7 +231,7 @@ Help tips are used in these places:
 
 A control that switches a view between two states is **one icon button**, not a set of choices side by side. These are
 the sidebar toggle (see "The sidebar toggle and the panel toggles" in `docs/product/window-layout.md`), the file
-viewer's three view controls (see "The header" in `docs/product/file-viewer.md`), the Files mode's two — its file-name
+viewer's four view controls (see "The header" in `docs/product/file-viewer.md`), the Files mode's two — its file-name
 filter toggle and the toggle in its filter field that includes ignored files (see "Filtering by file name" in
 `docs/product/project-pane.md`) — and the Git mode's three — the toggle of its change filter field (see "Filtering by
 file name" in `docs/product/project-pane-git-change-list.md`), Group by folder (see "Flat or grouped by folder" in the
@@ -239,8 +241,8 @@ same doc) and Group by commit (see "Grouped by commit" in the same doc). For all
 - **The icon shows the state the view is in; the name says what pressing will do**, so the name alternates with the
   state. That name is both the tooltip and what assistive technology announces, as "Tooltips on icon-only controls"
   above says. Assistive technology is also told which state the control is in: whether the button is pressed; the
-  sidebar toggle says instead whether the sidebar is expanded, and each file-name filter toggle says both, pressed
-  while its field is on screen.
+  sidebar toggle says instead whether the sidebar is expanded, and each file-name filter toggle and the file viewer's
+  Find in file say both, pressed while the field or the find bar they show is on screen.
 - **Nothing about the state is said in colour**: the button in its pressed state is drawn exactly as in its
   unpressed one.
 
@@ -248,7 +250,9 @@ Settings' Appearance choice is not one of these: being a choice among three, it 
 where the chosen option is marked by a fill of its own rather than by its icon (see "Appearance" in
 `docs/product/settings.md`). Nor are the panel toggles in the top bar: each keeps one icon whatever the state, and an
 open panel is marked by the toggle's pressed fill, besides its name and its expanded state (see "The panel toggles in
-the top bar" in `docs/product/right-pane-panels.md`).
+the top bar" in `docs/product/right-pane-panels.md`). Nor are the three switches of the file viewer's find bar, which
+narrow a search rather than switch a view: each keeps one icon and one name, and shows that it is on by a fill and an
+outline (see "The find bar" in `docs/product/finding-in-the-file-viewer.md`).
 
 ## Copy buttons
 

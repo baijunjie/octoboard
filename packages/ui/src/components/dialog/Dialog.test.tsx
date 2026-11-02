@@ -489,7 +489,7 @@ it("measures the outer dialog again when a dialog nested in it closes", async ()
  * tooltip, so a control that has one has it open. */
 function escapeFrom(
   control: (dialog: Element) => HTMLElement | null | undefined,
-  props: { alert?: boolean } = {},
+  props: { alert?: boolean; keyboardDismissHeld?: boolean } = {},
 ): { closes: number; tooltip: boolean } {
   const onClose = vi.fn();
   const container = document.body.appendChild(document.createElement("div"));
@@ -525,6 +525,7 @@ it.each([
   ["modal", {}, 1],
   ["confirmation", { alert: true }, 0],
   ["acknowledgement", { alert: true, dismissable: false }, 0],
+  ["modal whose keyboard dismissal is held", { keyboardDismissHeld: true }, 1],
 ])("handles a backdrop press on a %s", (_name, props, closes) => {
   const onClose = vi.fn();
   const container = document.body.appendChild(document.createElement("div"));
@@ -544,6 +545,19 @@ it.each([
   expect(onClose).toHaveBeenCalledTimes(closes);
 });
 
+it("still closes from its close button while the keyboard dismissal is held", () => {
+  const onClose = vi.fn();
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  render(root, <Dialog title="Held" onClose={onClose} keyboardDismissHeld footer={null}><span>body</span></Dialog>);
+  act(() => closeTrigger(document.querySelector("[role=dialog]")!)!.click());
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
+
 // The close button carries a tooltip, and a tooltip opens on keyboard focus. react-aria then holds
 // Escape at `document` to dismiss the tooltip, above `<body>`, where React dispatches the modal's
 // own Escape handling from — so the dialog has to close that press itself. Both frames put a close
@@ -560,6 +574,17 @@ it("closes on Escape once from a control without a tooltip", () => {
   expect(
     escapeFrom((dialog) => [...dialog.querySelectorAll<HTMLElement>("button")].find((b) => b.textContent === "Cancel")),
   ).toEqual({ closes: 1, tooltip: false });
+});
+
+// `keyboardDismissHeld` is for a dialog whose content closes something of its own on Escape: the key closes
+// the dialog neither where react-aria handles it nor where a tooltip made the dialog handle it itself, while
+// the close button and a press outside still dismiss (the backdrop cases, and "still closes from its close
+// button while the keyboard dismissal is held").
+it("does not close on Escape while the keyboard dismissal is held, with a tooltip open or not", () => {
+  expect(escapeFrom(closeTrigger, { keyboardDismissHeld: true })).toEqual({ closes: 0, tooltip: true });
+  expect(
+    escapeFrom((dialog) => [...dialog.querySelectorAll<HTMLElement>("button")].find((b) => b.textContent === "Cancel"), { keyboardDismissHeld: true }),
+  ).toEqual({ closes: 0, tooltip: false });
 });
 
 /** Renders a dialog whose body measures `scrollHeight` tall in a `clientHeight` box (jsdom has no

@@ -213,6 +213,15 @@ hover and keyboard focus, instead of the ghost variant's `--default-foreground`,
 up with the fields above, so its label sits in from theirs, and in their colour it would read as a field label out of
 line.
 
+The file viewer's find bar (`FindBar` in `packages/ui/src/viewer/FindBar.tsx`) draws two things of its own, both the
+user's decision. Its option switches — match case, whole word, regular expression — keep one icon each, so their
+pressed state is a fill with a 1px inset outline in `--app-muted` (at least 3:1 against the bar and the fill) rather
+than HeroUI's accent-soft selected look or an alternating icon; the outline is an inset ring of its own, not the
+focus ring's variables, so keyboard focus still shows its full ring over it. Its matches are painted as CSS
+highlights in the project's `--find-match-bg`, with the current match in `--find-current-bg` and
+`--find-current-fg` and underlined, so the current one is not told by colour alone; code and document text keep 4.5:1
+on the match fill. The bar floats over its content as a `floating-surface`.
+
 ## Keyboard
 
 Every interactive control is reachable from the keyboard and operable with Enter / Space, except for the collection-row
@@ -1997,12 +2006,13 @@ in and whose accessible name and tooltip say what pressing will do, so the name 
 unpressed one by fill: `.icon-toggle` in `packages/ui/src/style.css` resets HeroUI's selected tokens back to the
 resting ones, and `aria-pressed` carries the state for assistive technology. The window chrome's pane toggles (the
 sidebar's among them), the Git mode's two view toggles — the one that shows and hides the change filter field, and
-group by folder — the Files mode's filter toggle and include-ignored toggle, and the viewer's three view controls
-are built this way.
+group by folder — the Files mode's filter toggle and include-ignored toggle, and the viewer's four view controls
+(its find toggle among them) are built this way.
 
 A two-state control that is also what shows and hides a region carries `aria-expanded` beside its `aria-pressed`, the
 two saying the same thing in the two vocabularies: the Git mode's filter toggle is pressed while its field is on
-screen, and expanded for the same reason (`expanded` on `IconToggle`). The region it shows has no id of its own and so
+screen, and expanded for the same reason (`expanded` on `IconToggle`), and so is the viewer's find toggle while its
+find bar is. The region it shows has no id of its own and so
 no `aria-controls`; "Expanded and selected" above asks only for `aria-expanded`. A region taken away this way hands
 keyboard focus back to the toggle when it was holding it, the toggle being pressed without taking focus itself; the
 hand-off's ring follows how the press came, as "Focus moved by a change the user did not make" above has it.

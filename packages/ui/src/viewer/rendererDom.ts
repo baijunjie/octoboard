@@ -37,7 +37,7 @@ function kindOf(control: Element): ExpandKind | undefined {
 
 /** The library's shadow root under a rendered frame, when it has drawn there. */
 function shadowRootOf(frame: HTMLElement): ShadowRoot | undefined {
-  return Array.from(frame.querySelectorAll("*")).find((element) => element.shadowRoot)?.shadowRoot ?? undefined;
+  return shadowRootsIn(frame)[0];
 }
 
 /**
@@ -56,6 +56,23 @@ export function renderedCodeRange(frame: HTMLElement): Range | null | undefined 
   range.setStart(columns[0], 0);
   range.setEnd(last, last.childNodes.length);
   return range;
+}
+
+/** Every shadow root the library has drawn under `container`, in document order: one for a file or
+ * a diff, and one for each highlighted fenced block of a rendered document. */
+export function shadowRootsIn(container: ParentNode): ShadowRoot[] {
+  return Array.from(container.querySelectorAll("*")).flatMap((element) => (element.shadowRoot ? [element.shadowRoot] : []));
+}
+
+/** The elements holding the code of a shadow root's lines, in reading order: the code columns
+ * (`[data-content]`), one per file or per side of a split diff, and not the line numbers, markers
+ * and gutters beside them. A line is `[data-line]` in a column; a column that has none is returned
+ * whole. The bars of collapsed lines (`[data-separator]`) lie in the columns too and are not code. */
+export function codeBlocksOf(root: ShadowRoot): Element[] {
+  return Array.from(root.querySelectorAll("[data-content]")).flatMap((column) => {
+    const lines = Array.from(column.querySelectorAll("[data-line]")).filter((line) => !line.closest("[data-separator]"));
+    return lines.length > 0 ? lines : [column];
+  });
 }
 
 /** The scrolling frame a library host sits in, which takes focus. */

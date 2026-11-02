@@ -33,16 +33,17 @@ The header has three parts, one under the other:
 - **The details** — the file's path within the project, its size and the path a rename came from — followed by the
   **controls** on a separate final row directly above the content, aligned to its trailing side. Their fixed order is
   **Copy path**, then the document-or-source choice for a Markdown file (see `docs/product/markdown-documents.md`),
-  then the diff's unified-or-split choice, then the wrap choice (see "Wrapping long lines" below), then **File manager**
-  and **Default application**. The size shows as a tag of its own, drawn as the title's neutral stage tag is; a rename's
-  origin reads as a sentence naming the path. Right after the file's path stand the marks of the **notices about the
-  whole file or change** on screen, one mark per notice (see "Notices and stand-ins" below); they belong to the path's
-  own item, and the path's fade cuts only the path, never them. They come before the controls in the keyboard's order.
+  then the diff's unified-or-split choice, then the wrap choice (see "Wrapping long lines" below), then **Find in file**
+  (see `docs/product/finding-in-the-file-viewer.md`), then **File manager** and **Default application**. The size shows
+  as a tag of its own, drawn as the title's neutral stage tag is; a rename's origin reads as a sentence naming the path.
+  Right after the file's path stand the marks of the **notices about the whole file or change** on screen, one mark per
+  notice (see "Notices and stand-ins" below); they belong to the path's own item, and the path's fade cuts only the
+  path, never them. They come before the controls in the keyboard's order.
 
 At most two of the three view choices are ever offered at once, since the document-or-source choice belongs to a whole
 Markdown file's body and the unified-or-split choice to a two-sided diff, and a Markdown diff keeps its source view
-alone. So the header never holds more than Copy path, two view choices, File manager and Default application, and the
-order on screen is also the order the keyboard moves through them.
+alone. So the header never holds more than Copy path, two view choices, Find in file, File manager and Default
+application, and the order on screen is also the order the keyboard moves through them.
 
 **Copy path** is the same action a file's row offers, on the same path and in the same form (see "A row's actions" in
 `docs/product/project-pane.md`), but as a copy button, which says the path was copied on itself rather than in a toast:
@@ -53,8 +54,11 @@ on a row.
 **Each of the three view choices is a single icon button**: its icon shows the view on screen, pressing it switches to
 the other view, and its name — the tooltip and what assistive technology announces — says what pressing will do, so it
 alternates between "Show document" and "Show source", between "Show split diff" and "Show unified diff", and between
-"Wrap lines" and "Don't wrap lines". Nothing about the state is said in colour; the whole convention is in "Two-state
-icon toggles" in `docs/product/labels-and-tooltips.md`.
+"Wrap lines" and "Don't wrap lines". **Find in file**, offered only while the viewer shows text to search, is the
+fourth view control and follows the same convention: its icon is a magnifier, crossed out while the find bar is open,
+its name alternates between "Find in file" and "Close find", and it also tells assistive technology whether the bar is
+expanded. Nothing about the state is said in colour; the whole convention is in "Two-state icon toggles" in
+`docs/product/labels-and-tooltips.md`.
 
 **File manager and Default application** are the two actions of a file row's Open in submenu, on the same live file
 and with the same effect (see "A row's actions" in `docs/product/project-pane.md`): File manager opens the folder
@@ -190,9 +194,9 @@ formulas — as described in `docs/product/markdown-documents.md`.
 
 ## Wrapping long lines
 
-The **wrap control**, the last of the header's view controls, chooses whether lines too long for the viewer's width
-are broken onto the next line; its name alternates between "Wrap lines" and "Don't wrap lines". **Nothing wraps until
-it is turned on** in what the viewer shows as source text — prose as much as code. It is one choice for all of it,
+The **wrap control**, the last of the header's three view choices, chooses whether lines too long for the viewer's
+width are broken onto the next line; its name alternates between "Wrap lines" and "Don't wrap lines". **Nothing wraps
+until it is turned on** in what the viewer shows as source text — prose as much as code. It is one choice for all of it,
 files and changes alike: code, a file shown as plain text, a Markdown file's source, a diff, a plain patch, and the
 file behind a path in conflict. The choice is remembered, like the unified-or-split choice: it holds for the next file
 and the next change, and after the application restarts.
@@ -232,6 +236,11 @@ selection of part of the document copies as what is selected.
 While text inside the viewer is selected, the Left and Right arrow keys leave it selected rather than moving to
 another file (see "Moving between files" below).
 
+## Finding in the file
+
+**Find in file** — ⌘F (Ctrl+F off macOS) or the header's Find in file control — searches the text the viewer shows and
+highlights what it finds, as described in `docs/product/finding-in-the-file-viewer.md`.
+
 ## Moving between files
 
 **Previous file** and **Next file**, beside the title at its leading side at the top of the viewer, and the **Left**
@@ -254,11 +263,12 @@ below).
 ## Closing it
 
 **Escape**, the viewer's **Close** button, or a press on the dimmed area around it closes it (see "What an open dialog,
-menu or popover covers" in `docs/product/window-layout.md`). Keyboard focus then goes, for a viewer opened from Files,
-to the tree row of the file it showed last, not necessarily the one it was opened from; for one opened from the
-terminal, back to the terminal — from a shell terminal of the Terminal panel, back to that shell terminal while its tab
-is still there and shown, and to the agent terminal otherwise. A change viewer's closing is in
-`docs/product/project-pane-git-change-viewer.md`.
+menu or popover covers" in `docs/product/window-layout.md`). While the find bar is open, Escape closes the bar instead,
+and only the next Escape closes the viewer (see "Closing the find bar" in `docs/product/finding-in-the-file-viewer.md`).
+Keyboard focus then goes, for a viewer opened from Files, to the tree row of the file it showed last, not necessarily
+the one it was opened from; for one opened from the terminal, back to the terminal — from a shell terminal of the
+Terminal panel, back to that shell terminal while its tab is still there and shown, and to the agent terminal
+otherwise. A change viewer's closing is in `docs/product/project-pane-git-change-viewer.md`.
 
 ## When the open file changes
 

@@ -11,7 +11,7 @@ import type { Language } from "../../i18n/languages";
 import type { FileContent, LineStats } from "../../protocol";
 import { RENDER_BUDGETS } from "../../viewer/budgets";
 import { bodyFromFileContent, type ChangeBodies, ChangeBodiesError, type ViewerBody, type ViewerChangeSide, type ViewerSubject } from "../../viewer/content";
-import { describing, type Ui } from "../../fixtures/interact";
+import { describing, type Step, type Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
 import { IMAGES } from "../../fixtures/viewerImages";
 
@@ -1220,6 +1220,39 @@ async function documentSubjects(): Promise<ViewerSubject[]> {
   return [file("docs/notes.md", text("docs/notes.md", NORMAL_NOTES)), file("docs/other.md", text("docs/other.md", OTHER))];
 }
 
+// The find bar's scenarios search for a word that stands several times in each subject, so the current match
+// and the others are both on screen.
+const FIND_NOTES = `# Session handling
+
+A session is waiting once it has been idle for longer than the limit. The sidebar lists every session with
+its status, and a session that raised a hand comes before the others.
+
+\`\`\`ts
+export function openSession(id: string): Session {
+  const session = sessions.get(id);
+  return session ?? createSession(id);
+}
+\`\`\`
+
+Closing a session keeps its history, so a closed session can be read again.
+`;
+
+const openFind: Step = (ui) => ui.chord({ code: "KeyF", primary: true });
+const findFor = (query: string): Step => async (ui) => {
+  await openFind(ui);
+  await ui.type(query);
+};
+
+async function findCodeSubjects(): Promise<ViewerSubject[]> {
+  return [file("src/session.ts", newSession)];
+}
+async function findDocumentSubjects(): Promise<ViewerSubject[]> {
+  return [file("docs/sessions.md", text("docs/sessions.md", FIND_NOTES))];
+}
+async function findChangeSubjects(language: Language): Promise<ViewerSubject[]> {
+  return (await changes(language)).filter(({ key }) => key === "unstaged:src/session.ts");
+}
+
 export const viewerScenarios: Scenario[] = [
   {
     id: "viewer-files-errors", group: GROUP, category: "exceptional",
@@ -1254,6 +1287,15 @@ export const viewerScenarios: Scenario[] = [
     description: "Three marks stand after the path in the header, in this order and with even gaps: the image that could not be drawn (danger, circled \"!\"), the other side being outside the project (warning triangle) and the text being shown without highlighting (note, circled \"i\"). The danger mark is held open in its popover, which words the failure.",
     viewer: { subjects: marksOfEveryToneSubjects },
     steps: [(ui) => ui.hoverStatusMark(ui.t("viewer.image.asText"))],
+  },
+  {
+    id: "viewer-find-invalid",
+    group: GROUP,
+    category: "exceptional",
+    title: "Find with an invalid regular expression",
+    description: "The find bar with Use regular expression on and a pattern that cannot be compiled: the query field is outlined in the danger colour and the count reads \"Invalid\" in the danger colour in place of a match count; Previous / Next are disabled and nothing in the code is highlighted.",
+    viewer: { subjects: findCodeSubjects },
+    steps: [findFor("session("), (ui) => ui.press(ui.t("viewer.find.regex"))],
   },
   ...failureScenarios,
   ...bodiesFailureScenarios,
@@ -1332,5 +1374,33 @@ export const viewerScenarios: Scenario[] = [
     title: "Changes",
     description: "Successful modified, added, deleted, renamed, type-changed, untracked and compared changes. Green additions and red removals follow the path: the opening file shows +6 and -3, added and untracked files show additions only, deleted files show removals only, and empty or unavailable counts and binary changes show no count. Includes binary notices, empty diffs, and the notes and warnings that stand as marks after the path: a patch too large to draw, a missing newline at the end of a file, a side outside the project (warning), and an unchanged file or rename shown in full. Previous / Next stays within normal subjects. Next opens the five-line src/describe.ts: in both split and unified layouts, the diff fills the available height with its rows at the top and horizontal scrollbars at the bottom of the window; the split sides scroll horizontally on their own. Toggle word wrap and compare data/rows.ts for vertical scrolling. Compare the soft status badges beside the title (untracked is neutral), long comparison subtitles and layout controls. The current path and addition/removal counts stay on the same row across the full header width. Icon controls occupy the final row, right-aligned directly above the diff. Narrow the window to check that long current and renamed-from paths stay on one line with a fade at the start; hover to compare their tooltips and scrolling text. On the src/badgeLabel.ts rename, the short renamed-from path uses the same compact line spacing as the current path. Committed changes' comparison subtitles use the available line width for long branch identifiers before breaking, without short hyphen-separated fragments. Below phone width, the viewer fills the window with square corners; wider windows retain the inset dialog. File manager and Default application end the header row of the working-copy changes (staged, unstaged, untracked and conflicted) but not of the ones whose file is gone from the working copy (src/legacy.ts, src/moved-out.ts) nor of the committed ones, which carry a comparison under the title.",
     viewer: { subjects: changes },
+  },
+  {
+    id: "viewer-find",
+    group: GROUP,
+    category: "normal",
+    title: "Find in code",
+    description: "The find bar floats at the top-trailing corner of the content, a raised surface over highlighted code, with the query typed: every match is tinted, the current one in a stronger tint and text colour with an underline, and the compact count (\"1/13\") reads its place among them. Compare the highlight colours, the bar's placement and the pressed switches (a fill and an inset outline) using the theme control; narrow the window to see the bar stay on one row down to 320px, the query field shrinking while the count and the 24px controls keep their size.",
+    viewer: { subjects: findCodeSubjects },
+    steps: [findFor("session")],
+  },
+  {
+    id: "viewer-find-document",
+    group: GROUP,
+    category: "normal",
+    title: "Find in a rendered document",
+    description: "The find bar over a rendered Markdown document: matches are highlighted in the prose and inside the fenced code block, the current one in a stronger tint with an underline.",
+    viewer: { subjects: findDocumentSubjects },
+    steps: [findFor("session")],
+  },
+  {
+    id: "viewer-find-change",
+    group: GROUP,
+    category: "normal",
+    title: "Find in a split diff",
+    description: "The find bar over a split diff: matches are highlighted on both sides, the current one in a stronger tint with an underline. The unified layout, chosen with the layout control, highlights its single column the same way.",
+    preferences: { diffLayout: "split" },
+    viewer: { subjects: findChangeSubjects },
+    steps: [findFor("session")],
   },
 ];

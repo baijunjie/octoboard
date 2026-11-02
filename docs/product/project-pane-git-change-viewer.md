@@ -248,8 +248,9 @@ mirror under a right-to-left language, is as in "Moving between files" in `docs/
 
 ## Closing it
 
-**Escape** or the viewer's **Close** button closes it. Keyboard focus then goes to the row of the change it showed
-last.
+**Escape** or the viewer's **Close** button closes it; while the find bar is open, Escape closes the bar first (see
+"Closing the find bar" in `docs/product/finding-in-the-file-viewer.md`). Keyboard focus then goes to the row of the
+change it showed last.
 
 ## When the open change changes
 

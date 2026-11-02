@@ -163,7 +163,8 @@ function submitsFromChoice(e: React.KeyboardEvent<HTMLFormElement>): boolean {
 let openDialogs = 0;
 
 /**
- * The frame every dialog shares. Unless `dismissable` is false, Escape calls `onClose`.
+ * The frame every dialog shares. Unless `dismissable` is false, Escape calls `onClose`, which `keyboardDismissHeld`
+ * withholds from Escape alone.
  * A click outside also closes a non-alert dialog; confirmations require an explicit response. The dialog is
  * mounted only while it is open, so `isOpen` is constant. With `onSubmit` the header, body and footer sit in
  * a `<form>`, so Enter in a text field submits it — the dialog decides what "submit" means. The
@@ -198,6 +199,7 @@ function DialogFrame({
   failing,
   resetKey,
   dismissable = true,
+  keyboardDismissHeld = false,
   focusesItselfOnOpen,
   topLayerAtMount,
   fullScreen = false,
@@ -223,6 +225,10 @@ function DialogFrame({
   failing?: boolean;
   /** An error requires its acknowledgement button, with no implicit dismissal. */
   dismissable?: boolean;
+  /** While set, Escape does not close the dialog, whether it reaches react-aria's modal or arrives while a tooltip is
+   * open; the Close button and a click outside still do. For a dialog whose content takes Escape for something of its
+   * own, closing it from a listener on the dialog element: the dialog must not also close from the same press. */
+  keyboardDismissHeld?: boolean;
   /** Names what a dialog reused across subjects currently asks about; when it changes and focus
    * was lost with the old content, it is put back on the dialog. */
   resetKey?: string;
@@ -288,7 +294,7 @@ function DialogFrame({
   }, []);
   useToastClearance(markerRef, footer !== null);
   useHeightMotion(markerRef);
-  useEscapeWhileTooltipOpen(() => dialogAround(markerRef), dismissable ? onClose : () => {});
+  useEscapeWhileTooltipOpen(() => dialogAround(markerRef), dismissable && !keyboardDismissHeld ? onClose : () => {});
   const topLayer = useTopLayerAtMount(topLayerAtMount === true, markerRef);
 
   const Frame = alert ? AlertDialog : Modal;
@@ -378,7 +384,7 @@ function DialogFrame({
     <Frame.Backdrop
       isOpen
       isDismissable={dismissable && !alert}
-      isKeyboardDismissDisabled={!dismissable}
+      isKeyboardDismissDisabled={!dismissable || keyboardDismissHeld}
       onOpenChange={(open) => !open && dismissable && onClose()}
       data-react-aria-top-layer={topLayer ? "true" : undefined}
     >

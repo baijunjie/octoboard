@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 
 import { ChangeLineCounts } from "../components/status/ChangeLineCounts";
 import { FadeOverflow } from "../components/text/FadeOverflow";
@@ -14,6 +14,7 @@ import { useRendererScope } from "./codeRenderer";
 import { changeStatus, type ViewerSubject } from "./content";
 import { ControlsSlot } from "./controlsSlot";
 import { diffLayout } from "./diffLayout";
+import { FindBar, FindToggle } from "./FindBar";
 import {
   CopyPathButton,
   DetailItem,
@@ -27,8 +28,9 @@ import { formatFileSize } from "../format/fileSize";
 import { MarkdownLocationProvider, type MarkdownLocation } from "./markdownLocation";
 import { NoticeSlotBoxes, NoticeSlotsProvider } from "./notices";
 import { STATUS_LABELS, type StatusKey } from "./statusMarks";
+import { useFind } from "./useFind";
 import { useNavigationFocus } from "./useNavigationFocus";
-import { ViewerContentView } from "./ViewerContentView";
+import { isWaiting, ViewerContentView } from "./ViewerContentView";
 import type { ViewerNavigation } from "./viewerNavigation";
 import { useWrapClaims, WrapToggleHost } from "./wordWrap";
 
@@ -80,6 +82,10 @@ export function FileViewer({
     content,
     wrapClaimed,
   });
+
+  // Find in file (⌘F), over the text the content draws.
+  const contentRef = useRef<HTMLDivElement>(null);
+  const find = useFind({ headerRef, contentRef, subjectKey: subject.key, waiting: isWaiting(content) });
 
   const navigationControls = navigation ? (
     <RowIconGroup>
@@ -169,6 +175,7 @@ export function FileViewer({
         ) : undefined
       }
       onClose={onClose}
+      keyboardDismissHeld={find.bar !== null}
       footer={null}
       resetKey={subject.key}
     >
@@ -202,15 +209,22 @@ export function FileViewer({
             <div ref={setMarkdownViewSlot} className="contents" />
             <div ref={setLayoutSlot} className="contents" />
             {wrapClaimed && <WrapToggleHost />}
+            {find.toggle && <FindToggle {...find.toggle} />}
             {subject.host && <HostPathButtons host={subject.host} />}
           </RowIconGroup>
         </div>
-        <div className="flex min-h-0 flex-1 flex-col gap-3">
-          <ControlsSlot value={controls}>
-            <MarkdownLocationProvider value={{ path: subject.path, ...location }}>
-              <ViewerContentView subject={subject} name={name} layout={layout} onLayoutChange={diffLayout.set} line={line} />
-            </MarkdownLocationProvider>
-          </ControlsSlot>
+        {/* The find bar floats over the content's top trailing corner; while it is open the scrolled text
+            starts below it (`data-find-open` in style.css), so it covers no line until the reader scrolls.
+            The content is in a box of its own so the bar's changes do not count as the drawn text changing. */}
+        <div className="relative flex min-h-0 flex-1 flex-col" data-find-open={find.bar ? "" : undefined}>
+          {find.bar && <FindBar {...find.bar} />}
+          <div ref={contentRef} data-find-content="" className="flex min-h-0 flex-1 flex-col gap-3">
+            <ControlsSlot value={controls}>
+              <MarkdownLocationProvider value={{ path: subject.path, ...location }}>
+                <ViewerContentView subject={subject} name={name} layout={layout} onLayoutChange={diffLayout.set} line={line} />
+              </MarkdownLocationProvider>
+            </ControlsSlot>
+          </div>
         </div>
       </NoticeSlotsProvider>
     </Dialog>

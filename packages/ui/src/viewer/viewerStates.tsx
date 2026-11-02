@@ -13,6 +13,7 @@ import type { ErrorPresentation } from "../errors/errorPresentation";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { formatFileSize, formatSideSize } from "../format/fileSize";
+import { FIND_SKIP } from "./findDom";
 import { FIRST_ANNOUNCEMENT_DELAY_MS } from "./notices";
 import { ViewerErrorMessage } from "./ViewerErrorMessage";
 
@@ -149,10 +150,10 @@ export function Loading(): React.ReactElement {
 
 /** `Loading` laid over the frame that holds the content, for it to be centred in the frame (it only
  * centres itself inside a flex parent). It goes over the content rather than beside it, so taking it
- * away does not lay out a large file a second time. The frame is `relative`. */
+ * away does not lay out a large file a second time. The frame is `relative`. Find does not search it. */
 export function LoadingOverlay(): React.ReactElement {
   return (
-    <div className="absolute inset-0 flex">
+    <div {...FIND_SKIP} className="absolute inset-0 flex">
       <Loading />
     </div>
   );

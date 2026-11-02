@@ -13,7 +13,7 @@ import { Disconnected, DISCONNECTED, Failure, Loading, ViewerFirstContentContext
 
 /** Whether the content is still on its way: the file or change being read, or a conflict waiting
  * for its file. */
-function isWaiting(content: ViewerContent): boolean {
+export function isWaiting(content: ViewerContent): boolean {
   return content.state === "loading" || (content.state === "conflict" && !content.body && content.message === undefined);
 }
 

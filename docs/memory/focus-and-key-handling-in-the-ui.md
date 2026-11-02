@@ -270,6 +270,17 @@ surface that already calls it, every dialog included. Such a handler can only ch
 route the key onwards: once react-aria has swallowed it nothing can hand it back to the control that wanted it, which
 is why a combo box's suggestion list inside a dialog does not withdraw on Escape while a tooltip is open.
 
+Something inside a dialog that has to close on Escape before the dialog does (the file viewer's find bar) takes the key
+neither in a `window` capture-phase listener of its own nor by having `useEscapeWhileTooltipOpen` yield to
+`defaultPrevented`. Stopping the key on `window` hides it from every `document` capture-phase listener — react-aria's
+tracking of keyboard input, so focus moved by that press draws no ring, `AnchoredHint`'s own Escape, the tooltip's
+dismissal — and yielding to `defaultPrevented` depends on which listener was added first, which Fast Refresh reorders.
+Instead pass `Dialog`'s `keyboardDismissHeld` (`packages/ui/src/components/dialog/Dialog.tsx`) while the inner thing is
+open, which keeps both react-aria's modal and `useEscapeWhileTooltipOpen` from closing the dialog on Escape, and close
+the inner thing from a native `keydown` listener on the dialog element that calls `stopPropagation()`, so the React
+handlers the portal bubbles the key up to do not act on it as well — as `packages/ui/src/viewer/useFind.ts` does. With a
+tooltip open, that press only dismisses the tooltip, as everywhere else.
+
 A tooltip anchored to an element that is not its trigger (`AnchoredHint` in
 `packages/ui/src/components/hint/hintTooltips.tsx`, a clipped label's tooltip) gets no such listener from react-aria and
 stops the key itself in one case only: while it is shown and focus is inside the react-aria popover its anchor sits in
@@ -336,15 +347,23 @@ while focus is still in the popover and is overridden. Time it from the popover'
 `focusRow.ts` does. jsdom runs no exit animation, so a component test passes against the close-timed version too;
 settle such a focus return in a browser on the gallery page, driven from the keyboard.
 
-## A window shortcut is a command in the shortcut registry, never a key compared by hand
+## A window shortcut is a command in the shortcut registry; only a fixed key a view owns is compared by hand
 
 Applies to `packages/ui`, to every key combination the window answers or shows as a shortcut. Register it in
-`packages/ui/src/shortcuts/commands.ts` — `REBINDABLE`, or `FIXED` for a key the user may not change — match it with
-`matchesCommand` from `packages/ui/src/shortcuts/store.ts` inside `useWindowShortcut`, and show its key with
-`ShortcutKbd` (`packages/ui/src/shortcuts/ShortcutKbd.tsx`). A key compared by hand is missing from Settings' list,
-cannot be rebound, and is outside the set that `packages/ui/src/shortcuts/validate.ts` checks a recorded or imported
-binding against, so the user can bind another command onto it. Matching is exact — no modifier more or less — and the
-Cmd-on-Apple / Ctrl-elsewhere split of a binding is made in `packages/ui/src/shortcuts/binding.ts` alone.
+`packages/ui/src/shortcuts/commands.ts` — `REBINDABLE`, or `FIXED` for a key the user may not change — and show its
+key with `ShortcutKbd` (`packages/ui/src/shortcuts/ShortcutKbd.tsx`). A rebindable command is matched with
+`matchesCommand` from `packages/ui/src/shortcuts/store.ts`, which takes only rebindable ids, inside `useWindowShortcut`.
+A key missing from the registry is missing from Settings' list, cannot be rebound, and is outside the set that
+`packages/ui/src/shortcuts/validate.ts` checks a recorded or imported binding against, so the user can bind another
+command onto it — whose `useWindowShortcut`, on the window's capture phase, then swallows the key before anything else
+sees it, while a modal is open too. Matching is exact — no modifier more or less — and the Cmd-on-Apple /
+Ctrl-elsewhere split of a binding is made in `packages/ui/src/shortcuts/binding.ts`.
+
+The one key compared by hand is a `FIXED` key that a view outside `shortcuts/` owns (Find in the file viewer, F6 in
+`packages/ui/src/layout/useRegionCycle.ts`): `viewer/` and `layout/` may not import `shortcuts/` (`docs/structure/ui.md`,
+"Dependency direction"), so the view compares the key itself, through `isPrimaryModifier` below for Cmd / Ctrl. It is
+still listed in `FIXED`, and has a test that builds its key press from that entry, which tests may import, so the two cannot
+part unnoticed — as `packages/ui/src/viewer/FileViewerFind.test.tsx` presses Find from `eventKey(FIND_BINDING)`.
 
 Any other Cmd / Ctrl test — a modifier+click, the held-modifier quick-create affordance, a widget's own key — goes
 through `isPrimaryModifier` (and, for showing the key, `IS_MAC`) from `packages/ui/src/input/keys.ts`. Do not

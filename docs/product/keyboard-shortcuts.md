@@ -1,9 +1,9 @@
 # Keyboard shortcuts
 
 Octoboard's own commands have keyboard shortcuts the user can change, and Settings' **Keyboard shortcuts** section lists
-them together with the keys that belong to the window or the system, which cannot be changed. A changed shortcut belongs
-to the client it was changed in — the desktop app, or one browser — and nowhere else (see "Where the shortcuts are
-kept" below).
+them together with the keys that belong to the window, the system or the file viewer, which cannot be changed. A
+changed shortcut belongs to the client it was changed in — the desktop app, or one browser — and nowhere else (see
+"Where the shortcuts are kept" below).
 
 What each command does, and when it does nothing, is in the doc of the command itself; this doc covers the keys: which
 there are, how they are changed and how a key press is matched against them.
@@ -52,26 +52,28 @@ first. The defaults are written for an Apple keyboard; elsewhere each modifier i
 | Sessions | **Copy session ID** | `Shift+Cmd+C` | yes | every client |
 | Application | **Open settings** | `Cmd+,` | yes | the desktop app (its native menu) |
 | Editing | **Undo**, **Redo**, **Cut**, **Copy**, **Paste**, **Select all** | `Cmd+Z`, `Shift+Cmd+Z`, `Cmd+X`, `Cmd+C`, `Cmd+V`, `Cmd+A` | no | the desktop app (its native menu) |
+| Editing | **Find in file** | `Cmd+F` | no | every client |
 | Window | **Hide Octoboard**, **Hide others**, **Toggle full screen**, **Minimize**, **Close window**, **Quit Octoboard** | `Cmd+H`, `Option+Cmd+H`, `Ctrl+Cmd+F`, `Cmd+M`, `Cmd+W`, `Cmd+Q` | no | the desktop app (its native menu) |
 
 **A command the client does not have is not listed**: in a browser, Back and Forward, the console-session keys, Open
-settings and the native menu's keys are left out, and so are the Application, Editing and Window groups, which hold
-nothing else. Such a command keeps its key all the same, and that key cannot be given to another command there either
-(see "Which combinations are refused" below).
+settings and the native menu's keys are left out, and so are the Application and Window groups, which hold nothing
+else; the Editing group holds only Find in file there. Such a command keeps its key all the same, and that key cannot
+be given to another command there either (see "Which combinations are refused" below).
 
 What each command does: Back and Forward in "Keyboard shortcuts" in `docs/product/navigation-history.md`; the
 console-session keys in "The switch strip" in `docs/product/focus-mode.md`; the region keys in
 `docs/product/moving-focus-between-regions.md`; Toggle focus mode in "The focus mode shortcut" and the two New session
 commands in "Creating sessions from the keyboard", both in `docs/product/focus-mode.md`; the four session commands in
 "Session keyboard shortcuts" in `docs/product/sidebar-session-rows.md`; Open settings in "Opening and closing
-Settings" in `docs/product/settings.md`; and the native menu's keys in `docs/product/application-lifecycle.md`.
+Settings" in `docs/product/settings.md`; Find in file, which acts only in the file viewer, in
+`docs/product/finding-in-the-file-viewer.md`; and the native menu's keys in `docs/product/application-lifecycle.md`.
 
 ## The Keyboard shortcuts section
 
 The section sits after Notifications and before Configuration in Settings (see `docs/product/settings.md`). A paragraph
-under its heading says that the app's own commands can be changed, that the keys of the system and the window are listed
-too and cannot be, and that the changes apply to this device or browser only. Beside it, only while at least one
-shortcut differs from its default, is a **Restore defaults** button.
+under its heading says that the app's own commands can be changed, that the keys of the system, the window and the file
+viewer are listed too and cannot be, and that the changes apply to this device or browser only. Beside it, only while
+at least one shortcut differs from its default, is a **Restore defaults** button.
 
 Each group has a heading, and each command a row: its name, then its current key caps, and then either a **Change**
 button — with a **Reset** button after it while the command's shortcut differs from its default — or, for a key that

@@ -175,9 +175,11 @@ Where to start, by question:
 - [Project pane Git change list](product/project-pane-git-change-list.md) — the list of uncommitted and committed
   changes.
 - [Project pane Git change viewer](product/project-pane-git-change-viewer.md) — the diff view of one change.
-- [File viewer](product/file-viewer.md) — the read-only dialog showing one file: header, stand-ins, wrapping and
-  navigation.
+- [File viewer](product/file-viewer.md) — the read-only dialog showing one file: header, stand-ins, wrapping,
+  finding and navigation.
 - [Markdown documents in the file viewer](product/markdown-documents.md) — how a Markdown file renders as a document.
+- [Finding in the file viewer](product/finding-in-the-file-viewer.md) — Find in file: opening the find bar, what is
+  searched, its switches and count, how matches are highlighted and stepped through, and closing it.
 - [Report panel](product/report-panel.md) — the panel where a console session, or a project session that faces the
   user, pushes, withdraws and pages through its pages and receives form submissions.
 

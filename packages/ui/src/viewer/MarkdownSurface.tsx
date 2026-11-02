@@ -8,6 +8,7 @@ import { textPlan } from "./budgets";
 import { CODE_THEMES } from "./codeTheme";
 import { RendererBoundary } from "./codeRenderer";
 import { CodeSurface } from "./CodeSurface";
+import { FIND_REGION } from "./findDom";
 import { FencedCode } from "./FencedCode";
 import { FrameSurface } from "./FrameSurface";
 import { markdownView, MarkdownViewToggle, type MarkdownView } from "./markdownView";
@@ -121,6 +122,7 @@ function DocumentSurface({
         <div
           key={resetKey}
           {...fade}
+          {...FIND_REGION}
           onKeyDown={(event) => {
             if (isSelectAll(event) && selectDocument(event.currentTarget)) event.preventDefault();
           }}

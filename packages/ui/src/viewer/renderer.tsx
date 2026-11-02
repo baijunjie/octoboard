@@ -28,15 +28,17 @@ import { CODE_THEMES } from "./codeTheme";
 import type { ChangeBodies } from "./content";
 import type { DiffLayout } from "./diffLayout";
 import { EXPANSION_STEP, Expansion, type ExpansionStatus, type HunkExpander, type SeparatorLabels } from "./expansion";
+import { findHighlightCss } from "./findHighlight";
 import { separatorLabels } from "./rendererDom";
 
 // GitHub's high-contrast palettes: of the bundled themes measured, the ones whose every token
 // reaches WCAG AA's 4.5:1 on the code background in both appearances.
 const THEMES = { light: CODE_THEMES.light.name, dark: CODE_THEMES.dark.name } as const;
 
-/** The renderer's shadow root shares the application's monospace stack and its frame's fill. */
+/** The renderer's shadow root shares the application's monospace stack and its frame's fill, and
+ * paints the find bar's matches (a highlight rule has to be in the shadow root's own stylesheet). */
 function readingCss(theme: "light" | "dark"): string {
-  return `:host { --diffs-bg: ${CODE_THEMES[theme].background}; --diffs-font-family: var(--font-mono); }`;
+  return `:host { --diffs-bg: ${CODE_THEMES[theme].background}; --diffs-font-family: var(--font-mono); }${findHighlightCss}`;
 }
 
 const FLUSH_TOP_CSS = "[data-code], [data-diff-type=\"split\"] { padding-top: 0 !important; }";

@@ -998,7 +998,7 @@ it("wraps nothing by default, then wraps files and diffs alike once chosen, and 
 // The two controls portal into places of their own, so the Tab order stays the order on screen
 // whichever mounts first: stepping from a one-sided diff (the wrap choice only) to a two-sided one
 // brings the layout choice in after it.
-it("keeps Copy path, then the layout choice, then the wrap choice, when the layout choice mounts second", () => {
+it("keeps Copy path, then the layout choice, then the wrap choice, then Find, when the layout choice mounts second", () => {
   const side: ViewerChangeSide = { state: "present", path: "src/c.ts", kind: "file" };
   const change = (key: string, patch: string, old: ViewerChangeSide): ViewerSubject => ({
     key,
@@ -1007,9 +1007,9 @@ it("keeps Copy path, then the layout choice, then the wrap choice, when the layo
   });
   const controls = () => [...dialog()!.querySelector("[data-viewer-description]")!.querySelectorAll("button")].map((b) => b.getAttribute("aria-label"));
   show(change("one", "@@ -0,0 +1 @@\n+a\n", { state: "absent" }));
-  expect(controls()).toEqual(["Copy path", "Wrap lines"]);
+  expect(controls()).toEqual(["Copy path", "Wrap lines", "Find in file"]);
   show(change("two", "@@ -1 +1 @@\n-a\n+b\n", side));
-  expect(controls()).toEqual(["Copy path", "Show split diff", "Wrap lines"]);
+  expect(controls()).toEqual(["Copy path", "Show split diff", "Wrap lines", "Find in file"]);
 });
 
 // An image that cannot be decoded falls back to its text on whichever side it happens to, and the
