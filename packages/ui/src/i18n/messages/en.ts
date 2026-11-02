@@ -744,7 +744,7 @@ export const en = {
     one: "{count} more…",
     other: "{count} more…",
   },
-  "statusItem.noSessions": "No sessions running",
+  "statusItem.noListedSessions": "No sessions to show",
   "statusItem.open": "Open {appName}",
   "statusItem.quota": "{agent} usage",
   "statusItem.quota.notLoggedIn": "Not logged in",

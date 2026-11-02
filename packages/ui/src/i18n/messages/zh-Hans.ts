@@ -665,7 +665,7 @@ export const zhHans: Translation<"other"> = {
   "statusItem.more": {
     other: "还有 {count} 个…",
   },
-  "statusItem.noSessions": "没有正在运行的会话",
+  "statusItem.noListedSessions": "没有可显示的会话",
   "statusItem.open": "打开 {appName}",
   "statusItem.quota": "{agent} 用量",
   "statusItem.quota.notLoggedIn": "未登录",

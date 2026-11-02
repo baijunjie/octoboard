@@ -38,8 +38,8 @@ const inProject = (id: string, status: SessionStatus, title = id, terminal_title
 
 describe("buildStatusItemMenu", () => {
   it("says so when every session is archived, or there are none", () => {
-    expect(menuOf([inProject("a", "archived")]).sections).toEqual([{ heading: "No sessions running", items: [] }]);
-    expect(menuOf([]).sections).toEqual([{ heading: "No sessions running", items: [] }]);
+    expect(menuOf([inProject("a", "archived")]).sections).toEqual([{ heading: "No sessions to show", items: [] }]);
+    expect(menuOf([]).sections).toEqual([{ heading: "No sessions to show", items: [] }]);
   });
 
   it("lights the icon's dot only while a live session waits for the user or is dormant", () => {
@@ -55,75 +55,33 @@ describe("buildStatusItemMenu", () => {
     expect(menuOf([orphan]).attention).toBe(false);
   });
 
-  it("lists each status under a heading with its count, in the order the sidebar ranks statuses, background sessions apart", () => {
-    const background = sessionOf("b", "c", "p", "b", "idle", { background_tasks: [{ id: "t1" }] });
-    const { sections } = menuOf([inProject("w", "working"), background, inProject("i", "idle"), inProject("h", "waiting_user")]);
-    expect(sections.map((s) => [s.heading, s.icon, s.items.map((item) => item.session)])).toEqual([
-      ["Waiting for you (1)", "status:waiting_user", ["h"]],
-      ["Awaiting instructions (1)", "status:idle", ["i"]],
-      ["Working in background (1)", "status:background", ["b"]],
-      ["Working (1)", "status:working", ["w"]],
-    ]);
-  });
-
-  it("lists done and delegated sessions under headings of their own, between idle and background", () => {
-    const background = sessionOf("b", "c", "p", "b", "idle", { background_tasks: [{ id: "t1" }], has_conversation: false });
-    const done = sessionOf("d", "c", "p", "d", "idle", { has_conversation: true });
+  it("lists only waiting, paused, done and awaiting-instructions sessions with their counts and agent marks", () => {
+    const done = sessionOf("d", "c", "p", "d", "idle", { has_conversation: true, agent: "codex" });
     const owner = inProject("o", "idle");
     const child = { ...inProject("k", "working"), bound_to: "o" };
-    const { sections } = menuOf([child, background, done, owner, inProject("i", "idle"), inProject("h", "waiting_user")]);
-    expect(sections.map((s) => [s.heading, s.icon, s.items.map((item) => item.session)])).toEqual([
-      ["Waiting for you (1)", "status:waiting_user", ["h"]],
-      ["Done (1)", "status:done", ["d"]],
-      ["Awaiting instructions (1)", "status:idle", ["i"]],
-      ["Child sessions working (1)", "status:delegated", ["o"]],
-      ["Working in background (1)", "status:background", ["b"]],
-      ["Working (1)", "status:working", ["k"]],
+    const hidden = [
+      child, owner, inProject("w", "working"), inProject("m", "dormant"),
+      inProject("t", "starting"), inProject("n", "interrupted"), inProject("a", "archived"),
+      sessionOf("b", "c", "p", "b", "idle", { background_tasks: [{ id: "t1" }] }),
+      sessionOf("s", "c", "p", "s", "waiting_user", { switching_account: true }),
+    ];
+    const menu = menuOf([...hidden, inProject("i", "idle"), done, inProject("h", "waiting_user"), sessionOf("p", "c", "p", "p", "idle", { paused: true })]);
+    expect(menu.sections.map((section) => [section.heading, section.icon, section.items.map((item) => [item.session, item.icon])])).toEqual([
+      ["Waiting for you (1)", "status:waiting_user", [["h", "agent:claude"]]],
+      ["Paused (1)", "status:paused", [["p", "agent:claude"]]],
+      ["Done (1)", "status:done", [["d", "agent:codex"]]],
+      ["Awaiting instructions (1)", "status:idle", [["i", "agent:claude"]]],
     ]);
+    expect(menuOf(hidden).sections).toEqual([{ heading: "No sessions to show", items: [] }]);
+    expect([...iconKeysOf(menu)]).not.toContain("status:working");
   });
 
-  it("lists dormant and paused sessions under headings of their own, between the raised hand and done, and lights the attention dot for dormant, not for paused", () => {
-    const paused = sessionOf("p", "c", "p", "p", "idle", { paused: true, has_conversation: true });
-    const done = sessionOf("d", "c", "p", "d", "idle", { has_conversation: true });
-    const menu = menuOf([done, paused, inProject("m", "dormant"), inProject("h", "waiting_user")]);
-    expect(menu.sections.map((s) => [s.heading, s.icon, s.items.map((item) => item.session)])).toEqual([
-      ["Waiting for you (1)", "status:waiting_user", ["h"]],
-      ["Dormant (1)", "status:dormant", ["m"]],
-      ["Paused (1)", "status:paused", ["p"]],
-      ["Done (1)", "status:done", ["d"]],
-    ]);
-    expect(menuOf([paused]).attention).toBe(false);
-    expect(menuOf([inProject("m", "dormant")]).attention).toBe(true);
-    expect([...iconKeysOf(menu)]).toEqual(expect.arrayContaining(["status:dormant", "status:paused"]));
-  });
-
-  it("lists starting, switching account and interrupted sessions under headings of their own, after the ones at work in that order", () => {
-    const switching = sessionOf("s", "c", "p", "s", "idle", { switching_account: true });
-    const { sections } = menuOf([inProject("n", "interrupted"), switching, inProject("t", "starting"), inProject("w", "working"), inProject("h", "waiting_user")]);
-    expect(sections.map((s) => [s.heading, s.icon, s.items.map((item) => item.session)])).toEqual([
-      ["Waiting for you (1)", "status:waiting_user", ["h"]],
-      ["Working (1)", "status:working", ["w"]],
-      ["Starting (1)", "status:starting", ["t"]],
-      ["Switching account… (1)", "status:switching", ["s"]],
-      ["Interrupted (1)", "status:interrupted", ["n"]],
-    ]);
-  });
-
-  it("lights the attention dot for neither starting, switching account nor interrupted sessions", () => {
-    expect(menuOf([inProject("t", "starting"), inProject("n", "interrupted"), sessionOf("s", "c", "p", "s", "idle", { switching_account: true })]).attention).toBe(false);
-  });
-
-  it("lists a session once, however many statuses it has a claim to: switching account hides its own status", () => {
-    const switching = sessionOf("s", "c", "p", "s", "waiting_user", { switching_account: true });
-    expect(menuOf([switching]).sections.map((s) => [s.icon, s.items.map((item) => item.session)])).toEqual([["status:switching", ["s"]]]);
-  });
-
-  it("gives each heading its status glyph and each session its agent's mark", () => {
-    const { sections } = menuOf([inProject("h", "waiting_user"), sessionOf("w", "c", "p", "w", "working", { agent: "codex" })]);
-    expect(sections.map((s) => [s.icon, s.items.map((item) => item.icon)])).toEqual([
-      ["status:waiting_user", ["agent:claude"]],
-      ["status:working", ["agent:codex"]],
-    ]);
+  it("keeps a switching session out of the list even when its underlying status is eligible", () => {
+    for (const status of ["waiting_user", "idle"] as const) {
+      const switching = sessionOf("s", "c", "p", "s", status, { switching_account: true });
+      expect(menuOf([switching]).sections).toEqual([{ heading: "No sessions to show", items: [] }]);
+      expect(menuOf([switching]).attention).toBe(false);
+    }
   });
 
   it("names a session with its location unless it is titled after it", () => {
@@ -147,9 +105,9 @@ describe("buildStatusItemMenu", () => {
   });
 
   it("names the first ten of a longer section and sums up the rest in a line that cannot be chosen", () => {
-    const many = Array.from({ length: MAX_PER_SECTION + 3 }, (_, i) => inProject(`s${i}`, "working"));
+    const many = Array.from({ length: MAX_PER_SECTION + 3 }, (_, i) => inProject(`s${i}`, "waiting_user"));
     const [section] = menuOf(many).sections;
-    expect(section.heading).toBe(`Working (${many.length})`);
+    expect(section.heading).toBe(`Waiting for you (${many.length})`);
     expect(section.items).toHaveLength(MAX_PER_SECTION + 1);
     expect(section.items.at(-1)).toEqual({ label: "3 more…" });
   });

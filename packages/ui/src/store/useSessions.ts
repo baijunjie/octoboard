@@ -3,7 +3,7 @@ import { useShallow } from "zustand/react/shallow";
 import type { Session } from "../protocol";
 import { useDaemonStore } from "./react";
 import { topStatus } from "../sessions/order";
-import { sessionShownStatusKind, type ShownStatusKind } from "../sessions/sessionStatus";
+import { isSummaryStatus, sessionShownStatusKind, type ShownStatusKind } from "../sessions/sessionStatus";
 import { countWaitingInTree } from "../sessions/waiting";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 
@@ -34,11 +34,11 @@ export function useArchivedOwnerSessions(consoleId: string): Session[] {
   );
 }
 
-/** The avatar status: the top status (`topStatus`) of all sessions belonging to this console. */
+/** The avatar status: the top eligible status among this console's sessions. */
 export function useConsoleStatus(consoleId: string): ShownStatusKind | undefined {
   return useDaemonStore((s) => {
     const index = indexSessions(s.sessions);
-    return topStatus(sessionsOf(index.byConsole, consoleId), index.delegatingIds);
+    return topStatus(sessionsOf(index.byConsole, consoleId).filter((session) => isSummaryStatus(sessionShownStatusKind(session, index.delegatingIds))), index.delegatingIds);
   });
 }
 

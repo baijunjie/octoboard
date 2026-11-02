@@ -1095,8 +1095,9 @@ cell exposed as a static text of its own. The view takes no role or label and th
 would be exposed twice, or the line would have no title for menu search.
 
 A decoration drawn over the menu bar icon itself, such as the orange dot while a session waits for the user or is
-dormant, is likewise marked non-element, view and cell: the menu's **Waiting for you** or **Dormant** heading is what
-tells assistive technology that state.
+dormant, is likewise marked non-element, view and cell. The dot is a visual attention cue independent of the session
+list, which includes only Waiting for you, Paused, Done and Awaiting instructions. A dormant session may light the dot while
+no session is listed.
 
 ### Where an error is shown
 

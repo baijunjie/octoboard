@@ -63,24 +63,18 @@ it("opens no popover on a tap: both places it stands in are pressable, and the t
 describe("AvatarStatusBadge", () => {
   const badge = (status: ShownStatusKind | undefined) => mountForTooltip(<AvatarStatusBadge status={status} />).firstElementChild;
 
-  it.each(STATUS_TEXT)("gives a console showing %s a decorative badge", (status) => {
+  it.each(STATUS_TEXT.filter(([status]) => ["waiting_user", "paused", "done", "idle"].includes(status)))("gives a console showing %s a decorative badge", (status) => {
     const element = badge(status);
     expect(element).not.toBeNull();
     expect(element?.getAttribute("aria-hidden")).toBe("true");
   });
 
-  it("draws none for an archived or absent status", () => {
-    expect(badge("archived")).toBeNull();
-    expect(badge(undefined)).toBeNull();
+  it.each([undefined, "archived", "starting", "switching", "dormant", "delegated", "background", "working", "interrupted"] as const)("draws none for %s", (status) => {
+    expect(badge(status)).toBeNull();
   });
 
-  it("tells the statuses apart, starting and switching account sharing the grey turning arc", () => {
-    // The glyph alone, so that a disc's colour is never what tells two statuses apart.
-    const glyphs = STATUS_TEXT.map(([status]) => badge(status)!.firstElementChild!.outerHTML);
-    expect(new Set(glyphs).size).toBe(STATUS_TEXT.length - 1);
-    const grey = ["starting", "switching", "interrupted"].map((status) => badge(status as ShownStatusKind)!);
-    for (const element of grey) expect(element.className).toContain("bg-default");
-    expect(grey[0].outerHTML).toBe(grey[1].outerHTML);
-    expect(grey[2].outerHTML).not.toBe(grey[0].outerHTML);
+  it("gives each summary status a different glyph", () => {
+    const glyphs = (["waiting_user", "paused", "done", "idle"] as const).map((status) => badge(status)!.firstElementChild!.outerHTML);
+    expect(new Set(glyphs).size).toBe(4);
   });
 });

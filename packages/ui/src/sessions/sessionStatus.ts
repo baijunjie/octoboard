@@ -64,3 +64,10 @@ export function sessionShownStatusKind(
 ): ShownStatusKind {
   return showsSwitching(session) ? "switching" : sessionStatusKind(session, delegating);
 }
+
+/** The statuses surfaced by the menu bar list and console avatars. Other statuses stay on session rows. */
+export const SUMMARY_STATUSES = ["waiting_user", "paused", "done", "idle"] as const satisfies readonly ShownStatusKind[];
+
+export function isSummaryStatus(status: ShownStatusKind): boolean {
+  return SUMMARY_STATUSES.some((kind) => kind === status);
+}

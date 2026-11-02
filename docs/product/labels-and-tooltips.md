@@ -87,8 +87,8 @@ application buttons below. These are:
   toggle's tooltip follows its "Show …" / "Hide …" label (see "The sidebar toggle and the panel toggles" in
   `docs/product/window-layout.md`), and each panel toggle's also names its panel (see "The panel toggles in the top bar"
   in `docs/product/right-pane-panels.md`);
-- the rail's buttons — each console's avatar, whose tooltip is the console's name followed by the top status of its
-  sessions, the same text as the name announced for it (see "The console switcher" in `docs/product/console-switcher.md`), New
+- the rail's buttons — each console's avatar, whose tooltip is the console's name followed by its eligible top status,
+  when one is present, the same text as the name announced for it (see "The console switcher" in `docs/product/console-switcher.md`), New
   console, the waiting count, whose tooltip says how many sessions are waiting and that pressing it goes to the next
   one, Turn on notifications and Settings (the rail's Account usage button has none, as said below this list);
 - the ⋮ button that opens an action menu — a sidebar row's, the console's in the sidebar's header, the project's in
@@ -312,9 +312,9 @@ These are:
   (see "Project rows" in `docs/product/sidebar-project-rows.md`) or inside focus mode's **console-switch chip** (see
   "The switch strip" in `docs/product/focus-mode.md`), whose tooltip says that status in the same words as everywhere
   else it is named, the words the name of the row or chip around it says after the project's or console session's own
-  name (see "The top status" in `docs/product/session-statuses.md`). The rail's console avatar marks the same top
-  status with a badge (see "The console switcher" in `docs/product/console-switcher.md`); that decorative badge has no
-  tooltip of its own;
+  name (see "The top status" in `docs/product/session-statuses.md`). The rail's console avatar selects a badge only
+  among sessions waiting for the user, paused, done or awaiting instructions (see "The console switcher" in
+  `docs/product/console-switcher.md`); that decorative badge has no tooltip of its own;
 - the binding badge, the coloured dot on a project session's row bound to a console session, whose tooltip names that
   console session (see "The binding badge" in `docs/product/sidebar-session-rows.md`);
 - a session's agent icon on its row, on a focus mode's card or archived row, on the archive view's row and on each

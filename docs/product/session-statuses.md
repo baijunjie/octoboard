@@ -63,7 +63,7 @@ centred; the turning arc turns about the box's centre.
 **Dormant's "zz"** is a large Z at the bottom left with a smaller one stepping up to its top right. Where motion is
 allowed, Zs drift up that diagonal instead, shrinking as they rise, a new one entering at the bottom left as the top one
 leaves at the top right; each takes about 2.4 seconds to cross, the next a third of that behind, and none is drawn
-outside the glyph's box. The menu bar draws the still pair.
+outside the glyph's box.
 
 The waving hand, the pings, the turning arc and the rising Zs stand still where the system asks for reduced motion.
 Every status still differs from the rest by shape, so colour is never the only cue: the filled dot of *working* from the
@@ -331,28 +331,36 @@ shows again the moment the view is gone.
 
 ## The top status
 
-Where one mark stands for several sessions — a console's avatar on the rail, a collapsed project's row, a chip of a
-console session's switch strip — it marks them with their **top status**: the status, as "Which status a session shows"
-above gives it, of the one among them that comes first in the status order (see "The status order" in
-`docs/product/order-of-projects-and-sessions.md`), the most recently started breaking a tie. Archived sessions are left
-out. A session starting or switching account is ranked with the status it will have once that is over, but marked as
-starting or switching account. The choice does not depend on pins, nor on whether the sidebar is ordered by status.
+A collapsed project's row and a console session's focus-mode switch-strip chip mark several sessions with their
+**top status**: the shown status, as "Which status a session shows" above gives it, of the session that comes first
+in the status order (see "The status order" in `docs/product/order-of-projects-and-sessions.md`), the most recently
+started breaking a tie. Archived sessions are left out. A session starting or switching account is ranked with the
+status it will have once that is over, but marked as starting or switching account. The choice does not depend on
+pins, nor on whether the sidebar is ordered by status.
 
-Every status but *archived* has its own mark there, the glyph of "Status glyphs" above or, on the rail, a badge of its
-own, so the mark always says exactly which status it is; there is a mark whenever any of the sessions is not archived.
-The accessible name of the avatar, row or chip is its own name followed by that status, in the words the status is said
-in everywhere ("Name, Working"; for a pinned project, "Name, pinned, Working"). Where each is drawn is in "The console
-switcher" in `docs/product/console-switcher.md`, "Project rows" in `docs/product/sidebar-project-rows.md` and "The
-switch strip" in `docs/product/focus-mode.md`. The menu bar icon's menu lists every status but *archived* in a group of
-its own (see "The icon's menu" in `docs/product/menu-bar-icon.md`).
+Every status but *archived* has its own glyph there, as "Status glyphs" above describes, so the mark always says exactly
+which status it is; there is a mark whenever any of the sessions is not archived. The accessible name of the row or
+chip is its own name followed by that status ("Name, Working"; for a pinned project, "Name, pinned, Working"). Where
+each is drawn is in "Project rows" in `docs/product/sidebar-project-rows.md` and "The switch strip" in
+`docs/product/focus-mode.md`.
+
+**A console's avatar on the rail selects only among sessions whose shown status is waiting for the user, paused, done or
+awaiting instructions**, in that priority order, with the most recently started breaking a tie. Other shown statuses
+are excluded before choosing the top status, including starting and switching account. With no eligible session, it
+has no badge and its accessible name and tooltip contain only the console's name. Otherwise they include the chosen
+status. The badges are described in "The console switcher" in `docs/product/console-switcher.md`.
+
+The menu bar icon's session list uses the same four eligible statuses and their priority (see "The icon's menu" in
+`docs/product/menu-bar-icon.md`). This filtering does not change session rows, collapsed-project markers or focus-mode
+switch-strip chips.
 
 ## The raised hand
 
 *Waiting for the user* is the raised hand, and it is made findable rather than left on the session's own row:
 
 - The session's row shows the raised hand. Its project row shows one while the project is collapsed, and its console's
-  avatar on the rail carries one unless the session chosen for the badge is switching account. The rail shows every
-  console at once, so a waiting session can be found whatever the sidebar is showing (see "The console switcher" in
+  avatar on the rail carries one when a session shows that waiting status. The rail shows every console at once, so a
+  waiting session can be found whatever the sidebar is showing (see "The console switcher" in
   `docs/product/console-switcher.md` and "Project rows" in `docs/product/sidebar-project-rows.md`). In a console
   session's focus mode, a console session's chip in the switch strip shows one too while it or a session bound to it is
   waiting (see "The switch strip" in `docs/product/focus-mode.md`).

@@ -8,7 +8,8 @@ const GROUP = "Window layout";
 // which has two waiting sessions there, and the one with the long name, which has one, so the waiting
 // count reads 3 across both), a Done status (Operations, whose hub outranks its working session, and Billing), and
 // nothing going on (Docs). Main and Website are also borrowed by `layout-waiting-overflow`, which
-// gives them sessions of its own. Every other badge is shown by `collapsed-project-activity`.
+// gives them sessions of its own. `collapsed-project-activity` also shows Paused and Awaiting instructions
+// and consoles whose other statuses are filtered out of the rail badges.
 const main = consoleOf("c-main", "Main");
 const operations = consoleOf("c-ops", "Operations");
 const billing = consoleOf("c-billing", "Billing");

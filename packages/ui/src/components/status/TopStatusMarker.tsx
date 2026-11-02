@@ -1,15 +1,9 @@
-import { Check, CirclePause, Hand, LoaderCircle, MessageCircleMore, Pause } from "lucide-react";
+import { Check, CirclePause, Hand, MessageCircleMore } from "lucide-react";
 import React from "react";
 
 import { type ShownStatusKind } from "../../sessions/sessionStatus";
-import { DELEGATED_DOT_PX, DELEGATED_RING_PX } from "./delegatedGlyph";
 import { BUBBLE_SHIFT, HAND_SHIFT, shiftedViewBox } from "./opticalCentring";
 import { StatusIcon } from "./StatusIcon";
-import { SleepGlyph } from "./statusGlyphs";
-
-/** The badge's delegated ring; its dot keeps the glyph's proportion to the ring. */
-const BADGE_DELEGATED_RING_PX = 10;
-const BADGE_DELEGATED_DOT_PX = (BADGE_DELEGATED_RING_PX * DELEGATED_DOT_PX) / DELEGATED_RING_PX;
 
 /** The marker a collapsed project row shows for the sessions beneath it, and focus mode's
  * console-switch chip for the sessions of that console session: the glyph of the top status among
@@ -35,15 +29,8 @@ export function TopStatusMarker({ status }: { status: ShownStatusKind | undefine
   return <StatusIcon status={status} decorative withTooltip touchPopover={false} small />;
 }
 
-/** The disc is the badge's fixed 14px box, centring whatever it holds. Inverted status glyphs stay legible over arbitrary avatar colours, one for every status but archived,
- * which a console's badge never shows. Done wears its check mark, and paused
- * its pause sign in a circle (a bare pause sign is interrupted's), on the idle badge's green; dormant wears its
- * "zz" on the waiting badge's orange, as both need the person. Delegated, background and working follow their glyphs' progression: a green disc
- * with a ring around a dot, a green disc with a hollow centre, and a blue disc with a solid centre; only
- * the centre breathes, keeping the badge steady. Starting and switching account wear the turning arc on a
- * grey disc, as neither has settled into a status yet, and interrupted its pause sign on the same grey, as
- * it has no process.
- * The avatar supplies its tooltip and accessible name, so the badge is decorative. */
+/** A decorative 14px badge for the console's waiting, paused, done or awaiting-instructions summary.
+ * The avatar supplies its tooltip and accessible name. */
 export function AvatarStatusBadge({ status, className = "" }: { status: ShownStatusKind | undefined; className?: string }): React.ReactElement | null {
   const disc = `flex size-3.5 items-center justify-center rounded-full ${className}`;
   switch (status) {
@@ -59,13 +46,6 @@ export function AvatarStatusBadge({ status, className = "" }: { status: ShownSta
           <MessageCircleMore strokeWidth={2.5} viewBox={shiftedViewBox(BUBBLE_SHIFT)} className="size-2.5" />
         </span>
       );
-    case "dormant":
-      return (
-        <span aria-hidden="true" className={`${disc} bg-warning text-warning-foreground`}>
-          {/* The lucide stroke rather than the badge's thicker one: at 2.5 the two letters' corners meet. */}
-          <SleepGlyph className="size-2.5" />
-        </span>
-      );
     case "paused":
       return (
         <span aria-hidden="true" className={`${disc} bg-success text-success-foreground`}>
@@ -76,42 +56,6 @@ export function AvatarStatusBadge({ status, className = "" }: { status: ShownSta
       return (
         <span aria-hidden="true" className={`${disc} bg-success text-success-foreground`}>
           <Check strokeWidth={2.5} className="size-2.5" />
-        </span>
-      );
-    case "delegated":
-      return (
-        <span aria-hidden="true" className={`${disc} bg-success text-success-foreground`}>
-          <span
-            className="flex items-center justify-center rounded-full border-[1.5px] border-current motion-safe:animate-status-breathe"
-            style={{ width: BADGE_DELEGATED_RING_PX, height: BADGE_DELEGATED_RING_PX }}
-          >
-            <span className="rounded-full bg-current" style={{ width: BADGE_DELEGATED_DOT_PX, height: BADGE_DELEGATED_DOT_PX }} />
-          </span>
-        </span>
-      );
-    case "working":
-      return (
-        <span aria-hidden="true" className={`${disc} bg-accent text-accent-foreground`}>
-          <span className="size-1.5 rounded-full bg-current motion-safe:animate-status-breathe" />
-        </span>
-      );
-    case "background":
-      return (
-        <span aria-hidden="true" className={`${disc} bg-success text-success-foreground`}>
-          <span className="size-2 rounded-full border-[1.5px] border-current motion-safe:animate-status-breathe" />
-        </span>
-      );
-    case "starting":
-    case "switching":
-      return (
-        <span aria-hidden="true" className={`${disc} bg-default text-default-foreground`}>
-          <LoaderCircle className="size-2.5 motion-safe:animate-spin" />
-        </span>
-      );
-    case "interrupted":
-      return (
-        <span aria-hidden="true" className={`${disc} bg-default text-default-foreground`}>
-          <Pause strokeWidth={2.5} className="size-2.5" />
         </span>
       );
     default:

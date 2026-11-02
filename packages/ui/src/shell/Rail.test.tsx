@@ -14,7 +14,7 @@ import { enter, leave, mountForTooltip, openTooltip, withFakeTimers } from "../c
 
 const main = consoleOf("c-1", "Main");
 
-/** A status the avatar can show beyond the wire's: the ones derived from an idle session (`delegated` adds a
+/** A session status beyond the wire's: the ones derived from an idle session (`delegated` adds a
  * working session bound to it), and `switching` account over any status. */
 type Case = SessionStatus | "background" | "paused" | "done" | "delegated" | "switching";
 
@@ -64,12 +64,10 @@ function avatarOf(statuses: Case[], hoverOpensSidebar = false): HTMLButtonElemen
 const AVATAR_TEXT: Array<[string, Case[], string]> = [
   ["a session is waiting for the user", ["working", "waiting_user"], "Waiting for you"],
   ["a session awaits instructions before another finishes working", ["idle", "working"], "Awaiting instructions"],
-  ["a session is working in background", ["working", "background"], "Working in background"],
-  ["a session is starting before another finishes working", ["starting", "working"], "Starting"],
-  ["a session is dormant before another is paused", ["paused", "dormant"], "Dormant"],
-  ["a session is interrupted and another is working", ["interrupted", "working"], "Working"],
-  ["a session alone is interrupted", ["interrupted"], "Interrupted"],
-  ["a session is switching account", ["switching"], "Switching account…"],
+  ["a done session coexists with dormant and paused sessions", ["dormant", "paused", "done"], "Paused"],
+  ["an idle session coexists with a starting session", ["starting", "idle"], "Awaiting instructions"],
+  ["a waiting session takes priority over done", ["done", "paused", "waiting_user", "idle"], "Waiting for you"],
+  ["a done session takes priority over awaiting instructions", ["idle", "done"], "Done"],
 ];
 
 it.each(AVATAR_TEXT)("says on the avatar's tooltip, in its accessible name's words, that %s", (_case, statuses, words) => {
@@ -91,7 +89,7 @@ it.each(AVATAR_TEXT)("says on the avatar's tooltip, in its accessible name's wor
   expect(vi.getTimerCount()).toBe(0);
 });
 
-it.each<{ statuses: SessionStatus[] }>([{ statuses: [] }, { statuses: ["archived"] }])("tells the bare name without an avatar status for $statuses", ({ statuses }) => {
+it.each<{ statuses: Case[] }>([[], ["archived"], ["working"], ["starting"], ["dormant"], ["background"], ["delegated"], ["switching"], ["interrupted"]].map((statuses) => ({ statuses: statuses as Case[] })))("tells the bare name without an avatar status for $statuses", ({ statuses }) => {
   const settle = withFakeTimers();
   const avatar = avatarOf(statuses);
 
@@ -99,6 +97,7 @@ it.each<{ statuses: SessionStatus[] }>([{ statuses: [] }, { statuses: ["archived
   settle();
   expect(openTooltip()?.textContent).toBe("Main");
   expect(avatar.getAttribute("aria-label")).toBe("Main");
+  expect(avatar.querySelector("span.relative")!.children).toHaveLength(1);
   expect(avatar.getAttribute("aria-describedby")).toBeFalsy();
 
   leave(avatar);
@@ -108,16 +107,9 @@ it.each<{ statuses: SessionStatus[] }>([{ statuses: [] }, { statuses: ["archived
 
 const EVERY_STATUS: Array<[Case, string]> = [
   ["waiting_user", "Waiting for you"],
-  ["dormant", "Dormant"],
   ["paused", "Paused"],
   ["done", "Done"],
   ["idle", "Awaiting instructions"],
-  ["delegated", "Child sessions working"],
-  ["background", "Working in background"],
-  ["working", "Working"],
-  ["starting", "Starting"],
-  ["switching", "Switching account…"],
-  ["interrupted", "Interrupted"],
 ];
 
 it.each(EVERY_STATUS)("marks an avatar whose top status is %s with a badge, and names the status", (status, words) => {

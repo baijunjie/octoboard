@@ -18,8 +18,8 @@ bar:
   for a light or dark menu bar, rather than in the octopus's tint. The dot is about **6.5 pt** across within the
   18 pt icon. It appears with or without a readable quota.
   It is part of the icon's look and is not presented to assistive technology on
-  its own. The sessions that count are exactly those the menu lists under **Waiting for you** and **Dormant** (see
-  "The icon's menu" below), across every console.
+  its own. Sessions across every console count, independently of which statuses the menu lists. A dormant
+  session can light the dot even when the menu has no sessions to show.
 
 When the selected session has a readable account quota, bars below the octopus show the remaining percentage, with
 a gap above them. They use the octopus's monochrome tint and span the icon's width, covering its lower tentacles while
@@ -46,9 +46,8 @@ passing, after which that window is drawn full (see "How an account's quota is s
 not to the window, whose layout is what a right-to-left language mirrors (see `docs/product/right-to-left-layout.md`).
 
 The look changes together with the menu: a change that has to wait for an open menu to close (see the end of "The icon's
-menu" below) changes the look and its label only when it reaches the menu, so the icon and the menu always agree on
-whether a session is waiting or dormant; the octopus's dot clearance and the orange dot always appear and go together. Until the
-window's UI has sent its first menu — and throughout on the screen shown when the daemon failed to start — the icon is
+menu" below) changes the look and its label only when it reaches the menu, so both reflect the same session snapshot.
+The octopus's dot clearance and the orange dot always appear and go together. Until the window's UI has sent its first menu — and throughout on the screen shown when the daemon failed to start — the icon is
 the octopus alone.
 
 ## Clicking the icon
@@ -63,15 +62,12 @@ is lost and opens nothing; macOS swallows it while it leaves fullscreen.
 
 From top to bottom:
 
-1. **The sessions**, every one that is not archived, one group per status, each group under a heading that cannot be
-   chosen and that names the status with the number of sessions in it: **Waiting for you (n)**, **Dormant (n)**,
-   **Paused (n)**, **Done (n)**, **Awaiting instructions (n)**, **Child sessions working (n)**, **Working in background
-   (n)** and **Working (n)** in the sidebar's status order (see "The status order" in
-   `docs/product/order-of-projects-and-sessions.md`), whatever **Order the sidebar by status** says, then **Starting
-   (n)**, **Switching account… (n)** and **Interrupted (n)**. A group with no session is left out; archived sessions are
-   never listed. A session is listed under its status as "Which status a session shows" in
-   `docs/product/session-statuses.md` gives it, so a session being switched is listed under switching account, not
-   under its own status, and each status at a session's prompt goes in a group of its own.
+1. **The sessions**, only those whose shown status is **waiting for the user**, **paused**, **done** or **awaiting
+   instructions**, in that order, one group per status. Each group has a heading that cannot be chosen and names
+   the status with the number of sessions in it, regardless of **Order the sidebar by status**. A group with no
+   sessions is left out. The shown status is the one given by "Which status a session shows" in
+   `docs/product/session-statuses.md`: all other shown statuses are excluded, including starting and switching
+   account even when the session would become done or awaiting instructions afterwards.
    - **Headings.** A heading is system text at the menu font's size, regular weight, in the secondary text
      colour, with its status glyph to the left of the text. Its glyph and text sit where the session lines below place
      their agent marks and titles — the same left edges and the same line height, the glyph centred on the text — as
@@ -79,13 +75,10 @@ From top to bottom:
      is not dimmed the way a menu line that cannot be chosen is, never highlights under the pointer, and is read by
      assistive technology once, as its menu item, the heading's words.
    - **Pictures.** Each heading has a still glyph for its status, mirroring the sidebar's (see "Status glyphs" in
-     `docs/product/session-statuses.md`) — the hand for waiting for you, the two Zs for dormant, the circled pause for
-     paused, the circle with a check mark for done, the speech bubble for awaiting instructions, the green ring around a
-     dot for child sessions working, the green hollow ring for working in background, the blue dot for working, the grey
-     arc for starting and for switching account, and the grey bare pause for interrupted — and each session line has
-     the mark of its agent (Claude Code, Codex, Grok), as the sidebar draws them. The menu cannot animate, so the hand
-     does not wave, the Zs do not rise, the arc does not turn and the dot and the rings do not ping; the hand and the
-     speech bubble sit centred as the sidebar's do.
+     `docs/product/session-statuses.md`) — the hand for waiting for the user, the circle with a pause sign for paused, the circle with a check mark for
+     done and the speech bubble for awaiting instructions — and each session line has the mark of its agent
+     (Claude Code, Codex, Grok), as the sidebar draws them. The menu cannot animate, so the hand does not wave;
+     the hand and the speech bubble sit centred as the sidebar's do.
      The marks the sidebar draws in the text colour (Codex, Grok) are template images here, which macOS tints to suit a
      light or dark menu. A status glyph is in the colour the sidebar gives that status in the window's current
      appearance, drawn again in the new colours for the first menu that shows it after the appearance changes; the
@@ -107,8 +100,9 @@ From top to bottom:
      (an emoji sequence, a letter with its accents).
    - A group names at most **10** sessions. Beyond that, a last line that cannot be chosen says how many more there are
      ("N more…"); the heading's number still counts them all.
-   - With no session that is not archived, this part is a single heading, **No sessions running**, styled like the
-     other headings but with no glyph.
+   - With no session in one of the four listed statuses, this part is a single heading saying there are no
+     sessions to show, styled like the other headings but with no glyph. Sessions in other statuses may still be
+     running.
 2. **The quota submenus**, one per added agent that is available — **Claude usage**, **Codex usage**, **Grok
    usage**, in the order of the added agents (see "Added agents" in `docs/product/agent-accounts.md`), the agents'
    names never translated — each opening to that agent's accounts and showing what Settings and the rail's panel

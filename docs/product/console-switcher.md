@@ -12,39 +12,26 @@ pressing it with the mouse leaves keyboard focus where it was. A console created
 console or the welcome screen's (see `docs/product/welcome-screen.md`) — becomes the current one as soon as it appears;
 one created from another client is only added to the rail.
 
-An avatar carries a **14 px circular badge** at its bottom end corner marking the top status of all the console's
-sessions, its console sessions included (see "The top status" in `docs/product/session-statuses.md`): the status of the
-session that comes first in the status order of "Order of projects and sessions" in
-`docs/product/order-of-projects-and-sessions.md` — **waiting for the user, dormant, paused, done, awaiting
-instructions, child sessions working, working in background, working, then interrupted** — with the most recently
-started session breaking a tie. Archived sessions are left out, so a console whose sessions are all archived, or that
-has none, has no badge. A session starting or switching account is ranked, as it is there, by the status it will have
-once that is over. Pinning, project grouping and the sidebar's choice to order by status or date do not affect that
-choice.
+An avatar carries a **14 px circular badge** at its bottom end corner summarising the console's sessions, its
+console sessions included. Only sessions whose shown status is **waiting for the user**, **paused**, **done** or **awaiting
+instructions** can supply the badge, in that priority order, with the most recently started session breaking a tie
+(see "The top status" in `docs/product/session-statuses.md`). With none in these four states, the avatar has no badge,
+even while other sessions are running. Starting and switching-account sessions are excluded by their shown status.
+Pinning, project grouping and the sidebar's choice to order by status or date do not affect the choice.
 
 | Top status | Badge |
 |---|---|
 | Waiting for the user | A contrasting waving hand on an orange disc |
-| Dormant | A contrasting "zz" on an orange disc |
-| Paused | A contrasting pause sign in a circle on a green disc |
+| Paused | A contrasting circled pause sign on a green disc |
 | Done | A contrasting check mark on a green disc |
 | Awaiting instructions | A contrasting speech bubble on a green disc |
-| Child sessions working | A green disc with a contrasting ring around a contrasting dot |
-| Working in background | A green disc with a contrasting hollow centre, 8 px across |
-| Working | A blue disc with a contrasting solid centre, 6 px across |
-| Starting, switching account | A contrasting turning arc on a neutral disc |
-| Interrupted | A contrasting pause sign, with no circle, on a neutral disc |
 
-Only the centre of a working, working-in-background or child-sessions-working badge breathes (for child sessions
-working, the ring with its dot): its opacity eases from 100% to 90% and back over
-2.4 seconds, repeating while the disc and centre keep their size. There is no outward ripple. The hand waves, the "zz"
-rises as the status glyph's does (see "Status glyphs" in `docs/product/session-statuses.md`) and the arc turns. Where the
-system asks for reduced motion, the centres remain fully opaque, the hand does not wave, the "zz" stands still and the
-arc does not turn.
+The hand waves as its status glyph does (see "Status glyphs" in `docs/product/session-statuses.md`); where the system
+asks for reduced motion, it stays still. The other badges are still.
 
 The badge is decorative and has no tooltip or accessible name of its own. **The avatar's tooltip and accessible name
 are the same text**: the console's name followed by the top status, in the words the status is said in everywhere
-("Name, Working"), or the bare console name when it has no badge. When that tooltip opens, and why a mouse user with the
+("Name, Done"), or the bare console name when it has no badge. When that tooltip opens, and why a mouse user with the
 docked sidebar hidden does not get to read it, is in "Tooltips on icon-only controls" in
 `docs/product/labels-and-tooltips.md`.
 
