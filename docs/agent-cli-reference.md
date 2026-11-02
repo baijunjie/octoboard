@@ -878,11 +878,12 @@ status at a clean quit is still its prompt. The quits measured were `/exit`, `/q
 ### Stopped by a signal mid-turn
 
 Sent `SIGTERM` while a turn is in progress (the model request held open), no agent reports the turn as having ended
-normally. Measured on Codex 0.163.0 and Claude Code 2.1.316 in an isolated probe:
+normally. Measured on Codex 0.163.0, Claude Code 2.1.316 and Grok Build 1.0.70 in an isolated probe:
 
 - Claude Code — fires only `SessionEnd` with `reason` `other`, carrying the turn's `prompt_id`; no `Stop`.
 - Codex — exits at once (status 15) and fires no hook at all: no `Stop`, `Interrupt` or `SessionEnd`.
-- Grok — not measured; it fires `Stop` with `reason` `shutdown`, which names no `promptId`.
+- Grok — fires `SessionEnd` and `Stop`, both with `reason` `shutdown` and in either order, neither naming a
+  `promptId`; no `StopCancelled` or `StopFailure`. It exits with status 0, and its record notes no end of the turn.
 
 ## Moving a conversation to another config directory
 

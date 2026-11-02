@@ -9,9 +9,9 @@
 //!
 //! An end the daemon makes itself (an archive, an interruption, a shutdown) is not undone this
 //! way: on the `SIGTERM` it stops an agent with, mid-turn, Codex 0.163.0 fires nothing and Claude
-//! Code 2.1.316 only `SessionEnd`, while Grok Build fires its `Stop` with `reason: "shutdown"`
-//! (`docs/agent-cli-reference.md`, "Stopped by a signal mid-turn"); none of these is a turn's
-//! normal end.
+//! Code 2.1.316 only `SessionEnd`, while Grok Build 1.0.70 fires `SessionEnd` and its `Stop` with
+//! `reason: "shutdown"`, naming no turn (`docs/agent-cli-reference.md`, "Stopped by a signal
+//! mid-turn"); none of these is a turn's normal end.
 
 use std::time::{Duration, Instant};
 
