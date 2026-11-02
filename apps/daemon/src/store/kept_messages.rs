@@ -1,7 +1,7 @@
 //! Messages held for interrupted sessions until they are resumed and the message is written into
 //! them.
 
-use anyhow::Result;
+use super::Result;
 use rusqlite::params;
 
 use super::Store;

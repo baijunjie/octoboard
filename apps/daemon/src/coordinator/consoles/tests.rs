@@ -27,6 +27,47 @@ fn update_console_request(console: &str, edit: impl FnOnce(&mut RequestBody)) ->
     request
 }
 
+/// A create the store cannot write, because the data folder is read-only, is refused as
+/// `store_write_failed` with the `access` cause, and leaves no working directory behind.
+#[tokio::test]
+async fn a_create_the_store_cannot_write_leaves_no_working_directory() {
+    use std::os::unix::fs::PermissionsExt;
+    // SAFETY: a plain query of this process's effective user. Permissions do not stop the
+    // superuser, so the store never fails there.
+    if unsafe { libc::geteuid() } == 0 {
+        return;
+    }
+    let (state, dir) = crate::test_support::app_state("coordinator-create-console-read-only");
+    let consoles = dir.join("consoles");
+    std::fs::create_dir_all(&consoles).unwrap();
+    std::fs::set_permissions(&*dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let refused = handle(
+        &state,
+        None,
+        RequestBody::CreateConsole {
+            name: "Console".to_string(),
+            default_agent: Agent::Claude,
+            project_session_agent: None,
+            accounts: PerAgent {
+                claude: None,
+                codex: None,
+                grok: None,
+            },
+            launch: Default::default(),
+            project_session_launch: Default::default(),
+            icon: None,
+            console_session_prompt: None,
+        },
+    )
+    .await;
+    std::fs::set_permissions(&*dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let (code, params, _) = crate::protocol::error_parts(&refused.expect_err("read-only"));
+    assert_eq!(code, error_code::STORE_WRITE_FAILED);
+    assert_eq!(params["cause"], "access");
+    assert!(state.store.list_consoles().unwrap().is_empty());
+    assert_eq!(std::fs::read_dir(&consoles).unwrap().count(), 0);
+}
+
 /// A new console stores its default agent and launch settings; a model or effort is trimmed,
 /// with blank read as unset.
 #[tokio::test]

@@ -26,6 +26,7 @@ mod accounts;
 mod agents;
 mod branch_origins;
 mod consoles;
+mod failure;
 mod hosts;
 mod kept_messages;
 mod pages;
@@ -41,7 +42,7 @@ mod test_support;
 use std::path::Path;
 use std::sync::Mutex;
 
-use anyhow::{Context, Result};
+use anyhow::Context;
 use rusqlite::Connection;
 
 use schema::{settle_existing_file, user_version, SCHEMA, SCHEMA_VERSION};
@@ -49,6 +50,7 @@ use schema::{settle_existing_file, user_version, SCHEMA, SCHEMA_VERSION};
 pub use accounts::SharingStart;
 pub use agents::ReorderOutcome;
 pub use branch_origins::{BranchMove, BranchOrigin};
+pub use failure::{Result, StoreError};
 pub use sessions::RecordUpdate;
 
 /// The single local host record every project and session points at. There is no other host yet,

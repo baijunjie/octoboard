@@ -1,6 +1,6 @@
 //! The hosts table.
 
-use anyhow::Result;
+use super::Result;
 use rusqlite::params;
 
 use super::rows::{enum_from_row, enum_to_text};

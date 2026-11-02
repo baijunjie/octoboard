@@ -559,7 +559,7 @@ fn parse_path(path: &str) -> Result<RelPath> {
 }
 
 fn stored_project(state: &AppState, project: &str) -> Result<Project> {
-    state.store.require_project(project)
+    Ok(state.store.require_project(project)?)
 }
 
 fn project_source(

@@ -1,7 +1,7 @@
 //! The agents the user has added to the application and the order of the added agents and of each
 //! agent's accounts; both are stored in the settings row.
 
-use anyhow::Result;
+use super::Result;
 use rusqlite::{params, Connection};
 
 use super::rows::enum_to_text;
@@ -110,7 +110,8 @@ impl Store {
                 "the new order must name each account of the agent and its default exactly once"
                     .to_string(),
                 &[],
-            ));
+            )
+            .into());
         }
         let mut orders = read_account_order(&conn)?;
         if orders
@@ -231,7 +232,10 @@ mod tests {
             vec![None, Some("one".to_string()), Some("other".to_string())],
             vec![],
         ] {
-            let err = store.reorder_accounts(Agent::Claude, &invalid).unwrap_err();
+            let err: anyhow::Error = store
+                .reorder_accounts(Agent::Claude, &invalid)
+                .unwrap_err()
+                .into();
             assert_eq!(
                 crate::protocol::error_parts(&err).0,
                 error_code::ACCOUNT_ORDER_INVALID

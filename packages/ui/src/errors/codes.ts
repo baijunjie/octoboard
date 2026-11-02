@@ -271,6 +271,11 @@ export const CODES = {
   // picked with Browse, so it is put back rather than corrected. Its `cause` picks a closer remedy
   // (`SOURCE_CAUSE_RECOVERY`).
   source_unavailable: { origin: "daemon", recovery: "sourceGone", detailBlock: true, codeParams: ["path"] },
+  // Any request that reads or writes the application's own database can raise it, and so can a background step (a
+  // failed switch's restore, a launch), so its `cause` picks the remedy (`STORE_WRITE_CAUSE_RECOVERY`) wherever it
+  // comes from, nested or not, and its summary says the application's own data could not be written, which no call
+  // site's title says.
+  store_write_failed: { origin: "daemon", recovery: "appDataAccess", detailBlock: true },
   // A switch whose relaunch ended at once leaves the session interrupted on the account it had, resumable as before.
   switch_did_not_come_up: { origin: "daemon", recovery: "switchRelaunch", recordIds: ["session"], nameParams: ["session"] },
   terminal_input_lost: { origin: "daemon", recovery: "none", alertTitle: true, detailBlock: true, recoveryLine: true, recordIds: ["session", "shell_terminal"], variants: { session: { nameParams: ["session"] }, shell: { nameParams: ["shell_terminal"] } } },

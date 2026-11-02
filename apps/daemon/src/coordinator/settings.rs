@@ -19,8 +19,8 @@ use super::validate::{absolute_path, normalise_tags};
 /// alike through it.
 pub(super) struct LaunchOverride<T> {
     agent: Agent,
-    get: fn(&Store) -> Result<Option<T>>,
-    set: fn(&Store, Option<T>) -> Result<()>,
+    get: fn(&Store) -> crate::store::Result<Option<T>>,
+    set: fn(&Store, Option<T>) -> crate::store::Result<()>,
 }
 
 pub(super) const CODEX_REVIEWER: LaunchOverride<ApprovalReviewer> = LaunchOverride {
@@ -46,7 +46,7 @@ impl<T: PartialEq + Copy> LaunchOverride<T> {
         if session.agent != self.agent {
             return Ok(None);
         }
-        (self.get)(&state.store)
+        Ok((self.get)(&state.store)?)
     }
 
     /// Sets the agent's override and broadcasts the settings unless it already holds that value.

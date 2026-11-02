@@ -79,7 +79,9 @@ the captured agent screens and records tests replay.
 
 ### Storage and state
 
-- `src/store/` — the coordinator's SQLite `Store`: `schema.rs`, `rows.rs`, one file per table family.
+- `src/store/` — the coordinator's SQLite `Store`: `schema.rs`, `rows.rs`, one file per table family, and `failure.rs`,
+  the store's own `Result` and `StoreError`, which codes the SQLite failures to write Octoboard's database the user can
+  fix (read-only data folder, full disk) as `store_write_failed`.
 - `src/state/` — `AppState` (`mod.rs`) with one file per concern of live state (running sessions, claims, status,
   titles, turns, sharing status, git status, requests, availability, write queue facade, forgetting a record).
 - `src/agents/` — what the daemon knows about each agent CLI apart from launching it: availability, models, launch
@@ -213,6 +215,11 @@ the rest of its type is read as production code, which can only add an edge, nev
   coordinator or reporting function the control socket uses rather than reimplementing it.
 - A new table or column: `src/store/schema.rs` and the file of its table family; a plain boolean application setting is
   one line of the `bool_settings!` table in `src/store/settings.rs`.
+- Store code returns the store's `Result` (`src/store/failure.rs`), and a rusqlite error must reach `?` as itself:
+  wrapping it into `anyhow` first (`.context()`, `anyhow::Error::from`) skips the classification. A caller outside the
+  store that returns a store result as `anyhow` unwraps it with `Ok(store.x()?)`. The classification is in the store
+  and not where `error_parts` builds the reply on purpose: the daemon also opens the agents' own SQLite files (Codex's
+  state database), whose failures must not be reported as Octoboard's data folder.
 - State derived at run time from sessions, claims and processes belongs on `AppState` (`src/state/`), not in a stored
   record.
 - Anything specific to one agent CLI belongs in `src/adapter/<agent>/` or where `src/agents/layout.rs` names; code that

@@ -25,7 +25,7 @@ pub enum Deletion {
 impl AppState {
     /// Reads a session record, failing with a message the UI can show when it is gone.
     pub fn session_record(&self, id: &str) -> Result<Session> {
-        self.store.require_session(id)
+        Ok(self.store.require_session(id)?)
     }
 
     pub fn publish_session(&self, session: &Session) {
@@ -69,7 +69,7 @@ impl AppState {
             .flatten();
         // Titles and new control snapshots can publish the row independently, so freeze before
         // the database exposes the missing process, and undo that freeze if the write fails.
-        let update = || self.store.update_session(session);
+        let update = || -> Result<_> { Ok(self.store.update_session(session)?) };
         let updated = match live {
             Some(live) => live.freeze_output_for(update)?,
             None => update()?,
@@ -109,13 +109,13 @@ impl AppState {
 
     /// Archives the session as of now and tells every client; see [`Store::archive_session`].
     pub fn archive_session_record(&self, id: &str) -> Result<()> {
-        self.write_no_process(id, || self.store.archive_session(id, now_millis()))
+        self.write_no_process(id, || Ok(self.store.archive_session(id, now_millis())?))
     }
 
     /// Interrupts the session as of now unless it is archived, and tells every client; see
     /// [`Store::interrupt_session`].
     pub fn interrupt_session_record(&self, id: &str) -> Result<()> {
-        self.write_no_process(id, || self.store.interrupt_session(id, now_millis()))
+        self.write_no_process(id, || Ok(self.store.interrupt_session(id, now_millis())?))
     }
 
     /// Writes the session's title and tells every client. Returns the record as it now stands.
@@ -164,7 +164,7 @@ impl AppState {
     /// lock (`live`), so a resume cannot claim the session between the two. An archived session
     /// whose process is still exiting is deleted: its exit watcher finds no record and skips.
     pub fn delete_if_archived(&self, id: &str) -> Result<bool> {
-        let deletion = self.delete_where(id, |store| store.delete_session_if_archived(id))?;
+        let deletion = self.delete_where(id, |store| Ok(store.delete_session_if_archived(id)?))?;
         Ok(matches!(deletion, Deletion::Deleted { .. }))
     }
 
@@ -173,7 +173,7 @@ impl AppState {
     /// refused when the session is in use, is gone already, or is being launched right now. The
     /// returned session carries the native identity captured atomically with the deletion.
     pub fn delete_if_unused(&self, id: &str) -> Result<Deletion> {
-        self.delete_where(id, |store| store.delete_session_if_unused(id))
+        self.delete_where(id, |store| Ok(store.delete_session_if_unused(id)?))
     }
 
     fn delete_where(

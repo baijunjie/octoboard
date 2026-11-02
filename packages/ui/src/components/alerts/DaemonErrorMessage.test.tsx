@@ -460,6 +460,15 @@ describe("a failed automatic account switch", () => {
     expect(hasErrorRemedy(launched)).toBe(true);
   });
 
+  it("says a failed write to the application's own data as its summary, SQLite's text only in the raw part", () => {
+    const detail = "database or disk is full: Error code 13: Insertion failed because database is full";
+    const error = new DaemonRequestError("fallback", "account_switch_automatically_failed", { ...params, reason_code: "store_write_failed", reason: `Octoboard could not write its data: ${detail}`, cause: "disk_full", detail });
+    const { body, raw } = mountApart(error);
+    expect(body.textContent?.replace(/[\u2066-\u2069]/g, "")).toContain("Octoboard could not write its data.");
+    expect(body.textContent).not.toContain("Error code 13");
+    expect(raw.querySelector("pre")?.textContent).toBe(detail);
+  });
+
   it("says a reason the catalog lacks as the generic sentence, its own text only in the raw part", () => {
     const error = new DaemonRequestError("fallback", "account_switch_automatically_failed", { ...params, reason_code: "future_code", reason: "a newer daemon's reason" });
     const { body, raw } = mountApart(error);

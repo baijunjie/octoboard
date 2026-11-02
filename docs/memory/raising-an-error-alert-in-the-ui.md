@@ -55,9 +55,12 @@ here at all: it goes by the code's `cause` in `classifyError`, so that every rou
 ## A failed write to the application's own data takes its remedy from `appDataRecovery`
 
 Applies wherever code in `packages/ui` raises the alert for a request that writes only the application's own data — a
-setting, an agent's or account's row, an order, an approval, a trusted folder removed. Through the ordinary routes, a
-denied access or a full disk in the failure (an operating-system signature) gets the generic access remedy, which tells
-the user to choose another folder when they chose none. So derive the remedy with `appDataRecovery(error)`
+setting, an agent's or account's row, an order, an approval, a trusted folder removed. A failure to write Octoboard's
+database needs nothing from the call site: the daemon sends it as `store_write_failed`, and `classifyError` gives its
+`cause`'s remedy on every route, ahead of any explicit `recovery` and any operating-system signature. What the call site
+still decides is a failure the daemon built from the system's error rather than from SQLite: through the ordinary
+routes, a denied access or a full disk there (an operating-system signature) gets the generic access remedy, which
+tells the user to choose another folder when they chose none. So derive the remedy with `appDataRecovery(error)`
 (`packages/ui/src/errors/errorRecovery.ts`):
 
 - a request's catch handler: `alertAppDataFailure(title)` (`packages/ui/src/components/alerts/raiseError.tsx`) in place
@@ -68,3 +71,18 @@ the user to choose another folder when they chose none. So derive the remedy wit
 
 Keep the ordinary route where the action also writes to a folder the user chose, as adding or editing an account does
 with its configuration folder: there choosing another folder is the remedy.
+
+## Settle what a daemon failure arrives as against a real daemon before designing its remedy or its fixture
+
+Applies when a remedy is chosen from a daemon failure's code, `cause` or text (in `classifyError`, or as a call site's
+`recovery`), and when a gallery or test fixture models a daemon error. What the daemon sends cannot be read off the
+system failure underneath: only a failure built from the operating system's error carries `(os error N)`, while SQLite
+reports the same denied access or full disk in its own words and codes ("attempt to write a readonly database",
+"database or disk is full") with no signature to scan; and a code's name says nothing about the route it comes on
+(`store_io_failed` is only a `reason_code` nested in trust notices, never a request's error). A remedy keyed to the text
+one expects, and fixtures modelled on that text, pass every test and never fire in the app.
+
+So reproduce the failure with a real daemon first (`cargo run -p octoboardd` with `HOME` and `TMPDIR` set to throwaway
+directories: it keeps its data under `$HOME/.octoboard` and its port file under `$TMPDIR`), with the data folder made
+read-only for denied access, or placed on a small volume for a full disk (on macOS, a disk image made and mounted with
+`hdiutil`). Design the remedy from the code, params and `detail` it sends, and give the fixtures exactly those.

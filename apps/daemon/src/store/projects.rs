@@ -1,6 +1,6 @@
 //! The projects table, and the directories the user has trusted for every project under them.
 
-use anyhow::Result;
+use super::Result;
 use rusqlite::{params, OptionalExtension, Row};
 
 use super::rows::{column_slot, enum_from_row, enum_from_row_opt, enum_to_text, launch_from_row};
@@ -151,7 +151,7 @@ impl Store {
     /// The project `id`, or the `unknown_project` refusal when there is none.
     pub fn require_project(&self, id: &str) -> Result<Project> {
         self.get_project(id)?
-            .ok_or_else(|| CodedError::unknown_project(id))
+            .ok_or_else(|| CodedError::unknown_project(id).into())
     }
 
     /// The paths of this console's projects, as stored: absolute and lexically normalised.
@@ -282,7 +282,7 @@ mod tests {
             "project-1"
         );
 
-        let refused = store.require_project("nope").expect_err("unknown");
+        let refused: anyhow::Error = store.require_project("nope").expect_err("unknown").into();
         assert_eq!(
             error_parts(&refused),
             error_parts(&CodedError::unknown_project("nope"))

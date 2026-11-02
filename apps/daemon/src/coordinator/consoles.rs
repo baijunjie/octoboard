@@ -94,12 +94,19 @@ pub(super) fn store_new_console(
         created_at: now_millis(),
     };
     // Written before the record is stored: nothing else can touch a console no one has been told
-    // of yet, and a failed write then leaves no console behind.
-    mcp::console_instructions::write_console_session_instructions_from_settings(
+    // of yet, and a failed write then leaves no console behind. Either failing takes the new
+    // working directory with it, so a refused create leaves nothing under `consoles/`.
+    let stored = mcp::console_instructions::write_console_session_instructions_from_settings(
         &state.store,
         &console,
-    )?;
-    state.store.insert_console(&console)?;
+    )
+    .and_then(|()| Ok(state.store.insert_console(&console)?));
+    if let Err(err) = stored {
+        if let Err(removal) = mcp::console_instructions::remove_console_workdir(&console.workdir) {
+            tracing::warn!(workdir = %console.workdir, %removal, "removing the new console's working directory failed");
+        }
+        return Err(err);
+    }
     state.broadcast(Event::ConsoleUpserted {
         console: console.clone(),
     });

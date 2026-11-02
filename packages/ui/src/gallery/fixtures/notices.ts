@@ -670,7 +670,7 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Automatic account switch failed on a full disk reported as an internal error",
-    description: "The same error alert, \"Could not switch account\", for a session that could not be brought back up, by a failure the daemon classed as internal but whose text says the disk is full: the line beneath the sentence is \"The disk is full.\", followed by the remedy for a full disk, which does not say to retry. There is no Report issue guidance or button, and the daemon's raw text is only in the Error details disclosure, open here. A text that says access to a folder was denied reads alike, with \"Access was denied.\" and the remedy for denied access in their place.",
+    description: "The same error alert, \"Could not switch account\", for a session that could not be brought back up, by a failure the daemon classed as internal but whose text says the disk is full: the line beneath the sentence is \"The disk is full.\", followed by the remedy for a full disk, which does not say to retry. There is no Report issue guidance or button, and the daemon's raw text is only in the Error details disclosure, open here. A text that says access to a folder was denied reads alike, with \"Access was denied.\" and the remedy for denied access in their place, and so does a failure to write the application's own data, with \"Octoboard could not write its data.\" and the remedy for its data folder, which does not say to retry.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [sessionNoticeToast("s-web-1", "account_switch_automatically_failed", {
       agent: "Claude Code",

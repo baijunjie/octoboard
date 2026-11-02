@@ -18,7 +18,7 @@ A console carries:
 | Project session model and reasoning effort | the user, optional | One pair per agent for the console's project sessions, each value taken by a project session whose project and own choice leave it unset; the agent's own default when unset. See `docs/product/model-and-reasoning-effort.md`. |
 | Avatar | the user, optional | A custom image shown in place of the default avatar, in a circle; see "Avatar" below. |
 | Console session instructions | the user, optional | The user's own instructions for the console's console sessions, added after Octoboard's built-in ones and taking precedence over them, short of what a console session does; see "Console session instructions" below. |
-| Working directory | Octoboard | `~/.octoboard/consoles/<console id>/`, created when the console is created. Not settable and not changeable. |
+| Working directory | Octoboard | `~/.octoboard/consoles/<console id>/`, created when the console is created; a create that is refused or fails leaves none behind. Not settable and not changeable. |
 
 A console has two default agents. The **default agent for console sessions** is what a console session runs unless an
 agent is chosen for that session. The **default agent for project sessions** is what a project session runs when neither

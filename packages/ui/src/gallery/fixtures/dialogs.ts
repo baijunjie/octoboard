@@ -1328,8 +1328,8 @@ export const dialogScenarios: Scenario[] = [
     group: "Archive view",
     category: "exceptional",
     title: "Archive failed after confirmation",
-    description: "The danger error alert is titled \"Could not archive the session\" and says only \"The disk is full.\" (the daemon sent the system's text with no code to word it by, so the application names the cause from that text) and tells the user to free space on the disk before retrying; the system's own text, No space left on device (os error 28), is only in the Error details disclosure, closed here. After OK, the archive confirmation remains open and usable, with the original sessions intact.",
-    sessionArchiveError: { code: "store_io_failed", params: { detail: "No space left on device (os error 28)" }, message: "No space left on device (os error 28)" },
+    description: "The danger error alert is titled \"Could not archive the session\" and opens with the sentence \"Octoboard could not write its data.\", then the remedy: free space on the disk holding the application's data folder, then retry; SQLite's text, \"database or disk is full: Error code 13: Insertion failed because database is full\", is only in the Error details disclosure, closed here. After OK, the archive confirmation remains open and usable, with the original sessions intact.",
+    sessionArchiveError: { code: "store_write_failed", params: { cause: "disk_full", detail: "database or disk is full: Error code 13: Insertion failed because database is full" }, message: "Octoboard could not write its data: database or disk is full: Error code 13: Insertion failed because database is full" },
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Hub 4" })),
       (ui) => ui.press(ui.t("sidebar.session.archive")),

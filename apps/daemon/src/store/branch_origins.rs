@@ -1,6 +1,6 @@
 //! The records of which session works on which branch, which outlive the session.
 
-use anyhow::Result;
+use super::Result;
 use rusqlite::{params, Connection};
 
 use super::Store;

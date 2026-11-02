@@ -1,7 +1,7 @@
 //! A session's place in the orchestration tree and what hangs on it: its binding to an owner, its
 //! lock and the notice of a change of owner.
 
-use anyhow::Result;
+use super::Result;
 use rusqlite::{params, OptionalExtension};
 
 use super::rows::enum_to_text;

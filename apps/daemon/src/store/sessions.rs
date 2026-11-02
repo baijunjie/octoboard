@@ -1,7 +1,7 @@
 //! The sessions table: inserting a session, the column-scoped writers, launch overrides, colour,
 //! deletion and the reads.
 
-use anyhow::Result;
+use super::Result;
 use rusqlite::{params, Connection, OptionalExtension, Row};
 
 use super::rows::{enum_from_row, enum_from_row_opt, enum_from_text, enum_to_text};
@@ -661,7 +661,7 @@ impl Store {
     /// The session `id`, or the `unknown_session` refusal when there is none.
     pub fn require_session(&self, id: &str) -> Result<Session> {
         self.get_session(id)?
-            .ok_or_else(|| CodedError::unknown_session(id))
+            .ok_or_else(|| CodedError::unknown_session(id).into())
     }
 
     /// A session other than `except` that records `agent_session_id` as its agent's conversation
@@ -845,7 +845,7 @@ mod tests {
             "session-1"
         );
 
-        let refused = store.require_session("nope").expect_err("unknown");
+        let refused: anyhow::Error = store.require_session("nope").expect_err("unknown").into();
         assert_eq!(
             error_parts(&refused),
             error_parts(&CodedError::unknown_session("nope"))

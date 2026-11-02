@@ -1,6 +1,6 @@
 //! The consoles table: a console's record, its per-agent account references and launch defaults.
 
-use anyhow::Result;
+use super::Result;
 use rusqlite::{params, OptionalExtension, Row};
 
 use super::rows::{column_slot, enum_from_row, enum_from_row_opt, enum_to_text, launch_from_row};
@@ -126,7 +126,7 @@ impl Store {
     /// The console `id`, or the `unknown_console` refusal when there is none.
     pub fn require_console(&self, id: &str) -> Result<Console> {
         self.get_console(id)?
-            .ok_or_else(|| CodedError::unknown_console(id))
+            .ok_or_else(|| CodedError::unknown_console(id).into())
     }
 
     pub fn list_consoles(&self) -> Result<Vec<Console>> {
@@ -181,7 +181,7 @@ mod tests {
             "console-1"
         );
 
-        let refused = store.require_console("nope").expect_err("unknown");
+        let refused: anyhow::Error = store.require_console("nope").expect_err("unknown").into();
         assert_eq!(
             error_parts(&refused),
             error_parts(&CodedError::unknown_console("nope"))

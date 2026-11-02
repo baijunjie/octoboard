@@ -1,7 +1,7 @@
 //! The application settings: the single settings row's flags, default account names, approval
 //! modes, Git workflow and clone directory.
 
-use anyhow::Result;
+use super::Result;
 use rusqlite::{params, Connection};
 
 use super::agents::{read_account_order, read_added_agents};

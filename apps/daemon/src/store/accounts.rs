@@ -1,6 +1,6 @@
 //! The accounts table: the agent accounts the user added, their enabled and sharing state.
 
-use anyhow::Result;
+use super::{Result, StoreError};
 use rusqlite::{params, OptionalExtension, Row};
 
 use super::rows::{enum_from_row, enum_to_text};
@@ -176,7 +176,7 @@ impl Store {
     /// The account `id`, or the `unknown_account` refusal when there is none.
     pub fn require_account(&self, id: &str) -> Result<Account> {
         self.get_account(id)?
-            .ok_or_else(|| CodedError::unknown_account(id))
+            .ok_or_else(|| CodedError::unknown_account(id).into())
     }
 
     /// The directory of the account `account_id` names, `None` for the default account, which pins
@@ -222,9 +222,9 @@ impl Store {
 /// Turns the `accounts_agent_name_unique` index tripping into the protocol's own
 /// `account_name_taken` refusal, so an insert or update that reaches this far surfaces the same
 /// way as the collision check `coordinator` already runs beforehand — this only fires when the
-/// two disagree, which is two requests racing past that check. Any other error is passed through
-/// unchanged.
-fn account_write_error(err: rusqlite::Error, account: &Account) -> anyhow::Error {
+/// two disagree, which is two requests racing past that check. Any other error is classified as
+/// every store failure is (see `failure`).
+fn account_write_error(err: rusqlite::Error, account: &Account) -> StoreError {
     let is_name_collision = matches!(
         &err,
         rusqlite::Error::SqliteFailure(sqlite_err, _)
@@ -239,7 +239,8 @@ fn account_write_error(err: rusqlite::Error, account: &Account) -> anyhow::Error
                 account.agent.label()
             ),
             &[("agent", account.agent.label()), ("name", &account.name)],
-        );
+        )
+        .into();
     }
     err.into()
 }
@@ -282,7 +283,7 @@ mod tests {
             "claude-acct"
         );
 
-        let refused = store.require_account("nope").expect_err("unknown");
+        let refused: anyhow::Error = store.require_account("nope").expect_err("unknown").into();
         assert_eq!(
             error_parts(&refused),
             error_parts(&CodedError::unknown_account("nope"))

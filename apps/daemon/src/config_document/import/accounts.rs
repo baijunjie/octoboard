@@ -535,7 +535,7 @@ fn place_after_existing(state: &Arc<AppState>, agent: Agent, created: &[String])
         let mut order = export::display_order(&state.store.account_order(agent)?, &owned);
         order.retain(|id| id.as_ref().is_none_or(|id| !created.contains(id)));
         order.extend(created.iter().cloned().map(Some));
-        state.store.reorder_accounts(agent, &order)
+        Ok(state.store.reorder_accounts(agent, &order)?)
     };
     match placed() {
         Ok(true) => {

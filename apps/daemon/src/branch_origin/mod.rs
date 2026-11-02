@@ -422,14 +422,14 @@ pub fn hand_over(
 ) -> Result<BranchMove> {
     let gate = state.branch_origins.gate(repo);
     let _serialized = gate.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-    state.store.move_branch_responsibility(
+    Ok(state.store.move_branch_responsibility(
         &repo_key(repo),
         branches,
         from,
         to,
         &recorded_title(to_title),
         crate::protocol::now_millis(),
-    )
+    )?)
 }
 
 /// Moves every branch `from` is responsible for to `to`, a session of the same project, and

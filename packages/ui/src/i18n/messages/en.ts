@@ -93,6 +93,8 @@ export const en = {
   // the term other error messages already use for where the application keeps its data.
   "error.recovery.appDataAccess": "Check that {appName}’s data folder is writable and its disk is available. Grant {appName} access in system privacy settings if needed, then retry.",
   "error.recovery.appDataDiskSpace": "Free space on the disk holding {appName}’s data folder, then retry.",
+  "error.recovery.appDataAccessNoRetry": "Check that {appName}’s data folder is writable and its disk is available. Grant {appName} access in system privacy settings if needed.",
+  "error.recovery.appDataDiskSpaceNoRetry": "Free space on the disk holding {appName}’s data folder.",
   "error.recovery.connection": "Check the network and daemon connection. Use {retry} on the connection banner when available, then retry the operation.",
   "error.recovery.path": "Select an existing, accessible folder or file using {browse}, or correct the path in the dialog, then retry.",
   "error.recovery.hostPathGone": "It may have been moved, renamed or deleted. If it was moved or renamed, find it in the project’s files and try again from there.",
@@ -554,6 +556,8 @@ export const en = {
   "daemon.invalid_path": "{path} is not a valid path in this project.",
   "daemon.source_unavailable": "The folder {path} cannot be read: {detail}",
   "daemon.source_unavailable.summary": "The folder {path} cannot be read.",
+  "daemon.store_write_failed": "{appName} could not write its data: {detail}",
+  "daemon.store_write_failed.summary": "{appName} could not write its data.",
   "daemon.file_not_found": "{path} does not exist any more.",
   "daemon.permission_denied": "{appName} is not allowed to read {path}: {detail}",
   "daemon.permission_denied.summary": "{appName} is not allowed to read {path}.",

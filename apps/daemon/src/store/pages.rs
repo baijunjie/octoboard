@@ -1,6 +1,6 @@
 //! The report-panel pages a console session's projects have reported.
 
-use anyhow::Result;
+use super::Result;
 use rusqlite::{params, OptionalExtension, Row};
 
 use super::rows::enum_to_text;

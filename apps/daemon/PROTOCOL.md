@@ -267,6 +267,7 @@ A client also branches on some codes, instead of only showing them:
 | `code` | `params` | Meaning |
 |---|---|---|
 | `unreadable_request` | `detail` | The frame is not a request the daemon can read |
+| `store_write_failed` | `cause`, `detail` | SQLite could not write Octoboard's own database (`octoboard.db` in the data folder), for a cause the user can fix; any request that reads or writes a record can be answered with it. `cause`: `access` (the data folder or the file is read-only, or access is denied), `disk_full` (no room to grow the file) or `other` (the file could not be opened for the write, which a disk too full for SQLite's journal also causes); a client treats a cause it does not know as `other`. `detail` is SQLite's own text, which names no operating-system error. Failures of the agents' own databases are never this code |
 | `internal_error` | `detail` | Any other failure |
 | `unknown_console` / `unknown_project` / `unknown_session` / `unknown_page` / `unknown_shell_terminal` | `console` / `project` / `session` / `page` / `shell_terminal` | The record is not there |
 | `field_required` | `field` | A request lacks a field its kind needs, named as on the wire |

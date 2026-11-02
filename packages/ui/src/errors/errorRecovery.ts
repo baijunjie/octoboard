@@ -1,4 +1,4 @@
-import { isKeptForItsFolder, pathLinkRefusedCause, relocationCause, sourceUnavailableCause, type PathLinkRefusedCause, type RelocationCause, type SourceUnavailableCause } from "../protocol";
+import { isKeptForItsFolder, pathLinkRefusedCause, relocationCause, sourceUnavailableCause, storeWriteCause, type PathLinkRefusedCause, type RelocationCause, type SourceUnavailableCause, type StoreWriteCause } from "../protocol";
 import { ActionableError } from "./actionableError";
 import { codeRecord } from "./codes";
 import { DaemonRequestError } from "../daemon-client";
@@ -14,7 +14,7 @@ export type ErrorRecovery =
   | "pathLinkAmbiguous" | "pathLinkLaunchable" | "pathLinkNotPrivate"
   | "fileBusy" | "codexConfig" | "sqliteHome" | "symlink" | "notRestored" | "notRestoredAutomatic"
   | "accountNotShareable" | "accountSharing" | "accountBusy" | "accountChanging" | "sharingStop" | "ownerChanging" | "ownerMoved"
-  | "diskSpaceNoRetry" | "accessNoRetry" | "appDataAccess" | "appDataDiskSpace"
+  | "diskSpaceNoRetry" | "accessNoRetry" | "appDataAccess" | "appDataDiskSpace" | "appDataAccessNoRetry" | "appDataDiskSpaceNoRetry"
   | "none";
 
 const OS_RECOVERY: Record<string, ErrorRecovery> = {
@@ -60,6 +60,11 @@ const SOURCE_CAUSE_RECOVERY: Record<SourceUnavailableCause, ErrorRecovery> = {
   missing: "sourceGone", link: "sourceLink", not_a_directory: "sourceNotFolder", other: "sourceUnreadable",
 };
 
+/** The remedy of a `store_write_failed` by its `cause`, as `storeWriteCause` reads it. */
+const STORE_WRITE_CAUSE_RECOVERY: Record<StoreWriteCause, ErrorRecovery> = {
+  access: "appDataAccess", disk_full: "appDataDiskSpace", other: "appDataAccess",
+};
+
 /** The remedy of a `path_link_refused` by its `cause`, as `pathLinkRefusedCause` reads it. */
 const PATH_LINK_REFUSED_RECOVERY: Record<PathLinkRefusedCause, ErrorRecovery> = {
   ambiguous: "pathLinkAmbiguous", launchable: "pathLinkLaunchable", not_private: "pathLinkNotPrivate", not_a_file_or_folder: "none", unreadable: "none", other: "none",
@@ -83,6 +88,8 @@ function onlyKeptForTheirFolder(error: DaemonRequestError): boolean {
 /** The remedy for a failure of an operation with nothing left to retry, a session that could not be brought back up:
  * the recovery's variant without a step that retries it ("retry the operation", "choose another accessible folder"). */
 function withoutRetry(recovery: ErrorRecovery | undefined): ErrorRecovery | undefined {
+  if (recovery === "appDataAccess") return "appDataAccessNoRetry";
+  if (recovery === "appDataDiskSpace") return "appDataDiskSpaceNoRetry";
   return recovery === "diskSpace" ? "diskSpaceNoRetry" : recovery === "access" ? "accessNoRetry" : recovery;
 }
 
@@ -113,7 +120,25 @@ function failedSwitchCause(error: DaemonRequestError): DaemonRequestError {
   return cause && cause !== error.code ? new DaemonRequestError(error.params.reason ?? "", cause, error.params) : error;
 }
 
+/** The code whose remedy `error` shows: the failure a `failureAndRemedy` notice nests, or its own. */
+function remedyCode(error: DaemonRequestError): string | undefined {
+  return codeRecord(error.code)?.nested === "failureAndRemedy" ? error.params.reason_code : error.code;
+}
+
+/** The remedy of a failed write to the application's own database by the daemon's `cause`, which names it whatever the
+ * system's text in `detail` says (SQLite's text carries no operating-system signature to read), raised directly or as
+ * the cause of a failure that nests one (`failureAndRemedy`). Undefined for any other failure. */
+function storeWriteRecovery(error: unknown): ErrorRecovery | undefined {
+  if (!(error instanceof DaemonRequestError)) return undefined;
+  const code = remedyCode(error);
+  return code === "store_write_failed" ? STORE_WRITE_CAUSE_RECOVERY[storeWriteCause(error.params.cause)] : undefined;
+}
+
 export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorClassification {
+  // Ahead of an explicit remedy and of the operating-system signature: the cause names the application's own data, which
+  // the explicit remedies of a call site (access, disk space) would word for a folder the person chose.
+  const stored = storeWriteRecovery(error);
+  if (stored) return { kind: "actionable", recovery: stored };
   const explicit = recovery ?? (error instanceof ActionableError ? error.recovery : undefined);
   if (!explicit && error instanceof DaemonRequestError && error.code === "message_not_sent" && error.params.submit_retry === "once") {
     return { kind: "actionable", recovery: "submitRetry" };
@@ -141,6 +166,9 @@ export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorCl
       return classified.kind === "actionable" ? { kind: "actionable", recovery: withoutRetry(classified.recovery)! } : classified;
     }
     if (isNotRestored(nested)) return { kind: "actionable", recovery: "notRestoredAutomatic" };
+    // Octoboard's own data could not be written: the system said so, in words of the daemon's cause.
+    const stored = storeWriteRecovery(nested);
+    if (stored) return { kind: "actionable", recovery: withoutRetry(stored)! };
     // The domain remedies (wait for a change, correct a path) are not for the person to act on; what the system
     // said (a full disk, a denied access) is.
     return { kind: "actionable", recovery: withoutRetry(environmentRecovery(nested)) ?? "none" };
@@ -150,7 +178,7 @@ export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorCl
   const remedy = environmentRecovery(error) ?? explicit;
   if (remedy) return { kind: "actionable", recovery: remedy };
   if (error instanceof DaemonRequestError) {
-    const code = codeRecord(error.code)?.nested === "failureAndRemedy" ? error.params.reason_code : error.code;
+    const code = remedyCode(error);
     if (code === "source_unavailable") return { kind: "actionable", recovery: SOURCE_CAUSE_RECOVERY[sourceUnavailableCause(error.params.cause)] };
     if (code === "path_link_refused") return { kind: "actionable", recovery: PATH_LINK_REFUSED_RECOVERY[pathLinkRefusedCause(error.params.cause)] };
     if (onlyKeptForTheirFolder(error)) return { kind: "actionable", recovery: "none" };
@@ -179,10 +207,13 @@ export function hostPathRecovery(error: unknown): ErrorRecovery | undefined {
   return error instanceof DaemonRequestError && codeRecord(error.code)?.hostPathGone ? "hostPathGone" : undefined;
 }
 
-/** The remedy for a failed write to the application's own data (a setting, the order of the agents): what an
- * operating-system signature asks for there (access, disk space) is about the folder holding the application's data, not
- * a folder the person chose or the project's. Undefined for any other failure, which keeps its own. */
+/** The remedy for a failed write to the application's own data (a setting, the order of the agents): a
+ * `store_write_failed`'s by its cause, or what an operating-system signature asks for there (access, disk space), which
+ * is about the folder holding the application's data, not a folder the person chose or the project's. Undefined for any
+ * other failure, which keeps its own. */
 export function appDataRecovery(error: unknown): ErrorRecovery | undefined {
+  const stored = storeWriteRecovery(error);
+  if (stored) return stored;
   const recovery = environmentRecovery(error);
   return recovery === "access" ? "appDataAccess" : recovery === "diskSpace" ? "appDataDiskSpace" : undefined;
 }

@@ -103,6 +103,12 @@ pub mod error_code {
     /// Anything that is not meant for the user to read in detail: an unexpected failure with no
     /// meaning of its own. The text is carried as the `detail` param.
     pub const INTERNAL_ERROR: Code = Code("internal_error");
+    /// SQLite could not write Octoboard's own database, for a cause the user can fix. `params` has
+    /// the `cause`: `access` (the data folder or the file is read-only, or access is denied),
+    /// `disk_full` (no room to grow the file), or `other` (the file could not be opened for the
+    /// write, which a full disk also causes, as SQLite cannot create its journal then); and
+    /// SQLite's own text as `detail`.
+    pub const STORE_WRITE_FAILED: Code = Code("store_write_failed");
     pub const UNKNOWN_CONSOLE: Code = Code("unknown_console");
     pub const UNKNOWN_PROJECT: Code = Code("unknown_project");
     pub const UNKNOWN_SESSION: Code = Code("unknown_session");

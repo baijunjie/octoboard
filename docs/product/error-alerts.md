@@ -452,6 +452,20 @@ details. References to controls such as Retry, Browse and Unlock appear as inlin
 For example:
 
 - A full disk asks the user to free space on the disk used by Octoboard and the project, then retry.
+- A failed write to Octoboard's own data gets a remedy worded for Octoboard's data folder rather than for a folder the
+  user chose or the project's: for denied access or a file that could not be opened, to check that the data folder is
+  writable and its disk is available, and to grant Octoboard access in the system's privacy settings if needed, then
+  retry; for a full disk, to free space on the disk holding the data folder, then retry. It is given in two cases:
+  - **Octoboard's database could not be written** (`store_write_failed`), from any action, and also as the cause of a
+    failed launch: the alert, under the action's own title, opens by saying that Octoboard could not write its data,
+    with SQLite's own text under Error details. The remedy follows the cause the daemon names, whatever the system's
+    text says and whatever remedy the action would otherwise give: `disk_full` gets the full-disk remedy; `access`,
+    `other` and a cause the window does not know get the access remedy.
+  - **An action that writes only Octoboard's own data** fails for a recognized operating-system cause, denied access or
+    a full disk: saving an application setting in Settings, saving an agent's settings (approvals, tags, Claude
+    compatibility), turning an account off or on, reordering accounts or agents, adding or removing an agent, removing
+    a trusted folder, or renaming the default account. An action that involves a folder the user chose keeps the
+    folder's remedy.
 - A locked session asks the user to choose Unlock in that session's action menu, then retry.
 - An invalid or unavailable path asks the user to correct it or browse to an existing, accessible location. A file or
   folder that File manager or Default application no longer finds, a folder a folder row's Terminal would start a
@@ -514,18 +528,21 @@ For example:
 
 Known domain failures, the causes the daemon names for some of them (such as why a session's conversation could not be
 moved to another account, see "When a switch fails" in `docs/product/switching-session-accounts.md`; or why a folder a
-request is scoped to cannot be read), and recognized operating-system causes provide the remedy; a recognized
-operating-system cause takes precedence over the others, except for a switch's copy that failed and could not put back
-an older item: that is classified by the item put aside, and the operating-system cause's remedy is given as well;
-except for a file the user picked that could not be read, which keeps its own remedy for reading a file (see "When the
+request is scoped to cannot be read), and recognized operating-system causes provide the remedy. Octoboard's database
+that could not be written always gets the data folder's remedy by the cause the daemon names, ahead of any
+operating-system cause and of any remedy the action has (see above). Otherwise a recognized operating-system cause
+takes precedence over the others — worded for Octoboard's data folder where the action writes only Octoboard's own
+data (see above) — except for a switch's copy that failed and could not put back an older item: that is classified by
+the item put aside, and the operating-system cause's remedy is given as well; except for a file the user picked that could not be read, which keeps its own remedy for reading a file (see "When the
 file fails" in `docs/product/configuration-export-and-import-dialogs.md`); and except for a denied read of the
 project's files, which keeps its own remedy (see above) — each whatever operating-system cause it names; and except
 for an alert that states only its cause (below), which gives no remedy at all. A failure whose named cause is
 not one the window knows stays unexpected, except a folder a request is scoped to that cannot be read, which gets the
 remedy for any other cause (see above). An unfamiliar failure does not get generic retry advice merely because it
 occurred during a familiar operation. A failed automatic account switch has nothing left to retry, so none of its
-remedies says to try again, and of its cause's remedies it keeps only the copy-out advice for an item kept aside and
-the remedy for what the system said (see "When the switch fails" in `docs/product/automatic-account-switch.md`).
+remedies says to try again, and of its cause's remedies it keeps only the copy-out advice for an item kept aside, the
+remedy for what the system said, and the data folder's remedy for Octoboard's database that could not be written, each
+without its step to retry (see "When the switch fails" in `docs/product/automatic-account-switch.md`).
 
 **An alert whose body is the daemon's message, where that message already says what to do**, adds no remedy line of
 its kind after it: the message's own step is the remedy — "Reopen it first." for an archived session in a handoff, the

@@ -1156,6 +1156,17 @@ export function scopeCause(raw: string | undefined): ScopeCause {
   return raw === "permission_denied" ? raw : sourceUnavailableCause(raw);
 }
 
+const STORE_WRITE_CAUSES = ["access", "disk_full", "other"] as const;
+
+/** The `cause` of a `store_write_failed`: why the application could not write its own database. */
+export type StoreWriteCause = (typeof STORE_WRITE_CAUSES)[number];
+
+/** `raw` as a `store_write_failed` cause: one this client does not know, and none, are `other`, whose remedy covers
+ * a data folder that is writable on a disk that is available. */
+export function storeWriteCause(raw: string | undefined): StoreWriteCause {
+  return STORE_WRITE_CAUSES.find((cause) => cause === raw) ?? "other";
+}
+
 const PATH_LINK_REFUSED_CAUSES = ["ambiguous", "launchable", "not_private", "not_a_file_or_folder", "unreadable", "other"] as const;
 
 /** The `cause` of a `path_link_refused`: why a path inside a root is not opened from a link. */

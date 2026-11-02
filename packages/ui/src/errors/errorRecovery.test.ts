@@ -55,6 +55,34 @@ it.each([
   expect(classifyError(error)).toEqual({ kind: "actionable", recovery });
 });
 
+it.each([
+  ["access", "appDataAccess"], ["disk_full", "appDataDiskSpace"], ["other", "appDataAccess"],
+  ["a_future_cause", "appDataAccess"], [undefined, "appDataAccess"],
+])("gives a store_write_failed whose cause is %s the remedy for the application's data", (cause, recovery) => {
+  const error = new DaemonRequestError("localized text", "store_write_failed", { detail: "attempt to write a readonly database: Error code 1544", ...(cause && { cause }) });
+  expect(classifyError(error)).toEqual({ kind: "actionable", recovery });
+  expect(appDataRecovery(error)).toBe(recovery);
+});
+
+it("keeps the cause of a store_write_failed over a signature in its detail and over a remedy a call site names", () => {
+  const full = new DaemonRequestError("text", "store_write_failed", { cause: "disk_full", detail: "Permission denied (os error 13)" });
+  expect(classifyError(full)).toEqual({ kind: "actionable", recovery: "appDataDiskSpace" });
+  const denied = new DaemonRequestError("text", "store_write_failed", { cause: "access", detail: "No space left on device (os error 28)" });
+  expect(classifyError(denied)).toEqual({ kind: "actionable", recovery: "appDataAccess" });
+  expect(classifyError(denied, "diskSpace")).toEqual({ kind: "actionable", recovery: "appDataAccess" });
+  expect(classifyError(denied, "fileWrite")).toEqual({ kind: "actionable", recovery: "appDataAccess" });
+});
+
+it("gives a store_write_failed nested in a failed launch or a failed automatic switch the remedy of its cause", () => {
+  const detail = "database or disk is full: Error code 13: Insertion failed because database is full";
+  const launch = new DaemonRequestError("text", "launch_failed", { reason: detail, reason_code: "store_write_failed", cause: "disk_full", detail });
+  expect(classifyError(launch)).toEqual({ kind: "actionable", recovery: "appDataDiskSpace" });
+  // The switch has nothing left to retry, so its remedy does not say to.
+  const switched = (cause: string) => new DaemonRequestError("text", "account_switch_automatically_failed", { agent: "Claude Code", from: "A", account: "B", reason: detail, reason_code: "store_write_failed", cause, detail });
+  expect(classifyError(switched("disk_full"))).toEqual({ kind: "actionable", recovery: "appDataDiskSpaceNoRetry" });
+  expect(classifyError(switched("access"))).toEqual({ kind: "actionable", recovery: "appDataAccessNoRetry" });
+});
+
 it.each<Record<string, string>>([{}, { session: "s1" }, { shell_terminal: "t1" }, { session: "s1", detail: "write failed" }, { shell_terminal: "t1", detail: "write failed" }])(
   "gives a terminal_input_lost of %j no remedy of the group's own",
   (params) => {
@@ -167,13 +195,13 @@ it.each([
   ["a denied access", "Permission denied (os error 13)", "appDataAccess"],
   ["a full disk", "No space left on device (os error 28)", "appDataDiskSpace"],
 ])("words a failed write to the application's own data whose cause is %s for no folder to choose", (_name, detail, recovery) => {
-  const error = new DaemonRequestError(detail, "store_io_failed", { detail });
+  const error = new DaemonRequestError(detail, "internal_error", { detail });
   expect(appDataRecovery(error)).toBe(recovery);
   expect(classifyError(error, appDataRecovery(error))).toEqual({ kind: "actionable", recovery });
 });
 
 it("lets an explicit remedy for the application's own data win over an operating-system signature", () => {
-  const denied = new DaemonRequestError("denied", "store_io_failed", { detail: "Permission denied (os error 13)" });
+  const denied = new DaemonRequestError("denied", "internal_error", { detail: "Permission denied (os error 13)" });
   expect(classifyError(denied, "appDataDiskSpace")).toEqual({ kind: "actionable", recovery: "appDataDiskSpace" });
   const full = Object.assign(new Error("x"), { code: "ENOSPC" });
   expect(classifyError(full, "appDataAccess")).toEqual({ kind: "actionable", recovery: "appDataAccess" });
@@ -192,7 +220,7 @@ it("gives no remedy for the application's own data to a failure without an acces
 
 it("keeps the folder remedy of a denied access where a folder is chosen", () => {
   const detail = "Permission denied (os error 13)";
-  expect(classifyError(new DaemonRequestError(detail, "store_io_failed", { detail }))).toEqual({ kind: "actionable", recovery: "access" });
+  expect(classifyError(new DaemonRequestError(detail, "internal_error", { detail }))).toEqual({ kind: "actionable", recovery: "access" });
   expect(classifyError(new DaemonRequestError("denied", "relocation_failed", { cause: "permission_denied" }))).toEqual({ kind: "actionable", recovery: "access" });
 });
 
