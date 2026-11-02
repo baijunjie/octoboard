@@ -32,7 +32,8 @@ what startup saves of the model and effort and on theme saves with `GROK_THEME` 
 invisible characters was read from the executable of, and measured on, **Claude Code 2.1.304** on 2026-10-20; what it
 says about input written before bracketed paste is turned on, and about pasted pieces that end in an image extension, on
 **Claude Code 2.1.310** on 2026-10-25; and what it says about the terminal probe's bracketed-paste toggle at start on
-**Claude Code 2.1.310** on 2026-10-26. All three rewrite their hook surface, their payload fields, their configuration
+**Claude Code 2.1.310** on 2026-10-26. What the Claude Code section's "How the global config file is saved, and what a
+kill leaves behind" says was read from the executable of, and measured on, **Claude Code 2.1.316** on 2026-11-02. All three rewrite their hook surface, their payload fields, their configuration
 layering and their on-disk layout on upgrade, so check a detail here against the installed version before relying on it.
 
 How Octoboard's status mapping handles these traps is encoded in `apps/daemon/src/hooks/mod.rs`; the product behavior
@@ -381,6 +382,21 @@ Ctrl-C at the prompt arms "Press Ctrl-C again to exit". Ctrl-U deletes one line 
 start of a line the line break before it, so a three-line prompt took six presses to empty; the box then shows
 "Ctrl+Y to paste deleted text". A fresh session's empty box shows a placeholder such as `❯ Try "refactor <filepath>"`,
 which reads like text.
+
+**How the global config file is saved, and what a kill leaves behind** (2.1.316, read from the executable; the write
+count measured). `.claude.json` is saved under a lock on `<file>.lock`, retried with a backoff of about 0.2 to 4 seconds
+a try; when the lock cannot be had, the save goes ahead unlocked. The save writes `<file>.tmp.<pid>.<12 hex digits>`
+(created exclusively), syncs it to disk, closes it and renames it over `<file>`. Every error it can catch removes the
+temporary file, a failed rename included, which falls back to writing `<file>` in place. So a temporary file is left
+behind only by a process that dies between creating it and the rename: an empty one when it died before the write, a
+complete copy of the config when it died after it. Nothing removes such leftovers later, so they accumulate beside
+`.claude.json` in each configuration directory. The file is saved often, startup included: one print-mode run in a
+fresh configuration directory saved it nine times within about 160 ms, the last about 15 ms after its deferred startup
+work began, which is the moment a short headless run answers. A process that saves on exit is likewise exposed to a
+kill. On `SIGTERM` or `SIGINT` Claude Code runs its own shutdown, which races its cleanup against two seconds and then
+exits; a failsafe timer forces the exit after at least five seconds (more when a `SessionEnd` hook has a longer timeout).
+Several processes sharing one configuration directory do not by themselves leave temporary files: each names its own,
+and the rename within one directory is atomic.
 
 ## Codex
 
