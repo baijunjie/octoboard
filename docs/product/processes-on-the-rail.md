@@ -60,7 +60,7 @@ One row per project that has trees counted, then one per console session that ha
   `docs/product/session-titles.md`) — on one line, and beneath it, smaller and muted, **the name of its console**; each
   fades out where it is cut, with the whole name as its tooltip (see "Names too long for their space" in
   `docs/product/labels-and-tooltips.md`);
-- **its count**, in a small neutral badge;
+- **its count**, in a small accent-coloured badge, as the button's;
 - a **chevron** pointing to the reading direction's end, mirrored under a right-to-left language.
 
 Its name for assistive technology says the name, its console, how many processes are running there, and that pressing

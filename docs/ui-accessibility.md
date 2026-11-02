@@ -99,7 +99,12 @@ A status label such as "Not added", "Not installed" or "Logged in", and any othe
 account in its agent mark's tooltip where that names only the agent and its account, "Not in the list", a file's change
 status or size, "Read-only"), is a badge after the name, never parenthesised text in the name's own style and never an
 `InlineReference`. It is the shared `StatusBadge`, the only small badge component for a status; a bare count after a
-row's name (the rail processes panel's rows, a Focus view chip's count) is the shared `CountBadge` instead. It takes a semantic colour —
+row's name (the rail processes panel's rows, a Focus view chip's count) is the shared `CountBadge` instead: solid
+accent on a row drawn bare until hovered or pressed (a ghost button), whose opaque grey hover and pressed fills would
+swallow a neutral tint; neutral on a chip that carries its own fill at rest. The accent one is HeroUI's own solid
+pair, as on the rail's glyph badges, so its text is not held to the 4.5:1 below, and like them it drops HeroUI's ring
+in the background's colour (`border-0`), which only separates a badge overlapping its anchor.
+`StatusBadge` takes a semantic colour —
 `default` (neutral), `accent`, `success`, `warning`, `danger` or `help` (the project's purple, for help and hints) — and
 one of two variants:
 
