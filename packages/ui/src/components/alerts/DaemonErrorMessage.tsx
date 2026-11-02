@@ -93,7 +93,7 @@ function CodedDaemonMessage({ error, part }: { error: DaemonRequestError; part?:
   // re-renders with none of them.
   const consoles = useErrorRecords((s) => ("console" in error.params ? s.consoles : NO_RECORDS));
   const projects = useErrorRecords((s) => ("project" in error.params ? s.projects : NO_RECORDS));
-  const sessions = useErrorRecords((s) => ("session" in error.params || "session_ids" in error.params ? s.sessions : NO_RECORDS));
+  const sessions = useErrorRecords((s) => ("session" in error.params || "receiving_session" in error.params || "session_ids" in error.params ? s.sessions : NO_RECORDS));
   const shellTerminals = useErrorRecords((s) => ("shell_terminal" in error.params ? s.shellTerminals : NO_RECORDS));
   const accounts = useErrorRecords((s) => (error.code === "unknown_account" ? s.settings.accounts : undefined));
   const id = `daemon.${richMessageCode(error.code, error.params)}`;

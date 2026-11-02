@@ -148,7 +148,7 @@ it("fixes the agent when renaming a default account, so no other agent's default
   expect(request).toHaveBeenCalledWith({ type: "set_default_account_name", agent: "claude", name: "Main" });
 });
 
-const denied = () => new DaemonRequestError("Octoboard could not write its data: attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY", "store_write_failed", { cause: "access", detail: "attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" });
+const denied = () => new DaemonRequestError("Octoboard could not read or write its own data: attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY", "store_write_failed", { cause: "access", detail: "attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" });
 
 it("gives a denied rename of a default account the data folder remedy", async () => {
   onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });

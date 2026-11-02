@@ -1158,7 +1158,7 @@ export function scopeCause(raw: string | undefined): ScopeCause {
 
 const STORE_WRITE_CAUSES = ["access", "disk_full", "other"] as const;
 
-/** The `cause` of a `store_write_failed`: why the application could not write its own database. */
+/** The `cause` of a `store_write_failed`: why the application could not read or write its own database. */
 export type StoreWriteCause = (typeof STORE_WRITE_CAUSES)[number];
 
 /** `raw` as a `store_write_failed` cause: one this client does not know, and none, are `other`, whose remedy covers

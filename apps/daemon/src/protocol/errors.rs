@@ -49,6 +49,23 @@ impl CodedError {
         }
     }
 
+    /// An error under `code` that nests the failure `err`: `own` pairs beside its `reason`,
+    /// `reason_code` and its own params (see [`nested_params`]), and the message `message` words
+    /// from that reason.
+    pub fn nesting(
+        code: Code,
+        err: &anyhow::Error,
+        own: &[(&str, &str)],
+        message: impl FnOnce(&str) -> String,
+    ) -> anyhow::Error {
+        let (params, reason) = nested_params(err, own);
+        anyhow::Error::new(Self {
+            code,
+            message: message(&reason),
+            params,
+        })
+    }
+
     pub fn unknown_console(id: &str) -> anyhow::Error {
         Self::raised(
             error_code::UNKNOWN_CONSOLE,
@@ -105,6 +122,17 @@ pub fn error_parts(err: &anyhow::Error) -> (Code, Params, String) {
             )
         }
     }
+}
+
+/// The params of a message that nests the failure `err`, and that failure's message as the reason:
+/// the failure's own params, then `own` and the failure as `reason` and `reason_code`, each
+/// replacing a param of the same name, so a client words the cause itself.
+pub fn nested_params(err: &anyhow::Error, own: &[(&str, &str)]) -> (Params, String) {
+    let (reason_code, mut nested, reason) = error_parts(err);
+    nested.extend(params(own));
+    nested.insert("reason".to_string(), reason.clone());
+    nested.insert("reason_code".to_string(), reason_code.as_str().to_string());
+    (nested, reason)
 }
 
 impl std::fmt::Display for CodedError {

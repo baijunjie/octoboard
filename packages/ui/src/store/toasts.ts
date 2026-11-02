@@ -52,7 +52,8 @@ export interface AlertOptions {
   content?: ReactNode;
   /** The call site's title beats the code's own `alertTitle`: for a dialog's answer — a submit or a confirmation, or a
    * refusal or go-ahead whose failure arrives once the dialog has closed — whose alert always takes the dialog's failure
-   * title. */
+   * title. The exception is a failure after the work has moved (`handoff_archive_failed`, `handoff_move_failed`), which
+   * is no failed try of the dialog and takes its code's own title. */
   keepTitle?: boolean;
 }
 

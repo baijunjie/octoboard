@@ -4,7 +4,7 @@ import { expect, it } from "vitest";
 import { DaemonRequestError } from "../daemon-client";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { errorPresentation } from "./errorPresentation";
-import { appDataRecovery, classifyError, modelChangeRecovery, pathLinkRecovery } from "./errorRecovery";
+import { additionalRecovery, appDataRecovery, classifyError, modelChangeRecovery, pathLinkRecovery } from "./errorRecovery";
 import { ActionableError } from "./actionableError";
 import { hasErrorRemedy } from "../components/alerts/errorPartPresence";
 
@@ -56,8 +56,8 @@ it.each([
 });
 
 it.each([
-  ["access", "appDataAccess"], ["disk_full", "appDataDiskSpace"], ["other", "appDataAccess"],
-  ["a_future_cause", "appDataAccess"], [undefined, "appDataAccess"],
+  ["access", "appDataAccess"], ["disk_full", "appDataDiskSpace"], ["other", "appDataOther"],
+  ["a_future_cause", "appDataOther"], [undefined, "appDataOther"],
 ])("gives a store_write_failed whose cause is %s the remedy for the application's data", (cause, recovery) => {
   const error = new DaemonRequestError("localized text", "store_write_failed", { detail: "attempt to write a readonly database: Error code 1544", ...(cause && { cause }) });
   expect(classifyError(error)).toEqual({ kind: "actionable", recovery });
@@ -81,6 +81,31 @@ it("gives a store_write_failed nested in a failed launch or a failed automatic s
   const switched = (cause: string) => new DaemonRequestError("text", "account_switch_automatically_failed", { agent: "Claude Code", from: "A", account: "B", reason: detail, reason_code: "store_write_failed", cause, detail });
   expect(classifyError(switched("disk_full"))).toEqual({ kind: "actionable", recovery: "appDataDiskSpaceNoRetry" });
   expect(classifyError(switched("access"))).toEqual({ kind: "actionable", recovery: "appDataAccessNoRetry" });
+  expect(classifyError(switched("other"))).toEqual({ kind: "actionable", recovery: "appDataOtherNoRetry" });
+  // A failed handoff archive nests its cause as a failed launch does, and the work has moved, so it does not say to retry.
+  const archive = new DaemonRequestError("text", "handoff_archive_failed", { receiving_session: "s2", reason: detail, reason_code: "store_write_failed", cause: "other", detail });
+  expect(classifyError(archive)).toEqual({ kind: "actionable", recovery: "appDataOtherNoRetry" });
+  // So does a failed move of the place.
+  const moved = new DaemonRequestError("text", "handoff_move_failed", { receiving_session: "s2", reason: detail, reason_code: "store_write_failed", cause: "disk_full", detail });
+  expect(classifyError(moved)).toEqual({ kind: "actionable", recovery: "appDataDiskSpaceNoRetry" });
+});
+
+it("gives a handoff that failed after the work moved the remedy of its cause without a retry, and archiving the original after a failed archive", () => {
+  const params = { receiving_session: "s2", session: "s1" };
+  const locked = (code: string) => new DaemonRequestError("text", code, { ...params, reason: "locked", reason_code: "session_locked" });
+  // The nested session_locked and session_lock_busy would otherwise say to retry; the original is what is left to act on.
+  expect(classifyError(locked("handoff_move_failed"))).toEqual({ kind: "actionable", recovery: "unlockOriginal" });
+  const busy = new DaemonRequestError("text", "handoff_archive_failed", { ...params, reason: "busy", reason_code: "session_lock_busy" });
+  expect(classifyError(busy)).toEqual({ kind: "actionable", recovery: "waitOriginal" });
+  const running = new DaemonRequestError("text", "handoff_move_failed", { ...params, reason: "running", reason_code: "session_has_running_sessions" });
+  expect(classifyError(running)).toEqual({ kind: "actionable", recovery: "stopSessionsNoRetry" });
+  const denied = (code: string) => new DaemonRequestError("text", code, { ...params, reason: "denied (os error 13)", reason_code: "internal_error", detail: "denied (os error 13)" });
+  expect(classifyError(denied("handoff_move_failed"))).toEqual({ kind: "actionable", recovery: "accessNoRetry" });
+  // A failure it names no code for stays unexpected.
+  expect(classifyError(new DaemonRequestError("text", "handoff_move_failed", { receiving_session: "s2" }))).toEqual({ kind: "unexpected" });
+  expect(additionalRecovery(locked("handoff_archive_failed"))).toBe("archiveOriginal");
+  expect(additionalRecovery(locked("handoff_move_failed"))).toBe("handoffBothRunning");
+  expect(additionalRecovery(new DaemonRequestError("text", "handoff_archive_failed", { receiving_session: "s2" }))).toBe("archiveOriginal");
 });
 
 it.each<Record<string, string>>([{}, { session: "s1" }, { shell_terminal: "t1" }, { session: "s1", detail: "write failed" }, { shell_terminal: "t1", detail: "write failed" }])(

@@ -44,6 +44,15 @@ const state = snapshotState({
   settings,
 });
 
+// The session a handoff of `bare` created before archiving the original failed, which the failure names.
+const received = sessionOf("s-handoff-received", console_.id, api.id, "Add idempotency keys", "idle", { agent: "codex", started_at: minutesAgo(1) });
+const receivedState = snapshotState({
+  consoles: [console_],
+  projects: [web, api],
+  sessions: [hub, lead, ...owned, ...hubOwned, bare, working, received],
+  settings,
+});
+
 // The same sessions plus an idle one the user locked, which Hand off and Archive refuse; kept out of `state` so
 // the lock mark does not appear in the other scenarios.
 const locked = sessionOf("s-handoff-locked", console_.id, api.id, "Review the rate limits", "idle", { locked: true, started_at: minutesAgo(25) });
@@ -246,5 +255,27 @@ export const handoffScenarios: Scenario[] = [
       [bare.id]: { code: "session_working", params: { session: bare.id }, message: "The session is in the middle of a turn" },
     },
     steps: confirmHandoff(bare.title),
+  },
+  {
+    id: "dialog-hand-off-archive-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Hand off done, archiving the original failed on the application's data",
+    description: "The handoff counts as done: the dialog has closed and the new session (the receiving one) is selected in the sidebar and open in the main area, with the original still listed. Over it, an error alert titled \"Could not finish the handoff\": the work was handed off to the new session (a chip), but archiving the original failed, and the cause the sentence ends with is \"Octoboard could not read or write its own data.\" Then the remedy for the application's data folder (writable, its disk available, access granted in system privacy settings) with no step to retry, and a line saying the original session is still open and is to be archived by the person once this is resolved. SQLite's text is only in the Error details disclosure, open here.",
+    state: receivedState,
+    sessionHandoffs: {
+      [bare.id]: {
+        code: "handoff_archive_failed",
+        params: {
+          receiving_session: received.id,
+          reason: "Octoboard could not read or write its own data: attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY",
+          reason_code: "store_write_failed",
+          cause: "access",
+          detail: "attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY",
+        },
+        message: `the work was handed off to ${received.id}, but archiving the original session failed: Octoboard could not read or write its own data: attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY`,
+      },
+    },
+    steps: [...confirmHandoff(bare.title), (ui) => ui.press(ui.t("error.diagnostics"))],
   },
 ];

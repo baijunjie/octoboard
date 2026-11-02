@@ -102,7 +102,7 @@ function queuedAlertText(): string {
   host.remove();
   return text;
 }
-const deniedWrite = () => new DaemonRequestError("Octoboard could not write its data: attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY", "store_write_failed", { cause: "access", detail: "attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" });
+const deniedWrite = () => new DaemonRequestError("Octoboard could not read or write its own data: attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY", "store_write_failed", { cause: "access", detail: "attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" });
 
 it("words a denied save of the permission approval for the application's data folder, not for another folder to choose", async () => {
   const { container, change } = mount("Codex");

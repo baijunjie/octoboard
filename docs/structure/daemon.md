@@ -80,8 +80,8 @@ the captured agent screens and records tests replay.
 ### Storage and state
 
 - `src/store/` — the coordinator's SQLite `Store`: `schema.rs`, `rows.rs`, one file per table family, and `failure.rs`,
-  the store's own `Result` and `StoreError`, which codes the SQLite failures to write Octoboard's database the user can
-  fix (read-only data folder, full disk) as `store_write_failed`.
+  the store's own `Result` and `StoreError`, which codes the SQLite failures to read or write Octoboard's database the
+  user can fix (read-only data folder, full disk, a file that cannot be opened or read) as `store_write_failed`.
 - `src/state/` — `AppState` (`mod.rs`) with one file per concern of live state (running sessions, claims, status,
   titles, turns, sharing status, git status, requests, availability, write queue facade, forgetting a record).
 - `src/agents/` — what the daemon knows about each agent CLI apart from launching it: availability, models, launch

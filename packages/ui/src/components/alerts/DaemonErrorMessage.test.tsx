@@ -434,6 +434,77 @@ it.each([
   expect(hasErrorDetails(error)).toBe(true);
 });
 
+describe("a failure to write the application's own data nested in another failure", () => {
+  const detail = "database or disk is full: Error code 13: Insertion failed because database is full";
+  const nested = { reason_code: "store_write_failed", reason: `Octoboard could not read or write its own data: ${detail}`, cause: "disk_full", detail };
+
+  it("says a failed launch with the summary of its cause, SQLite's text only in the raw part", () => {
+    const error = new DaemonRequestError("fallback", "launch_failed", { title: "Draft", ...nested });
+    const { body, raw } = mountApart(error);
+    const text = body.textContent?.replace(/[\u2066-\u2069]/g, "");
+    expect(text).toContain("Could not start Draft: Octoboard could not read or write its own data.");
+    expect(text).not.toContain("Error code 13");
+    expect(raw.querySelector("pre")?.textContent).toBe(detail);
+  });
+
+  it("says a failed handoff archive by the receiving session, with the same summary", () => {
+    const error = new DaemonRequestError("fallback", "handoff_archive_failed", { receiving_session: "s2", ...nested, cause: "other" });
+    const { body, raw } = mountApart(error);
+    const text = body.textContent?.replace(/[\u2066-\u2069]/g, "");
+    expect(text).toContain("The work was handed off to s2, but archiving the original session failed: Octoboard could not read or write its own data.");
+    expect(text).not.toContain("Error code 13");
+    expect(raw.querySelector("pre")?.textContent).toBe(detail);
+  });
+
+  it.each(["handoff_archive_failed", "handoff_move_failed"])("names the receiving session of %s by its title once the store holds it", (code) => {
+    const daemon = { store: createStateStore({ sessions: new Map([["s2", { id: "s2", title: "Received work" } as import("../../protocol").Session]]) }) } as Daemon;
+    const error = new DaemonRequestError("fallback", code, { receiving_session: "s2", ...nested, cause: "other" });
+    const { body } = mountApart(error, daemon);
+    expect(body.querySelector("[data-inline-reference]")?.textContent).toBe("Received work");
+    expect(body.textContent).not.toContain("s2");
+  });
+
+  it("says a failed move of the place by the receiving session, with the same summary", () => {
+    const error = new DaemonRequestError("fallback", "handoff_move_failed", { receiving_session: "s2", ...nested, cause: "other" });
+    const { body, raw } = mountApart(error);
+    const text = body.textContent?.replace(/[\u2066-\u2069]/g, "");
+    expect(text).toContain("The new session s2 was started, but handing the work off to it did not complete: Octoboard could not read or write its own data.");
+    expect(text).not.toContain("Error code 13");
+    expect(raw.querySelector("pre")?.textContent).toBe(detail);
+  });
+});
+
+describe("the alert of a handoff that failed after the work moved", () => {
+  const archiveLine = "The original session is still open. Archive it yourself when you no longer need it.";
+  const bothRunningLine = "Both the original session and the new one are running. Check which one holds the work, and archive the one you no longer need.";
+
+  function alertText(code: string, reasonCode: string, reason = "raw reason"): string {
+    raiseError(new DaemonRequestError("fallback", code, { receiving_session: "s2", session: "s1", reason, reason_code: reasonCode }), { title: "Could not hand off the session" });
+    mount(<ErrorAlerts />);
+    return document.querySelector('[role="alertdialog"]')!.textContent!;
+  }
+
+  it.each([
+    { reasonCode: "session_locked", own: "Unlock it first.", remedy: "Open the original session’s action menu and choose" },
+    { reasonCode: "session_lock_busy", own: "Try again when the operation finishes.", remedy: "Wait for that operation to finish." },
+    { reasonCode: "internal_error", own: "", remedy: "" },
+  ])("tells a failed archive nesting $reasonCode to archive the original, with no step to retry", ({ reasonCode, own, remedy }) => {
+    const text = alertText("handoff_archive_failed", reasonCode);
+    expect(text).toContain(archiveLine);
+    if (own) expect(text).not.toContain(own);
+    if (remedy) expect(text).toContain(remedy);
+    expect(text).not.toMatch(/retry|try again|again/i);
+    expect(text.split(archiveLine)).toHaveLength(2);
+  });
+
+  it.each(["session_locked", "session_lock_busy", "internal_error"])("tells a failed move nesting %s that both sessions are running, with no step to retry", (reasonCode) => {
+    const text = alertText("handoff_move_failed", reasonCode);
+    expect(text).toContain(bothRunningLine);
+    expect(text).not.toContain(archiveLine);
+    expect(text).not.toMatch(/retry|try again|again/i);
+  });
+});
+
 describe("a failed automatic account switch", () => {
   const params = { agent: "Codex", from: "Work", account: "Spare", reason_code: "path_not_found", path: "/missing/project" };
 
@@ -462,9 +533,9 @@ describe("a failed automatic account switch", () => {
 
   it("says a failed write to the application's own data as its summary, SQLite's text only in the raw part", () => {
     const detail = "database or disk is full: Error code 13: Insertion failed because database is full";
-    const error = new DaemonRequestError("fallback", "account_switch_automatically_failed", { ...params, reason_code: "store_write_failed", reason: `Octoboard could not write its data: ${detail}`, cause: "disk_full", detail });
+    const error = new DaemonRequestError("fallback", "account_switch_automatically_failed", { ...params, reason_code: "store_write_failed", reason: `Octoboard could not read or write its own data: ${detail}`, cause: "disk_full", detail });
     const { body, raw } = mountApart(error);
-    expect(body.textContent?.replace(/[\u2066-\u2069]/g, "")).toContain("Octoboard could not write its data.");
+    expect(body.textContent?.replace(/[\u2066-\u2069]/g, "")).toContain("Octoboard could not read or write its own data.");
     expect(body.textContent).not.toContain("Error code 13");
     expect(raw.querySelector("pre")?.textContent).toBe(detail);
   });

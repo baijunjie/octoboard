@@ -1371,9 +1371,9 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Permission approval could not be saved",
-    description: "The error alert is titled \"Could not save the permission approval\" and opens with the sentence \"Octoboard could not write its data.\", then the remedy for the application's data folder (check that it is writable and its disk available, grant access in system privacy settings if needed, then retry; no suggestion to choose another folder); SQLite's text, \"attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY\", is only in the Error details disclosure, closed here. Codex's Permission approval row keeps Follow account configuration behind the alert; acknowledging the error leaves that saved selection intact. Approve everything refused for the same reason gets the same alert over its confirmation dialog, which stays open; Claude compatibility refused the same way has its own title, \"Could not save Claude compatibility\", and leaves its switch available again.",
+    description: "The error alert is titled \"Could not save the permission approval\" and opens with the sentence \"Octoboard could not read or write its own data.\", then the remedy for the application's data folder (check that it is writable and its disk available, grant access in system privacy settings if needed, then retry; no suggestion to choose another folder); SQLite's text, \"attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY\", is only in the Error details disclosure, closed here. Codex's Permission approval row keeps Follow account configuration behind the alert; acknowledging the error leaves that saved selection intact. Approve everything refused for the same reason gets the same alert over its confirmation dialog, which stays open; Claude compatibility refused the same way has its own title, \"Could not save Claude compatibility\", and leaves its switch available again.",
     state: approvalState,
-    accountApprovalError: { code: "store_write_failed", params: { cause: "access", detail: "attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" }, message: "Octoboard could not write its data: attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" },
+    accountApprovalError: { code: "store_write_failed", params: { cause: "access", detail: "attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" }, message: "Octoboard could not read or write its own data: attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" },
     steps: [
       ...openAccounts,
       (ui) => ui.press(AGENT_LABEL.codex),
@@ -1388,7 +1388,7 @@ export const settingsScenarios: Scenario[] = [
     title: "Agent tags could not be saved",
     description: "A tag was picked from the suggestions on Codex's tab and the save was refused: an error alert titled \"Could not save the tags\" opens with the same sentence and remedy for the application's data folder, and SQLite's text is in the Error details disclosure, closed here. Behind it the Tags row shows the stored tags again, review and tests, without the tag that was picked.",
     state: taggedState,
-    agentTagsError: { code: "store_write_failed", params: { cause: "access", detail: "attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" }, message: "Octoboard could not write its data: attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" },
+    agentTagsError: { code: "store_write_failed", params: { cause: "access", detail: "attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" }, message: "Octoboard could not read or write its own data: attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" },
     steps: [
       ...openAccounts,
       (ui) => ui.press(AGENT_LABEL.codex),

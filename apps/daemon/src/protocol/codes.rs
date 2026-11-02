@@ -384,6 +384,14 @@ pub mod error_code {
     /// A handoff was asked to the agent the session already runs on. `params` names the `session`
     /// and the `agent`.
     pub const HANDOFF_TO_SAME_AGENT: Code = Code("handoff_to_same_agent");
+    /// A handoff moved the work to the receiving session, but archiving the original failed.
+    /// `params` names the `receiving_session` and nests the archive's own failure as `reason`,
+    /// `reason_code` and that failure's params (its own `session` kept), as a `launch_failed` does.
+    pub const HANDOFF_ARCHIVE_FAILED: Code = Code("handoff_archive_failed");
+    /// A handoff started the receiving session, but moving the place to it failed (the binding, the
+    /// owned sessions or the pinned mark), and it is left running. `params` names the
+    /// `receiving_session` and nests the failure as `HANDOFF_ARCHIVE_FAILED` does.
+    pub const HANDOFF_MOVE_FAILED: Code = Code("handoff_move_failed");
     /// A switch found no conversation record of the session in the account it is on. `params`
     /// names `agent` and the `path` of that account's directory.
     pub const CONVERSATION_NOT_FOUND: Code = Code("conversation_not_found");

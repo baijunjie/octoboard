@@ -18,7 +18,8 @@ export function alertTitle(t: ReturnType<typeof useT>, alert: ErrorAlertView): s
  * sentence asking for a report of an unexpected failure (see `useIssueReport`), which a failure modal, never about an
  * unexpected failure, has no need of. */
 export function ErrorAlertBody({ alert, issueGuidance }: { alert: ErrorAlertView; issueGuidance?: React.ReactNode }): React.ReactElement {
-  // What a recognised system failure asks for besides the remedy that comes first (see `additionalRecovery`).
+  // What is said besides the remedy that comes first (see `additionalRecovery`): what a recognised system failure asks
+  // for in the case of a move that could not be undone, or what a failed handoff left behind.
   const also = alert.error === undefined ? undefined : additionalRecovery(alert.error);
   const diagnostics = [alert.error, ...(alert.failures?.map((failure) => failure.error) ?? [])].map(diagnosticText).filter((detail): detail is string => !!detail && detail !== alert.message);
   return (
@@ -31,10 +32,10 @@ export function ErrorAlertBody({ alert, issueGuidance }: { alert: ErrorAlertView
           {issueGuidance && <p>{issueGuidance}</p>}
           {alert.details === undefined && diagnostics.length > 0 && <DetailsDisclosure><DiagnosticBlock>{[...new Set(diagnostics)].join("\n\n")}</DiagnosticBlock></DetailsDisclosure>}
         </>
-        : !alert.failures?.length && !alert.remedyInBody && <>
-          {alert.classification.recovery !== "none" && <p><RecoveryGuidance recovery={alert.classification.recovery} /></p>}
-          {also && also !== alert.classification.recovery && <p><RecoveryGuidance recovery={also} /></p>}
-        </>}
+        : !alert.failures?.length && !alert.remedyInBody && alert.classification.recovery !== "none" && <p><RecoveryGuidance recovery={alert.classification.recovery} /></p>}
+      {/* Said even for an unexpected failure, since a failed handoff's line is about what it left behind (an original
+        still open, both sessions running), not a remedy of the failure. */}
+      {!alert.failures?.length && also && (alert.classification.kind === "unexpected" || also !== alert.classification.recovery) && <p><RecoveryGuidance recovery={also} /></p>}
       {alert.details ? <DetailsDisclosure>{alert.details}</DetailsDisclosure> : null}
     </>
   );

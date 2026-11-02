@@ -14,7 +14,7 @@ export type ErrorRecovery =
   | "pathLinkAmbiguous" | "pathLinkLaunchable" | "pathLinkNotPrivate"
   | "fileBusy" | "codexConfig" | "sqliteHome" | "symlink" | "notRestored" | "notRestoredAutomatic"
   | "accountNotShareable" | "accountSharing" | "accountBusy" | "accountChanging" | "sharingStop" | "ownerChanging" | "ownerMoved"
-  | "diskSpaceNoRetry" | "accessNoRetry" | "appDataAccess" | "appDataDiskSpace" | "appDataAccessNoRetry" | "appDataDiskSpaceNoRetry"
+  | "diskSpaceNoRetry" | "accessNoRetry" | "appDataAccess" | "appDataDiskSpace" | "appDataAccessNoRetry" | "appDataDiskSpaceNoRetry" | "appDataOther" | "appDataOtherNoRetry" | "unlockOriginal" | "waitOriginal" | "stopSessionsNoRetry" | "archiveOriginal" | "handoffBothRunning"
   | "none";
 
 const OS_RECOVERY: Record<string, ErrorRecovery> = {
@@ -62,7 +62,7 @@ const SOURCE_CAUSE_RECOVERY: Record<SourceUnavailableCause, ErrorRecovery> = {
 
 /** The remedy of a `store_write_failed` by its `cause`, as `storeWriteCause` reads it. */
 const STORE_WRITE_CAUSE_RECOVERY: Record<StoreWriteCause, ErrorRecovery> = {
-  access: "appDataAccess", disk_full: "appDataDiskSpace", other: "appDataAccess",
+  access: "appDataAccess", disk_full: "appDataDiskSpace", other: "appDataOther",
 };
 
 /** The remedy of a `path_link_refused` by its `cause`, as `pathLinkRefusedCause` reads it. */
@@ -90,8 +90,19 @@ function onlyKeptForTheirFolder(error: DaemonRequestError): boolean {
 function withoutRetry(recovery: ErrorRecovery | undefined): ErrorRecovery | undefined {
   if (recovery === "appDataAccess") return "appDataAccessNoRetry";
   if (recovery === "appDataDiskSpace") return "appDataDiskSpaceNoRetry";
+  if (recovery === "appDataOther") return "appDataOtherNoRetry";
   return recovery === "diskSpace" ? "diskSpaceNoRetry" : recovery === "access" ? "accessNoRetry" : recovery;
 }
+
+/** Whether `error` is a handoff that failed once the receiving session was running and the work had moved
+ * (`handoff_archive_failed`, `handoff_move_failed`). */
+export function isHandoffAfterMove(error: unknown): error is DaemonRequestError {
+  return error instanceof DaemonRequestError && (error.code === "handoff_archive_failed" || error.code === "handoff_move_failed");
+}
+
+/** The remedies of a nested failure that name a session to unlock, wait for or archive, worded for a handoff that failed
+ * after the work moved: the original is the one left to act on, and nothing is to be retried. */
+const HANDOFF_ORIGINAL_RECOVERY: Partial<Record<ErrorRecovery, ErrorRecovery>> = { unlock: "unlockOriginal", wait: "waitOriginal", stopSessions: "stopSessionsNoRetry" };
 
 /** A move whose older item could not be put back (`relocation_failed`'s `cause` `not_restored`). */
 function isNotRestored(error: unknown): boolean {
@@ -106,16 +117,21 @@ export function namedSystemCause(error: unknown): ErrorRecovery | undefined {
 
 /** The remedy that goes with a failure's own as well, said after it: what a recognised operating-system signature in
  * a failure that kept an older item aside asks for (free space, permissions), which `classifyError` leaves behind the
- * remedy that prevents losing that item. */
+ * remedy that prevents losing that item; and, for a handoff that failed after the work moved, what the failure left
+ * behind (an original still open, or both sessions running), whatever the cause. */
 export function additionalRecovery(error: unknown): ErrorRecovery | undefined {
+  // Said whatever the failure's own remedy is, or whether it has one: the original is still open, and after a failed
+  // move both sessions are running.
+  if (error instanceof DaemonRequestError && error.code === "handoff_archive_failed") return "archiveOriginal";
+  if (error instanceof DaemonRequestError && error.code === "handoff_move_failed") return "handoffBothRunning";
   if (isNotRestored(error)) return environmentRecovery(error);
-  const cause = error instanceof DaemonRequestError && error.code === "account_switch_automatically_failed" ? failedSwitchCause(error) : undefined;
+  const cause = error instanceof DaemonRequestError && error.code === "account_switch_automatically_failed" ? nestedFailure(error) : undefined;
   return cause && isNotRestored(cause) ? withoutRetry(environmentRecovery(cause)) : undefined;
 }
 
-/** The failure a failed automatic switch reports, as a failure of its own (its `reason` as the message), or the
- * switch's own failure when it names none. */
-function failedSwitchCause(error: DaemonRequestError): DaemonRequestError {
+/** The failure a failed automatic switch or a handoff that failed after the work moved reports, as a failure of its
+ * own (its `reason` as the message), or its own failure when it names none. */
+function nestedFailure(error: DaemonRequestError): DaemonRequestError {
   const cause = error.params.reason_code;
   return cause && cause !== error.code ? new DaemonRequestError(error.params.reason ?? "", cause, error.params) : error;
 }
@@ -125,7 +141,7 @@ function remedyCode(error: DaemonRequestError): string | undefined {
   return codeRecord(error.code)?.nested === "failureAndRemedy" ? error.params.reason_code : error.code;
 }
 
-/** The remedy of a failed write to the application's own database by the daemon's `cause`, which names it whatever the
+/** The remedy of a failed read or write of the application's own database by the daemon's `cause`, which names it whatever the
  * system's text in `detail` says (SQLite's text carries no operating-system signature to read), raised directly or as
  * the cause of a failure that nests one (`failureAndRemedy`). Undefined for any other failure. */
 function storeWriteRecovery(error: unknown): ErrorRecovery | undefined {
@@ -135,6 +151,18 @@ function storeWriteRecovery(error: unknown): ErrorRecovery | undefined {
 }
 
 export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorClassification {
+  // The work has moved and the receiving session is running, so nothing is left to retry: the remedy of the failure it
+  // carries, without a step that retries (for the original session where it is the one to unlock or wait for), ahead of
+  // every other, since a nested `store_write_failed` would otherwise give its retrying remedy. A failure it names no code
+  // for stays unexpected.
+  if (isHandoffAfterMove(error)) {
+    const nested = nestedFailure(error);
+    if (nested === error) return { kind: "unexpected" };
+    const classified = classifyError(nested);
+    if (classified.kind !== "actionable") return classified;
+    const recovery = withoutRetry(classified.recovery)!;
+    return { kind: "actionable", recovery: HANDOFF_ORIGINAL_RECOVERY[recovery] ?? recovery };
+  }
   // Ahead of an explicit remedy and of the operating-system signature: the cause names the application's own data, which
   // the explicit remedies of a call site (access, disk space) would word for a folder the person chose.
   const stored = storeWriteRecovery(error);
@@ -144,9 +172,9 @@ export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorCl
     return { kind: "actionable", recovery: "submitRetry" };
   }
   // A file that could not be read keeps its own remedy over the one an operating-system signature names: the
-  // signature's access and disk-space remedies are about writing, which reading a file never needed. The two remedies
+  // signature's access and disk-space remedies are about writing, which reading a file never needed. The three remedies
   // for the application's own data (`appDataRecovery`) are outputs of that signature, so it cannot override them.
-  if (explicit === "issueAddress" || explicit === "openExternal" || explicit === "fileRead" || explicit === "appDataAccess" || explicit === "appDataDiskSpace") return { kind: "actionable", recovery: explicit };
+  if (explicit === "issueAddress" || explicit === "openExternal" || explicit === "fileRead" || explicit === "appDataAccess" || explicit === "appDataDiskSpace" || explicit === "appDataOther") return { kind: "actionable", recovery: explicit };
   if (isNotRestored(error)) return { kind: "actionable", recovery: "notRestored" };
   // A denied read keeps its own remedy over the access remedy its operating-system signature names, which is about
   // writing and choosing another folder.
@@ -157,7 +185,7 @@ export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorCl
   // system said (a full disk, a denied access). A cause the application has no words for stays unexpected, with
   // the guidance to report it, unless its raw text names what the system said, which the reason line already says.
   if (error instanceof DaemonRequestError && error.code === "account_switch_automatically_failed") {
-    const nested = failedSwitchCause(error);
+    const nested = nestedFailure(error);
     if (nested === error) return { kind: "unexpected" };
     // Recognised as the cause names itself or as the system's text does, in lockstep with the generic sentence
     // `uncataloguedSummaryKey` says for it; otherwise it is unexpected.
@@ -207,7 +235,7 @@ export function hostPathRecovery(error: unknown): ErrorRecovery | undefined {
   return error instanceof DaemonRequestError && codeRecord(error.code)?.hostPathGone ? "hostPathGone" : undefined;
 }
 
-/** The remedy for a failed write to the application's own data (a setting, the order of the agents): a
+/** The remedy for a failed read or write of the application's own data (a setting, the order of the agents): a
  * `store_write_failed`'s by its cause, or what an operating-system signature asks for there (access, disk space), which
  * is about the folder holding the application's data, not a folder the person chose or the project's. Undefined for any
  * other failure, which keeps its own. */

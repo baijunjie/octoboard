@@ -128,9 +128,10 @@ Pressing **Hand off** sends `hand_off_session`, once the user has confirmed star
 last change of sharing is incomplete (see "Starting a session on an account whose last change is incomplete" in
 `docs/product/sharing-the-default-configuration.md`). When it succeeds the dialog closes and the receiving session is
 selected. A refusal or failure is shown as an error alert (see `docs/product/error-alerts.md`) and the dialog stays
-open for another try. A session in the middle of a turn or still starting (`session_working`) asks the user to wait for
-its current turn or operation to finish; a receiving agent that is the session's own (`handoff_to_same_agent`), which
-the dialog cannot send, is shown as an unexpected failure.
+open for another try, except a failure after the work has moved, which closes the dialog (see "When a handoff fails").
+A session in the middle of a turn or still starting (`session_working`) asks the user to wait for its current turn or
+operation to finish; a receiving agent that is the session's own (`handoff_to_same_agent`), which the dialog cannot
+send, is shown as an unexpected failure.
 
 ## Handing off from an owner's tool
 
@@ -369,9 +370,17 @@ Every refusal comes before anything is written or started. After that:
   up: the package is removed again, and the original, its binding, its branches and its sessions are left as they were.
 - **Anything that fails once the receiving session is running** — the original's owner no longer able to take a
   coordinator with a parent when the binding moves, recording the move, or archiving the original — is answered with an
-  error that names the receiving session, which is left running. Where the binding had not moved yet, nothing of the
-  original's moved and it is not archived; where it had, the place stays with the receiving session and the original may
-  be left unarchived.
+  error that names the receiving session, which is left running (a failed move or a failed archive carries the
+  failure's own cause, so the window words it and gives its remedy, such as the one for a data folder that could not
+  be read or written, without a step to retry, since the work has moved). The window treats such a handoff as done:
+  the dialog closes and selects the receiving session as for a success, and the error alert follows, titled "Could
+  not finish the handoff". The alert never suggests retrying or redoing the handoff, whatever the cause: a locked
+  original is answered with unlocking it, worded for the original session, and the cause's own "try again" line is
+  left out. Whatever the cause (an unexpected one included), after a failed archive the alert tells
+  the user that the original session is still open and to archive it themselves; after a failed move it tells the user
+  that both the original session and the new one are running, to check which one holds the work and to archive the one
+  no longer needed. Where the binding had not moved yet, nothing of the original's moved and it is not archived; where
+  it had, the place stays with the receiving session and the original may be left unarchived.
 - **Branches that cannot be moved** do not fail the handoff: they stay with the original, and the receiving session is
   told so.
 

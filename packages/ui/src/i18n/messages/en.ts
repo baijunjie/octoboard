@@ -91,10 +91,15 @@ export const en = {
   "error.recovery.accessNoRetry": "Check the folder’s file permissions and that its disk is writable. Grant {appName} access in system privacy settings if needed.",
   // For a failed write to the application's own data (a setting), where there is no folder to choose again. "Data folder" is
   // the term other error messages already use for where the application keeps its data.
-  "error.recovery.appDataAccess": "Check that {appName}’s data folder is writable and its disk is available. Grant {appName} access in system privacy settings if needed, then retry.",
+  "error.recovery.appDataAccess": "Check that {appName}’s data folder is writable and its disk is available. Grant access in system privacy settings if needed, then retry.",
   "error.recovery.appDataDiskSpace": "Free space on the disk holding {appName}’s data folder, then retry.",
-  "error.recovery.appDataAccessNoRetry": "Check that {appName}’s data folder is writable and its disk is available. Grant {appName} access in system privacy settings if needed.",
+  "error.recovery.appDataAccessNoRetry": "Check that {appName}’s data folder is writable and its disk is available. Grant access in system privacy settings if needed.",
   "error.recovery.appDataDiskSpaceNoRetry": "Free space on the disk holding {appName}’s data folder.",
+  // For a failure of the data file the daemon could not tell further: the folder is not writable, its disk is not
+  // available or has no room left to create the file's journal, or the file was moved or deleted while the application
+  // ran.
+  "error.recovery.appDataOther": "Check that {appName}’s data folder is writable, that its disk is available and mounted, and that it has free space. If the folder or its data file was moved or deleted while in use, restart {appName}. Then retry.",
+  "error.recovery.appDataOtherNoRetry": "Check that {appName}’s data folder is writable, that its disk is available and mounted, and that it has free space. If the folder or its data file was moved or deleted while in use, restart {appName}.",
   "error.recovery.connection": "Check the network and daemon connection. Use {retry} on the connection banner when available, then retry the operation.",
   "error.recovery.path": "Select an existing, accessible folder or file using {browse}, or correct the path in the dialog, then retry.",
   "error.recovery.hostPathGone": "It may have been moved, renamed or deleted. If it was moved or renamed, find it in the project’s files and try again from there.",
@@ -123,6 +128,12 @@ export const en = {
   "error.recovery.tool": "Install the named agent CLI or {git} on the daemon host and make it available in the login shell {pathVar}, then reopen {appName} and retry.",
   "error.recovery.shell": "Open your login shell in {terminal} and fix slow or blocked startup commands in its configuration, then retry.",
   "error.recovery.unlock": "Open the affected session’s action menu, choose {unlock}, then retry.",
+  // For a handoff that failed once the work had moved: nothing is left to retry, and the original is the session to act on.
+  "error.recovery.unlockOriginal": "Open the original session’s action menu and choose {unlock}.",
+  "error.recovery.waitOriginal": "Wait for that operation to finish.",
+  "error.recovery.archiveOriginal": "The original session is still open. Archive it yourself when you no longer need it.",
+  "error.recovery.stopSessionsNoRetry": "Archive the running sessions listed above from their action menus.",
+  "error.recovery.handoffBothRunning": "Both the original session and the new one are running. Check which one holds the work, and archive the one you no longer need.",
   "error.recovery.stopSessions": "Archive the running sessions listed above from their action menus, then retry this operation.",
   "error.recovery.availability": "{appName} is still checking which agents are installed. Try again in a moment; if it keeps failing, reopen {appName}.",
   "error.recovery.agentNotAdded": "Add the agent, then try again.",
@@ -529,6 +540,8 @@ export const en = {
   "daemon.session_changing": "This session is being started, resumed, handed off or switched to another account, is having its branches handed over, or is being given another owner, so its owner cannot change right now.",
   "daemon.session_owner_changing": "{owner} is being started, resumed, handed off, switched to another account or given another owner, so sessions cannot be bound to or moved from it right now.",
   "daemon.handoff_to_same_agent": "A handoff moves a session to another agent, and this session already runs on {agent}.",
+  "daemon.handoff_move_failed": "The new session {receiving_session} was started, but handing the work off to it did not complete: {reason}",
+  "daemon.handoff_archive_failed": "The work was handed off to {receiving_session}, but archiving the original session failed: {reason}",
   "daemon.conversation_not_found":
     "No {agent} conversation of this session was found in {path}, so it cannot continue under another account.",
   "daemon.conversation_unresumable":
@@ -583,8 +596,9 @@ export const en = {
   "daemon.invalid_path": "{path} is not a valid path in this project.",
   "daemon.source_unavailable": "The folder {path} cannot be read: {detail}",
   "daemon.source_unavailable.summary": "The folder {path} cannot be read.",
-  "daemon.store_write_failed": "{appName} could not write its data: {detail}",
-  "daemon.store_write_failed.summary": "{appName} could not write its data.",
+  // Reads can raise it too (an unreadable data file), so the wording covers both.
+  "daemon.store_write_failed": "{appName} could not read or write its own data: {detail}",
+  "daemon.store_write_failed.summary": "{appName} could not read or write its own data.",
   "daemon.file_not_found": "{path} does not exist any more.",
   "daemon.permission_denied": "{appName} is not allowed to read {path}: {detail}",
   "daemon.permission_denied.summary": "{appName} is not allowed to read {path}.",
@@ -707,6 +721,8 @@ export const en = {
   "daemon.trust_answer_failed.alertTitle": "Could not answer the trust confirmation",
   "daemon.queued_messages_dropped.alertTitle": "Queued messages dropped",
   "daemon.handoff_messages_dropped.alertTitle": "Handoff messages dropped",
+  "daemon.handoff_move_failed.alertTitle": "Could not finish the handoff",
+  "daemon.handoff_archive_failed.alertTitle": "Could not finish the handoff",
   "daemon.sharing_messages_dropped.alertTitle": "Messages dropped during a sharing change",
   "daemon.sharing_resume_failed.alertTitle": "Could not resume the session",
   "daemon.account_sharing_repair_failed.alertTitle": "Could not repair sharing links",

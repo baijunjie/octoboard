@@ -33,12 +33,16 @@ export interface CodeRecord extends MessageFacets {
   unexpected?: string;
   /** Carries a nested failure as `reason_code` and its params, so its reason is worded from that failure's message;
    * `failureAndRemedy` also shows that failure's own remedy sentence (a failed launch has none of its own, a failed
-   * automatic switch says what to do in its own sentence). */
+   * automatic switch says what to do in its own sentence). A handoff that failed after the work moved uses `failure`
+   * although the nested failure has a remedy: that remedy would say to retry, so the alert's remedy comes from
+   * `classifyError` instead, with the retry removed. */
   nested?: "failure" | "failureAndRemedy";
   /** A session notice that is a failure, shown as an error alert rather than a toast (`noticeKind`). */
   failureNotice?: true;
   /** `daemon.<code>.alertTitle` exists: the alert's own title, which wins over the caller's except in a dialog's
-   * submit or confirmation. Checked against the catalog by `daemonCodes.test.ts`, not read at run time. */
+   * submit or confirmation (and in a dialog's closing, after-the-fact alert for `handoff_archive_failed` and
+   * `handoff_move_failed`, whose title is the code's: "Could not finish the handoff"). Checked against the catalog by
+   * `daemonCodes.test.ts`, not read at run time. */
   alertTitle?: true;
   /** Producer-confirmed CLI, shell and sharing diagnostics: its `detail` is shown as a block of its own, and the rich
    * sentence (`daemon.<code>.summary`) leaves it out. */
@@ -152,6 +156,14 @@ export const CODES = {
   grok_home_not_initialized: { origin: "daemon", recovery: "account", recoveryLine: true, codeParams: ["path"], uiParams: { grok: "Grok" } },
   grok_sandbox_unsupported: { origin: "daemon", recovery: "grokSandbox", codeParams: ["source", "profile"] },
   handoff_messages_dropped: { origin: "daemon", recovery: "lostMessages", failureNotice: true, alertTitle: true },
+  // The archive of the original failed after the work moved: the failure it carries as `reason_code` is worded as a
+  // failed launch's is. Its own remedy would say to retry, though the work is done, so `nested` is `failure` and the
+  // remedy comes from `classifyError` with the retry removed; the receiving session rides as `receiving_session`,
+  // leaving the failure's own `session` param as it is. One with no words of its own is shown as unexpected.
+  handoff_archive_failed: { origin: "daemon", unexpected: "shown as the failure its `reason_code` names", nested: "failure", alertTitle: true, recordIds: ["receiving_session"], nameParams: ["receiving_session"] },
+  // The move of the place failed after the receiving session was running, which stays running: worded and given its
+  // remedy as the archive's failure is, from the failure it carries.
+  handoff_move_failed: { origin: "daemon", unexpected: "shown as the failure its `reason_code` names", nested: "failure", alertTitle: true, recordIds: ["receiving_session"], nameParams: ["receiving_session"] },
   handoff_to_same_agent: { origin: "daemon", unexpected: "the handoff dialog never offers the session's own agent" },
   // The console dialog draws a picked image into a data URL scaled down to the limit, so only an imported
   // configuration carries an avatar that is not an image or is too large.
@@ -275,9 +287,10 @@ export const CODES = {
   source_unavailable: { origin: "daemon", recovery: "sourceGone", detailBlock: true, codeParams: ["path"] },
   // Any request that reads or writes the application's own database can raise it, and so can a background step (a
   // failed switch's restore, a launch), so its `cause` picks the remedy (`STORE_WRITE_CAUSE_RECOVERY`) wherever it
-  // comes from, nested or not, and its summary says the application's own data could not be written, which no call
-  // site's title says.
-  store_write_failed: { origin: "daemon", recovery: "appDataAccess", detailBlock: true },
+  // comes from, nested or not, and its summary says the application's own data could not be read or written, which no
+  // call site's title says. The `recovery` here is the one for the cause `other`, which `classifyError` never reaches
+  // for a failure that carries a cause, as every one does.
+  store_write_failed: { origin: "daemon", recovery: "appDataOther", detailBlock: true },
   submit_retry_failed: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true, detailBlock: true, codeParams: ["enter"], uiParams: { enter: "Enter" } },
   // A switch whose relaunch ended at once leaves the session interrupted on the account it had, resumable as before.
   switch_did_not_come_up: { origin: "daemon", recovery: "switchRelaunch", recordIds: ["session"], nameParams: ["session"] },

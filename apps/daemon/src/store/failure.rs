@@ -1,6 +1,6 @@
-//! What a store method fails with: SQLite's failures to write the database file, which the user
-//! can fix (a data folder made read-only, a full disk), become `store_write_failed`, so a client
-//! can name the remedy; every other failure passes through unchanged.
+//! What a store method fails with: SQLite's failures to read or write the database file, which the
+//! user can fix (a data folder made read-only, a full disk), become `store_write_failed`, so a
+//! client can name the remedy; every other failure passes through unchanged.
 //!
 //! Classifying here rather than where an error reply is built keeps the code to Octoboard's own
 //! database: the daemon also opens the agents' SQLite files (Codex's state database), whose
@@ -20,9 +20,9 @@ impl From<rusqlite::Error> for StoreError {
     }
 }
 
-/// Passes `err` through unclassified: a rusqlite error turned into `anyhow::Error` before it reaches
-/// `?` (by `.context()`, say) is never coded, so store code lets rusqlite errors reach `?` as
-/// themselves.
+/// Passes `err` through unclassified: a rusqlite error turned into `anyhow::Error` before it
+/// reaches `?` (by `.context()`, say) is never coded, so store code lets rusqlite errors reach `?`
+/// as themselves.
 impl From<anyhow::Error> for StoreError {
     fn from(err: anyhow::Error) -> Self {
         Self(err)
@@ -53,24 +53,30 @@ impl std::fmt::Display for StoreError {
     }
 }
 
-/// The `cause` of a `store_write_failed` for SQLite's `code`, or `None` for a failure that is not
-/// one of writing the file.
+/// The `cause` of a `store_write_failed` for SQLite's `error`, or `None` for a failure that is not
+/// one of reading or writing the file.
 ///
 /// SQLite reports these without the operating system's error: a read-only data folder is
 /// `SQLITE_READONLY` (extended `SQLITE_READONLY_DIRECTORY`), a disk too full to create the
 /// rollback journal is `SQLITE_CANTOPEN`, and one too full to grow the file is `SQLITE_FULL`.
-fn write_cause(code: rusqlite::ErrorCode) -> Option<&'static str> {
+/// Every `SQLITE_IOERR` (the operating system failed a read, write, sync or lock on the file) and
+/// a file moved or deleted while open (`SQLITE_READONLY_DBMOVED`, which the folder's permissions
+/// do not explain) are `other`.
+fn write_cause(error: &rusqlite::ffi::Error) -> Option<&'static str> {
     use rusqlite::ErrorCode::*;
-    match code {
+    if error.extended_code == rusqlite::ffi::SQLITE_READONLY_DBMOVED {
+        return Some("other");
+    }
+    match error.code {
         ReadOnly | PermissionDenied => Some("access"),
         DiskFull => Some("disk_full"),
-        CannotOpen => Some("other"),
+        CannotOpen | SystemIoFailure => Some("other"),
         _ => None,
     }
 }
 
 fn classify(err: rusqlite::Error) -> anyhow::Error {
-    let Some(cause) = err.sqlite_error_code().and_then(write_cause) else {
+    let Some(cause) = err.sqlite_error().and_then(write_cause) else {
         return err.into();
     };
     // The alternate form keeps SQLite's extended code ("SQLITE_READONLY_DIRECTORY"), which the
@@ -78,7 +84,7 @@ fn classify(err: rusqlite::Error) -> anyhow::Error {
     let detail = format!("{:#}", anyhow::Error::from(err));
     CodedError::raised(
         error_code::STORE_WRITE_FAILED,
-        format!("Octoboard could not write its data: {detail}"),
+        format!("Octoboard could not read or write its own data: {detail}"),
         &[("cause", cause), ("detail", &detail)],
     )
 }
@@ -105,11 +111,15 @@ mod tests {
             (ffi::SQLITE_PERM, "access"),
             (ffi::SQLITE_FULL, "disk_full"),
             (ffi::SQLITE_CANTOPEN, "other"),
+            (ffi::SQLITE_IOERR, "other"),
+            (ffi::SQLITE_IOERR_WRITE, "other"),
+            (ffi::SQLITE_IOERR_SHORT_READ, "other"),
+            (ffi::SQLITE_READONLY_DBMOVED, "other"),
         ] {
             let (wire, params, message) = error_parts(&failure(code));
             assert_eq!(wire.as_str(), "store_write_failed", "{code}");
             assert_eq!(params["cause"], cause, "{code}");
-            assert!(message.starts_with("Octoboard could not write its data: "));
+            assert!(message.starts_with("Octoboard could not read or write its own data: "));
             assert!(!params["detail"].is_empty());
         }
     }

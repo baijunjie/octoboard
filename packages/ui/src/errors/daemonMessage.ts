@@ -14,6 +14,7 @@ export const RECORD_NAMES: Record<string, (state: RecordNames, id: string) => st
   console: (state, id) => state.consoles.get(id)?.name,
   project: (state, id) => state.projects.get(id)?.name,
   session: (state, id) => state.sessions.get(id)?.title,
+  receiving_session: (state, id) => state.sessions.get(id)?.title,
   shell_terminal: (state, id) => state.shellTerminals?.get(id)?.title,
   account: (state, id) => (state.accounts ?? state.settings?.accounts)?.find((account) => account.id === id)?.name,
 };

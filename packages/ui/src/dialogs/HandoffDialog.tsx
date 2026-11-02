@@ -1,5 +1,6 @@
 import React, { useId, useRef, useState } from "react";
 
+import { raiseError } from "../components/alerts/raiseError";
 import { Button } from "../components/controls/Button";
 import { FailureBody } from "../components/alerts/errorParts";
 import { useHandOffAfterRemoval } from "../components/focus/HandOffOnUnmount";
@@ -7,7 +8,7 @@ import { InlineReference } from "../i18n/InlineReference";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { StatusMark } from "../components/status/StatusMark";
 import { useHasPainted } from "../components/motion/useHasPainted";
-import { retryCanHelp } from "../errors/errorRecovery";
+import { isHandoffAfterMove, retryCanHelp } from "../errors/errorRecovery";
 import { Message, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
@@ -29,7 +30,9 @@ import { useResponsibleBranches } from "./useSessionBranches";
  * which follow what a new session of that agent and account would take from its project or
  * console until changed. Above them it says what moves with the session. `hand_off_session` is
  * answered with `session_opened` for the receiving session, which `onHandedOff` selects; a
- * refusal or a late failure is an error alert, and the dialog stays for another try.
+ * refusal or a late failure is an error alert, and the dialog stays for another try. A failure after the work
+ * has moved (`handoff_archive_failed`, `handoff_move_failed`) is not a failed try: the dialog closes and
+ * selects the receiving session as for a success, and the error alert follows.
  */
 export function HandoffDialog({ session, onClose, onHandedOff }: {
   session: Session;
@@ -61,14 +64,27 @@ function HandoffForm({ session, console: parentConsole, project, onClose, onHand
 
   const submit = () => {
     void confirmLaunch(choice.account, () => void run(async () => {
-      const reply = await request({
-        type: "hand_off_session",
-        session: session.id,
-        agent: choice.agent,
-        account: choice.account,
-        terminal_appearance: appearance,
-        ...overrides,
-      });
+      let reply;
+      try {
+        reply = await request({
+          type: "hand_off_session",
+          session: session.id,
+          agent: choice.agent,
+          account: choice.account,
+          terminal_appearance: appearance,
+          ...overrides,
+        });
+      } catch (err) {
+        // The receiving session is running and the work has moved, so the handoff is done whatever the rest of it
+        // could not do: the dialog has nothing left to try again, and the alert, titled by its code, says what remains.
+        const receiving = afterMoveReceiving(err);
+        if (receiving === undefined) throw err;
+        onHandedOff(receiving);
+        onClose();
+        // The title is the fallback: the code's own `alertTitle` wins over it.
+        raiseError(err, { title: t("dialog.handOff.failedTitle") });
+        return;
+      }
       if (reply.type === "session_opened") onHandedOff(reply.session.id);
       onClose();
     }));
@@ -104,6 +120,12 @@ function HandoffForm({ session, console: parentConsole, project, onClose, onHand
       {confirmation}
     </Dialog>
   );
+}
+
+/** The receiving session of a handoff that failed once it was running and the work had moved (`handoff_archive_failed`,
+ * `handoff_move_failed`); undefined for any other failure, which left nothing handed off. */
+function afterMoveReceiving(error: unknown): string | undefined {
+  return isHandoffAfterMove(error) ? error.params.receiving_session || undefined : undefined;
 }
 
 /** What moves to the receiving session along with the original's place, from what the window

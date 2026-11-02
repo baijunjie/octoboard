@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::env_shell;
 use crate::protocol::{
-    error_parts, notice_code, now_millis, Agent, CodedError, Console, Notice, OrchestrationRole,
+    nested_params, notice_code, now_millis, Agent, CodedError, Console, Notice, OrchestrationRole,
     Origin, Project, Role, Session, SessionStatus, TerminalAppearance,
 };
 use crate::session::term;
@@ -147,23 +147,13 @@ async fn open_detached_with(
 /// the same. The notice carries the failure's own code as `reason_code` and its params beside
 /// `title` and `reason` (the English account), so a client words the reason itself.
 pub(crate) fn report_failed_launch(state: &Arc<AppState>, session: &Session, err: &anyhow::Error) {
-    let (code, coded, reason) = error_parts(err);
-    let mut pairs: Vec<(&str, &str)> = coded
-        .iter()
-        .map(|(name, value)| (name.as_str(), value.as_str()))
-        .collect();
-    // After the failure's own, which a later pair of the same name replaces.
-    pairs.extend([
-        ("title", session.title.as_str()),
-        ("reason", reason.as_str()),
-        ("reason_code", code.as_str()),
-    ]);
+    let (params, reason) = nested_params(err, &[("title", session.title.as_str())]);
     state.broadcast(
-        Notice::new(
-            notice_code::LAUNCH_FAILED,
-            format!("could not start {}: {reason}", session.title),
-            &pairs,
-        )
+        Notice {
+            code: notice_code::LAUNCH_FAILED,
+            message: format!("could not start {}: {reason}", session.title),
+            params,
+        }
         .about(&session.id),
     );
 }

@@ -1022,3 +1022,97 @@ async fn a_failed_archive_takes_back_the_carry_over_of_what_the_original_started
         "carried to the receiving session though the handoff failed"
     );
 }
+
+/// An archive of the original that fails after the work moved is answered with a
+/// `handoff_archive_failed` that names the `receiving_session` and carries the archive's own
+/// failure as `reason_code` and its params, so a client words the cause (a data folder it could
+/// not write, say) and gives its remedy instead of reporting an internal error.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_failed_archive_carries_the_failure_it_failed_with() {
+    let fixture = Fixture::new("archive-failed-nests");
+    fixture.run(session("original", true, "idle", None, false));
+    let state = fixture.state.clone();
+    let during = fixture.launch_after(move || {
+        state.store.set_session_locked("original", true).unwrap();
+    });
+
+    let err = fixture
+        .hand_off_launching("original", Agent::Codex, during)
+        .await
+        .expect_err("archiving the original failed");
+    let (code, params, message) = crate::protocol::error_parts(&err);
+    assert_eq!(code, error_code::HANDOFF_ARCHIVE_FAILED);
+    assert_eq!(params["reason_code"], "session_locked");
+    assert_eq!(
+        params["reason"],
+        "this operation includes a locked session; unlock it first"
+    );
+    // The archive's own failure keeps naming the original; the receiving session rides apart.
+    assert_eq!(params["session"], "original");
+    assert_eq!(
+        params["receiving_session"],
+        fixture.launches.lock().unwrap()[0].0
+    );
+    assert!(
+        message.contains("archiving the original session failed"),
+        "{message}"
+    );
+}
+
+/// The archive's failure to write Octoboard's database is nested with its cause, so the window
+/// gives the data folder's remedy.
+#[test]
+fn a_failed_archive_keeps_the_cause_of_a_store_write_failure() {
+    let inner = CodedError::raised(
+        error_code::STORE_WRITE_FAILED,
+        "Octoboard could not read or write its own data: disk full",
+        &[("cause", "disk_full"), ("detail", "disk full")],
+    );
+    let (code, params, _) = crate::protocol::error_parts(&archive_failed("receiving-1", &inner));
+    assert_eq!(code, error_code::HANDOFF_ARCHIVE_FAILED);
+    assert_eq!(params["receiving_session"], "receiving-1");
+    assert!(!params.contains_key("session"));
+    assert_eq!(params["reason_code"], "store_write_failed");
+    assert_eq!(params["cause"], "disk_full");
+    assert_eq!(params["detail"], "disk full");
+}
+
+/// A failure with no code of its own is nested as the internal error it would be.
+#[test]
+fn a_failed_archive_of_an_uncoded_failure_nests_an_internal_error() {
+    let (code, params, _) =
+        crate::protocol::error_parts(&archive_failed("receiving-1", &anyhow!("disk exploded")));
+    assert_eq!(code, error_code::HANDOFF_ARCHIVE_FAILED);
+    assert_eq!(params["reason_code"], "internal_error");
+    assert_eq!(params["reason"], "disk exploded");
+}
+
+/// A failure of the move of the place, once the receiving session is running, nests its cause
+/// as a failed archive does, so a failure to write Octoboard's database gives the data folder's
+/// remedy.
+#[test]
+fn a_failed_move_keeps_the_cause_of_a_store_write_failure() {
+    let inner = CodedError::raised(
+        error_code::STORE_WRITE_FAILED,
+        "Octoboard could not read or write its own data: disk full",
+        &[("cause", "disk_full"), ("detail", "disk full")],
+    );
+    let (code, params, message) = crate::protocol::error_parts(&move_failed("receiving-1", &inner));
+    assert_eq!(code, error_code::HANDOFF_MOVE_FAILED);
+    assert_eq!(params["receiving_session"], "receiving-1");
+    assert!(!params.contains_key("session"));
+    assert_eq!(params["reason_code"], "store_write_failed");
+    assert_eq!(params["cause"], "disk_full");
+    assert_eq!(params["detail"], "disk full");
+    assert!(message.contains("is left running"), "{message}");
+}
+
+/// A move failure with no code of its own is nested as the internal error it would be.
+#[test]
+fn a_failed_move_of_an_uncoded_failure_nests_an_internal_error() {
+    let (code, params, _) =
+        crate::protocol::error_parts(&move_failed("receiving-1", &anyhow!("disk exploded")));
+    assert_eq!(code, error_code::HANDOFF_MOVE_FAILED);
+    assert_eq!(params["reason_code"], "internal_error");
+    assert_eq!(params["reason"], "disk exploded");
+}

@@ -23,7 +23,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use uuid::Uuid;
 
 use crate::coordinator::{self, open::OpenRequest};
@@ -129,15 +129,46 @@ pub(crate) async fn hand_off_with(
         if let Some(launch) = &carried {
             state.process_ledger.withdraw_hand_over(launch);
         }
-        anyhow!(
-            "the work was handed off to `{}`, but archiving the original session failed: {err:#}",
-            receiving.id
-        )
+        archive_failed(&receiving.id, &err)
     })?;
     // Dropping the hold forwards a message queued after the forward above to the receiving session,
     // as it does on every path out of here once the place has moved.
     drop(hold);
     Ok(moved)
+}
+
+/// The error for the original's archive failing once the work has moved to `receiving`. It nests
+/// the archive's own failure as a `launch_failed` does (`reason`, `reason_code` and that failure's
+/// params, its own `session` kept), beside the `receiving_session`, so a client words the cause
+/// itself (a data folder it could not write, say) instead of showing an internal error.
+fn archive_failed(receiving: &str, err: &anyhow::Error) -> anyhow::Error {
+    CodedError::nesting(
+        error_code::HANDOFF_ARCHIVE_FAILED,
+        err,
+        &[("receiving_session", receiving)],
+        |reason| {
+            format!(
+                "the work was handed off to `{receiving}`, but archiving the original session \
+                 failed: {reason}"
+            )
+        },
+    )
+}
+
+/// The error for moving the place (the binding, the owned sessions, the pinned mark) failing once
+/// `receiving` is running, which is left running. It nests the failure as [`archive_failed`] does.
+fn move_failed(receiving: &str, err: &anyhow::Error) -> anyhow::Error {
+    CodedError::nesting(
+        error_code::HANDOFF_MOVE_FAILED,
+        err,
+        &[("receiving_session", receiving)],
+        |reason| {
+            format!(
+                "the work was not fully handed off: the new session `{receiving}` was started and \
+                 is left running: {reason}"
+            )
+        },
+    )
 }
 
 /// What opening the receiving session of `request` asks for, `session_id` being the id to record it
@@ -284,13 +315,7 @@ async fn move_place(
 ) -> Result<Moved> {
     move_place_inner(state, original, receiving, hold)
         .await
-        .with_context(|| {
-            format!(
-                "the work was not fully handed over: the new session `{}` was started and is left \
-                 running",
-                receiving.id
-            )
-        })
+        .map_err(|err| move_failed(&receiving.id, &err))
 }
 
 async fn move_place_inner(

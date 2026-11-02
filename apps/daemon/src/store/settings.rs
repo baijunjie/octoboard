@@ -293,6 +293,13 @@ impl Store {
         Ok(true)
     }
 
+    /// Makes every later read or write of the settings fail.
+    #[cfg(test)]
+    pub fn drop_settings(&self) -> Result<()> {
+        self.lock().execute_batch("DROP TABLE settings")?;
+        Ok(())
+    }
+
     /// The tag of the language the user last picked for the interface, as a client reported it;
     /// `None` until one has.
     pub fn interface_language(&self) -> Result<Option<String>> {

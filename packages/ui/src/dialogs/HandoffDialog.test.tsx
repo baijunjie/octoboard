@@ -5,6 +5,8 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { press } from "../components/alerts/detailsTestSupport";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
+import { errorAlerts } from "../components/alerts/errorAlerts";
+import { DaemonRequestError } from "../daemon-client";
 import { accountOf, consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import { currentLanguage, setLanguage } from "../i18n/language";
 import type { AccountQuota, Agent, AgentAvailability, Session, SessionBranchItem, Settings } from "../protocol";
@@ -22,7 +24,7 @@ const branch = (name: string): SessionBranchItem => ({
   kind: "branch", repository: "/r", branch: name, path: null, uncommitted: false, project: project.id, session: "s-1", state: "removable", detail: null,
 });
 
-function mount(session: Session, others: Session[] = [], branches: SessionBranchItem[] | "fail" | "failTwice" = [], availability: Partial<Record<Agent, AgentAvailability["availability"]>> = {}, added: Agent[] | null = null, accountQuotas: AccountQuota[] = [], settings: Partial<Settings> = {}) {
+function mount(session: Session, others: Session[] = [], branches: SessionBranchItem[] | "fail" | "failTwice" = [], availability: Partial<Record<Agent, AgentAvailability["availability"]>> = {}, added: Agent[] | null = null, accountQuotas: AccountQuota[] = [], settings: Partial<Settings> = {}, handoffError?: Error) {
   const sessions = new Map([session, ...others].map((s) => [s.id, s]));
   const initial: Partial<State> = {
     consoles: new Map([[parentConsole.id, parentConsole]]),
@@ -41,6 +43,7 @@ function mount(session: Session, others: Session[] = [], branches: SessionBranch
     if (body.type === "inspect_session_branches" && branches === "failTwice") return { type: "session_branches_inspected", id: null, items: [] };
     if (body.type === "inspect_session_branches" && branches === "fail") throw new Error("git failed");
     if (body.type === "inspect_session_branches") return { type: "session_branches_inspected", id: null, items: branches };
+    if (body.type === "hand_off_session" && handoffError) throw handoffError;
     if (body.type === "hand_off_session") return { type: "session_opened", id: null, session: sessionOf("s-new", parentConsole.id, session.project_id ?? undefined, session.title, "working", { agent: "codex" }) };
     return { type: "ack", id: null };
   });
@@ -224,4 +227,36 @@ it.each([["en", "handed off. A new session"], ["zh-Hans", "移交。另一个智
     const whitespaceOnly = Array.from(sentence.childNodes).filter((node) => node.nodeType === Node.TEXT_NODE && node.textContent!.trim() === "");
     expect(whitespaceOnly).toEqual([]);
   }
+});
+
+it.each([
+  ["handoff_archive_failed", "archiving the original session failed"],
+  ["handoff_move_failed", "handing the work off to it did not complete"],
+])("treats a %s as handed off: closes, selects the receiving session and raises the alert", async (code) => {
+  const error = new DaemonRequestError("text", code, { receiving_session: "s-new", reason: "locked", reason_code: "session_locked", session: "s-1" });
+  const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle");
+  const { onClose, onHandedOff } = mount(session, [], [], {}, null, [], {}, error);
+  await settle();
+  await act(async () => buttons().find((b) => b.textContent === "Hand off")?.click());
+  await settle();
+  expect(onHandedOff).toHaveBeenCalledExactlyOnceWith("s-new");
+  expect(onClose).toHaveBeenCalledOnce();
+  const raised = errorAlerts.getSnapshot();
+  expect(raised).toHaveLength(1);
+  expect(raised[0].title).toBe("Could not finish the handoff");
+  act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
+});
+
+it("keeps the dialog open and the old title for another handoff failure", async () => {
+  const error = new DaemonRequestError("text", "session_locked", { session: "s-1" });
+  const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle");
+  const { onClose, onHandedOff } = mount(session, [], [], {}, null, [], {}, error);
+  await settle();
+  await act(async () => buttons().find((b) => b.textContent === "Hand off")?.click());
+  await settle();
+  expect(onHandedOff).not.toHaveBeenCalled();
+  expect(onClose).not.toHaveBeenCalled();
+  const raised = errorAlerts.getSnapshot();
+  expect(raised[0].title).toBe("Could not hand off the session");
+  act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
 });

@@ -159,11 +159,11 @@ it to carry on or to wait for its next instruction. No report is synthesised for
     the folder the reason names before it is cleared; where the cause is one the window recognises from what the
     system said, such as a full disk or denied access, it gives that remedy without any step that retries — for denied
     access, to check the folder's permissions and that its disk is writable and to grant Octoboard access in the
-    system's privacy settings if needed, without choosing another folder; where Octoboard could not write its own
-    database, it gives the remedy for Octoboard's data folder by the cause the daemon names, again without a step that
-    retries. A cause the window has no words for is an unexpected failure, with **Report issue** (see
-    "Recovery and unexpected errors" in `docs/product/error-alerts.md`). The daemon sends it as a `session_notice` with the code
-    `account_switch_automatically_failed`, carrying the failure's own code and params;
+    system's privacy settings if needed, without choosing another folder; where Octoboard could not read or write its
+    own database, it gives the remedy for Octoboard's data folder by the cause the daemon names, again without a step
+    that retries. A cause the window has no words for is an unexpected failure, with **Report issue** (see
+    "Recovery and unexpected errors" in `docs/product/error-alerts.md`). The daemon sends it as a `session_notice` with
+    the code `account_switch_automatically_failed`, carrying the failure's own code and params;
   - its owner, when it has one that is not archived, is written a message saying the session reached its account's
     usage limit and Octoboard could neither switch it nor bring it back up, with the reason, that it is interrupted
     and its work stopped, and to look at it with `get_session` and relaunch it with `reopen_session` if the work

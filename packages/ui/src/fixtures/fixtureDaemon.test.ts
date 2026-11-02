@@ -37,7 +37,7 @@ describe("the fixture daemon's session archiving", () => {
   it("leaves the whole team intact when runtime archiving fails", async () => {
     const owner = sessionOf("owner", "c", undefined, "Hub", "idle");
     const child = sessionOf("child", "c", "p", "Child", "working", { bound_to: owner.id });
-    const error = { code: "store_write_failed", params: { cause: "disk_full", detail: "database or disk is full: Error code 13: Insertion failed because database is full" }, message: "Octoboard could not write its data: database or disk is full: Error code 13: Insertion failed because database is full" };
+    const error = { code: "store_write_failed", params: { cause: "disk_full", detail: "database or disk is full: Error code 13: Insertion failed because database is full" }, message: "Octoboard could not read or write its own data: database or disk is full: Error code 13: Insertion failed because database is full" };
     const daemon = createFixtureDaemon({ state: snapshotState({ sessions: [owner, child] }), sessionArchiveError: error });
     await expect(daemon.request({ type: "archive_session", session: owner.id })).rejects.toMatchObject({ code: error.code, params: error.params });
     expect([...daemon.store.getState().sessions.values()]).toEqual([owner, child]);
@@ -1212,7 +1212,7 @@ describe("the fixture daemon's permission approval", () => {
   });
 
   it("retains every selection when saving fails", async () => {
-    const error = { code: "store_write_failed", params: { cause: "access", detail: "attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" }, message: "Octoboard could not write its data: attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" };
+    const error = { code: "store_write_failed", params: { cause: "access", detail: "attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" }, message: "Octoboard could not read or write its own data: attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" };
     const daemon = createFixtureDaemon({ ...scenario, accountApprovalError: error });
     const before = daemon.store.getState().settings;
     await expect(daemon.request({ type: "set_codex_approval_reviewer", reviewer: "auto_review" })).rejects.toMatchObject({ code: error.code, params: error.params });
@@ -1232,7 +1232,7 @@ describe("the fixture daemon's agent tags", () => {
     expect(daemon.store.getState().settings.agent_tags).toEqual({});
   });
   it("refuses a save of agent tags staged to fail and keeps the stored tags, while other settings still save", async () => {
-    const error = { code: "store_write_failed", params: { cause: "access", detail: "attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" }, message: "Octoboard could not write its data: attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" };
+    const error = { code: "store_write_failed", params: { cause: "access", detail: "attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" }, message: "Octoboard could not read or write its own data: attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" };
     const daemon = createFixtureDaemon({ state: snapshotState({ settings: { ...DEFAULT_SETTINGS, added_agents: ["claude", "codex"], default_clone_dir: "/Users/dev/Projects", accounts: [], agent_tags: { codex: ["review"] } } }), agentTagsError: error });
     await expect(daemon.request({ type: "update_settings", agent_tags: { codex: ["review", "tests"] } })).rejects.toMatchObject({ code: error.code, params: error.params });
     expect(daemon.store.getState().settings.agent_tags).toEqual({ codex: ["review"] });
@@ -2247,7 +2247,7 @@ describe("the fixture daemon's process ledger", () => {
     const archived = createFixtureDaemon(scenario);
     await archived.request({ type: "archive_session", session: running.id, keep_process_ids: ["1:1"] });
     await expect(list(archived, { project_id: project.id })).resolves.toEqual(["3:1", "6:1", "1:1"]);
-    const refused = createFixtureDaemon({ ...scenario, sessionArchiveError: { code: "store_write_failed", params: { cause: "disk_full", detail: "database or disk is full: Error code 13: Insertion failed because database is full" }, message: "Octoboard could not write its data: database or disk is full: Error code 13: Insertion failed because database is full" } });
+    const refused = createFixtureDaemon({ ...scenario, sessionArchiveError: { code: "store_write_failed", params: { cause: "disk_full", detail: "database or disk is full: Error code 13: Insertion failed because database is full" }, message: "Octoboard could not read or write its own data: database or disk is full: Error code 13: Insertion failed because database is full" } });
     await expect(refused.request({ type: "archive_session", session: running.id, keep_process_ids: ["1:1"] })).rejects.toMatchObject({ code: "store_write_failed" });
     await expect(list(refused, { session_id: running.id })).resolves.toEqual(["2:1"]);
   });

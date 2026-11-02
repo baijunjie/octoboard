@@ -262,8 +262,9 @@ Where to start, by question:
   what to avoid when making checks cheaper.
 - [Probing the agent CLIs](memory/probing-agent-clis.md) — establishing what an agent CLI actually does: which install,
   oracles, positive controls and out-of-band proof.
-- [Raising an error alert in the UI](memory/raising-an-error-alert-in-the-ui.md) — passing a title and raising
-  UI-detected failures as `ActionableError`.
+- [Raising an error alert in the UI](memory/raising-an-error-alert-in-the-ui.md) — passing a title, raising
+  UI-detected failures as `ActionableError`, the remedy of a failed write to the application's own data, and settling
+  what a daemon failure arrives as against a real daemon.
 - [Reading daemon state in the UI](memory/reading-daemon-state-in-the-ui.md) — selectors, effect dependencies, polling
   deduplication and event ordering when reading daemon state.
 - [Running git from the daemon](memory/running-git-from-the-daemon.md) — building `git` commands in the daemon:

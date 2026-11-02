@@ -87,8 +87,11 @@ dialog staying open under the alert, and two answers whose failure usually comes
 dialog go-ahead (see "The trust dialog" in `docs/product/folder-trust.md`) and an approval or a refusal of another
 session's request (see "The confirmation dialog" in `docs/product/session-requests.md`). A go-ahead whose answer went
 through, and only carrying Grok Build's trust entry into the user's store failed (`trust_not_carried_over`), is not a
-failed answer: it keeps that code's own title, "Trust not carried over". Anything else a dialog hands
-on as it closes, such as a change of model, fails as any other action does.
+failed answer: it keeps that code's own title, "Trust not carried over". The handoff dialog has one more
+exception: a handoff that fails once the receiving session is running (`handoff_move_failed`,
+`handoff_archive_failed`) is no failed try, so its alert keeps the code's own title, "Could not finish the handoff",
+instead of the dialog's. Anything else a dialog hands on as it closes, such as a change of model, fails as any other
+action does.
 A failure of the application's own lifecycle has its own title too — "The daemon exited unexpectedly", "Could not
 quit", "Could not restart" (see "Starting up", "Quitting" and "Restarting" in `docs/product/application-lifecycle.md`). Only a failure nothing titles — an error nothing caught — is titled
 "Unexpected error" when it is unexpected, and "Error" when its cause is a known one. A title of its own does not change
@@ -452,15 +455,21 @@ details. References to controls such as Retry, Browse and Unlock appear as inlin
 For example:
 
 - A full disk asks the user to free space on the disk used by Octoboard and the project, then retry.
-- A failed write to Octoboard's own data gets a remedy worded for Octoboard's data folder rather than for a folder the
-  user chose or the project's: for denied access or a file that could not be opened, to check that the data folder is
-  writable and its disk is available, and to grant Octoboard access in the system's privacy settings if needed, then
-  retry; for a full disk, to free space on the disk holding the data folder, then retry. It is given in two cases:
-  - **Octoboard's database could not be written** (`store_write_failed`), from any action, and also as the cause of a
-    failed launch: the alert, under the action's own title, opens by saying that Octoboard could not write its data,
+- A failed read or write of Octoboard's own data gets a remedy worded for Octoboard's data folder rather than for a
+  folder the user chose or the project's: for denied access, to check that the data folder is writable and its disk is
+  available, and to grant Octoboard access in the system's privacy settings if needed, then retry; for a full disk, to
+  free space on the disk holding the data folder, then retry; for any other cause (the file could not be opened, the
+  system failed a read or write of it, or it was moved or deleted while Octoboard ran), to check that the data folder is
+  writable, that its disk is available and mounted and that it has free space, and to restart Octoboard if the folder
+  or its data file was moved or deleted while it ran, then retry. It is given in two cases:
+  - **Octoboard's database could not be read or written** (`store_write_failed`), from any action, and also as the
+    cause of a failed launch or of a failed handoff once the receiving session is running — the move of the place
+    (`handoff_move_failed`) or the archiving of the original session (`handoff_archive_failed`): the alert, under the
+    action's own title (the code's own, "Could not finish the handoff", for the two handoff codes), opens by saying
+    that Octoboard could not read or write its own data,
     with SQLite's own text under Error details. The remedy follows the cause the daemon names, whatever the system's
-    text says and whatever remedy the action would otherwise give: `disk_full` gets the full-disk remedy; `access`,
-    `other` and a cause the window does not know get the access remedy.
+    text says and whatever remedy the action would otherwise give: `disk_full` gets the full-disk remedy; `access` the
+    access remedy; `other` and a cause the window does not know the remedy for any other cause.
   - **An action that writes only Octoboard's own data** fails for a recognized operating-system cause, denied access or
     a full disk: saving an application setting in Settings, saving an agent's settings (approvals, tags, Claude
     compatibility), turning an account off or on, reordering accounts or agents, adding or removing an agent, removing
@@ -529,20 +538,31 @@ For example:
 Known domain failures, the causes the daemon names for some of them (such as why a session's conversation could not be
 moved to another account, see "When a switch fails" in `docs/product/switching-session-accounts.md`; or why a folder a
 request is scoped to cannot be read), and recognized operating-system causes provide the remedy. Octoboard's database
-that could not be written always gets the data folder's remedy by the cause the daemon names, ahead of any
+that could not be read or written always gets the data folder's remedy by the cause the daemon names, ahead of any
 operating-system cause and of any remedy the action has (see above). Otherwise a recognized operating-system cause
 takes precedence over the others — worded for Octoboard's data folder where the action writes only Octoboard's own
 data (see above) — except for a switch's copy that failed and could not put back an older item: that is classified by
-the item put aside, and the operating-system cause's remedy is given as well; except for a file the user picked that could not be read, which keeps its own remedy for reading a file (see "When the
-file fails" in `docs/product/configuration-export-and-import-dialogs.md`); and except for a denied read of the
+the item put aside, and the operating-system cause's remedy is given as well; except for a file the user picked that
+could not be read, which keeps its own remedy for reading a file (see "When the file fails" in
+`docs/product/configuration-export-and-import-dialogs.md`); and except for a denied read of the
 project's files, which keeps its own remedy (see above) — each whatever operating-system cause it names; and except
 for an alert that states only its cause (below), which gives no remedy at all. A failure whose named cause is
 not one the window knows stays unexpected, except a folder a request is scoped to that cannot be read, which gets the
 remedy for any other cause (see above). An unfamiliar failure does not get generic retry advice merely because it
 occurred during a familiar operation. A failed automatic account switch has nothing left to retry, so none of its
 remedies says to try again, and of its cause's remedies it keeps only the copy-out advice for an item kept aside, the
-remedy for what the system said, and the data folder's remedy for Octoboard's database that could not be written, each
-without its step to retry (see "When the switch fails" in `docs/product/automatic-account-switch.md`).
+remedy for what the system said, and the data folder's remedy for Octoboard's database that could not be read or
+written, each without its step to retry (see "When the switch fails" in
+`docs/product/automatic-account-switch.md`). So does a handoff that failed once the receiving session was running
+(`handoff_move_failed`, `handoff_archive_failed`), the work having moved: it gives the remedy of the failure it carries
+without a step to retry or redo the handoff, and is titled "Could not finish the handoff". The nested failure's own
+recovery line is not shown, since it would say to retry: a locked original is answered with "Open the original
+session's action menu and choose Unlock", and running sessions that block it with the same archive-them line without
+its step to retry. What the
+failure left behind is then said whatever the cause is, including an unexpected one: after a failed archive, that the
+original session is still open and is to be archived by the user when no longer needed; after a failed move,
+that both the original session and the new one are running, so the user is to check which one holds the work and archive
+the one no longer needed (see "When a handoff fails" in `docs/product/handing-off-sessions.md`).
 
 **An alert whose body is the daemon's message, where that message already says what to do**, adds no remedy line of
 its kind after it: the message's own step is the remedy — "Reopen it first." for an archived session in a handoff, the

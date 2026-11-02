@@ -68,6 +68,38 @@ async fn a_create_the_store_cannot_write_leaves_no_working_directory() {
     assert_eq!(std::fs::read_dir(&consoles).unwrap().count(), 0);
 }
 
+/// A create whose instruction file cannot be written, because the settings it reads cannot be,
+/// stores no console and takes its new working directory with it.
+#[tokio::test]
+async fn a_create_whose_instructions_cannot_be_written_leaves_no_working_directory() {
+    let (state, dir) = crate::test_support::app_state("coordinator-create-console-no-instructions");
+    state.store.drop_settings().unwrap();
+    let consoles = dir.join("consoles");
+    std::fs::create_dir_all(&consoles).unwrap();
+    let refused = handle(
+        &state,
+        None,
+        RequestBody::CreateConsole {
+            name: "Console".to_string(),
+            default_agent: Agent::Claude,
+            project_session_agent: None,
+            accounts: PerAgent {
+                claude: None,
+                codex: None,
+                grok: None,
+            },
+            launch: Default::default(),
+            project_session_launch: Default::default(),
+            icon: None,
+            console_session_prompt: None,
+        },
+    )
+    .await;
+    refused.expect_err("the settings are gone");
+    assert!(state.store.list_consoles().unwrap().is_empty());
+    assert_eq!(std::fs::read_dir(&consoles).unwrap().count(), 0);
+}
+
 /// A new console stores its default agent and launch settings; a model or effort is trimmed,
 /// with blank read as unset.
 #[tokio::test]
