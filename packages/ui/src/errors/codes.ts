@@ -128,6 +128,8 @@ export const CODES = {
   directory_unavailable: { origin: "daemon", recovery: "openFileManager", detailBlock: true, noSummary: true },
   directory_unreachable: { origin: "daemon", recovery: "path", codeParams: ["path"] },
   directory_unreadable: { origin: "daemon", recovery: "access", detailBlock: true, recoveryLine: true, codeParams: ["path"], uiParams: { macOS: "macOS" } },
+  draft_restore_unconfirmed: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true },
+  draft_save_unconfirmed: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true },
   // The export dialog keeps Export unavailable while nothing is chosen, so only a client that does not guard it
   // meets this.
   export_empty: { origin: "daemon", recovery: "exportSelection" },
@@ -216,7 +218,7 @@ export const CODES = {
   // A push refused because the project's previous one is still running, and says so.
   push_in_progress: { origin: "daemon", recovery: "none" },
   queued_messages_dropped: { origin: "daemon", recovery: "refreshMessages", failureNotice: true, alertTitle: true, recoveryLine: true },
-  queued_messages_lost: { origin: "daemon", recovery: "refreshMessages", recoveryLine: true },
+  queued_messages_lost: { origin: "daemon", recovery: "refreshMessages", recoveryLine: true, variants: { held: {} } },
   quick_create_owner_gone: { origin: "ui", recovery: "ownerGone", nameParams: ["name"] },
   quick_create_unavailable: { origin: "ui", recovery: "none" },
   quota_binary_not_found: { origin: "daemon", recoveryLine: true, codeParams: ["binary", "pathVar"], uiParams: { pathVar: "PATH" } },
@@ -289,6 +291,9 @@ export const CODES = {
   trust_not_carried_over: { origin: "daemon", recovery: "none", alertTitle: true, codeParams: ["path", "enter"], uiParams: { enter: "Enter" } },
   trust_not_waiting: { origin: "daemon", recovery: "session" },
   trust_path_not_absolute: { origin: "daemon", recovery: "trust", codeParams: ["path"] },
+  typing_blocked: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true },
+  typing_held: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true },
+  typing_lost: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true },
   unknown_account: { origin: "daemon", recovery: "account", recordIds: ["account"], nameParams: ["account"] },
   unknown_branch: { origin: "daemon", recovery: "branch", codeParams: ["branch"] },
   unknown_commit: { origin: "daemon", recovery: "refresh", codeParams: ["commit"] },

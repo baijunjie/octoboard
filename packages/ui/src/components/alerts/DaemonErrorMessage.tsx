@@ -1,7 +1,7 @@
 import React, { useId } from "react";
 
 import { DaemonRequestError } from "../../daemon-client";
-import { daemonParams, hasTrustDiagnostic, leftBranchDetail, leftBranchGroups, leftBranchItems, leftBranchName, richMessageCode, lacksSummary, sharingFailureItems, sharingRawReason, hasSharingReason, runningSessionIds, hasRefusedQuotaWindow, messageCode, type LeftBranchItem } from "../../errors/daemonMessage";
+import { daemonParams, hasTrustDiagnostic, leftBranchDetail, leftBranchGroups, leftBranchItems, leftBranchName, richMessageCode, furtherKey, lacksSummary, sharingFailureItems, sharingRawReason, hasSharingReason, runningSessionIds, hasRefusedQuotaWindow, messageCode, type LeftBranchItem } from "../../errors/daemonMessage";
 import { hasCodeParams, hasShellTimeoutDetails, systemCauseKey, uncataloguedSummaryKey, unwordedReason, type ErrorPresentation } from "../../errors/errorPresentation";
 import { isUncataloguedFailure } from "../../errors/uncataloguedFailure";
 import { ActionableError } from "../../errors/actionableError";
@@ -157,8 +157,8 @@ function CodedDaemonMessage({ error, part }: { error: DaemonRequestError; part?:
   const recoveryId = `daemon.${messageCode(error.code, error.params)}.recovery`;
   const recovery = codeRecord(error.code)?.recoveryLine && isMessageKey(recoveryId) ? <span className="block"><Message id={recoveryId} params={params as never} /></span> : null;
   // The application's own further explanation, which leads Details, ahead of the raw text.
-  const furtherId = `daemon.${error.code}.details`;
-  const further = isMessageKey(furtherId) ? <span className="block"><Message id={furtherId} params={params as never} /></span> : null;
+  const furtherId = furtherKey(error.code, error.params);
+  const further = furtherId ? <span className="block"><Message id={furtherId} params={params as never} /></span> : null;
   // The nested cause's recovery is the failure's own, a launch failure having none of its own.
   const remedy = recovery ?? (structuredNested && codeRecord(error.code)?.nested === "failureAndRemedy" && hasErrorRemedy(nested) ? <DaemonErrorMessage error={nested} part="remedy" /> : null);
   const nestedFurther = structuredNested ? <DaemonErrorMessage error={nested} part="further" /> : null;

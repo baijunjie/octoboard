@@ -35,8 +35,15 @@ interrupt a turn" in `docs/agent-cli-reference.md`). So:
   takes it back to `Working` within milliseconds of a cancel, so polling for `Idle` misses it.
 - Where the step reads or clears the agent's input box, hold `AppState::pause_outbox` for the session from before
   the first key until it is done, so a queued message does not land in or join text left in the box, and read the box
-  from `screen_text_undimmed`: Claude Code draws a fresh session's placeholder (`❯ Try "…"`) faint, and the plain
-  screen text reads it as typed text.
+  from `screen_text_undimmed`: Claude Code draws the hints of an empty box faint (a fresh session's `❯ Try "…"`,
+  `❯ Press up to edit queued messages`), and the plain screen text reads them as typed text. Do not blank faint cells
+  in a reader of your own: over a hint, Claude Code's cursor is an inverse cell outside the faint run, which
+  `screen_text_undimmed` discounts and a faint-only filter reads as a one-character draft.
+- Text in the box is not yet the user's: for some 20 ms after a message the daemon wrote, Claude Code still shows that
+  message in the box (measured under "Writing into a running session" in `docs/agent-cli-reference.md`), and holding
+  the outbox does not cover a message written just before. So a step that acts on a non-empty box soon after a write —
+  a stash key above all, which would stash the message itself — first waits, bounded, for the box to empty, as
+  `LiveSession::settled_composer` does after `note_message_written`.
 
 ## A gate on a terminal mode the agent sets reads the mode as it stands, after reading the agent's whole start-up output
 

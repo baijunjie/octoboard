@@ -7,7 +7,8 @@
 //!
 //! The screen given is the one with faint cells blanked
 //! (`crate::terminal::snapshot::TerminalSnapshot::visible_text_undimmed`): Claude Code writes the
-//! placeholder of a fresh session's empty box (`❯ Try "…"`) faint, and it is no text of the box.
+//! hints of an empty box faint (a fresh session's `❯ Try "…"`, `❯ Press up to edit queued
+//! messages` while a message waits for the turn to end), and they are no text of the box.
 //! Grok Build writes nothing in its composer faint (1.0.70).
 
 use crate::protocol::Agent;
@@ -343,8 +344,8 @@ mod tests {
         );
     }
 
-    /// Raw captures of a real session's output (Claude Code 2.1.310, Grok Build 1.0.70), replayed
-    /// into the daemon's own screen.
+    /// Raw captures of a real session's output (Claude Code 2.1.310 and 2.1.316, Grok Build
+    /// 1.0.70), replayed into the daemon's own screen.
     fn replayed(bytes: &[u8], undimmed: bool) -> String {
         let mut screen = crate::terminal::snapshot::TerminalSnapshot::new(40, 120);
         screen.process(bytes);
@@ -373,6 +374,28 @@ mod tests {
         assert_eq!(
             input_box(Agent::Claude, &replayed(RESTORED_RAW, true)).as_deref(),
             Some("Think carefully about the history of zero, then write a 600-word essay.")
+        );
+    }
+
+    /// While a message waits for the turn to end, Claude Code's empty box shows a faint hint whose
+    /// first character is its cursor, drawn inverse rather than faint; text typed meanwhile
+    /// replaces the hint.
+    #[test]
+    fn claude_s_queued_message_hint_is_no_text_of_its_box() {
+        const QUEUED: &[u8] = include_bytes!("../../testdata/claude_input_queued.bin");
+        const QUEUED_DRAFT: &[u8] = include_bytes!("../../testdata/claude_input_queued_draft.bin");
+        assert_eq!(
+            input_box(Agent::Claude, &replayed(QUEUED, false)).as_deref(),
+            Some("Press up to edit queued messages"),
+            "the hint reads as text on the plain screen"
+        );
+        assert_eq!(
+            input_box(Agent::Claude, &replayed(QUEUED, true)).as_deref(),
+            Some("")
+        );
+        assert_eq!(
+            input_box(Agent::Claude, &replayed(QUEUED_DRAFT, true)).as_deref(),
+            Some("draft words")
         );
     }
 

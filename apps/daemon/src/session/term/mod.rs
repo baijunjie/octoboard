@@ -296,7 +296,9 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
 }
 
 /// What is said about a message the agent only partly accepted, to the sender whose call hit it and
-/// to the user. One wording, because they are the same fact seen from two places.
+/// to the user. One wording, because they are the same fact seen from two places. It holds for a
+/// partial write that leaves the session's later writes free; one made while a draft was stashed
+/// holds them (`crate::session::HeldFragment`) and is worded by [`HELD_FRAGMENT`].
 ///
 /// It names no reader and promises no recovery: what state the input line is actually left in, and
 /// what it takes to clear it, is not established for any of the three agents. What *is* known follows
@@ -309,6 +311,16 @@ pub const FRAGMENT_HAZARD: &str = concat!(
     env!("OCTOBOARD_APP_NAME"),
     " could not finish writing. The next message written into the session will be run \
      together with it, so check the session before sending anything else."
+);
+
+/// [`FRAGMENT_HAZARD`] for a session that holds its later writes behind the fragment until the user
+/// sends a prompt, which submits the input line: nothing is run together with it, but a message sent
+/// meanwhile waits.
+pub const HELD_FRAGMENT: &str = concat!(
+    "the session's input box may be holding part of it. ",
+    env!("OCTOBOARD_APP_NAME"),
+    " writes nothing more into the session until a prompt is sent, so a message \
+     sent now waits until then."
 );
 
 #[cfg(test)]

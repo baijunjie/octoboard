@@ -23,7 +23,8 @@ use anyhow::{bail, Result};
 
 use crate::branch_cleanup;
 use crate::messaging::delivery::{
-    is_archived_refusal, rebound_owner, write_to_owner, Delivery, SentBy,
+    is_archived_refusal, is_held_fragment, rebound_owner, write_to_owner, Delivery, SentBy,
+    HELD_FRAGMENT_PARAM,
 };
 use crate::messaging::texts::REPORT_OPENING;
 use crate::protocol::{error_code, CodedError, Session, SessionStatus};
@@ -307,8 +308,22 @@ fn from_reporters_side(err: anyhow::Error, owner: &Session) -> anyhow::Error {
             ),
             &[("session", owner.id.as_str())],
         ),
-        // The same code reads as the reporter's own fate through `delivery::lost_message`, which
-        // speaks of "this session"; the drain announced the loss to the user.
+        // The same code reads as the reporter's own fate through `delivery`'s wording, which
+        // speaks of "this session"; the drain told the user. The report alone was lost when it
+        // was written in part while the owner's draft was stashed, which the user is told of as
+        // `typing_blocked`.
+        Some(coded) if is_held_fragment(coded) => CodedError::raised(
+            error_code::QUEUED_MESSAGES_LOST,
+            format!(
+                "the report could not be written in full into your owner, the {owner_kind} \
+                 `{}`, so it was not delivered; your owner's input box may hold part of it. \
+                 This session was left as it was; the user has been told, so tell them in \
+                 this terminal what the report says rather than reporting again",
+                owner.id
+            ),
+            &[("session", owner.id.as_str()), HELD_FRAGMENT_PARAM],
+        ),
+        // Otherwise the whole queue went, and the user was told as `queued_messages_dropped`.
         Some(coded) if coded.code == error_code::QUEUED_MESSAGES_LOST => CodedError::raised(
             error_code::QUEUED_MESSAGES_LOST,
             format!(

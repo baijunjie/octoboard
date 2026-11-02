@@ -94,8 +94,9 @@ an interrupted owner" in `docs/product/reporting-to-owners.md`).
   is not lost. A kept piece of information is gone only
   once its message has been written into the session — a message left unsent in the agent's input box, or taken by a
   view of its background agents, counts as written (see "A message written but not sent" and "A message a dialog
-  discarded or a view took" in `docs/product/message-delivery.md`) — or when the queue it was on is lost to a partial
-  write, which the user is told of as for any message (see "Messages held until a session can take them" there).
+  discarded or a view took" in `docs/product/message-delivery.md`) — or when its message, or the queue it was on, is
+  lost to a partial write, which the user is told of as for any message (see "Messages held until a session can take
+  them" there).
 - **Delivered in the order it arrived**, among everything kept for the session, as messages queued for the resumed
   session, held like any other until the session can take one (see "Messages held until a session can take them" in
   `docs/product/message-delivery.md`). When the relaunch carries an instruction of its own — an owner's

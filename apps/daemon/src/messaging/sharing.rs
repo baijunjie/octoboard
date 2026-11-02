@@ -93,9 +93,15 @@ fn write_or_hold(state: &Arc<AppState>, id: &str, text: &str) -> Result<Delivery
 /// Why a copy failed, from the sender's side: the error text speaks of "this session", which the
 /// sender would read as the receiver.
 fn copy_failure(err: &anyhow::Error) -> String {
-    match err.downcast_ref::<CodedError>().map(|coded| coded.code) {
+    let coded = err.downcast_ref::<CodedError>();
+    let held = coded.is_some_and(delivery::is_held_fragment);
+    match coded.map(|coded| coded.code) {
         Some(error_code::SESSION_NOT_RUNNING) => "its owner has no process running".to_string(),
         Some(error_code::SESSION_ARCHIVED) => "its owner is archived".to_string(),
+        // The copy itself was written in part while the owner's draft was stashed.
+        Some(error_code::QUEUED_MESSAGES_LOST) if held => {
+            "only part of it reached its owner's input box".to_string()
+        }
         Some(error_code::QUEUED_MESSAGES_LOST) => {
             "its owner's input line may hold a fragment of an earlier message".to_string()
         }

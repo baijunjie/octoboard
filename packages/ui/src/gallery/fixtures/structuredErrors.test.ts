@@ -14,8 +14,9 @@ const records = {
   shellTerminals: new Map([[shellTerminal.id, shellTerminal]]), accounts: sample.settings!.accounts,
 };
 
-/** Codes the scenarios no longer show, for a record that is held and for one that is gone, so their placeholders stay
- * filled in every language without a scenario each. */
+/** Codes and variants these scenarios do not show — ones they no longer show, for a record that is held and for one that
+ * is gone, and session notices and request failures shown elsewhere or nowhere in the gallery — so their placeholders
+ * stay filled in every language without a scenario here. */
 const UNSHOWN: Array<{ code: string; params: Record<string, string> }> = [
   { code: "unknown_console", params: { console: consoleId } },
   { code: "unknown_console", params: { console: "missing-console-42" } },
@@ -30,6 +31,12 @@ const UNSHOWN: Array<{ code: string; params: Record<string, string> }> = [
   { code: "field_required", params: { field: "console_id" } },
   { code: "invalid_launch_setting", params: { agent: "Claude Code", field: "reasoning_effort", value: "unsupported-effort" } },
   { code: "terminal_input_lost", params: { shell_terminal: shellTerminal.id } },
+  { code: "draft_save_unconfirmed", params: { agent: "Codex" } },
+  { code: "draft_restore_unconfirmed", params: { agent: "Codex" } },
+  { code: "typing_held", params: { agent: "Codex" } },
+  { code: "typing_blocked", params: { agent: "Codex" } },
+  { code: "typing_lost", params: { agent: "Codex", bytes: "37" } },
+  { code: "queued_messages_lost", params: { fragment: "held" } },
   { code: "launch_failed", params: { title: "Review index", reason_code: "invalid_launch_setting", agent: "Claude Code", field: "reasoning_effort", value: "unsupported-effort" } },
 ];
 

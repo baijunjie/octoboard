@@ -1,5 +1,5 @@
 import { AGENT_OPTIONS } from "../agents/agents";
-import { format, isMessageKey, messageText, globalParam } from "../i18n/catalog";
+import { format, isMessageKey, messageText, globalParam, type MessageKey } from "../i18n/catalog";
 import { joinPhrases } from "../i18n/joinPhrases";
 import { isolate } from "../i18n/isolate";
 import { abbreviateHome } from "../format/pathDisplay";
@@ -251,6 +251,12 @@ export function hasTrustDiagnostic(code: string, params: MessageParams): boolean
   return (code === "trust_answer_failed" || code === "trust_not_carried_over") && ["terminal_write_failed", "store_io_failed"].includes(params.reason_code) && !!params.detail;
 }
 
+/** The catalog key of a failure's further explanation in the application's own words, which leads its Details: the
+ * `.details` of the message it is worded under, else of its code, so a variant can replace its code's explanation. */
+export function furtherKey(code: string, params: MessageParams): MessageKey | undefined {
+  return [`daemon.${messageCode(code, params)}.details`, `daemon.${code}.details`].find(isMessageKey);
+}
+
 /** The rich sentence omits a raw diagnostic that is rendered separately. Plain messages keep the
  * complete catalog sentence for native notifications and other text-only consumers. */
 export function richMessageCode(code: string, params: MessageParams): string {
@@ -294,8 +300,10 @@ export function referenceNameParams(code: string, params: MessageParams): string
  * (`account`, `default_account` or `project`), worded as `daemon.account_directory_shared.<kind>`; `outside_scope` of a
  * refused link click, with `action` `open`, worded as `daemon.outside_scope.open`; `terminal_input_lost` of a
  * session's terminal or of a shell terminal, naming it by its `session` or `shell_terminal` param, worded as
- * `daemon.terminal_input_lost.session` or `.shell`). */
+ * `daemon.terminal_input_lost.session` or `.shell`; `queued_messages_lost` of a session that holds later writes behind the
+ * fragment, with `fragment` `held`, worded as `daemon.queued_messages_lost.held`). */
 export function messageCode(code: string, params: MessageParams): string {
+  if (code === "queued_messages_lost" && params.fragment === "held") return "queued_messages_lost.held";
   if (code === "message_not_sent" && params.submit_retry === "once") return "message_not_sent.retry";
   if (code === "terminal_input_lost" && params.session) return "terminal_input_lost.session";
   if (code === "terminal_input_lost" && params.shell_terminal) return "terminal_input_lost.shell";

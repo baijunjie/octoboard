@@ -1,5 +1,5 @@
 import { ActionableError } from "../../errors/actionableError";
-import { hasRichMessage, hasTrustDiagnostic, leftBranchDetail, leftBranchItems, messageCode, sharingFailureItems, sharingRawReason, sharingReasonKey } from "../../errors/daemonMessage";
+import { furtherKey, hasRichMessage, hasTrustDiagnostic, leftBranchDetail, leftBranchItems, messageCode, sharingFailureItems, sharingRawReason, sharingReasonKey } from "../../errors/daemonMessage";
 import { hasCodeParams, hasShellTimeoutDetails, unwordedReason } from "../../errors/errorPresentation";
 import { isUncataloguedFailure } from "../../errors/uncataloguedFailure";
 import { isMessageKey } from "../../i18n/catalog";
@@ -21,7 +21,7 @@ export function hasErrorDetails(error: { code: string; params: MessageParams; me
   if (hasShellTimeoutDetails(error)) return true;
   if (!hasCodeParams(error) || !hasRichMessage(error.code, error.params)) return false;
   if (leftBranchItems(error.code, error.params)) return true;
-  if (isMessageKey(`daemon.${error.code}.details`)) return true;
+  if (furtherKey(error.code, error.params)) return true;
   if (sharingRawReason(error) && sharingReasonKey(error.params.cause)) return true;
   const nested = nestedFailure(error);
   return nested !== undefined && hasErrorDetails(nested);

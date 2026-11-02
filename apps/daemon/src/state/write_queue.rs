@@ -177,6 +177,10 @@ impl PromptSignal for HookPrompts<'_> {
         self.live.input_recovery_pending().is_some()
     }
 
+    fn input_held(&self) -> bool {
+        self.live.input_swap_active()
+    }
+
     fn sent(&self) -> u64 {
         self.live.prompts_sent()
     }
@@ -473,6 +477,9 @@ impl AppState {
                 .about(id),
             );
         }
+        // A message `Drain::Fragmented` lost was announced as `typing_blocked`, which says what
+        // holds there; this notice's warning that the next message runs together with it does
+        // not, and nothing behind it was dropped.
         if outcome == Drain::Lost {
             // Nobody is waiting on a return value for most of these drains, and a message Octoboard
             // accepted and then could not deliver is the user's business — the more so because the

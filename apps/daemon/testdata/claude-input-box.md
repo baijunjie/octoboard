@@ -21,3 +21,13 @@ Raw output, replayed into the daemon's own screen by the tests, captured on 2026
   session.
 - `claude_input_restored.bin`: the same session after its second prompt was cancelled with Esc before any output: the
   prompt is back in the box, written plain.
+
+Raw output captured on 2026-11-02 from Claude Code 2.1.316 in a 120×40 PTY, from a scratch config directory with a
+fake API key against a local stand-in endpoint that held the turn open (the working directory in the banner
+overwritten with a string of the same length):
+
+- `claude_input_queued.bin`: a one-line message pasted and submitted mid-turn, which Claude Code queued: the empty box
+  shows the hint `❯ Press up to edit queued messages`, its first character drawn inverse (the cursor) and the rest
+  faint.
+- `claude_input_queued_draft.bin`: the near miss — the same session after `draft words` was typed while the message
+  was still queued: the text replaces the hint, written plain.

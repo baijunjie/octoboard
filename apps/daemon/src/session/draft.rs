@@ -1,4 +1,5 @@
-//! A conservative mirror of input, used only to match actual submitted prompts to edit generations.
+//! A conservative mirror of input, used only to match actual submitted prompts to edit generations,
+//! and to tell a prompt submitted before a partly written message from one submitted after it.
 
 use std::collections::VecDeque;
 
@@ -15,7 +16,20 @@ pub(super) struct Draft {
     escape: Vec<u8>,
     overflowed: bool,
     utf8_remaining: u8,
+    /// The texts of the last prompts the agent reported sending, which it can send again by itself:
+    /// a retry, or a prompt it had queued. Bounded by [`RECENTLY_SENT`] and [`RECENTLY_SENT_BYTES`].
+    recently_sent: VecDeque<String>,
+    /// The prompts submitted before a message was partly written ([`Self::mark_fragment`]), which
+    /// a prompt the agent reports sending later may still be: the submissions still pending then
+    /// and [`Self::recently_sent`] as it stood.
+    before_fragment: Option<Vec<String>>,
 }
+
+/// How many of the prompts last reported sent are kept, for telling one sent again apart.
+const RECENTLY_SENT: usize = 32;
+/// How many bytes of them are kept, the same budget as the submissions'; here a long prompt pushes
+/// the oldest out, and one longer than this is not kept at all.
+const RECENTLY_SENT_BYTES: usize = 1024 * 1024;
 
 impl Draft {
     pub(super) fn input(&mut self, data: &[u8]) {
@@ -123,23 +137,73 @@ impl Draft {
     }
 
     pub(super) fn prompt_sent(&mut self, text: Option<&str>, agent: Agent) {
+        if let Some(text) = text.filter(|text| text.len() <= RECENTLY_SENT_BYTES) {
+            while self.recently_sent.len() >= RECENTLY_SENT
+                || self.recently_sent.iter().map(String::len).sum::<usize>() + text.len()
+                    > RECENTLY_SENT_BYTES
+            {
+                self.recently_sent.pop_front();
+            }
+            self.recently_sent.push_back(text.to_string());
+        }
         if self.overflowed {
             return;
         }
         let Some(at) = text.and_then(|text| {
-            self.submissions.iter().position(|(_, candidate)| {
-                let candidate = match agent {
-                    Agent::Claude => crate::hooks::without_paste_wrapper(candidate),
-                    Agent::Codex => candidate.trim(),
-                    Agent::Grok => candidate,
-                };
-                candidate == text
-            })
+            self.submissions
+                .iter()
+                .position(|(_, candidate)| same_prompt(agent, candidate, text))
         }) else {
             return;
         };
         if let Some((Some(generation), _)) = self.submissions.remove(at) {
             self.submitted = self.submitted.max(generation);
+        }
+    }
+
+    /// Marks that `fragment`, a message Octoboard wrote, reached the input only in part. Its own
+    /// submission goes, since only the user's Enter can now send what of it is there; every other
+    /// prompt submitted or sent so far is remembered, as one the agent may still report sending.
+    pub(super) fn mark_fragment(&mut self, fragment: &str) {
+        if let Some(at) = self
+            .submissions
+            .iter()
+            .rposition(|(generation, text)| generation.is_none() && text == fragment)
+        {
+            self.submissions.remove(at);
+        }
+        self.before_fragment = Some(
+            self.submissions
+                .iter()
+                .map(|(_, text)| text.clone())
+                .chain(self.recently_sent.iter().cloned())
+                .collect(),
+        );
+    }
+
+    /// Whether a prompt the agent reported sending ([`Self::prompt_sent`]) was submitted after the
+    /// last [`Self::mark_fragment`], so from an input the fragment can no longer be part of: it is
+    /// none of the prompts remembered there, each of which can stand for one such report. A prompt
+    /// whose text is unknown counts as later, and so does one submitted before the mark that an
+    /// overflowing record had already lost or that was too long to keep.
+    ///
+    /// Two misreadings are accepted: a later prompt with the same text as one remembered is taken
+    /// for it, once, which only delays the end of a hold; and an agent that sends several prompts
+    /// from before the mark as one is reported as one text none of them matches, which counts as
+    /// later.
+    pub(super) fn sent_after_fragment(&mut self, text: Option<&str>, agent: Agent) -> bool {
+        let (Some(before), Some(text)) = (self.before_fragment.as_mut(), text) else {
+            return true;
+        };
+        match before
+            .iter()
+            .position(|candidate| same_prompt(agent, candidate, text))
+        {
+            Some(at) => {
+                before.remove(at);
+                false
+            }
+            None => true,
         }
     }
 
@@ -150,6 +214,16 @@ impl Draft {
     pub(super) fn holds(&self) -> bool {
         self.overflowed || self.edited > self.submitted
     }
+}
+
+/// Whether `text`, a prompt the agent reported sending, is `candidate` as it was submitted.
+fn same_prompt(agent: Agent, candidate: &str, text: &str) -> bool {
+    let candidate = match agent {
+        Agent::Claude => crate::hooks::without_paste_wrapper(candidate),
+        Agent::Codex => candidate.trim(),
+        Agent::Grok => candidate,
+    };
+    candidate == text
 }
 
 fn incomplete_escape(sequence: &[u8]) -> bool {
@@ -163,6 +237,23 @@ fn incomplete_escape(sequence: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A record that has overflowed still tells a prompt from before a fragment, one it kept, from
+    /// a later one, which ends a takeover.
+    #[test]
+    fn an_overflowed_record_still_tells_a_later_prompt_from_an_earlier_one() {
+        let mut draft = Draft::default();
+        draft.prompt_sent(Some("sent before"), Agent::Grok);
+        for at in 0..300 {
+            draft.submission(None, format!("message {at}"));
+        }
+        assert!(draft.overflowed);
+        draft.mark_fragment("message 299");
+        draft.prompt_sent(Some("later"), Agent::Grok);
+        assert!(draft.sent_after_fragment(Some("later"), Agent::Grok));
+        draft.prompt_sent(Some("sent before"), Agent::Grok);
+        assert!(!draft.sent_after_fragment(Some("sent before"), Agent::Grok));
+    }
 
     #[test]
     fn a_partial_paste_escape_or_utf8_character_cannot_be_taken_over() {

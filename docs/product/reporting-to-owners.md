@@ -36,7 +36,9 @@ Reporting is refused, or fails without accepting the report, when:
 - a message queued for its owner could not be written in full, so it and everything queued behind it, the report
   included, were dropped (see "Messages held until a session can take them" in `docs/product/message-delivery.md`).
   The reason names the owner, says the user has been told, and tells the session to tell the user in its terminal what
-  the report says rather than report again;
+  the report says rather than report again. When the report itself was written only in part while the owner's draft
+  was stashed, only the report was dropped, and the reason says so, adding that the owner's input box may hold part of
+  it (see "A message only partly written while the draft is stashed" in `docs/product/message-delivery.md`);
 - the session has already been wrapped up — a session archived by its own `done` report cannot
   report a second time;
 - the session is a coordinator with a parent, the report has `status: done` and no open items, and a session bound to it

@@ -155,31 +155,41 @@ impl TerminalSnapshot {
     /// places words with cursor moves and Codex redraws only the cells that changed, so the bytes
     /// hold no whole phrase.
     pub fn visible_text(&self) -> String {
-        self.visible_text_where(|_| true)
+        self.visible_text_where(|_, _| true)
     }
 
     /// [`Self::visible_text`] with every faint (SGR 2) cell shown as a space: what an agent
     /// writes as a hint rather than as text, such as Claude Code's placeholder in an empty input
-    /// box.
+    /// box. An inverse-video cell right before a faint one goes too: Claude Code draws its own
+    /// cursor as an inverse cell, and over a hint it covers the hint's first character, which it
+    /// leaves out of the faint run (`❯ Press up to edit queued messages`, 2.1.316).
     pub fn visible_text_undimmed(&self) -> String {
-        self.visible_text_where(|cell| !cell.flags.contains(Flags::DIM))
+        let faint = |cell: &Cell| cell.flags.contains(Flags::DIM);
+        self.visible_text_where(|cell, next| {
+            !faint(cell) && !(cell.flags.contains(Flags::INVERSE) && next.is_some_and(faint))
+        })
     }
 
-    /// The visible rows, a cell `shown` rejects written as a space.
-    fn visible_text_where(&self, shown: impl Fn(&Cell) -> bool) -> String {
+    /// The visible rows, a cell `shown` rejects written as a space. `shown` is given the cell
+    /// and the next one drawn on its row.
+    fn visible_text_where(&self, shown: impl Fn(&Cell, Option<&Cell>) -> bool) -> String {
+        let spacer = |cell: &Cell| {
+            cell.flags
+                .intersects(Flags::WIDE_CHAR_SPACER | Flags::LEADING_WIDE_CHAR_SPACER)
+        };
         let grid = self.terminal.grid();
         let mut text = String::new();
         for row in 0..grid.screen_lines() as i32 {
             let cells = &grid[Line(row)];
             for col in 0..grid.columns() {
                 let cell = &cells[Column(col)];
-                if cell
-                    .flags
-                    .intersects(Flags::WIDE_CHAR_SPACER | Flags::LEADING_WIDE_CHAR_SPACER)
-                {
+                if spacer(cell) {
                     continue;
                 }
-                if !shown(cell) {
+                let next = (col + 1..grid.columns())
+                    .map(|col| &cells[Column(col)])
+                    .find(|cell| !spacer(cell));
+                if !shown(cell, next) {
                     text.push(' ');
                     continue;
                 }

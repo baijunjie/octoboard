@@ -228,7 +228,7 @@ Where to start, by question:
 ## Development memory
 
 - [Adding a daemon error code](memory/adding-a-daemon-error-code.md) — classifying a new daemon error code in the UI in
-  the same change.
+  the same change, and sending a condition the daemon finds on its own as a coded notice about its session.
 - [Adding a dependency](memory/adding-a-dependency.md) — which `package.json` group a package belongs in when the UI
   bundle ships it.
 - [Adding a reason an account cannot be used](memory/adding-a-reason-an-account-cannot-be-used.md) — every place that

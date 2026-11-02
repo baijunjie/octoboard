@@ -305,6 +305,9 @@ export const en = {
   "daemon.queued_messages_lost.summary": "A message queued for this session could not be written in full, so it and everything queued behind it were dropped.",
   "daemon.queued_messages_lost.recovery": "Check the session's input line before sending anything else.",
   "daemon.queued_messages_lost.details": "The input line may be holding part of a message {appName} could not finish writing, and the next message written into the session will be run together with it.",
+  "daemon.queued_messages_lost.held.summary": "The message could not be written in full into this session, so it was dropped.",
+  "daemon.queued_messages_lost.held.recovery": "Check the session's input box before sending a prompt.",
+  "daemon.queued_messages_lost.held.details": "The session's input box may be holding part of the message. {appName} writes nothing more into the session until a prompt is sent, so any messages queued behind the dropped one, and any sent now, wait until then.",
   "daemon.source_changed.summary": "{path} changed while it was being read.",
   "daemon.source_changed.recovery": "Try again.",
   "daemon.trust_directory_too_broad.summary": "{path} is too broad to trust as a whole.",
@@ -320,6 +323,25 @@ export const en = {
   "daemon.message_acceptance_unconfirmed.summary": "{agent} did not confirm that it accepted a message {appName} wrote into this session.",
   "daemon.message_acceptance_unconfirmed.recovery": "Check the conversation before deciding whether to send the message again.",
   "daemon.message_acceptance_unconfirmed.details": "The message may already be queued, and {appName} will not send it again. Later messages are held for at most three seconds or until another prompt is sent.",
+  "daemon.draft_save_unconfirmed.summary":
+    "{agent} did not confirm saving the draft in this session's input box, so {appName} wrote its message into the input box as it was.",
+  "daemon.draft_save_unconfirmed.recovery":
+    "Check the conversation: the message may have been sent together with the draft.",
+  "daemon.draft_restore_unconfirmed.summary":
+    "{agent} did not confirm putting the draft back into this session's input box after {appName} sent its message.",
+  "daemon.draft_restore_unconfirmed.recovery": "Check the input box before sending what it holds.",
+  "daemon.draft_restore_unconfirmed.details":
+    "What was typed into the session while the draft was set aside goes into the input box as it is now, and the message is not sent again.",
+  "daemon.typing_held.summary":
+    "Some of what was typed into this session while {appName} wrote a message into it has not reached {agent} yet.",
+  "daemon.typing_held.recovery": "If the session shows a dialog, answer it.",
+  "daemon.typing_held.details":
+    "{agent} is showing a dialog or is not taking input. What was held back is typed in, in order, once it takes input again.",
+  "daemon.typing_blocked.summary":
+    "Only part of a message {appName} wrote into this session reached its input box, and it will not be sent again.",
+  "daemon.typing_blocked.recovery": "Check the input box and remove what is left of the message before sending a prompt.",
+  "daemon.typing_blocked.details":
+    "What was typed into the session while the message was written is discarded when you type again, and what you type from then on goes straight to {agent}. Other messages from {appName} wait until a prompt is sent.",
   "daemon.terminal_input_lost.summary": "The terminal disconnected before it had taken everything typed into it.",
   "daemon.terminal_input_lost.recovery": "Check the terminal's input line before continuing.",
   "daemon.terminal_input_lost.session.summary": "The terminal of session {session} disconnected before it had taken everything typed into it.",
@@ -552,6 +574,7 @@ export const en = {
     "This session's agent is showing, or may be about to show, its trust confirmation. Send the message once that is answered, or once the session has finished starting if none appears.",
   "daemon.queued_messages_lost":
     "A message queued for this session could not be written in full, so it and everything queued behind it were dropped. The input line may be holding part of a message {appName} could not finish writing, and the next message written into the session will be run together with it. Check the session's input line before sending anything else.",
+  "daemon.queued_messages_lost.held": "The message could not be written in full into this session, so it was dropped. The session's input box may be holding part of the message. {appName} writes nothing more into the session until a prompt is sent, so any messages queued behind the dropped one, and any sent now, wait until then. Check the session's input box before sending a prompt.",
   "daemon.page_not_current": "This page is no longer current, so its form can no longer be submitted.",
   "daemon.invalid_path": "{path} is not a valid path in this project.",
   "daemon.source_unavailable": "The folder {path} cannot be read: {detail}",
@@ -647,6 +670,16 @@ export const en = {
     "{agent} showed a dialog while {appName} wrote a message into this session and discarded the message. {appName} will write it again once the dialog has been answered.",
   "daemon.message_diverted_by_view":
     "{agent} was showing a view of its background agents while {appName} wrote a message into this session, so the message went there rather than to the conversation. Check the session.",
+  "daemon.draft_save_unconfirmed":
+    "{agent} did not confirm saving the draft in this session's input box, so {appName} wrote its message into the input box as it was. Check the conversation: the message may have been sent together with the draft.",
+  "daemon.draft_restore_unconfirmed":
+    "{agent} did not confirm putting the draft back into this session's input box after {appName} sent its message. What was typed into the session while the draft was set aside goes into the input box as it is now, and the message is not sent again. Check the input box before sending what it holds.",
+  "daemon.typing_held":
+    "Some of what was typed into this session while {appName} wrote a message into it has not reached {agent} yet. {agent} is showing a dialog or is not taking input. What was held back is typed in, in order, once it takes input again. If the session shows a dialog, answer it.",
+  "daemon.typing_blocked":
+    "Only part of a message {appName} wrote into this session reached its input box, and it will not be sent again. What was typed into the session while the message was written is discarded when you type again, and what you type from then on goes straight to {agent}. Other messages from {appName} wait until a prompt is sent. Check the input box and remove what is left of the message before sending a prompt.",
+  "daemon.typing_lost":
+    "This session ended before {agent} confirmed putting its draft back, so what was typed into it meanwhile is lost and is not typed in when the session is resumed.",
   "daemon.account_switched_automatically": "{from} ({agent}) reached its usage limit, so {appName} switched {session} to {account}.",
   "daemon.account_switch_automatically_failed":
     "{from} ({agent}) reached its usage limit, and {appName} could neither switch this session to {account} nor bring it back up on the account it had, so it is interrupted.",
@@ -658,6 +691,11 @@ export const en = {
   "daemon.launch_failed.alertTitle": "Could not start the session",
   "daemon.message_not_sent.alertTitle": "Message not sent",
   "daemon.message_acceptance_unconfirmed.alertTitle": "Message not confirmed",
+  "daemon.draft_save_unconfirmed.alertTitle": "Draft save not confirmed",
+  "daemon.draft_restore_unconfirmed.alertTitle": "Draft restore not confirmed",
+  "daemon.typing_held.alertTitle": "Typing held back",
+  "daemon.typing_blocked.alertTitle": "Message partly written",
+  "daemon.typing_lost.alertTitle": "Typing lost",
   "daemon.terminal_input_lost.alertTitle": "Terminal input not accepted",
   "daemon.trust_answer_failed.alertTitle": "Could not answer the trust confirmation",
   "daemon.queued_messages_dropped.alertTitle": "Queued messages dropped",

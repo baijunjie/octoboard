@@ -1,18 +1,23 @@
 //! The per-session FIFO for automatic messages, with one drainer per session.
 //!
-//! Each ticket keeps its first delivery-attempt time across retries. Draft protection can delay
-//! writing only for a bounded grace period; afterwards a write may include unfinished user input.
+//! Each ticket keeps its first delivery-attempt time across retries, except one refused while the
+//! session's input is held for a draft or a fragment, whose grace starts again once the hold ends.
+//! Draft protection can delay writing only for a bounded grace period; afterwards a write may
+//! include unfinished user input.
 //! Lifecycle holds, trust confirmations and agent dialogs remain separate reasons to wait.
 //!
 //! A physical partial write cannot be repeated without duplicating its accepted prefix. It and
 //! the queue behind it are reported lost, because another paste would join the unterminated one.
+//! A fragment written while the draft was stashed loses only itself: the session holds whatever
+//! follows until nothing can join the fragment, so the queue behind it waits instead.
 //! An uncertain native submission instead consumes only its own ticket and retains later ones:
 //! there is no terminal fragment, but repeating the request could deliver the message twice.
 //!
 //! A complete write missing its prompt acknowledgement briefly holds later messages. Its payload
 //! never goes back into the queue; the running session owns the bounded submit-key retry.
 //! For the delivery contract see docs/product/message-delivery.md's
-//! "Messages held until a session can take them" section.
+//! "Messages held until a session can take them" section, and for a fragment written while the
+//! draft was stashed its "A message only partly written while the draft is stashed" section.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -36,6 +41,11 @@ pub enum Drain {
     Pending,
     /// A message was written in part, so it is gone and the queue behind it with it.
     Lost,
+    /// The message with this ticket was written in part while the session's draft was stashed
+    /// ([`crate::session::HeldFragment`]). It is gone, but the session holds Octoboard's later
+    /// writes until a prompt is sent after it, so nothing written next can run together with the
+    /// fragment: the queue behind it stays, and is written in order once the hold ends.
+    Fragmented(Ticket),
     /// The native queue may have accepted this ticket; it is never submitted again.
     Uncertain(Ticket),
     /// The message with this ticket was written, but the agent did not report sending it. Its text
@@ -91,6 +101,11 @@ pub trait PromptSignal {
     fn note_written_mid_turn(&self) {}
     /// A complete message reached the CLI, whose native draft restoration is still pending.
     fn input_recovery_pending(&self) -> bool {
+        false
+    }
+    /// Whether the session's input is held for a draft being stashed or restored, or for a
+    /// fragment ([`crate::session::RecoveryPhase`]), which refuses every message until it ends.
+    fn input_held(&self) -> bool {
         false
     }
 }
@@ -329,7 +344,7 @@ impl Outbox {
                         // Its paste went to a dialog that discarded it, so unlike an unsent
                         // message nothing of it is in the input box.
                         tracing::warn!(session = %id, "a dialog discarded a written message");
-                        self.push_front(id, ticket, text, protection_started);
+                        self.push_front(id, ticket, text, Some(protection_started));
                         return Drain::Discarded(ticket);
                     }
                     if now.diverted_seen > seen.diverted_seen {
@@ -350,6 +365,10 @@ impl Outbox {
                     if partial.error.kind() != std::io::ErrorKind::WouldBlock {
                         tracing::warn!(session = %id, error = %partial.error, "a queued message could not be written yet");
                     }
+                    // A hold on the input is no wait for a draft, which the message's grace
+                    // measures: spent behind it, the grace would let the message join whatever
+                    // the user has in the box the moment the hold ends.
+                    let protection_started = (!prompts.input_held()).then_some(protection_started);
                     self.push_front(id, ticket, text, protection_started);
                     return Drain::Pending;
                 }
@@ -363,6 +382,25 @@ impl Outbox {
                     tracing::error!(session = %id, error = %partial.error,
                         "the native queue did not confirm accepting a message; it will not be resent");
                     return Drain::Uncertain(ticket);
+                }
+                Err(partial)
+                    if partial
+                        .error
+                        .get_ref()
+                        .is_some_and(|error| error.is::<crate::session::HeldFragment>()) =>
+                {
+                    // Only this message is lost; the session holds what follows until it can no
+                    // longer join the fragment, so the queue behind it waits, in order, as it does
+                    // for any hold. A drain meanwhile finds the session refusing writes.
+                    self.mark_written(ticket);
+                    tracing::error!(
+                        session = %id,
+                        written = partial.written,
+                        error = %partial.error,
+                        "a message was only partly written while the draft was stashed; it has \
+                         been dropped and the queue behind it waits for the session's hold to end"
+                    );
+                    return Drain::Fragmented(ticket);
                 }
                 Err(partial) => {
                     // The queue behind it goes too. The next message written into this session is
@@ -541,13 +579,19 @@ impl Outbox {
         next
     }
 
-    fn push_front(&self, id: &str, ticket: Ticket, text: String, protection_started: Instant) {
+    fn push_front(
+        &self,
+        id: &str,
+        ticket: Ticket,
+        text: String,
+        protection_started: Option<Instant>,
+    ) {
         self.queues
             .lock()
             .expect("outbox lock poisoned")
             .entry(id.to_string())
             .or_default()
-            .push_front((ticket, text, Some(protection_started)));
+            .push_front((ticket, text, protection_started));
     }
 }
 
@@ -584,6 +628,39 @@ mod tests {
         }
         fn trust_holds_writes(&self) -> bool {
             false
+        }
+    }
+
+    /// [`MidTurn`] with the session's input held, as for a draft being stashed or a fragment.
+    struct HeldInput;
+
+    impl PromptSignal for HeldInput {
+        fn sent(&self) -> u64 {
+            0
+        }
+        fn expects_send(&self) -> bool {
+            false
+        }
+        fn wait_past(&self, _before: u64) -> bool {
+            unreachable!("nothing is written while the input is held")
+        }
+        fn mark_unsent(&self, _before: u64) {
+            unreachable!("nothing is written while the input is held")
+        }
+        fn unsent_waiting(&self) -> bool {
+            false
+        }
+        fn sighting(&self) -> Sighting {
+            Sighting::default()
+        }
+        fn watch_screen(&self, _on: bool) {
+            unreachable!("nothing is checked while the input is held")
+        }
+        fn trust_holds_writes(&self) -> bool {
+            false
+        }
+        fn input_held(&self) -> bool {
+            true
         }
     }
 
@@ -854,6 +931,77 @@ mod tests {
             Drain::Lost
         );
         assert_eq!(outbox.len("s"), 0);
+    }
+
+    /// A message written in part while the draft was stashed leaves a session that holds every
+    /// later write until a prompt is sent after it, so only that message is lost, its row with it:
+    /// the queue behind it waits, rows kept, refused meanwhile, and is written in order once the
+    /// session takes writes again.
+    #[test]
+    fn a_held_fragment_loses_only_its_own_message() {
+        let outbox = Outbox::default();
+        let first = outbox.push_kept("s", "first", 1).unwrap();
+        outbox.push_kept("s", "second", 2);
+        outbox.push("s", "third");
+        let held = || PartialWrite {
+            written: 3,
+            error: std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                crate::session::HeldFragment("no room".to_string()),
+            ),
+        };
+        assert_eq!(
+            outbox.drain_with("s", &mut |_, _, _| Err(held()), &MidTurn),
+            Drain::Fragmented(first)
+        );
+        assert_eq!(outbox.len("s"), 2);
+        assert_eq!(outbox.take_written(), [1]);
+        assert!(outbox.is_row_queued(2));
+        assert_eq!(
+            outbox.drain_with("s", &mut |_, _, _| Err(partial(0)), &MidTurn),
+            Drain::Pending
+        );
+        let mut written = Vec::new();
+        assert_eq!(
+            outbox.drain_with(
+                "s",
+                &mut |_, text, _| {
+                    written.push(text.to_string());
+                    Ok(())
+                },
+                &MidTurn
+            ),
+            Drain::Clear
+        );
+        assert_eq!(written, vec!["second", "third"]);
+        assert_eq!(outbox.take_written(), [2]);
+    }
+
+    /// A message refused while the session's input is held keeps none of its draft grace, so once
+    /// the hold ends it gets the whole grace again rather than joining what is in the box.
+    #[test]
+    fn a_hold_on_the_input_spends_none_of_a_message_s_draft_grace() {
+        let outbox = Outbox::default();
+        outbox.push("s", "first");
+        let (ticket, text, _) = outbox.pop("s").unwrap();
+        outbox.push_front("s", ticket, text, Some(Instant::now() - DRAFT_WAIT));
+        assert_eq!(
+            outbox.drain_with("s", &mut |_, _, _| Err(partial(0)), &HeldInput),
+            Drain::Pending
+        );
+        let mut mixed = None;
+        assert_eq!(
+            outbox.drain_with(
+                "s",
+                &mut |_, _, allow_mixed| {
+                    mixed = Some(allow_mixed);
+                    Ok(())
+                },
+                &MidTurn
+            ),
+            Drain::Clear
+        );
+        assert_eq!(mixed, Some(false));
     }
 
     #[test]
@@ -1149,7 +1297,12 @@ mod tests {
         assert_eq!(outbox.drain(&live, &MidTurn), Drain::Pending);
         assert_eq!(live.input_writes(), before);
         let queued = outbox.pop(&live.id).unwrap();
-        outbox.push_front(&live.id, queued.0, queued.1, Instant::now() - DRAFT_WAIT);
+        outbox.push_front(
+            &live.id,
+            queued.0,
+            queued.1,
+            Some(Instant::now() - DRAFT_WAIT),
+        );
         assert_eq!(outbox.drain(&live, &MidTurn), Drain::Clear);
         assert_eq!(live.input_writes(), before + 1);
         assert_eq!(outbox.len(&live.id), 0);
@@ -1171,7 +1324,7 @@ mod tests {
         assert_eq!(outbox.drain_with("s", &mut write, &MidTurn), Drain::Pending);
         let queued = outbox.pop("s").unwrap();
         assert!(queued.2.is_some());
-        outbox.push_front("s", queued.0, queued.1, Instant::now() - DRAFT_WAIT);
+        outbox.push_front("s", queued.0, queued.1, Some(Instant::now() - DRAFT_WAIT));
         assert_eq!(outbox.drain_with("s", &mut write, &MidTurn), Drain::Pending);
         assert_eq!(outbox.drain_with("s", &mut write, &MidTurn), Drain::Pending);
         assert_eq!(allowances, [false, true, true]);

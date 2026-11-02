@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 
-use crate::messaging::outbox::Drain;
+use crate::messaging::outbox::{Drain, Ticket};
 use crate::messaging::texts::{is_waiting_notice, waiting_notice_session};
 use crate::protocol::{error_code, now_millis, CodedError, Session, SessionStatus};
 use crate::session::term;
@@ -87,6 +87,30 @@ fn lost_message() -> String {
         "A message queued for this session could not be written in full, so it and everything \
          queued behind it were dropped: {}",
         term::FRAGMENT_HAZARD
+    )
+}
+
+/// The param `queued_messages_lost` carries when its message was written in part while the
+/// session's draft was stashed ([`Drain::Fragmented`]): only that message was lost.
+pub(crate) const HELD_FRAGMENT_PARAM: (&str, &str) = ("fragment", "held");
+
+/// Whether `error` is the loss of a message written in part while the session's draft was stashed,
+/// the one message it lost ([`HELD_FRAGMENT_PARAM`]).
+pub(crate) fn is_held_fragment(error: &CodedError) -> bool {
+    error.code == error_code::QUEUED_MESSAGES_LOST
+        && error
+            .params
+            .get(HELD_FRAGMENT_PARAM.0)
+            .is_some_and(|value| value == HELD_FRAGMENT_PARAM.1)
+}
+
+/// What a sender is told when its own message was the one written in part while the session's
+/// draft was stashed ([`Drain::Fragmented`]): only it is gone, and what is queued behind it stays.
+fn fragmented_message() -> String {
+    format!(
+        "The message could not be written in full, so it was dropped; messages queued behind it \
+         stay queued: {}",
+        term::HELD_FRAGMENT
     )
 }
 
@@ -176,7 +200,12 @@ pub fn write_message(
 
     // Queued even when the session looks ready, so messages cannot overtake one another.
     let ticket = state.queue_message(id, text);
-    match state.flush_outbox(id, agent_status) {
+    delivery_of(state.flush_outbox(id, agent_status), ticket)
+}
+
+/// What a drain's outcome means for the message with `ticket`, queued before the drain began.
+fn delivery_of(drain: Drain, ticket: Ticket) -> Result<Delivery> {
+    match drain {
         Drain::Clear => Ok(Delivery::Written),
         Drain::Pending => Ok(Delivery::Queued),
         Drain::Unsent(unsent) if unsent == ticket => Ok(Delivery::Unsent),
@@ -207,6 +236,15 @@ pub fn write_message(
             lost_message(),
             &[],
         )),
+        // Only the message written in part is lost; one queued behind it waits for the session's
+        // hold to end, one queued before it was written first.
+        Drain::Fragmented(fragmented) if fragmented == ticket => Err(CodedError::raised(
+            error_code::QUEUED_MESSAGES_LOST,
+            fragmented_message(),
+            &[HELD_FRAGMENT_PARAM],
+        )),
+        Drain::Fragmented(fragmented) if fragmented < ticket => Ok(Delivery::Queued),
+        Drain::Fragmented(_) => Ok(Delivery::Written),
     }
 }
 
@@ -406,6 +444,24 @@ pub(crate) fn current_kept_messages(
 mod tests {
     use super::*;
     use crate::test_support::owner_team::{interrupted_hub_state, kept_texts, team_state};
+
+    /// Only the message written in part while the draft was stashed is lost to its sender: one
+    /// queued behind it waits for the session's hold to end, one queued before it was written.
+    #[test]
+    fn a_held_fragment_is_lost_only_to_its_own_sender() {
+        assert_eq!(
+            delivery_of(Drain::Fragmented(5), 6).unwrap(),
+            Delivery::Queued
+        );
+        assert_eq!(
+            delivery_of(Drain::Fragmented(5), 4).unwrap(),
+            Delivery::Written
+        );
+        let lost = delivery_of(Drain::Fragmented(5), 5).unwrap_err();
+        assert!(lost
+            .downcast_ref::<CodedError>()
+            .is_some_and(is_held_fragment));
+    }
 
     /// A message that would be an empty prompt once stripped is refused, not written.
     #[test]

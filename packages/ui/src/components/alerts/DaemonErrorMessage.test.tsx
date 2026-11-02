@@ -494,8 +494,10 @@ it("retains a named quota window as a rich name and a plain isolated value", () 
   expect(daemonMessage("en", "account_quota_exhausted", params, "fallback", createStateStore({}).getState())).toContain(`\u2068${params.window}\u2069`);
 });
 
-it.each(["path_not_absolute", "project_directory_shared", "agent_not_available", "console_has_running_sessions", "trust_answer_failed", "conversation_in_session", "session_locked", "queued_messages_lost"])("keeps %s recovery visible as the remedy, with only its own further explanation for Details, and preserves the complete plain wording", (code) => {
-  const params = { path: "/tmp/مراجعة", project: "Docs", agent: "Codex", reason_code: "screen_gone", session: "missing", reason: "fallback reason" };
+it.each(["path_not_absolute", "project_directory_shared", "agent_not_available", "console_has_running_sessions", "trust_answer_failed", "conversation_in_session", "session_locked", "queued_messages_lost", "queued_messages_lost.held"])("keeps %s recovery visible as the remedy, with only its own further explanation for Details, and preserves the complete plain wording", (entry) => {
+  // `queued_messages_lost.held` is that code with `fragment: "held"`, worded as a variant with further explanation of its own.
+  const [code, variant] = entry.split(".");
+  const params = { path: "/tmp/مراجعة", project: "Docs", agent: "Codex", reason_code: "screen_gone", session: "missing", reason: "fallback reason", ...(variant ? { fragment: variant } : {}) };
   const error = new DaemonRequestError("fallback", code, params);
   const container = mount(<><section data-summary><DaemonErrorMessage error={error} part="summary" /></section><section data-remedy><DaemonErrorMessage error={error} part="remedy" /></section><section data-details><DaemonErrorMessage error={error} part="details" /></section></>);
   const summary = container.querySelector("[data-summary]")!;
@@ -511,6 +513,8 @@ it.each(["path_not_absolute", "project_directory_shared", "agent_not_available",
   expect(details.textContent === "").toBe(!further);
   expect(hasErrorDetails(error)).toBe(further);
   expect(hasErrorRemedy(error)).toBe(true);
+  // A held fragment's Details never warn that the next message runs together with it.
+  expect(details.textContent?.includes("run together")).toBe(further && !variant);
   const whole = () => normalize((summary.textContent ?? "") + details.textContent + remedy.textContent);
   expect(whole()).toBe(normalize(plain));
   act(() => setLanguage("zh-Hans"));

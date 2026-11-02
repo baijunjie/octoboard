@@ -262,6 +262,10 @@ pub mod error_code {
     /// about to show, its folder-trust confirmation, which the message's trailing Enter would
     /// answer. `params` names the `session`.
     pub const SESSION_TRUST_PENDING: Code = Code("session_trust_pending");
+    /// A message queued for the session could not be written in full, so it and the queue behind
+    /// it were dropped. `params` holds `fragment: "held"` when it was written while a draft was
+    /// stashed: only it was dropped, and the session holds Octoboard's later writes until the user
+    /// has sent a prompt after it, so nothing is run together with the fragment.
     pub const QUEUED_MESSAGES_LOST: Code = Code("queued_messages_lost");
     pub const PAGE_NOT_CURRENT: Code = Code("page_not_current");
     pub const BINARY_NOT_FOUND: Code = Code("binary_not_found");
@@ -659,4 +663,25 @@ pub mod notice_code {
     /// not cover (a newer Codex's), so its threads are kept apart from the other accounts'.
     /// `params` names the `account`, its `name` and the database's `path`.
     pub const UNSHARED_STATE_DATABASE: Code = Code("unshared_state_database");
+    /// The session's agent did not confirm, within the protection window, stashing the draft in its
+    /// input box before a message was written, so the message went into the input as it was and
+    /// may have been sent with the draft. `params` names the `agent`.
+    pub const DRAFT_SAVE_UNCONFIRMED: Code = Code("draft_save_unconfirmed");
+    /// A message went in while the draft was stashed, but the agent did not confirm restoring the
+    /// draft in time: keys typed meanwhile are released into the input as it is, and the message is
+    /// not sent again. `params` names the `agent`.
+    pub const DRAFT_RESTORE_UNCONFIRMED: Code = Code("draft_restore_unconfirmed");
+    /// Keys typed while a draft was stashed have not all been replayed yet: a dialog is up or the
+    /// terminal is not taking them. They are replayed once it does. `params` names the `agent`.
+    pub const TYPING_HELD: Code = Code("typing_held");
+    /// Only part of a message written while a draft was stashed reached the input. It is not sent
+    /// again. Keys typed while it was written are dropped, unreplayed, when the user next types, and
+    /// their keys go straight in from then on; Octoboard writes nothing more into the session, and
+    /// keeps what is queued behind the message, until a prompt is submitted after that. `params`
+    /// names the `agent`.
+    pub const TYPING_BLOCKED: Code = Code("typing_blocked");
+    /// The session's process ended before the draft's restoration was confirmed, so the keys typed
+    /// meanwhile are not replayed into a resumed session. `params` names the `agent` and the
+    /// `bytes` held back.
+    pub const TYPING_LOST: Code = Code("typing_lost");
 }

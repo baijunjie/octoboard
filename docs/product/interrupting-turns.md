@@ -83,8 +83,8 @@ nothing else has been written into the terminal meanwhile.
   (see "A message written but not sent" in `docs/product/message-delivery.md`) — is never touched.
 - **Text left in the box afterwards** — a restored prompt that could not be cleared, or text that was there before —
   is reported in the note, which asks for the user to clear the input box before anything more is sent.
-- The input box is read with faint text left out, so the placeholder Claude Code shows in a fresh session's empty box
-  does not count as text.
+- The input box is read with faint text left out, so the placeholder Claude Code shows in a fresh session's empty box,
+  and its "Press up to edit queued messages" hint while a message waits for the turn to end, do not count as text.
 - Codex leaves its composer empty after an Esc, and nothing is cleared there.
 
 A cancel the user makes in the terminal is left as the agent leaves it; only an interrupt made with

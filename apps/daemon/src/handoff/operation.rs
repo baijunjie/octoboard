@@ -530,7 +530,8 @@ async fn forward_queued(state: &Arc<AppState>, original: &str, receiving: &str) 
             delivery::write_message_off_runtime(state, receiving, text, WhenBlocked::Queue).await
         {
             tracing::warn!(session = %receiving, %err, "forwarding a message queued for the original session failed");
-            // A lost queue was announced as `queued_messages_dropped` by the drain that lost it.
+            // The drain that lost it told the user: a lost queue as `queued_messages_dropped`, a
+            // message written in part while the draft was stashed as `typing_blocked`.
             if err
                 .downcast_ref::<CodedError>()
                 .is_some_and(|coded| coded.code == error_code::QUEUED_MESSAGES_LOST)

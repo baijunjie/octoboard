@@ -1,10 +1,37 @@
 //! Native composer stashes keep editor state inside the CLI while messages use its input.
 
 use super::*;
+use crate::protocol::{notice_code, Code, Notice};
 use std::collections::VecDeque;
 
 const MAX_BUFFERED_INPUT: usize = 1024 * 1024;
 const SETTLE: Duration = Duration::from_secs(3);
+/// How long the screen may still show a message written into an empty composer as if it were
+/// typed there: Claude Code draws a pasted message in its box before it takes the Enter after it
+/// (some 20 ms in 2.1.316).
+#[cfg_attr(test, allow(dead_code))]
+const OWN_MESSAGE_SETTLE: Duration = Duration::from_millis(500);
+
+/// How long the composer is waited on after a message went into it: [`OWN_MESSAGE_SETTLE`], except
+/// under test, where a stand-in's screen is fed by a test thread that a loaded machine can hold up
+/// past half a second, so tests wait up to `PATIENCE` (the wait ends as soon as the box empties) and
+/// a test proving the window runs out lowers it with [`OWN_MESSAGE_SETTLE_OVERRIDE`]. Read on the
+/// writer's thread.
+fn own_message_settle() -> Duration {
+    #[cfg(test)]
+    {
+        OWN_MESSAGE_SETTLE_OVERRIDE
+            .with(std::cell::Cell::get)
+            .unwrap_or(crate::test_support::PATIENCE)
+    }
+    #[cfg(not(test))]
+    OWN_MESSAGE_SETTLE
+}
+
+#[cfg(test)]
+thread_local! {
+    static OWN_MESSAGE_SETTLE_OVERRIDE: std::cell::Cell<Option<Duration>> = const { std::cell::Cell::new(None) };
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum RecoveryPhase {
@@ -13,7 +40,18 @@ pub(crate) enum RecoveryPhase {
     Submitted,
     RestoreRequested,
     ReleasePending,
+    /// Only part of a message reached the input after the draft was stashed. What the input holds
+    /// is unknown: a paste left open, a cut-off escape sequence, or the message's text without its
+    /// Enter, with the draft perhaps still stashed and a dialog perhaps up. Keys retained while the
+    /// message went in were typed for the draft and never reach the agent: replayed into that
+    /// input they could join the fragment, submit it or answer a dialog.
     Fragmented,
+    /// The user typed again after a fragment, so their keys go straight in while Octoboard's own
+    /// writes stay held until the agent reports a prompt submitted after the fragment: once the
+    /// user has sent the input line, nothing written after it can run together with the fragment.
+    /// A prompt submitted before it does not count, whether its hook comes late or the agent sends
+    /// it again by itself (`Draft::sent_after_fragment`).
+    TakenOver,
     Replaying,
 }
 
@@ -34,7 +72,26 @@ pub(super) struct InputSwap {
     allow_dialog_input: bool,
     pending_since: Option<Instant>,
     ended_reported: bool,
+    /// When `write_empty_message_input` last wrote a message, until the composer is next read for a
+    /// message. An `allow_mixed` write sets it too, since its paste can still be on screen when the
+    /// next message is decided on; a message written after a stash does not, the restored draft
+    /// being what the box then holds. Only a write that checks the composer waits on it.
+    message_written: Option<Instant>,
 }
+
+/// The error of a message only partly written while a draft was stashed. The session then holds
+/// every later write of Octoboard's until the user has sent a prompt after it, so unlike another
+/// partial write nothing written next runs together with the fragment.
+#[derive(Debug)]
+pub(crate) struct HeldFragment(pub(crate) String);
+
+impl std::fmt::Display for HeldFragment {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for HeldFragment {}
 
 pub(super) fn blocked(message: &str) -> ptyio::PartialWrite {
     ptyio::PartialWrite {
@@ -49,7 +106,8 @@ struct Transaction<'a>(&'a LiveSession);
 impl Drop for Transaction<'_> {
     fn drop(&mut self) {
         let mut swap = self.0.swap.lock().expect("input swap lock poisoned");
-        if swap.phase.is_some() {
+        // A takeover that came in before the write returned has nothing left to recover.
+        if swap.phase.is_some() && swap.phase != Some(RecoveryPhase::TakenOver) {
             swap.pending = true;
             swap.pending_since.get_or_insert_with(Instant::now);
         }
@@ -68,7 +126,7 @@ impl LiveSession {
         swap.pending.then_some(swap.phase).flatten()
     }
 
-    pub(super) fn input_swap_active(&self) -> bool {
+    pub(crate) fn input_swap_active(&self) -> bool {
         self.swap
             .lock()
             .expect("input swap lock poisoned")
@@ -101,6 +159,24 @@ impl LiveSession {
         if data.is_empty() {
             return Ok(InputRoute::Buffered);
         }
+        match swap.phase {
+            Some(RecoveryPhase::TakenOver) => return Ok(InputRoute::Direct),
+            // What an attached terminal sends by itself is no sign of the user taking over.
+            Some(RecoveryPhase::Fragmented) if !is_terminal_protocol(data) => {
+                let discarded = swap.bytes;
+                swap.buffered.clear();
+                swap.bytes = 0;
+                swap.allow_dialog_input = false;
+                // Nothing is left for a recovery pass to replay or time out.
+                swap.pending = false;
+                swap.pending_since = None;
+                swap.phase = Some(RecoveryPhase::TakenOver);
+                drop(swap);
+                tracing::warn!(session = %self.id, discarded, "the user typed after a partly written message; retained keyboard input was discarded");
+                return Ok(InputRoute::Direct);
+            }
+            _ => {}
+        }
         // A terminal frame can exceed the usual queue budget. Accept it alone so backpressure
         // cannot permanently refuse a large paste; the WebSocket bounds each frame separately.
         // Only new, deliberate user input may answer a dialog while old edits await replay.
@@ -122,6 +198,37 @@ impl LiveSession {
 
     fn composer(&self) -> Option<String> {
         super::input_box::input_box(self.agent, &self.screen_text_undimmed())
+    }
+
+    pub(super) fn note_message_written(&self) {
+        self.swap
+            .lock()
+            .expect("input swap lock poisoned")
+            .message_written = Some(Instant::now());
+    }
+
+    /// [`Self::composer`], read once a message just written into an empty composer has had time
+    /// to leave it: until then the screen can show that message where a draft would be, and
+    /// stashing it would hold the message back instead of a draft.
+    fn settled_composer(&self) -> Option<String> {
+        let written = self
+            .swap
+            .lock()
+            .expect("input swap lock poisoned")
+            .message_written
+            .take();
+        let settle = own_message_settle();
+        loop {
+            let composer = self.composer();
+            if composer.as_deref() == Some("")
+                || written.is_none_or(|at| at.elapsed() >= settle)
+                || self.is_frozen()
+                || self.poll_exit()
+            {
+                return composer;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
     }
 
     pub(super) fn stash_shown(&self) -> bool {
@@ -177,7 +284,7 @@ impl LiveSession {
         prompt: &str,
         allow_mixed: bool,
     ) -> Result<(), ptyio::PartialWrite> {
-        if allow_mixed || !self.checks_composer || self.composer().as_deref() == Some("") {
+        if allow_mixed || !self.checks_composer || self.settled_composer().as_deref() == Some("") {
             return self.write_empty_message_input(data, prompt, allow_mixed);
         }
         let native = {
@@ -212,26 +319,21 @@ impl LiveSession {
             return Err(blocked("the session could not stash its composer"));
         }
         if !self.wait_for_swap(false, deadline) {
-            self.report_input_recovery("The agent did not confirm saving the draft in time. The message will be written into its current input and may include unfinished user text.");
+            self.report_input_recovery(notice_code::DRAFT_SAVE_UNCONFIRMED, "The agent did not confirm saving the draft in time. The message will be written into its current input and may include unfinished user text.");
             self.native_stash.store(false, Ordering::Release);
             // The stash key may already have taken effect. Do not toggle it again; submission
             // itself can restore a native stash, and the current editor is the fallback target.
-            let result = self.write_swap_payload(data, prompt);
-            if result.as_ref().err().is_some_and(|error| error.written > 0) {
-                self.mark_input_fragmented();
-            } else {
+            let result = self.write_swap_payload_or_hold(data, prompt);
+            if !result.as_ref().err().is_some_and(|error| error.written > 0) {
                 self.release_input_protection();
             }
             return result;
         }
         self.set_swap_phase(RecoveryPhase::Stashed);
-        let result = self.write_swap_payload(data, prompt);
+        let result = self.write_swap_payload_or_hold(data, prompt);
         match &result {
             Ok(()) => self.set_swap_phase(RecoveryPhase::Submitted),
-            Err(error) if error.written > 0 => {
-                self.mark_input_fragmented();
-                return result;
-            }
+            Err(error) if error.written > 0 => return result,
             Err(_) => {
                 // Only this confirmed owned stash may be restored with a key, and a dialog may
                 // have appeared since the payload was refused.
@@ -241,10 +343,10 @@ impl LiveSession {
         }
         if self.wait_for_swap(true, deadline) {
             if !self.finish_input_swap() {
-                self.report_input_recovery("The draft was restored, but replaying retained keyboard input has not completed.");
+                self.report_input_recovery(notice_code::TYPING_HELD, "The draft was restored, but replaying retained keyboard input has not completed.");
             }
         } else {
-            self.report_input_recovery("The agent did not confirm restoring the draft in time. Retained keyboard input will be replayed into its current input; a written message will not be sent again.");
+            self.report_input_recovery(notice_code::DRAFT_RESTORE_UNCONFIRMED, "The agent did not confirm restoring the draft in time. Retained keyboard input will be replayed into its current input; a written message will not be sent again.");
             self.release_input_protection();
         }
         drop(transaction);
@@ -271,14 +373,55 @@ impl LiveSession {
         self.pty.write_locked(&input, data)
     }
 
-    fn mark_input_fragmented(&self) {
+    /// [`Self::write_swap_payload`], which after writing only part of the message leaves the input
+    /// held ([`RecoveryPhase::Fragmented`]) and marks the error [`HeldFragment`].
+    fn write_swap_payload_or_hold(
+        &self,
+        data: &[u8],
+        prompt: &str,
+    ) -> Result<(), ptyio::PartialWrite> {
+        self.write_swap_payload(data, prompt).map_err(|partial| {
+            if partial.written == 0 {
+                return partial;
+            }
+            self.mark_input_fragmented(prompt);
+            ptyio::PartialWrite {
+                written: partial.written,
+                error: io::Error::new(
+                    partial.error.kind(),
+                    HeldFragment(partial.error.to_string()),
+                ),
+            }
+        })
+    }
+
+    fn mark_input_fragmented(&self, prompt: &str) {
         self.native_stash.store(false, Ordering::Release);
+        self.draft
+            .lock()
+            .expect("draft lock poisoned")
+            .mark_fragment(prompt);
         {
             let mut swap = self.swap.lock().expect("input swap lock poisoned");
             swap.phase = Some(RecoveryPhase::Fragmented);
             swap.reported = false;
         }
-        self.report_input_recovery("Only part of an automatic message reached the input. It will not be sent again. Retained keyboard input cannot be replayed safely; restart the session before continuing.");
+        self.report_input_recovery(notice_code::TYPING_BLOCKED, "Only part of an automatic message reached the input. It will not be sent again. Keyboard input retained while it was written is discarded when the user next types, and later keys go straight in; automatic input, the queue behind the message included, waits until the agent reports a prompt submitted after that.");
+    }
+
+    /// Ends a takeover after a fragment once the agent reports a prompt submitted after it. Only a
+    /// takeover: before it, no key of the user's has reached the agent, so a prompt sent then is
+    /// one from before the fragment, and the input may still hold the fragment.
+    pub(super) fn end_input_takeover(&self) {
+        let mut swap = self.swap.lock().expect("input swap lock poisoned");
+        if swap.phase != Some(RecoveryPhase::TakenOver) {
+            return;
+        }
+        swap.phase = None;
+        swap.pending = false;
+        swap.reported = false;
+        swap.allow_dialog_input = false;
+        swap.pending_since = None;
     }
 
     fn release_input_protection(&self) {
@@ -289,11 +432,13 @@ impl LiveSession {
             swap.allow_dialog_input = true;
         }
         if !self.finish_input_swap() {
-            self.report_input_recovery("Retained keyboard input is waiting for a dialog to close or for the terminal to accept it; new user keys can answer the dialog.");
+            self.report_input_recovery(notice_code::TYPING_HELD, "Retained keyboard input is waiting for a dialog to close or for the terminal to accept it; new user keys can answer the dialog.");
         }
     }
 
-    fn report_input_recovery(&self, detail: &str) {
+    /// Tells every client about this session's input recovery, once per recovery: `code` is one of
+    /// the draft and typing notices, `detail` its English text.
+    fn report_input_recovery(&self, code: Code, detail: &str) {
         {
             let mut swap = self.swap.lock().expect("input swap lock poisoned");
             if swap.reported {
@@ -301,31 +446,32 @@ impl LiveSession {
             }
             swap.reported = true;
         }
+        self.broadcast_notice(Notice::new(code, detail, &[("agent", self.agent.label())]));
+        tracing::error!(session = %self.id, %code, %detail, "input replacement recovery is pending");
+    }
+
+    fn broadcast_notice(&self, notice: Notice) {
         let observer = self.title.lock().expect("title observer lock poisoned");
         if let Some(state) = observer.state.upgrade() {
-            let error = anyhow::anyhow!("Session {}: {detail}", self.id);
-            state.broadcast(crate::protocol::Event::from_error(None, &error));
+            state.broadcast(notice.about(&self.id));
         }
-        tracing::error!(session = %self.id, %detail, "input replacement recovery is pending");
     }
 
     pub(crate) fn note_input_recovery_ended(&self) {
         let bytes = {
             let mut swap = self.swap.lock().expect("input swap lock poisoned");
-            if swap.phase.is_none() || swap.ended_reported {
+            if matches!(swap.phase, None | Some(RecoveryPhase::TakenOver)) || swap.ended_reported {
                 return;
             }
             swap.ended_reported = true;
             swap.bytes
         };
-        let message = format!("Session {} ended before draft restoration was confirmed. Its retained keyboard input ({bytes} bytes) cannot be replayed into a resumed session.", self.id);
-        let observer = self.title.lock().expect("title observer lock poisoned");
-        if let Some(state) = observer.state.upgrade() {
-            state.broadcast(crate::protocol::Event::from_error(
-                None,
-                &anyhow::anyhow!(message.clone()),
-            ));
-        }
+        let message = format!("The session ended before draft restoration was confirmed. Its retained keyboard input ({bytes} bytes) cannot be replayed into a resumed session.");
+        self.broadcast_notice(Notice::new(
+            notice_code::TYPING_LOST,
+            message.clone(),
+            &[("agent", self.agent.label()), ("bytes", &bytes.to_string())],
+        ));
         tracing::error!(session = %self.id, bytes, "{message}");
     }
 
@@ -403,10 +549,16 @@ impl LiveSession {
             if live.is_frozen() || live.poll_exit() {
                 live.note_input_recovery_ended();
             } else {
-                let expired = live.swap.lock().expect("input swap lock poisoned")
-                    .pending_since.is_some_and(|since| since.elapsed() >= SETTLE);
-                if expired && !matches!(live.input_recovery_pending(), Some(RecoveryPhase::Replaying | RecoveryPhase::ReleasePending | RecoveryPhase::Fragmented)) {
-                    live.report_input_recovery("Draft protection timed out. Retained keyboard input will be replayed into the current input once dialogs clear.");
+                // One look under the lock: a takeover between reading the window and the phase
+                // would otherwise read as an expired window with nothing pending.
+                let expired = {
+                    let swap = live.swap.lock().expect("input swap lock poisoned");
+                    swap.pending
+                        && swap.pending_since.is_some_and(|since| since.elapsed() >= SETTLE)
+                        && !matches!(swap.phase, Some(RecoveryPhase::Replaying | RecoveryPhase::ReleasePending | RecoveryPhase::Fragmented | RecoveryPhase::TakenOver))
+                };
+                if expired {
+                    live.report_input_recovery(notice_code::TYPING_HELD, "Draft protection timed out. Retained keyboard input will be replayed into the current input once dialogs clear.");
                     live.release_input_protection();
                 }
                 let phase = live.input_recovery_pending();
@@ -416,7 +568,7 @@ impl LiveSession {
                         && live.composer().is_some_and(|text| !text.is_empty()))
                 {
                     if !live.finish_input_swap() {
-                        live.report_input_recovery("Replaying retained keyboard input has not completed; new user keys can answer any visible dialog.");
+                        live.report_input_recovery(notice_code::TYPING_HELD, "Replaying retained keyboard input has not completed; new user keys can answer any visible dialog.");
                     }
                     if let Ok(record) = state.session_record(&id) {
                         state.flush_outbox(&id, state.agent_status(&record));
@@ -563,6 +715,92 @@ mod tests {
         }
     }
 
+    /// Claude Code's empty box shows a hint while an earlier message waits for the turn to end;
+    /// a message written then goes straight in, with no stash key.
+    #[test]
+    fn a_queued_message_hint_takes_the_empty_input_path() {
+        let live = crate::test_support::fake_live_session(
+            "queued-hint",
+            Agent::Claude,
+            120,
+            40,
+            "sleep 30",
+        )
+        .with_composer();
+        live.enable_native_stash(true);
+        live.on_output(include_bytes!("../../testdata/claude_input_queued.bin"));
+        crate::session::term::send_message(&live, "peer").unwrap();
+        assert_eq!(live.input_writes(), 1, "the payload alone");
+        assert!(!live.input_swap_active());
+    }
+
+    /// Right after a message goes into an empty box the screen can still show it there; the
+    /// next message waits for the box to empty rather than stashing the first one.
+    #[test]
+    fn a_message_just_written_is_not_stashed_as_a_draft() {
+        let live = crate::test_support::fake_live_session(
+            "own-message",
+            Agent::Claude,
+            120,
+            40,
+            "sleep 30",
+        )
+        .with_composer();
+        live.enable_native_stash(true);
+        live.on_output(&draw("", false, Agent::Claude));
+        crate::session::term::send_message(&live, "first").unwrap();
+        live.on_output(&draw("[Pasted text #1 +24 lines]", false, Agent::Claude));
+        let writer = live.clone();
+        let send =
+            std::thread::spawn(move || crate::session::term::send_message(&writer, "second"));
+        std::thread::sleep(Duration::from_millis(100));
+        live.on_output(&draw("", false, Agent::Claude));
+        send.join().unwrap().unwrap();
+        assert_eq!(live.input_writes(), 2, "two payloads and no stash key");
+        assert!(!live.input_swap_active());
+    }
+
+    /// The wait for a message just written to leave the box is bounded: a draft typed after it is
+    /// stashed once the window runs out.
+    #[test]
+    fn a_draft_after_a_message_just_written_is_stashed_once_the_window_ends() {
+        OWN_MESSAGE_SETTLE_OVERRIDE.with(|settle| settle.set(Some(Duration::from_millis(50))));
+        let live = crate::test_support::fake_live_session(
+            "own-message-window",
+            Agent::Claude,
+            120,
+            40,
+            "sleep 30",
+        )
+        .with_composer();
+        live.enable_native_stash(true);
+        live.on_output(&draw("", false, Agent::Claude));
+        crate::session::term::send_message(&live, "first").unwrap();
+        live.write_terminal_input(b"draft").unwrap();
+        live.on_output(&draw("draft", false, Agent::Claude));
+        let agent = live.clone();
+        let screen = std::thread::spawn(move || {
+            wait_until(|| agent.input_swap_active());
+            agent.on_output(&draw("", true, Agent::Claude));
+            wait_until(|| agent.swap.lock().unwrap().phase == Some(RecoveryPhase::Submitted));
+            agent.on_output(&draw("draft", false, Agent::Claude));
+        });
+        let started = Instant::now();
+        crate::session::term::send_message(&live, "second").unwrap();
+        assert!(
+            started.elapsed() < crate::test_support::PATIENCE,
+            "the shortened window was waited out in full"
+        );
+        screen.join().unwrap();
+        OWN_MESSAGE_SETTLE_OVERRIDE.with(|settle| settle.set(None));
+        assert_eq!(
+            live.input_writes(),
+            4,
+            "first message, draft, one stash key, second message"
+        );
+        assert!(!live.input_swap_active());
+    }
+
     #[test]
     fn an_existing_native_stash_is_never_overwritten() {
         for text in ["draft", ""] {
@@ -651,6 +889,52 @@ mod tests {
             live.input_writes(),
             4,
             "draft, exactly one Ctrl-S, one payload, one replay"
+        );
+    }
+
+    /// The user is told about the recovery as a notice naming the session, not as an error.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn an_unconfirmed_stash_is_announced_as_a_notice_about_the_session() {
+        let (state, dir) = crate::test_support::app_state("missing-stash-notice");
+        insert_session_record(&state, &dir, "missing-stash-notice");
+        let live = crate::test_support::fake_live_session(
+            "missing-stash-notice",
+            Agent::Claude,
+            120,
+            40,
+            "sleep 30",
+        )
+        .with_composer();
+        state.register_live(live.clone());
+        let mut events = state.subscribe();
+        live.enable_native_stash(true);
+        live.on_output(&draw("draft", false, Agent::Claude));
+        live.write_terminal_input(b"draft").unwrap();
+        let writer = live.clone();
+        std::thread::spawn(move || crate::session::term::send_message(&writer, "peer"))
+            .join()
+            .unwrap()
+            .unwrap();
+        let mut notices = Vec::new();
+        while let Ok(event) = events.try_recv() {
+            match event {
+                crate::protocol::Event::SessionNotice {
+                    session,
+                    code,
+                    params,
+                    ..
+                } => notices.push((session, code, params.get("agent").cloned())),
+                crate::protocol::Event::Error { code, .. } => panic!("an error event {code}"),
+                _ => {}
+            }
+        }
+        assert_eq!(
+            notices,
+            [(
+                "missing-stash-notice".to_string(),
+                notice_code::DRAFT_SAVE_UNCONFIRMED,
+                Some("Claude Code".to_string())
+            )]
         );
     }
 
@@ -840,6 +1124,134 @@ mod tests {
             2,
             "old keys replay once after permission clears"
         );
+    }
+
+    /// A stand-in session left holding a fragment of "the whole message", with keys retained while
+    /// it went in, and three prompts from before it the agent may still report sending: one the
+    /// user typed, a message Octoboard wrote, and one already reported sent.
+    fn fragmented_session(
+        id: &str,
+    ) -> (
+        Arc<crate::state::AppState>,
+        crate::test_support::ScratchDir,
+        crate::test_support::StandIn,
+    ) {
+        let (state, dir) = crate::test_support::app_state(id);
+        insert_session_record(&state, &dir, id);
+        let live = crate::test_support::fake_live_session(id, Agent::Claude, 120, 40, "sleep 30")
+            .with_composer();
+        state.register_live(live.clone());
+        live.on_output(&draw("", false, Agent::Claude));
+        live.write_terminal_input(b"user prompt\r").unwrap();
+        live.note_launch_prompt("earlier message".to_string());
+        live.note_prompt_sent(Some("sent before"));
+        // As `write_swap_payload` records the message it writes.
+        live.draft
+            .lock()
+            .unwrap()
+            .submission(None, "the whole message".to_string());
+        live.set_swap_phase(RecoveryPhase::Submitted);
+        live.write_terminal_input(b"old edit\r").unwrap();
+        live.mark_input_fragmented("the whole message");
+        // As the write's transaction leaves it when it ends.
+        {
+            let mut swap = live.swap.lock().unwrap();
+            swap.pending = true;
+            swap.pending_since = Some(Instant::now());
+        }
+        (state, dir, live)
+    }
+
+    fn wait_for_recovery_pass(live: &LiveSession) {
+        let deadline = Instant::now() + crate::test_support::PATIENCE;
+        while live.recovery_scheduled.load(Ordering::Acquire) {
+            assert!(
+                Instant::now() < deadline,
+                "the recovery pass did not finish"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    /// After a partly written message, the user's next key takes over: what was retained is
+    /// dropped, never replayed, and Octoboard's own writes wait for a prompt submitted after the
+    /// fragment.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn the_user_takes_over_after_a_partly_written_message() {
+        let (_state, _dir, live) = fragmented_session("fragment-takeover");
+        let before = live.input_writes();
+        live.write_terminal_input(b"\x1b[I").unwrap();
+        assert_eq!(live.input_writes(), before, "a focus report is no takeover");
+        live.write_terminal_input(b"typed\r").unwrap();
+        assert_eq!(live.input_writes(), before + 1, "the new keys alone go in");
+        {
+            let swap = live.swap.lock().unwrap();
+            assert_eq!(swap.bytes, 0);
+            assert!(!swap.pending && swap.pending_since.is_none());
+        }
+        live.on_output(&draw("", false, Agent::Claude));
+        assert!(
+            !live.recovery_scheduled.load(Ordering::Acquire),
+            "output schedules no pass for a takeover"
+        );
+        // A pass that finds the protection window expired, as one already under way at the
+        // takeover can, leaves the takeover in place.
+        {
+            let mut swap = live.swap.lock().unwrap();
+            swap.pending = true;
+            swap.pending_since = Some(Instant::now() - SETTLE * 2);
+        }
+        live.on_output(&draw("", false, Agent::Claude));
+        wait_for_recovery_pass(&live);
+        assert_eq!(
+            live.swap.lock().unwrap().phase,
+            Some(RecoveryPhase::TakenOver)
+        );
+        assert_eq!(
+            crate::session::term::send_message(&live, "peer")
+                .unwrap_err()
+                .written,
+            0
+        );
+        for late in ["user prompt", "earlier message", "sent before"] {
+            live.note_prompt_sent(Some(late));
+            assert!(
+                live.input_swap_active(),
+                "{late} was submitted before the fragment"
+            );
+        }
+        // Only the user's Enter can send what reached the input of the message itself.
+        live.note_prompt_sent(Some("the whole message"));
+        assert!(!live.input_swap_active());
+        live.note_prompt_sent(Some("typed"));
+        crate::session::term::send_message(&live, "peer").unwrap();
+        assert_eq!(live.input_writes(), before + 2);
+    }
+
+    /// A write's transaction that ends only after the user took over leaves nothing pending for a
+    /// recovery pass.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_transaction_ending_after_a_takeover_leaves_nothing_pending() {
+        let (_state, _dir, live) = fragmented_session("fragment-transaction");
+        live.write_terminal_input(b"x").unwrap();
+        drop(Transaction(&live));
+        let swap = live.swap.lock().unwrap();
+        assert_eq!(swap.phase, Some(RecoveryPhase::TakenOver));
+        assert!(!swap.pending && swap.pending_since.is_none());
+    }
+
+    /// Before a takeover no key of the user's has reached the agent, so a prompt it reports then
+    /// was submitted before the fragment, which the input may still hold: the hold stays.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_prompt_sent_before_a_takeover_keeps_the_fragment_held() {
+        let (_state, _dir, live) = fragmented_session("fragment-prompt");
+        let before = live.input_writes();
+        live.note_prompt_sent(Some("a prompt the agent sends by itself"));
+        let swap = live.swap.lock().unwrap();
+        assert_eq!(swap.phase, Some(RecoveryPhase::Fragmented));
+        assert_eq!(swap.bytes, b"old edit\r".len());
+        drop(swap);
+        assert_eq!(live.input_writes(), before);
     }
 
     #[test]

@@ -21,7 +21,7 @@ use std::io;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
-pub(crate) use swap::RecoveryPhase;
+pub(crate) use swap::{HeldFragment, RecoveryPhase};
 
 use crate::protocol::Agent;
 use crate::session::trust::{CarriedTrust, TrustState};
@@ -494,7 +494,11 @@ impl LiveSession {
         }
         draft.submission(None, prompt.to_string());
         self.input_writes.fetch_add(1, Ordering::AcqRel);
-        self.pty.write_locked(&input, data)
+        let written = self.pty.write_locked(&input, data);
+        if written.is_ok() {
+            self.note_message_written();
+        }
+        written
     }
 
     pub(crate) fn note_launch_prompt(&self, prompt: String) {
@@ -558,12 +562,17 @@ impl LiveSession {
     }
 
     /// Counts a prompt the agent's hooks reported it sending, which also ends the hold an agent
-    /// error put on the session's writes.
+    /// error put on the session's writes, and, for a prompt submitted after a partly written
+    /// message, the hold a takeover keeps on them.
     pub fn note_prompt_sent(&self, prompt: Option<&str>) {
-        self.draft
-            .lock()
-            .expect("draft lock poisoned")
-            .prompt_sent(prompt, self.agent);
+        let after_fragment = {
+            let mut draft = self.draft.lock().expect("draft lock poisoned");
+            draft.prompt_sent(prompt, self.agent);
+            draft.sent_after_fragment(prompt, self.agent)
+        };
+        if after_fragment {
+            self.end_input_takeover();
+        }
         self.prompts_sent.fetch_add(1, Ordering::AcqRel);
         *self
             .agent_error_at

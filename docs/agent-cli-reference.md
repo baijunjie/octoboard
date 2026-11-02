@@ -2191,6 +2191,14 @@ not tested. Claude's source retains its pasted-content records, and Grok documen
 replace a measured attachment round trip. Claude's `chat:stash` action is customizable through `keybindings.json`;
 Ctrl-S must not be assumed to stash when its binding is unknown or overridden.
 
+**Claude Code's queued-message hint reads as text unless the cursor cell is discounted.** While a message waits in
+Claude Code 2.1.316's queue, its empty composer shows `❯ Press up to edit queued messages`. The hint is faint, but
+its first character is the cursor, drawn in inverse video rather than faint, so an undimmed read of the box yields
+`P` and looks like a draft. Typed text replaces the hint and is never faint. Separately, for roughly 15–20 ms after a
+bracketed paste and CR, the box still shows the pasted message before Claude takes it; a Ctrl-S landing in that
+window stashed the message itself, which was later restored and submitted joined onto the next message. Both were
+measured in a PTY against a local stub endpoint.
+
 **Codex has a separate message queue.** Codex 0.163.0's ordinary `codex queue` works with the shared daemon, but
 passing even one `-c` override disables implicit shared-daemon selection and uses embedded mode unless an
 explicit remote is selected. The command can enqueue without an idle embedded

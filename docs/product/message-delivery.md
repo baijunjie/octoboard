@@ -27,31 +27,60 @@ message separately while preserving the user's draft, without waiting for the us
   conversation when there is one. Until that identity is unambiguous the message stays queued. This path is enabled
   only for that verified version; an unknown or different version retains the guarded terminal delivery below.
 
-During a native stash and restoration, the user's continued typing is temporarily retained and replayed in order
-after the draft's restoration is confirmed, or released as described below if confirmation times out. Output and
-terminal responses continue meanwhile. If a dialog is shown during recovery, earlier retained keystrokes wait until
-it is gone; newly typed answers can answer the dialog once restoration is confirmed or the protection times out,
-and are not added to the draft's tracked edits. Successful restoration preserves multiline text and long
-collapsed pastes. Claude Code and Codex retain the cursor position; Grok Build restores the cursor at the end.
-Attachment restoration has not been verified and is not guaranteed.
+Octoboard reads the composer off the session's screen with faint text left out, so Claude Code's hints in an empty
+box — a fresh session's placeholder, and "Press up to edit queued messages" while a message waits for the turn to
+end — read as an empty composer; text typed there replaces the hint and reads as a draft. A message Octoboard has
+just written into an empty composer can still be drawn there for a moment before the agent takes it, so before the
+next message is checked for a draft, Octoboard waits up to 500 ms after that write for the composer to read empty; only
+text still there after that counts as a draft. Octoboard therefore does not stash a message of its own.
+
+During a native stash and restoration, the user's continued typing is temporarily retained and replayed in order after
+the draft's restoration is confirmed, released as described below if confirmation times out, or discarded if the message
+reaches the input only in part (see "A message only partly written while the draft is stashed" below). Output and
+terminal responses continue meanwhile. If a dialog is shown during recovery, earlier retained keystrokes wait until it
+is gone; newly typed answers can answer the dialog once restoration is confirmed or the protection times out, and are
+not added to the draft's tracked edits. Successful restoration preserves multiline text and long collapsed pastes.
+Claude Code and Codex retain the cursor position; Grok Build restores the cursor at the end. Attachment restoration has
+not been verified and is not guaranteed.
 
 Saving and restoring a native stash share one three-second confirmation window. If saving is not confirmed in time,
-Octoboard shows an error and writes the message into the current composer with Enter, which may submit unfinished
-user text with it; it does not send a second stash key. If the complete message was written but restoration is not
-confirmed in time, Octoboard shows an error and releases retained typing into the current input without repeating
-the message. Either timeout disables native stashing for that running process. A dialog still holds earlier retained
-keys until it closes; after a timeout they can be released without a stash marker confirming restoration. If the
-process ends before replay, Octoboard reports that retained input cannot be replayed into a resumed session.
+Octoboard sends the `draft_save_unconfirmed` notice and writes the message into the current composer with Enter,
+which may submit unfinished user text with it; it does not send a second stash key. If the complete message was
+written but restoration is not confirmed in time, Octoboard sends the `draft_restore_unconfirmed` notice and releases
+retained typing into the current input without repeating the message. Either timeout disables native stashing for
+that running process. A dialog still holds earlier retained keys until it closes; after a timeout they can be
+released without a stash marker confirming restoration. While retained typing cannot all be replayed yet — a dialog
+is up or the terminal is not taking it, also once the confirmation window has run out with the stash unsettled —
+Octoboard sends the `typing_held` notice. If the process ends before restoration is confirmed, Octoboard sends the
+`typing_lost` notice: the retained typing is not replayed into a resumed session.
+
+**The draft and typing notices.** Each is sent to every client about the session, naming its agent (`agent`);
+`typing_lost` also carries `bytes`, the amount of retained typing lost. Of `draft_save_unconfirmed`,
+`draft_restore_unconfirmed` and `typing_held`, one stash and its recovery send only the first that applies;
+`typing_blocked` and `typing_lost` are sent whenever they apply. The window shows each as an error alert (see
+`docs/product/error-alerts.md`) naming the session and where it is: a known failure with no remedy beyond its own
+text, not an unexpected one.
+
+| Notice | Alert title | What the alert says |
+|---|---|---|
+| `draft_save_unconfirmed` | "Draft save not confirmed" | The agent did not confirm saving the draft, so Octoboard wrote its message into the input box as it was; the user is to check the conversation, since the message may have been sent together with the draft. |
+| `draft_restore_unconfirmed` | "Draft restore not confirmed" | The agent did not confirm putting the draft back after the message was sent; the user is to check the input box before sending what it holds. Its details add that what was typed while the draft was set aside goes into the input box as it is now, and that the message is not sent again. |
+| `typing_held` | "Typing held back" | Some of what was typed while Octoboard wrote a message has not reached the agent yet; the user is to answer any dialog the session shows. Its details add that the agent is showing a dialog or not taking input, and that what was held back is typed in, in order, once it takes input again. |
+| `typing_blocked` | "Message partly written" | Only part of a message Octoboard wrote reached the input box, and it will not be sent again; the user is to check the input box and remove what is left of the message before sending a prompt. Its details add that what was typed while the message was written is discarded on the next key, that typing goes straight to the agent from then on, and that Octoboard's other messages wait until a prompt is sent. |
+| `typing_lost` | "Typing lost" | The session ended before the agent confirmed putting its draft back, so what was typed meanwhile is lost and is not typed in when the session is resumed. |
 
 **When separate delivery cannot be used, delivery takes priority after three seconds.** Each message gets a draft
-protection grace period from its first delivery attempt; retries and continued typing do not reset it. During the
-grace period, ordinary terminal delivery requires a recognised empty composer and confirmation that preceding user
-edits were submitted. A delayed report for an earlier prompt, an automatic message or a background completion does
-not confirm a newer draft. An unsupported stash, an existing stash, an unrecognised composer, unconfirmed edits or
-an incomplete input sequence can hold delivery temporarily. Once the grace period has elapsed, the next delivery
-attempt writes the message into the current input and submits it, even if unfinished user text is included. It does
-not start another native stash wait then. Draft protection therefore does not wait indefinitely for an ordinary
-prompt or a new process. This grace period does not raise the session's hand.
+protection grace period from its first delivery attempt; retries and continued typing do not reset it. The exception is
+a message refused while the session's input is held for draft preservation — a draft being stashed or restored, or a
+partly written message (see "A message only partly written while the draft is stashed" below): its grace period starts
+again from its first attempt after the hold ends. During the grace period, ordinary terminal delivery requires a
+recognised empty composer and confirmation that preceding user edits were submitted. A delayed report for an earlier
+prompt, an automatic message or a background completion does not confirm a newer draft. An unsupported stash, an
+existing stash, an unrecognised composer, unconfirmed edits or an incomplete input sequence can hold delivery
+temporarily. Once the grace period has elapsed, the next delivery attempt writes the message into the current input and
+submits it, even if unfinished user text is included. It does not start another native stash wait then. Draft protection
+therefore does not wait indefinitely for an ordinary prompt or a new process. This grace period does not raise the
+session's hand.
 
 The deadline never answers a recognised dialog or trust confirmation, overrides an agent's permission wait, or writes
 into an ended or frozen session. Such holds must clear first. A partial terminal write remains a delivery failure;
@@ -212,7 +241,9 @@ subagent's, or of another agent, holds nothing.
 There is a second way a message Octoboard accepted does not arrive. If the agent stops taking input
 part way through a write, part of that message is left sitting in the session's input line. Whatever
 Octoboard writes next would be run together with it, so that message and everything queued behind it
-are dropped rather than delivered spoiled.
+are dropped rather than delivered spoiled. A message written while the draft is stashed is the exception: the session
+then holds Octoboard's later writes, so only that message is lost (see "A message only partly written while the draft
+is stashed" below), and nothing below applies to it.
 
 Octoboard does not try to repair the line. The damage is expected to be bounded on its own — the next message written
 into the session closes the leftover fragment and goes in with it — so the cost would be one spoiled message rather than
@@ -222,8 +253,8 @@ happen, so neither has this bound been seen to hold.
 
 The loss is reported rather than passed off as delivered, but not to everyone: the sender whose own
 call ran into it is told (a report fails, and its session is *not* archived), while a sender whose
-message was already queued behind it is not. What covers those is the message the user gets, which
-names the session and tells them to look at it before anything else is sent.
+message was already queued behind it is not. What covers those is the `queued_messages_dropped` notice the user gets,
+which names the session and tells them to look at it before anything else is sent.
 
 **What the owners' tools report.** Every session record the session tools give (see "Session records" in
 `docs/product/what-every-session-reads.md`) carries `queued_messages`, the number of messages queued for the session and
@@ -246,8 +277,34 @@ because its agent reported it is waiting for the user — at a permission prompt
 | `submission_uncertain` | Codex's independent queue did not confirm accepting a message; later messages wait up to three seconds or until another submitted prompt, whichever comes first (see "A message whose acceptance is uncertain" below). |
 | `unsent_message` | A message written into it was left unsent (see "A message written but not sent" below). |
 
-An input-box or unconfirmed-edit hold is not included in `writes_held`. When no other listed hold applies, that field
-can be `null` while `queued_messages` still counts messages waiting for safe draft preservation or confirmed edits.
+An input-box, unconfirmed-edit or draft-preservation hold — a draft being stashed or restored, or a partly written
+message — is not included in `writes_held`. When no other listed hold applies, that field can be `null` while
+`queued_messages` still counts messages waiting for safe draft preservation, confirmed edits or the end of such a hold.
+
+## A message only partly written while the draft is stashed
+
+If only part of a message reaches the input after Octoboard pressed the stash key, whether or not saving was confirmed,
+the message is lost: it is not sent again, and what the input holds is unknown — a paste left open, the message's text
+without its Enter, the draft perhaps still stashed. Native stashing is off for the rest of the process, and Octoboard
+sends the `typing_blocked` notice. Then:
+
+- Typing retained while the message was written is never replayed. The user's next key in the terminal — not what an
+  attached terminal sends by itself — discards it and goes straight into the session, as every key after it does.
+- Everything else Octoboard writes into the session — messages, interrupt keys, trust answers, the submit-key retry of
+  a message left unsent — stays held until the agent reports a prompt sent after the user has typed again, or until
+  the process ends. A prompt reported before the user types again does not end the hold, nor does one submitted
+  before the message was written: a late hook report of an earlier prompt, or a prompt the agent sends again by
+  itself, as a retry or from its own queue.
+- Messages queued behind the lost one stay queued, with any sent meanwhile, and are written in order once the hold
+  ends. Nothing is dropped with it, so no `queued_messages_dropped` notice is sent: `typing_blocked` tells the user
+  instead.
+- The sender whose own message it was is answered `queued_messages_lost` with `fragment: "held"`: the message could
+  not be written in full into the session, so it was dropped; messages queued behind it stay queued; the session's
+  input box may hold part of it, and Octoboard writes nothing more into the session until a prompt is sent, so a
+  message sent now waits until then. A sender whose message was queued behind it is told it was queued.
+
+A partial write outside a native stash is not covered by this: it drops the message and its queue (see "Messages
+held until a session can take them" above).
 
 ## A message whose acceptance is uncertain
 
