@@ -51,11 +51,12 @@ reachable. On narrow windows, the action row and tool row contents wrap rather t
   the window remembers either names a console that no longer exists or is this same empty state, so each is passed
   over (see "Moving back and forward" in `docs/product/navigation-history.md`). There is no breadcrumb, no session
   being selected.
-- **On the rail, no waiting count** — no session is waiting. The rail is otherwise unchanged: the console list, empty
-  here, then New console, and at the bottom the notifications bell and Settings (see "The rail" in
-  `docs/product/window-layout.md`). It stays in the row at every width, below 594 px too, where with a console it
-  comes in only with the floating sidebar (see "Below 594 px: the rail comes in with the sidebar" in
-  `docs/product/sidebar-drawer.md`).
+- **On the rail, no waiting count and no Processes** — no session is waiting, and with no console there is no project
+  or console session whose process trees are counted. The rail is otherwise unchanged: the console list, empty here,
+  then New console, and at the bottom Turn on notifications (only in a browser whose answer to notifications is still
+  undecided), Account usage and Settings (see "The rail" in `docs/product/window-layout.md`). It stays in the row at
+  every width, below 594 px too, where with a console it comes in only with the floating sidebar (see "Below 594 px:
+  the rail comes in with the sidebar" in `docs/product/sidebar-drawer.md`).
 
 ## The panes' saved preferences are left alone
 
