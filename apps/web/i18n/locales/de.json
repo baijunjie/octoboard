@@ -136,7 +136,7 @@
   "usageExampleWindow": "Kontonutzung",
   "usageExampleReset": "Countdown bis zum Reset",
   "coordinationEyebrow": "Wenn eine Aufgabe mehrere Projekte betrifft",
-  "coordinationTitle": "Ein Ziel.\nJeder Agent in seinem Projekt.",
+  "coordinationGoalTitle": "Projektübergreifend zusammenarbeiten.\nEin gemeinsames Ziel erreichen.",
   "coordinationDescription": "Eine Menüaktion erfordert Änderungen an Bestellfunktionen, Zahlungen und Filialverwaltung in mehreren Projekten.",
   "navOpen": "Menü öffnen",
   "footerNav": "Navigation im Fußbereich",

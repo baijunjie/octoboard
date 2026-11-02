@@ -133,7 +133,7 @@ useSeoMeta({
       <SectionHeading
         number="03"
         :label="t('coordinationEyebrow')"
-        :title="t('coordinationTitle')"
+        :title="t('coordinationGoalTitle')"
         :description="t('coordinationWalkthroughDescription')"
       />
       <WorkflowDemo :paused="paused" />

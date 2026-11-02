@@ -184,7 +184,7 @@ test("agent documents follow the pages and do not publish a download that does n
       "featureWallTitle",
       ...featureGroups.flatMap((group) => [group.key, ...group.features.map((key) => `${key}FeatureTitle`)]),
       "previewTitle",
-      "coordinationTitle",
+      "coordinationGoalTitle",
       "developerTitle",
       "developerShiftTitle",
       "developerContextTitle",

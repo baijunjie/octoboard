@@ -136,7 +136,7 @@
   "usageExampleWindow": "Account usage",
   "usageExampleReset": "Reset countdown",
   "coordinationEyebrow": "When a task spans projects",
-  "coordinationTitle": "One goal.\nEach agent in its own project.",
+  "coordinationGoalTitle": "Collaborate across projects.\nAchieve a shared goal.",
   "coordinationDescription": "Adding a meal deal promotion means updating ordering, payments, and store operations across several projects.",
   "navOpen": "Open menu",
   "footerNav": "Footer navigation",

@@ -136,7 +136,7 @@
   "usageExampleWindow": "계정 사용량",
   "usageExampleReset": "초기화 카운트다운",
   "coordinationEyebrow": "하나의 작업이 여러 프로젝트에 걸칠 때",
-  "coordinationTitle": "하나의 목표.\n각 에이전트는 자신의 프로젝트에서.",
+  "coordinationGoalTitle": "프로젝트 간 협업으로\n공동의 목표를 달성합니다.",
   "coordinationDescription": "세트 메뉴 프로모션을 추가하려면 주문, 결제, 매장 운영 등 여러 프로젝트를 함께 수정해야 합니다.",
   "navOpen": "메뉴 열기",
   "footerNav": "하단 탐색 메뉴",

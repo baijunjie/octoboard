@@ -136,7 +136,7 @@
   "usageExampleWindow": "帳號用量",
   "usageExampleReset": "重設倒數",
   "coordinationEyebrow": "當一個需求涉及多個專案",
-  "coordinationTitle": "一個目標，\n各代理在自己的專案中工作。",
+  "coordinationGoalTitle": "跨專案協作，\n共同達成目標。",
   "coordinationDescription": "新增門市套餐促銷功能，需要一起修改點餐、付款與門市營運等多個專案。",
   "navOpen": "開啟選單",
   "footerNav": "頁尾導覽",

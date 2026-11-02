@@ -145,7 +145,7 @@ function homeMarkdown(copy: AgentCopy, locale: SiteLocale): string {
       text("previewScenarioFocus"),
       text("previewScenarioChanges"),
     ].join(" · "),
-    heading(2, text("coordinationTitle")),
+    heading(2, text("coordinationGoalTitle")),
     text("coordinationDescription"),
     heading(3, text("demoLabel")),
     text("demoIllustration"),

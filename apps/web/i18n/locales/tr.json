@@ -136,7 +136,7 @@
   "usageExampleWindow": "Hesap kullanımı",
   "usageExampleReset": "Sıfırlamaya kalan süre",
   "coordinationEyebrow": "Bir görev birden çok projeyi kapsadığında",
-  "coordinationTitle": "Tek hedef.\nHer ajan kendi projesinde.",
+  "coordinationGoalTitle": "Projeler arasında iş birliği yapın.\nOrtak bir hedefe ulaşın.",
   "coordinationDescription": "Bir menü kampanyası eklemek, sipariş, ödeme ve mağaza yönetimi özelliklerini birden fazla projede güncellemeyi gerektirir.",
   "navOpen": "Menüyü aç",
   "footerNav": "Alt bilgi gezinmesi",

@@ -259,7 +259,7 @@ const percent = (value: number) => new Intl.NumberFormat(locale.value, { style: 
 .project-boundary:nth-child(2) .context-breadcrumb { color: #8793b8; }
 @media (max-width: 600px) {
   .network-trunk { height: 10px; }
-  .network-branches { width: calc(50% - 10px); height: 10px; margin-inline-start: 10px; margin-inline-end: auto; border-inline-end: 0; }
+  .network-branches { width: calc(50% - 10px); height: 10px; margin-inline-start: 10px; margin-inline-end: auto; border-inline-end: 0; border-start-end-radius: 0; }
   .network-branches::after { display: none; }
   .network-leaves { grid-template-columns: minmax(0, 1fr); gap: 6px; padding-inline-start: 12px; margin-inline-start: 10px; border-inline-start: 1px solid #806153; }
   .network-leaf { position: relative; grid-template-columns: 20px minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto auto; gap: 1px 8px; padding: 6px 8px; text-align: start; justify-items: start; }

@@ -136,7 +136,7 @@
   "usageExampleWindow": "账号用量",
   "usageExampleReset": "重置倒计时",
   "coordinationEyebrow": "当一个需求涉及多个项目",
-  "coordinationTitle": "一个目标，\n各项目保留自己的上下文。",
+  "coordinationGoalTitle": "跨项目协作，\n共同完成目标。",
   "coordinationDescription": "以门店套餐促销为例：点餐、支付和门店经营涉及多个项目，需要协同开发。",
   "navOpen": "打开菜单",
   "footerNav": "页脚导航",

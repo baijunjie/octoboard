@@ -136,7 +136,7 @@
   "usageExampleWindow": "アカウントの使用量",
   "usageExampleReset": "リセットまでのカウントダウン",
   "coordinationEyebrow": "ひとつの依頼が複数のプロジェクトに及ぶとき",
-  "coordinationTitle": "目標はひとつ。\n作業は各エージェントのプロジェクトで。",
+  "coordinationGoalTitle": "複数のプロジェクトで連携し、\n共通の目標を達成します。",
   "coordinationDescription": "飲食店のセットメニューのキャンペーンを追加するには、注文、決済、店舗運営に関わる複数のプロジェクトを変更する必要があります。",
   "navOpen": "メニューを開く",
   "footerNav": "フッターナビゲーション",
