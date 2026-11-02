@@ -12,6 +12,7 @@ import type { AccountQuota, ResetCreditOutcome } from "../protocol";
 import { useDaemon } from "../store";
 import { ringForAutomaticFocus } from "../input/touchInput";
 import { useNow } from "../format/useNow";
+import { FadeOverflow } from "../components/text/FadeOverflow";
 import { AccountQuotaSummary, QuotaStaleMark } from "./AccountQuotaSummary";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
 import { expiryLine, nextResetCredit, resetCreditsSummary, usageBarSummary, usageBarWindows } from "../accounts/quotaFormat";
@@ -31,10 +32,11 @@ export function ResetCreditsLine({ quota, accountName, onUse, preventFocusOnPres
   const t = useT();
   const now = useNow();
   if (typeof quota !== "object" || !quota.reset_credits) return null;
+  const summary = resetCreditsSummary(t, quota.reset_credits, now);
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-      <span className="text-app-muted">{resetCreditsSummary(t, quota.reset_credits, now)}</span>
-      <Button size="xs" variant="secondary" preventFocusOnPress={preventFocusOnPress} aria-label={t("quota.resetCredits.useFor", { account: isolate(accountName) })} onPress={onUse}>
+    <div className="flex min-w-0 items-center gap-3 text-sm">
+      <FadeOverflow className="min-w-0 flex-1 text-app-muted" titleWhenClipped={summary}>{summary}</FadeOverflow>
+      <Button size="xs" variant="secondary" className="shrink-0" preventFocusOnPress={preventFocusOnPress} aria-label={t("quota.resetCredits.useFor", { account: isolate(accountName) })} onPress={onUse}>
         {t("quota.resetCredits.use")}
       </Button>
     </div>
