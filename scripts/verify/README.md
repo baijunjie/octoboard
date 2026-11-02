@@ -12,9 +12,18 @@ this directory holds its parts and their tests (`*.test.mjs`, run as the `verify
      target branch (`branch.<name>.targetBranch`, else the remote's HEAD), and with no baseline at all it passes
      `--full`. A tag push is not verified (release CI checks the tag).
    - Without `--base`, the base is the fetched upstream of the branch, else of its target branch. With neither, or when
-     the base cannot be fetched or read, the scope is every package; only for a branch with no upstream or target branch
-     does `--quick` instead measure from the merge base with the remote target branch (or remote HEAD), as a new branch
-     is at push.
+     the base cannot be fetched or read, the scope is every package.
+   - `--quick` runs before a local merge, so a branch with no upstream of its own is measured from its merge base with
+     its local target branch: the target's own commits, pushed or not, are already checked, and only the branch's
+     changes since the fork count. The target is `branch.<name>.targetBranch` (an explicit setting, never replaced
+     when that branch is missing), else the local branch the branch tracks, else the local branch the remote's HEAD
+     names. A branch tracking the remote branch of its target (`git switch -c topic origin/main`) counts as having no
+     upstream of its own; any other upstream is kept. With no local target, or when the checked-out branch is the
+     target itself (its merge base with itself is HEAD, which would measure nothing), the order continues with the
+     upstream of the target branch, then the merge base with the remote target branch (or remote HEAD), as a new
+     branch is at push. Push verification and a run without `--quick` never use the local target. The plan prints
+     `verify: measured from the merge base with ...` when a quick run measured from a merge base; with an upstream
+     or `--base` it prints nothing.
    - With `--head`, the pushed commit must be the checked-out commit with a clean working tree, so a different checkout
      cannot certify it.
 2. **Scope** (`scope.mjs`). Each changed file is matched against every rule in `RULES`; the consumers of all matching
@@ -55,6 +64,7 @@ this directory holds its parts and their tests (`*.test.mjs`, run as the `verify
 
 - `pnpm verify` with `--dry-run`, `--base <ref>`, `--head <commit>`, `--full`, `--release`, `--quick`, `--fresh`.
 - `scope.mjs`: `RULES`, `planScope`, `matchingRules`. `steps.mjs`: `checkSteps`. `quick.mjs`: `quickSteps`.
-- `changes.mjs`: `resolveBase`, `resolveRemoteTargetBase`, `changedFiles`, `requirePushedTree`.
+- `changes.mjs`: `chooseBase`, `resolveBase`, `resolveLocalTargetBase`, `resolveRemoteTargetBase`, `changedFiles`,
+  `requirePushedTree`.
 - `lock.mjs`: `acquireSlot`; `stamp.mjs`: `readStamp`, `recordPass`; `rerun.mjs`: the failed-file record; `tree.mjs`:
   `workingTree`.

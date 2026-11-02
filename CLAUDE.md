@@ -193,8 +193,11 @@ the earlier steps do not run them separately (the related tests a step runs to c
   selects an explicit baseline; `--full` checks all packages; `--fresh` ignores earlier successful results for
   identical content. `pnpm verify --quick` runs the same scope without builds or the tests that need them, and runs
   only the UI and Rust tests related to the changed files in place of the full suites, falling back to a full suite
-  where a change's reach cannot be traced; a branch without an upstream is measured from its merge base with the
-  remote target branch (or remote HEAD), as a new branch is at push.
+  where a change's reach cannot be traced; a quick run measures a branch with no upstream of its own (including one
+  that only tracks its target's remote branch) from its merge base with its local target branch
+  (`branch.<name>.targetBranch`, else the local branch it tracks, else the local branch the remote HEAD names), so the
+  target's own commits, pushed or not, are not counted; with no local target, or when the branch is the target itself,
+  it falls back to the remote target branch (or remote HEAD), as a new branch is at push.
 - Within "Gallery" and "UI preview": continue gallery maintenance and previews at their existing steps, but defer
   the automated gallery quick check and sweep to before pushing, when the UI changes call for them; do not run
   them again at routine development completion or local merge. The agent runs them via the `agent-gallery` skill

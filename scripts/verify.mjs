@@ -9,7 +9,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { git, run } from "./git.mjs";
-import { changedFiles, requirePushedTree, resolveBase, resolveRemoteTargetBase } from "./verify/changes.mjs";
+import { changedFiles, chooseBase, requirePushedTree } from "./verify/changes.mjs";
 import { acquireSlot, describeWait } from "./verify/lock.mjs";
 import { clearFailure, failedFiles, narrowedFiles, readFailure, recordFailure, REPORT_ENV } from "./verify/rerun.mjs";
 import { quickSteps } from "./verify/quick.mjs";
@@ -146,9 +146,8 @@ async function runStep(step, key, tree) {
   console.log(`verify: passed ${step.label} in ${Math.round((Date.now() - started) / 1000)}s`);
 }
 
-let base = flag("--full") || flag("--release") ? {} : resolveBase(git, baseArg);
-// A quick run on a branch with no upstream or target branch measures from where it forked from the remote.
-if (flag("--quick") && base.noTarget) base = resolveRemoteTargetBase(git);
+const base = flag("--full") || flag("--release") ? {} : chooseBase(git, { quick: flag("--quick"), baseArg });
+if (base.via) console.log(`verify: measured from the merge base with ${base.via}`);
 const current = plan(base);
 const describe = (scope) => `verify: scope ${scope.mode} (${scope.reason})`;
 console.log(describe(current.scope));
