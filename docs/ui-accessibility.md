@@ -112,7 +112,7 @@ instead of a token) and an edge, which both components read, so a chip and a bad
 coloured fill is HeroUI's `--{colour}-soft`, its edge the solid `--{colour}` mixed down (HeroUI has no border token);
 the neutral fill is the foreground at 8% in light and 10% in dark, translucent like the coloured ones, so it is close to
 HeroUI's `--default` over white and deepens on a grey surface (a hovered or selected row) instead of vanishing
-into it, 1.19:1 to 1.20:1 off a light surface and 1.14:1 to 1.31:1 off a dark one. Its edge is the secondary text colour
+into it, 1.17:1 to 1.18:1 off a light surface and 1.22:1 to 1.36:1 off a dark one. Its edge is the secondary text colour
 at 28%. Only the bordered badge draws the edge; a chip never has one.
 
 Every colour and variant keeps at least 4.5:1 for its text on every surface it sits on (fields, dialogs, popovers,
