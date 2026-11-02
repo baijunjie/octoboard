@@ -3,7 +3,7 @@ import React, { useId, useRef, useState } from "react";
 
 import { defaultAccountName } from "../../agents/agents";
 import { SharingCauseLine, SharingCauseSummary, SharingDetails, SharingFailureReason } from "../../components/alerts/SharingFailure";
-import { HandOffOnUnmount } from "../../components/focus/HandOffOnUnmount";
+import { focusHandOffTarget, HandOffOnUnmount } from "../../components/focus/HandOffOnUnmount";
 import { HelpTip } from "../../components/hint/HelpTip";
 import { InlineReference } from "../../i18n/InlineReference";
 import { StatusAnnouncer } from "../../components/announce/StatusAnnouncer";
@@ -161,7 +161,7 @@ export function AccountSharingSwitch({ account, opensFocused }: { account: Accou
             title={title}
             guidance={guidance}
             idle={idle}
-            focusSwitch={() => root.current?.querySelector<HTMLElement>('input[role="switch"]')?.focus()}
+            switchElement={() => root.current?.querySelector<HTMLElement>('input[role="switch"]')}
           />
         )}
         <StatusAnnouncer text={announce ? title : undefined} clearAfterRead />
@@ -224,13 +224,13 @@ function SharingProgress({ id, progress }: { id: string; progress: NonNullable<A
  * could not be changed and the way to try again. The switch is described by a hidden copy of the title (`${id}-title`);
  * the title is spoken by the switch's own announcer. The mark takes the focus it or its popover held to the switch as
  * it goes. */
-function SharingIncomplete({ id, failure, title, guidance, idle, focusSwitch }: {
+function SharingIncomplete({ id, failure, title, guidance, idle, switchElement }: {
   id: string;
   idle: number;
   failure: AccountSharing["failure"];
   title: string;
   guidance: "settings.accounts.sharing.guidanceOn" | "settings.accounts.sharing.guidanceOff" | "settings.accounts.sharing.guidanceMoved";
-  focusSwitch: () => void;
+  switchElement: () => HTMLElement | null | undefined;
 }): React.ReactElement {
   const t = useT();
   const items = parseSharingItems(failure?.items);
@@ -248,8 +248,14 @@ function SharingIncomplete({ id, failure, title, guidance, idle, focusSwitch }: 
   const markId = `${id}-mark`;
   return (
     <>
-      {/* The mark goes with the warning; focus it or its popover held goes to the switch. */}
-      <HandOffOnUnmount from={`[data-status-mark-id="${markId}"]`} to={focusSwitch} />
+      {/* The mark goes with the warning; focus it or its popover held goes to the switch. Moved during the removal, as
+          this component goes with the mark and has no layout effect left to run, and the accounts section's own
+          refocus (`useSectionRefocus`) would take focus from `<body>` in the same commit's effects. */}
+      <HandOffOnUnmount
+        from={`[data-status-mark-id="${markId}"]`}
+        ring={false}
+        to={() => focusHandOffTarget(switchElement(), { duringRemoval: true })}
+      />
       <StatusMark tone="warning" markId={markId} label={t("settings.accounts.sharing.unfinishedMark")}>
         <p>{title}</p>
         {failure && <p>{group ? <SharingCauseLine group={group} withFix={false} /> : whole ? <SharingFailureReason cause={whole} withFix={false} /> : t("settings.accounts.sharing.failedSummary")}</p>}

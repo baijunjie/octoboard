@@ -2,8 +2,7 @@ import React, { useId, useRef, useState } from "react";
 
 import { appConfig } from "../appConfig";
 import { Button } from "../components/controls/Button";
-import { HandOffOnUnmount } from "../components/focus/HandOffOnUnmount";
-import { ringForAutomaticFocus } from "../input/touchInput";
+import { useHandOffAfterRemoval } from "../components/focus/HandOffOnUnmount";
 import { InlineReference } from "../i18n/InlineReference";
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { StatusMark } from "../components/status/StatusMark";
@@ -68,6 +67,8 @@ export function UpdatesSetting(): React.ReactElement | null {
   const markId = useId();
   const notesId = useId();
   const actionButton = useRef<HTMLButtonElement>(null);
+  // The mark and the notes link each hand focus they held to the row's action as they go.
+  const handOffFrom = useHandOffAfterRemoval(() => actionButton.current);
   if (!updates) return null;
   const { store, state } = updates;
   if (state.phase !== phase) {
@@ -92,7 +93,7 @@ export function UpdatesSetting(): React.ReactElement | null {
   const warning = failed && (
     <>
       {/* The mark goes as a check starts; focus it or its popover held goes to Check for updates. */}
-      <HandOffOnUnmount from={`[data-status-mark-id="${markId}"]`} to={() => actionButton.current?.focus()} />
+      {handOffFrom(`[data-status-mark-id="${markId}"]`)}
       <StatusMark tone="warning" markId={markId} label={t("settings.updates.checkFailed.mark")}>
         <p>{failedTitle}</p>
         <p>{t("settings.updates.checkFailed.description")}</p>
@@ -106,17 +107,8 @@ export function UpdatesSetting(): React.ReactElement | null {
   // The link goes when the row turns to an installed update of no known version; focus held on it goes to the action.
   const notes = notesVersion && (
     <>
-      {/* Deferred and guarded, so closing Settings with focus here leaves the restore to the dialog. */}
-      <HandOffOnUnmount
-        from={`[data-release-notes-id="${notesId}"]`}
-        ring={false}
-        to={() => queueMicrotask(() => {
-          const target = actionButton.current;
-          if (!target?.isConnected || (document.activeElement && document.activeElement !== document.body)) return;
-          ringForAutomaticFocus();
-          target.focus();
-        })}
-      />
+      {/* Closing Settings with focus here leaves the restore to the dialog. */}
+      {handOffFrom(`[data-release-notes-id="${notesId}"]`)}
       <ExternalLink data-release-notes-id={notesId} href={releaseUrl(notesVersion)} appearance="button" size="sm">{t("settings.updates.notes")}</ExternalLink>
     </>
   );

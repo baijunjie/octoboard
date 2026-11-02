@@ -171,8 +171,7 @@ it("keeps focus inside the dialog when a retry of the check succeeds and takes t
   await settle();
   // The retry succeeded: the mark, which held focus, is gone, and focus did not fall to the page.
   expect(mark()).toBeNull();
-  expect(document.activeElement).not.toBe(document.body);
-  expect(dialog.contains(document.activeElement)).toBe(true);
+  expect(document.activeElement).toBe(dialog);
 });
 
 it("turns into an acknowledgement-only failure modal when no other agent can be picked", async () => {

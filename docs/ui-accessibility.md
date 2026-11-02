@@ -554,10 +554,23 @@ A hand-off that runs because what held focus went away — a pane hidden, a pane
 event — also calls `setInteractionModality("keyboard")` before it focuses the destination. The user did not ask for the
 move, so they have to be able to see where focus went, and the previous input was often a pointer press, which leaves
 the destination without a ring. `handFocusOff` takes a `showRing` flag for the hand-off whose trigger is a press, where
-the ring follows how the press came; `HandOffOnUnmount` always sets it, its trigger being a render, and so does
-`useFocusHandoff`, whose trigger is the render that took the control away. That covers the one hand-off through it whose
-trigger is really a press — the change filter field closed from the header's toggle, which takes no focus itself —
-knowingly: focus lands on a control the user did not aim it at either way.
+the ring follows how the press came; `HandOffOnUnmount` sets it by default, its trigger being a render, and so does
+`useFocusHandoff`, whose trigger is the render that took the control away. That covers the one hand-off through
+`useFocusHandoff` whose trigger is really a press — the change filter field closed from the header's toggle, which takes
+no focus itself — knowingly: focus lands on a control the user did not aim it at either way.
+
+A mark or link whose focus goes to a control of its own surface (a field's trigger, a row's action, its dialog) hands
+focus on through `useHandOffAfterRemoval`, which sets the ring only when it actually moves focus. It decides in the
+layout effect of the component that renders the source, later in the commit that removes it: a target the same render
+disabled is left alone, the effects of an enclosing `useFocusHandoff` or `useSectionRefocus`, which would take focus
+from `<body>` elsewhere, have not run yet, and when a dialog closes with focus in the source the component has gone with
+it, so nothing is moved and the modality is left alone; the dialog's restore, a frame later, then places focus, its ring
+following the input that closed the dialog. A source whose component goes with it (the sharing switch's mark, in its
+warning) moves focus inside React's commit instead, from `HandOffOnUnmount`. React passes no focus event on to
+react-aria there, so `HandOffOnUnmount` sends the destination a `focusin` of its own once the commit is over; without it
+the destination would hold focus with no ring. A mark whose focus goes to the start of its panel (the Files and Report
+panels' marks) and the hand-offs of panes and panels taken away keep `HandOffOnUnmount` with its ring: no dialog's
+restore follows them.
 
 Selecting another archived session while focus is in the history on screen is not such a move: a sidebar row's press
 keeps focus where it is, so the history it replaces drops focus to `<body>`, but the user made the switch, whether
@@ -575,8 +588,9 @@ standing. And the window does not move focus into a terminal on its own initiati
 raises the on-screen keyboard over the content the user tapped to see: a floating panel lands on its first control that
 takes no text (`focusLandingWithoutText`; the Report panel lands on its page, marked `data-touch-landing`), focus meant
 for the agent terminal goes to a covering panel's first such control or else the top bar's first control, so it never
-falls to `<body>`, and a tapped session pick does not focus the terminal. A tap on a text field still focuses it, and
-form dialogs still focus their first field, since the user opened them to fill in.
+falls to `<body>`, and a tapped session pick does not focus the terminal. The file filter field's incomplete-search
+mark, as the search completes, hands focus to the field's input, but after a tap to the filter toggle instead. A tap on
+a text field still focuses it, and form dialogs still focus their first field, since the user opened them to fill in.
 
 A separator of collapsed lines taken off the screen is such a move: the bar for the run past a diff's last hunk goes
 once the daemon's reply says that hunk reaches the end of the file, and the hand-off to the code frame sets the
@@ -2038,7 +2052,8 @@ screen, and expanded for the same reason (`expanded` on `IconToggle`), and so is
 find bar is. The region it shows has no id of its own and so
 no `aria-controls`; "Expanded and selected" above asks only for `aria-expanded`. A region taken away this way hands
 keyboard focus back to the toggle when it was holding it, the toggle being pressed without taking focus itself; the
-hand-off's ring follows how the press came, as "Focus moved by a change the user did not make" above has it.
+hand-off turns the ring on whether the press came from a key or a mouse (not after a tap, as for any automatic move),
+as "Focus moved by a change the user did not make" above has it.
 
 The right pane's panel kind toggles are the exception: each keeps one icon, and its open state is a filled chip behind
 the icon (the rail's current-console fill), a shape rather than a tint, with `aria-expanded` for assistive technology. A

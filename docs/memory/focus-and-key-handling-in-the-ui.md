@@ -53,6 +53,28 @@ itself, never count on a parent rendering it again. A change that makes a compon
 hand-off with nothing failing; `packages/ui/src/App.focusHandoff.test.tsx` drives the removals only for the terminal
 pane (its history's owner line included), the update notice and the connection banner.
 
+## A hand-off moved inside React's commit draws no ring, and one put off to a microtask comes too late
+
+Applies to `packages/ui`, to code of your own that moves focus on because what held it is going away. Two timings
+that look right both fail, and a test that checks only `document.activeElement` passes against either:
+
+- `focus()` from a layout-effect cleanup of the subtree being removed runs in React's mutation phase, where React
+  drops the focus events it would pass on: DOM focus and the modality move, but react-aria never hears of the focus,
+  so the destination shows no `data-focus-visible` ring and no focus-within state. Move focus there only through
+  `HandOffOnUnmount` (`packages/ui/src/components/focus/HandOffOnUnmount.tsx`), which replays a `focusin` once the
+  commit is over.
+- Putting the move off to a `queueMicrotask` so that it runs after the commit: on a synchronous commit, which is what
+  a `useSyncExternalStore` update (the daemon store's included) renders as, React runs the passive effects before any
+  queued microtask, so an enclosing `useFocusHandoff` or `useSectionRefocus` has already found focus on `<body>` and
+  sent it elsewhere. Decide in a layout effect of a component that renders in that commit, as
+  `useHandOffAfterRemoval` in the same file does; which of the two a source uses is set out in
+  `docs/ui-accessibility.md`, "Focus moved by a change the user did not make".
+
+So a test of such a hand-off asserts `data-focus-visible` on the element react-aria marks (a switch's `label`) after
+`await act(async () => {})`, not only where focus is, and makes the change the way the store sends it — a new array,
+not an element replaced inside the fixture's array — or effects keyed on that array, `useSectionRefocus` among them,
+never run and the ordering stays untested.
+
 ## A modal raised over another dialog mounts a commit after it as a top layer for that commit, and focuses itself one render after mounting
 
 Applies to `packages/ui`, to a modal shown from state of its own (a store, a daemon push) rather than by the press that

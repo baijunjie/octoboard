@@ -4,7 +4,7 @@ import { useShallow } from "zustand/react/shallow";
 import { incompleteAccount } from "../accounts/accountChoices";
 import { AGENT_LABEL, defaultAccountName } from "../agents/agents";
 import { DaemonRequestError } from "../daemon-client";
-import { HandOffOnUnmount } from "../components/focus/HandOffOnUnmount";
+import { useHandOffAfterRemoval } from "../components/focus/HandOffOnUnmount";
 import { InlineReference } from "../i18n/InlineReference";
 import { joinNodes } from "../i18n/joinPhrases";
 import type { Language } from "../i18n/languages";
@@ -115,11 +115,12 @@ function SessionRequestSentence({ request, incomplete }: { request: SessionReque
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const markId = useId();
   const sentence = useRef<HTMLParagraphElement>(null);
+  const handOffFrom = useHandOffAfterRemoval(() => dialogAround(sentence));
   // The mark after the account the session would run on. When it goes while it or its popover holds
   // focus, focus moves to the dialog.
   const incompleteMark = incomplete && (
     <span className="ms-1">
-      <HandOffOnUnmount from={`[data-status-mark-id="${markId}"]`} to={() => dialogAround(sentence)?.focus()} />
+      {handOffFrom(`[data-status-mark-id="${markId}"]`)}
       <IncompleteSharingMark inline account={incomplete} markId={markId} />
     </span>
   );

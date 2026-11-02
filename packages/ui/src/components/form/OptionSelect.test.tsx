@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { act, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { setInteractionModality } from "react-aria";
+import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { AnchoredTooltip } from "../hint/AnchoredTooltip";
@@ -59,7 +61,6 @@ it("does not focus the trigger when the mark that holds focus goes in the render
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
-  // The hand-off decides after the commit, in a microtask, which `act` waits for only when awaited.
   const render = (marked: boolean, locked: boolean) => act(async () => root.render(
     <OptionSelect label="Model" value="a" onChange={() => {}} options={[{ value: "a", label: "A" }]} isDisabled={locked}
       mark={marked ? (markId) => <button type="button" data-status-mark-id={markId}>Why</button> : undefined} />,
@@ -77,6 +78,38 @@ it("does not focus the trigger when the mark that holds focus goes in the render
   focusMark();
   await render(false, false);
   expect(document.activeElement).toBe(trigger);
+});
+
+it("turns the focus ring on only when it hands focus to the trigger, not when the whole field goes with the mark", async () => {
+  const modality = getInteractionModality();
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+    act(() => Reflect.apply(setInteractionModality, undefined, [modality]));
+  });
+  document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", bubbles: true }));
+  const render = (shown: boolean, marked: boolean) => act(async () => root.render(shown ? (
+    <OptionSelect label="Model" value="a" onChange={() => {}} options={[{ value: "a", label: "A" }]}
+      mark={marked ? (markId) => <button type="button" data-status-mark-id={markId}>Why</button> : undefined} />
+  ) : null));
+  const focusMarkAfterPointer = () => act(() => {
+    setInteractionModality("pointer");
+    container.querySelector<HTMLButtonElement>("[data-status-mark-id]")!.focus();
+  });
+  // The mark goes on its own: focus moves to the trigger, with the ring.
+  await render(true, true);
+  focusMarkAfterPointer();
+  await render(true, false);
+  expect(document.activeElement).toBe(container.querySelector("[data-slot=select-trigger]"));
+  expect(getInteractionModality()).toBe("keyboard");
+  // The field goes with it, as when its dialog closes: nothing is moved, and the modality is left as it was.
+  await render(true, true);
+  focusMarkAfterPointer();
+  await render(false, false);
+  expect(document.activeElement).toBe(document.body);
+  expect(getInteractionModality()).toBe("pointer");
 });
 
 it("puts a label mark beside the label, keeps it out of the field's name, and hands focus to the trigger when it goes", async () => {

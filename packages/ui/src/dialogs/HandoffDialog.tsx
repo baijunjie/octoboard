@@ -2,7 +2,7 @@ import React, { useId, useRef, useState } from "react";
 
 import { Button } from "../components/controls/Button";
 import { FailureBody } from "../components/alerts/errorParts";
-import { HandOffOnUnmount } from "../components/focus/HandOffOnUnmount";
+import { useHandOffAfterRemoval } from "../components/focus/HandOffOnUnmount";
 import { InlineReference } from "../i18n/InlineReference";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { StatusMark } from "../components/status/StatusMark";
@@ -124,6 +124,7 @@ function HandoffMoves({ session, busy }: { session: Session; busy: boolean }): R
   const inspected = useResponsibleBranches(session.id, session.role !== "console");
   const rootRef = useRef<HTMLDivElement>(null);
   const markId = useId();
+  const handOffFrom = useHandOffAfterRemoval(() => dialogAround(rootRef));
   // The check fails after the dialog opened, so its mark is announced.
   const painted = useHasPainted();
   const live = {
@@ -148,7 +149,7 @@ function HandoffMoves({ session, busy }: { session: Session; busy: boolean }): R
         {inspected.error !== undefined && (
           <>
             {/* The check answers as a retry succeeds; focus the mark or its popover held goes to the dialog. */}
-            <HandOffOnUnmount from={`[data-status-mark-id="${markId}"]`} to={() => dialogAround(rootRef)?.focus()} />
+            {handOffFrom(`[data-status-mark-id="${markId}"]`)}
             <StatusMark
               markId={markId}
               label={t("dialog.handOff.movesBranchesFailed.mark")}

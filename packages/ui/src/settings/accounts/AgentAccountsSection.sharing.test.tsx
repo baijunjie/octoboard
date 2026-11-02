@@ -586,10 +586,15 @@ describe("a change that did not finish", () => {
     const { container, render } = await mountSettings("Codex");
     act(() => mark(container)!.focus());
     accountSharing.delete("codex-work");
-    settings.accounts[1] = { ...settings.accounts[1]!, share_default_config_incomplete: false };
+    // A new array, as the store sends one: the section's own refocus (`useSectionRefocus`) runs on the change and
+    // would take focus from `<body>`, so the hand-off must have placed it on the switch by then.
+    settings.accounts = settings.accounts.map((account, index) => index === 1 ? { ...account, share_default_config_incomplete: false } : account);
     render();
     expect(mark(container)).toBeNull();
     expect(document.activeElement).toBe(sharingSwitches(container)[0]);
+    // The switch knows it has focus, and shows the ring, once the commit that moved it is over.
+    await act(async () => {});
+    expect(sharingSwitches(container)[0]!.closest("label")!.hasAttribute("data-focus-visible")).toBe(true);
     // Focus that was elsewhere stays there.
     settings.accounts[1] = { ...settings.accounts[1]!, share_default_config_incomplete: true };
     render();

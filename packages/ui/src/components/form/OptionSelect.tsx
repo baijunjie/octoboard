@@ -5,7 +5,7 @@ import { ButtonContext } from "react-aria-components";
 import { CodeToneContext } from "../../i18n/codeTone";
 import { FadeOverflow } from "../text/FadeOverflow";
 import { FieldClearButton } from "../controls/FieldClearButton";
-import { HandOffOnUnmount } from "../focus/HandOffOnUnmount";
+import { useHandOffAfterRemoval } from "../focus/HandOffOnUnmount";
 import { MarkLineBox } from "../status/MarkLineBox";
 import { MotionListBox } from "../motion/MotionListBox";
 import { ReasonText } from "../text/ReasonText";
@@ -108,10 +108,10 @@ function FadeLabel({ label, badge, lang, className, as }: {
  * which cannot hold another, so the mark is laid over the room the trigger keeps free for it. With
  * `labelMark`, built likewise, one about the whole field (its list of options) stands right after the
  * label, beside it rather than inside it, so that the field's accessible name stays the label's text.
- * When either mark goes while it or its popover holds focus, focus moves to the trigger once the render
- * is committed, unless the trigger is disabled by then: a caller that disables the select with the
- * mark's going hands focus on itself (`useFocusHandoff`), from `<body>`, where focus falls from the
- * removed mark.
+ * When either mark goes while it or its popover holds focus, focus moves to the trigger in the commit
+ * that removes the mark, ahead of a caller's own hand-off, unless that commit disables the trigger: a
+ * caller that disables the select with the mark's going hands focus on itself (`useFocusHandoff`), from
+ * `<body>`, where focus falls from the removed mark.
  *
  * With `errorMessage` the field is marked invalid and says what is wrong with it right under the select, in its
  * `FieldError`, as `TextInput` does. A `joined` half is not a field of its own: the group draws the message, and the
@@ -182,12 +182,9 @@ export function OptionSelect<T extends string>({
   const badgeInLabel = current ? current.badgeInLabel : true;
   const invalid = isInvalid === true || (errorMessage !== undefined && errorMessage !== null && errorMessage !== false && errorMessage !== "");
   const hasReason = options.some((option) => option.reason);
-  // The hand-off runs before the commit sets the sibling trigger's `disabled`, so the trigger is asked
-  // after it: one disabled in the same render is not focused (WebKit would blur it as it is disabled)
-  // and focus falls to `<body>` for the caller to take, and focus a caller has placed meanwhile stays.
-  const handOffToTrigger = (id: string) => (
-    <HandOffOnUnmount from={`[data-status-mark-id="${id}"]`} to={() => queueMicrotask(() => { const target = trigger.current; if (target?.isConnected && !target.disabled && (!document.activeElement || document.activeElement === document.body)) target.focus(); })} />
-  );
+  // Decided once the commit has set the trigger's `disabled`, and before the effects of a caller's own hand-off.
+  const handOffFrom = useHandOffAfterRemoval(() => trigger.current);
+  const handOffToTrigger = (id: string) => handOffFrom(`[data-status-mark-id="${id}"]`);
   return (
     // HeroUI's variant for a field on a surface: in a dialog, or in the Processes panel's toolbar.
     <Select

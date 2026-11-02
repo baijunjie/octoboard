@@ -165,7 +165,7 @@ it("puts the incomplete-search mark inside the field before the Clear button, wh
   expect(field(view.container).value).toBe("");
 });
 
-it("hands focus to the search input when the mark that holds it goes because the search completed", () => {
+it("hands focus to the search input when the mark that holds it goes because the search completed", async () => {
   let incomplete = true;
   const view = render(true, () => incomplete);
   view.type("alpha");
@@ -176,6 +176,9 @@ it("hands focus to the search input when the mark that holds it goes because the
   view.rerender();
   expect(view.container.querySelector("button[data-status-mark]")).toBeNull();
   expect(document.activeElement).toBe(field(view.container));
+  // The input knows it has focus, and shows the ring, once the commit that moved it is over.
+  await act(async () => {});
+  expect(field(view.container).hasAttribute("data-focus-visible")).toBe(true);
   // Focus elsewhere is left alone.
   incomplete = true;
   view.rerender();
@@ -183,6 +186,21 @@ it("hands focus to the search input when the mark that holds it goes because the
   incomplete = false;
   view.rerender();
   expect(document.activeElement).toBe(view.toggle);
+});
+
+it("hands focus from the mark to the filter toggle after a tap, not into the input, which would raise the keyboard", () => {
+  onTestFinished(() => void document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", bubbles: true })));
+  let incomplete = true;
+  const view = render(true, () => incomplete);
+  view.type("alpha");
+  const mark = view.container.querySelector<HTMLElement>("button[data-status-mark]")!;
+  document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "touch", bubbles: true }));
+  act(() => mark.focus());
+  incomplete = false;
+  view.rerender();
+  expect(view.container.querySelector("button[data-status-mark]")).toBeNull();
+  expect(document.activeElement).toBe(view.toggle);
+  expect(field(view.container).value).toBe("alpha");
 });
 
 it("leaves focus on another mark in the window alone when its own mark goes", () => {

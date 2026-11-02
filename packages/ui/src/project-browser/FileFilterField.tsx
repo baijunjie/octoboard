@@ -4,13 +4,14 @@ import React, { useEffect, useId, useRef, useState } from "react";
 import { ButtonContext } from "react-aria-components";
 
 import { FieldClearButton } from "../components/controls/FieldClearButton";
-import { HandOffOnUnmount } from "../components/focus/HandOffOnUnmount";
+import { useHandOffAfterRemoval } from "../components/focus/HandOffOnUnmount";
 import { IconToggle } from "../components/controls/IconToggle";
 import { PaneToolbar } from "../components/panel/PaneToolbar";
 import { StatusMark } from "../components/status/StatusMark";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { useT } from "../i18n/react";
 import { isImeKey } from "../input/imeKey";
+import { interactionIsTouch } from "../input/touchInput";
 
 export interface FileFilterState {
   filter: string;
@@ -61,6 +62,7 @@ export function FileFilterField({ state, label, placeholder, contextKey, ignored
   const input = useRef<HTMLInputElement>(null);
   // Scopes the hand-off to this field's own mark and its popover, not any mark in the window.
   const markId = useId();
+  const handOffFrom = useHandOffAfterRemoval(() => (interactionIsTouch() ? null : input.current));
   const previous = useRef({ open: state.filterOpen, contextKey });
   useEffect(() => {
     if (state.filterOpen && !previous.current.open && previous.current.contextKey === contextKey) input.current?.focus();
@@ -95,10 +97,12 @@ export function FileFilterField({ state, label, placeholder, contextKey, ignored
               {/* The mark stands before the Clear button, which keeps the trailing end it has with or without
                   the mark. The field gives its clear button's behaviour to every button inside it
                   through `ButtonContext`; the mark is not that button. When the search completes the mark
-                  goes, and focus it held goes to the input rather than to the page. */}
+                  goes, and focus it held goes to the input rather than to the page, ahead of the field's own
+                  `useFocusHandoff`. After a tap it leaves focus to that hand-off, which takes it to the filter
+                  toggle: the input would raise the on-screen keyboard. */}
               {incomplete && (
                 <>
-                  <HandOffOnUnmount from={`[data-status-mark-id="${markId}"]`} to={() => { if (input.current?.isConnected) input.current.focus(); }} />
+                  {handOffFrom(`[data-status-mark-id="${markId}"]`)}
                   <ButtonContext.Provider value={{}}>
                     <StatusMark tone="warning" markId={markId} label={t("browser.filter.partial")}>{t("browser.filter.partial.details")}</StatusMark>
                   </ButtonContext.Provider>

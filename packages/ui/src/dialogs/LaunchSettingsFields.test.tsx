@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
+import { setInteractionModality } from "react-aria";
+import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { press } from "../components/alerts/detailsTestSupport";
@@ -152,7 +154,6 @@ it("hands focus to the Model trigger when the mark that holds it goes, and leave
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
-  // The hand-off decides after the commit, in a microtask, which `act` waits for only when awaited.
   const render = (modelFailure?: string) => act(async () => root.render(<ModelPicker launch={launchOf(modelFailure)} model={null} onChange={() => {}} />));
   await render("Why");
   const trigger = container.querySelector<HTMLElement>("[data-slot=select-trigger]")!;
@@ -186,6 +187,39 @@ it("hands focus to the console's Model trigger when the console matrix's mark th
   await render(undefined);
   expect(modelMark(container)).toBeNull();
   expect(document.activeElement).toBe(consoleTrigger);
+});
+
+it("turns the focus ring on only when the console matrix's mark hands focus on, not when the whole matrix goes with it", async () => {
+  const launchOf = (modelFailure?: string): LaunchModels => ({ loading: false, listed: true, models: [], modelText: undefined, modelDescription: undefined, modelFailure });
+  const modality = getInteractionModality();
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+    act(() => Reflect.apply(setInteractionModality, undefined, [modality]));
+  });
+  document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", bubbles: true }));
+  const pair = { model: null, effort: null };
+  const render = (shown: boolean, modelFailure?: string) => act(async () => root.render(shown
+    ? <LaunchMatrix launch={launchOf(modelFailure)} consoleSessions={pair} projectSessions={pair} onConsoleChange={() => {}} onProjectChange={() => {}} />
+    : null));
+  const focusMarkAfterPointer = () => act(() => {
+    setInteractionModality("pointer");
+    modelMark(container)!.focus();
+  });
+  // The mark goes on its own: focus moves to the console's Model trigger, with the ring.
+  await render(true, "Why");
+  focusMarkAfterPointer();
+  await render(true, undefined);
+  expect(document.activeElement).toBe(container.querySelectorAll("[data-slot=select-trigger]")[0]);
+  expect(getInteractionModality()).toBe("keyboard");
+  // The matrix goes with it, as when its dialog closes: nothing is moved, and the modality is left as it was.
+  await render(true, "Why");
+  focusMarkAfterPointer();
+  await render(false);
+  expect(document.activeElement).toBe(document.body);
+  expect(getInteractionModality()).toBe("pointer");
 });
 
 // WebKit blurs a control as it is disabled, before the render's effects run; jsdom never does, so the blur is

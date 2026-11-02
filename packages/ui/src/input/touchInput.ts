@@ -57,7 +57,9 @@ export function interactionIsTouch(): boolean {
 /** Called before a focus move the user did not ask for (a hand-off as something goes away, a
  * return after a press elsewhere): its destination shows a focus ring, as for the keyboard. Not
  * after a tap, where a ring shows nothing a finger can use and the tooltip it opens would stay up
- * with nothing to send it away. */
+ * with nothing to send it away. Call it right before the `focus()` that actually happens, after every
+ * guard: called earlier, it sets the keyboard modality even when nothing moves, and a dialog's later
+ * restore after a pointer close then shows a ring. */
 export function ringForAutomaticFocus(): void {
   if (!interactionIsTouch()) setInteractionModality("keyboard");
 }
