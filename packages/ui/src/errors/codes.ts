@@ -278,6 +278,7 @@ export const CODES = {
   // comes from, nested or not, and its summary says the application's own data could not be written, which no call
   // site's title says.
   store_write_failed: { origin: "daemon", recovery: "appDataAccess", detailBlock: true },
+  submit_retry_failed: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true, detailBlock: true, codeParams: ["enter"], uiParams: { enter: "Enter" } },
   // A switch whose relaunch ended at once leaves the session interrupted on the account it had, resumable as before.
   switch_did_not_come_up: { origin: "daemon", recovery: "switchRelaunch", recordIds: ["session"], nameParams: ["session"] },
   terminal_input_lost: { origin: "daemon", recovery: "none", alertTitle: true, detailBlock: true, recoveryLine: true, recordIds: ["session", "shell_terminal"], variants: { session: { nameParams: ["session"] }, shell: { nameParams: ["shell_terminal"] } } },

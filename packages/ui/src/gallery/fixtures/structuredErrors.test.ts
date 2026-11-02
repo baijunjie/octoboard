@@ -31,6 +31,7 @@ const UNSHOWN: Array<{ code: string; params: Record<string, string> }> = [
   { code: "field_required", params: { field: "console_id" } },
   { code: "invalid_launch_setting", params: { agent: "Claude Code", field: "reasoning_effort", value: "unsupported-effort" } },
   { code: "terminal_input_lost", params: { shell_terminal: shellTerminal.id } },
+  { code: "submit_retry_failed", params: { agent: "Codex", detail: "Broken pipe (os error 32) (0 bytes written)" } },
   { code: "draft_save_unconfirmed", params: { agent: "Codex" } },
   { code: "draft_restore_unconfirmed", params: { agent: "Codex" } },
   { code: "typing_held", params: { agent: "Codex" } },

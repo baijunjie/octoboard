@@ -666,9 +666,16 @@ impl LiveSession {
         runtime.spawn_blocking(move || {
             let Some(live) = state.live_session(&id).filter(|live| live.launch_id == launch) else { return; };
             if let Err(error) = live.retry_unsent_submit(|| state.permits_automatic_input(&id)) {
-                state.broadcast(crate::protocol::Event::from_error(None, &anyhow::anyhow!(
-                    "Session {id} could not retry submitting its pending message: {error}. Check its input before continuing."
-                )));
+                let detail = error.to_string();
+                tracing::error!(session = %id, %detail, "submit-key retry failed");
+                state.broadcast(
+                    crate::protocol::Notice::new(
+                        crate::protocol::notice_code::SUBMIT_RETRY_FAILED,
+                        format!("Retrying the submit key of a pending message failed: {detail}. Check the session's input box before continuing."),
+                        &[("agent", live.agent.label()), ("detail", &detail)],
+                    )
+                    .about(&id),
+                );
             }
             live.unsent_retry_scheduled.store(false, Ordering::Release);
             state.retry_pending_outbox(&id);
@@ -913,6 +920,66 @@ mod tests {
         live.note_prompt_sent(None);
         assert!(!live.retry_unsent_submit(|| true).unwrap());
         assert_eq!(live.input_writes(), before + 1);
+    }
+
+    /// A submit-key retry whose write fails is told as a notice about the session, not as an error.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_failed_submit_retry_is_announced_as_a_notice_about_the_session() {
+        let (state, dir) = crate::test_support::app_state("submit-retry-failed");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&dir))
+            .unwrap();
+        state
+            .store
+            .insert_session(&crate::test_support::bare_session(
+                "submit-retry-failed",
+                crate::protocol::Role::Project,
+            ))
+            .unwrap();
+        let live = crate::test_support::fake_live_session(
+            "submit-retry-failed",
+            crate::protocol::Agent::Claude,
+            120,
+            40,
+            "trap '' HUP; echo ready; exec sleep 30",
+        );
+        // The stand-in announces itself only once it ignores SIGHUP, so hanging up cannot end it.
+        crate::terminal::pty::spawn_reader_thread((*live).clone(), 8 * 1024);
+        let ready = crate::test_support::output_containing(&live, "ready");
+        assert!(ready.contains("ready"), "{ready}");
+        state.register_live(live.clone());
+        let mut events = state.subscribe();
+        live.hang_up();
+        live.mark_unsent(0);
+        *live.unsent_at.lock().unwrap() = Some((
+            0,
+            std::time::Instant::now() - crate::messaging::outbox::DRAFT_WAIT,
+        ));
+        live.schedule_unsent_submit_retry();
+        let notice = tokio::time::timeout(crate::test_support::PATIENCE, async {
+            loop {
+                match events.recv().await.expect("the event stream ended") {
+                    crate::protocol::Event::SessionNotice {
+                        session,
+                        code,
+                        params,
+                        ..
+                    } => break (session, code, params),
+                    crate::protocol::Event::Error { code, .. } => panic!("an error event {code}"),
+                    _ => {}
+                }
+            }
+        })
+        .await
+        .expect("no notice about the failed retry");
+        assert_eq!(notice.0, "submit-retry-failed");
+        assert_eq!(notice.1, crate::protocol::notice_code::SUBMIT_RETRY_FAILED);
+        assert_eq!(
+            notice.2.get("agent").map(String::as_str),
+            Some("Claude Code")
+        );
+        assert!(!notice.2.get("detail").expect("a detail").is_empty());
     }
 
     #[test]

@@ -76,8 +76,7 @@ the same change:
 Applies to daemon code that tells clients of a condition outside any request's reply — from a session's input path, a
 background task, a recovery pass. `Event::from_error` given a plain `anyhow` error goes out as `internal_error`, which
 the window shows as an unexpected failure that may be a bug, with a Report issue link, however ordinary the condition;
-and a session named only inside the English text is shown as its raw id, not its title. Nearby code still broadcasts
-`Event::from_error(None, &anyhow!(..))` this way, so do not copy it. Instead:
+and a session named only inside the English text is shown as its raw id, not its title. Instead:
 
 - A condition about a session: a `notice_code` of its own, sent as
   `state.broadcast(Notice::new(code, message, params).about(&session_id))`, which arrives as a `session_notice` the

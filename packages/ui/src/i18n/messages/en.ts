@@ -323,6 +323,10 @@ export const en = {
   "daemon.message_acceptance_unconfirmed.summary": "{agent} did not confirm that it accepted a message {appName} wrote into this session.",
   "daemon.message_acceptance_unconfirmed.recovery": "Check the conversation before deciding whether to send the message again.",
   "daemon.message_acceptance_unconfirmed.details": "The message may already be queued, and {appName} will not send it again. Later messages are held for at most three seconds or until another prompt is sent.",
+  "daemon.submit_retry_failed.summary":
+    "{agent} did not confirm sending a message {appName} wrote into this session, and {appName} could not press {enter} again.",
+  "daemon.submit_retry_failed.recovery":
+    "Check the input box. If the message is still there, press {enter} without pasting it again.",
   "daemon.draft_save_unconfirmed.summary":
     "{agent} did not confirm saving the draft in this session's input box, so {appName} wrote its message into the input box as it was.",
   "daemon.draft_save_unconfirmed.recovery":
@@ -670,6 +674,8 @@ export const en = {
     "{agent} showed a dialog while {appName} wrote a message into this session and discarded the message. {appName} will write it again once the dialog has been answered.",
   "daemon.message_diverted_by_view":
     "{agent} was showing a view of its background agents while {appName} wrote a message into this session, so the message went there rather than to the conversation. Check the session.",
+  "daemon.submit_retry_failed":
+    "{agent} did not confirm sending a message {appName} wrote into this session, and {appName} could not press {enter} again. Check the input box. If the message is still there, press {enter} without pasting it again. Reason: {detail}",
   "daemon.draft_save_unconfirmed":
     "{agent} did not confirm saving the draft in this session's input box, so {appName} wrote its message into the input box as it was. Check the conversation: the message may have been sent together with the draft.",
   "daemon.draft_restore_unconfirmed":
@@ -691,6 +697,7 @@ export const en = {
   "daemon.launch_failed.alertTitle": "Could not start the session",
   "daemon.message_not_sent.alertTitle": "Message not sent",
   "daemon.message_acceptance_unconfirmed.alertTitle": "Message not confirmed",
+  "daemon.submit_retry_failed.alertTitle": "Submit not confirmed",
   "daemon.draft_save_unconfirmed.alertTitle": "Draft save not confirmed",
   "daemon.draft_restore_unconfirmed.alertTitle": "Draft restore not confirmed",
   "daemon.typing_held.alertTitle": "Typing held back",

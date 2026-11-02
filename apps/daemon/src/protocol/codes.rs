@@ -649,6 +649,11 @@ pub mod notice_code {
     /// subagent, or a new background session) rather than the conversation, and is not written
     /// again. `params` names the `agent`.
     pub const MESSAGE_DIVERTED_BY_VIEW: Code = Code("message_diverted_by_view");
+    /// A message Octoboard wrote into the session was complete but the agent did not confirm sending
+    /// it, and the one retry of its submit key failed to write. The message is not written again;
+    /// the input box may still hold it. `params` names the `agent` and the failed write's English
+    /// text as `detail`.
+    pub const SUBMIT_RETRY_FAILED: Code = Code("submit_retry_failed");
     /// Before the session launched, some of its sharing account's links to the default
     /// configuration could not be repaired; the session launched all the same. `params` names
     /// the `account`, its `name`, `cause` and `items`, as `account_sharing_failed`'s.

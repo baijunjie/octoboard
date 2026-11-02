@@ -365,8 +365,12 @@ written during the wait nor lifts the hold below. Any other prompt counts, whoev
   If a prompt has already been reported, Octoboard skips the retry. Otherwise, three seconds after the message was
   marked unsent, it presses Enter once into the current input, which may include the user's later edits. A recognised
   dialog or trust confirmation must clear first. Once the attempt is made, the hold clears even without another
-  submitted-prompt report, and later messages can proceed under the other holds above. A failed retry raises an error
-  asking the user to check the input; it does not repeat the message text.
+  submitted-prompt report, and later messages can proceed under the other holds above. If writing the submit key fails,
+  every client is sent the `submit_retry_failed` notice about that session, naming its agent and carrying the failed
+  write's reason. The window shows it as an error alert titled "Submit not confirmed", saying the agent has not confirmed
+  sending the message and Octoboard could not press Enter again, and telling the user to check the input box and, if the
+  message is still there, press Enter without pasting it again. The key is not retried again and the message is not
+  written again.
 - The hold belongs to the session's process that was written to and ends with it, as its queue does: a session resumed
   later starts without one.
 

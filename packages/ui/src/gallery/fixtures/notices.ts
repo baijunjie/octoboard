@@ -502,6 +502,15 @@ export const noticeScenarios: Scenario[] = [
     toasts: [sessionNoticeToast("s-web-1", "message_acceptance_unconfirmed", { agent: "Codex" })],
   },
   {
+    id: "toast-submit-retry-failed",
+    group: TRUST,
+    category: "exceptional",
+    title: "Submit not confirmed, the retry of Enter failed",
+    description: "An error alert titled \"Submit not confirmed\", with the session line above the message (the session and its project each a chip) and no Report issue button: a notice about this session, not an unexpected error. The summary says the agent (Codex) did not confirm sending a message the app wrote into the session and that the app could not press Enter again; the recovery line below it asks the person to check the input box and press Enter themselves, with Enter as a key chip; and the Error details disclosure (closed here) holds the system's own text for the failed retry, which is the only place raw text appears.",
+    state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
+    toasts: [sessionNoticeToast(codexSession.id, "submit_retry_failed", { agent: "Codex", detail: "Broken pipe (os error 32) (0 bytes written)" })],
+  },
+  {
     id: "toast-typing-blocked",
     group: TRUST,
     category: "exceptional",
