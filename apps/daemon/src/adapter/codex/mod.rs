@@ -61,6 +61,7 @@
 //! The persisted conversation id still arrives through the hooks; thread id and session id match.
 
 mod claude_compatibility;
+mod claude_mcp;
 mod config;
 mod private_server;
 #[cfg(test)]
@@ -158,13 +159,7 @@ impl AgentAdapter for CodexAdapter {
                 {
                     continue;
                 }
-                let mut parts = value.get("version")?.as_str()?.split('.');
-                let version = (
-                    parts.next()?.parse().ok()?,
-                    parts.next()?.parse().ok()?,
-                    parts.next()?.parse().ok()?,
-                );
-                return parts.next().is_none().then_some(version);
+                return super::parse_version(value.get("version")?.as_str()?);
             }
         }
         None
@@ -339,13 +334,8 @@ impl AgentAdapter for CodexAdapter {
                         ConfigFile::Parsed(parsed) => server_names(parsed).contains(name),
                     }
             };
-            let servers = super::claude_mcp::codex_servers(
-                spec.shell_env,
-                &env,
-                &reserved_env,
-                spec.cwd,
-                &taken,
-            );
+            let servers =
+                claude_mcp::codex_servers(spec.shell_env, &env, &reserved_env, spec.cwd, &taken);
             for server_override in servers.overrides {
                 server_args.push("-c".to_string());
                 server_args.push(server_override);

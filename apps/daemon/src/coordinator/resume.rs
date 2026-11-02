@@ -210,6 +210,7 @@ fn find_conversation_to_resume(
     let mut shell_env: Option<HashMap<String, String>> = None;
     let mut snapshot_error = None;
     let mut newest: Option<(SystemTime, ConversationLocation)> = None;
+    let mut locator = crate::records::Locator::default();
     for &agent in agents {
         let default = (None, None);
         let pinned = accounts
@@ -232,7 +233,7 @@ fn find_conversation_to_resume(
                 }
             }
             let dir = account_dir(agent, config_dir, shell_env.as_ref());
-            let record = match relocate::locate(agent, &dir, id) {
+            let record = match relocate::locate_with(&mut locator, agent, &dir, id) {
                 Ok(record) => record,
                 Err(err) => match err.downcast::<CodedError>() {
                     Ok(coded) if coded.code == error_code::CONVERSATION_NOT_FOUND => continue,
@@ -240,7 +241,7 @@ fn find_conversation_to_resume(
                     Err(err) => return Err(err),
                 },
             };
-            let written = relocate::modified(&dir.join(record));
+            let written = crate::accounts::files::modified(&dir.join(record));
             if newest.as_ref().is_none_or(|(latest, _)| written > *latest) {
                 newest = Some((written, ConversationLocation::Record { agent, account }));
             }

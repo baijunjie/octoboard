@@ -29,7 +29,7 @@
 //!   compaction.
 //! - **Hooks must fail fast and silently.** Every agent surfaces a failing hook to the user, and a
 //!   hook with no timeout blocks the turn for its full duration. Octoboard owns the hook command
-//!   (`hook_command` below; Codex and Grok run it as the per-session `hook_script`, Claude Code
+//!   (`hooks::hook_command`; Codex and Grok run it as the per-session `hook_script`, Claude Code
 //!   inline, or not at all when its version posts hooks over HTTP itself), which exits 0
 //!   unconditionally and writes nothing.
 //!
@@ -37,19 +37,24 @@
 //! one constant command serves every event, and adding or removing an event never changes what an
 //! adapter has to generate beyond the event name itself.
 
+mod account_cli;
 pub mod claude;
-mod claude_mcp;
 pub mod codex;
 pub(crate) mod files;
 pub mod grok;
+mod hooks;
+
+pub use account_cli::{
+    account_command, account_command_of, account_dir, default_account_dir, resolve_account_binary,
+};
+pub use hooks::{hook_command, hook_script_path, hook_url, write_hook_script, HOOK_TIMEOUT_SECS};
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Duration;
 
 use anyhow::Result;
 
-use crate::agents::layout::layout;
 use crate::git_workflow::GitWorkflowSettings;
 use crate::mcp::Owner;
 use crate::protocol::{
@@ -113,7 +118,8 @@ pub struct LaunchSpec<'a> {
     /// Whether this session of Codex or Grok Build is to load Claude Code's instructions, skills
     /// and the rest: its setting is in effect (`Store::claude_compatibility_of`). Always false for
     /// Claude Code. Codex is told in its instructions to read them (`claude_compatibility.md`) and
-    /// is given Claude Code's MCP servers (`claude_mcp`); Grok Build is given its own switches.
+    /// is given Claude Code's MCP servers (`codex::claude_mcp`); Grok Build is given its own
+    /// switches.
     pub claude_compatibility: bool,
     /// The default account's directory, fully resolved, when the session's account shares the
     /// default configuration (`crate::accounts::shared_config`); `None` for every other launch. An
@@ -247,93 +253,6 @@ pub fn refuse_unlaunchable_account(agent: Agent, pinned: Option<&Path>) -> Resul
     }
 }
 
-/// The directory this agent's default account resolves to — what "pinning nothing" means at
-/// launch: the directory its own variable is exported to in `shell_env`, else the agent's own
-/// usual default under the home directory the snapshot carries, else the daemon's own. For
-/// Grok Build this is the *source* home a session's per-session home is built from
-/// (`grok::home::build_grok_home`), never the per-session home itself, which is Octoboard's own and
-/// exists only for the duration of a process.
-///
-/// Shared by `crate::agents::availability`, which shows it as the default account's directory
-/// before any session has opened, and by [`account_dir`], which a launch with no pinned account
-/// resolves its directory through.
-pub fn default_account_dir(agent: Agent, shell_env: &HashMap<String, String>) -> PathBuf {
-    let layout = layout(agent);
-    if let Some(dir) = shell_env
-        .get(layout.config_dir_var)
-        .filter(|dir| !dir.is_empty())
-    {
-        return PathBuf::from(dir);
-    }
-    let home = shell_env
-        .get("HOME")
-        .filter(|home| !home.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(crate::paths::home_dir);
-    home.join(layout.default_dir)
-}
-
-/// The directory of an account of `agent` as a session of it would see it: `pinned`, the account's
-/// own, else the default account's ([`default_account_dir`]) resolved from `shell_env`.
-pub fn account_dir(
-    agent: Agent,
-    pinned: Option<&Path>,
-    shell_env: &HashMap<String, String>,
-) -> PathBuf {
-    pinned.map_or_else(|| default_account_dir(agent, shell_env), Path::to_path_buf)
-}
-
-/// A command running `agent`'s binary with `args` the way a session of the account would run it,
-/// for a short query of the CLI rather than a launch: the binary resolved on `shell_env`'s
-/// `PATH`, the environment the snapshot's and no more, the account's directory exported under
-/// the agent's own variable when `config_dir` names one (left as the shell has it for the
-/// default account), and the home directory as working directory, so no project-level
-/// configuration of whatever directory the daemon started in takes part. `Err` carries the
-/// binary's name when it does not resolve.
-///
-/// A caller running it outside a session or its launch claim holds
-/// [`crate::accounts::shared_config::admitted_reading`] for the whole run, as
-/// [`crate::accounts::cli_run::admitted_command`] does: otherwise a change to the account's
-/// sharing can move what the CLI opens, such as Codex's state database and history, from under it.
-pub fn account_command(
-    agent: Agent,
-    shell_env: &HashMap<String, String>,
-    config_dir: Option<&Path>,
-    args: &[&str],
-) -> Result<std::process::Command, &'static str> {
-    let binary = resolve_account_binary(agent, shell_env)?;
-    Ok(account_command_of(
-        &binary, agent, shell_env, config_dir, args,
-    ))
-}
-
-/// Where `agent`'s binary resolves on `shell_env`'s `PATH`; `Err` carries the binary's name.
-pub fn resolve_account_binary(
-    agent: Agent,
-    shell_env: &HashMap<String, String>,
-) -> Result<String, &'static str> {
-    let binary_name = adapter_for(agent).binary();
-    crate::env_shell::resolve_binary(binary_name, shell_env).map_err(|_| binary_name)
-}
-
-/// [`account_command`] over a `binary` already resolved by [`resolve_account_binary`], for a caller
-/// that makes several commands and wants them all to run the one it found.
-pub fn account_command_of(
-    binary: &str,
-    agent: Agent,
-    shell_env: &HashMap<String, String>,
-    config_dir: Option<&Path>,
-    args: &[&str],
-) -> std::process::Command {
-    let mut command = std::process::Command::new(binary);
-    command.args(args).env_clear().envs(shell_env);
-    if let Some(dir) = config_dir {
-        command.env(layout(agent).config_dir_var, dir);
-    }
-    command.current_dir(crate::paths::home_dir());
-    command
-}
-
 #[derive(Default)]
 pub struct LaunchPlan {
     pub args: Vec<String>,
@@ -368,10 +287,19 @@ pub struct NamedTitle {
     pub precedence: u8,
 }
 
+/// The braille spinner Codex and Grok Build start their titles with while a turn runs, a frame
+/// every 100 to 300 ms.
+const BRAILLE_SPINNER: std::ops::RangeInclusive<char> = '\u{2800}'..='\u{28FF}';
+
+/// Whether `glyph` is one of the braille spinner's.
+pub fn is_braille_spinner_glyph(glyph: char) -> bool {
+    BRAILLE_SPINNER.contains(&glyph)
+}
+
 /// Whether `text` is nothing but a spinner's glyphs, the braille patterns agents animate.
 pub fn is_spinner(text: &str) -> bool {
     let mut glyphs = text.chars().filter(|c| !c.is_whitespace()).peekable();
-    glyphs.peek().is_some() && glyphs.all(|c| ('\u{2800}'..='\u{28ff}').contains(&c))
+    glyphs.peek().is_some() && glyphs.all(is_braille_spinner_glyph)
 }
 
 pub trait AgentAdapter {
@@ -446,78 +374,18 @@ pub fn adapter_for(agent: Agent) -> Box<dyn AgentAdapter> {
     }
 }
 
-/// Hook timeout given to every agent, in seconds. Short on purpose: Grok defaults `Stop`,
-/// `SubagentStop` and `PostToolUse` to 600 s because it treats them as gates, which would stall the
-/// UI for ten minutes on a wedged hook, and Codex hard-clamps `SessionEnd` and `Interrupt` to 3 s
-/// and prints a visible warning for anything above it.
-pub const HOOK_TIMEOUT_SECS: u32 = 3;
-
 /// An agent's version as major, minor, patch.
 pub type AgentVersion = (u32, u32, u32);
 
-/// Where an agent that posts its hooks itself sends them: the daemon's own hook route, which
-/// takes the same body the forwarder would have posted. The daemon's key is the URL's query.
-pub fn hook_url(session_id: &str, daemon_port: u16, daemon_key: &str) -> String {
-    format!("http://127.0.0.1:{daemon_port}/hook/{session_id}?key={daemon_key}")
-}
-
-/// The shell command that forwards one hook payload to the daemon: the body of the hook script,
-/// and for an agent that runs its hook command through a shell, the whole hook, so the script's
-/// own `/bin/sh` is not started on top of it. `exec` rather than a plain call so no shell lingers,
-/// and stderr is dropped at the command level as well as inside the binary: a single stderr line
-/// is enough to render an error cell in every one of the three agents.
-pub fn hook_command(
-    self_exe: &str,
-    session_id: &str,
-    daemon_port: u16,
-    daemon_key: &str,
-) -> String {
-    format!(
-        "exec {} hook --session {} --port {} --key {} 2>/dev/null",
-        shell_quote(self_exe),
-        shell_quote(session_id),
-        daemon_port,
-        shell_quote(daemon_key)
-    )
-}
-
-/// Writes the per-session hook script and returns its path. One script per session rather than a
-/// shared one, because it carries the session's identity and the daemon's port and key; it is
-/// removed with the session's scratch directory.
-///
-/// The script execs the daemon binary in `hook` mode, which reads the payload, derives the event
-/// from it, posts it to the daemon under a hard deadline, and exits 0 whatever happens.
-pub fn write_hook_script(
-    scratch: &Path,
-    self_exe: &str,
-    session_id: &str,
-    daemon_port: u16,
-    daemon_key: &str,
-) -> Result<PathBuf> {
-    use std::io::Write;
-    use std::os::unix::fs::OpenOptionsExt;
-
-    let path = hook_script_path(scratch);
-    // Owner-only from the first byte: the script carries the key.
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o700)
-        .open(&path)?;
-    writeln!(file, "#!/bin/sh")?;
-    writeln!(
-        file,
-        "{}",
-        hook_command(self_exe, session_id, daemon_port, daemon_key)
-    )?;
-    file.flush()?;
-    Ok(path)
-}
-
-/// Where a session's hook script is, or would be, in its scratch directory.
-pub fn hook_script_path(scratch: &Path) -> PathBuf {
-    scratch.join("hook")
+/// Reads a version that is exactly `major.minor.patch` and nothing else.
+fn parse_version(text: &str) -> Option<AgentVersion> {
+    let mut parts = text.split('.');
+    let version = (
+        parts.next()?.parse().ok()?,
+        parts.next()?.parse().ok()?,
+        parts.next()?.parse().ok()?,
+    );
+    parts.next().is_none().then_some(version)
 }
 
 pub(crate) fn shell_quote(value: &str) -> String {
@@ -686,22 +554,6 @@ pub mod tests {
         }
     }
 
-    #[test]
-    fn the_hook_script_is_executable_by_its_owner_only() {
-        use std::os::unix::fs::PermissionsExt;
-
-        let fixture = spec_fixture();
-        let scratch = fixture.scratch.join("hook-script");
-        std::fs::create_dir_all(&scratch).expect("scratch directory");
-        let path = super::write_hook_script(&scratch, "/bin/octoboardd", "s", 1, "feedface")
-            .expect("hook script");
-        let mode = std::fs::metadata(path)
-            .expect("metadata")
-            .permissions()
-            .mode();
-        assert_eq!(mode & 0o777, 0o700);
-    }
-
     /// The child starts its catalogue from its own arguments, so a session with an owner has to
     /// say so there and one without must not; after launch it follows the daemon's answers.
     #[test]
@@ -715,55 +567,5 @@ pub mod tests {
         fixture.owner = None;
         let (_, independent) = super::mcp_server_command(&fixture.spec());
         assert!(!independent.contains(&"--worker".to_string()));
-    }
-
-    /// Each agent's configuration directory: the variable it reads it from, set in the shell
-    /// snapshot, else its own directory under the snapshot's home; an empty variable counts as
-    /// unset.
-    #[test]
-    fn each_agents_default_account_is_its_variable_or_its_directory_under_home() {
-        use crate::protocol::Agent;
-        for (agent, var, dir) in [
-            (Agent::Claude, "CLAUDE_CONFIG_DIR", ".claude"),
-            (Agent::Codex, "CODEX_HOME", ".codex"),
-            (Agent::Grok, "GROK_HOME", ".grok"),
-        ] {
-            assert_eq!(crate::agents::layout::layout(agent).config_dir_var, var);
-            let home = HashMap::from([("HOME".to_string(), "/home/user".to_string())]);
-            assert_eq!(
-                super::default_account_dir(agent, &home),
-                PathBuf::from("/home/user").join(dir)
-            );
-            let mut exported = home.clone();
-            exported.insert(var.to_string(), String::new());
-            assert_eq!(
-                super::default_account_dir(agent, &exported),
-                PathBuf::from("/home/user").join(dir)
-            );
-            exported.insert(var.to_string(), "/elsewhere".to_string());
-            assert_eq!(
-                super::default_account_dir(agent, &exported),
-                PathBuf::from("/elsewhere")
-            );
-        }
-    }
-
-    /// An account's own directory is what its sessions run in, whatever the shell exports; the
-    /// default account's follows the shell.
-    #[test]
-    fn a_pinned_account_dir_wins_over_the_default_one() {
-        use crate::protocol::Agent;
-        let shell = HashMap::from([
-            ("HOME".to_string(), "/home/user".to_string()),
-            ("CLAUDE_CONFIG_DIR".to_string(), "/exported".to_string()),
-        ]);
-        assert_eq!(
-            super::account_dir(Agent::Claude, Some(std::path::Path::new("/pinned")), &shell),
-            PathBuf::from("/pinned")
-        );
-        assert_eq!(
-            super::account_dir(Agent::Claude, None, &shell),
-            PathBuf::from("/exported")
-        );
     }
 }

@@ -786,19 +786,19 @@ account resolves to (`CLAUDE_CONFIG_DIR` of the launch's shell snapshot, else `~
 before working.
 
 It also passes the MCP servers Claude Code would load for the session's working directory (user, local and approved
-project scope, stdio and streamable HTTP; `src/adapter/claude_mcp.rs`) as `-c mcp_servers.<name>.…` overrides, and never
-over a server of the same name in Codex's own `config.toml`, in the project's `.codex/config.toml` or the reserved
-`octoboard`. A stdio server's expanded `command`, `args` and `cwd` are on Codex's own argv
+project scope, stdio and streamable HTTP; `src/adapter/codex/claude_mcp.rs`) as `-c mcp_servers.<name>.…` overrides,
+and never over a server of the same name in Codex's own `config.toml`, in the project's `.codex/config.toml` or the
+reserved `octoboard`. A stdio server's expanded `command`, `args` and `cwd` are on Codex's own argv
 (`-c mcp_servers.<name>.command`, `.args`, `.cwd`) for the session: `command` and `args` reach the server's own argv
 anyway, as under Claude Code, and `cwd` is a path, rarely a secret. Header values and `env` values stay off argv: they
 are carried in the Codex process's environment (a header under `OCTOBOARD_CLAUDE_MCP_<n>_<m>_TOKEN`, an `env` entry
 under its own name, which the server receives through `env_vars`). A server is skipped when it uses a transport other
 than stdio and streamable HTTP (SSE, for one), has a `headersHelper`, or has a field that is not a string where one is
-expected or is otherwise malformed; when a `${VAR}` in it has no default and `VAR` is unset; when its `env` or a header
-value holds a NUL byte or its `env` has an invalid name; when its `env` would give a name a value other than the one the
-shell or another server gives it; when its `env` names `TERM`, `GIT_CONFIG_*` or `OCTOBOARD_*`, which the launch sets
-after the shell; when its `env` names a variable that steers Codex itself (`CODEX_*`, `OPENAI_*`, `RUST_LOG`,
-`RUST_BACKTRACE`, `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` and `NO_PROXY` in either case, `SSL_CERT_FILE`,
+expected or is otherwise malformed; when a `${VAR}` in it has no default and `VAR` is unset; when its `env` or a
+header value holds a NUL byte or its `env` has an invalid name; when its `env` would give a name a value other than
+the one the shell or another server gives it; when its `env` names `TERM`, `GIT_CONFIG_*` or `OCTOBOARD_*`, which the
+launch sets after the shell; when its `env` names a variable that steers Codex itself (`CODEX_*`, `OPENAI_*`,
+`RUST_LOG`, `RUST_BACKTRACE`, `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` and `NO_PROXY` in either case, `SSL_CERT_FILE`,
 `SSL_CERT_DIR`, `NODE_OPTIONS`, `DYLD_*`, `LD_*`) at any value other than the one it already holds; or when its `url`
 takes a value from a variable or carries credentials or a query string.
 

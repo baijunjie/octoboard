@@ -2,8 +2,7 @@
 
 use std::path::Path;
 
-use crate::accounts::cli_run::NotRun;
-use crate::processes::subprocess::{run_bounded, Bounds};
+use crate::accounts::cli_run::{self, NotRun, QueryFailure};
 use crate::protocol::{error_code, Agent, CodedError};
 
 /// How long `codex unarchive` may take; it only moves one file.
@@ -29,31 +28,32 @@ pub fn unarchive(
             &[("detail", &detail)],
         )
     };
-    let mut command =
-        crate::adapter::account_command(Agent::Codex, shell_env, config_dir, &["unarchive", id])
-            .map_err(|binary| {
-                CodedError::raised(
-                    error_code::BINARY_NOT_FOUND,
-                    NotRun::BinaryNotFound(binary).detail(),
-                    &[("binary", binary)],
-                )
-            })?;
-    let never = std::sync::atomic::AtomicBool::new(false);
-    let output = run_bounded(
-        &mut command,
-        &Bounds::agent_query(UNARCHIVE_TIMEOUT, OUTPUT_LIMIT),
-        &never,
+    let output = cli_run::query(
+        Agent::Codex,
+        shell_env,
+        config_dir,
+        &["unarchive", id],
+        UNARCHIVE_TIMEOUT,
+        OUTPUT_LIMIT,
+        None,
     )
-    .map_err(|failure| failed(failure.into_error().to_string()))?;
+    .map_err(|failure| match failure {
+        QueryFailure::NotRun(NotRun::BinaryNotFound(binary)) => CodedError::raised(
+            error_code::BINARY_NOT_FOUND,
+            NotRun::BinaryNotFound(binary).detail(),
+            &[("binary", binary)],
+        ),
+        QueryFailure::NotRun(refused) => failed(refused.detail()),
+        QueryFailure::Bounded(failure) => failed(failure.into_error().to_string()),
+    })?;
     if output.status.success() {
         return Ok(());
     }
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let message = stderr.trim().lines().next_back().unwrap_or_default();
+    let message = cli_run::last_stderr_line(&output);
     Err(failed(if message.is_empty() {
         output.status.to_string()
     } else {
-        message.to_owned()
+        message
     }))
 }
 

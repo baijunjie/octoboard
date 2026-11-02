@@ -34,6 +34,10 @@ use crate::protocol::{error_code, CodedError};
 /// a launch that hangs forever.
 const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// How much of each of the shell's output pipes is kept. The environment dump is a few KiB; this
+/// only stops an rc file that floods a pipe from growing memory until the timeout.
+const PIPE_LIMIT: usize = 16 * 1024 * 1024;
+
 /// How long what the snapshot shell left in its process group is given to exit after a hangup
 /// before it is killed (see `kill_group_and_reap`). Long enough for a job to drop a lock or finish
 /// a write, short enough that a launch waiting on the snapshot does not notice it.
@@ -162,8 +166,8 @@ fn snapshot_with(shell: &str, timeout: Duration) -> Result<HashMap<String, Strin
     let mut stderr_pipe = child.stderr.take().expect("stderr was piped");
     let (stdout_tx, stdout_rx) = mpsc::channel();
     let (stderr_tx, stderr_rx) = mpsc::channel();
-    thread::spawn(move || pipe_reader(&mut stdout_pipe, &stdout_tx));
-    thread::spawn(move || pipe_reader(&mut stderr_pipe, &stderr_tx));
+    thread::spawn(move || pipe_reader(&mut stdout_pipe, &stdout_tx, PIPE_LIMIT));
+    thread::spawn(move || pipe_reader(&mut stderr_pipe, &stderr_tx, PIPE_LIMIT));
 
     let (status, stdout, stderr) = wait_with_timeout(
         &mut child, stdout_rx, stderr_rx, shell, &command, &marker, timeout,
@@ -216,13 +220,20 @@ fn settle_home(env: &mut HashMap<String, String>) {
 /// single `read_to_end` held until the whole message is assembled) would. An `Err` is forwarded
 /// like any other message rather than swallowed, so a mid-read io error reaches the consumer
 /// instead of silently truncating what came before it; either outcome ends the loop.
-fn pipe_reader(pipe: &mut impl Read, tx: &mpsc::Sender<io::Result<Vec<u8>>>) {
+///
+/// At most `limit` bytes are forwarded, so a shell whose rc files flood a pipe cannot grow memory
+/// for the whole timeout; what follows is still read, and dropped, so the writer is never blocked
+/// on a full pipe.
+fn pipe_reader(pipe: &mut impl Read, tx: &mpsc::Sender<io::Result<Vec<u8>>>, limit: usize) {
     let mut chunk = vec![0u8; PIPE_CHUNK_SIZE];
+    let mut forwarded = 0usize;
     loop {
         match pipe.read(&mut chunk) {
             Ok(0) => break,
             Ok(n) => {
-                if tx.send(Ok(chunk[..n].to_vec())).is_err() {
+                let kept = n.min(limit - forwarded);
+                forwarded += kept;
+                if kept > 0 && tx.send(Ok(chunk[..kept].to_vec())).is_err() {
                     break;
                 }
             }
@@ -251,19 +262,18 @@ enum DrainOutcome {
 /// Appends every chunk currently waiting on `rx` to `buf`, without blocking for more to arrive,
 /// and reports whether the channel is still open. Surfaces a reader thread's io error instead of
 /// discarding the bytes already appended ahead of it — unlike `read_to_end`, which on error still
-/// leaves its partial buffer looking complete to the caller. `subject` names what `rx` is reading
-/// from (e.g. "the snapshot shell"), since this drains the pipes of any bounded subprocess, not
-/// only the snapshot shell — it is the caller's job to say which one so the error reads true.
+/// leaves its partial buffer looking complete to the caller. `which` names the snapshot shell's
+/// stream `rx` reads, for the error.
 fn drain_available(
     rx: &mpsc::Receiver<io::Result<Vec<u8>>>,
     buf: &mut Vec<u8>,
     which: &str,
-    subject: &str,
 ) -> Result<DrainOutcome> {
     loop {
         match rx.try_recv() {
             Ok(chunk) => {
-                let bytes = chunk.with_context(|| format!("reading {which} from {subject}"))?;
+                let bytes =
+                    chunk.with_context(|| format!("reading {which} from the snapshot shell"))?;
                 buf.extend_from_slice(&bytes);
             }
             Err(mpsc::TryRecvError::Empty) => return Ok(DrainOutcome::Open),
@@ -275,13 +285,9 @@ fn drain_available(
 /// Drains whatever has arrived on `rx` into `buf`, discarding a read error instead of surfacing
 /// it. Stderr is read only for its contents (the non-zero-exit error message of a bounded
 /// subprocess), never awaited for completeness, so an io error on it must not cost a good launch
-/// its result. `subject` is forwarded to `drain_available` unchanged.
-fn drain_stderr_best_effort(
-    rx: &mpsc::Receiver<io::Result<Vec<u8>>>,
-    buf: &mut Vec<u8>,
-    subject: &str,
-) {
-    let _ = drain_available(rx, buf, "stderr", subject);
+/// its result.
+fn drain_stderr_best_effort(rx: &mpsc::Receiver<io::Result<Vec<u8>>>, buf: &mut Vec<u8>) {
+    let _ = drain_available(rx, buf, "stderr");
 }
 
 /// Byte offset where `marker` begins in `haystack`, or `None` if it has not arrived (in full) yet.
@@ -363,8 +369,8 @@ fn wait_unreaped(
     let mut stderr = Vec::new();
 
     let succeeded = loop {
-        drain_available(&stdout_rx, &mut stdout, "stdout", "the snapshot shell")?;
-        drain_stderr_best_effort(&stderr_rx, &mut stderr, "the snapshot shell");
+        drain_available(&stdout_rx, &mut stdout, "stdout")?;
+        drain_stderr_best_effort(&stderr_rx, &mut stderr);
         match leader::unreaped_state(pid) {
             Some(Unreaped::Exited { success }) => break success,
             Some(Unreaped::Running) => {}
@@ -384,11 +390,11 @@ fn wait_unreaped(
     // settle rather than one non-blocking grab, so a diagnostic longer than a single chunk does
     // not reach the user cut off at a chunk boundary.
     if !succeeded {
-        let _ = drain_available(&stdout_rx, &mut stdout, "stdout", "the snapshot shell");
+        let _ = drain_available(&stdout_rx, &mut stdout, "stdout");
         let settle = Instant::now() + REAP_GRACE;
         while Instant::now() < settle {
             if matches!(
-                drain_available(&stderr_rx, &mut stderr, "stderr", "the snapshot shell"),
+                drain_available(&stderr_rx, &mut stderr, "stderr"),
                 Ok(DrainOutcome::Disconnected) | Err(_)
             ) {
                 break;
@@ -400,9 +406,8 @@ fn wait_unreaped(
 
     let marker = marker.as_bytes();
     loop {
-        let stdout_state =
-            drain_available(&stdout_rx, &mut stdout, "stdout", "the snapshot shell")?;
-        drain_stderr_best_effort(&stderr_rx, &mut stderr, "the snapshot shell");
+        let stdout_state = drain_available(&stdout_rx, &mut stdout, "stdout")?;
+        drain_stderr_best_effort(&stderr_rx, &mut stderr);
         if let Some(end) = find_marker(&stdout, marker) {
             stdout.truncate(end);
             break;
@@ -843,18 +848,30 @@ mod tests {
     #[test]
     fn a_mid_read_error_is_not_swallowed_into_a_truncated_buffer() {
         let (tx, rx) = mpsc::channel();
-        pipe_reader(&mut ErroringReader { failed: false }, &tx);
+        pipe_reader(&mut ErroringReader { failed: false }, &tx, PIPE_LIMIT);
 
         let mut buf = Vec::new();
         // The real chunk is still appended to `buf` — `drain_available` does not discard data
         // read before the error — but the error itself has to surface rather than be swallowed:
         // silently dropping it would leave `buf` holding only the partial data with nothing to
         // say it stopped short of a complete snapshot.
-        let err = drain_available(&rx, &mut buf, "stdout", "the snapshot shell")
-            .expect_err("a mid-read error must surface");
+        let err =
+            drain_available(&rx, &mut buf, "stdout").expect_err("a mid-read error must surface");
         // `{:#}` rather than `to_string()`: anyhow's default `Display` prints only the
         // outermost context message, and the `boom` io error is its source.
         assert!(format!("{err:#}").contains("boom"));
         assert_eq!(buf, b"FOO=1");
+    }
+
+    #[test]
+    fn a_flood_past_the_limit_is_read_and_dropped() {
+        let (tx, rx) = mpsc::channel();
+        let mut flood = io::repeat(b'x').take(100);
+        pipe_reader(&mut flood, &tx, 10);
+        drop(tx);
+
+        let mut buf = Vec::new();
+        drain_available(&rx, &mut buf, "stdout").unwrap();
+        assert_eq!(buf, b"xxxxxxxxxx");
     }
 }

@@ -159,13 +159,7 @@ impl AgentAdapter for GrokAdapter {
         ) {
             return None;
         }
-        let mut parts = version.split('.');
-        let version = (
-            parts.next()?.parse().ok()?,
-            parts.next()?.parse().ok()?,
-            parts.next()?.parse().ok()?,
-        );
-        parts.next().is_none().then_some(version)
+        super::parse_version(version)
     }
 
     /// Grok's title is its items joined by ` - `: while it works a spinner and a status ending in

@@ -232,6 +232,37 @@ async fn turning_sharing_off_restores_backups_and_leaves_history_in_the_default(
     assert_eq!(read(&default, "settings.json"), "default settings");
 }
 
+/// Turning sharing off cannot tell whether a configuration item has a backup when looking it up
+/// fails with anything but "not there" (here a name too long to look up): the link is kept and the
+/// item reported, rather than the item left absent while its backup may wait.
+#[tokio::test]
+async fn a_backup_that_cannot_be_looked_up_keeps_the_link() {
+    let fixture = Fixture::new();
+    let (default, account) = claude_setup(&fixture);
+    fixture.share(Agent::Claude, true).await.unwrap();
+    assert!(is_link(&account.join("settings.json")));
+    let dirs = link::Dirs::for_undoing(&account, &default, &default)
+        .unwrap()
+        .unwrap();
+    let stamp = "x".repeat(300);
+
+    let failures = link::turn_off(
+        Agent::Claude,
+        &dirs,
+        &stamp,
+        &[],
+        Ok(&std::collections::HashMap::new()),
+        &mut |_, _| {},
+    );
+
+    let failure = failures
+        .iter()
+        .find(|failure| failure.item == "settings.json")
+        .expect("settings.json is reported");
+    assert_eq!(failure.left, link::Left::Linked);
+    assert!(is_link(&account.join("settings.json")));
+}
+
 #[tokio::test]
 async fn a_link_names_the_default_entrys_resolved_target() {
     let fixture = Fixture::new();
@@ -1242,6 +1273,7 @@ async fn a_record_the_account_holds_already_is_kept_when_it_is_the_later_one() {
         &dirs,
         &conversation,
         "STAMP",
+        Ok(&std::collections::HashMap::new()),
     )
     .unwrap_or_else(|failure| {
         panic!("{failure:?}");
@@ -1285,6 +1317,57 @@ async fn a_codex_row_cleanup_that_failed_is_redone_by_a_retry() {
     shared.execute_batch("DROP TRIGGER refuse;").unwrap();
     fixture.share(Agent::Codex, false).await.unwrap();
     assert_eq!(rollout_of(&default.join("state_5.sqlite"), THREAD), None);
+}
+
+#[tokio::test]
+async fn a_taken_back_codex_thread_is_pointed_where_the_launch_environment_puts_the_database() {
+    let fixture = Fixture::new();
+    let (default, account) = (fixture.default(Agent::Codex), fixture.account(Agent::Codex));
+    std::fs::create_dir_all(default.join("sessions")).unwrap();
+    fixture.share(Agent::Codex, true).await.unwrap();
+    std::fs::remove_file(account.join("sessions")).unwrap();
+    let chain = test_support::codex_chain(&account, THREAD, false);
+    let database_dir = fixture.dir.join("codex-sqlite-home");
+    std::fs::create_dir_all(&database_dir).unwrap();
+    let database = database_dir.join("state_5.sqlite");
+    codex_database(&database, &[(THREAD, "stale", 1)]);
+    let dirs = link::Dirs::for_undoing(&account, &default, &default)
+        .unwrap()
+        .unwrap();
+    let conversation = take_back::Conversation {
+        agent_session_id: THREAD.to_string(),
+        sessions: vec!["own".to_string()],
+        held_elsewhere: false,
+    };
+    let take = |launch_env: Result<&std::collections::HashMap<String, String>, &str>| {
+        take_back::take_back(
+            &mut crate::records::Locator::default(),
+            Agent::Codex,
+            &dirs,
+            &conversation,
+            "STAMP",
+            launch_env,
+        )
+    };
+
+    // An environment that cannot be had leaves the row standing and says so.
+    let failure = take(Err("no shell snapshot")).unwrap_err();
+    assert!(
+        failure.detail.contains("no shell snapshot"),
+        "{}",
+        failure.detail
+    );
+    assert_eq!(rollout_of(&database, THREAD).as_deref(), Some("stale"));
+
+    let env = std::collections::HashMap::from([(
+        "CODEX_SQLITE_HOME".to_string(),
+        database_dir.to_string_lossy().into_owned(),
+    )]);
+    take(Ok(&env)).unwrap_or_else(|failure| panic!("{failure:?}"));
+    assert_eq!(
+        rollout_of(&database, THREAD),
+        Some(chain.head.to_string_lossy().into_owned())
+    );
 }
 
 #[tokio::test]
@@ -1913,6 +1996,7 @@ async fn a_conversation_with_nowhere_of_the_accounts_to_go_is_told_as_a_conflict
         &dirs,
         &conversation,
         "STAMP",
+        Ok(&std::collections::HashMap::new()),
     )
     .unwrap_err();
     assert_eq!(failure.cause, link::Cause::Conflict);

@@ -98,17 +98,6 @@ const STATUS_LINE_SINCE: AgentVersion = (2, 0, 0);
 
 pub struct ClaudeAdapter;
 
-/// Reads a version that is exactly `major.minor.patch` and nothing else.
-fn parse_version(text: &str) -> Option<AgentVersion> {
-    let mut parts = text.split('.');
-    let version = (
-        parts.next()?.parse().ok()?,
-        parts.next()?.parse().ok()?,
-        parts.next()?.parse().ok()?,
-    );
-    parts.next().is_none().then_some(version)
-}
-
 impl ClaudeAdapter {
     /// The `--settings` JSON. A Claude Code that takes HTTP hooks posts each event to the daemon
     /// itself, so a hook costs no process at all, except for [`COMMAND_ONLY_EVENTS`]; with an older
@@ -253,7 +242,7 @@ impl AgentAdapter for ClaudeAdapter {
         let resolved = std::fs::canonicalize(binary).ok()?;
         let parent = resolved.parent()?;
         if parent.file_name().is_some_and(|name| name == "versions") {
-            return parse_version(resolved.file_name()?.to_str()?);
+            return super::parse_version(resolved.file_name()?.to_str()?);
         }
         for dir in parent.ancestors() {
             let name = dir.file_name()?;
@@ -264,7 +253,7 @@ impl AgentAdapter for ClaudeAdapter {
                 let manifest =
                     read_regular_text(&dir.join("package.json"), SMALL_FILE_LIMIT).ok()?;
                 let manifest: serde_json::Value = serde_json::from_str(&manifest).ok()?;
-                return parse_version(manifest.get("version")?.as_str()?);
+                return super::parse_version(manifest.get("version")?.as_str()?);
             }
         }
         None

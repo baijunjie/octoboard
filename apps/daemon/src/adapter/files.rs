@@ -11,7 +11,7 @@ pub(super) use crate::hostfs::read_regular_text;
 use crate::wire_path::RelPath;
 
 /// The most bytes read from a small configuration file (a JSON settings file, a TOML config).
-pub(super) const SMALL_FILE_LIMIT: usize = 1024 * 1024;
+pub(crate) const SMALL_FILE_LIMIT: usize = 1024 * 1024;
 
 /// The most bytes read from a configuration file that grows with use, such as Claude Code's global
 /// config, which holds an entry for every project.

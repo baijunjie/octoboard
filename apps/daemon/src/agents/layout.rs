@@ -11,10 +11,9 @@
 //! descriptor (`CODEX.search_depth`) for a value that has none. A name only one agent's own logic
 //! uses (Codex's rollout naming, Grok Build's session marker) is a constant beside that agent's
 //! descriptor, named for the agent. How a record is recognised and read stays with the code that
-//! does it (`crate::records`, `crate::accounts::relocate`): this module holds names and depths, not
-//! rules. The measurements behind them are in `docs/agent-cli-reference.md`, mostly in "Moving a
-//! conversation to another config directory" and "Sharing a configuration directory between
-//! accounts".
+//! does it (`crate::records`): this module holds names and depths, not rules. The measurements
+//! behind them are in `docs/agent-cli-reference.md`, mostly in "Moving a conversation to another
+//! config directory" and "Sharing a configuration directory between accounts".
 
 use crate::protocol::Agent;
 

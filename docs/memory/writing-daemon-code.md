@@ -123,8 +123,9 @@ Applies to daemon code that runs an agent CLI and has to end whatever it left ru
 stopped, when the daemon goes down. Agent CLIs move some helpers (a REPL or code-execution host, a background shell
 task) into process groups of their own, so the process-group stop other subprocesses get leaves them running; they
 keep the CLI's session. Do not write a sweep of your own: run the CLI through `apps/daemon/src/processes/subprocess.rs`
-with `Reach::Session` (`Bounds::agent_query` for a short query through `run_bounded` — an account's query built by
-`accounts::cli_run::admitted_command` — or `Bounds { reach: Reach::Session, .. }` for `run_exchange`), and where it
+with `Reach::Session` (`Bounds::agent_query` for a short query through `run_bounded` — an account's query through
+`accounts::cli_run`, never by hand, see `docs/structure/daemon.md`, "Shared entry points" — or
+`Bounds { reach: Reach::Session, .. }` for `run_exchange`), and where it
 cannot go through there (it runs on a PTY, or a flow reads it while it runs), build on
 `apps/daemon/src/processes/leader.rs`. Anything that is not an agent CLI, such as `git`, keeps `Reach::ProcessGroup`
 (`run_with_timeout`): a session sweep lists every process on the system.

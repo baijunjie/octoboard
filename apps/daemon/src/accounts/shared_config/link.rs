@@ -10,19 +10,19 @@
 //! leads straight at that copy, so a save does not depend on the agent following more than one
 //! link.
 
+use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use super::codex_state::{self, Repoint};
 use super::moves::{
     append_lines, backup_name, backup_path, is_link, link, link_target, lstat, merge_move,
     move_database, move_path, resolve, resolve_existing, resolve_or_spelled,
 };
 use super::registries;
 use super::take_back::{take_back, Conversation};
-use crate::accounts::relocate::is_state_database;
+use crate::accounts::codex_threads::{self, is_state_database, Repoint};
 use crate::accounts::shared_config::items::{shared_items, ItemClass, ItemKind, SharedItem};
 use crate::agents::layout::{
     CLAUDE_PROMPT_HISTORY, CODEX_ARCHIVED_DIR, CODEX_PROMPT_HISTORY, CODEX_RECORDS_DIR,
@@ -249,6 +249,17 @@ impl Failure {
     fn io(item: &SharedItem, left: Left, err: io::Error) -> Self {
         Self::new(item, left, Cause::of(&err), err)
     }
+
+    /// The rows of a Codex state database not brought in line (`what`, such as "rows not
+    /// repointed"), the item itself already linked.
+    fn database(item: &SharedItem, what: &str, err: &rusqlite::Error) -> Self {
+        Self::new(
+            item,
+            Left::Linked,
+            Cause::of_database(err),
+            format!("{what}: {err}"),
+        )
+    }
 }
 
 /// The backup turning sharing on made of `item` under `stamp`, the one turning it off restores.
@@ -344,20 +355,15 @@ fn finish_linked(
         return Ok(());
     }
     let aside = turn_on_backup(dirs, item, stamp);
-    let carried = if std::fs::symlink_metadata(&aside).is_ok() {
-        codex_state::bring_rows(shared, &aside, &codex_repoints(dirs)).map(|_| ())
+    let has_aside = lstat(&aside)
+        .map_err(|err| Failure::io(item, Left::Linked, err))?
+        .is_some();
+    let carried = if has_aside {
+        codex_threads::bring_rows(shared, &aside, &codex_repoints(dirs)).map(|_| ())
     } else {
-        codex_state::repoint_rows(shared, &codex_repoints(dirs))
+        codex_threads::repoint_rows(shared, &codex_repoints(dirs))
     };
-    carried.map_err(|err| {
-        let cause = Cause::of_database(&err);
-        Failure::new(
-            item,
-            Left::Linked,
-            cause,
-            format!("rows not carried over: {err}"),
-        )
-    })
+    carried.map_err(|err| Failure::database(item, "rows not carried over", &err))
 }
 
 /// Brings `item` under the default directory: the item as the account holds it is backed up
@@ -451,17 +457,8 @@ fn bring_in(
                 if database {
                     // The rows name the rollouts by the account's own spelling, and the
                     // rollouts are in the default directory now.
-                    return codex_state::repoint_rows(&shared, &codex_repoints(dirs)).map_err(
-                        |err| {
-                            let cause = Cause::of_database(&err);
-                            Failure::new(
-                                item,
-                                Left::Linked,
-                                cause,
-                                format!("rows not repointed: {err}"),
-                            )
-                        },
-                    );
+                    return codex_threads::repoint_rows(&shared, &codex_repoints(dirs))
+                        .map_err(|err| Failure::database(item, "rows not repointed", &err));
                 }
                 return Ok(());
             }
@@ -477,17 +474,9 @@ fn bring_in(
                 let aside = backup_path(&entry, stamp);
                 move_database(&entry, &aside).map_err(|err| failed(left, err))?;
                 link(&entry, shared).map_err(|err| failed(Left::BackedUp, err))?;
-                return codex_state::bring_rows(shared, &aside, &codex_repoints(dirs))
+                return codex_threads::bring_rows(shared, &aside, &codex_repoints(dirs))
                     .map(|_| ())
-                    .map_err(|err| {
-                        let cause = Cause::of_database(&err);
-                        Failure::new(
-                            item,
-                            Left::Linked,
-                            cause,
-                            format!("rows not carried over: {err}"),
-                        )
-                    });
+                    .map_err(|err| Failure::database(item, "rows not carried over", &err));
             }
             _ => {
                 std::fs::rename(&entry, backup_path(&entry, stamp))
@@ -553,11 +542,14 @@ pub(super) fn turn_on(
 /// is left unreachable.
 ///
 /// The repointing is told as part of the first entry, under the item whose records it rewrites.
+/// `launch_env` is the environment the account's sessions launch with, which says where a Codex
+/// account keeps its own thread database, or why it could not be had.
 pub(super) fn turn_off(
     agent: Agent,
     dirs: &Dirs,
     stamp: &str,
     conversations: &[Conversation],
+    launch_env: Result<&HashMap<String, String>, &str>,
     report: Report,
 ) -> Vec<Failure> {
     let items = shared_items(agent);
@@ -583,17 +575,17 @@ pub(super) fn turn_off(
         report(0, item.name);
         let repointed = match resolve(&dirs.default.join(item.name)) {
             Ok(None) => Ok(()),
-            Ok(Some(database)) => codex_state::repoint_rows(&database, &codex_repoints(dirs))
-                .map_err(|err| (Cause::of_database(&err), err.to_string())),
-            Err(err) => Err((Cause::of(&err), err.to_string())),
-        };
-        if let Err((cause, err)) = repointed {
-            failures.push(Failure::new(
+            Ok(Some(database)) => codex_threads::repoint_rows(&database, &codex_repoints(dirs))
+                .map_err(|err| Failure::database(item, "rows not repointed", &err)),
+            Err(err) => Err(Failure::new(
                 item,
                 Left::Linked,
-                cause,
+                Cause::of(&err),
                 format!("rows not repointed: {err}"),
-            ));
+            )),
+        };
+        if let Err(failure) = repointed {
+            failures.push(failure);
             kept.extend([item.name, CODEX_RECORDS_DIR, CODEX_ARCHIVED_DIR]);
         }
     }
@@ -610,7 +602,8 @@ pub(super) fn turn_off(
     let mut locator = crate::records::Locator::default();
     for (done, conversation) in conversations.iter().enumerate() {
         report(items.len() + done, &conversation.agent_session_id);
-        if let Err(failure) = take_back(&mut locator, agent, dirs, conversation, stamp) {
+        if let Err(failure) = take_back(&mut locator, agent, dirs, conversation, stamp, launch_env)
+        {
             failures.push(failure);
         }
     }
@@ -620,20 +613,30 @@ pub(super) fn turn_off(
 fn take_out(item: &SharedItem, dirs: &Dirs, stamp: &str) -> Result<(), Failure> {
     let entry = dirs.account.join(item.name);
     let backup = turn_on_backup(dirs, item, stamp);
-    let has_backup = std::fs::symlink_metadata(&backup).is_ok();
     let present = lstat(&entry).map_err(|err| Failure::io(item, Left::Linked, err))?;
+    // A backup that cannot be looked up may be there, so it fails the item: the link is kept, or
+    // the absence told, rather than the item left absent while its backup waits.
+    let has_backup =
+        if item.class == ItemClass::Configuration && (present.is_none() || is_link(&present)) {
+            let left = if present.is_some() {
+                Left::Linked
+            } else {
+                Left::Absent
+            };
+            lstat(&backup)
+                .map_err(|err| Failure::io(item, left, err))?
+                .is_some()
+        } else {
+            false
+        };
     match &present {
-        Some(_)
-            if is_link(&present)
-                && ((has_backup && item.class == ItemClass::Configuration)
-                    || is_sharing_link(&entry, item, dirs)) =>
-        {
+        Some(_) if is_link(&present) && (has_backup || is_sharing_link(&entry, item, dirs)) => {
             std::fs::remove_file(&entry).map_err(|err| Failure::io(item, Left::Linked, err))?;
         }
         // The account's own entry, or a link of the user's.
         Some(_) => return Ok(()),
         // Left absent by a run that failed after unlinking it.
-        None if has_backup && item.class == ItemClass::Configuration => {}
+        None if has_backup => {}
         None => return Ok(()),
     }
     let absent = |err: io::Error| Failure::io(item, Left::Absent, err);

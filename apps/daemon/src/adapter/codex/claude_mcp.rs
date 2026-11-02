@@ -51,9 +51,9 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use super::claude::settings::{global_config_file, project_entry};
-use super::codex::toml_string;
-use super::files::{
+use super::toml_string;
+use crate::adapter::claude::settings::{global_config_file, project_entry};
+use crate::adapter::files::{
     canonical_project, is_agent_config_dir, read_bounded_text, read_regular_text, LARGE_FILE_LIMIT,
     SMALL_FILE_LIMIT,
 };
@@ -435,7 +435,7 @@ fn expand(text: &str, env: &HashMap<String, String>) -> Result<(String, bool), S
 
 /// The servers Claude Code would load, by name, the later scope replacing the earlier.
 fn load(shell_env: &HashMap<String, String>, cwd: &Path) -> BTreeMap<String, Value> {
-    let config_dir = super::default_account_dir(Agent::Claude, shell_env);
+    let config_dir = crate::adapter::default_account_dir(Agent::Claude, shell_env);
     let project = canonical_project(cwd);
     let global = read_json(&global_config_file(shell_env, None), None, LARGE_FILE_LIMIT);
     let entry = global

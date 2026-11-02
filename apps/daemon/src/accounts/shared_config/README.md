@@ -23,9 +23,10 @@ What lives where:
 
 Internals, by file: `link.rs` and `moves.rs` turn sharing on and off item by item and repair links an agent replaced
 (with the file-move primitives: across volumes, backup naming, merging directories); `take_back.rs` moves the account's
-own conversations back out of the default directory when sharing is turned off; `codex_state.rs` and `registries.rs`
-keep Codex's thread state database and the plugin registries' recorded paths consistent with shared or unshared items;
-`cli_reads.rs` is the admission of agent CLI runs outside a session against a running change.
+own conversations back out of the default directory when sharing is turned off; `registries.rs` keeps the plugin
+registries' recorded paths consistent with shared or unshared items, and Codex's thread state database is kept
+consistent through `apps/daemon/src/accounts/codex_threads.rs`, which the account switch's copy uses too; `cli_reads.rs`
+is the admission of agent CLI runs outside a session against a running change.
 
 ## External interfaces
 
@@ -33,9 +34,9 @@ Exported from `mod.rs` (defined there unless a file is named):
 
 - `lock_account`, `Locked`, `Refused`, `Changing`, `carry_out` (`change.rs`) — lock an account for a change of its
   sharing, keep its progress until the change ends, and carry the change out on the account's directory.
-- `in_use`, `runs_under`, `default_dir`, `is_same_directory`, `lock_agent`, `try_lock_agent`, and the refusals
-  `account_in_use`, `still_sharing`, `not_shareable`, `sharing_in_progress` and `sharing_failed` — what the
-  coordinator's operation and the state layer need.
+- `in_use`, `runs_under`, `default_dir`, `lock_agent`, `try_lock_agent`, and the refusals `account_in_use`,
+  `still_sharing`, `not_shareable`, `sharing_in_progress` and `sharing_failed` — what the coordinator's operation and
+  the state layer need.
 - `entries` (`link.rs`) — how many entries a change goes through.
 - `own_conversations` (`take_back.rs`) — the conversations turning sharing off takes back.
 - `FailureCause` and `FailedItem` (`link.rs`) — why an item failed, and which item.

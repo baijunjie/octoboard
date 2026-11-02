@@ -32,30 +32,14 @@ pub struct SharedConfigWriteback {
 }
 
 /// The keys [`SharedConfigWriteback`] compares. `None` means the key is absent. An empty plugin
-/// list is present and is copied: clearing the list is how a plugin is switched off.
+/// list is present and is copied: clearing the list is how a plugin is switched off. What
+/// [`Self::changes`] returns is a slice too, where `None` means the key is unchanged.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ConfigSlice {
     theme: Option<String>,
     enabled: Option<Vec<String>>,
     disabled: Option<Vec<String>>,
     model: Option<String>,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-struct ConfigChanges {
-    theme: Option<String>,
-    enabled: Option<Vec<String>>,
-    disabled: Option<Vec<String>>,
-    model: Option<String>,
-}
-
-impl ConfigChanges {
-    fn is_empty(&self) -> bool {
-        self.theme.is_none()
-            && self.enabled.is_none()
-            && self.disabled.is_none()
-            && self.model.is_none()
-    }
 }
 
 /// Serializes this daemon's exits so they merge into the latest shared file rather than dropping
@@ -168,6 +152,15 @@ impl SharedConfigWriteback {
 }
 
 impl ConfigSlice {
+    /// Whether no key is present, which for the slice [`Self::changes`] returns means nothing
+    /// changed.
+    fn is_empty(&self) -> bool {
+        self.theme.is_none()
+            && self.enabled.is_none()
+            && self.disabled.is_none()
+            && self.model.is_none()
+    }
+
     fn from_table(table: &toml::Table) -> Self {
         Self {
             theme: string_key(table, "ui", "theme"),
@@ -180,8 +173,8 @@ impl ConfigSlice {
     /// What of `self` (the session file at exit) differs from `baseline` (the copy taken before
     /// Grok ran) and is safe to publish. A `[models] default` equal to `launch_model` is the launch
     /// flag's own write.
-    fn changes(&self, baseline: &Self, launch_model: Option<&str>) -> ConfigChanges {
-        ConfigChanges {
+    fn changes(&self, baseline: &Self, launch_model: Option<&str>) -> ConfigSlice {
+        ConfigSlice {
             theme: self.theme.clone().filter(|_| self.theme != baseline.theme),
             enabled: self
                 .enabled
@@ -218,7 +211,7 @@ fn string_array(table: &toml::Table, section: &str, key: &str) -> Option<Vec<Str
     Some(items)
 }
 
-fn apply_changes(current: &str, changes: &ConfigChanges) -> Result<String> {
+fn apply_changes(current: &str, changes: &ConfigSlice) -> Result<String> {
     let mut doc = current
         .parse::<toml_edit::DocumentMut>()
         .context("the shared configuration is not valid TOML")?;
@@ -279,7 +272,7 @@ fn set_value(
     anyhow::bail!("`[{section}]` is not a table, so `{key}` was not written")
 }
 
-fn apply_to_table(table: &mut toml::Table, changes: &ConfigChanges) -> Result<()> {
+fn apply_to_table(table: &mut toml::Table, changes: &ConfigSlice) -> Result<()> {
     if let Some(theme) = &changes.theme {
         set_table_string(table, "ui", "theme", theme.clone())?;
     }

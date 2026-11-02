@@ -8,6 +8,7 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
+use crate::adapter::files::LARGE_FILE_LIMIT;
 use crate::hostfs::replace::{replace_beside, Permissions};
 use crate::protocol::Agent;
 
@@ -27,9 +28,10 @@ pub(super) fn registries(agent: Agent) -> &'static [(&'static str, &'static str)
 /// Rewrites, in `registry`, every string that is one of `from` or lies below it to the same path
 /// under `to`. Written through a file of its own and renamed over the registry, so a reader never
 /// sees half of it; a registry that is not there, or names nothing below `from`, is left as it
-/// is.
+/// is. One that is no regular file, or too large to read whole, is an error, as is one that is not
+/// JSON: it cannot be rewritten without losing what it holds.
 pub(super) fn repoint(registry: &Path, from: &[PathBuf], to: &Path) -> io::Result<()> {
-    let text = match std::fs::read_to_string(registry) {
+    let text = match crate::hostfs::read_regular_text(registry, LARGE_FILE_LIMIT) {
         Ok(text) => text,
         Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(()),
         Err(err) => return Err(err),

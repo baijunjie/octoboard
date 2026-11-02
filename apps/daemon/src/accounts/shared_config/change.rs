@@ -2,6 +2,7 @@
 //! runs as an operation: locking the account for it, the progress it tells until it ends, and
 //! carrying it out on the account's directory.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -11,7 +12,7 @@ use super::link::{self, Cause, DirsError, Failure};
 use super::{
     cli_reads, default_dir, describe, in_use, moves, not_shareable, sharing_in_progress, take_back,
 };
-use crate::protocol::{Account, SharingFailure};
+use crate::protocol::{Account, Agent, SharingFailure};
 use crate::state::{broadcast_settings, AccountSharingLock, AppState};
 use crate::store::SharingStart;
 
@@ -160,6 +161,12 @@ pub(crate) async fn carry_out(
         match start {
             None => Ok(Vec::new()),
             Some(start) => {
+                // Only a Codex conversation taken back has a database row of its own to point.
+                let launch_env = if agent == Agent::Codex && !conversations.is_empty() {
+                    launch_env().await.map_err(|err| format!("{err:#}"))
+                } else {
+                    Ok(HashMap::new())
+                };
                 tokio::task::spawn_blocking(move || {
                     match link::Dirs::for_undoing(&dir, Path::new(&start.default_dir), &current) {
                         // The directory never linked anything to itself: nothing to undo.
@@ -170,6 +177,7 @@ pub(crate) async fn carry_out(
                             &dirs,
                             &start.stamp,
                             &conversations,
+                            launch_env.as_ref().map_err(String::as_str),
                             &mut report,
                         )),
                     }
@@ -198,4 +206,18 @@ pub(crate) async fn carry_out(
     }
     broadcast_settings(state)?;
     Ok(Ok(()))
+}
+
+/// The environment the account's sessions launch with, which says where a Codex account keeps its
+/// own thread database.
+#[cfg(not(test))]
+async fn launch_env() -> Result<HashMap<String, String>> {
+    tokio::task::spawn_blocking(crate::env_shell::launch_snapshot).await?
+}
+
+/// Under test, an empty environment: the user's own login shell may name their real Codex
+/// database (`CODEX_SQLITE_HOME`), which no test may write to.
+#[cfg(test)]
+async fn launch_env() -> Result<HashMap<String, String>> {
+    Ok(HashMap::new())
 }

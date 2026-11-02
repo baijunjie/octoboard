@@ -6,7 +6,7 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::accounts::relocate::{modified, remove_any};
+use crate::accounts::files::{modified, remove_any};
 
 /// The entry at `path` itself, a link not followed; `None` when there is none.
 pub(super) fn lstat(path: &Path) -> io::Result<Option<std::fs::Metadata>> {
@@ -244,38 +244,94 @@ fn merge(from: &Path, into: &Path, aside: &Path, keep_source: bool) -> io::Resul
 }
 
 /// Adds the lines of `from` to the end of `into`, starting on a line of their own, unless `into`
-/// already ends with them: a run that stopped after appending them and is being retried.
+/// already ends with them: a run that stopped after appending them and is being retried. Both are
+/// opened without blocking and must be regular files. `from` is copied whole as it was when it was
+/// opened, a chunk at a time, never cut short: it is the account's own history, set aside to be
+/// merged, and removed once it has been.
 pub(super) fn append_lines(from: &Path, into: &Path) -> io::Result<()> {
     use std::io::{Read, Seek, SeekFrom, Write};
-    let mut added = std::fs::read(from)?;
-    if added.is_empty() {
+    let mut source = crate::hostfs::open_regular(from)?;
+    let size = source.metadata()?.len();
+    if size == 0 {
         return Ok(());
     }
-    if added.last() != Some(&b'\n') {
-        added.push(b'\n');
+    // The lines are ended by a line break of their own when `from` does not end with one.
+    let closed = last_byte(&mut source, size)? == b'\n';
+    let added = size + u64::from(!closed);
+    let mut file = open_regular_to_append(into)?;
+    let length = file.metadata()?.len();
+    if length >= added && ends_with(&mut file, length - added, &mut source, size, closed)? {
+        return Ok(());
     }
-    let mut file = std::fs::OpenOptions::new()
+    if length > 0 && last_byte(&mut file, length)? != b'\n' {
+        file.write_all(b"\n")?;
+    }
+    source.seek(SeekFrom::Start(0))?;
+    let copied = io::copy(&mut Read::take(&mut source, size), &mut file)?;
+    if copied != size {
+        return Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            format!("`{}` shrank while it was appended", from.display()),
+        ));
+    }
+    if !closed {
+        file.write_all(b"\n")?;
+    }
+    Ok(())
+}
+
+/// Opens `path` to read and append to, without blocking, refusing anything but a regular file.
+fn open_regular_to_append(path: &Path) -> io::Result<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let file = std::fs::OpenOptions::new()
         .read(true)
         .append(true)
-        .open(into)?;
-    let length = file.metadata()?.len();
-    if length >= added.len() as u64 {
-        let mut tail = vec![0u8; added.len()];
-        file.seek(SeekFrom::Start(length - added.len() as u64))?;
-        file.read_exact(&mut tail)?;
-        if tail == added {
-            return Ok(());
-        }
+        .custom_flags(libc::O_NONBLOCK | libc::O_NOCTTY)
+        .open(path)?;
+    if !file.metadata()?.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("`{}` is not a regular file", path.display()),
+        ));
     }
-    if length > 0 {
-        let mut last = [0u8; 1];
-        file.seek(SeekFrom::Start(length - 1))?;
-        file.read_exact(&mut last)?;
-        if last[0] != b'\n' {
-            added.insert(0, b'\n');
+    Ok(file)
+}
+
+/// The last of the `length` bytes of `file`.
+fn last_byte(file: &mut std::fs::File, length: u64) -> io::Result<u8> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut last = [0u8; 1];
+    file.seek(SeekFrom::Start(length - 1))?;
+    file.read_exact(&mut last)?;
+    Ok(last[0])
+}
+
+/// Whether `file` holds, from `at` on, the `size` bytes of `source`, followed by a line break
+/// unless `closed`.
+fn ends_with(
+    file: &mut std::fs::File,
+    at: u64,
+    source: &mut std::fs::File,
+    size: u64,
+    closed: bool,
+) -> io::Result<bool> {
+    use std::io::{Read, Seek, SeekFrom};
+    file.seek(SeekFrom::Start(at))?;
+    source.seek(SeekFrom::Start(0))?;
+    let (mut theirs, mut ours) = (vec![0u8; 64 * 1024], vec![0u8; 64 * 1024]);
+    let mut left = size;
+    while left > 0 {
+        let n = theirs
+            .len()
+            .min(usize::try_from(left).unwrap_or(usize::MAX));
+        file.read_exact(&mut theirs[..n])?;
+        source.read_exact(&mut ours[..n])?;
+        if theirs[..n] != ours[..n] {
+            return Ok(false);
         }
+        left -= n as u64;
     }
-    file.write_all(&added)
+    Ok(closed || last_byte(file, at + size + 1)? == b'\n')
 }
 
 /// SQLite keeps a database's write-ahead log and its index beside it, named after it; the log
@@ -321,5 +377,24 @@ mod tests {
 
         link(&from.join("relative"), Path::new("record.jsonl")).unwrap();
         assert!(copy_any(&from, &dir.join("again")).is_err());
+    }
+
+    /// The lines are appended whole, each run on a line of its own, once: a retry finds them at
+    /// the end and appends nothing. What is not a regular file is refused, not waited on.
+    #[test]
+    fn appended_lines_start_on_a_line_of_their_own_and_are_not_appended_twice() {
+        let dir = crate::test_support::ScratchDir::new("shared-config-append");
+        let (from, into) = (dir.join("aside"), dir.join("history"));
+        std::fs::write(&from, "b\nc").unwrap();
+        std::fs::write(&into, "a").unwrap();
+        append_lines(&from, &into).unwrap();
+        append_lines(&from, &into).unwrap();
+        assert_eq!(std::fs::read_to_string(&into).unwrap(), "a\nb\nc\n");
+
+        let fifo = dir.join("fifo");
+        let path = std::ffi::CString::new(fifo.to_string_lossy().as_bytes()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(path.as_ptr(), 0o600) }, 0);
+        assert!(append_lines(&fifo, &into).is_err());
+        assert!(append_lines(&from, &fifo).is_err());
     }
 }

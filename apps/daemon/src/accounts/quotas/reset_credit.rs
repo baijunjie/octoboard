@@ -12,9 +12,10 @@ use std::time::Duration;
 
 use serde_json::{json, Value};
 
-use super::probe::{is_response, rpc_error_detail, OUTPUT_LIMIT, PROBE_TIMEOUT};
+use super::probe::{OUTPUT_LIMIT, PROBE_TIMEOUT};
 use crate::accounts::cli_run::{self, NotRun};
 use crate::agents::codex_app_server::{self, CODEX_APP_SERVER_ARGS};
+use crate::agents::json_rpc;
 use crate::processes::subprocess::{run_exchange, Bounds, ExchangeFailure};
 use crate::protocol::{Agent, ResetCreditOutcome};
 
@@ -77,7 +78,7 @@ pub(super) fn consume(
         let Ok(value) = serde_json::from_str::<Value>(line) else {
             return false;
         };
-        if !is_response(&value, 2) {
+        if !json_rpc::is_reply_to(&value, 2) {
             return false;
         }
         *reply.borrow_mut() = Some(value);
@@ -88,7 +89,7 @@ pub(super) fn consume(
         other => Failure::Failed(other.to_string()),
     })?;
     let reply = reply.take().ok_or_else(unreadable)?;
-    if let Some(detail) = rpc_error_detail(&reply) {
+    if let Some(detail) = json_rpc::error_detail(&reply) {
         return Err(
             if detail.to_lowercase().contains("authentication required") {
                 Failure::NotSignedIn

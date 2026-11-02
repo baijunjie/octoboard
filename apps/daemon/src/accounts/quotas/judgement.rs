@@ -14,6 +14,9 @@ use crate::protocol::{quota_unavailable_code as code, Agent, Code, QuotaWindow, 
 /// calls it something else ([`Exhausted::named_for`]).
 const SESSION_WINDOW: &str = "5-hour";
 
+/// The lengths in minutes, from 6 to 8 days, of a credit period that counts as a weekly window.
+const ABOUT_A_WEEK: std::ops::RangeInclusive<u32> = 6 * 24 * 60..=8 * 24 * 60;
+
 /// The window that keeps an account from opening a session.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Exhausted {
@@ -102,7 +105,7 @@ fn window_name(window: &QuotaWindow) -> String {
         QuotaWindowKind::Session => SESSION_WINDOW,
         QuotaWindowKind::Weekly | QuotaWindowKind::WeeklyModel => "Weekly",
         QuotaWindowKind::CreditPeriod => match window.window_minutes {
-            Some(minutes) if (6 * 24 * 60..=8 * 24 * 60).contains(&minutes) => "Weekly",
+            Some(minutes) if ABOUT_A_WEEK.contains(&minutes) => "Weekly",
             Some(minutes) if (28 * 24 * 60..=31 * 24 * 60).contains(&minutes) => "Monthly",
             _ => "Credits",
         },
@@ -128,7 +131,7 @@ impl ExpiringWeekly {
 
 /// A weekly window that still has quota and whose reset is still ahead.
 /// Account-wide `Weekly`, or `CreditPeriod` whose `window_minutes` is in
-/// `6 * 24 * 60..=8 * 24 * 60`. A model's own weekly window never counts.
+/// [`ABOUT_A_WEEK`]. A model's own weekly window never counts.
 /// `used_percent` must be finite and below 100. A reset that is missing or
 /// not strictly after `now` does not rank. Among the windows of one account,
 /// the soonest reset wins, so quota about to reset is spent first, then the
@@ -140,7 +143,7 @@ fn expiring_weekly(windows: &[QuotaWindow], now: i64) -> Option<ExpiringWeekly> 
             QuotaWindowKind::Weekly => true,
             QuotaWindowKind::CreditPeriod => window
                 .window_minutes
-                .is_some_and(|minutes| (6 * 24 * 60..=8 * 24 * 60).contains(&minutes)),
+                .is_some_and(|minutes| ABOUT_A_WEEK.contains(&minutes)),
             QuotaWindowKind::Session | QuotaWindowKind::WeeklyModel => false,
         };
         if !weekly || !window.used_percent.is_finite() || window.used_percent >= 100.0 {

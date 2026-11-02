@@ -1,14 +1,18 @@
 //! Running an agent's CLI as an account for a short query outside a session — a quota probe, a
-//! kick, the use of a reset credit, a model listing: the command a session of the account would
-//! run ([`adapter::account_command`]), admitted under the account's directory for the whole run.
-//! Such a run is held to [`crate::processes::subprocess::Bounds::agent_query`].
+//! kick, the use of a reset credit, a model listing, an unarchive, a sign-in's `claude auth
+//! status`: the command a session of the account would run ([`adapter::account_command`]),
+//! admitted under the account's directory for the whole run. Such a run is held to
+//! [`crate::processes::subprocess::Bounds::agent_query`].
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output};
+use std::sync::atomic::AtomicBool;
+use std::time::Duration;
 
 use crate::accounts::shared_config;
 use crate::adapter;
+use crate::processes::subprocess::{run_bounded, BoundedFailure, Bounds};
 use crate::protocol::Agent;
 
 /// A command running an agent's CLI as an account, and the account's directory admitted for it:
@@ -17,6 +21,19 @@ use crate::protocol::Agent;
 pub(crate) struct AdmittedCommand {
     pub(crate) command: Command,
     _reading: Option<shared_config::Run>,
+}
+
+impl AdmittedCommand {
+    /// Runs the command as a short query ([`run_query`]), the account's directory held until this
+    /// returns.
+    pub(crate) fn run(
+        &mut self,
+        timeout: Duration,
+        limit: usize,
+        cancel: Option<&AtomicBool>,
+    ) -> Result<Output, BoundedFailure> {
+        run_query(&mut self.command, timeout, limit, cancel)
+    }
 }
 
 /// Why a short query was not run.
@@ -62,6 +79,61 @@ pub(crate) fn admitted_command(
         command,
         _reading: reading,
     })
+}
+
+/// Why [`query`] produced no output.
+#[derive(Debug)]
+pub(crate) enum QueryFailure {
+    /// The command was not started.
+    NotRun(NotRun),
+    /// The run was stopped or could not be carried out.
+    Bounded(BoundedFailure),
+}
+
+/// Runs `command` as a short query of an agent CLI: held to [`Bounds::agent_query`] with `timeout`
+/// and a stdout `limit`, and stopped by setting `cancel` (`None` never stops it). Blocking. It
+/// does not admit the command's directory, so it is only for a command whose directory is already
+/// held (a sign-in's, for one); [`query`] is for the rest.
+pub(crate) fn run_query(
+    command: &mut Command,
+    timeout: Duration,
+    limit: usize,
+    cancel: Option<&AtomicBool>,
+) -> Result<Output, BoundedFailure> {
+    let never = AtomicBool::new(false);
+    run_bounded(
+        command,
+        &Bounds::agent_query(timeout, limit),
+        cancel.unwrap_or(&never),
+    )
+}
+
+/// [`admitted_command`] with `args` run as a short query ([`run_query`]). Blocking.
+pub(crate) fn query(
+    agent: Agent,
+    shell_env: &HashMap<String, String>,
+    config_dir: Option<&Path>,
+    args: &[&str],
+    timeout: Duration,
+    limit: usize,
+    cancel: Option<&AtomicBool>,
+) -> Result<Output, QueryFailure> {
+    admitted_command(agent, shell_env, config_dir, args)
+        .map_err(QueryFailure::NotRun)?
+        .run(timeout, limit, cancel)
+        .map_err(QueryFailure::Bounded)
+}
+
+/// The last line of what a query printed on stderr, trimmed; empty when it printed none.
+pub(crate) fn last_stderr_line(output: &Output) -> String {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    stderr
+        .trim()
+        .lines()
+        .next_back()
+        .map(str::trim)
+        .unwrap_or_default()
+        .to_string()
 }
 
 #[cfg(test)]

@@ -6,6 +6,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use crate::adapter::account_cli::{exported_dir, snapshot_home};
 use crate::adapter::files::{
     canonical_project, is_agent_config_dir, read_bounded_text, read_regular_text, LARGE_FILE_LIMIT,
     SMALL_FILE_LIMIT,
@@ -20,21 +21,9 @@ fn explicit_config_dir(
     shell_env: &HashMap<String, String>,
     pinned: Option<&Path>,
 ) -> Option<PathBuf> {
-    pinned.map(PathBuf::from).or_else(|| {
-        shell_env
-            .get(layout::CLAUDE.config_dir_var)
-            .filter(|dir| !dir.is_empty())
-            .map(PathBuf::from)
-    })
-}
-
-/// The home directory the launch's shell snapshot carries, else the daemon's own.
-fn home_dir(shell_env: &HashMap<String, String>) -> PathBuf {
-    shell_env
-        .get("HOME")
-        .filter(|home| !home.is_empty())
+    pinned
         .map(PathBuf::from)
-        .unwrap_or_else(crate::paths::home_dir)
+        .or_else(|| exported_dir(shell_env, layout::CLAUDE.config_dir_var))
 }
 
 /// A settings file Claude Code reads: one the project keeps, read through `browse::live`, or one
@@ -227,7 +216,7 @@ pub(crate) fn global_config_file(
 ) -> PathBuf {
     match explicit_config_dir(shell_env, pinned) {
         Some(dir) => dir.join(".claude.json"),
-        None => home_dir(shell_env).join(".claude.json"),
+        None => snapshot_home(shell_env).join(".claude.json"),
     }
 }
 

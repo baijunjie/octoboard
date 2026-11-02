@@ -37,11 +37,11 @@ use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
-use crate::accounts::cli_run::{self, NotRun};
+use crate::accounts::cli_run::{self, NotRun, QueryFailure};
 use crate::adapter;
 use crate::agents::layout::GROK_MODELS_CACHE;
 use crate::env_shell;
-use crate::processes::subprocess::{run_bounded, BoundedFailure, Bounds};
+use crate::processes::subprocess::BoundedFailure;
 use crate::protocol::{models_unavailable_code as code, Agent, AgentModel, ModelsUnavailable};
 
 /// How long a catalogue command may run. The commands answer in well under a second from a
@@ -226,31 +226,33 @@ fn run(
     args: &[&str],
     timeout: Duration,
 ) -> Result<String, ModelsUnavailable> {
-    let mut run =
-        cli_run::admitted_command(agent, shell_env, config_dir, args).map_err(|refused| {
-            match refused {
-                NotRun::DirMissing(_) => failed(agent, &refused.detail()),
-                NotRun::BinaryNotFound(binary) => ModelsUnavailable::new(
-                    code::BINARY_NOT_FOUND,
-                    refused.detail(),
-                    &[("binary", binary)],
-                ),
-            }
-        })?;
-    let bounds = Bounds::agent_query(timeout, OUTPUT_LIMIT);
-    let never = std::sync::atomic::AtomicBool::new(false);
-    let output =
-        run_bounded(&mut run.command, &bounds, &never).map_err(|failure| match failure {
-            BoundedFailure::TimedOut(_) => ModelsUnavailable::new(
-                code::TIMED_OUT,
-                format!("{} did not list its models in time", agent.label()),
-                &[("agent", agent.label())],
+    let output = cli_run::query(
+        agent,
+        shell_env,
+        config_dir,
+        args,
+        timeout,
+        OUTPUT_LIMIT,
+        None,
+    )
+    .map_err(|failure| match failure {
+        QueryFailure::NotRun(refused) => match refused {
+            NotRun::DirMissing(_) => failed(agent, &refused.detail()),
+            NotRun::BinaryNotFound(binary) => ModelsUnavailable::new(
+                code::BINARY_NOT_FOUND,
+                refused.detail(),
+                &[("binary", binary)],
             ),
-            other => failed(agent, &other.to_string()),
-        })?;
+        },
+        QueryFailure::Bounded(BoundedFailure::TimedOut(_)) => ModelsUnavailable::new(
+            code::TIMED_OUT,
+            format!("{} did not list its models in time", agent.label()),
+            &[("agent", agent.label())],
+        ),
+        QueryFailure::Bounded(other) => failed(agent, &other.to_string()),
+    })?;
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let detail = stderr.trim().lines().next_back().unwrap_or_default();
+        let detail = cli_run::last_stderr_line(&output);
         let detail = if detail.is_empty() {
             output.status.to_string()
         } else {

@@ -134,7 +134,7 @@ mod tests {
     type Launches = Arc<Mutex<Vec<Launched>>>;
     type Started = Arc<Mutex<Vec<StandIn>>>;
 
-    const CONVERSATION: &str = "projects/slug/agent-1.jsonl";
+    const CONVERSATION: &str = "projects/slug/a0000000-0000-4000-8000-000000000001.jsonl";
 
     /// A Claude Code transcript whose last turn a restart cut off on a tool call.
     const CUT_OFF_TURN: &str = concat!(
@@ -173,7 +173,7 @@ mod tests {
         std::fs::write(default.join(CONVERSATION), "conversation").unwrap();
         let mut record = state.session_record(session).unwrap();
         record.has_conversation = true;
-        record.agent_session_id = Some("agent-1".to_string());
+        record.agent_session_id = Some("a0000000-0000-4000-8000-000000000001".to_string());
         state.store.update_session(&record).unwrap();
         let env = HashMap::from([(
             "CLAUDE_CONFIG_DIR".to_string(),
@@ -229,7 +229,10 @@ mod tests {
         assert_eq!(record.model, Some(Some("sonnet".to_string())));
         assert_eq!(record.effort, Some(None));
         assert_eq!((record.account_id, record.config_dir), (None, None));
-        assert_eq!(record.agent_session_id.as_deref(), Some("agent-1"));
+        assert_eq!(
+            record.agent_session_id.as_deref(),
+            Some("a0000000-0000-4000-8000-000000000001")
+        );
         assert!(!state.is_changing_model("of-a"));
         assert!(result["note"]
             .as_str()
@@ -319,7 +322,7 @@ mod tests {
             &arguments(json!({"session":"mine", "effort":"low"})),
             move || {
                 let mut session = during.session_record("mine")?;
-                session.agent_session_id = Some("agent-1".to_string());
+                session.agent_session_id = Some("a0000000-0000-4000-8000-000000000001".to_string());
                 session.has_conversation = true;
                 during.store.update_session(&session)?;
                 snapshot()
@@ -814,10 +817,10 @@ mod tests {
         );
         let mut grok = state.session_record("mine").unwrap();
         grok.agent = Agent::Grok;
-        grok.agent_session_id = Some("grok-1".to_string());
+        grok.agent_session_id = Some("b0000000-0000-4000-8000-000000000001".to_string());
         state.store.update_session(&grok).unwrap();
         // Its turn stopped on the limit, as Grok 1.0.70 writes it.
-        let record = dir.join("grok-default/sessions/proj/grok-1");
+        let record = dir.join("grok-default/sessions/proj/b0000000-0000-4000-8000-000000000001");
         std::fs::create_dir_all(&record).unwrap();
         std::fs::write(
             record.join("updates.jsonl"),

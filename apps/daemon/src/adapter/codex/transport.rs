@@ -14,7 +14,7 @@ use serde_json::{json, Value};
 use tokio_tungstenite::tungstenite::{self, Message, WebSocket};
 
 use crate::adapter::codex::PrivateServerPlan;
-use crate::agents::codex_app_server;
+use crate::agents::{codex_app_server, json_rpc};
 use crate::terminal::ptyio::PartialWrite;
 
 const RPC_TIMEOUT: Duration = Duration::from_secs(5);
@@ -212,9 +212,10 @@ impl CodexTransport {
             Ok(_) => Ok(()),
             Err(RpcFailure::Rejected {
                 code: -32600,
-                message,
-            }) if message == "thread already has an active or pending turn"
-                || message == format!("queued submission not found: {id}") =>
+                reason,
+                ..
+            }) if reason == "thread already has an active or pending turn"
+                || reason == format!("queued submission not found: {id}") =>
             {
                 Ok(())
             }
@@ -314,14 +315,20 @@ fn wait_for_server(path: &Path, server: &ServerProcess) -> Result<Rpc> {
 #[derive(Debug)]
 enum RpcFailure {
     Transport(String),
-    Rejected { code: i64, message: String },
+    Rejected {
+        code: i64,
+        /// The error's own `message`, which the refusals this module tells apart are matched on.
+        reason: String,
+        /// What the error says with its `data`, for showing.
+        message: String,
+    },
 }
 
 impl std::fmt::Display for RpcFailure {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Transport(message) => formatter.write_str(message),
-            Self::Rejected { code, message } => {
+            Self::Rejected { code, message, .. } => {
                 write!(formatter, "Codex RPC error {code}: {message}")
             }
         }
@@ -420,15 +427,14 @@ impl Rpc {
                 Message::Text(text) => {
                     let value: Value = serde_json::from_str(&text)
                         .map_err(|error| RpcFailure::Transport(error.to_string()))?;
-                    if value.get("id").and_then(Value::as_u64) == Some(id) {
-                        if let Some(error) = value.get("error") {
+                    if json_rpc::is_reply_to(&value, id as i64) {
+                        if let Some(message) = json_rpc::error_detail(&value) {
                             return Err(RpcFailure::Rejected {
-                                code: error.get("code").and_then(Value::as_i64).unwrap_or(-32603),
-                                message: error
-                                    .get("message")
-                                    .and_then(Value::as_str)
-                                    .unwrap_or("unknown error")
+                                code: json_rpc::error_code(&value).unwrap_or(-32603),
+                                reason: json_rpc::error_message(&value)
+                                    .unwrap_or_default()
                                     .to_string(),
+                                message,
                             });
                         }
                         return value.get("result").cloned().ok_or_else(|| {
@@ -585,7 +591,7 @@ mod tests {
                 start["params"],
                 json!({"threadId":"the-thread","queuedSubmissionId":"queued-12"})
             );
-            socket.send(Message::Text(json!({"id":start["id"],"error":{"code":-32600,"message":"thread already has an active or pending turn"}}).to_string())).unwrap();
+            socket.send(Message::Text(json!({"id":start["id"],"error":{"code":-32600,"message":"thread already has an active or pending turn","data":"turn turn-1 running"}}).to_string())).unwrap();
         });
         transport
             .send("line one\nline two", "launch:ticket-12")

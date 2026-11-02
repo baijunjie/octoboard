@@ -10,10 +10,11 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use crate::accounts::dirs::account_dir_key;
+use crate::accounts::files::is_same_path;
 use crate::accounts::shared_config::{
-    account_in_use, carry_out, default_dir, entries, in_use, is_same_directory, lock_account,
-    lock_agent, not_shareable, own_conversations, sharing_failed, sharing_in_progress,
-    still_sharing, try_lock_agent, Changing, FailureCause as Cause, Locked, Refused,
+    account_in_use, carry_out, default_dir, entries, in_use, lock_account, lock_agent,
+    not_shareable, own_conversations, sharing_failed, sharing_in_progress, still_sharing,
+    try_lock_agent, Changing, FailureCause as Cause, Locked, Refused,
 };
 use crate::processes::ledger::HeldForLaunch;
 use crate::protocol::{
@@ -49,7 +50,7 @@ pub async fn set(state: &Arc<AppState>, account: Option<String>, share: bool) ->
         if share {
             let default = default_dir(state, account.agent).await?;
             let dir = PathBuf::from(&account.config_dir);
-            if tokio::task::spawn_blocking(move || is_same_directory(&dir, &default)).await? {
+            if tokio::task::spawn_blocking(move || is_same_path(&dir, &default)).await? {
                 return Err(not_shareable(Some(&account)));
             }
         }

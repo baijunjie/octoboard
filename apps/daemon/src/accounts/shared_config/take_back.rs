@@ -4,16 +4,17 @@
 //! conversation another session records too, outside the account, is copied and left where it is
 //! for that session.
 
+use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 
 use anyhow::Result;
 
-use super::codex_state;
 use super::link::{Cause, Dirs, Failure, Left};
 use super::moves::{backup_path, is_link, lstat, merge_copy, merge_move, resolve};
+use crate::accounts::codex_threads::{self, is_state_database, RowError};
 use crate::accounts::dirs::account_dir_key;
-use crate::accounts::relocate::is_state_database;
 use crate::accounts::shared_config::items::shared_items;
+use crate::adapter::files::LARGE_FILE_LIMIT;
 use crate::agents::layout::CODEX_TITLE_INDEX;
 use crate::protocol::{Account, Agent};
 use crate::state::AppState;
@@ -73,14 +74,17 @@ pub(crate) fn own_conversations(state: &AppState, account: &Account) -> Result<V
 /// the other is kept under `<directory>.bak-<stamp>/` in the account's directory. A Codex thread
 /// moved out loses its row in the default's database, which would otherwise name a rollout no
 /// longer there, also when its files left on an earlier attempt, but never while no file of it is
-/// found; the account's own database, when it has one, is pointed at the head taken back. Nothing
-/// is taken back while a directory it would land in is still linked into the default directory.
+/// found; the account's own database, when it has one, is pointed at the head taken back, found
+/// where `launch_env` (the environment the account's sessions launch with, or why it could not be
+/// had) and the account's `config.toml` put it. Nothing is taken back while a directory it would
+/// land in is still linked into the default directory.
 pub(super) fn take_back(
     locator: &mut crate::records::Locator,
     agent: Agent,
     dirs: &Dirs,
     conversation: &Conversation,
     stamp: &str,
+    launch_env: Result<&HashMap<String, String>, &str>,
 ) -> Result<(), Failure> {
     let id = conversation.agent_session_id.as_str();
     let failure = |left: Left, cause: Cause, detail: String| Failure {
@@ -168,7 +172,7 @@ pub(super) fn take_back(
             .filter(|item| is_state_database(item.name))
         {
             if let Ok(Some(database)) = resolve(&dirs.default.join(item.name)) {
-                if let Err(err) = codex_state::forget_threads(&database, &[id]) {
+                if let Err(err) = codex_threads::forget_threads(&database, &[id]) {
                     problems.push((
                         Cause::of_database(&err),
                         format!("the default's `{}` still names it: {err}", item.name),
@@ -178,16 +182,19 @@ pub(super) fn take_back(
         }
     }
     if let Ok(head) = crate::accounts::relocate::locate(agent, &dirs.account, id) {
-        let env = std::collections::HashMap::from([(
-            "HOME".to_string(),
-            crate::paths::home_dir().to_string_lossy().into_owned(),
-        )]);
-        if let Err(err) =
-            crate::accounts::relocate::repoint_thread_row(agent, &dirs.account, &head, id, &env)
-        {
-            let cause = err
-                .downcast_ref::<rusqlite::Error>()
-                .map_or(Cause::Other, Cause::of_database);
+        let pointed = launch_env
+            .map_err(|err| (Cause::Other, format!("the shell environment: {err}")))
+            .and_then(|env| {
+                codex_threads::point_thread_at(
+                    &dirs.account,
+                    &dirs.account.join(head),
+                    id,
+                    env,
+                    codex_threads::PATIENCE,
+                )
+                .map_err(|err| (cause_of_row(&err), err.to_string()))
+            });
+        if let Err((cause, err)) = pointed {
             problems.push((
                 cause,
                 format!("the account's own database was not pointed at it: {err}"),
@@ -202,12 +209,25 @@ pub(super) fn take_back(
     Err(failure(Left::PartlyMoved, cause, detail.join("; ")))
 }
 
+/// Why the account's own row of a thread was not pointed at the head taken back.
+fn cause_of_row(err: &RowError) -> Cause {
+    match err {
+        RowError::ConfigUnreadable(err)
+        | RowError::Listing(_, err)
+        | RowError::Inspecting(_, err) => Cause::of(err),
+        RowError::Database(_, err) => Cause::of_database(err),
+        RowError::ConfigInvalid(_) | RowError::Unresolvable(_) => Cause::Other,
+    }
+}
+
 /// Copies the default's thread-name entries of Codex thread `id` into the account's own index, so
 /// a resume of the thread by name still finds it there. Best effort: a name is not needed to
 /// resume by id, which is how a session is resumed.
 fn copy_thread_names(dirs: &Dirs, id: &str) {
     use std::io::Write;
-    let Ok(index) = std::fs::read_to_string(dirs.default.join(CODEX_TITLE_INDEX)) else {
+    let Ok(index) =
+        crate::hostfs::read_regular_text(&dirs.default.join(CODEX_TITLE_INDEX), LARGE_FILE_LIMIT)
+    else {
         return;
     };
     let lines: String = index
@@ -222,7 +242,16 @@ fn copy_thread_names(dirs: &Dirs, id: &str) {
         return;
     }
     let target = dirs.account.join(CODEX_TITLE_INDEX);
-    let already = std::fs::read_to_string(&target).unwrap_or_default();
+    // An index that is there but cannot be read is not appended to: it may hold the names already,
+    // or be no file to write to.
+    let already = match crate::hostfs::read_regular_text(&target, LARGE_FILE_LIMIT) {
+        Ok(text) => text,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(err) => {
+            tracing::warn!(thread = %id, %err, "reading the account's Codex thread names failed");
+            return;
+        }
+    };
     if already.contains(&lines) {
         return;
     }

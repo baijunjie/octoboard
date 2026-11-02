@@ -62,17 +62,20 @@ fn hook_agent(state: &Arc<AppState>, session_id: &str) -> Option<Agent> {
 fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
     let payload: serde_json::Value =
         serde_json::from_slice(body).unwrap_or(serde_json::Value::Null);
+    let event = hooks::event_name(&payload);
 
     // An event of the turn the end of the session's process cut short comes from the ended
     // process, posted after the end by a hook the agent did not wait for: it is that turn's
     // late word, and nothing of it reaches whatever runs in the session now.
     let agent = hook_agent(state, session_id);
+    let is_subagent = hooks::is_subagent(agent, &payload);
     let turn_key = agent
-        .filter(|agent| !hooks::is_subagent(Some(*agent), &payload))
+        .filter(|_| !is_subagent)
         .and_then(|agent| hooks::turn_key(agent, &payload));
     if let (Some(agent), Some(key)) = (agent, &turn_key) {
-        let outcome = hooks::event_name(&payload)
-            .and_then(|event| hooks::turn_outcome(agent, &event, &payload));
+        let outcome = event
+            .as_deref()
+            .and_then(|event| hooks::turn_outcome(agent, event, &payload));
         if state.apply_late_turn_event(session_id, key, outcome) {
             return;
         }
@@ -81,10 +84,8 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
     // Marked before anything of this event can release a queue: the first hook ends the trust
     // hold below, and its drain must not write into an error's prompt. A subagent's failure is
     // its own business, never the session's.
-    if let (Some(agent), Some(event)) = (agent, hooks::event_name(&payload)) {
-        if !hooks::is_subagent(Some(agent), &payload)
-            && hooks::stopped_on_agent_error(agent, &event, &payload)
-        {
+    if let (Some(agent), Some(event)) = (agent, event.as_deref()) {
+        if !is_subagent && hooks::stopped_on_agent_error(agent, event, &payload) {
             if let Some(live) = state.live_session(session_id) {
                 live.mark_agent_error();
                 // Nothing else drains the queue once the hold has run out.
@@ -112,10 +113,11 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
     // A subagent's events are the agent's internal business and carry the subagent's own ids; the
     // only thing read from them is the background work they leave running, which never changes
     // the session's status.
-    if hooks::is_subagent(agent, &payload) {
-        let change = hooks::event_name(&payload)
+    if is_subagent {
+        let change = event
+            .as_deref()
             .zip(agent)
-            .and_then(|(event, agent)| hooks::background_tasks_change(agent, &event, &payload));
+            .and_then(|(event, agent)| hooks::background_tasks_change(agent, event, &payload));
         if let Some(change) = change {
             state.apply_background_tasks_change(session_id, change);
         }
@@ -138,108 +140,123 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
 
     crate::records::on_hook(state, session_id, &payload);
 
-    match hooks::event_name(&payload) {
-        Some(event) => {
-            let mut prompt_sent = false;
-            if hooks::starts_conversation(&event) {
-                if let Err(err) = state.mark_conversation_started(session_id) {
-                    tracing::debug!(session = %session_id, %err, "recording the session's first turn failed");
-                }
-                let prompt = agent.and_then(|agent| hooks::submitted_prompt(agent, &payload));
-                // A background task's completion arrives as a prompt the agent sends itself, which
-                // says nothing about what is in its input box.
-                prompt_sent = !prompt.is_some_and(hooks::is_task_notification);
-                // The previous turn's watch goes before the new turn opens: a watch still current
-                // when it opens could find the previous turn's failure (Codex) or cancel (Claude
-                // Code, Grok) and close this one.
-                if agent.is_some() {
-                    state.end_record_watch(session_id);
-                }
-                state.turn_started(session_id, prompt);
-            }
-            if let Some(agent) = agent {
-                let believable = read_turn_boundary(state, session_id, agent, &event, &payload);
-                if believable {
-                    // A whole new list goes in before the status, so the record the status
-                    // change publishes already carries it. A completion notification goes in
-                    // after: it arrives as a prompt while the session is still idle, and trimming
-                    // the list first would publish a plain idle record before the turn starts.
-                    let mut finished = None;
-                    match hooks::background_tasks_change(agent, &event, &payload) {
-                        Some(BackgroundTasksChange::Finished(ids)) => finished = Some(ids),
-                        Some(change) => state.apply_background_tasks_change(session_id, change),
-                        None => {}
-                    }
-                    if let Some(status) = hooks::status_from_event(agent, &event, &payload) {
-                        let status = suppress_auto_review_hook(state, session_id, status);
-                        // Before the status write, so the record it publishes already carries
-                        // whether the turn that ended left the session paused.
-                        let outcome = hooks::turn_outcome(agent, &event, &payload);
-                        if let Some(outcome) = outcome {
-                            state.set_paused(session_id, outcome == hooks::TurnOutcome::Abnormal);
-                        }
-                        // Read before the status lands: a Claude Code watch, and a Grok one past
-                        // the agent's own hand, is armed on a move into a status, not on more of
-                        // the same.
-                        let previous = matches!(agent, Agent::Claude | Agent::Grok)
-                            .then(|| state.session_record(session_id).ok())
-                            .flatten()
-                            .map(|session| state.agent_status(&session));
-                        match state.apply_hook_status(session_id, status) {
-                            // Delivery writes into the owner's PTY, which blocks.
-                            Ok(true) if status == SessionStatus::WaitingUser => {
-                                let (state, id) = (state.clone(), session_id.to_string());
-                                tokio::task::spawn_blocking(move || {
-                                    crate::messaging::owner_notices::tell_owner_it_waits(
-                                        &state, &id,
-                                    )
-                                });
-                            }
-                            Ok(_) => {}
-                            Err(err) => {
-                                tracing::debug!(session = %session_id, %event, %err, "applying the hook status failed");
-                            }
-                        }
-                        // The end of the process can land between the check at the top and these
-                        // writes, which a record without a process refuses: the turn's end is then
-                        // its late word after all.
-                        if let (Some(key), Some(outcome)) = (&turn_key, outcome) {
-                            if state
-                                .session_record(session_id)
-                                .is_ok_and(|session| session.status.has_no_process())
-                            {
-                                state.apply_late_turn_event(session_id, key, Some(outcome));
-                            }
-                        }
-                        arm_record_watches(
-                            state, session_id, agent, &event, previous, status, &payload,
-                        );
-                        // Counted after the status it brings and before the drain that status
-                        // releases: that drain lets a queue held for an unsent message go on, and
-                        // the agent reads as working by the time the outbox sees the count move.
-                        if prompt_sent {
-                            if let Some(live) = state.live_session(session_id) {
-                                live.note_prompt_sent(hooks::submitted_prompt(agent, &payload));
-                            }
-                        }
-                        // Releasing a message queued while the session could not take one writes
-                        // into its PTY, which blocks; it must not sit on this response, where the
-                        // adapters' few-second hook timeout would surface as agent-visible noise.
-                        state.spawn_flush_outbox(session_id, status);
-                    }
-                    if let Some(ids) = finished {
-                        state.apply_background_tasks_change(
-                            session_id,
-                            BackgroundTasksChange::Finished(ids),
-                        );
-                    }
-                }
-            } else {
-                tracing::debug!(session = %session_id, %event, "hook callback for an unknown session");
-            }
+    let Some(event) = event else {
+        tracing::debug!(session = %session_id, "hook payload carried no event name");
+        return;
+    };
+    let mut prompt_sent = false;
+    if hooks::starts_conversation(&event) {
+        if let Err(err) = state.mark_conversation_started(session_id) {
+            tracing::debug!(session = %session_id, %err, "recording the session's first turn failed");
         }
-        None => tracing::debug!(session = %session_id, "hook payload carried no event name"),
+        let prompt = agent.and_then(|agent| hooks::submitted_prompt(agent, &payload));
+        // A background task's completion arrives as a prompt the agent sends itself, which
+        // says nothing about what is in its input box.
+        prompt_sent = !prompt.is_some_and(hooks::is_task_notification);
+        // The previous turn's watch goes before the new turn opens: a watch still current
+        // when it opens could find the previous turn's failure (Codex) or cancel (Claude
+        // Code, Grok) and close this one.
+        if agent.is_some() {
+            state.end_record_watch(session_id);
+        }
+        state.turn_started(session_id, prompt);
     }
+    let Some(agent) = agent else {
+        tracing::debug!(session = %session_id, %event, "hook callback for an unknown session");
+        return;
+    };
+    if !read_turn_boundary(state, session_id, agent, &event, &payload) {
+        return;
+    }
+    // A whole new list goes in before the status, so the record the status change publishes
+    // already carries it. A completion notification goes in after: it arrives as a prompt while
+    // the session is still idle, and trimming the list first would publish a plain idle record
+    // before the turn starts.
+    let mut finished = None;
+    match hooks::background_tasks_change(agent, &event, &payload) {
+        Some(BackgroundTasksChange::Finished(ids)) => finished = Some(ids),
+        Some(change) => state.apply_background_tasks_change(session_id, change),
+        None => {}
+    }
+    apply_status(
+        state,
+        session_id,
+        agent,
+        &event,
+        &payload,
+        turn_key.as_deref(),
+        prompt_sent,
+    );
+    if let Some(ids) = finished {
+        state.apply_background_tasks_change(session_id, BackgroundTasksChange::Finished(ids));
+    }
+}
+
+/// Applies the status `event` brings, if it brings one: the pause, the status itself, and what the
+/// status sets going. `turn_key` is the key of the turn the event belongs to, and `prompt_sent`
+/// whether the event is a prompt the agent was sent.
+fn apply_status(
+    state: &Arc<AppState>,
+    session_id: &str,
+    agent: Agent,
+    event: &str,
+    payload: &serde_json::Value,
+    turn_key: Option<&str>,
+    prompt_sent: bool,
+) {
+    let Some(status) = hooks::status_from_event(agent, event, payload) else {
+        return;
+    };
+    let status = suppress_auto_review_hook(state, session_id, status);
+    // Before the status write, so the record it publishes already carries whether the turn that
+    // ended left the session paused.
+    let outcome = hooks::turn_outcome(agent, event, payload);
+    if let Some(outcome) = outcome {
+        state.set_paused(session_id, outcome == hooks::TurnOutcome::Abnormal);
+    }
+    // Read before the status lands: a Claude Code watch, and a Grok one past the agent's own hand,
+    // is armed on a move into a status, not on more of the same.
+    let previous = matches!(agent, Agent::Claude | Agent::Grok)
+        .then(|| state.session_record(session_id).ok())
+        .flatten()
+        .map(|session| state.agent_status(&session));
+    match state.apply_hook_status(session_id, status) {
+        // Delivery writes into the owner's PTY, which blocks.
+        Ok(true) if status == SessionStatus::WaitingUser => {
+            let (state, id) = (state.clone(), session_id.to_string());
+            tokio::task::spawn_blocking(move || {
+                crate::messaging::owner_notices::tell_owner_it_waits(&state, &id)
+            });
+        }
+        Ok(_) => {}
+        Err(err) => {
+            tracing::debug!(session = %session_id, %event, %err, "applying the hook status failed");
+        }
+    }
+    // The end of the process can land between the check at the top of `apply_hook` and these
+    // writes, which a record without a process refuses: the turn's end is then its late word
+    // after all.
+    if let (Some(key), Some(outcome)) = (turn_key, outcome) {
+        if state
+            .session_record(session_id)
+            .is_ok_and(|session| session.status.has_no_process())
+        {
+            state.apply_late_turn_event(session_id, key, Some(outcome));
+        }
+    }
+    arm_record_watches(state, session_id, agent, event, previous, status, payload);
+    // Counted after the status it brings and before the drain that status releases: that drain
+    // lets a queue held for an unsent message go on, and the agent reads as working by the time
+    // the outbox sees the count move.
+    if prompt_sent {
+        if let Some(live) = state.live_session(session_id) {
+            live.note_prompt_sent(hooks::submitted_prompt(agent, payload));
+        }
+    }
+    // Releasing a message queued while the session could not take one writes into its PTY, which
+    // blocks; it must not sit on this response, where the adapters' few-second hook timeout would
+    // surface as agent-visible noise.
+    state.spawn_flush_outbox(session_id, status);
 }
 
 /// Starts watching the agent's own session record for what its hooks will not report after this

@@ -16,8 +16,6 @@
 //! any output, which a cancel at that moment leaves looking the same as the switch's ending of it
 //! (Claude Code, Grok Build) — is therefore not continued.
 
-use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 
 use serde_json::Value;
@@ -95,29 +93,32 @@ fn verdict(agent: Agent, record: &Path, usage_limit_only: bool) -> bool {
 
 /// The entries of the transcript that bear on the decision, oldest first, from the last user or
 /// assistant entry on (or all of them, when the file has none): user, assistant and system entries
-/// of the main conversation. Reads backwards from the end in growing windows, since a transcript
-/// can be tens of MB and only its last turn matters.
+/// of the main conversation. Reads the end in growing windows, since a transcript can be tens of MB
+/// and only its last turn matters; a line past the shared reader's limit is skipped, not held.
 fn claude_tail(record: &Path) -> std::io::Result<Vec<Value>> {
-    let mut file = File::open(record)?;
-    let len = file.metadata()?.len();
+    let len = std::fs::metadata(record)?.len();
     let mut window = FIRST_WINDOW;
     loop {
         let start = len.saturating_sub(window);
-        file.seek(SeekFrom::Start(start))?;
-        let mut bytes = Vec::with_capacity((len - start) as usize);
-        file.read_to_end(&mut bytes)?;
-        let mut lines: Vec<&[u8]> = bytes.split(|&byte| byte == b'\n').collect();
-        if start > 0 {
-            // Cut mid-line.
-            lines.remove(0);
-        }
-        let entries: Vec<Value> = lines
-            .into_iter()
-            .filter_map(|line| serde_json::from_slice::<Value>(line).ok())
-            .filter(is_conversation_entry)
-            .collect();
+        let mut entries: Vec<Value> = Vec::new();
+        // The first line the reader hands over is skipped, as it may be the end of a line the
+        // window's start cut. Whenever the skipped one is a whole line (the start fell on a line
+        // boundary, or the reader already dropped the partial line itself, over its limit or not
+        // UTF-8), the verdict stays right: a window with no turn entry after it is widened until
+        // it holds one.
+        let mut cut = start > 0;
+        line_file::read_from(record, start, |line| {
+            if std::mem::take(&mut cut) {
+                return;
+            }
+            if let Ok(entry) = serde_json::from_str::<Value>(line) {
+                if is_conversation_entry(&entry) {
+                    entries.push(entry);
+                }
+            }
+        })?;
         if let Some(last_turn) = entries.iter().rposition(is_turn_entry) {
-            return Ok(entries[last_turn..].to_vec());
+            return Ok(entries.split_off(last_turn));
         }
         if start == 0 {
             return Ok(entries);
@@ -521,6 +522,15 @@ mod tests {
         let filler =
             json!({"type": "system", "isSidechain": false, "subtype": "x", "content": big});
         assert!(decide(&[prompt("run it"), tool_use(), filler]));
+    }
+
+    #[test]
+    fn a_line_past_the_reader_limit_is_skipped() {
+        let big = "x".repeat(line_file::LINE_LIMIT + 1);
+        let oversized = assistant(Some("end_turn"), json!([{"type": "text", "text": big}]));
+        // Were the oversized line held, the turn would have finished on it and not be continued;
+        // skipped, the turn stays cut off on the tool call before it.
+        assert!(decide(&[prompt("run it"), tool_use(), oversized]));
     }
 
     #[test]

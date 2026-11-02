@@ -60,7 +60,7 @@ async fn a_refused_switch_records_nothing() {
     let archived = project_session("s", Agent::Claude, SessionStatus::Archived);
     let mut with_conversation = project_session("s", Agent::Claude, SessionStatus::Interrupted);
     with_conversation.has_conversation = true;
-    with_conversation.agent_session_id = Some("agent-1".to_string());
+    with_conversation.agent_session_id = Some("a0000000-0000-4000-8000-000000000001".to_string());
     let cases = [
         (
             "an account that does not exist",
@@ -185,7 +185,7 @@ async fn a_session_handed_to_another_owner_meanwhile_is_not_switched() {
 fn the_default_account_is_resolved_once_for_the_copy_and_the_relaunch() {
     let dir = temp_dir("switch-prepare");
     let default_dir = dir.join("default-claude");
-    let record = default_dir.join("projects/slug/agent-1.jsonl");
+    let record = default_dir.join("projects/slug/a0000000-0000-4000-8000-000000000001.jsonl");
     std::fs::create_dir_all(record.parent().unwrap()).unwrap();
     std::fs::write(&record, "conversation").unwrap();
     let calls = std::sync::atomic::AtomicUsize::new(0);
@@ -200,7 +200,7 @@ fn the_default_account_is_resolved_once_for_the_copy_and_the_relaunch() {
 
     let plan = prepare_switch(
         Agent::Claude,
-        Some("agent-1"),
+        Some("a0000000-0000-4000-8000-000000000001"),
         None,
         Some(&target),
         snapshot,
@@ -212,8 +212,8 @@ fn the_default_account_is_resolved_once_for_the_copy_and_the_relaunch() {
         (
             default_dir.clone(),
             PathBuf::from(&target),
-            PathBuf::from("projects/slug/agent-1.jsonl"),
-            "agent-1".to_owned()
+            PathBuf::from("projects/slug/a0000000-0000-4000-8000-000000000001.jsonl"),
+            "a0000000-0000-4000-8000-000000000001".to_owned()
         )
     );
     assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
@@ -282,13 +282,13 @@ fn a_compressed_codex_rollout_is_planned_for_a_switch() {
 async fn a_switch_whose_relaunch_fails_is_back_on_its_account_and_archives_nothing() {
     let (state, dir) = console_with_project_and_accounts("coordinator-switch-relaunch-refused");
     let source = dir.join("default-claude");
-    let record = "projects/slug/agent-1.jsonl";
+    let record = "projects/slug/a0000000-0000-4000-8000-000000000001.jsonl";
     std::fs::create_dir_all(source.join(record).parent().unwrap()).unwrap();
     std::fs::write(source.join(record), "conversation").unwrap();
 
     let mut hub = bare_session("hub", Role::Console);
     hub.has_conversation = true;
-    hub.agent_session_id = Some("agent-1".to_string());
+    hub.agent_session_id = Some("a0000000-0000-4000-8000-000000000001".to_string());
     hub.status = SessionStatus::Working;
     state.store.insert_session(&hub).unwrap();
     let mut bound = project_session("bound", Agent::Claude, SessionStatus::Interrupted);

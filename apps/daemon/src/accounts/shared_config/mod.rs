@@ -15,7 +15,6 @@
 
 mod change;
 mod cli_reads;
-mod codex_state;
 mod items;
 mod launch;
 mod link;
@@ -157,14 +156,6 @@ pub(crate) async fn default_dir(state: &Arc<AppState>, agent: Agent) -> Result<P
         .await?
         .context("snapshotting the user's shell environment")?;
     Ok(crate::adapter::default_account_dir(agent, &shell_env))
-}
-
-/// Whether the two spellings resolve to one directory. Blocking.
-pub(crate) fn is_same_directory(a: &Path, b: &Path) -> bool {
-    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
-        (Ok(a), Ok(b)) => a == b,
-        _ => false,
-    }
 }
 
 pub(crate) fn not_shareable(account: Option<&Account>) -> anyhow::Error {

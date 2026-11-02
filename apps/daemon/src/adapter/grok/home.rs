@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use serde_json::json;
 
 use super::HOOK_EVENTS;
-use crate::adapter::files::canonical_project;
+use crate::adapter::files::{canonical_project, LARGE_FILE_LIMIT};
 use crate::adapter::{LaunchSpec, HOOK_TIMEOUT_SECS};
 use crate::agents::layout::{GROK_CONFIG_FILE, GROK_TRUST_STORE};
 use crate::mcp;
@@ -74,9 +74,9 @@ pub(super) fn build_grok_home(spec: &LaunchSpec<'_>, source_home: &Path) -> Resu
 
 /// Appends Octoboard's MCP server to the farm's own `config.toml`. Appended rather than written
 /// fresh, because this copy carries the user's whole Grok configuration and replacing it would be
-/// the "do not override the user's configuration" failure in another form. Only the copy's last
-/// byte is read, so a file of any size is kept whole without being read into memory. The server's
-/// command line carries the daemon's key, so a file created here is owner-only.
+/// the "do not override the user's configuration" failure in another form. The append step reads
+/// only the copy's last byte. The server's command line carries the daemon's key, so a file
+/// created here is owner-only.
 fn append_mcp_server(config: &Path, spec: &LaunchSpec<'_>) -> Result<()> {
     use std::io::{Read, Seek, SeekFrom, Write};
     use std::os::unix::fs::OpenOptionsExt;
@@ -127,15 +127,19 @@ fn append_mcp_server(config: &Path, spec: &LaunchSpec<'_>) -> Result<()> {
 }
 
 /// Copies the file `from` to `to` readable by its owner only, whatever the source's mode, and never
-/// with a wider one in between; an absent source is left absent. A linked source is followed.
+/// with a wider one in between; an absent source is left absent. A linked source is followed. The
+/// source is read whole within [`LARGE_FILE_LIMIT`] before `to` is created, so a source that is too
+/// large, or stops being a regular file before it is read, fails the copy rather than leaving a
+/// truncated one.
 fn copy_private_file(from: &Path, to: &Path) -> Result<()> {
+    use std::io::Write;
     use std::os::unix::fs::OpenOptionsExt;
 
     if !from.is_file() {
         return Ok(());
     }
-    let mut source =
-        std::fs::File::open(from).with_context(|| format!("opening {}", from.display()))?;
+    let bytes = crate::hostfs::read_regular(from, LARGE_FILE_LIMIT)
+        .with_context(|| format!("reading {}", from.display()))?;
     let mut copy = std::fs::OpenOptions::new()
         .write(true)
         .create(true)
@@ -143,8 +147,7 @@ fn copy_private_file(from: &Path, to: &Path) -> Result<()> {
         .mode(0o600)
         .open(to)
         .with_context(|| format!("creating {}", to.display()))?;
-    std::io::copy(&mut source, &mut copy)
-        .map(drop)
+    copy.write_all(&bytes)
         .with_context(|| format!("copying {}", from.display()))
 }
 

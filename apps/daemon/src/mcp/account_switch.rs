@@ -205,7 +205,7 @@ mod tests {
     /// What each relaunch was asked to resume and to run against.
     type Resumed = Arc<Mutex<Vec<(Option<String>, Option<std::path::PathBuf>)>>>;
 
-    const CONVERSATION: &str = "projects/slug/agent-1.jsonl";
+    const CONVERSATION: &str = "projects/slug/a0000000-0000-4000-8000-000000000001.jsonl";
 
     /// Makes the fixture's console and project start in `dir`, which exists, since a relaunch is
     /// refused at a working directory that does not; adds a Claude and a Codex account under it;
@@ -241,7 +241,7 @@ mod tests {
         std::fs::write(default.join(CONVERSATION), "conversation").unwrap();
         let mut record = state.session_record(session).unwrap();
         record.has_conversation = true;
-        record.agent_session_id = Some("agent-1".to_string());
+        record.agent_session_id = Some("a0000000-0000-4000-8000-000000000001".to_string());
         state.store.update_session(&record).unwrap();
         default_env(dir)
     }
@@ -318,7 +318,10 @@ mod tests {
         );
         assert_eq!(
             *resumed.lock().unwrap(),
-            [(Some("agent-1".to_string()), Some(target))],
+            [(
+                Some("a0000000-0000-4000-8000-000000000001".to_string()),
+                Some(target)
+            )],
             "relaunched resuming its conversation against the account"
         );
     }
@@ -480,7 +483,10 @@ mod tests {
         );
         assert_eq!(
             *resumed.lock().unwrap(),
-            [(Some("agent-1".to_string()), None)]
+            [(
+                Some("a0000000-0000-4000-8000-000000000001".to_string()),
+                None
+            )]
         );
         // The original process's end is the exit watcher's to judge, after the switch returned.
         crate::test_support::exit_settled(&original).await;

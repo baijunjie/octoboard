@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use crate::adapter::claude_mcp::Reserved;
+use super::claude_mcp::Reserved;
 use crate::protocol::Agent;
 
 /// The instructions that have Codex read Claude Code's configuration (`claude_compatibility.md`),

@@ -14,7 +14,7 @@ use anyhow::bail;
 
 use crate::accounts::cli_run;
 use crate::agents::codex_app_server::CODEX_QUIET_FEATURES;
-use crate::processes::subprocess::{run_bounded, BoundedFailure, Bounds};
+use crate::processes::subprocess::BoundedFailure;
 use crate::protocol::Agent;
 
 /// How long a kick may take: the CLI's start, which can be slow on a loaded machine, and a model
@@ -205,19 +205,18 @@ pub(super) fn kick(
     let mut run = cli_run::admitted_command(agent, shell_env, config_dir, &args)
         .map_err(|refused| anyhow::anyhow!(refused.detail()))?;
     run.command.envs(env);
-    let bounds = Bounds::agent_query(timeout, OUTPUT_LIMIT);
-    let output =
-        run_bounded(&mut run.command, &bounds, cancel).map_err(|failure| match failure {
+    let output = run
+        .run(timeout, OUTPUT_LIMIT, Some(cancel))
+        .map_err(|failure| match failure {
             BoundedFailure::Failed(err) => err,
             other => anyhow::anyhow!("{} {other}", agent.label()),
         })?;
     if !output.status.success() {
-        let detail = String::from_utf8_lossy(&output.stderr);
         bail!(
             "{} exited with {}: {}",
             agent.label(),
             output.status,
-            detail.trim()
+            cli_run::last_stderr_line(&output)
         );
     }
     Ok(())

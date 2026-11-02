@@ -29,11 +29,12 @@ use tokio::process::{Child, ChildStdin};
 use tokio::sync::{mpsc, Notify};
 
 use super::Key;
+use crate::accounts::cli_run;
 use crate::adapter;
 use crate::agents::codex_app_server::{self, CODEX_APP_SERVER_ARGS};
+use crate::agents::json_rpc;
 use crate::agents::layout::GROK_SIGN_IN_FILE;
 use crate::processes::leader;
-use crate::processes::subprocess::{run_bounded, Bounds};
 use crate::protocol::{login_failure_code as code, Agent, LoginFailure, LoginStatus};
 use crate::state::AppState;
 
@@ -244,8 +245,8 @@ impl Flow {
                     }
                 }
                 Some(line) = process.lines.recv() => {
-                    if !line.is_empty() {
-                        last_words = line;
+                    if let Some(words) = line.into_words() {
+                        last_words = words;
                     }
                 }
                 status = process.child.wait() => break status,
@@ -293,7 +294,7 @@ impl Flow {
             &script,
             format!(
                 "#!/bin/sh\nprintf '%s\\n' \"$1\" >> {}\n",
-                shell_quote(&urls)
+                adapter::shell_quote(&urls.to_string_lossy())
             ),
         )?;
         std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700))?;
@@ -305,9 +306,7 @@ impl Flow {
     async fn claude_signed_in(&self) -> bool {
         let mut command = self.command(&["auth", "status"]);
         let output = tokio::task::spawn_blocking(move || {
-            let never = std::sync::atomic::AtomicBool::new(false);
-            let bounds = Bounds::agent_query(STATUS_TIMEOUT, STATUS_OUTPUT_LIMIT);
-            run_bounded(&mut command, &bounds, &never)
+            cli_run::run_query(&mut command, STATUS_TIMEOUT, STATUS_OUTPUT_LIMIT, None)
         })
         .await;
         let Ok(Ok(output)) = output else {
@@ -335,21 +334,21 @@ impl Flow {
                 Some(line) = process.lines.recv() => {
                     let mut found = false;
                     if url.is_none() {
-                        if let Some(page) = url_in(&line) {
+                        if let Some(page) = url_in(&line.text) {
                             device_code = device_code.take().or_else(|| user_code_in(&page));
                             url = Some(page);
                             found = true;
                         }
                     }
-                    if device_code.is_none() && looks_like_device_code(&line) {
-                        device_code = Some(line.clone());
+                    if device_code.is_none() && looks_like_device_code(&line.text) {
+                        device_code = Some(line.text.clone());
                         found = true;
                     }
                     if found {
                         progress.waiting(url.clone(), device_code.clone(), true);
                     }
-                    if !line.is_empty() {
-                        last_words = line;
+                    if let Some(words) = line.into_words() {
+                        last_words = words;
                     }
                 }
                 status = process.child.wait() => break status,
@@ -428,9 +427,9 @@ impl Flow {
         loop {
             tokio::select! {
                 Some(line) = process.lines.recv() => {
-                    let Ok(message) = serde_json::from_str::<Value>(&line) else {
-                        if !line.is_empty() {
-                            last_words = line;
+                    let Ok(message) = serde_json::from_str::<Value>(&line.text) else {
+                        if let Some(words) = line.into_words() {
+                            last_words = words;
                         }
                         continue;
                     };
@@ -510,16 +509,9 @@ enum CodexEvent {
 }
 
 fn codex_event(message: &Value, login: Option<&str>) -> CodexEvent {
-    // A reply carries the id of its request and no method; a message with a method is the server's
-    // own, whatever id it numbers itself by.
-    let id = message
-        .get("method")
-        .is_none()
-        .then(|| message.get("id").and_then(Value::as_i64))
-        .flatten();
-    if id == Some(2) {
-        if let Some(error) = message.get("error") {
-            return CodexEvent::Rejected(rpc_message(error));
+    if json_rpc::is_reply_to(message, 2) {
+        if let Some(detail) = json_rpc::error_detail(message) {
+            return CodexEvent::Rejected(detail);
         }
         let result = message.get("result");
         let field = |name: &str| {
@@ -535,7 +527,7 @@ fn codex_event(message: &Value, login: Option<&str>) -> CodexEvent {
             _ => CodexEvent::Rejected("the login start was answered without a page".to_string()),
         };
     }
-    if id == Some(3) {
+    if json_rpc::is_reply_to(message, 3) {
         let signed_in = message
             .pointer("/result/account")
             .is_some_and(|account| !account.is_null());
@@ -561,14 +553,6 @@ fn codex_event(message: &Value, login: Option<&str>) -> CodexEvent {
     CodexEvent::Other
 }
 
-fn rpc_message(error: &Value) -> String {
-    error
-        .get("message")
-        .and_then(Value::as_str)
-        .unwrap_or("the request was refused")
-        .to_string()
-}
-
 /// The last non-empty line of the file at `path`; empty while it is missing.
 fn last_line_of(path: &Path) -> String {
     std::fs::read_to_string(path)
@@ -581,11 +565,6 @@ fn last_line_of(path: &Path) -> String {
                 .map(str::to_string)
         })
         .unwrap_or_default()
-}
-
-/// `path` as one word for `sh`.
-fn shell_quote(path: &Path) -> String {
-    format!("'{}'", path.to_string_lossy().replace('\'', r"'\''"))
 }
 
 /// The first `https://` word of `line`.
@@ -649,7 +628,7 @@ struct Process {
     /// Names the CLI in the log of a session sweep: the agent's name.
     label: &'static str,
     stdin: Option<ChildStdin>,
-    lines: mpsc::UnboundedReceiver<String>,
+    lines: mpsc::Receiver<Line>,
 }
 
 impl Process {
@@ -670,7 +649,7 @@ impl Process {
             .stderr(Stdio::piped())
             .kill_on_drop(true);
         let mut child = command.spawn()?;
-        let (tx, lines) = mpsc::unbounded_channel();
+        let (tx, lines) = line_channel();
         if let Some(stdout) = child.stdout.take() {
             forward_lines(stdout, tx.clone());
         }
@@ -695,7 +674,7 @@ impl Process {
     /// Reads on until Codex's `account/login/completed`, or until the CLI's output ends.
     async fn until_completed(&mut self) {
         while let Some(line) = self.lines.recv().await {
-            let completed = serde_json::from_str::<Value>(&line).is_ok_and(|message| {
+            let completed = serde_json::from_str::<Value>(&line.text).is_ok_and(|message| {
                 message.get("method").and_then(Value::as_str) == Some("account/login/completed")
             });
             if completed {
@@ -733,8 +712,8 @@ impl Process {
     /// why it failed comes just before it exits.
     async fn last_words(&mut self, last_words: &mut String) {
         while let Ok(Some(line)) = tokio::time::timeout(LAST_WORDS, self.lines.recv()).await {
-            if !line.is_empty() {
-                *last_words = line;
+            if let Some(words) = line.into_words() {
+                *last_words = words;
             }
         }
     }
@@ -752,24 +731,78 @@ impl Drop for Process {
     }
 }
 
-fn forward_lines(
-    pipe: impl tokio::io::AsyncRead + Unpin + Send + 'static,
-    tx: mpsc::UnboundedSender<String>,
-) {
+/// The most of a line of a CLI's output that is kept; the rest of a longer line is dropped.
+const LINE_LIMIT: usize = 16 * 1024;
+
+/// How many lines wait for a flow that is not reading them. Past it the newest are dropped, so a
+/// CLI that floods its output neither grows the daemon's memory nor stalls on a full pipe.
+const LINE_BACKLOG: usize = 256;
+
+/// One line of a CLI's output.
+struct Line {
+    text: String,
+    /// Whether the CLI's line was longer than [`LINE_LIMIT`] and `text` is only its start.
+    cut: bool,
+}
+
+impl Line {
+    /// What the line says, for a CLI's last words: `None` for an empty line and for a cut one,
+    /// whose end, the part that would tell something, is gone.
+    fn into_words(self) -> Option<String> {
+        (!self.text.is_empty() && !self.cut).then_some(self.text)
+    }
+}
+
+/// The channel a CLI's lines wait in, bounded by [`LINE_BACKLOG`].
+fn line_channel() -> (mpsc::Sender<Line>, mpsc::Receiver<Line>) {
+    mpsc::channel(LINE_BACKLOG)
+}
+
+/// Reads the next line of `reader` into `line`, keeping at most [`LINE_LIMIT`] bytes of it.
+/// `None` at the end of the pipe, else whether the line was cut.
+async fn read_line_capped(
+    reader: &mut BufReader<impl tokio::io::AsyncRead + Unpin>,
+    line: &mut Vec<u8>,
+) -> std::io::Result<Option<bool>> {
+    line.clear();
+    let mut any = false;
+    let mut cut = false;
+    loop {
+        let buffered = reader.fill_buf().await?;
+        if buffered.is_empty() {
+            return Ok(any.then_some(cut));
+        }
+        any = true;
+        let (used, complete) = match buffered.iter().position(|byte| *byte == b'\n') {
+            Some(end) => (end + 1, true),
+            None => (buffered.len(), false),
+        };
+        let room = LINE_LIMIT.saturating_sub(line.len());
+        let content = if complete { used - 1 } else { used };
+        cut |= content > room;
+        line.extend_from_slice(&buffered[..used.min(room)]);
+        reader.consume(used);
+        if complete {
+            return Ok(Some(cut));
+        }
+    }
+}
+
+fn forward_lines(pipe: impl tokio::io::AsyncRead + Unpin + Send + 'static, tx: mpsc::Sender<Line>) {
     tokio::spawn(async move {
         let mut reader = BufReader::new(pipe);
         let mut bytes = Vec::new();
-        loop {
-            bytes.clear();
-            // Read as bytes and decoded lossily: a line that is not UTF-8 must not stop the pipe
-            // from being read, as a full one stalls the CLI.
-            match reader.read_until(b'\n', &mut bytes).await {
-                Ok(0) | Err(_) => return,
-                Ok(_) => {}
-            }
+        // Read as bytes and decoded lossily: a line that is not UTF-8 must not stop the pipe from
+        // being read, as a full one stalls the CLI.
+        while let Ok(Some(cut)) = read_line_capped(&mut reader, &mut bytes).await {
             let line = String::from_utf8_lossy(&bytes);
-            if tx.send(strip_ansi(&line).trim().to_string()).is_err() {
-                return;
+            let line = Line {
+                text: strip_ansi(&line).trim().to_string(),
+                cut,
+            };
+            match tx.try_send(line) {
+                Err(mpsc::error::TrySendError::Closed(_)) => return,
+                Ok(()) | Err(mpsc::error::TrySendError::Full(_)) => {}
             }
         }
     });
@@ -796,15 +829,68 @@ mod tests {
         assert!(!looks_like_device_code("abcd-12-34"));
     }
 
+    /// What `forward_lines` hands over for `input` once its sender is gone, as (text, cut).
+    async fn forwarded(input: Vec<u8>) -> Vec<(String, bool)> {
+        let (tx, mut lines) = line_channel();
+        forward_lines(std::io::Cursor::new(input), tx);
+        let mut got = Vec::new();
+        // Nothing receives until the reader has ended, so only the backlog is kept for it.
+        while let Some(line) = lines.recv().await {
+            got.push((line.text, line.cut));
+        }
+        got
+    }
+
     #[tokio::test]
     async fn a_line_that_is_not_utf8_does_not_stop_the_lines_after_it() {
-        let (tx, mut lines) = mpsc::unbounded_channel();
-        forward_lines(&b"bad \xff line\n\x1b[1mnext\x1b[0m\nlast"[..], tx);
-        let mut got = Vec::new();
-        while let Some(line) = lines.recv().await {
-            got.push(line);
+        let got = forwarded(b"bad \xff line\n\x1b[1mnext\x1b[0m\nlast".to_vec()).await;
+        let texts: Vec<&str> = got.iter().map(|(text, _)| text.as_str()).collect();
+        assert_eq!(texts, ["bad \u{fffd} line", "next", "last"]);
+    }
+
+    #[tokio::test]
+    async fn the_caps_on_a_cli_s_output_hold() {
+        let kept = |text: &str| (text.to_string(), false);
+        let mut flood = Vec::new();
+        for n in 0..LINE_BACKLOG + 50 {
+            flood.extend_from_slice(format!("{n}\n").as_bytes());
         }
-        assert_eq!(got, ["bad \u{fffd} line", "next", "last"]);
+        let mut exact = "y".repeat(LINE_LIMIT).into_bytes();
+        exact.extend_from_slice(b"\nnext\n");
+        let cases = [
+            (
+                "a line past the limit is cut and the next one still arrives",
+                [&b"x".repeat(LINE_LIMIT + 7)[..], b"\nnext\n"].concat(),
+                vec![("x".repeat(LINE_LIMIT), true), kept("next")],
+            ),
+            (
+                "a line of exactly the limit is whole",
+                exact,
+                vec![("y".repeat(LINE_LIMIT), false), kept("next")],
+            ),
+            (
+                "lines past the backlog are dropped, the first ones kept",
+                flood,
+                (0..LINE_BACKLOG).map(|n| kept(&n.to_string())).collect(),
+            ),
+        ];
+        for (name, input, expected) in cases {
+            assert_eq!(forwarded(input).await, expected, "{name}");
+        }
+    }
+
+    #[test]
+    fn a_cut_or_empty_line_is_not_a_cli_s_last_words() {
+        let line = |text: &str, cut| Line {
+            text: text.to_string(),
+            cut,
+        };
+        assert_eq!(
+            line("failed", false).into_words().as_deref(),
+            Some("failed")
+        );
+        assert_eq!(line("failed", true).into_words(), None);
+        assert_eq!(line("", false).into_words(), None);
     }
 
     #[test]

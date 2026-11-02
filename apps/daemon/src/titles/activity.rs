@@ -16,10 +16,6 @@ const CLAUDE_RUNNING: std::ops::RangeInclusive<char> = '\u{25D0}'..='\u{25D3}';
 /// The glyph Claude Code starts its title with when it is back at its prompt.
 const CLAUDE_AT_PROMPT: char = '\u{2733}';
 
-/// The braille spinner Codex and Grok Build start their titles with while a turn runs, a frame
-/// every 100 to 300 ms.
-const SPINNER: std::ops::RangeInclusive<char> = '\u{2800}'..='\u{28FF}';
-
 /// How recently a running title must have been sent for the turn to count as still running. Every
 /// agent changes its running title at least once a second (Claude Code's circle turns about once a
 /// second, the spinners several times), so a running title older than this is one the agent has
@@ -46,7 +42,9 @@ pub fn shown(agent: Agent, glyph: Option<char>, empty: bool) -> Option<Shown> {
         (Agent::Claude, Some(glyph)) if CLAUDE_RUNNING.contains(&glyph) => Some(Shown::Running),
         (Agent::Claude, Some(CLAUDE_AT_PROMPT)) => Some(Shown::AtPrompt),
         (Agent::Claude, _) => None,
-        (Agent::Codex | Agent::Grok, Some(glyph)) if SPINNER.contains(&glyph) => {
+        (Agent::Codex | Agent::Grok, Some(glyph))
+            if crate::adapter::is_braille_spinner_glyph(glyph) =>
+        {
             Some(Shown::Running)
         }
         // A title with no spinner: Codex's project or thread name, Grok's own name.

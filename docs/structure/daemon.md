@@ -85,13 +85,18 @@ the captured agent screens and records tests replay.
 - `src/state/` — `AppState` (`mod.rs`) with one file per concern of live state (running sessions, claims, status,
   titles, turns, sharing status, git status, requests, availability, write queue facade, forgetting a record).
 - `src/agents/` — what the daemon knows about each agent CLI apart from launching it: availability, models, launch
-  settings, `layout.rs` (where each agent keeps its files, one `AgentLayout` each), `codex_app_server.rs`.
+  settings, `layout.rs` (where each agent keeps its files, one `AgentLayout` each), `codex_app_server.rs` (Codex's
+  app-server handshake and start arguments), `json_rpc.rs` (reading JSON-RPC replies, shared by Codex's app server and
+  Grok's ACP stdio).
 
 ### Agent accounts
 
 - `src/accounts/` — accounts: `quotas/` (plan quota read from the agent's CLI, poller, probes, judgement), `login/`
-  (background sign-in), `cli_run.rs`, `dirs.rs`, `relocate.rs`, `trash.rs`, `switch_continue.rs`, `auto_switch.rs`
-  (automatic continuation of turns stopped by a usage limit).
+  (background sign-in), `cli_run.rs` (running an agent CLI as an account for a short query), `dirs.rs`, `relocate.rs`
+  (copying a session's record into another account's directory for a switch), `codex_threads.rs` (Codex's thread state
+  database, shared by the switch's copy and the shared configuration), `files.rs` (file helpers for account code and its
+  coordinator callers), `trash.rs`, `switch_continue.rs`, `auto_switch.rs` (automatic continuation of turns stopped by
+  a usage limit).
 - [`src/accounts/shared_config/`](../../apps/daemon/src/accounts/shared_config/README.md) — an account sharing its
   agent's default configuration directory.
 
@@ -127,10 +132,12 @@ the captured agent screens and records tests replay.
 - `src/records/` — an agent's own on-disk session records: finding them, the one collector that persists what they show,
   conversation and history reading, record watches; every pass over a record goes through `line_file.rs`.
 - `src/adapter/` — one adapter per agent CLI behind a single interface (`claude/`, `codex/`, `grok/`); `mod.rs` holds
-  the shared launch/resume flow. Other per-agent differences live where they are used (screens and dialogs in `session/`
-  and `titles/`, hook payloads in `hooks/`, records in `records/`, sign-in, quota and account switching in `accounts/`,
-  tool naming, the instruction file and role text in `mcp/`, launch and account switch in `coordinator/`, model
-  catalogues in `agents/models.rs` and detecting a project's agent in `hostfs/listing.rs`).
+  the shared launch/resume flow, `hooks.rs` the hook URL, command and script, and `account_cli.rs` the account
+  directories and commands (`codex/claude_mcp.rs` is Codex's use of Claude Code's MCP servers). Other per-agent
+  differences live where they are used (screens and dialogs in `session/` and `titles/`, hook payloads in `hooks/`,
+  records in `records/`, sign-in, quota and account switching in `accounts/`, tool naming, the instruction file and role
+  text in `mcp/`, launch and account switch in `coordinator/`, model catalogues in `agents/models.rs` and detecting a
+  project's agent in `hostfs/listing.rs`).
 - `src/mcp/` — the Octoboard MCP server a session drives Octoboard with: `mod.rs` the tool catalogue and which tools a
   role sees, `exec/` dispatch of one call through the same coordinator and reporting functions the control socket uses,
   then one file per tool family (reads, project changes and branches, handoff and handover, bindings, settings, pages,
@@ -240,9 +247,10 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Tell directories apart; move to Trash | `src/hostfs/identity.rs` (device and inode); `hostfs::trash::move_to_trash` under `src/trash_safety.rs`'s rules; account directories by `accounts::dirs::account_dir_key` |
 | List every process id | `processes::pids::all` (only `crash_cleanup.rs` keeps its own listing, which must not allocate) |
 | Run a spawned process within bounds | `src/processes/subprocess.rs` (`run_bounded`, `run_exchange`, `Bounds`) |
-| Run an agent's CLI as an account for a short query | `src/accounts/cli_run.rs` `admitted_command`, held to `Bounds::agent_query` |
-| An account's directory | `adapter::account_dir` (the pinned directory, else the agent's default) |
-| Where an agent keeps its files; Codex's app-server handshake | `src/agents/layout.rs`; `src/agents/codex_app_server.rs` |
+| Run an agent's CLI as an account for a short query | `src/accounts/cli_run.rs`: `query` (admits the run, held to `Bounds::agent_query`), `AdmittedCommand::run`, and `run_query` only where the account's directory is already held (a sign-in); `last_stderr_line` words a failure |
+| An account's directory | `adapter::account_dir` (the pinned directory, else the agent's default; `src/adapter/account_cli.rs`) |
+| Where an agent keeps its files; Codex's app-server handshake; reading a JSON-RPC reply | `src/agents/layout.rs`; `src/agents/codex_app_server.rs`; `src/agents/json_rpc.rs` |
+| Codex's thread state database (its location, repointing rows, carrying or forgetting threads) | `src/accounts/codex_threads.rs` |
 | Look up a known record or fail with its `unknown_*` error | `Store::require_project`, `require_console`, `require_account`, `require_session` |
 | Whether an agent is on the added list (every agent is while the list is undecided) | `Store::agent_is_added` (`src/store/agents.rs`) |
 | Clean a project's or an agent's tag list before storing it | `normalise_tags` (`src/coordinator/validate.rs`) |
