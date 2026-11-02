@@ -14,8 +14,9 @@ import { reportDaemonExit, reportExitFailure } from "./exitFailure";
  * later, or never settle at all, leaving the exit confirmation dialog wedged with no way out. */
 const SHUTDOWN_TIMEOUT_MS = 2000;
 
-/** The wire statuses a quit asks about: a session starting, working, or waiting for the user. */
-const BUSY_STATUSES: ReadonlySet<SessionStatus> = new Set(["starting", "working", "waiting_user"]);
+/** The wire statuses a quit asks about: a session starting, working, dormant (its background agents are
+ * on view, possibly at work), or waiting for the user. */
+const BUSY_STATUSES: ReadonlySet<SessionStatus> = new Set(["starting", "working", "waiting_user", "dormant"]);
 
 /** What holds a quit up: sessions in the middle of something (`BUSY_STATUSES`), and shell terminals
  * running something, which the quit would end. An idle or exited shell does not count. */

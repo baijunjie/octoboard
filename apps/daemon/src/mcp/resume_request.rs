@@ -132,7 +132,7 @@ async fn plan(
              `instruct_session` while it runs"
         );
     }
-    if !holder.status.is_dormant() {
+    if !holder.status.has_no_process() {
         bail!(
             "{named} holds this conversation and is running, so there is nothing to resume. It \
              reports to {}; `send_message` tells it something",
@@ -408,8 +408,8 @@ mod tests {
     /// An archived session is reopened with the name asked for when it differs, along with the
     /// owners the check says come back; an interrupted one is resumed and keeps its name.
     #[tokio::test]
-    async fn a_dormant_holder_is_resumed_in_place() {
-        let (state, _dir) = shared_console_state("resume-request-dormant");
+    async fn a_no_process_holder_is_resumed_in_place() {
+        let (state, _dir) = shared_console_state("resume-request-no-process");
         let args =
             |title: Option<&str>| json!({ "conversation": ID.to_uppercase(), "title": title });
 

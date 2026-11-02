@@ -11,15 +11,15 @@ use crate::protocol::SessionStatus;
 impl AppState {
     /// Raises the hand of a session whose request for a session has started waiting, remembering
     /// the status its agent is at. A session with a request already held keeps what it remembered:
-    /// the request replacing another one is the same wait. A dormant record is left alone, as in
-    /// [`Self::apply_hook_status`].
+    /// the request replacing another one is the same wait. A record without a process is left
+    /// alone, as in [`Self::apply_hook_status`].
     pub fn raise_request_hand(&self, id: &str) -> Result<()> {
         let mut hands = self
             .request_hands
             .lock()
             .expect("request hands lock poisoned");
         let session = self.session_record(id)?;
-        if session.status.is_dormant() {
+        if session.status.has_no_process() {
             return Ok(());
         }
         hands.entry(id.to_string()).or_insert(session.status);

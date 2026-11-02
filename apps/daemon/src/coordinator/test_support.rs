@@ -300,7 +300,7 @@ pub(super) fn binding_fixture(
     (state, dir, stand_ins)
 }
 
-/// Relaunches the dormant session `id` with a stand-in launch, giving the launch prompt, the
+/// Relaunches the process-less session `id` with a stand-in launch, giving the launch prompt, the
 /// messages queued for it and the flag's count afterwards, or the launch's failure.
 pub(super) async fn relaunch_stand_in(
     state: &Arc<AppState>,
@@ -324,7 +324,7 @@ pub(super) async fn relaunch_stand_in(
     Ok((prompt, state.take_queued(id)))
 }
 
-pub(super) fn dormant_with_conversation(id: &str, agent: Agent, owner: &str) -> Session {
+pub(super) fn no_process_with_conversation(id: &str, agent: Agent, owner: &str) -> Session {
     Session {
         agent,
         agent_session_id: Some(format!("conversation-{id}")),

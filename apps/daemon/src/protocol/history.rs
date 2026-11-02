@@ -49,8 +49,8 @@ pub struct HistoryMessage {
 pub enum ConversationLocation {
     /// An archived session of the asking project records it: reopening that session continues it.
     ArchivedSession { session: String },
-    /// A session of the asking project that is not archived records it, running or dormant: its
-    /// conversation is in use already.
+    /// A session of the asking project that is not archived records it, running or without a
+    /// process: its conversation is in use already.
     LiveSession { session: String },
     /// A session outside the asking project, a console session included, records it in any state.
     OutsideProject { session: String },

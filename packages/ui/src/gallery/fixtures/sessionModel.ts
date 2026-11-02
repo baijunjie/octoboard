@@ -82,7 +82,7 @@ export const sessionModelScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Change the model of a running session",
-    description: "The body names the session and says it restarts to take the new values, keeps its conversation, and that a turn in progress is cut off and continued where that is safe. Model and Reasoning effort start on what the session chose, Sonnet and medium, and Change model is greyed out until one of them differs; the note says a changed value is kept for this session from now on. A session that is not running, one with no conversation yet and one waiting for an answer word the body differently in the same dialog.",
+    description: "The body names the session and says it restarts to take the new values, keeps its conversation, and that a turn in progress is cut off and continued where that is safe. Model and Reasoning effort start on what the session chose, Sonnet and medium, and Change model is greyed out until one of them differs; the note says a changed value is kept for this session from now on. A session that is not running, one with no conversation yet and one waiting for an answer and one showing its background agents (Dormant, whose restart closes that view) word the body differently in the same dialog.",
     state,
     steps: openDialog(running.title),
   },

@@ -20,15 +20,16 @@ Where to start, by question:
   relationships, where sessions are listed, locking and renaming.
 - [Opening a session](product/opening-sessions.md) — the session dialog and how the agent, account, model and effort of
   a new session are chosen.
-- [Session statuses](product/session-statuses.md) — what each status glyph means, what it is derived from, and the
-  raised hand: the notification, Dock badge and rail count for a session waiting on the user.
+- [Session statuses](product/session-statuses.md) — what each status and its glyph means (Paused and Dormant included),
+  what it is derived from, the top status a project, chip or avatar shows, and the raised hand: the notification, Dock
+  badge and rail count for a session waiting on the user.
 - [Turns the agents' hooks do not report](product/turns-hooks-do-not-report.md) — the turn endings no hook event
   announces and how the status copes.
 - [Session titles](product/session-titles.md) — created names, displayed names and how a title follows the agent's.
 - [Session context size](product/session-context.md) — how the context size is measured, refreshed and shown as a chip.
 - [Session history](product/session-history.md) — the read-only history shown for an archived session.
 - [Archiving and resuming sessions](product/archiving-and-resuming-sessions.md) — how archiving or an interruption ends
-  a session's process and how a dormant session comes back.
+  a session's process and how an interrupted or archived session comes back.
 - [Background processes](product/background-processes.md) — processes started by agents, automatic cleanup, keeping
   processes running, carrying them over on a handoff, account switch, model change or change of an account's sharing,
   moving them between sessions, project processes and process choices when archiving.

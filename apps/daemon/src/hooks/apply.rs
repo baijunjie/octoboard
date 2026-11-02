@@ -150,6 +150,11 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
                     }
                     if let Some(status) = hooks::status_from_event(agent, &event, &payload) {
                         let status = suppress_auto_review_hook(state, session_id, status);
+                        // Before the status write, so the record it publishes already carries
+                        // whether the turn that ended left the session paused.
+                        if let Some(outcome) = hooks::turn_outcome(agent, &event, &payload) {
+                            state.set_paused(session_id, outcome == hooks::TurnOutcome::Abnormal);
+                        }
                         // Read before the status lands: a Claude Code watch, and a Grok one past
                         // the agent's own hand, is armed on a move into a status, not on more of
                         // the same.

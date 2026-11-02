@@ -96,6 +96,11 @@ pub enum SessionStatus {
     Starting,
     Working,
     WaitingUser,
+    /// A live session whose screen shows one of Claude Code's views of its background agents, which
+    /// holds its messages and takes none: the person is looking at the agents, so it is neither
+    /// busy nor waiting for an answer. Computed only in the status a client is shown
+    /// (`AppState::shown_status`), over a stored `Working` or `Idle`; never stored.
+    Dormant,
     Idle,
     Interrupted,
     Archived,
@@ -104,7 +109,7 @@ pub enum SessionStatus {
 impl SessionStatus {
     /// True for the two statuses that mean "no process is running for this session". Both are
     /// resumable; the difference is only how the session got there.
-    pub fn is_dormant(self) -> bool {
+    pub fn has_no_process(self) -> bool {
         matches!(self, SessionStatus::Interrupted | SessionStatus::Archived)
     }
 }
@@ -457,6 +462,13 @@ pub struct Session {
     /// receives (`AppState::wire_session`), and absent otherwise.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub switching_account: bool,
+    /// Whether the session's process is at its prompt (`idle`) after a turn that ended abnormally:
+    /// cancelled by the user or an owner's interrupt, a declined permission prompt or question that
+    /// ended the turn, a usage-limit stop, or a failure. It lasts until the next turn begins, a
+    /// turn ends normally, or a Claude Code `SessionStart` begins a fresh conversation. Never stored: it is filled in on the record a client receives
+    /// (`AppState::wire_session`) from the live process, and absent otherwise.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub paused: bool,
     /// Whether a launch of this session that is pending or under way will hand the agent a
     /// prompt, so that it is `working` once it is up. A new open sets it from the first record
     /// that announces the session; a relaunch sets it inside `relaunch_session_with`, once the

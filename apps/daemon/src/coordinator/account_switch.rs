@@ -172,9 +172,10 @@ pub(crate) struct SwitchOnlyIf<'a> {
     pub recovery: Option<&'a crate::accounts::auto_switch::PendingRecovery>,
     /// The account the session must still be on (`Some(None)` the default account).
     pub on_account: Option<Option<&'a str>>,
-    /// The session must not be shown as waiting for the user, by whatever route: moving it would
-    /// end the prompt it waits at. Relaxed when `usage_limited` is set: the usage-limit dialog of
-    /// an agent's screen is the point of that switch and does not count as a wait.
+    /// The session must not be shown as waiting for the user, by whatever route, nor as dormant
+    /// over a view of its background agents: moving it would end the prompt it waits at or the
+    /// view. Relaxed when `usage_limited` is set: the usage-limit dialog of an agent's screen is
+    /// the point of that switch and does not count as a wait.
     pub not_waiting: bool,
     /// The session must have a process at its prompt or in a turn (shown `working` or `idle`),
     /// so one the user stopped, or whose process exited since the record was read, is not
@@ -271,7 +272,7 @@ pub(crate) async fn switch_session_account_if(
     } else {
         state.shown_status(&before)
     };
-    if only_if.not_waiting && shown == SessionStatus::WaitingUser {
+    if only_if.not_waiting && matches!(shown, SessionStatus::WaitingUser | SessionStatus::Dormant) {
         return Err(NoLongerDue("the session waits for the user now").into());
     }
     if only_if.running
@@ -545,7 +546,7 @@ pub(crate) async fn restore_after_failed_switch(
     if now.status == SessionStatus::Archived {
         return Err(session_archived(id));
     }
-    if !now.status.is_dormant() {
+    if !now.status.has_no_process() {
         return Err(CodedError::raised(
             error_code::SESSION_ALREADY_RUNNING,
             "this session is not interrupted or archived",

@@ -96,7 +96,7 @@ mod tests {
     use std::time::{Duration, Instant};
 
     #[tokio::test]
-    async fn a_dormant_status_publishes_only_after_its_screen_is_frozen() {
+    async fn a_no_process_status_publishes_only_after_its_screen_is_frozen() {
         for status in [SessionStatus::Archived, SessionStatus::Interrupted] {
             let (state, dir) = app_state("state-output-frozen-before-publication");
             insert_record(&state, &dir, "s", SessionStatus::Working);

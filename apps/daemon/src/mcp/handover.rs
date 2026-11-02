@@ -297,7 +297,7 @@ impl Parties {
                 .ok()
                 .flatten()
                 .unwrap_or_else(|| session.clone());
-            if current.status.is_dormant() {
+            if current.status.has_no_process() {
                 untold.push(current);
                 continue;
             }

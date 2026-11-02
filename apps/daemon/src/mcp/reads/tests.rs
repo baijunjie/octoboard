@@ -94,11 +94,60 @@ async fn sessions_are_filtered_by_kind_and_by_the_branch_they_are_responsible_fo
     }
 }
 
+/// A session record carries `paused` only for an idle session whose last turn ended abnormally,
+/// and a session over a view of its background agents is `dormant` with a note saying to leave it
+/// be.
+#[tokio::test]
+async fn a_session_record_says_whether_it_is_paused_or_dormant() {
+    let fixture = RepoState::new("reads-paused-dormant");
+    let state = &fixture.state;
+    let live = running(state, "lead");
+    let get = || async {
+        call(
+            state,
+            "loose",
+            "get_session",
+            &arguments(json!({ "session": "lead" })),
+        )
+        .await
+        .unwrap()
+    };
+
+    with_status(state, "lead", SessionStatus::Idle);
+    assert_eq!(get().await["paused"], false);
+    live.mark_paused(true);
+    let paused = get().await;
+    assert_eq!(paused["status"], "idle");
+    assert_eq!(paused["paused"], true);
+    assert!(paused.get("note").is_none());
+    let listed = call(state, "loose", "list_sessions", &arguments(json!({})))
+        .await
+        .unwrap();
+    let entry = listed["sessions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|session| session["session"] == "lead")
+        .unwrap();
+    assert_eq!(entry["paused"], true);
+
+    with_status(state, "lead", SessionStatus::Working);
+    assert_eq!(get().await["paused"], false);
+
+    with_status(state, "lead", SessionStatus::Idle);
+    crate::test_support::show_agents_view(&live);
+    let dormant = get().await;
+    assert_eq!(dormant["status"], "dormant");
+    assert_eq!(dormant["paused"], false);
+    let note = dormant["note"].as_str().unwrap();
+    assert!(note.contains("background-agents view"), "{note}");
+}
+
 /// An interrupted or archived session says whether its agent still holds the conversation:
 /// proven gone is `false`, one that cannot be told `null`, one with no conversation `true`; a
 /// running session has no such field, and `list_archived` adds it only when asked.
 #[tokio::test]
-async fn a_dormant_session_says_whether_it_can_be_resumed() {
+async fn a_no_process_session_says_whether_it_can_be_resumed() {
     let fixture = RepoState::new("reads-resumable");
     let state = &fixture.state;
     let account = ScratchDir::new("reads-resumable-account");

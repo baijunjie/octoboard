@@ -5,54 +5,71 @@
 | Starting | `starting` | a grey arc turning | A newly opened session — from the dialog, by an agent's `new_session`, or by an approved session request — whose agent is still being launched; it has no process yet. Once the process is up it becomes *working* for a session started with a brief, *done* for one opened on an existing conversation, and *awaiting instructions* otherwise; it is removed again if the launch fails (see "Starting the session" in `docs/product/opening-sessions.md`). |
 | Working | `working` | a solid blue (accent) dot pinging a fading copy of itself outward | The agent is executing a turn. |
 | Waiting for the user | `waiting_user` | an orange (warning) raised hand that waves now and then | The agent is waiting on a permission decision, including its folder-trust confirmation, or has asked the user a question through its own ask-the-user tool; or Octoboard is asking the user on the agent's behalf while the agent's call waits, which is a session request (see "Waiting for the answer" in `docs/product/session-requests.md`). |
+| Dormant | `dormant` | an orange (warning) "zz", two Zs rising | The terminal of a running Claude Code session shows one of its views of its background agents, and the session is held there until the user leaves it. See "Dormant" below. |
+| Paused | `idle`, with `paused` true | a green pause sign in a circle | The process is sitting at its prompt after a turn that ended abnormally — cancelled, ended by a declined prompt, stopped on a usage limit or failed. See "Paused" below. |
 | Done | `idle`, with `has_conversation` true | a green circle with a check mark | The process is running and sitting at its prompt with nothing left running in the background and no delegated work in progress, and the session has a conversation. See "Done, awaiting instructions and child sessions working" below. |
 | Awaiting instructions | `idle`, with `has_conversation` false | a green speech bubble | The process is running and sitting at its prompt, and the session has never had a conversation: it waits for its first instruction. |
-| Child sessions working | `idle`, while a session under it is starting, working or waiting for the user | a hollow green ring with a filled green dot in its centre, pinging outward | The process is sitting at its prompt with nothing of its own left running, while work it delegated is in progress in the sessions under it. See "Done, awaiting instructions and child sessions working" below. |
+| Child sessions working | `idle`, while a session under it is starting, working, waiting for the user or dormant | a hollow green ring with a filled green dot in its centre, pinging outward | The process is sitting at its prompt with nothing of its own left running, while work it delegated is in progress in the sessions under it. See "Done, awaiting instructions and child sessions working" below. |
 | Working in background | `idle`, with a non-empty `background_tasks` | a hollow green ring, pinging outward | The process is sitting at its prompt, but its last turn ended with work still running in the background. Claude Code sessions only; see "Working in background" below. |
 | Switching account | any status except `archived`, with `switching_account` true | the *starting* arc | An account switch holds the session, or, in the window that confirmed the switch, the session waits for its turn in it (see "While a session is switching" in `docs/product/switching-session-accounts.md`). Shown in place of the session's own status, which it does not change; lists ranked by status sort it by the status it will have once the switch is over (see "The status order" in `docs/product/order-of-projects-and-sessions.md`). |
-| Interrupted | `interrupted` | a grey pause sign | No process is running, and it did not end by being archived. The session stays in its project's list (a console session, in the console sessions section) and can be resumed. |
+| Interrupted | `interrupted` | a grey pause sign, with no circle | No process is running, and it did not end by being archived. The session stays in its project's list (a console session, in the console sessions section) and can be resumed. |
 | Archived | `archived` | an archive box | Ended by being archived (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`). No longer listed among its project's sessions (a console session, no longer in the console sessions section); reached through the archive (see "Archived sessions" in `docs/product/archiving-and-resuming-sessions.md`) and can be reopened. |
 
-*Working* and *waiting for the user* mean a process is running, and so do the four statuses of a session **at its
-prompt** — *done*, *awaiting instructions*, *child sessions working* and *working in background*, all `idle` on the
-wire. *Starting* means a process is about to be; *interrupted* and *archived* mean none is, and both can be resumed.
+*Working*, *waiting for the user* and *dormant* mean a process is running, and so do the five statuses of a session **at
+its prompt** — *paused*, *done*, *awaiting instructions*, *child sessions working* and *working in background*, all
+`idle` on the wire. *Starting* means a process is about to be; *interrupted* and *archived* mean none is, and both can
+be resumed.
 
-*Done*, *awaiting instructions*, *child sessions working* and *working in background* are told apart by the client
-alone: the daemon's `status` is `idle` for all four, and so is the `status` of every session record the session tools
-give (see "Session records" in `docs/product/what-every-session-reads.md`).
+*Paused*, *done*, *awaiting instructions*, *child sessions working* and *working in background* are told apart by the
+client alone: the daemon's `status` is `idle` for all five, and so is the `status` of every session record the session
+tools give (see "Session records" in `docs/product/what-every-session-reads.md`), which carry `paused` and the other
+facts the client reads.
 
 ## Which status a session shows
 
 A session shows the first of these that applies:
 
 1. *Switching account*, while an account switch holds it, over every status but *archived*.
-2. Its wire status, when that is not `idle`.
-3. *Working in background*, while it has work left running in the background (Claude Code only; for the other agents
+2. Its wire status, when that is not `idle` — *dormant* included, which the daemon works out (see "Dormant" below).
+3. *Paused*, while `paused` is true.
+4. *Working in background*, while it has work left running in the background (Claude Code only; for the other agents
    this step never applies).
-4. *Child sessions working*, while a session under it is starting, working or waiting for the user.
-5. *Done*, when it has a conversation.
-6. *Awaiting instructions*.
+5. *Child sessions working*, while a session under it is starting, working, waiting for the user or dormant.
+6. *Done*, when it has a conversation.
+7. *Awaiting instructions*.
 
 ## Status glyphs
 
 The glyph stands for the status on the sidebar's rows, focus mode's cards, the top bar's breadcrumb and a confirmation's
 list of the sessions it affects. In a confirmation, archived sessions omit the status glyph; the warning identifies them
-as archived.
+as archived. The same glyphs mark the top status of a group of sessions (see "The top status" below), and the menu bar
+icon's menu draws them still (see "The icon's menu" in `docs/product/menu-bar-icon.md`).
 
-**Colour says whether the session itself is at its prompt or busy; form progresses gradually along the status
-order** (see "The status order" in `docs/product/order-of-projects-and-sessions.md`), so statuses next to each other
-look related. Orange is
-waiting for the user: the hand of *waiting for the user*. Green is the session itself at its prompt, where it can be
-talked to: the check mark of *done*, the speech bubble of *awaiting instructions*, the ring with a centre dot of *child
-sessions working* and the hollow ring of *working in background*. Blue is the session itself busy: the solid dot of
-*working*. The muted grey is a session with no prompt up: the pause of *interrupted*, and the turning arc
-that *starting* and *switching account* share. *Archived* is an archive box. The ring of *child sessions working* is
+**Colour says what the session asks of the person; form progresses gradually along the status order** (see "The status
+order" in `docs/product/order-of-projects-and-sessions.md`), so statuses next to each other look related. Orange is a
+session that needs the person: the hand of *waiting for the user*, waiting for an answer, and the "zz" of *dormant*,
+held in a view until the person leaves it. Green is the session at its prompt, where it can be talked to: the circled
+pause of *paused*, the check mark of *done*, the speech bubble of *awaiting instructions*, the ring with a centre dot of
+*child sessions working* and the hollow ring of *working in background*. Blue is the session itself busy: the solid dot
+of *working*. The muted grey is a session that cannot be talked to now: the bare pause of *interrupted*, and the turning
+arc that *starting* and *switching account* share. *Archived* is an archive box. The ring of *child sessions working* is
 larger than the other dots, and its ping reaches less far, ending within the glyph's own slot.
 
-The waving hand, the pings and the turning arc stand still where the system asks for reduced motion. Every status still
-differs from the rest by shape, so colour is never the only cue: the filled dot of *working* from the hollow ring of
-*working in background*, that ring from the larger ring of *child sessions working* by the latter's centre dot, and the
-rings from the speech bubble and the check mark.
+**Every glyph sits in a box of one size, whatever the status**: 16 px on rows, cards, the breadcrumb and a
+confirmation's list, 14 px in a status marker (see "The top status" below), so glyphs in a column share one centre line.
+The raised hand and the speech bubble, whose ink leans to one side, are moved slightly within the box so that they read
+centred; the turning arc turns about the box's centre.
+
+**Dormant's "zz"** is a large Z at the bottom left with a smaller one stepping up to its top right. Where motion is
+allowed, Zs drift up that diagonal instead, shrinking as they rise, a new one entering at the bottom left as the top one
+leaves at the top right; each takes about 2.4 seconds to cross, the next a third of that behind, and none is drawn
+outside the glyph's box. The menu bar draws the still pair.
+
+The waving hand, the pings, the turning arc and the rising Zs stand still where the system asks for reduced motion.
+Every status still differs from the rest by shape, so colour is never the only cue: the filled dot of *working* from the
+hollow ring of *working in background*, that ring from the larger ring of *child sessions working* by the latter's centre
+dot, the rings from the speech bubble and the check mark, the "zz" from the hand, and the circled pause of *paused*
+from the bare pause of *interrupted*.
 
 **How the status reaches a user who does not read the glyph** differs by placement:
 
@@ -61,8 +78,9 @@ rings from the speech bubble and the check mark.
 - On the **top bar's breadcrumb** and in a **confirmation's list of the sessions it affects** nothing around the glyph
   says the status, so the glyph itself is named after it.
 - Every placement where no status text sits beside the glyph gives it a **tooltip** saying the status in the same words
-  — the **sidebar's rows**, the **top bar's breadcrumb** and a **confirmation's list** (see "Tooltips on indicators" in
-  `docs/product/labels-and-tooltips.md`). Focus mode's cards say the status in words already and carry none.
+  — the **sidebar's rows**, the **top bar's breadcrumb**, a **confirmation's list** and a **status marker** (see
+  "Tooltips on indicators" in `docs/product/labels-and-tooltips.md`). Focus mode's cards say the status in words already
+  and carry none.
 
 ## Transitions
 
@@ -74,9 +92,11 @@ rings from the speech bubble and the check mark.
   A launch that fails removes the session.
 - While the process runs, reports from the agent move the session between *working*, *waiting for the user* and its
   prompt — except while a folder-trust confirmation, Codex action prompt, a screen of the agent's that only the user can
-  answer or a session request holds it at *waiting for the user* (see "What the statuses are derived from" below). At
-  its prompt it shows the status "Which status a session shows" above gives it: a session started with a brief is
-  *working*, then *done* once that turn is over; one opened by hand is *awaiting instructions* until its first turn.
+  answer or a session request holds it at *waiting for the user* (see "What the statuses are derived from" below), and
+  while a view of its background agents shows it *dormant* (see "Dormant" above). At its prompt it shows the status
+  "Which status a session shows" above gives it: a session started with a brief is *working*, then *done* once that turn
+  is over; one opened by hand is *awaiting instructions* until its first turn; a turn that ends abnormally leaves it
+  *paused* until the next one (see "Paused" above).
 - The process ending for any reason other than archiving — the agent exiting on its own, a crash, the application
   quitting — leaves the session *interrupted*.
 - Archiving leaves the session *archived*. User-initiated archiving of an owner also ends and archives the sessions
@@ -124,10 +144,11 @@ and only these seven.
   the agent's first hook report. Its raised hand follows the confirmation rather than the dialog; see "What happens when
   a confirmation comes up" in `docs/product/folder-trust.md`.
 - A screen of the agent's own that only the user can answer and that no hook reports — such as Claude Code's "Resume
-  this conversation?" or a view of its background agents, Codex's sign-in screen, or Grok Build's usage-limit screen —
-  holds its session at *waiting for the user* for as long as the session's rendered screen shows it, whatever the
-  agent's hook reports say meanwhile; once it is gone the session shows the agent's last reported status again. Which
-  screens are recognised is in "Messages held until a session can take them" in `docs/product/message-delivery.md`.
+  this conversation?", Codex's sign-in screen, or Grok Build's usage-limit screen — holds its session at *waiting for
+  the user* for as long as the session's rendered screen shows it, whatever the agent's hook reports say meanwhile; once
+  it is gone the session shows the agent's last reported status again. Claude Code's views of its background agents are
+  recognised the same way but show the session *dormant* instead (see "Dormant" above). Which screens are recognised is
+  in "Messages held until a session can take them" in `docs/product/message-delivery.md`.
 - A session request — a `request_session` or `request_resume_session` call, or an owner's `switch_session_account` or
   `handoff_session` call the user is asked to approve — waiting for the user's answer holds its session at *waiting for
   the user* for the whole wait, whatever the agent's own events say meanwhile; when the request ends the session goes
@@ -201,15 +222,9 @@ archiving it asks for confirmation first (see "Archiving, interruption and resum
 `docs/product/application-lifecycle.md`), and a turn that ends this way is not reported to its owner (see "When a
 session does not report" in `docs/product/reporting-to-owners.md`).
 
-**It has its own glyph and name** wherever a session's status is shown or said — its row, focus mode's card, the top
-bar's breadcrumb, a confirmation's list of sessions, the row's accessible name and the glyph's tooltip. A console's
-avatar distinguishes it from working too, using the badge and selection rules in "The console switcher" in
-`docs/product/console-switcher.md`. **For activity summaries, it is an activity of its own**, below a session waiting
-for the user or working and above one merely running, shown with its own glyph by a collapsed project's activity
-marker (see "Project rows" in `docs/product/sidebar-project-rows.md`) and a switch strip chip (see "The switch strip"
-in `docs/product/focus-mode.md`). Project and session lists ranked by status give it a separate place, following
-"Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`. The menu bar icon's menu lists it
-in a group of its own (see "The icon's menu" in `docs/product/menu-bar-icon.md`).
+**It has its own glyph and name** wherever a session's status is shown or said, as every status does (see "The top
+status" below), and lists ranked by status give it a place of its own (see "The status order" in
+`docs/product/order-of-projects-and-sessions.md`).
 
 Every session record the session tools give carries the list (see "Session records" in
 `docs/product/what-every-session-reads.md`).
@@ -230,10 +245,10 @@ and no delegated work in progress, is *done*; one that has never had a conversat
   change of model and effort, bring it back *done* — or *working*, when it is sent a prompt to continue.
 
 **Child sessions working** is a session at its prompt, with nothing of its own left running in the background, while a
-session bound to it — or, at any depth, bound to one of those — is *starting*, *working* or *waiting for the user*.
-Sessions under it that are at their prompt (working in background included), *interrupted* or *archived* do not count.
-It takes precedence over *done* and *awaiting instructions*, and gives way to *working in background* (see "Which status
-a session shows" above).
+session bound to it — or, at any depth, bound to one of those — is *starting*, *working*, *waiting for the user* or
+*dormant*. Sessions under it that are at their prompt (paused and working in background included), *interrupted* or
+*archived* do not count. It takes precedence over *done* and *awaiting instructions*, and gives way to *paused* and
+*working in background* (see "Which status a session shows" above).
 
 **Done and child sessions working are sessions at their prompt in every respect but their glyph and name.** Each
 takes a message straight away (see
@@ -243,15 +258,93 @@ quit by itself; for *child sessions working*, the busy sessions under it do (see
 `docs/product/application-lifecycle.md`). Archiving one with an unarchived session under it asks for confirmation, as
 for any owner (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`).
 
-Each has its own glyph and name wherever a session's status is shown or said, as *working in background* does, and its
-own badge on a console's avatar (see "The console switcher" in `docs/product/console-switcher.md`). **For activity
-summaries, both count as a session running, not working**, as *awaiting instructions* does: a collapsed project's
-activity marker shows the speech bubble for them (see "Project rows" in `docs/product/sidebar-project-rows.md`), and a
-switch strip chip, which shows nothing for a session merely running, shows nothing for them (see "The switch strip" in
-`docs/product/focus-mode.md`). The sessions under one with child sessions working count by their own status, wherever
-they are. Project and session lists ranked by status give each a place of its own (see "The status order" in
-`docs/product/order-of-projects-and-sessions.md`), and the menu bar icon's menu lists each in a group of its own (see
-"The icon's menu" in `docs/product/menu-bar-icon.md`).
+Each has its own glyph and name wherever a session's status is shown or said, as every status does (see "The top
+status" below), and lists ranked by status give each a place of its own (see "The status order" in
+`docs/product/order-of-projects-and-sessions.md`). The sessions under one with child sessions working count by their own
+status, wherever they are.
+
+## Paused
+
+**Paused is a session at its prompt whose last turn ended abnormally**: cancelled — by the user in the terminal, or by an
+owner's `interrupt_session` (see `docs/product/interrupting-turns.md`) — ended by a declined permission prompt or
+question, stopped on a usage limit, or failed, such as on an overloaded model or a network or API error. On the wire it
+is `idle` with `paused: true`; the flag names no reason, and neither does the window: the glyph's tooltip, a focus
+mode's card and every accessible name say only that it is paused.
+
+**What sets it** is the end of the turn as the agent reports it — Claude Code's `StopFailure` hook event, Codex's
+`Interrupt`, Grok Build's `StopCancelled` and `StopFailure` — or as Octoboard recovers it where no hook reports it: a
+Claude Code decline or cancel, a Grok Build cancel before its first token, and a Codex turn that ended in an error (see
+`docs/product/turns-hooks-do-not-report.md`).
+
+**What clears it:**
+
+- the next turn beginning, or anything else that moves the session's own status off its prompt, such as a permission
+  prompt its hooks report;
+- a turn ending normally, whether or not it leaves work running in the background;
+- a Claude Code session beginning a fresh conversation, as after `/clear`;
+- the process ending, for any reason: it is kept on the running process only, never stored, so a relaunch — a resume, an
+  account switch, a change of model and effort or of its account's sharing — starts without it.
+
+Grok Build's turn-end backstop and its turn end at shutdown neither set nor clear it.
+
+**It shows only while the session would otherwise be at its prompt.** A wait that only the session's screen shows, or a
+view that shows it *dormant*, takes its place without clearing it, so the session reads as paused again once that is
+gone.
+
+**In every other respect it is a session at its prompt**: it takes a message straight away (see "Messages held until a
+session can take them" in `docs/product/message-delivery.md`), can be handed off (see "What can be handed off" in
+`docs/product/handing-off-sessions.md`), is archived at once when nothing else asks for a confirmation (see "Archiving,
+interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`), holds up no quit by itself (see
+"Quitting" in `docs/product/application-lifecycle.md`), and does not make its owner read as *child sessions working*.
+
+## Dormant
+
+**Dormant is a running Claude Code session whose terminal shows one of its views of its background agents**: a
+background subagent's view (`claude_subagent_view`), its agents view (`claude_agents_view`), or its list of background
+agents with the focus moved onto it (`claude_agent_list_focus`) — the screens of those codes in "Messages held until a
+session can take them" in `docs/product/message-delivery.md`. The person is looking at the agents rather than being
+asked anything, and the session cannot take a message until they leave the view. On the wire it is `dormant`, worked out
+by the daemon from the session's screen and never stored: the agent's own last reported status is kept beneath it and
+shows again the moment the view is gone.
+
+- **It shows over *working* and over every status at its prompt.** It does not show over a wait for the user: a hand
+  the agent's hooks or a session request raised, a folder-trust confirmation, Codex's `Action Required` title and every
+  other recognised screen of the agent's — Grok Build's usage-limit screen included — still read as *waiting for the
+  user*. Nor does it show over *starting*, *interrupted* or *archived*; *switching account* shows over it as over any
+  status.
+- **What is written into it is held** as for any recognised screen, its `writes_held` reason `agent_dialog` with the
+  view's code, and written once the view is gone.
+- **Nobody acts on it in the user's place.** An owner's `interrupt_session` and `set_session_model` are refused with
+  `session_waiting_for_user`, under a message that names the view (see "When a key is sent" in
+  `docs/product/interrupting-turns.md` and "Changing a session's model and effort" in
+  `docs/product/model-and-reasoning-effort.md`); `get_session` carries a note telling the caller to leave it be. An
+  automatic account switch leaves it alone (see `docs/product/automatic-account-switch.md`), and a change of its
+  account's sharing is refused while it lasts (see "When a change is carried out" in
+  `docs/product/sharing-the-default-configuration.md`). The user can still change its model from the window, where the
+  dialog warns that restarting closes the view.
+- **It raises no hand**: no system notification, no count in the Dock badge or the rail's waiting count, and its owner
+  is not told that it waits (see "Notices to an owner" in `docs/product/reporting-to-owners.md`). The menu
+  bar icon's orange dot does light for it (see "The icon's look" in `docs/product/menu-bar-icon.md`).
+- **It counts as busy**: quitting asks for confirmation while one is dormant (see "Quitting" in
+  `docs/product/application-lifecycle.md`), archiving it asks first (see "Archiving, interruption and resuming" in
+  `docs/product/archiving-and-resuming-sessions.md`), and the session it is bound to reads as *child sessions working*.
+
+## The top status
+
+Where one mark stands for several sessions — a console's avatar on the rail, a collapsed project's row, a chip of a
+console session's switch strip — it marks them with their **top status**: the status, as "Which status a session shows"
+above gives it, of the one among them that comes first in the status order (see "The status order" in
+`docs/product/order-of-projects-and-sessions.md`), the most recently started breaking a tie. Archived sessions are left
+out. A session starting or switching account is ranked with the status it will have once that is over, but marked as
+starting or switching account. The choice does not depend on pins, nor on whether the sidebar is ordered by status.
+
+Every status but *archived* has its own mark there, the glyph of "Status glyphs" above or, on the rail, a badge of its
+own, so the mark always says exactly which status it is; there is a mark whenever any of the sessions is not archived.
+The accessible name of the avatar, row or chip is its own name followed by that status, in the words the status is said
+in everywhere ("Name, Working"; for a pinned project, "Name, pinned, Working"). Where each is drawn is in "The console
+switcher" in `docs/product/console-switcher.md`, "Project rows" in `docs/product/sidebar-project-rows.md` and "The
+switch strip" in `docs/product/focus-mode.md`. The menu bar icon's menu lists every status but *archived* in a group of
+its own (see "The icon's menu" in `docs/product/menu-bar-icon.md`).
 
 ## The raised hand
 
@@ -272,13 +365,16 @@ they are. Project and session lists ranked by status give each a place of its ow
   window is closed into the background Octoboard has no Dock icon; the count is still kept and shows once it returns to
   the Dock (see "Closing the window" in `docs/product/application-lifecycle.md`). The menu bar icon's menu lists the
   waiting sessions too (see "The icon's menu" in `docs/product/menu-bar-icon.md`), and the icon itself carries an orange
-  dot while any is waiting (see "The icon's look" in `docs/product/menu-bar-icon.md`).
+  dot while any is waiting or dormant (see "The icon's look" in `docs/product/menu-bar-icon.md`).
 - The rail carries the same count, as a raised hand and the number, shown only while at least one session is waiting.
   Pressing it selects the next waiting session after the selected one — console by console in the order the consoles
   were created, its console sessions before its projects' sessions, and both in the sidebar's order (see "Order of
   projects and sessions" in `docs/product/order-of-projects-and-sessions.md`) — and wraps from the last back to the
   first; when the selected session is not waiting, it selects the first. The sidebar follows the session it selects (see
   "Selecting a session" in `docs/product/sidebar.md`).
+
+A *dormant* session raises none of this: it notifies nobody and is in neither count; only the menu bar icon's dot lights
+for it (see "Dormant" above).
 
 **Where the hand is the agent's own, the user answers in the session's terminal**, and the status leaves *waiting for
 the user* on the agent's next event, when its Codex action title clears or when the screen that held it is no longer

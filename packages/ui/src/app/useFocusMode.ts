@@ -51,11 +51,11 @@ export function useFocusMode({
   // Only while a console session is in focus, where the strip is on screen and the shortcut exists.
   const stripConsoleId = focus && "consoleSession" in focus ? currentConsoleId : undefined;
   const switchableConsoleSessions = useDaemonStore(
-    useShallow((s) =>
-      stripConsoleId !== undefined
-        ? switchStrip(sessionsOf(indexSessions(s.sessions).byConsole, stripConsoleId), stripConsoleId).map((e) => e.consoleSession)
-        : NO_SESSIONS,
-    ),
+    useShallow((s) => {
+      if (stripConsoleId === undefined) return NO_SESSIONS;
+      const index = indexSessions(s.sessions);
+      return switchStrip(sessionsOf(index.byConsole, stripConsoleId), stripConsoleId, index.delegatingIds).map((e) => e.consoleSession);
+    }),
   );
   // ⌃Tab only shows the console session, without resuming an interrupted one (`KEY_SWITCH_SELECTION`),
   // and hands keyboard focus to its terminal, as selecting a session does. The switch is applied in

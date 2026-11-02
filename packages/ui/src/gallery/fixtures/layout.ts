@@ -4,11 +4,11 @@ import { consoleOf, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState
 
 const GROUP = "Window layout";
 
-// `railState` has five consoles covering everything the rail shows per console: a raised hand (Main,
+// `railState` has five consoles covering the rail's common badges: a raised hand (Main,
 // which has two waiting sessions there, and the one with the long name, which has one, so the waiting
-// count reads 3 across both), work in progress (Operations), a session merely running (Billing), and
+// count reads 3 across both), a Done status (Operations, whose hub outranks its working session, and Billing), and
 // nothing going on (Docs). Main and Website are also borrowed by `layout-waiting-overflow`, which
-// gives them sessions of its own.
+// gives them sessions of its own. Every other badge is shown by `collapsed-project-activity`.
 const main = consoleOf("c-main", "Main");
 const operations = consoleOf("c-ops", "Operations");
 const billing = consoleOf("c-billing", "Billing");
@@ -75,7 +75,7 @@ export const layoutScenarios: Scenario[] = [
     category: "normal",
     title: "Rail with five consoles",
     description:
-      "Waiting, working, running and inactive avatars appear together, including a long name. Hover for activity details. Delete the inactive Docs console from its context menu: its avatar fades out while sliding to the right while the remaining avatars slide into place. Use the rail’s New console button to add an avatar and inspect its entrance.",
+      "Waiting, done and inactive avatars appear together, including a long name; each badge is the console's top status (Operations' Done hub outranks its working session). Hover an avatar for its status. Delete the inactive Docs console from its context menu: its avatar fades out while sliding to the right while the remaining avatars slide into place. Use the rail’s New console button to add an avatar and inspect its entrance.",
     state: railState,
     steps: [
       (ui) => ui.press(ui.session("Hub")),

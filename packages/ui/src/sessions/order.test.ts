@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { consoleOf } from "../fixtures/builders";
 import type { Project, Session, SessionStatus } from "../protocol";
-import { archiveNeedsConfirmation, isUnusedSession, consoleActivity, consoleStatus, INACTIVE_PROJECT_RANK, STATUS_RANK, archivePreviewSessions, projectRank, liveConsoleSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, ordersByStatus, sessionsInTreeOrder, sortProjects, switchStrip } from "./order";
+import { archiveNeedsConfirmation, isUnusedSession, topStatus, INACTIVE_PROJECT_RANK, STATUS_RANK, archivePreviewSessions, projectRank, liveConsoleSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, ordersByStatus, sessionsInTreeOrder, sortProjects, switchStrip } from "./order";
 import { FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
-import { delegatingSessionIds } from "./sessionStatus";
+import { delegatingSessionIds, type ShownStatusKind } from "./sessionStatus";
 
 /** No session delegates: the sessions of a test that does not look at delegated work. */
 const NONE: ReadonlySet<string> = new Set();
@@ -82,7 +82,7 @@ describe("liveSessions", () => {
     const starting = [session("starting", "starting", 1)];
     expect(liveSessions(starting, NONE).map((s) => s.id)).toEqual(["starting"]);
     expect(projectRank(starting, NONE)).not.toBe(INACTIVE_PROJECT_RANK);
-    expect(consoleActivity(starting)).toBe("running");
+    expect(topStatus(starting, NONE)).toBe("starting");
   });
 
   it("does not offer a console session that is still starting as an owner", () => {
@@ -91,7 +91,7 @@ describe("liveSessions", () => {
   });
 });
 
-describe("consoleStatus", () => {
+describe("topStatus", () => {
   it("uses the same priority as rows, regardless of pins, input order or recency", () => {
     const ordered = [
       session("waiting", "waiting_user", 1),
@@ -101,25 +101,53 @@ describe("consoleStatus", () => {
     ];
     const kinds = ["waiting_user", "idle", "background", "working"];
     for (let index = 0; index < ordered.length; index++) {
-      expect(consoleStatus(ordered.slice(index).reverse(), NONE)).toBe(kinds[index]);
+      expect(topStatus(ordered.slice(index).reverse(), NONE)).toBe(kinds[index]);
     }
     expect(liveSessions(ordered.map((s) => ({ ...s, pinned: false })), NONE).map((s) => s.id))
       .toEqual(["waiting", "idle", "background", "working"]);
   });
 
-  it("omits starting from the avatar while ranking it with the idle session it will become in session order", () => {
+  it("names every status there is but archived, each as the top one of a session in it", () => {
+    const sessions: Record<Exclude<ShownStatusKind, "archived">, Session> = {
+      waiting_user: session("waiting_user", "waiting_user", 1),
+      dormant: session("dormant", "dormant", 1),
+      paused: { ...session("paused", "idle", 1), paused: true },
+      done: { ...session("done", "idle", 1), has_conversation: true },
+      idle: session("idle", "idle", 1),
+      delegated: session("delegated", "idle", 1),
+      background: { ...session("background", "idle", 1), background_tasks: [{ id: "watcher" }] },
+      working: session("working", "working", 1),
+      starting: session("starting", "starting", 1),
+      switching: { ...session("switching", "idle", 1), switching_account: true },
+      interrupted: session("interrupted", "interrupted", 1),
+    };
+    const delegating = delegatingSessionIds([...Object.values(sessions), session("child", "working", 2, false, "delegated")]);
+    for (const [kind, one] of Object.entries(sessions)) expect(topStatus([one], delegating)).toBe(kind);
+  });
+
+  it("ranks a session starting up or switching account where it will land, and draws it as it is", () => {
     const starting = session("starting", "starting", 3);
     const idle = session("idle", "idle", 2);
     const working = session("working", "working", 1);
-    expect(consoleStatus([starting], NONE)).toBeUndefined();
-    expect(consoleStatus([starting, working], NONE)).toBe("working");
+    expect(topStatus([starting], NONE)).toBe("starting");
+    expect(topStatus([starting, working], NONE)).toBe("starting");
+    expect(topStatus([working, { ...starting, prompt_on_launch: true }], NONE)).toBe("starting");
+    expect(topStatus([working, { ...starting, has_conversation: true }, session("waiting", "waiting_user", 0)], NONE)).toBe("waiting_user");
+    expect(topStatus([session("interrupted", "interrupted", 9), starting], NONE)).toBe("starting");
     expect(liveSessions([working, starting, idle], NONE).map((s) => s.id)).toEqual(["starting", "idle", "working"]);
   });
 
-  it("omits inactive sessions and preserves the selected session's account-switch presentation", () => {
-    expect(consoleStatus([], NONE)).toBeUndefined();
-    expect(consoleStatus([session("paused", "interrupted", 1), session("archived", "archived", 2)], NONE)).toBeUndefined();
-    expect(consoleStatus([{ ...session("switching", "idle", 3), switching_account: true }], NONE)).toBe("switching");
+  it("puts interrupted last, and leaves out archived sessions", () => {
+    expect(topStatus([], NONE)).toBeUndefined();
+    expect(topStatus([session("interrupted", "interrupted", 1), session("archived", "archived", 2)], NONE)).toBe("interrupted");
+    expect(topStatus([session("interrupted", "interrupted", 1), session("working", "working", 0)], NONE)).toBe("working");
+    expect(topStatus([session("archived", "archived", 2)], NONE)).toBeUndefined();
+    expect(topStatus([{ ...session("switching", "idle", 3), switching_account: true }], NONE)).toBe("switching");
+  });
+
+  it("takes the newest of equally ranked sessions", () => {
+    expect(topStatus([session("old", "working", 1), { ...session("new", "starting", 2), prompt_on_launch: true }], NONE)).toBe("starting");
+    expect(topStatus([session("new", "working", 2), { ...session("old", "starting", 1), prompt_on_launch: true }], NONE)).toBe("working");
   });
 });
 
@@ -143,9 +171,27 @@ describe("a session running in the background", () => {
     expect(projectRank([background], NONE)).toBeLessThan(projectRank([session("w", "working", 1)], NONE));
     expect(projectRank([background], NONE)).toBeGreaterThan(projectRank([session("i", "idle", 2)], NONE));
     expect(projectRank([background, session("i", "idle", 2)], NONE)).toBe(projectRank([session("i", "idle", 2)], NONE));
-    expect(consoleActivity([background])).toBe("background");
-    expect(consoleActivity([background, session("w", "working", 3)])).toBe("working");
-    expect(consoleActivity([background, session("i", "idle", 2)])).toBe("background");
+    expect(topStatus([background], NONE)).toBe("background");
+    expect(topStatus([background, session("w", "working", 3)], NONE)).toBe("background");
+    expect(topStatus([background, session("i", "idle", 2)], NONE)).toBe("idle");
+  });
+});
+
+describe("a dormant or paused session", () => {
+  const paused = { ...session("paused", "idle", 2), paused: true };
+  const dormant = session("dormant", "dormant", 1);
+
+  it("sorts after a raised hand and before done and idle, dormant ahead of paused", () => {
+    const done = { ...session("done", "idle", 4), has_conversation: true };
+    const ordered = liveSessions([session("idle", "idle", 5), done, paused, dormant, session("waiting", "waiting_user", 0)], NONE);
+    expect(ordered.map((s) => s.id)).toEqual(["waiting", "dormant", "paused", "done", "idle"]);
+    expect(topStatus([session("idle", "idle", 5), paused], NONE)).toBe("paused");
+    expect(topStatus([paused, dormant], NONE)).toBe("dormant");
+  });
+
+  it("is the top status of a project over the work beneath it", () => {
+    expect(topStatus([dormant, paused, session("w", "working", 3)], NONE)).toBe("dormant");
+    expect(topStatus([paused, session("w", "working", 3)], NONE)).toBe("paused");
   });
 });
 
@@ -465,6 +511,7 @@ describe("switchStrip", () => {
         session("project-session", "working", 3),
       ],
       "c",
+      NONE,
     );
     expect(strip.map((e) => e.consoleSession.id)).toEqual(["pinned", "idle-old", "idle-new", "waiting", "tie-a", "tie-b"]);
   });
@@ -472,42 +519,50 @@ describe("switchStrip", () => {
   it("keeps its order when statuses change", () => {
     const before = [hub("a", "idle", 1), hub("b", "idle", 2), hub("c", "idle", 3)];
     const after = [hub("a", "interrupted", 1), hub("b", "waiting_user", 2), hub("c", "working", 3)];
-    const ids = (sessions: Session[]) => switchStrip(sessions, "c").map((e) => e.consoleSession.id);
+    const ids = (sessions: Session[]) => switchStrip(sessions, "c", NONE).map((e) => e.consoleSession.id);
     expect(ids(after)).toEqual(ids(before));
   });
 
-  it("sums a console session's activity with that of the sessions bound to it: a raised hand, then work, then background work, then nothing", () => {
-    const strip = switchStrip(
-      [
-        hub("a", "idle", 4),
-        hub("b", "idle", 3),
-        hub("c", "waiting_user", 2),
-        hub("d", "interrupted", 1),
-        hub("e", "idle", 0),
-        session("a-1", "working", 1, false, "a"),
-        session("a-2", "waiting_user", 1, false, "a"),
-        session("b-1", "working", 1, false, "b"),
-        session("b-2", "archived", 1, false, "b"),
-        session("d-1", "idle", 1, false, "d"),
-        session("unbound", "waiting_user", 1),
-        { ...session("e-1", "idle", 1, false, "e"), background_tasks: [{ id: "bg" }] },
-      ],
-      "c",
-    );
-    expect(Object.fromEntries(strip.map((e) => [e.consoleSession.id, e.activity]))).toEqual({
-      a: "waiting",
-      b: "working",
-      c: "waiting",
-      d: undefined,
-      e: "background",
+  it("shows each console session the top status among itself and the sessions bound to it, every status included", () => {
+    const sessions = [
+      hub("a", "idle", 4),
+      hub("b", "idle", 3),
+      hub("c", "waiting_user", 2),
+      hub("d", "interrupted", 1),
+      hub("e", "idle", 0),
+      hub("f", "idle", 5),
+      hub("g", "starting", 6),
+      session("a-1", "working", 1, false, "a"),
+      session("a-2", "dormant", 1, false, "a"),
+      session("b-1", "working", 1, false, "b"),
+      session("b-2", "archived", 1, false, "b"),
+      session("d-1", "interrupted", 1, false, "d"),
+      session("unbound", "waiting_user", 1),
+      { ...session("e-1", "idle", 1, false, "e"), background_tasks: [{ id: "bg" }] },
+      { ...session("f-1", "idle", 1, false, "f"), paused: true },
+    ];
+    const strip = switchStrip(sessions, "c", delegatingSessionIds(sessions));
+    expect(Object.fromEntries(strip.map((e) => [e.consoleSession.id, e.status]))).toEqual({
+      a: "dormant",
+      b: "delegated",
+      c: "waiting_user",
+      d: "interrupted",
+      e: "idle",
+      f: "paused",
+      g: "starting",
     });
+  });
+
+  it("shows the chip of a console session whose sessions are all archived as its own status alone", () => {
+    const strip = switchStrip([hub("a", "idle", 1), session("a-1", "archived", 1, false, "a")], "c", NONE);
+    expect(strip.map((e) => e.status)).toEqual(["idle"]);
   });
 });
 
 describe("STATUS_RANK", () => {
   it("lists what wants a person first, then work elsewhere, then work, then no process, archived at the very end", () => {
     const byRank = (Object.keys(STATUS_RANK) as (keyof typeof STATUS_RANK)[]).sort((a, b) => STATUS_RANK[a] - STATUS_RANK[b]);
-    expect(byRank).toEqual(["waiting_user", "done", "idle", "delegated", "background", "working", "interrupted", "archived"]);
+    expect(byRank).toEqual(["waiting_user", "dormant", "paused", "done", "idle", "delegated", "background", "working", "interrupted", "archived"]);
     expect(INACTIVE_PROJECT_RANK).toBe(STATUS_RANK.archived);
   });
 
@@ -544,12 +599,13 @@ describe("STATUS_RANK", () => {
     const sessions = [session("parent", "idle", 1), session("child", "working", 2, false, "parent")];
     const delegating = delegatingSessionIds(sessions);
     expect(projectRank([sessions[0]], delegating)).toBe(STATUS_RANK.delegated);
-    expect(consoleStatus([sessions[0]], delegating)).toBe("delegated");
-    expect(consoleStatus([{ ...sessions[0], has_conversation: true }], NONE)).toBe("done");
+    expect(topStatus([sessions[0]], delegating)).toBe("delegated");
+    expect(topStatus([{ ...sessions[0], has_conversation: true }], NONE)).toBe("done");
   });
 
   it("does not count delegated work, or a done session, as working", () => {
     const parent = session("parent", "idle", 1);
-    expect(consoleActivity([parent])).toBe("running");
+    expect(topStatus([parent], NONE)).toBe("idle");
+    expect(topStatus([{ ...parent, has_conversation: true }], NONE)).toBe("done");
   });
 });

@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use super::AppState;
 use crate::hooks::BackgroundTasksChange;
-use crate::protocol::{BackgroundTask, Session, SessionStatus};
+use crate::protocol::{BackgroundTask, SessionStatus};
 
 /// How long a subagent's stop that leaves no background work stands before the list is emptied.
 /// A subagent handing over to the next one stops and starts within the same instant, and the list
@@ -206,18 +206,6 @@ impl AppState {
         hand.unwrap_or(session.status) == SessionStatus::Idle
     }
 
-    fn publish_if_idle(&self, id: &str) {
-        match self.store.get_session(id) {
-            Ok(Some(session)) if session.status == SessionStatus::Idle => {
-                self.publish_session(&session)
-            }
-            Ok(_) => {}
-            Err(err) => {
-                tracing::debug!(session = %id, %err, "reading the session for its background tasks failed")
-            }
-        }
-    }
-
     /// Records the effort the session's agent runs it at by itself, and says whether that changed
     /// what a client is shown; the caller publishes the session when it did.
     pub fn set_default_effort(&self, id: &str, effort: Option<String>) -> bool {
@@ -251,11 +239,16 @@ impl AppState {
             .retain(|id, _| ids.contains(id.as_str()));
     }
 
-    /// The background tasks a client is shown for the session: its list while it is idle, where
-    /// work still running is told apart from nothing left, and none for any other status.
-    pub(crate) fn shown_background_tasks(&self, session: &Session) -> Vec<BackgroundTask> {
-        if session.status == SessionStatus::Idle {
-            self.background_tasks_of(&session.id)
+    /// The background tasks a client is shown for session `id`, whose status shown is `shown`: its
+    /// list while that is idle, where work still running is told apart from nothing left, and none
+    /// for any other status.
+    pub(crate) fn shown_background_tasks(
+        &self,
+        id: &str,
+        shown: SessionStatus,
+    ) -> Vec<BackgroundTask> {
+        if shown == SessionStatus::Idle {
+            self.background_tasks_of(id)
         } else {
             Vec::new()
         }

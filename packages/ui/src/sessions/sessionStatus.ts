@@ -1,12 +1,13 @@
 import type { Session, SessionStatus } from "../protocol";
 
-/** What a status glyph and label stand for: the wire statuses, and three kinds the client derives
+/** What a status glyph and label stand for: the wire statuses, and four kinds the client derives
  * from an `idle` session, none of them a status of the daemon's (the session is as ready for a
- * message as any idle one): *working in background*, work left running (`Session.background_tasks`);
+ * message as any idle one): *paused*, a session whose last turn ended abnormally (`Session.paused`);
+ * *working in background*, work left running (`Session.background_tasks`);
  * *delegated*, work in progress in the sessions under it (`delegatingSessionIds`); and *done*, a
  * session that has a conversation — a turn taken, or one resumed at open — with nothing left going
  * (`Session.has_conversation`). */
-export type StatusKind = SessionStatus | "background" | "delegated" | "done";
+export type StatusKind = SessionStatus | "paused" | "background" | "delegated" | "done";
 
 /** Whether an idle session has work left running in the background. */
 export function runsInBackground(session: Pick<Session, "status" | "background_tasks">): boolean {
@@ -14,7 +15,7 @@ export function runsInBackground(session: Pick<Session, "status" | "background_t
 }
 
 /** The ids of the sessions with delegated work in progress: those some session in `sessions` that is
- * starting, working or waiting for the user is bound to, directly or through the sessions between
+ * starting, working, dormant or waiting for the user is bound to, directly or through the sessions between
  * (`bound_to`), whatever their own status. One pass: each such session walks up its chain of owners.
  * The chain carries a seen set, so a binding that leads back on itself ends the walk. */
 export function delegatingSessionIds(sessions: Iterable<Session>): ReadonlySet<string> {
@@ -22,7 +23,7 @@ export function delegatingSessionIds(sessions: Iterable<Session>): ReadonlySet<s
   const active: Session[] = [];
   for (const session of sessions) {
     byId.set(session.id, session);
-    if (session.status === "starting" || session.status === "working" || session.status === "waiting_user") active.push(session);
+    if (session.status === "starting" || session.status === "working" || session.status === "waiting_user" || session.status === "dormant") active.push(session);
   }
   const delegating = new Set<string>();
   for (const session of active) {
@@ -35,11 +36,12 @@ export function delegatingSessionIds(sessions: Iterable<Session>): ReadonlySet<s
   return delegating;
 }
 
-/** The kind of a session by what it does on its own first: any wire status but `idle`, then work left
- * in the background, then work delegated to the sessions under it (`delegating`, see
+/** The kind of a session by what it does on its own first: any wire status but `idle`, then whether its
+ * last turn ended abnormally (`paused`), then work left in the background, then work delegated to the sessions under it (`delegating`, see
  * `delegatingSessionIds`), then whether its conversation has begun (`has_conversation`). */
-export function sessionStatusKind(session: Pick<Session, "id" | "status" | "background_tasks" | "has_conversation">, delegating: ReadonlySet<string>): StatusKind {
+export function sessionStatusKind(session: Pick<Session, "id" | "status" | "paused" | "background_tasks" | "has_conversation">, delegating: ReadonlySet<string>): StatusKind {
   if (session.status !== "idle") return session.status;
+  if (session.paused) return "paused";
   if (runsInBackground(session)) return "background";
   if (delegating.has(session.id)) return "delegated";
   return session.has_conversation ? "done" : "idle";
@@ -57,7 +59,7 @@ export function showsSwitching(session: Pick<Session, "status" | "switching_acco
 }
 
 export function sessionShownStatusKind(
-  session: Pick<Session, "id" | "status" | "background_tasks" | "has_conversation" | "switching_account">,
+  session: Pick<Session, "id" | "status" | "paused" | "background_tasks" | "has_conversation" | "switching_account">,
   delegating: ReadonlySet<string>,
 ): ShownStatusKind {
   return showsSwitching(session) ? "switching" : sessionStatusKind(session, delegating);

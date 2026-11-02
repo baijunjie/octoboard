@@ -1,27 +1,24 @@
-import { Check, Hand, LoaderCircle, MessageCircleMore } from "lucide-react";
+import { Check, CirclePause, Hand, LoaderCircle, MessageCircleMore, Pause } from "lucide-react";
 import React from "react";
 
-import { useT } from "../../i18n/react";
-import { activityLabel } from "../../sessions/sessionLabel";
 import { type ShownStatusKind } from "../../sessions/sessionStatus";
-import type { Activity } from "../../sessions/order";
-import { IndicatorTooltip } from "../hint/IndicatorTooltip";
 import { DELEGATED_DOT_PX, DELEGATED_RING_PX } from "./delegatedGlyph";
-import { WavingHand, WorkingDot } from "./statusGlyphs";
+import { BUBBLE_SHIFT, HAND_SHIFT, shiftedViewBox } from "./opticalCentring";
+import { StatusIcon } from "./StatusIcon";
+import { SleepGlyph } from "./statusGlyphs";
 
 /** The badge's delegated ring; its dot keeps the glyph's proportion to the ring. */
 const BADGE_DELEGATED_RING_PX = 10;
 const BADGE_DELEGATED_DOT_PX = (BADGE_DELEGATED_RING_PX * DELEGATED_DOT_PX) / DELEGATED_RING_PX;
 
 /** The marker a collapsed project row shows for the sessions beneath it, and focus mode's
- * console-switch chip for the sessions of that console session: a waving hand when one is waiting
- * for the user, a ringing dot when one is
- * at work, a hollow green ring when none is but work runs in the background, a speech bubble when
- * one is merely running, awaiting instructions.
+ * console-switch chip for the sessions of that console session: the glyph of the top status among
+ * them (`topStatus`), which is `StatusIcon`'s own, compact, in the one 14px `StatusSlot` every status shares, so
+ * every status has its one shape in the sidebar and beside the avatars. Nothing when `status` is `undefined`.
  *
- * It carries the indicator tooltip that puts the activity into words for a sighted user, who has
- * only four glyphs of a similar size to tell them apart. The marker and the tooltip's trigger
- * are both left unnamed: the row's and the chip's own accessible names already say the activity.
+ * It carries the indicator tooltip that puts the status into words for a sighted user, who has
+ * only glyphs of a similar size to tell them apart. The glyph and the tooltip's trigger are both
+ * left unnamed: the row's and the chip's own accessible names already say the status.
  *
  * On the chip that puts the trigger's `div` inside a `<button>`, which no content model allows. It
  * is accepted rather than worked around: the trigger cancels only the focus a mouse press would
@@ -33,63 +30,46 @@ const BADGE_DELEGATED_DOT_PX = (BADGE_DELEGATED_RING_PX * DELEGATED_DOT_PX) / DE
  * It never opens a touch popover (`touchPopover={false}`): both places are pressable, a project's
  * row (a tap folds it) and the chip (a tap switches console session), and the tap is theirs.
  */
-export function ActivityMarker({ activity }: { activity: Activity }): React.ReactElement | null {
-  const t = useT();
-  const marker = activityMarker(activity);
-  const label = activityLabel(t, activity);
-  if (label === undefined) return marker;
-  return (
-    <IndicatorTooltip tooltip={label} className="inline-flex shrink-0" touchPopover={false}>
-      {marker}
-    </IndicatorTooltip>
-  );
+export function TopStatusMarker({ status }: { status: ShownStatusKind | undefined }): React.ReactElement | null {
+  if (status === undefined) return null;
+  return <StatusIcon status={status} decorative withTooltip touchPopover={false} small />;
 }
 
-function activityMarker(activity: Activity): React.ReactElement | null {
-  switch (activity) {
-    case "waiting":
-      return (
-        <span aria-hidden="true" className="flex shrink-0">
-          <WavingHand className="size-3.5" />
-        </span>
-      );
-    case "working":
-      return (
-        <span aria-hidden="true" className="flex shrink-0">
-          <WorkingDot small />
-        </span>
-      );
-    case "background":
-      return (
-        <span aria-hidden="true" className="flex shrink-0">
-          <WorkingDot small kind="background" />
-        </span>
-      );
-    case "running":
-      return <MessageCircleMore aria-hidden="true" className="size-3.5 shrink-0 text-success-soft-foreground" />;
-    default:
-      return null;
-  }
-}
-
-/** Inverted status glyphs stay legible over arbitrary avatar colours. Done wears its check mark on the
- * idle badge's green. Delegated, background and working follow their glyphs' progression: a green disc
+/** The disc is the badge's fixed 14px box, centring whatever it holds. Inverted status glyphs stay legible over arbitrary avatar colours, one for every status but archived,
+ * which a console's badge never shows. Done wears its check mark, and paused
+ * its pause sign in a circle (a bare pause sign is interrupted's), on the idle badge's green; dormant wears its
+ * "zz" on the waiting badge's orange, as both need the person. Delegated, background and working follow their glyphs' progression: a green disc
  * with a ring around a dot, a green disc with a hollow centre, and a blue disc with a solid centre; only
- * the centre breathes, keeping the badge steady.
+ * the centre breathes, keeping the badge steady. Starting and switching account wear the turning arc on a
+ * grey disc, as neither has settled into a status yet, and interrupted its pause sign on the same grey, as
+ * it has no process.
  * The avatar supplies its tooltip and accessible name, so the badge is decorative. */
-export function ActivityBadge({ status, className = "" }: { status: ShownStatusKind | undefined; className?: string }): React.ReactElement | null {
+export function AvatarStatusBadge({ status, className = "" }: { status: ShownStatusKind | undefined; className?: string }): React.ReactElement | null {
   const disc = `flex size-3.5 items-center justify-center rounded-full ${className}`;
   switch (status) {
     case "waiting_user":
       return (
         <span aria-hidden="true" className={`${disc} bg-warning text-warning-foreground`}>
-          <Hand strokeWidth={2.5} className="size-2.5 origin-[70%_90%] motion-safe:animate-status-wave" />
+          <Hand strokeWidth={2.5} viewBox={shiftedViewBox(HAND_SHIFT)} className="size-2.5 origin-[70%_90%] motion-safe:animate-status-wave" />
         </span>
       );
     case "idle":
       return (
         <span aria-hidden="true" className={`${disc} bg-success text-success-foreground`}>
-          <MessageCircleMore strokeWidth={2.5} className="size-2.5" />
+          <MessageCircleMore strokeWidth={2.5} viewBox={shiftedViewBox(BUBBLE_SHIFT)} className="size-2.5" />
+        </span>
+      );
+    case "dormant":
+      return (
+        <span aria-hidden="true" className={`${disc} bg-warning text-warning-foreground`}>
+          {/* The lucide stroke rather than the badge's thicker one: at 2.5 the two letters' corners meet. */}
+          <SleepGlyph className="size-2.5" />
+        </span>
+      );
+    case "paused":
+      return (
+        <span aria-hidden="true" className={`${disc} bg-success text-success-foreground`}>
+          <CirclePause strokeWidth={2.5} className="size-2.5" />
         </span>
       );
     case "done":
@@ -121,10 +101,17 @@ export function ActivityBadge({ status, className = "" }: { status: ShownStatusK
           <span className="size-2 rounded-full border-[1.5px] border-current motion-safe:animate-status-breathe" />
         </span>
       );
+    case "starting":
     case "switching":
       return (
         <span aria-hidden="true" className={`${disc} bg-default text-default-foreground`}>
           <LoaderCircle className="size-2.5 motion-safe:animate-spin" />
+        </span>
+      );
+    case "interrupted":
+      return (
+        <span aria-hidden="true" className={`${disc} bg-default text-default-foreground`}>
+          <Pause strokeWidth={2.5} className="size-2.5" />
         </span>
       );
     default:

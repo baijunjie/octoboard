@@ -381,14 +381,40 @@ it("a console session's focus mode has a strip of the console's console sessions
   const { container, handlers, unmount } = mount((h) => (
     <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web, api]} sessions={sessions} />
   ), sessions);
-  // Hub's own bound session is working; Hub 2's console session is merely running; Hub 3 is archived.
+  // Each chip names its top status: Hub's own bound session is working, but Hub itself is done, which
+  // ranks ahead of work; Hub 2 is done too; Hub 3 is archived.
   expect(chips(container).map((chip) => [chip.getAttribute("aria-label"), chip.getAttribute("aria-current")])).toEqual([
-    [`${isolate("Hub")}, a session is working`, "true"],
-    ["Hub 2", null],
+    [`${isolate("Hub")}, Done`, "true"],
+    [`${isolate("Hub 2")}, Done`, null],
   ]);
   act(() => chips(container)[1].click());
   expect(handlers.onSwitchConsoleSession).toHaveBeenCalledWith(hub2);
   expect(handlers.onSelectSession).not.toHaveBeenCalled();
+  unmount();
+});
+
+it.each<[string, Parameters<typeof sessionOf>[4], Partial<Session>, string]>([
+  ["waiting for the user", "waiting_user", {}, "Waiting for you"],
+  ["dormant", "dormant", {}, "Dormant"],
+  ["paused", "idle", { paused: true }, "Paused"],
+  ["done", "idle", { has_conversation: true }, "Done"],
+  ["awaiting instructions", "idle", { has_conversation: false }, "Awaiting instructions"],
+  ["working in the background", "idle", { background_tasks: [{ id: "watcher" }] }, "Working in background"],
+  ["working", "working", {}, "Working"],
+  ["starting", "starting", {}, "Starting"],
+  ["switching account", "idle", { switching_account: true }, "Switching account…"],
+  ["interrupted", "interrupted", {}, "Interrupted"],
+])("a switch chip marks a console session that is %s with that status's glyph, and names it", (_case, status, extra, words) => {
+  const other = sessionOf("s-other", main.id, undefined, "Other", status, { has_conversation: false, ...extra });
+  const stored = [hub1, other];
+  const { container, unmount } = mount((h) => (
+    <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web]} sessions={stored} />
+  ), stored);
+  const chip = chips(container).find((c) => c.getAttribute("aria-label")?.startsWith(isolate("Other")))!;
+  expect(chip.getAttribute("aria-label")).toBe(`${isolate("Other")}, ${words}`);
+  // The glyph itself is decorative; the chip's name says the status.
+  expect(chip.querySelector("[role=img]")).toBeNull();
+  expect(chip.querySelector("[role=presentation] > [aria-hidden=true]")).not.toBeNull();
   unmount();
 });
 

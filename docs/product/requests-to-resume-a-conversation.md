@@ -99,8 +99,8 @@ where the conversation is held, judged again at that moment:
   session the user opened from the tab, and it is given no prompt: it comes up at the agent's prompt, continuing the
   conversation.
 - **The session that holds it is already running by then** (`already_running`): nothing is done. This holds only where
-  the session is no longer dormant, or is being launched or resumed itself; one that is held instead for an account
-  switch, a handoff, a handover of branches or a binding change while still dormant fails the approval (see "When an
+  the session has a process again, or is being launched or resumed itself; one that is held instead for an account
+  switch, a handoff, a handover of branches or a binding change while still without a process fails the approval (see "When an
   approval cannot be carried out" below).
 
 **The caller gains nothing over what it resumed.** It is never made an owner and keeps running unchanged; what was

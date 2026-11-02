@@ -5,7 +5,6 @@ import { isolate } from "../i18n/isolate";
 import { joinPhrases } from "../i18n/joinPhrases";
 import type { Language } from "../i18n/languages";
 import type { Account, Console, Project, Session, Settings } from "../protocol";
-import type { Activity } from "./order";
 import type { ShownStatusKind } from "./sessionStatus";
 
 /** Keeps the agent's current task beside the session name the user created. Each name is
@@ -101,11 +100,13 @@ export function sessionWithLocation(
 const STATUS_KEY = {
   background: "session.status.background",
   delegated: "session.status.delegated",
+  paused: "session.status.paused",
   done: "session.status.done",
   switching: "session.status.switching",
   starting: "session.status.starting",
   working: "session.status.working",
   waiting_user: "session.status.waitingUser",
+  dormant: "session.status.dormant",
   idle: "session.status.idle",
   interrupted: "session.status.interrupted",
   archived: "session.status.archived",
@@ -185,40 +186,4 @@ export function sessionRowName(
     ...further.map((owner) => t("sidebar.session.boundTo", { name: isolate(sessionDisplayTitle(t, owner)) })),
     modelLabel,
   ]);
-}
-
-/** What an activity marker stands for, on its own, for the tooltip it carries; `undefined` for a
- * marker that is not drawn at all. The accessible name of the row or chip around it says the same
- * thing (see `activityLabelKey`), so the tooltip repeats rather than adds. */
-export function activityLabel(t: Translate, activity: Activity): string | undefined {
-  switch (activity) {
-    case "waiting":
-      return t("activity.waiting");
-    case "working":
-      return t("activity.working");
-    case "background":
-      return t("activity.background");
-    case "running":
-      return t("activity.running");
-    default:
-      return undefined;
-  }
-}
-
-/** The message that names a console or a project together with what is going on beneath it, for its
- * accessible name; `undefined` for one with nothing going on, whose own name says enough. A pinned
- * project's variant says so too. */
-export function activityLabelKey(activity: Activity, pinned = false) {
-  switch (activity) {
-    case "waiting":
-      return pinned ? ("sidebar.activity.waitingPinned" as const) : ("sidebar.activity.waiting" as const);
-    case "working":
-      return pinned ? ("sidebar.activity.workingPinned" as const) : ("sidebar.activity.working" as const);
-    case "background":
-      return pinned ? ("sidebar.activity.backgroundPinned" as const) : ("sidebar.activity.background" as const);
-    case "running":
-      return pinned ? ("sidebar.activity.runningPinned" as const) : ("sidebar.activity.running" as const);
-    default:
-      return undefined;
-  }
 }

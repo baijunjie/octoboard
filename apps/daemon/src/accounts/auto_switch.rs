@@ -1258,6 +1258,12 @@ mod tests {
             assert!(self.worker_process.look_for_dialog().current.is_some());
         }
 
+        /// Puts Claude Code's view of a background subagent on the worker's screen, which shows
+        /// it as dormant: not at a prompt, but no question waits for the user either.
+        fn show_agents_view(&self) {
+            crate::test_support::show_agents_view(&self.worker_process);
+        }
+
         fn clear_screen(&self) {
             self.worker_process.on_output(b"\x1b[2J\x1b[H");
             assert!(self.worker_process.look_for_dialog().current.is_none());
@@ -2451,6 +2457,15 @@ mod tests {
         assert_eq!(fixture.launched(), 0, "a prompt the screen shows would end");
         fixture.clear_screen();
 
+        fixture.show_agents_view();
+        assert_eq!(
+            fixture.state.status_for_switch(&fixture.worker()),
+            SessionStatus::Dormant
+        );
+        fixture.failed_turn().await;
+        assert_eq!(fixture.launched(), 0, "a view the screen shows would end");
+        fixture.clear_screen();
+
         let claim = fixture.state.begin_account_switch("w", false).unwrap();
         fixture.failed_turn().await;
         assert_eq!(fixture.launched(), 0, "a claim is held");
@@ -2530,6 +2545,21 @@ mod tests {
         .await;
         assert_eq!(
             refusal(&waiting),
+            Some("the session waits for the user now")
+        );
+        fixture.clear_screen();
+
+        fixture.show_agents_view();
+        let viewing = attempt(
+            "w",
+            SwitchOnlyIf {
+                not_waiting: true,
+                ..SwitchOnlyIf::default()
+            },
+        )
+        .await;
+        assert_eq!(
+            refusal(&viewing),
             Some("the session waits for the user now")
         );
         fixture.clear_screen();

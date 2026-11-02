@@ -756,11 +756,11 @@ async fn a_reopen_unarchives_a_codex_rollout_under_the_sessions_own_account() {
     assert_still_archived_at_5(&state, "s");
 }
 
-/// Which owners a relaunch brings back first, topmost first: the archived owner a dormant
-/// session is bound to and, when that is an archived lead session, its archived console
+/// Which owners a relaunch brings back first, topmost first: the archived owner a session
+/// without a process is bound to and, when that is an archived lead session, its archived console
 /// session above it. The walk stops at the first owner that is not archived — only
 /// interrupted, running or gone — and nothing is brought back for an unbound session, for one
-/// that is not dormant, or for a console session, so reopening an owner reopens nothing bound
+/// with a process, or for a console session, so reopening an owner reopens nothing bound
 /// to it.
 #[test]
 fn a_reopen_brings_back_the_archived_owners_above_it_topmost_first() {
@@ -794,7 +794,7 @@ fn a_reopen_brings_back_the_archived_owners_above_it_topmost_first() {
         ("owner running", Archived, Some("running-hub"), &[]),
         ("owner gone", Archived, Some("no-such-hub"), &[]),
         ("unbound", Archived, None, &[]),
-        ("not dormant", Idle, Some("archived-hub"), &[]),
+        ("with a process", Idle, Some("archived-hub"), &[]),
         (
             "both levels archived",
             Archived,

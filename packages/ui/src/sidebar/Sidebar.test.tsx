@@ -164,7 +164,7 @@ it("hands lost focus to the new current chip when one console session's focus mo
     (nav) => nav.querySelector<HTMLElement>("[role=group] button:not([data-switch-current])"),
     { consoleSession: hub2 },
   );
-  expect(active?.getAttribute("aria-label")).toBe("Hub 2");
+  expect(active?.getAttribute("aria-label")).toBe(`${isolate("Hub 2")}, Done`);
   expect(active?.hasAttribute("data-switch-current")).toBe(true);
   // The focus mode is keyed, so the chip that was pressed is replaced rather than reused.
   expect(pickedConnected).toBe(false);

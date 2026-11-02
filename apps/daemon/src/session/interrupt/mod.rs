@@ -282,7 +282,7 @@ fn interrupted_note(agent: Agent, written: usize, draft: Draft, prompt: Restored
 /// turn.
 fn judge(state: &Arc<AppState>, session: &Session) -> Result<Option<Arc<LiveSession>>> {
     let id = session.id.as_str();
-    if session.status.is_dormant() {
+    if session.status.has_no_process() {
         return Err(not_running(id, "this session is not running"));
     }
     match state.claim_kind(id) {
@@ -298,7 +298,8 @@ fn judge(state: &Arc<AppState>, session: &Session) -> Result<Option<Arc<LiveSess
     match state.write_hold(id) {
         Some(WriteHold::Starting) => return Err(not_running(id, STILL_STARTING)),
         Some(WriteHold::TrustConfirmation) => return Err(trust_pending(id)),
-        Some(WriteHold::AgentDialog(_) | WriteHold::AgentAction) => return Err(waiting(id)),
+        Some(WriteHold::AgentDialog(dialog)) => return Err(waiting(id, dialog.is_agents_view())),
+        Some(WriteHold::AgentAction) => return Err(waiting(id, false)),
         Some(WriteHold::Handoff | WriteHold::SharingChange) => return Err(busy(id)),
         // A session held only for these is at its prompt or in a turn like any other.
         Some(WriteHold::AgentError | WriteHold::UnsentMessage | WriteHold::SubmissionUncertain)
@@ -312,7 +313,7 @@ fn judge(state: &Arc<AppState>, session: &Session) -> Result<Option<Arc<LiveSess
     // The record carries the hand of a hook (the agent's own prompt or question) and of a session
     // request alike; the agent's status reads through a request's hand to what is under it.
     if session.status == SessionStatus::WaitingUser {
-        return Err(waiting(id));
+        return Err(waiting(id, false));
     }
     Ok((state.agent_status(session) == SessionStatus::Working).then_some(live))
 }
@@ -341,11 +342,18 @@ fn busy(id: &str) -> anyhow::Error {
     )
 }
 
-fn waiting(id: &str) -> anyhow::Error {
+/// The refusal for a session held up by the user, or, with `agents_view`, by the view of its
+/// background agents the user is in (shown dormant), which a key would go to as well.
+fn waiting(id: &str, agents_view: bool) -> anyhow::Error {
+    let message = if agents_view {
+        "the user is in this session's background-agents view, and a key sent now would go there"
+    } else {
+        "this session is waiting for the user, who alone can answer what it is showing; an \
+         interrupt key would answer it in their place"
+    };
     CodedError::raised(
         error_code::SESSION_WAITING_FOR_USER,
-        "this session is waiting for the user, who alone can answer what it is showing; an \
-         interrupt key would answer it in their place",
+        message,
         &[("session", id)],
     )
 }

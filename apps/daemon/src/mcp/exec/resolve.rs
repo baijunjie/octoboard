@@ -162,6 +162,7 @@ pub(crate) fn describe_session(
     // Looked at before the status is read, so that the status, which reads the screen as that look
     // left it, and the hold cannot disagree about a dialog that came up in between.
     let write_hold = state.write_hold(&session.id);
+    let shown = state.shown_status(session);
     // The account by id and name, as `get_account_quotas` and `switch_session_account` name it:
     // `default` is the agent's default account. Never its directory, which is the user's.
     let account_name = state
@@ -178,10 +179,12 @@ pub(crate) fn describe_session(
         // Null until the agent has reported one.
         "agent_session_id": session.agent_session_id,
         "origin": session.origin,
-        "status": state.shown_status(session),
+        "status": shown,
+        // Whether an idle session's last turn ended abnormally; false for every other status.
+        "paused": state.shown_paused(&session.id, shown),
         // What an idle session has left running in the background: it takes a message like any
         // idle session, but its work is not over. Empty for every other status.
-        "background_tasks": state.shown_background_tasks(session),
+        "background_tasks": state.shown_background_tasks(&session.id, shown),
         // How full the session's context window is, as the UI shows it: owners weigh it when
         // choosing which session gets a task. Null while no size is known: before the session's
         // first report, and after a compaction until its next request.

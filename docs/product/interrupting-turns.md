@@ -1,8 +1,8 @@
 # Interrupting a session's turn
 
 An owner can stop the turn a session it owns is in the middle of, as the user pressing the agent's interrupt key in the
-terminal would. The session keeps its process and its conversation and goes back to its prompt, for the
-owner to redirect it with `instruct_session`. This is not the *interrupted* status: that is a session whose process has
+terminal would. The session keeps its process and its conversation and goes back to its prompt, where it reads as
+*paused* (see "Paused" in `docs/product/session-statuses.md`), for the owner to redirect it with `instruct_session`. This is not the *interrupted* status: that is a session whose process has
 ended (see `docs/product/session-statuses.md`), and an interrupted turn leaves the process running.
 
 ## Who can interrupt a turn
@@ -41,6 +41,7 @@ What happens depends on where the session stands when the call is made:
 | At its prompt — whichever status it shows there (see "Which status a session shows" in `docs/product/session-statuses.md`), including one holding messages after a Grok Build error or behind a message left unsent | Nothing is sent; answered with `interrupted: false` and a note that there was nothing to interrupt. |
 | Already being interrupted by another `interrupt_session` | Nothing is sent; answered with `interrupted: false`. |
 | Waiting for the user: its agent's permission prompt or question, a screen of the agent's own that only the user can answer, Codex's `Action Required` title, or a session request of its own waiting for the user's answer | Refused with `session_waiting_for_user`: a key would answer it in the user's place. |
+| *Dormant*: showing one of Claude Code's views of its background agents | Refused with `session_waiting_for_user`, under a message saying the user is in that view and a key would go there. |
 | Showing its folder-trust confirmation | Refused with `session_trust_pending`. |
 | Archived or *interrupted*, with no process, still being launched, or not yet past its startup screens | Refused with `session_not_running`. |
 | Being switched to another account, handed off, having its branches handed over, given another owner, or restarted for a change of its account's sharing | Refused with `session_busy`. |

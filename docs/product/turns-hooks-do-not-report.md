@@ -5,7 +5,8 @@ A session's status follows the hook events its agent reports (see "What the stat
 and Octoboard reads them from somewhere else instead: the agent's own record of the conversation, or its terminal title.
 This doc covers each of those cases, what Octoboard reads for it, and where that reading fails. They apply whoever
 caused them: a cancel the user makes in the terminal and one an owner's `interrupt_session` makes (see
-`docs/product/interrupting-turns.md`) are recovered the same way.
+`docs/product/interrupting-turns.md`) are recovered the same way. Each ending recovered here leaves the session *paused*
+(see "Paused" in `docs/product/session-statuses.md`).
 
 ## Declining a Claude Code prompt or question
 
@@ -21,8 +22,8 @@ the Dock badge count drops, and a message queued for the session while its hand 
 until a session can take them" in `docs/product/message-delivery.md`). A later prompt or question in the same session
 raises the hand and notifies afresh, as any other does.
 
-- The agent prints that the turn was interrupted, but its process is still running, so the session is *awaiting
-  instructions* and not *interrupted*.
+- The agent prints that the turn was interrupted, but its process is still running, so the session is at its prompt,
+  *paused*, and not *interrupted*.
 - No turn end was reported, so no report is synthesised for the session's owner for that turn either (see "When a
   session does not report" in `docs/product/reporting-to-owners.md`).
 - **Claude Code sessions only.** Codex and Grok Build report a decline through their own hook events, and the transcript
@@ -39,7 +40,7 @@ raises the hand and notifies afresh, as any other does.
   nothing lowers the hand, and the session keeps it up until something else moves its status.
 - A decline is noticed the same way while a session request holds that session's hand up (see "Waiting for the answer"
   in `docs/product/session-requests.md`). The hand stays up until the request ends, since it is the request's own; the
-  session is then at its prompt, where the decline left its agent.
+  session is then at its prompt, *paused*, where the decline left its agent.
 
 **What this costs to keep working.** The transcript is a file format Claude Code owns and rewrites on upgrade, and a
 decline is recognised by two fixed marker strings inside it; the behaviour was measured against Claude Code 2.1.274 and
@@ -88,7 +89,7 @@ leaves it.
 - **Not while a screen of the agent's own is up.** While one of the Claude Code screens that hold messages is on the
   session's screen (see "Messages held until a session can take them" in `docs/product/message-delivery.md`), a `✳` is
   the turn waiting on the user and is not counted.
-- The agent's process is still running, so the session is at its prompt and not *interrupted*.
+- The agent's process is still running, so the session is at its prompt, *paused*, and not *interrupted*.
 - No turn end was reported, so no report is synthesised for the session's owner for that turn (see "When a session does
   not report" in `docs/product/reporting-to-owners.md`).
 - **Claude Code sessions only.** Codex reports a cancelled turn through its own hook event, and Grok Build through its
@@ -142,7 +143,7 @@ What follows the move:
 - The prompt Grok put back in its composer stays there, and a message Octoboard writes from then on goes in after it. A
   cancel made by `interrupt_session` clears it first (see "The input box afterwards" in
   `docs/product/interrupting-turns.md`); a cancel the user makes in the terminal is left as Grok leaves it.
-- The agent's process is still running, so the session is at its prompt and not *interrupted*.
+- The agent's process is still running, so the session is at its prompt, *paused*, and not *interrupted*.
 
 How the watch is kept to the right turn:
 
@@ -174,7 +175,7 @@ Codex keeps of the session, and moves the session to its prompt once the turn ap
 an error — normally within about a second of the prompt, and so up to about half a second behind Codex's own return to
 its prompt. Every turn of a session is covered, its first included.
 
-- The agent's process is still running, so the session is at its prompt and not *interrupted*.
+- The agent's process is still running, so the session is at its prompt, *paused*, and not *interrupted*.
 - The turn is reported on: a session bound to an owner has a report synthesised for it with status *failed*, carrying
   Codex's own error text and the usual line saying the session stopped without reporting (see "When a session does not
   report" in `docs/product/reporting-to-owners.md`).

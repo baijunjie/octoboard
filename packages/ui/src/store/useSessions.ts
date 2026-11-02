@@ -2,7 +2,7 @@ import { useShallow } from "zustand/react/shallow";
 
 import type { Session } from "../protocol";
 import { useDaemonStore } from "./react";
-import { consoleStatus } from "../sessions/order";
+import { topStatus } from "../sessions/order";
 import { sessionShownStatusKind, type ShownStatusKind } from "../sessions/sessionStatus";
 import { countWaitingInTree } from "../sessions/waiting";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
@@ -34,11 +34,20 @@ export function useArchivedOwnerSessions(consoleId: string): Session[] {
   );
 }
 
-/** The avatar status selected from all sessions belonging to this console. */
+/** The avatar status: the top status (`topStatus`) of all sessions belonging to this console. */
 export function useConsoleStatus(consoleId: string): ShownStatusKind | undefined {
   return useDaemonStore((s) => {
     const index = indexSessions(s.sessions);
-    return consoleStatus(sessionsOf(index.byConsole, consoleId), index.delegatingIds);
+    return topStatus(sessionsOf(index.byConsole, consoleId), index.delegatingIds);
+  });
+}
+
+/** The top status (`topStatus`) of all sessions of a project, a kind, so a collapsed project's row renders again only
+ * when its marker changes. */
+export function useProjectStatus(projectId: string): ShownStatusKind | undefined {
+  return useDaemonStore((s) => {
+    const index = indexSessions(s.sessions);
+    return topStatus(sessionsOf(index.byProject, projectId), index.delegatingIds);
   });
 }
 

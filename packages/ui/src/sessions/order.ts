@@ -2,19 +2,22 @@ import { type Console, type Project, type Session, type Settings } from "../prot
 import { runsInBackground, sessionShownStatusKind, sessionStatusKind, showsSwitching, type ShownStatusKind } from "./sessionStatus";
 
 /** How soon a session wants a person: the ones that need someone to act or look come first (a raised
- * hand, a finished turn, a prompt waiting for a first instruction), then work going on elsewhere (delegated
- * or left in the background), then the sessions busy working, which are best left alone, and last the ones
- * with no process. Archived sessions are listed separately. A session starting up or switching account has no
+ * hand, a session that cannot take messages while its background agents are on view, a turn that ended
+ * abnormally, a finished turn, a prompt waiting for a first instruction), then work going on elsewhere
+ * (delegated or left in the background), then the sessions busy working, which are best left alone, and last
+ * the ones with no process. Archived sessions are listed separately. A session starting up or switching account has no
  * rank of its own: it sorts where it will land (`outcomeKind`), so `starting` has no entry. */
 export const STATUS_RANK: Record<Exclude<ShownStatusKind, "starting" | "switching">, number> = {
   waiting_user: 0,
-  done: 1,
-  idle: 2,
-  delegated: 3,
-  background: 4,
-  working: 5,
-  interrupted: 6,
-  archived: 7,
+  dormant: 1,
+  paused: 2,
+  done: 3,
+  idle: 4,
+  delegated: 5,
+  background: 6,
+  working: 7,
+  interrupted: 8,
+  archived: 9,
 };
 
 /** What a session that is starting or switching account will be once that is over: working when the launch
@@ -272,7 +275,7 @@ export function notUnderConsoleSession(sessions: Session[], owners: Map<string, 
  * that console session. `owners` holds the console's console sessions by id; each owner comes out
  * once, with its count, in the sidebar's order, and a session whose console session is not in it,
  * or is archived, cannot be named and is not counted. An archived owner with a live bound session
- * should not exist (archiving a console session archives its dormant bound sessions, and reopening
+ * should not exist (archiving a console session archives its bound sessions, and reopening
  * a bound one reopens its owner first), so this only keeps a link that could not be followed from
  * being offered. `undefined` when there are none, which is when the focus view shows nothing for
  * them. */
@@ -335,56 +338,45 @@ export function focusGroupRows(sessions: Session[], project: Project, consoleSes
   return liveSessionRows(liveInProject(focusListed(sessions, consoleSessionId), project), delegating, byStatus);
 }
 
-/** The avatar represents the most urgent live session by the sidebar's status rank, independent
- * of pins or the user's choice to sort rows by date. Starting sessions have no avatar indicator.
- * Ties take the newest session, as rows do. */
-export function consoleStatus(sessions: Session[], delegating: ReadonlySet<string>): ShownStatusKind | undefined {
+/** The status of the most urgent session of `sessions` by the sidebar's status rank, independent of
+ * pins or the user's choice to sort rows by date: what the console's avatar on the rail, a collapsed
+ * project's row and a focus-mode switch chip each mark their sessions with. A session starting up or
+ * switching account counts where it will land (`rankOf`) but is drawn as it is. Archived sessions are
+ * left out, so `undefined` when none is left. Ties take the newest session, as rows do. */
+export function topStatus(sessions: Iterable<Session>, delegating: ReadonlySet<string>): ShownStatusKind | undefined {
   let selected: Session | undefined;
+  let selectedRank = Infinity;
   for (const session of sessions) {
-    if (session.status === "starting" || session.status === "archived" || session.status === "interrupted") continue;
-    if (!selected || rankOf(session, delegating) < rankOf(selected, delegating)
-      || (rankOf(session, delegating) === rankOf(selected, delegating) && session.started_at > selected.started_at)) selected = session;
+    if (session.status === "archived") continue;
+    const rank = rankOf(session, delegating);
+    if (!selected || rank < selectedRank || (rank === selectedRank && session.started_at > selected.started_at)) {
+      selected = session;
+      selectedRank = rank;
+    }
   }
   return selected ? sessionShownStatusKind(selected, delegating) : undefined;
 }
 
-/** Every activity there is, most pressing first: a session itself busy beats one at its prompt with
- * work left in the background, as that beats one merely running. The type is derived from the list rather than
- * written beside it, so whoever covers them all cannot be left behind by a new one. */
-export const ACTIVITIES = ["waiting", "working", "background", "running"] as const;
-
-/** What a collapsed project or focus-mode switch chip shows: the most pressing activity beneath it. */
-export type Activity = (typeof ACTIVITIES)[number] | undefined;
-
-export function consoleActivity(sessions: Session[]): Activity {
-  if (sessions.some((s) => s.status === "waiting_user")) return "waiting";
-  if (sessions.some((s) => s.status === "working")) return "working";
-  if (sessions.some(runsInBackground)) return "background";
-  if (sessions.some((s) => s.status === "idle" || s.status === "starting")) return "running";
-  return undefined;
-}
-
-/** One chip of a console session's focus mode's switch strip: a console session and what is going on
- * in it and in the sessions bound to it, as far as the strip shows it. */
+/** One chip of a console session's focus mode's switch strip: a console session and the top status
+ * (`topStatus`) among itself and the sessions bound to it. */
 export interface SwitchStripEntry {
   consoleSession: Session;
-  /** A raised hand beats a session at work, which beats work in the background, which beats nothing:
-   * a session merely running is not worth a chip's room. */
-  activity: Exclude<Activity, "running">;
+  status: ShownStatusKind;
 }
 
 /** The chips of the switch strip: the console's console sessions that are not archived, each with the
- * most pressing activity among itself and its bound sessions. The order is fixed, pinned first and
+ * top status among itself and its bound sessions. The order is fixed, pinned first and
  * then by when they started (ties by id), not ranked by status like the sidebar's list: a chip stays
  * where it is while statuses change, so cycling through them never skips or repeats one. */
-export function switchStrip(sessions: Session[], consoleId: string): SwitchStripEntry[] {
+export function switchStrip(sessions: Session[], consoleId: string, delegating: ReadonlySet<string>): SwitchStripEntry[] {
   const consoleSessions = sessions
     .filter((s) => s.console_id === consoleId && s.role === "console" && s.status !== "archived")
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.started_at - b.started_at || (a.id < b.id ? -1 : 1));
-  return consoleSessions.map((consoleSession) => {
-    const activity = consoleActivity([consoleSession, ...sessions.filter((s) => s.bound_to === consoleSession.id)]);
-    return { consoleSession, activity: activity === "running" ? undefined : activity };
-  });
+  return consoleSessions.map((consoleSession) => ({
+    consoleSession,
+    // The fallback is never taken: the chip's own console session is not archived.
+    status: topStatus([consoleSession, ...sessions.filter((s) => s.bound_to === consoleSession.id)], delegating) ?? sessionShownStatusKind(consoleSession, delegating),
+  }));
 }
 
 /** The sessions `include` picks, in the order the sidebar tree lists them: console by console, its

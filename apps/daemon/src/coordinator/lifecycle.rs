@@ -104,7 +104,7 @@ fn archive_session_group(
     // the launch claim, so in between a bound session reads as neither archived nor
     // process-backed. Nothing awaits in that gap, so no archive can land in it, and it is not
     // closed.
-    let (running, dormant): (Vec<Session>, Vec<Session>) = descendants
+    let (running, no_process): (Vec<Session>, Vec<Session>) = descendants
         .into_iter()
         .filter(|bound| bound.status != SessionStatus::Archived)
         .partition(|bound| state.has_process(&bound.id));
@@ -131,7 +131,7 @@ fn archive_session_group(
             ],
         ));
     }
-    for bound in dormant {
+    for bound in no_process {
         archive_record(state, &bound.id)?;
         archived.push(bound);
     }

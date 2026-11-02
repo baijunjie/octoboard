@@ -40,7 +40,7 @@ struct Cursor {
     path: Option<PathBuf>,
     file: LineFile,
     context: Context,
-    dormant: bool,
+    without_process: bool,
     titles: Titles,
     /// The opening prompt of a Codex thread's first rollout, when the record read is a later
     /// segment, with the path it was read from.
@@ -320,7 +320,7 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
         let sleeping = cursors
             .sessions
             .get(&session.id)
-            .is_some_and(|cursor| cursor.dormant)
+            .is_some_and(|cursor| cursor.without_process)
             && state.live_session(&session.id).is_none();
         if let (Some(_), Some(agent_id), false) = (
             layout(session.agent).title_index,
@@ -381,7 +381,7 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
         // record, since an account's catalogue can change after the session stops. A boundary
         // stored meanwhile waits for its process: a model change stores one only for a session
         // whose process it relaunches, and the change's write cleared the observed model already.
-        if cursor.dormant && !live {
+        if cursor.without_process && !live {
             settle_default_effort(
                 state,
                 &mut cursors.default_efforts,
@@ -522,7 +522,7 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
             titles.prompt = Some(prompt.clone());
         }
         let titles = (titles != session.record_titles).then_some(titles);
-        cursor.dormant = !live;
+        cursor.without_process = !live;
         if context.is_some()
             || titles.is_some()
             || observed_model.is_some()

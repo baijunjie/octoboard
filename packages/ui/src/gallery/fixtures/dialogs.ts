@@ -291,6 +291,17 @@ const dialogState = {
   sessions: new Map([...twoHubsState.sessions!, ...removeState.sessions!, ...cascadeState.sessions!]),
 };
 
+// The remove-project confirmation's state with a session showing its background agents and one whose last turn
+// ended abnormally, so the list of sessions it ends carries the Dormant and Paused glyphs beside the others.
+const removeStatusesState = {
+  ...dialogState,
+  sessions: new Map([
+    ...dialogState.sessions!,
+    ["s-web-dormant", sessionOf("s-web-dormant", console_.id, web.id, "Review the background agents", "dormant")] as const,
+    ["s-web-paused", sessionOf("s-web-paused", console_.id, web.id, "Retry the failed benchmark", "idle", { paused: true })] as const,
+  ]),
+};
+
 // A console whose agents were removed from the added list after it was set up: its console sessions run on Grok
 // Build and its project sessions on Codex, both installed, with a named account pinned and model stored for each.
 const removedAgentsState = (() => {
@@ -1096,7 +1107,8 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Remove project with running sessions",
-    description: "A warning modal (warning icon in the header, the plain title Remove project, the project named in the first sentence of the body). The confirming button reads \"End and remove\" because sessions are running. Three sections stand under the message, divided by grooves: \"Sessions that will be ended (4)\" lists the running sessions, where default, named and removed-directory account cases coexist (hover each agent mark); \"Project folder\" holds the Trash option, unchecked as first opened, with no consequence line yet; \"Project processes\" shows one plain row for each process no session owns (one kept, two left behind in a deleted directory), each with the stop glyph and a Details disclosure, and ends with the line \"3 processes are stopped.\".",
+    state: removeStatusesState,
+    description: "A warning modal (warning icon in the header, the plain title Remove project, the project named in the first sentence of the body). The confirming button reads \"End and remove\" because sessions are running. Three sections stand under the message, divided by grooves: \"Sessions that will be ended (6)\" lists the running sessions, where default, named and removed-directory account cases coexist (hover each agent mark) and the status glyphs include the orange zz of a Dormant session (Zs rising and shrinking, still with reduced motion on) and the green circled pause sign of a Paused one; \"Project folder\" holds the Trash option, unchecked as first opened, with no consequence line yet; \"Project processes\" shows one plain row for each process no session owns (one kept, two left behind in a deleted directory), each with the stop glyph and a Details disclosure, and ends with the line \"3 processes are stopped.\".",
     processes: { projectProcesses: { [web.id]: [keptOf("600:1", "node scripts/serve-docs.mjs --port 4000", 300, { ports: [4000] }), leftoverOf("601:1", "vite --port 5180", 600), leftoverOf("602:1", "esbuild --service=0.21.5 --ping", 610)] } },
     steps: [
       (ui) => projectActions(ui, web.name),

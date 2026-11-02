@@ -194,6 +194,8 @@ when the restart fails after it ended the process (see "Automatic stopping and i
 `docs/product/background-processes.md`). An interrupted session is not started: the choices are recorded for its next
 resume. The changed values become the session's own choices, persisting as described at the top of this document. The
 user can change a session waiting for the user too; the dialog explains that restarting ends the prompt it was showing.
+For a dormant session it explains instead that the session is showing its background agents and restarting closes that
+view (see "Dormant" in `docs/product/session-statuses.md`).
 Where no conversation has started, it explains that the restart starts a new conversation instead.
 
 A console session or project coordinator changes a session bound to it with **`set_session_model`**, without asking for
@@ -217,8 +219,9 @@ No separate message about the change is sent to the session.
 
 A change is refused for an archived session (reopen it with the desired values instead), a session starting or already
 being changed, or while its account's sharing of the default configuration is being changed. An owner's call is also
-refused while the session is waiting for the user, so it cannot end a prompt only the user can answer. A usage-limit
-dialog alone does not count as such a wait and can be ended by the restart. A changed value the agent does not offer is
+refused while the session is waiting for the user, so it cannot end a prompt only the user can answer, and while it is
+dormant, since the restart would close the view the user is in; both are refused with `session_waiting_for_user`, the
+dormant one under a message naming the view. A usage-limit dialog alone does not count as such a wait and can be ended by the restart. A changed value the agent does not offer is
 refused before the process is stopped or any choices are recorded. If the process cannot be stopped in time, the choices
 stay as they were (`model_change_did_not_stop`). If the restart is refused, fails to launch or ends immediately
 (`model_change_did_not_come_up`), the session is left interrupted with its earlier choices.

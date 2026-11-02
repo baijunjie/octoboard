@@ -67,6 +67,7 @@ fn deleting_sessions_is_limited_to_archived_ones_in_scope() {
                 record_titles: Default::default(),
                 background_tasks: Vec::new(),
                 switching_account: false,
+                paused: false,
                 prompt_on_launch: false,
                 default_effort: None,
                 orchestration_role: OrchestrationRole::Coordinator,
@@ -157,7 +158,7 @@ async fn archiving_a_console_session_is_refused_while_a_bound_process_runs() {
         .unwrap();
     state
         .store
-        .insert_session(&bound_session("dormant", Interrupted, "hub"))
+        .insert_session(&bound_session("no-process", Interrupted, "hub"))
         .unwrap();
 
     // (what runs, the statuses of the bound sessions that have a process)
@@ -198,9 +199,9 @@ async fn archiving_a_console_session_is_refused_while_a_bound_process_runs() {
             );
             assert!(coded.message.contains(id.as_str()), "{name}");
         }
-        assert!(!coded.params["sessions"].contains("dormant"), "{name}");
+        assert!(!coded.params["sessions"].contains("no-process"), "{name}");
         assert_eq!(status_of(&state, "hub"), Some(Idle), "{name}");
-        assert_eq!(status_of(&state, "dormant"), Some(Interrupted), "{name}");
+        assert_eq!(status_of(&state, "no-process"), Some(Interrupted), "{name}");
 
         drop(live); // ends the stand-in processes
         for id in &ids {
@@ -209,7 +210,7 @@ async fn archiving_a_console_session_is_refused_while_a_bound_process_runs() {
     }
 
     // A bound session being launched has no registered process yet, and still counts.
-    let claim = state.begin_launch("dormant").unwrap();
+    let claim = state.begin_launch("no-process").unwrap();
     let err = archive_session(&state, "hub").expect_err("launching");
     assert_eq!(code_of(&err), error_code::SESSION_HAS_RUNNING_SESSIONS);
     assert_eq!(status_of(&state, "hub"), Some(Idle));
@@ -354,7 +355,7 @@ async fn archiving_a_project_session_follows_the_rule_for_the_sessions_bound_to_
     for session in [
         project_session("starter", Agent::Claude, Idle),
         bound_session("running", Idle, "starter"),
-        bound_session("dormant", Interrupted, "starter"),
+        bound_session("no-process", Interrupted, "starter"),
     ] {
         state.store.insert_session(&session).unwrap();
     }
@@ -364,13 +365,13 @@ async fn archiving_a_project_session_follows_the_rule_for_the_sessions_bound_to_
     let err = archive_session(&state, "starter").expect_err("a bound session is running");
     assert_eq!(code_of(&err), error_code::SESSION_HAS_RUNNING_SESSIONS);
     assert_eq!(status_of(&state, "starter"), Some(Idle));
-    assert_eq!(status_of(&state, "dormant"), Some(Interrupted));
+    assert_eq!(status_of(&state, "no-process"), Some(Interrupted));
 
     drop(running);
     state.store.delete_session("running").unwrap();
     archive_session(&state, "starter").unwrap();
     assert_eq!(status_of(&state, "starter"), Some(Archived));
-    assert_eq!(status_of(&state, "dormant"), Some(Archived));
+    assert_eq!(status_of(&state, "no-process"), Some(Archived));
 }
 
 /// Archiving a project session reaches no other session: the automatic archive of a `done` report
@@ -949,7 +950,7 @@ async fn archiving_a_console_session_covers_its_lead_sessions_own_sessions() {
         console_session("hub", Idle),
         lead_session("lead", Interrupted, "hub"),
         bound_session("running", Working, "lead"),
-        bound_session("dormant", Interrupted, "lead"),
+        bound_session("no-process", Interrupted, "lead"),
     ] {
         state.store.insert_session(&session).unwrap();
     }
@@ -964,7 +965,7 @@ async fn archiving_a_console_session_covers_its_lead_sessions_own_sessions() {
     for (id, status) in [
         ("hub", Idle),
         ("lead", Interrupted),
-        ("dormant", Interrupted),
+        ("no-process", Interrupted),
     ] {
         assert_eq!(status_of(&state, id), Some(status), "{id}");
     }
@@ -972,7 +973,7 @@ async fn archiving_a_console_session_covers_its_lead_sessions_own_sessions() {
     drop(running);
     state.store.delete_session("running").unwrap();
     archive_session(&state, "hub").unwrap();
-    for id in ["hub", "lead", "dormant"] {
+    for id in ["hub", "lead", "no-process"] {
         assert_eq!(status_of(&state, id), Some(Archived), "{id}");
     }
 }

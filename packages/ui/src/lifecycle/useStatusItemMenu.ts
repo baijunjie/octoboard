@@ -39,7 +39,7 @@ interface UseStatusItemMenuOptions {
 }
 
 /**
- * Keeps the shell's menu bar icon menu listing the live sessions and each available agent's quota
+ * Keeps the shell's menu bar icon menu listing the unarchived sessions and each available agent's quota
  * (`buildStatusItemMenu`), and selects a session chosen there. Best-effort, like the Dock badge: a
  * menu left a moment behind is not worth surfacing.
  *

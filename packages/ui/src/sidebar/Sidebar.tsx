@@ -15,7 +15,7 @@ import { useShallow } from "zustand/react/shallow";
 
 import { noAgentState } from "../agents/agents";
 import { ActionMenu } from "../components/menus/ActionMenu";
-import { ActivityMarker } from "../components/status/ActivityMarker";
+import { TopStatusMarker } from "../components/status/TopStatusMarker";
 import { SessionAgentIcon } from "../components/icons/SessionAgentIcon";
 import { EmptyPanel } from "../components/panel/EmptyPanel";
 import { handFocusOff } from "../components/focus/handFocusOff";
@@ -36,7 +36,7 @@ import type { PanePeek } from "../layout/usePaneToggles";
 import { onReducedMotion, prefersReducedMotion } from "../components/motion/reducedMotion";
 import { effectiveTags, matchesFilter, tagVocabulary } from "../sessions/projectFiltering";
 import type { Console, Project, Session } from "../protocol";
-import { activityLabelKey, sessionDisplayTitle, sessionRowName } from "../sessions/sessionLabel";
+import { sessionDisplayTitle, sessionRowName, statusLabel } from "../sessions/sessionLabel";
 import { sessionModelLabel } from "../sessions/sessionModel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 import { useDaemonStore, useDaemonStoreEqual, useSessionLaunch, useSessionShownStatus } from "../store";
@@ -47,7 +47,7 @@ import { consoleMenu, projectMenu } from "./menus";
 import { NewSessionButton } from "./NewSessionButton";
 import { useNoAgentToStart } from "./useNewSessionMode";
 import { SessionActions } from "./SessionActions";
-import { archivedSessions, consoleActivity, INACTIVE_PROJECT_RANK, liveSessionRows, liveSessions, ordersByStatus, projectRank, sortProjectsByRank } from "../sessions/order";
+import { archivedSessions, INACTIVE_PROJECT_RANK, liveSessionRows, liveSessions, ordersByStatus, projectRank, sortProjectsByRank } from "../sessions/order";
 import { type FilterUpdate, isFiltering, NO_FILTER, type ProjectFilter, ProjectFilterButton, ProjectFilterSummary } from "./ProjectFilter";
 import { pinAfterFoldAction, projectFoldControl, reconcileExpandPins, type ProjectFoldControl } from "./projectFold";
 import { NESTED_RAIL_CLASS, NESTED_ROW_CLASS, NestedBranch, LockButton, PinButton, RowIconButton, RowLabel, STICKY_HEADING_HEIGHT, StickySectionHeading, TreeRow } from "./rows";
@@ -56,7 +56,7 @@ import type { FocusTarget, SidebarHandlers } from "./types";
 import { useFlip } from "./useFlip";
 import { useListMotion } from "../components/motion/useListMotion";
 import { INACTIVE_VEIL_CLASS } from "../components/status/inactiveVeil";
-import { useArchivedOwnerSessions, useConsoleSessions, useHasBoundSessions, useOwnerSessions, useProjectSessions, useSession, useSessionProjectId } from "../store";
+import { useArchivedOwnerSessions, useConsoleSessions, useHasBoundSessions, useOwnerSessions, useProjectSessions, useProjectStatus, useSession, useSessionProjectId } from "../store";
 
 /** The clip the docked column sits in. `min-w-0` lets the flex item reach 0 while the sidebar
  * inside keeps its full width, so the list does not reflow.
@@ -783,12 +783,11 @@ const ProjectNode = memo(function ProjectNode({
   });
   const lastRootIndex = rows.reduce((last, row, index) => row.under ? last : index, -1);
   const archived = archivedSessions(sessions);
-  const activity = consoleActivity(sessions);
+  const status = useProjectStatus(project.id);
   const noAgentToStart = useNoAgentToStart();
   const newSession = (): NewSessionRequest => ({ kind: "new-session", console: parentConsole, project, binding: { kind: "choose" } });
-  const activityKey = activityLabelKey(activity, project.pinned);
-  const nameLabel = activityKey
-    ? t(activityKey, { name: isolate(project.name) })
+  const nameLabel = status
+    ? t(project.pinned ? "session.status.namedPinned" : "session.status.named", { name: isolate(project.name), status: statusLabel(t, status) })
     : project.pinned
       ? t("sidebar.project.ariaLabelPinned", { name: isolate(project.name) })
       : project.name;
@@ -822,7 +821,7 @@ const ProjectNode = memo(function ProjectNode({
         </div>
         {/* No touch popover: a tap on the project row folds it. A failure mark is a button that answers its own tap. */}
         <GitBadge status={gitStatus} decorative touchPopover={false} returnFocusTo={rowRef} />
-        {isCollapsed && <ActivityMarker activity={activity} />}
+        {isCollapsed && <TopStatusMarker status={status} />}
         <RowControls fixed={project.pinned ? <PinButton name={project.name} onUnpin={() => handlers.onSetPinned({ project }, false)} returnFocusTo={rowRef} /> : undefined}>
           <NewSessionButton label={t("sidebar.project.openSession")} quickLabel={t("sidebar.project.openSessionQuick")} target={newSession} onOpen={handlers.onOpenDialog} onQuickCreate={handlers.onQuickCreateSession} />
           <ActionMenu label={t("sidebar.project.actions", { name: isolate(project.name) })} items={projectMenu(t, handlers, project, archived, { gitRepository: gitStatus?.repository, pushing: gitStatus?.activity === "pushing" })} contextTargetRef={rowRef} />

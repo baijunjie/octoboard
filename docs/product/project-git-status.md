@@ -16,7 +16,7 @@ in `docs/product/project-git-actions.md`).
 
 ## The branch badge
 
-At the end of a project's row — after the project's name, before the activity marker a collapsed project carries, a
+At the end of a project's row — after the project's name, before the status marker a collapsed project carries, a
 pinned project's pin button and the row's **+** and action-menu buttons (see "Project rows" in
 `docs/product/sidebar-project-rows.md`) — sits a badge showing that project's git state. The same badge sits after the
 project's name in its focus mode header and in each project group's heading in a console session's focus mode (see "What

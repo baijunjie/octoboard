@@ -20,9 +20,8 @@ user has turned it on, is switch a session to another account of the same agent 
 
 A console session or a project session, of either role and with any reporting relationship, can be handed off while it
 is at its prompt, waiting for the user or interrupted. At its prompt includes every status a session shows there —
-done, awaiting instructions, child sessions working and working in background (see "Which status a session shows" in
-`docs/product/session-statuses.md`); for one working in background the
-processes it left running in the background are carried over to the session that takes its place rather than stopped
+paused, done, awaiting instructions, child sessions working and working in background (see "Which status a session
+shows" in `docs/product/session-statuses.md`); for one working in background the processes it left running in the background are carried over to the session that takes its place rather than stopped
 (see "Automatic stopping and its boundaries" in `docs/product/background-processes.md`). A handoff is refused, with
 nothing changed, when:
 

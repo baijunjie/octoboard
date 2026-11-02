@@ -30,6 +30,7 @@ export const UI_UNTRACEABLE = [
 export const UI_DISK_TESTS = [
   "src/style.test.ts",
   "src/components/scroll/scrollFadeCoverage.test.ts",
+  "src/components/status/sleepGlyph.test.ts",
   "src/errorModulesCycle.test.ts",
   "src/cssDependencies.test.ts",
   "src/layout/paneWidth.test.tsx",

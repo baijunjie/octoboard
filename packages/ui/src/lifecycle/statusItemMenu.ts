@@ -4,18 +4,26 @@ import type { Console, Project, Session } from "../protocol";
 import { remainingPercentAt } from "../accounts/quotaFormat";
 import { accountInUse, accountQuotaLabel, sessionQuotaBarOf } from "../quota/sessionQuota";
 import { sessionWithLocation, statusLabel } from "../sessions/sessionLabel";
-import { sessionStatusKind, type StatusKind } from "../sessions/sessionStatus";
+import { sessionShownStatusKind, type ShownStatusKind } from "../sessions/sessionStatus";
 import { sessionsInTreeOrder, STATUS_RANK } from "../sessions/order";
 import { agentIconKey, statusIconKey } from "./statusItemIconKeys";
 import { buildQuotaSubmenus, type StatusItemQuotaSource } from "./statusItemQuota";
 
-/** The live statuses the menu lists, each under its own heading, in the sidebar's status order
- * (`STATUS_RANK`). A session that is done, one with its work delegated and one running in the
- * background get a heading of their own, as each has a glyph of its own in the sidebar. */
-const SECTION_ORDER = (["waiting_user", "done", "idle", "delegated", "background", "working"] satisfies StatusKind[]).sort((a, b) => STATUS_RANK[a] - STATUS_RANK[b]);
+/** The statuses the menu lists, each under its own heading, in the sidebar's status order
+ * (`STATUS_RANK`), as each has a glyph of its own in the sidebar. Starting and switching account have
+ * no rank of their own, as they sort where the session lands; here they take the place between the
+ * sessions at work and the ones with no process (interrupted), which a section cannot sit in
+ * several places to follow. Archived sessions are not listed. */
+const SECTION_ORDER = [
+  ...(["waiting_user", "dormant", "paused", "done", "idle", "delegated", "background", "working"] satisfies ShownStatusKind[]).sort((a, b) => STATUS_RANK[a] - STATUS_RANK[b]),
+  "starting",
+  "switching",
+  "interrupted",
+] satisfies ShownStatusKind[];
 
 /** How many sessions a section names before the rest are summed up in one line, which keeps the
- * menu on screen however many sessions run. */
+ * menu on screen however many sessions run: at most this many lines, and one for the rest, in each
+ * section. */
 export const MAX_PER_SECTION = 10;
 
 /** How wide a session's line may be, in display columns (East Asian wide characters count as two): the
@@ -42,12 +50,12 @@ export interface StatusItemMenuSource {
   currentConsoleId?: string;
 }
 
-/** The live sessions in the sidebar's order, each status under its own heading in the sidebar's
+/** The unarchived sessions in the sidebar's order, each shown status (`sessionShownStatusKind`) under its own heading in the sidebar's
  * status order (`SECTION_ORDER`), then a quota submenu per available agent. The icon shows its
- * attention dot (`attention`) while any session waits for the user. */
+ * attention dot (`attention`) while any session waits for the user or is dormant. */
 export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource): StatusItemMenuDraft {
   const { consoles, projects, sessions, consoleMap, projectMap, quota } = source;
-  const perStatus = SECTION_ORDER.map((status) => ({ status, listed: sessionsInTreeOrder(consoles, projects, sessions, (s) => sessionStatusKind(s, source.delegating) === status, source.delegating, source.byStatus) }));
+  const perStatus = SECTION_ORDER.map((status) => ({ status, listed: sessionsInTreeOrder(consoles, projects, sessions, (s) => sessionShownStatusKind(s, source.delegating) === status, source.delegating, source.byStatus) }));
   const sections = perStatus.flatMap(({ status, listed }): StatusItemSection[] => {
     if (listed.length === 0) return [];
     const items: StatusItemEntry[] = listed
@@ -73,7 +81,8 @@ export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource):
     submenus: buildQuotaSubmenus(t, quota, consoleMap.get(source.currentConsoleId ?? ""), accountInUse(selected)),
     open: t("statusItem.open"),
     quit: t("menu.quit"),
-    // Taken from the listed sessions, so the dot never shows over a menu with no waiting section.
-    attention: perStatus.some(({ status, listed }) => status === "waiting_user" && listed.length > 0),
+    // Taken from the listed sessions, so the dot never shows over a menu with no such section. A dormant
+    // session lights it too: it stays held until the person leaves its view, though it raises no hand.
+    attention: perStatus.some(({ status, listed }) => (status === "waiting_user" || status === "dormant") && listed.length > 0),
   };
 }

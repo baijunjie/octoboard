@@ -267,10 +267,11 @@ pub(super) fn resumable_agent_session_id(session: &Session) -> Option<String> {
     }
 }
 
-/// Relaunches a dormant session. `instruction` is given to it here rather than by the caller: as
-/// the launch prompt for a Claude Code session that resumes a conversation, otherwise queued to be
-/// written once it is running — whichever hook releases it can fire the moment the agent starts, so
-/// it has to be in the queue before the launch and out again if the launch never happens.
+/// Relaunches a session without a process. `instruction` is given to it here rather than by the
+/// caller: as the launch prompt for a Claude Code session that resumes a conversation, otherwise
+/// queued to be written once it is running — whichever hook releases it can fire the moment the
+/// agent starts, so it has to be in the queue before the launch and out again if the launch never
+/// happens.
 ///
 /// A session bound to an archived owner (a console session, or a project session that started it)
 /// brings its archived owners back first, level by level from the topmost down — a session bound
@@ -489,17 +490,17 @@ struct Checked {
     judgement: records::Judgement,
 }
 
-/// Looks for the conversation record of a dormant session in its own account, resolving a default
-/// account through `shell`, the snapshot the launch will use. Only a proven absence is
+/// Looks for the conversation record of a session without a process in its own account, resolving a
+/// default account through `shell`, the snapshot the launch will use. Only a proven absence is
 /// [`records::Resumability::Unresumable`]; anything unknown launches as it always has, and a
-/// session that is not dormant is not looked at.
+/// session that has a process is not looked at.
 async fn check_resumable(
     state: &Arc<AppState>,
     id: &str,
     shell: &HashMap<String, String>,
 ) -> Result<Checked> {
     let session = state.session_record(id)?;
-    if !session.status.is_dormant() {
+    if !session.status.has_no_process() {
         return Ok(Checked {
             session,
             judgement: records::Judgement {
@@ -580,13 +581,13 @@ fn needs_reopening(state: &Arc<AppState>, owner: &str) -> Result<bool> {
     })
 }
 
-/// The archived owners a dormant session brings back before itself, topmost first: its owner when
-/// that is archived, then that owner's owner when that is archived too, stopping at the first that
-/// is not (or is not on record). Empty for a session that is not dormant.
+/// The archived owners a session without a process brings back before itself, topmost first: its
+/// owner when that is archived, then that owner's owner when that is archived too, stopping at the
+/// first that is not (or is not on record). Empty for a session that has a process.
 pub(crate) fn archived_owners(state: &Arc<AppState>, id: &str) -> Result<Vec<String>> {
     let session = state.session_record(id)?;
     let mut owners = Vec::new();
-    let mut next = session.bound_to.filter(|_| session.status.is_dormant());
+    let mut next = session.bound_to.filter(|_| session.status.has_no_process());
     while let Some(owner_id) = next {
         let Some(owner) = state
             .store

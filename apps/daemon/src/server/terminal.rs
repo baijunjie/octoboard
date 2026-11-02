@@ -216,8 +216,8 @@ async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, id: String) {
 
     // Snapshot and subscription happen under one lock inside `attach`, so the replay cannot miss a
     // byte or repeat one even while the process is producing output right now. A shell that has
-    // exited answers with its replay alone, read-only, as a dormant session does. A live one is
-    // first told where its replay stands, for answering the program's queries in it.
+    // exited answers with its replay alone, read-only, as a session without a process does. A live
+    // one is first told where its replay stands, for answering the program's queries in it.
     let Attached {
         replay,
         mut live,

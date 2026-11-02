@@ -18,25 +18,21 @@ expanded, and while hidden it takes no room, so a long name runs as far as it wo
 when the chevron appears. The hover chevron fades and opens out as it appears, and back as it goes, briefly — at once
 where the system asks for reduced motion.
 
-After the name, before the activity marker below and the row's controls, comes the project's **branch badge** — its
+After the name, before the status marker below and the row's controls, comes the project's **branch badge** — its
 current branch and how far it is from its upstream, when its directory is a git repository, led by a failure mark when
 its last check failed (see "The branch badge" in `docs/product/project-git-status.md`). That mark is a button and a tab
 stop of its own on the row, and pressing it does not fold the project; the row's own name adds that the Git check failed
 while it shows.
 
-A collapsed project shows an activity marker taken from its sessions that are not archived, so a waiting session can
-be found with its project collapsed. It shows the first of these that applies:
-
-1. a waving hand while any session is waiting for the user;
-2. the *working* glyph, the blue pinging dot, while any is working;
-3. the *working in background* glyph, the hollow green ring, while any is working in background;
-4. a green speech bubble while any is at its prompt — done, awaiting instructions or with child sessions working — or
-   starting;
-5. otherwise nothing.
-
-The glyphs follow "Status glyphs" in `docs/product/session-statuses.md`. **The marker carries a tooltip** saying which activity it stands for, in the
-same words the row's own name folds in beside the project's name (see "Tooltips on indicators" in
-`docs/product/labels-and-tooltips.md`).
+A collapsed project shows a **status marker** for its sessions that are not archived, so a waiting session can be found
+with its project collapsed: the glyph, at the compact 14 px size, of their top status — the status of the one that
+comes first in the status order (see "The top status" in `docs/product/session-statuses.md`). Every status has its own
+glyph there, interrupted, starting and switching account included, so a project whose unarchived sessions are all
+interrupted shows the pause sign; a project with no unarchived session shows none. The glyphs follow "Status glyphs" in
+`docs/product/session-statuses.md`. **The marker carries a tooltip** saying that status in the same words as everywhere
+else it is said (see "Tooltips on indicators" in `docs/product/labels-and-tooltips.md`). The row's accessible name says
+it too, expanded or collapsed: the project's name followed by its top status, with "pinned" between them for a pinned
+project.
 
 At the row's end are its pin button while the project is pinned (see "Pinning" in
 `docs/product/order-of-projects-and-sessions.md`), then a **+** button, **New session**, which opens the new-session

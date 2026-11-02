@@ -167,7 +167,7 @@ export interface TerminalControllerHandlers {
   /** Puts on the clipboard the text a program in the terminal asks to copy (OSC 52), as Claude Code
    * does with the text selected in its own fullscreen view; absent where there is no clipboard, where
    * the text is only offered to the editing menu (`programCopiedText`). Never called for output
-   * written before the screen's session was attached: a live session's replay, a dormant session's
+   * written before the screen's session was attached: a live session's replay, a process-less session's
    * saved output, or what was still queued when the screen was reset. */
   copyToClipboard?: (text: string) => void;
   /** What the daemon makes of the file paths in the output, for the session on screen: absent where
@@ -238,7 +238,7 @@ export class TerminalController {
   /** The saved output being shown for the session on screen, which has no process (see `detach`).
    * Replaced or cleared with the screen, and compared by identity, so a load that arrives for a
    * screen that has since been reset is dropped. Retained after close to mark this screen as a
-   * saved snapshot, so repeated dormant renders do not replace it with another load. */
+   * saved snapshot, so repeated renders of a process-less session do not replace it with another load. */
   private savedLoad?: WebSocket;
   /** Saved output or a reset barrier written and not yet parsed. While any is, xterm's answers
    * to output queries are dropped unless it marked the data as the user's (`userInput`), and what
@@ -636,7 +636,7 @@ export class TerminalController {
    * `apps/daemon/PROTOCOL.md` — attaching to a session whose process is not running gets only the
    * output its last process left, if any, and then the close. That close is still handled below
    * (as `not_running`) as a safety net for the race where a session stops between the click and
-   * the socket connecting, not as the normal path for opening a dormant session.
+   * the socket connecting, not as the normal path for opening a session without a process.
    */
   attach(sessionId: string, wsUrl: string, userInitiated: boolean): void {
     const generation = ++this.generation;
@@ -726,12 +726,12 @@ export class TerminalController {
   }
 
   /** Detaches without connecting a new session — used when nothing is selected, or the selected
-   * session is dormant (interrupted/archived) and waiting to be resumed.
+   * session has no process (interrupted/archived) and waiting to be resumed.
    *
    * With `savedOutputUrl` (the session's terminal socket), replaces the live screen with the
    * daemon's saved snapshot, even for the same session: a live socket may already have delivered
    * the agent's shutdown cleanup. Read-only: nothing is sent on the saved-output socket, and
-   * nothing typed goes anywhere. A later detach for the same dormant session keeps that
+   * nothing typed goes anywhere. A later detach for the same process-less session keeps that
    * snapshot, including while its load is pending; `attach()` replaces it on resume.
    *
    * `keepScreenFor` names the session the pane is detaching to. Without a saved-output URL, its

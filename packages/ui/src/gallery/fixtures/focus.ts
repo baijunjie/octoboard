@@ -34,9 +34,11 @@ const settings = {
 // focus mode summarizes by default or shows with hub-colored dots when included; `hub1`'s nests
 // them under it. Its archived child stays in project archives in both modes. `s-3`, unbound, has one of its own,
 // which the project's focus mode nests under it. `s-console-old` is an archived console session, which the
-// switch strip leaves out. For the strip's kinds of activity: `hub1` waits through `s-2`, `hub2` is
-// working itself and `hub3` works through `s-3d` (working here; in `consoleFocusState`, idle with a watcher
-// still running, which shows as background work), while `hub4` has nothing going on.
+// switch strip leaves out. A chip marks the top status among its console session and the sessions bound to it, by the
+// sidebar's status order: `hub1` waits through `s-2`, `hub2` is working itself but Done through the idle sessions bound
+// to it (`consoleFocusState` has them working), `hub4` is Done and `hub3` is delegating while `s-3d` works
+// (in `consoleFocusState`, `hub3` itself works and `s-3d` is idle with a watcher still running, which shows as
+// background work and outranks the Working of `hub3`).
 const lead = sessionOf("s-lead", console_.id, project.id, "Rework the result ranking", "idle", { bound_to: hub1.id, account_id: "a-work", terminal_title: "Compare ranking strategies", context: { tokens: 846_209 } });
 const sessions = [
   hub1,
@@ -251,12 +253,15 @@ const limitContextState = withContext({ tokens: 90_227, window: 200_000, used_pe
 const warningContextState = withContext({ tokens: 126_450, window: 200_000, used_percent: 63 });
 const dangerContextState = withContext({ tokens: 182_400, window: 200_000, used_percent: 91 });
 
-// Project focus also shows a newer unbound foreground session behind the older migration watcher.
+// Project focus also shows a newer unbound foreground session behind the older migration watcher, and an unbound
+// dormant session and a paused one, which rank ahead of every Done card.
 const runningInBackgroundState = {
   ...scrollingFocusState,
   sessions: new Map([
     ...scrollingFocusState.sessions,
     ["s-query-working", sessionOf("s-query-working", console_.id, project.id, "Optimize the query plan", "working", { started_at: minutesAgo(5) })],
+    ["s-query-dormant", sessionOf("s-query-dormant", console_.id, project.id, "Review the background agents", "dormant", { started_at: minutesAgo(6) })],
+    ["s-query-paused", sessionOf("s-query-paused", console_.id, project.id, "Retry the failed benchmark", "idle", { started_at: minutesAgo(7), paused: true })],
   ]),
 };
 
@@ -294,19 +299,31 @@ const unusedBoundSessions = [
 // No native records exist for the unused bound sessions.
 const unusedBoundRecords = Object.fromEntries(unusedBoundSessions.map((session) => [session.id, "absent" as const]));
 
+// The strip's other statuses: `hub2` is working through everything bound to it, and two more console sessions
+// are Dormant and Paused themselves, started right after Hub, so that the first chips already differ.
+const stripWorking = new Set(["s-3c", "s-7", "s-9"]);
+const stripExtra = [
+  sessionOf("s-console-dormant", console_.id, undefined, "Nightly", "dormant", { colour: "orange", started_at: minutesAgo(350) }),
+  sessionOf("s-console-paused", console_.id, undefined, "Bench", "idle", { colour: "blue", paused: true, started_at: minutesAgo(320) }),
+];
+
 // `hub1`'s own card in its focus mode: locked, with a context-size badge beside its agent. `s-1` is locked too.
 const consoleFocusState = {
   ...scrollingFocusState,
   sessions: new Map([
     ...[...scrollingFocusState.sessions].map(([id, session]) => [
       id,
-      // `hub3`'s only bound session is idle with a watcher still running, so its chip shows background work.
-      id === "s-3d" ? { ...session, status: "idle" as const, background_tasks: [{ id: "task-watch", type: "shell", description: "cargo watch -x test" }] }
-        : id === hub1.id ? { ...session, locked: true, context: { tokens: 612_480 } }
-          : id === "s-1" ? { ...session, locked: true }
-            : session,
+      // `hub3` works itself, but its only bound session is idle with a watcher still running, and background work
+      // outranks Working, so its chip shows background work.
+      id === hub3.id ? { ...session, status: "working" as const }
+        : id === "s-3d" ? { ...session, status: "idle" as const, background_tasks: [{ id: "task-watch", type: "shell", description: "cargo watch -x test" }] }
+          : stripWorking.has(id) ? { ...session, status: "working" as const }
+            : id === hub1.id ? { ...session, locked: true, context: { tokens: 612_480 } }
+              : id === "s-1" ? { ...session, locked: true }
+                : session,
     ] as const),
     ...unusedBoundSessions.map((session) => [session.id, session] as const),
+    ...stripExtra.map((session) => [session.id, session] as const),
   ]),
 };
 
@@ -365,7 +382,7 @@ export const focusScenarios: Scenario[] = [
     state: runningInBackgroundState,
     sessionRecords: { "s-scroll-unused": "absent" },
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
-    description: "The switch beside the Sessions count starts off. Hover or focus it for its tooltip. The cards of project sessions bound to console sessions (Rework the result ranking and the working and waiting ones) join the list once it is on. Colored summary chips and gray count badges sit above archives. Scroll to confirm Sessions stays clear above the fade. At a 200px window height Archived pushes it away at the top, its preview listing Archived work of the active lead on its own, since its owner is not archived, while A session of the archived lead session stays in View all. Done, Awaiting instructions and interrupted cards show an Archive button beside the menu, the pinned Review search improvement 1 after its pin. Write the migration, selected, has none, as an unarchived session is bound under it and its build watcher is still running: its card reads Working in background with a pinging hollow green ring, unlike the filled accent dot of Optimize the query plan and the working cards that join once the switch is on, as does the glyph at the end of the top bar's breadcrumb, whose tooltip says the same. Scroll down to it: it sits below the Done reviews and the Awaiting instructions Draft the release notes, and above the newer working Optimize the query plan, followed by the interrupted Profile the slow query. The unused Draft the release notes has a Delete shortcut instead. Compare the selected card's and the project header's actions buttons at rest, with muted glyphs, then hover or open each menu for the subtle tint every actions button shares. Hover the header's new-session button for its platform modifier + N hint; set Modifier to Held to see the bolt and its modifier + Shift + N quick-create hint. The same keys open the dialog or create with defaults while this project is focused.",
+    description: "The switch beside the Sessions count starts off. Hover or focus it for its tooltip. The cards of project sessions bound to console sessions (Rework the result ranking and the working and waiting ones) join the list once it is on. Colored summary chips and gray count badges sit above archives. Scroll to confirm Sessions stays clear above the fade. At a 200px window height Archived pushes it away at the top, its preview listing Archived work of the active lead on its own, since its owner is not archived, while A session of the archived lead session stays in View all. Done, Awaiting instructions and interrupted cards show an Archive button beside the menu, the pinned Review search improvement 1 after its pin. Write the migration, selected, has none, as an unarchived session is bound under it and its build watcher is still running: its card reads Working in background with a pinging hollow green ring, unlike the filled accent dot of Optimize the query plan and the working cards that join once the switch is on, as does the glyph at the end of the top bar's breadcrumb, whose tooltip says the same. Scroll down to it: it sits below the Done reviews and the Awaiting instructions Draft the release notes, and above the newer working Optimize the query plan, followed by the interrupted Profile the slow query. The unused Draft the release notes has a Delete shortcut instead. Review the background agents (Dormant, orange zz, Zs rising from the bottom left to the top right and shrinking as they go, or a still large and small Z with reduced motion on) and Retry the failed benchmark (Paused, green circled pause sign) follow the pinned card and lead the rest, ahead of the Done ones; select either to see the same glyph at the end of the breadcrumb. Compare the selected card's and the project header's actions buttons at rest, with muted glyphs, then hover or open each menu for the subtle tint every actions button shares. Hover the header's new-session button for its platform modifier + N hint; set Modifier to Held to see the bolt and its modifier + Shift + N quick-create hint. The same keys open the dialog or create with defaults while this project is focused.",
     steps: [
       (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Plan the database migration", name: "Write the migration" }))),
     ],
@@ -409,7 +426,7 @@ export const focusScenarios: Scenario[] = [
     state: consoleFocusState,
     sessionRecords: unusedBoundRecords,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
-    description: "The header holds only the back button, the console name Main as a single-line heading and the plus menu; Hub's title is on the card below, not in the header. Below the switch strip, fixed above the scrolling list, Hub's own card is not selected: its status, a colour dot, its agent, creation time and 612K context-size badge, and its persistent Unlock control before the actions menu, whose items have no Pin or Focus mode. The pinned Add idempotency keys card has a persistent Unlock control too, without lock borders; unlocking either keeps their order. Draft the changelog and Start the benchmark run are both bound to Hub and were never used; the first was opened by the user, so its shortcut and menu offer Delete, while the second was started by an agent and keeps Archive. Within Rework the result ranking, the older Watch the ranking build sits after the waiting child and before the newer working Chase the flaky test. The pinned working Add idempotency keys stays above the waiting and background cards. The switch strip includes waiting, working, background and inactive sessions; hover markers for details. Hub waits, Hub 2 works (pinging accent dot) and Hub 3's marker is the pinging hollow green ring for background work, since its only bound session, Document the retry policy, is idle with a test watcher still running; Release notes has no marker. Set Modifier to Held to see the header plus menu and each project group's new-session button as the bolt; choosing a project from the menu then creates with defaults.",
+    description: "The header holds only the back button, the console name Main as a single-line heading and the plus menu; Hub's title is on the card below, not in the header. Below the switch strip, fixed above the scrolling list, Hub's own card is not selected: its status, a colour dot, its agent, creation time and 612K context-size badge, and its persistent Unlock control before the actions menu, whose items have no Pin or Focus mode. The pinned Add idempotency keys card has a persistent Unlock control too, without lock borders; unlocking either keeps their order. Draft the changelog and Start the benchmark run are both bound to Hub and were never used; the first was opened by the user, so its shortcut and menu offer Delete, while the second was started by an agent and keeps Archive. Within Rework the result ranking, the older Watch the ranking build sits after the waiting child and before the newer working Chase the flaky test. The pinned working Add idempotency keys stays above the waiting and background cards. Every chip of the switch strip ends in the glyph of the top status among its console session and the sessions bound to it, and its accessible name ends with that status; hover a marker to read it, and scroll the strip to reach the later chips. Hub waits (waving hand, through Fix the rounding of partial results), Nightly is Dormant (orange zz, Zs rising from the bottom left to the top right and shrinking as they go, still with reduced motion on), Bench is Paused (green circled pause sign), Hub 2 is Working (pinging blue dot, through every session bound to it), Hub 3 is Working in background (pinging hollow green ring, since its only bound session, Document the retry policy, is idle with a test watcher still running, which outranks Hub 3's own Working) and Release notes is Done (green circled check mark). The strip is ordered by when the console sessions started, not by status. Set Modifier to Held to see the header plus menu and each project group's new-session button as the bolt; choosing a project from the menu then creates with defaults.",
     steps: [
       (ui) => ui.press(addIdempotencyKeys(ui)),
     ],

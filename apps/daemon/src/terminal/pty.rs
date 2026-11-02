@@ -381,9 +381,10 @@ impl PtyCore {
             .freeze();
     }
 
-    /// Freezes before a dormant record can become observable. The closure only updates storage;
-    /// publishing happens after this returns. A failed update rolls back only this call's freeze,
-    /// while the input lock keeps termination or another update from claiming that same screen.
+    /// Freezes before a record without a process can become observable. The closure only updates
+    /// storage; publishing happens after this returns. A failed update rolls back only this call's
+    /// freeze, while the input lock keeps termination or another update from claiming that same
+    /// screen.
     pub fn freeze_output_for(
         &self,
         update: impl FnOnce() -> anyhow::Result<bool>,

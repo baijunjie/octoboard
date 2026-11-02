@@ -703,3 +703,194 @@ async fn subagent_events_inside_a_turn_leave_the_tasks_alone() {
     );
     assert!(state.background_tasks_of("s").is_empty());
 }
+
+/// How each agent's turn ends sets and clears the paused flag across turns: an abnormal end sets
+/// it (and publishes it, also for a session already idle), the next prompt clears it, and a
+/// normal stop clears it and publishes that too.
+#[tokio::test]
+async fn an_abnormal_turn_end_pauses_the_session_until_the_next_turn_or_a_normal_stop() {
+    for (agent, abnormal, normal, prompt) in [
+        (
+            Agent::Claude,
+            r#"{"hook_event_name": "StopFailure"}"#,
+            r#"{"hook_event_name": "Stop"}"#,
+            r#"{"hook_event_name": "UserPromptSubmit"}"#,
+        ),
+        (
+            Agent::Claude,
+            r#"{"hook_event_name": "StopFailure"}"#,
+            r#"{"hook_event_name": "Stop", "background_tasks": [{"id": "b1", "type": "shell"}]}"#,
+            r#"{"hook_event_name": "UserPromptSubmit"}"#,
+        ),
+        (
+            Agent::Codex,
+            r#"{"hook_event_name": "Interrupt"}"#,
+            r#"{"hook_event_name": "Stop"}"#,
+            r#"{"hook_event_name": "UserPromptSubmit"}"#,
+        ),
+        (
+            Agent::Grok,
+            r#"{"hookEventName": "StopCancelled"}"#,
+            r#"{"hookEventName": "Stop", "reason": "end_turn"}"#,
+            r#"{"hookEventName": "UserPromptSubmit"}"#,
+        ),
+        (
+            Agent::Grok,
+            r#"{"hookEventName": "StopFailure"}"#,
+            r#"{"hookEventName": "Stop", "reason": "end_turn"}"#,
+            r#"{"hookEventName": "UserPromptSubmit"}"#,
+        ),
+    ] {
+        let (state, dir) = app_state("hook-paused");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&dir))
+            .unwrap();
+        state
+            .store
+            .insert_session(&crate::test_support::console_session(
+                "s",
+                SessionStatus::Idle,
+            ))
+            .unwrap();
+        let live = crate::test_support::fake_live_session("s", agent, 80, 24, "sleep 30");
+        state.register_live(live.clone());
+        let mut events = state.subscribe();
+        let last_paused = |events: &mut tokio::sync::broadcast::Receiver<Event>| {
+            let mut last = None;
+            while let Ok(event) = events.try_recv() {
+                if let Event::SessionUpserted { session } = event {
+                    last = Some((session.status, session.paused));
+                }
+            }
+            last
+        };
+        let label = format!("{agent:?} {abnormal}");
+
+        // Ended abnormally while the session was working: the one publish carries the flag.
+        apply_hook(&state, "s", prompt.as_bytes());
+        assert_eq!(
+            last_paused(&mut events),
+            Some((SessionStatus::Working, false))
+        );
+        apply_hook(&state, "s", abnormal.as_bytes());
+        assert_eq!(
+            last_paused(&mut events),
+            Some((SessionStatus::Idle, true)),
+            "{label}"
+        );
+
+        // The next prompt ends it.
+        apply_hook(&state, "s", prompt.as_bytes());
+        assert_eq!(
+            last_paused(&mut events),
+            Some((SessionStatus::Working, false)),
+            "{label}"
+        );
+        assert!(!live.is_paused());
+
+        // Ended abnormally again, then normally: the second end is published although the status
+        // stays idle.
+        apply_hook(&state, "s", abnormal.as_bytes());
+        assert_eq!(
+            last_paused(&mut events),
+            Some((SessionStatus::Idle, true)),
+            "{label}"
+        );
+        apply_hook(&state, "s", normal.as_bytes());
+        assert_eq!(
+            last_paused(&mut events),
+            Some((SessionStatus::Idle, false)),
+            "{label}"
+        );
+
+        // An abnormal end of a session that is idle already is published too.
+        apply_hook(&state, "s", abnormal.as_bytes());
+        assert_eq!(
+            last_paused(&mut events),
+            Some((SessionStatus::Idle, true)),
+            "{label}"
+        );
+        assert!(live.is_paused());
+    }
+}
+
+/// An event that ends no turn leaves the flag as it is: Claude Code's `idle_prompt` follows a
+/// failed stop, and Grok's backstop and teardown fire after turns that already ended.
+#[tokio::test]
+async fn events_that_end_no_turn_leave_the_paused_flag_alone() {
+    for (agent, ends_abnormally, silent) in [
+        (
+            Agent::Claude,
+            r#"{"hook_event_name": "StopFailure"}"#,
+            r#"{"hook_event_name": "Notification", "notification_type": "idle_prompt"}"#,
+        ),
+        (
+            Agent::Grok,
+            r#"{"hookEventName": "StopCancelled"}"#,
+            r#"{"hookEventName": "Notification", "notificationType": "idle_prompt"}"#,
+        ),
+        (
+            Agent::Grok,
+            r#"{"hookEventName": "StopCancelled"}"#,
+            r#"{"hookEventName": "Stop", "reason": "shutdown"}"#,
+        ),
+    ] {
+        let (state, dir) = app_state("hook-paused-silent");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&dir))
+            .unwrap();
+        state
+            .store
+            .insert_session(&crate::test_support::console_session(
+                "s",
+                SessionStatus::Working,
+            ))
+            .unwrap();
+        let live = crate::test_support::fake_live_session("s", agent, 80, 24, "sleep 30");
+        state.register_live(live.clone());
+        apply_hook(&state, "s", ends_abnormally.as_bytes());
+        assert!(live.is_paused());
+        apply_hook(&state, "s", silent.as_bytes());
+        assert!(live.is_paused(), "{agent:?} {silent}");
+        assert!(
+            state
+                .wire_session(state.session_record("s").unwrap())
+                .paused
+        );
+    }
+}
+
+/// A Claude Code `SessionStart` (a new conversation after `/clear`) has no stopped turn, so it
+/// clears the paused flag and publishes that for a session that is idle already.
+#[tokio::test]
+async fn a_new_claude_conversation_clears_the_paused_flag() {
+    let (state, dir) = app_state("hook-paused-session-start");
+    state
+        .store
+        .insert_console(&crate::test_support::console(&dir))
+        .unwrap();
+    state
+        .store
+        .insert_session(&crate::test_support::console_session(
+            "s",
+            SessionStatus::Working,
+        ))
+        .unwrap();
+    let live = crate::test_support::fake_live_session("s", Agent::Claude, 80, 24, "sleep 30");
+    state.register_live(live.clone());
+    apply_hook(&state, "s", br#"{"hook_event_name": "StopFailure"}"#);
+    assert!(live.is_paused());
+
+    let mut events = state.subscribe();
+    apply_hook(&state, "s", br#"{"hook_event_name": "SessionStart"}"#);
+    assert!(!live.is_paused());
+    let mut last = None;
+    while let Ok(event) = events.try_recv() {
+        if let Event::SessionUpserted { session } = event {
+            last = Some((session.status, session.paused));
+        }
+    }
+    assert_eq!(last, Some((SessionStatus::Idle, false)));
+}

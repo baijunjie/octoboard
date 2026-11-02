@@ -129,7 +129,7 @@ pub fn watch_for_failure(
 
 /// Ends the open turn as a failed one, as if the agent had fired a failure event for it: the turn
 /// closes, a bound session's owner gets its report, and the session goes back to awaiting
-/// instructions.
+/// instructions, paused.
 fn end_failed_turn(state: &Arc<AppState>, session_id: &str, message: Option<String>) {
     let turn = TurnEnd {
         last_assistant_message: message,
@@ -151,6 +151,8 @@ fn end_failed_turn(state: &Arc<AppState>, session_id: &str, message: Option<Stri
                 session = %session_id,
                 "a turn ended in an error; the agent is back at its prompt"
             );
+            // Before the status write, so the record it publishes carries the flag.
+            state.set_paused(session_id, true);
             if let Err(err) = state.apply_hook_status(session_id, SessionStatus::Idle) {
                 tracing::debug!(
                     session = %session_id, %err,
@@ -311,6 +313,7 @@ mod tests {
             record_titles: Default::default(),
             background_tasks: Vec::new(),
             switching_account: false,
+            paused: false,
             prompt_on_launch: false,
             default_effort: None,
             orchestration_role: OrchestrationRole::Coordinator,
@@ -412,6 +415,10 @@ mod tests {
 
         assert!(fixture.went_idle(crate::test_support::PATIENCE).await);
         assert_eq!(fixture.state.close_turn("s", false), TurnClose::NoTurn);
+        let shown = fixture
+            .state
+            .wire_session(fixture.state.session_record("s").unwrap());
+        assert!(shown.paused, "a failed turn leaves the session paused");
     }
 
     /// The race the watch's start offset exists for: Codex wrote the failed turn's `task_complete`

@@ -82,7 +82,7 @@ pub fn watch_exit(state: &Arc<AppState>, live: Arc<LiveSession>) {
         match exit {
             Some(Ok(Some((before, session)))) => {
                 state.publish_session(&session);
-                let unasked = !before.is_dormant()
+                let unasked = !before.has_no_process()
                     && !live.was_ended_on_purpose()
                     && !live.is_watched_under_claim();
                 if unasked && session.bound_to.is_some() {

@@ -223,13 +223,13 @@ impl Store {
         )
     }
 
-    /// Moves a session to `status`, which must not be dormant, but only while the session is not
-    /// dormant itself and is at another status. A running session's status follows its agent's
-    /// events, which arrive on tasks of their own; matching in the statement means one that lands
-    /// after an archive or an exit cannot bring the session back to life. Returns the record as it
-    /// now stands, or `None` when nothing changed or the session is gone.
+    /// Moves a session to `status`, which must not be a no-process status, but only while the
+    /// session has a process and is at another status. A running session's status follows its
+    /// agent's events, which arrive on tasks of their own; matching in the statement means one that
+    /// lands after an archive or an exit cannot bring the session back to life. Returns the record
+    /// as it now stands, or `None` when nothing changed or the session is gone.
     pub fn set_running_status(&self, id: &str, status: SessionStatus) -> Result<Option<Session>> {
-        debug_assert!(!status.is_dormant());
+        debug_assert!(!status.has_no_process());
         self.update_session_row(
             id,
             "UPDATE sessions SET status = ?2
@@ -388,7 +388,7 @@ impl Store {
         Ok(changed)
     }
 
-    /// Writes only the terminal title, and skips unchanged, dormant or deleted rows. Shutdown
+    /// Writes only the terminal title, and skips unchanged, no-process or deleted rows. Shutdown
     /// cleanup may still emit OSC titles after archiving or interruption; keep the last active
     /// title instead. The read and write share the store lock with status updates, so that
     /// boundary and concurrent renames are preserved.
@@ -404,7 +404,7 @@ impl Store {
         let Some(mut session) = session else {
             return Ok(None);
         };
-        if session.status.is_dormant() || session.terminal_title.as_deref() == title {
+        if session.status.has_no_process() || session.terminal_title.as_deref() == title {
             return Ok(None);
         }
         conn.execute(
@@ -698,7 +698,7 @@ impl Store {
 
     /// Moves every session that a previous daemon left mid-flight to `interrupted`. The daemon
     /// owns the agent processes, so none of them survived its exit — whatever the stored status
-    /// says. Archived sessions are already dormant on purpose and are left alone.
+    /// says. Archived sessions are already without a process on purpose and are left alone.
     pub fn mark_live_sessions_interrupted(&self) -> Result<usize> {
         let changed = self.lock().execute(
             "UPDATE sessions SET status = ?1, ended_at = ?2 WHERE status NOT IN (?1, ?3)",
@@ -792,6 +792,7 @@ pub(super) fn read_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         status: enum_from_row::<SessionStatus>(row, 9)?,
         background_tasks: Vec::new(),
         switching_account: false,
+        paused: false,
         prompt_on_launch: false,
         default_effort: None,
         orchestration_role: enum_from_row::<OrchestrationRole>(row, 19)?,
@@ -1012,12 +1013,12 @@ mod tests {
         drop(store);
     }
 
-    /// A running status reported after the session went dormant — a Stop hook landing after an
-    /// archive, a late event after the process ended — leaves it dormant; and the process going
-    /// away keeps an archive while interrupting anything else.
+    /// A running status reported after the session lost its process — a Stop hook landing after
+    /// an archive, a late event after the process ended — leaves it as it was; and the process
+    /// going away keeps an archive while interrupting anything else.
     #[test]
-    fn a_dormant_session_stays_so_whatever_its_agent_reports() {
-        let path = temp_db("session-dormant");
+    fn a_no_process_session_stays_so_whatever_its_agent_reports() {
+        let path = temp_db("session-no-process");
         let store = Store::open(&path).expect("store");
         store
             .insert_console(&console(None, None, None))
@@ -1589,9 +1590,9 @@ mod tests {
         assert_eq!(stored.title, "Renamed");
         assert_eq!(stored.status, SessionStatus::Archived);
         for status in [SessionStatus::Archived, SessionStatus::Interrupted] {
-            let mut dormant = store.get_session("session-1").unwrap().unwrap();
-            dormant.status = status;
-            store.update_session(&dormant).unwrap();
+            let mut ended = store.get_session("session-1").unwrap().unwrap();
+            ended.status = status;
+            store.update_session(&ended).unwrap();
             for title in [None, Some("Shutdown title")] {
                 assert!(store
                     .set_terminal_title("session-1", title)
@@ -1605,7 +1606,7 @@ mod tests {
                         .terminal_title
                         .as_deref(),
                     Some("Task title"),
-                    "cleanup cannot replace a dormant session's title"
+                    "cleanup cannot replace the title of a session without a process"
                 );
             }
         }

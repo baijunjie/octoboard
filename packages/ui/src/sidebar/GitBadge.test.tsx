@@ -280,7 +280,7 @@ it("names the badge in focus mode's header itself, once, with the sentence its t
 it("keeps a press on the failure mark from folding the project, the row naming the failure in its own words", () => {
   const container = PLACEMENTS[0].render(gitStatusOf(web.id, FAILED));
   const row = PLACEMENTS[0].named(container)!;
-  expect(row.getAttribute("aria-label")).toBe(`${isolate("Website")}, a session is running, Branch ${BRANCH}, 3 commits ahead, 2 commits behind, Git check failed`);
+  expect(row.getAttribute("aria-label")).toBe(`${isolate("Website")}, Done, Branch ${BRANCH}, 3 commits ahead, 2 commits behind, Git check failed`);
   const expanded = row.getAttribute("aria-expanded");
   press(markOf(container), "mouse");
   expect(row.getAttribute("aria-expanded")).toBe(expanded);
@@ -295,7 +295,7 @@ it("leaves the badge on a sidebar row unnamed, the row carrying its sentence in 
   expect(lineOf(badge).closest("[aria-hidden=true]")).not.toBeNull();
   expect(badge.querySelector("svg.lucide-git-branch")!.closest("[aria-hidden=true]")).not.toBeNull();
   expect(document.body.querySelector("[role=img]")).toBeNull();
-  expect(row.named(document.body)?.getAttribute("aria-label")).toBe(`${isolate("Website")}, a session is running, Branch ${BRANCH}, 1 commit ahead`);
+  expect(row.named(document.body)?.getAttribute("aria-label")).toBe(`${isolate("Website")}, Done, Branch ${BRANCH}, 1 commit ahead`);
 });
 
 it.each(PLACEMENTS)("runs only the hovered project name or branch in $name, leaving buttons and glyphs still", (placement) => {

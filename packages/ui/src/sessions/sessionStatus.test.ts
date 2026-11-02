@@ -41,25 +41,33 @@ describe("sessionStatusKind", () => {
     expect(kindOf("idle", { has_conversation: true }, delegating)).toBe("delegated");
   });
 
+  it("reads a paused idle session as paused over background work, delegated work and done", () => {
+    const paused = { paused: true, has_conversation: true, background_tasks: [{ id: "b" }] };
+    expect(kindOf("idle", paused, new Set(["s"]))).toBe("paused");
+    expect(kindOf("idle", { paused: true })).toBe("paused");
+    expect(kindOf("idle", { paused: false, has_conversation: true })).toBe("done");
+  });
+
   it("ranks the session's own background work over delegated work", () => {
     expect(kindOf("idle", { has_conversation: true, background_tasks: [{ id: "b" }] }, new Set(["s"]))).toBe("background");
   });
 
-  it.each(["starting", "working", "waiting_user", "interrupted", "archived"] as const)("keeps the wire status %s whatever else holds", (status) => {
-    expect(kindOf(status, { has_conversation: true, background_tasks: [{ id: "b" }] }, new Set(["s"]))).toBe(status);
+  it.each(["starting", "working", "waiting_user", "dormant", "interrupted", "archived"] as const)("keeps the wire status %s whatever else holds", (status) => {
+    expect(kindOf(status, { has_conversation: true, paused: true, background_tasks: [{ id: "b" }] }, new Set(["s"]))).toBe(status);
   });
 });
 
 describe("delegatingSessionIds", () => {
   const at = (id: string, status: SessionStatus, bound_to: string | null = null) => sessionOf(id, "c", "p", id, status, { bound_to });
 
-  it.each(["starting", "working", "waiting_user"] as const)("marks the owner of a session that is %s", (status) => {
+  it.each(["starting", "working", "waiting_user", "dormant"] as const)("marks the owner of a session that is %s", (status) => {
     expect([...delegatingSessionIds([at("owner", "idle"), at("child", status, "owner")])]).toEqual(["owner"]);
   });
 
-  it("does not count children that are idle, idle with background work, interrupted or archived", () => {
+  it("does not count children that are idle, paused, idle with background work, interrupted or archived", () => {
     const children = [
       at("idle", "idle", "owner"),
+      sessionOf("paused", "c", "p", "paused", "idle", { bound_to: "owner", paused: true }),
       sessionOf("bg", "c", "p", "bg", "idle", { bound_to: "owner", background_tasks: [{ id: "b" }] }),
       at("stopped", "interrupted", "owner"),
       at("gone", "archived", "owner"),

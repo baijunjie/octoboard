@@ -142,8 +142,7 @@ fn cancelled_before_output(state: &Arc<AppState>, session_id: &str, generation: 
     // the turn is closed in the same step, so a prompt landing just after cannot have its own turn
     // closed instead.
     let moved = state.while_record_watch_current(session_id, generation, || {
-        let moved =
-            state.report_agent_status_if(session_id, SessionStatus::Working, SessionStatus::Idle);
+        let moved = state.report_paused_if(session_id, SessionStatus::Working);
         if matches!(moved, Ok(true)) {
             state.end_turn_off_title(session_id);
         }
@@ -338,6 +337,10 @@ mod tests {
         armed(&fixture);
         replay(&fixture.live, CANCEL_TITLES);
         assert!(reaches(&fixture.state, SessionStatus::Idle).await);
+        assert!(
+            fixture.live.is_paused(),
+            "a cancelled turn leaves it paused"
+        );
     }
 
     /// The title left at the prompt by the turn before is no cancel of this one.
@@ -363,6 +366,10 @@ mod tests {
             .unwrap());
         assert!(!reaches(&fixture.state, SessionStatus::Idle).await);
         assert_eq!(status(&fixture.state), Some(SessionStatus::WaitingUser));
+        assert!(
+            !fixture.live.is_paused(),
+            "a write that moved nothing leaves no mark"
+        );
     }
 
     /// A hook event still waiting to be applied may say where the session went; the title waits
@@ -417,6 +424,10 @@ mod tests {
         armed(&fixture);
         replay(&fixture.live, GROK_CANCEL_TITLES);
         assert!(reaches(&fixture.state, SessionStatus::Idle).await);
+        assert!(
+            fixture.live.is_paused(),
+            "a cancelled turn leaves it paused"
+        );
         assert_eq!(fixture.state.close_turn("s", true), TurnClose::NoTurn);
         let heard = output_containing(&fixture.live, "held while working");
         assert!(heard.contains("held while working"), "{heard}");

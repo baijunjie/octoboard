@@ -109,7 +109,7 @@ stay, do not block lock changes, and a lock set meanwhile is seen before they ar
 
 ## Archiving, interruption and resuming
 
-Archiving a session, an interruption, resuming and reopening a dormant session, when its conversation can no longer be
+Archiving a session, an interruption, resuming and reopening a session without a process, when its conversation can no longer be
 resumed, and how long archived sessions are kept are described in `docs/product/archiving-and-resuming-sessions.md`.
 
 ## Renaming a session

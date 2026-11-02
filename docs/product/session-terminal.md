@@ -91,7 +91,7 @@ text goes to the one system clipboard. Only writes are honoured:
 
 - a request to read the clipboard is never answered, and a request to clear it is ignored;
 - a request in output written before the session was attached is ignored: the replay that opens each attach (or, when
-  there was nothing to replay, the first live output after it), a dormant session's saved output, and output still
+  there was nothing to replay, the first live output after it), the saved output of a session without a process, and output still
   waiting to be drawn when the screen is reset, as on a switch to another session;
 - where the platform has no clipboard nothing is put on it; the text is still offered to Copy in the editing menu, which
   falls back to the browser's selection copy.
@@ -114,7 +114,7 @@ program's next copy replaces it.
 
 - Attaching to a running session replays the **most recent 2 MiB** of that session's raw output, then follows live
   output. The terminal itself keeps 10,000 lines of scrollback. An interrupted session shows the saved preview described
-  in "Interrupted, archived and dormant sessions" below; an archived one shows its history instead.
+  in "Interrupted and archived sessions" below; an archived one shows its history instead.
 - **Once a session has written more than those 2 MiB, the replay first restores the terminal modes the agent has on at
   that moment**, since agents announce them only once, at startup: the alternate screen, mouse reporting, focus
   reporting, bracketed paste, application cursor and keypad keys, a hidden cursor and disabled line wrap. A full-screen
@@ -218,7 +218,7 @@ the session is shown as switching its account, the cover described in "While a s
 the loading state and of the switching cover as each begins, by the terminal's area alone, as it is told the covers in
 "Reconnecting" above.
 
-## Interrupted, archived and dormant sessions
+## Interrupted and archived sessions
 
 - Selecting an interrupted session resumes it rather than attaching, unless it is shown as switching its account (see
   "While a session is switching" in `docs/product/switching-session-accounts.md`). Two ways of reaching one only show

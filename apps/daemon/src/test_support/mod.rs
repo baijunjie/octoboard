@@ -412,6 +412,20 @@ pub(crate) fn fresh_interrupt() -> String {
     captured_interrupt().replace(CAPTURED_AT, "\"timestamp\":\"2100-01-01T00:00:00.000Z\"")
 }
 
+/// Claude Code's view of a background subagent as drawn on the screen.
+pub(crate) const SUBAGENT_VIEW: &str = "\u{276F} Message @general-purpose\u{2026}\n\
+    \x20 \u{25EF} main\n  \u{23FA} general-purpose  Slow probe agent  8s\n";
+
+/// Puts [`SUBAGENT_VIEW`] on `live`'s screen and asserts it is recognised as a view of the
+/// background agents, which shows the session dormant.
+pub(crate) fn show_agents_view(live: &LiveSession) {
+    live.on_output(SUBAGENT_VIEW.as_bytes());
+    assert!(live
+        .look_for_dialog()
+        .current
+        .is_some_and(|dialog| dialog.is_agents_view()));
+}
+
 /// A stand-in live session that stays alive on a PTY (`sleep 30`) with nothing reading it.
 pub(crate) fn idle_stand_in(id: &str) -> StandIn {
     fake_live_session(id, Agent::Claude, 80, 24, "sleep 30")
@@ -1306,6 +1320,7 @@ pub(crate) fn bare_session(id: &str, role: Role) -> Session {
         record_titles: Default::default(),
         background_tasks: Vec::new(),
         switching_account: false,
+        paused: false,
         prompt_on_launch: false,
         default_effort: None,
         orchestration_role: OrchestrationRole::Coordinator,

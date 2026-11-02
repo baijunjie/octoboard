@@ -181,9 +181,9 @@ closed** switch in Settings' General section, which is **off to begin with** (se
 `docs/product/settings.md`).
 
 **With the switch off, closing the window quits.** It is an ordinary quit gesture, taking exactly the path `Cmd+Q` takes
-(see "Quitting" below): with a session starting, working, waiting for the user or working in background, or a busy shell
-terminal, it asks the same confirmation, where Cancel leaves the window open and everything running, and otherwise it
-quits at once. The sessions a confirmed close ends are left *interrupted* and resumable, just as any confirmed quit
+(see "Quitting" below): with a session starting, working, waiting for the user, dormant or working in background, or a
+busy shell terminal, it asks the same confirmation, where Cancel leaves the window open and everything running, and
+otherwise it quits at once. The sessions a confirmed close ends are left *interrupted* and resumable, just as any confirmed quit
 leaves them (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`).
 
 **With the switch on, closing the window closes it into the background**: the window is hidden, Octoboard leaves the
@@ -232,10 +232,11 @@ background is off, closing the window: the close button, `Cmd+W` and the Window 
 the window" above). The one difference is the escape hatch in "Quitting when the window has stopped responding" below,
 which the close gestures have no part in.
 
-- **While any session is *starting*, *working*, *waiting for the user* or *working in background*, quitting asks for
-  confirmation.** One working in background counts because the quit would also end the work it left running (see
-  "Working in background" in `docs/product/session-statuses.md`). Any other session at its prompt — *done*, *awaiting
-  instructions* or with *child sessions working* — does not count by itself: it is in the middle of nothing that is
+- **While any session is *starting*, *working*, *waiting for the user*, *dormant* or *working in background*, quitting
+  asks for confirmation.** One working in background counts because the quit would also end the work it left running
+  (see "Working in background" in `docs/product/session-statuses.md`), and a dormant one because its background agents
+  may be at work (see "Dormant" in `docs/product/session-statuses.md`). Any other session at its prompt — *paused*,
+  *done*, *awaiting instructions* or with *child sessions working* — does not count by itself: it is in the middle of nothing that is
   reported, and the quit still leaves it interrupted and resumable like the others. One with child sessions working
   holds the quit up only through the busy sessions under it, which count by their own status.
   The message says that quitting interrupts those sessions and that each stays resumable next time.
@@ -259,9 +260,9 @@ which the close gestures have no part in.
   window still shows such a refusal, it is an error alert saying that the daemon is shutting down, so nothing can be
   started now, with no remedy and no **Report issue**. An automatic account switch, or its restore of the session, that
   the shutdown cuts short tells nobody (see "When the switch fails" in `docs/product/automatic-account-switch.md`).
-- With no session *starting*, *working*, *waiting for the user* or *working in background* — none at all, or only ones
-  otherwise at their prompt — and no busy shell terminal, quitting is immediate and asks nothing, and a window closed into
-  the background is not brought back for it.
+- With no session *starting*, *working*, *waiting for the user*, *dormant* or *working in background* — none at all, or
+  only ones otherwise at their prompt — and no busy shell terminal, quitting is immediate and asks nothing, and a window
+  closed into the background is not brought back for it.
 - While the daemon is not running — it failed to start, or has exited, or is being started again — every quit is
   immediate and asks nothing, and no daemon is started again after it.
 - On the screen for a UI that failed (see "The window chrome and the content panel" in
@@ -286,10 +287,10 @@ Octoboard restarts itself only to apply an installed update, when the user press
 apply an update" in `docs/product/in-app-updates.md`). A restart is a quit followed by a fresh launch, and follows the
 rules above:
 
-- It asks for confirmation exactly when a quit would — a session *starting*, *working*, *waiting for the user* or
-  *working in background*, or a busy shell terminal — and otherwise restarts at once. The confirmation is titled as a
-  restart, its message says that restarting interrupts those sessions, each resumable after the restart, and ends what
-  the terminals run, as the quit's message would, and its confirming button reads Restart. Cancel leaves everything
+- It asks for confirmation exactly when a quit would — a session *starting*, *working*, *waiting for the user*,
+  *dormant* or *working in background*, or a busy shell terminal — and otherwise restarts at once. The confirmation is
+  titled as a restart, its message says that restarting interrupts those sessions, each resumable after the restart, and
+  ends what the terminals run, as the quit's message would, and its confirming button reads Restart. Cancel leaves everything
   running.
 - A quit gesture arriving while the restart's confirmation is open turns it into the quit's confirmation.
 - Once confirmed, everything ends as in a confirmed quit — every session left *interrupted* and resumable, every shell
@@ -376,7 +377,7 @@ server form is the server — with two exceptions, the window's state and the po
 | `~/.octoboard/octoboard.db` | Consoles, projects, session records, the report panel pages every session pushed, each project's trust permission and the trusted folders (see "The trust permission" in `docs/product/folder-trust.md`), and the settings the daemon keeps for every client (see "Git" and "General" in `docs/product/settings.md`). The database records the version of its schema, and the daemon decides what to do with the file when it opens it, on every start: **a database at the version this build reads** is used as it is; **a file with no tables in it** is given the current schema in place; **a database at an older schema version** (this build reads version 1, and has no upgrade from an older one, so the only older state is a database written before versions were recorded) is moved aside: the daemon renames it, beside itself, to `octoboard.db.superseded-<Unix time in seconds>`, logs a warning naming both files, and starts a fresh database at the usual path. Nothing in a database moved aside is read back into the new one: the user re-enters their consoles, projects and accounts by hand, and the old file stays on disk, never deleted. **A database at a newer version** is refused and left untouched, and so is **a file that is not a SQLite database**: the daemon fails to start, with a reason that names the file (for a database at a version this build does not read, its version and that renaming the named file moves it aside, which deletes nothing and has this build start a fresh database), shown as described in "Starting up" above. |
 | `~/.octoboard/consoles/<console id>/` | A console's working directory, where its console sessions run, including the console session instruction file Octoboard writes there, `AGENTS.md`, and `CLAUDE.md`, a link to it (see "The console session's instruction file" in `docs/product/launching-agents.md`). Removed when the console is deleted. |
 | `~/.octoboard/run/<session id>/` | Per-session scratch space for what a launch injects. Removed when the session's process is gone, and cleared wholesale on daemon start. |
-| `~/.octoboard/output/<session id>` | The saved terminal preview shown for an interrupted session (see "Interrupted, archived and dormant sessions" in `docs/product/session-terminal.md` for its capture rules and limits). Written when the process ends, including when the daemon stops it on its way out, but not when the daemon itself goes down on an internal failure. Starting a new process discards it. Removed with the session's record; on daemon start, any left for a session that no longer exists is removed. |
+| `~/.octoboard/output/<session id>` | The saved terminal preview shown for an interrupted session (see "Interrupted and archived sessions" in `docs/product/session-terminal.md` for its capture rules and limits). Written when the process ends, including when the daemon stops it on its way out, but not when the daemon itself goes down on an internal failure. Starting a new process discards it. Removed with the session's record; on daemon start, any left for a session that no longer exists is removed. |
 | `~/.octoboard/handoff/<session id>.md` | The handoff package a session read when it took over another session's place (see "The handoff package" in `docs/product/handing-off-sessions.md`), named for the receiving session. Removed with that session's record; on daemon start, any left for a session that no longer exists, and any half-written one, is removed. |
 | `~/.octoboard/daemon.lock` | Enforces one daemon per data directory. |
 | `~/.octoboard/logs/daemon.log` | The daemon's log, at the level of information and above, the panics of any of its threads included. Only the daemon that holds `daemon.lock` writes it, so a second daemon refused at start leaves it alone. An entry that would take the file past **5 MiB** first rotates it: `daemon.log` becomes `daemon.log.1`, the one before that `daemon.log.2`, then `daemon.log.3`, and the oldest beyond that is dropped. |

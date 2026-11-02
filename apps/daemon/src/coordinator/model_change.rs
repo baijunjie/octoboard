@@ -69,10 +69,11 @@ pub(crate) enum ModelAsker<'a> {
     /// The user, from the window, who owns nothing to check and can see what the session waits on.
     User,
     /// The owner whose id this is, over MCP: the session must still be bound to it once the change
-    /// holds its claim, and a session waiting for the user is refused
+    /// holds its claim, and a session waiting for the user or dormant is refused
     /// (`session_waiting_for_user`), since the restart would end the prompt the user alone answers
-    /// — except where its only wait is a usage-limit dialog, which the restart is free to end, as
-    /// an automatic account switch does (`AppState::status_for_switch`).
+    /// or the background-agents view they are in — except where its only wait is a usage-limit
+    /// dialog, which the restart is free to end, as an automatic account switch does
+    /// (`AppState::status_for_switch`).
     Owner(&'a str),
 }
 
@@ -159,7 +160,7 @@ pub(crate) async fn set_session_model_with(
     refuse_if_owner_must_wait(state, asker, &before)?;
     // Shown restarting at once, as an account switch is shown switching once it has its claim, so
     // that no window shows the old status or offers another change while the checks run.
-    if !before.status.is_dormant() {
+    if !before.status.has_no_process() {
         state.mark_model_change(id);
     }
     crate::accounts::shared_config::refuse_if_changing(state, before.account_id.as_deref())?;
@@ -182,7 +183,7 @@ pub(crate) async fn set_session_model_with(
     if current.status == SessionStatus::Archived {
         return Err(session_archived(id));
     }
-    if current.status.is_dormant() {
+    if current.status.has_no_process() {
         if !state
             .store
             .set_session_launch_overrides_unless_archived(id, &model, &effort, None)?
@@ -331,23 +332,31 @@ fn stop_timeout(state: &AppState) -> std::time::Duration {
 }
 
 /// Refuses a change of the model of `session` an owner asked for while the session waits for the
-/// user, beyond a usage-limit dialog, which the restart is free to end (see [`ModelAsker::Owner`]).
+/// user, beyond a usage-limit dialog, which the restart is free to end, or shows a view of its
+/// background agents, which the restart would end all the same (see [`ModelAsker::Owner`]).
 fn refuse_if_owner_must_wait(
     state: &AppState,
     asker: ModelAsker<'_>,
     session: &Session,
 ) -> Result<()> {
-    if matches!(asker, ModelAsker::Owner(_))
-        && state.status_for_model_change(session) == SessionStatus::WaitingUser
-    {
-        return Err(CodedError::raised(
-            error_code::SESSION_WAITING_FOR_USER,
-            "this session is waiting for the user, who alone can answer what it is showing; \
-             restarting it would end that prompt",
-            &[("session", &session.id)],
-        ));
+    if !matches!(asker, ModelAsker::Owner(_)) {
+        return Ok(());
     }
-    Ok(())
+    let message = match state.status_for_model_change(session) {
+        SessionStatus::WaitingUser => {
+            "this session is waiting for the user, who alone can answer what it is showing; \
+             restarting it would end that prompt"
+        }
+        SessionStatus::Dormant => {
+            "the user is in this session's background-agents view; restarting it would close it"
+        }
+        _ => return Ok(()),
+    };
+    Err(CodedError::raised(
+        error_code::SESSION_WAITING_FOR_USER,
+        message,
+        &[("session", &session.id)],
+    ))
 }
 
 #[cfg(test)]

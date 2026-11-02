@@ -5,11 +5,10 @@ import type { Language } from "../i18n/languages";
 import { minWidthQuery } from "../components/hooks/breakpoint";
 import { panelId } from "../panels/stackState";
 import type { PanelKind } from "../layout/panelKind";
-import { DORMANT_STATUSES, LIVE_STATUSES, type AccountQuota, type Agent, type AgentAvailability, type Event as DaemonEvent, type GitStatus } from "../protocol";
-import { activityLabel, statusLabel } from "../sessions/sessionLabel";
+import type { AccountQuota, Agent, AgentAvailability, Event as DaemonEvent, GitStatus } from "../protocol";
+import { statusLabel } from "../sessions/sessionLabel";
 import { type ShownStatusKind } from "../sessions/sessionStatus";
 import { eventKey, type Binding } from "../shortcuts/binding";
-import { ACTIVITIES } from "../sessions/order";
 import type { Daemon, State } from "../store";
 import type { TerminalElement } from "../terminal/TerminalController";
 import { IS_MAC } from "../input/keys";
@@ -21,6 +20,26 @@ import { STATUS_LABELS, type StatusKey } from "../viewer/statusMarks";
  * control, such as an error alert's "Error details". */
 const PRESSABLE =
   "button, [role=button], [role=menuitem], [role=menuitemradio], [role=tab], [role=option], [role=row], a[href], input[type=checkbox], input[type=radio], summary, [role=separator][tabindex]";
+
+/** Every status a status glyph can show: the keys of a record typed by `ShownStatusKind`, so a status added to the app
+ * fails type checking here rather than leaving a hover step refusing its tooltip. */
+const SHOWN_STATUSES = Object.keys({
+  waiting_user: 0,
+  dormant: 0,
+  paused: 0,
+  done: 0,
+  idle: 0,
+  delegated: 0,
+  background: 0,
+  working: 0,
+  starting: 0,
+  switching: 0,
+  interrupted: 0,
+  archived: 0,
+} satisfies Record<ShownStatusKind, 0>) as ShownStatusKind[];
+
+/** What a marker or badge can show: every status but archived, which a session no longer shows a marker for. */
+const MARKER_STATUSES = SHOWN_STATUSES.filter((status) => status !== "archived");
 
 /** A menu item, whichever way it is checked: what a menu's rows are looked up among. */
 const MENU_ITEM = "[role=menuitem], [role=menuitemradio]";
@@ -278,15 +297,15 @@ export interface Ui {
    * there, as `hoverIndicator` does. The glyph's tooltip trigger is the one named `role="img"`
    * in the bar; fails while no session is selected. */
   hoverTopBarStatus: () => Promise<void>;
-  /** Moves the pointer onto the activity marker of the collapsed project row or the focus mode
+  /** Moves the pointer onto the status marker of the collapsed project row or the focus mode
    * switch strip chip named `host`, and leaves it there, as `hoverIndicator` does. The marker is
    * decorative and the last tooltip trigger in either, so it is taken as that; the step fails if
-   * the tooltip that opens is not one of the activities' (an expanded row, which draws no
+   * the tooltip that opens is not a status's (an expanded row, which draws no
    * marker, has none to hover), rather than leave whatever else was hovered up. The row's git badge
    * is a `role="presentation"` trigger as well, and the two are told apart by nothing but their
    * order in the row: the badge comes before the marker (`Sidebar.tsx`), which `hoverGitBadge`
    * avoids by matching the state glyph instead. */
-  hoverActivityMarker: (host: Matcher) => Promise<void>;
+  hoverStatusMarker: (host: Matcher) => Promise<void>;
   /** Moves the pointer onto the first control named `matcher` and leaves it there, as `hoverIndicator`
    * does, for a control whose tooltip repeats its accessible name, such as a rail avatar's. It is not
    * for a control whose tooltip says something else (an actions button, a pane toggle): the step fails
@@ -366,7 +385,7 @@ export interface Ui {
    * mode's header, found by its own name. It fails unless the tooltip that opens is that sentence
    * exactly, which also takes a `status` that is not the one on screen. A badge that says "No commits
    * yet" in visible text, or a failed read with no branch, nothing in flight and no counts, which shows
-   * the failure mark alone, has no tooltip, and fails here rather than hover the activity marker
+   * the failure mark alone, has no tooltip, and fails here rather than hover the status marker
    * beside it. */
   hoverGitBadge: (status: GitStatus, over: "glyph" | "line", row?: Matcher) => Promise<void>;
   /** Presses the failure mark of a git badge with a finger and returns once its popover is up in its
@@ -905,9 +924,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       }, `No session titled ${title} in a dialog's callout list with a status glyph to hover`);
       // A glyph without `withTooltip` is the same `role="img"` first child, and hovering it opens nothing.
       const shown = doc.querySelector("[role=tooltip]")?.textContent;
-      // The wire statuses and the kinds the client derives from `idle`, which a callout's glyph may show too.
-      const statuses: ShownStatusKind[] = [...LIVE_STATUSES, ...DORMANT_STATUSES, "background", "delegated", "done", "switching"];
-      if (!shown || !statuses.some((status) => statusLabel(t, status) === shown)) {
+      if (!shown || !SHOWN_STATUSES.some((status) => statusLabel(t, status) === shown)) {
         throw new Error(`The status glyph of ${title} has no tooltip: its last tooltip is ${shown ? `"${shown}"` : "none"}`);
       }
     },
@@ -925,7 +942,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     async hoverTopBarStatus() {
       await hover(() => doc.querySelector<HTMLElement>("[data-region=topbar] [role=img]"), "No status glyph in the top bar");
     },
-    async hoverActivityMarker(host) {
+    async hoverStatusMarker(host) {
       await hover(() => {
         const found = find(host);
         if (!found) return undefined;
@@ -933,10 +950,10 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
         // comes before the marker. A row with no marker would end up on the badge, which the check
         // below then refuses.
         return Array.from(found.querySelectorAll<HTMLElement>("[role=presentation]")).at(-1);
-      }, `No row or chip matching ${String(host)} with an activity marker to hover`);
+      }, `No row or chip matching ${String(host)} with a status marker to hover`);
       const shown = doc.querySelector("[role=tooltip]")?.textContent;
-      if (!shown || !ACTIVITIES.some((activity) => activityLabel(t, activity) === shown)) {
-        throw new Error(`The control matching ${String(host)} has no activity marker: its last tooltip is ${shown ? `"${shown}"` : "none"}`);
+      if (!shown || !MARKER_STATUSES.some((status) => statusLabel(t, status) === shown)) {
+        throw new Error(`The control matching ${String(host)} has no status marker: its last tooltip is ${shown ? `"${shown}"` : "none"}`);
       }
     },
     async hoverTitledControl(matcher) {
@@ -1121,7 +1138,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       if (!sentence) throw new Error("The git badge has nothing to hover: a failed read with no branch, nothing in flight and no counts shows its failure mark alone, with no tooltip");
       const glyph = gitGlyphOf(status);
       if (over === "glyph" && !glyph) throw new Error("The git badge has no glyph to hover: its failure mark stands in for it, outside the tooltip (openGitFailure)");
-      // The branch line, or the counts, are the badge's own LTR parts; the activity marker beside it has none.
+      // The branch line, or the counts, are the badge's own LTR parts; the status marker beside it has none.
       const own = (element: HTMLElement) => (glyph ? element.querySelector(`svg.lucide-${glyph}`) : element.querySelector("[dir=ltr]")) !== null;
       await hover(
         () => {
@@ -1139,7 +1156,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
             if (!nameOf(found).includes(withoutIsolates(sentence))) {
               throw new Error(`The row matching ${String(row)} does not name the badge's sentence "${sentence}": its name is "${nameOf(found)}"`);
             }
-            // A row holds more than one tooltip trigger (the badge, then the activity marker of a
+            // A row holds more than one tooltip trigger (the badge, then the status marker of a
             // collapsed one), so the badge is the one holding its state glyph, or, with none, its branch
             // or counts: a row whose badge is no trigger (a repository with no commit yet, a directory
             // that is not a repository) fails here rather than hover the marker.

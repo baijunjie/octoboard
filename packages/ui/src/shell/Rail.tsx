@@ -4,7 +4,6 @@ import React, { memo, useRef } from "react";
 
 import { Button } from "../components/controls/Button";
 import { isolate } from "../i18n/isolate";
-import { joinPhrases } from "../i18n/joinPhrases";
 import { textDirection } from "../i18n/languages";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { isRailPeekArea, PHONE_SLIDE_AWAY } from "../layout/paneOverlay";
@@ -15,7 +14,7 @@ import type { SettingsSectionId } from "../settings/SettingsDialog";
 import { RailQuotaEntry } from "./RailQuotaEntry";
 import { useArchivedOwnerSessions, useConsoleStatus } from "../store";
 import { ActionMenu } from "../components/menus/ActionMenu";
-import { ActivityBadge } from "../components/status/ActivityMarker";
+import { AvatarStatusBadge } from "../components/status/TopStatusMarker";
 import { CHROME_BUTTON_FILLS, CHROME_CURRENT_FILLS, ChromeButton } from "./ChromeButton";
 import { ConsoleAvatar } from "./ConsoleAvatar";
 import { NotificationsBell } from "./NotificationsBell";
@@ -107,10 +106,9 @@ const ConsoleTile = memo(function ConsoleTile({
   const t = useT();
   // Read here rather than handed down, so an event about a session renders only its console's tile.
   const status = useConsoleStatus(thisConsole.id);
-  const language = useCurrentLanguage();
   const sessions = useArchivedOwnerSessions(thisConsole.id);
   const tileRef = useRef<HTMLDivElement>(null);
-  const label = status ? joinPhrases(language, [isolate(thisConsole.name), statusLabel(t, status)]) : thisConsole.name;
+  const label = status ? t("session.status.named", { name: isolate(thisConsole.name), status: statusLabel(t, status) }) : thisConsole.name;
   return (
     <div ref={tileRef} data-list-motion={thisConsole.id} className="flex">
       <TitledControl title={label} placement="end" focusOnly={hoverOpensSidebar}>
@@ -132,7 +130,7 @@ const ConsoleTile = memo(function ConsoleTile({
         >
           <span className="relative flex">
             <ConsoleAvatar name={thisConsole.name} icon={thisConsole.icon} className={`size-7 ${status ? AVATAR_CUT_OUT : ""}`} />
-            <ActivityBadge status={status} className="absolute -end-0.75 -bottom-0.75" />
+            <AvatarStatusBadge status={status} className="absolute -end-0.75 -bottom-0.75" />
           </span>
         </Button>
       </TitledControl>

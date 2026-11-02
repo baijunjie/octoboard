@@ -11,7 +11,7 @@ use crate::coordinator::projects::{
 };
 use crate::coordinator::test_support::{
     binding_fixture, bound_session, code_of, console, console_workdir, create_account_request,
-    dormant_with_conversation, only_account, open_request, project_of, relaunch_stand_in,
+    no_process_with_conversation, only_account, open_request, project_of, relaunch_stand_in,
     set_availability,
 };
 use crate::protocol::{
@@ -316,9 +316,9 @@ async fn information_kept_for_an_interrupted_session_is_deleted_only_once_it_is_
         "kept-info",
         vec![
             console_session("hub", Idle),
-            dormant_with_conversation("codex", Agent::Codex, "hub"),
-            dormant_with_conversation("archived-later", Agent::Codex, "hub"),
-            dormant_with_conversation("deleted-later", Agent::Codex, "hub"),
+            no_process_with_conversation("codex", Agent::Codex, "hub"),
+            no_process_with_conversation("archived-later", Agent::Codex, "hub"),
+            no_process_with_conversation("deleted-later", Agent::Codex, "hub"),
         ],
         &["hub"],
     );

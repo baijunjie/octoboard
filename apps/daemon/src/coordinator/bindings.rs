@@ -115,7 +115,7 @@ pub(crate) fn owner_refusal(
     }
     // A session still starting is not running yet either: its launch may fail, and a failed
     // launch deletes the session whatever is bound to it.
-    if owner.status.is_dormant()
+    if owner.status.has_no_process()
         || owner.status == SessionStatus::Starting
         || !state.has_process(&owner.id)
     {
@@ -323,7 +323,7 @@ pub struct Released {
 /// user's (`None`), and tells every client. The session becomes an ordinary unbound project
 /// session: `bound_to` is cleared and it is a coordinator, and what it owns stays bound to it,
 /// so a coordinator that reported to a console session keeps its sessions. Its branches stay with
-/// it. Any running or dormant state will do.
+/// it. Any running or no-process state will do.
 ///
 /// Refused, with nothing changed, for the session or its owner under a claim (see
 /// [`claim_for_binding`], [`refuse_if_owner_claimed`]), a console session

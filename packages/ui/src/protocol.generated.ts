@@ -3687,6 +3687,14 @@ export type Session = {
    */
   switching_account?: boolean,
   /**
+   * Whether the session's process is at its prompt (`idle`) after a turn that ended abnormally:
+   * cancelled by the user or an owner's interrupt, a declined permission prompt or question that
+   * ended the turn, a usage-limit stop, or a failure. It lasts until the next turn begins, a
+   * turn ends normally, or a Claude Code `SessionStart` begins a fresh conversation. Never stored: it is filled in on the record a client receives
+   * (`AppState::wire_session`) from the live process, and absent otherwise.
+   */
+  paused?: boolean,
+  /**
    * Whether a launch of this session that is pending or under way will hand the agent a
    * prompt, so that it is `working` once it is up. A new open sets it from the first record
    * that announces the session; a relaunch sets it inside `relaunch_session_with`, once the
@@ -3863,7 +3871,7 @@ export type SessionRequestAction = "start" | "reopen" | "resume" | "resume_recor
  */
 export type SessionRequestEnding = "approved" | "refused" | "timed_out" | "withdrawn";
 
-export type SessionStatus = "starting" | "working" | "waiting_user" | "idle" | "interrupted" | "archived";
+export type SessionStatus = "starting" | "working" | "waiting_user" | "dormant" | "idle" | "interrupted" | "archived";
 
 /**
  * The app-wide user settings the daemon stores, and the account list alongside them: a record

@@ -5,8 +5,8 @@ information shared by another session, a report panel form submission — and wh
 
 ## Messages held until a session can take them
 
-A session that is working or at its prompt (done, awaiting instructions, with child sessions working, or working in
-background) takes a message straight away, unless one of the holds below applies to it, or it is a Claude Code
+A session that is working or at its prompt (paused, done, awaiting instructions, with child sessions working, or working
+in background) takes a message straight away, unless one of the holds below applies to it, or it is a Claude Code
 session held behind a message its agent did not send (see "A message written but not sent" below). A message written mid-turn is taken by the agent: Claude Code and Grok Build
 queue it and run it once the turn ends, though Claude Code can also take it into the turn still running. Codex's
 independent queue runs it after the active turn. What becomes of such messages when an owner interrupts the turn is
@@ -191,8 +191,10 @@ the session is queued as above. Each has a code, which the owners' tools report 
 Every Codex launch keeps its last three screens away as far as it can (see "Codex" in
 `docs/product/per-agent-launch-specifics.md`), so they hold messages only when one comes up all the same. While such a
 screen is up the session reads as *waiting for the user* and raises its hand (see "What the statuses are derived from"
-in `docs/product/session-statuses.md`); the moment its screen no longer shows one, the queue is written, oldest first,
-and the hand comes down. Octoboard never answers such a screen: the user does, in the session's terminal. A client's
+in `docs/product/session-statuses.md`) — except Claude Code's three views of its background agents
+(`claude_agent_list_focus`, `claude_subagent_view`, `claude_agents_view`), which show it *dormant* and raise no hand (see
+"Dormant" in `docs/product/session-statuses.md`); the moment its screen no longer shows one, the queue is written,
+oldest first, and the hand comes down. Octoboard never answers such a screen: the user does, in the session's terminal. A client's
 `send_message` request meanwhile is queued like any other message, not refused.
 
 **And while an interrupt is typing into the session.** While `interrupt_session` sends its keys into a Claude Code or

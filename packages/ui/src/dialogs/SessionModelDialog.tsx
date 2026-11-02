@@ -138,6 +138,7 @@ function SessionModelForm({
         <Message id="dialog.sessionModel.subject" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference> }} />
         {`${t("common.sentenceSeparator")}${t(running ? restart : "dialog.sessionModel.nextResume")}`}
         {running && session.status === "waiting_user" ? `${t("common.sentenceSeparator")}${t("dialog.sessionModel.restartPrompt")}` : null}
+        {running && session.status === "dormant" ? `${t("common.sentenceSeparator")}${t("dialog.sessionModel.restartDormant")}` : null}
       </p>
       {held && (
         <ErrorAlert

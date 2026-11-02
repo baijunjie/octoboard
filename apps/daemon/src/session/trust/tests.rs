@@ -517,6 +517,7 @@ fn session(id: &str, agent: Agent, role: Role, project_id: Option<&str>) -> Sess
         record_titles: Default::default(),
         background_tasks: Vec::new(),
         switching_account: false,
+        paused: false,
         prompt_on_launch: false,
         default_effort: None,
         orchestration_role: OrchestrationRole::Coordinator,
@@ -2452,9 +2453,9 @@ async fn trust_waiting_preserves_the_agent_status_and_ends_only_when_the_screen_
         );
         assert_eq!(record.status, SessionStatus::Working);
         for status in [SessionStatus::Interrupted, SessionStatus::Archived] {
-            let mut dormant = record.clone();
-            dormant.status = status;
-            assert_eq!(state.wire_session(dormant).status, status);
+            let mut ended = record.clone();
+            ended.status = status;
+            assert_eq!(state.wire_session(ended).status, status);
         }
         on_hook(&state, &live);
         assert_eq!(state.wire_session(record).status, SessionStatus::Working);

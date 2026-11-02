@@ -318,9 +318,9 @@ async fn resume(
     let mut relaunched = false;
     let record = state.store.get_session(id).ok().flatten();
     let session_exists = record.is_some();
-    let still_running = record
-        .as_ref()
-        .is_some_and(|session| state.live_session(id).is_some() || !session.status.is_dormant());
+    let still_running = record.as_ref().is_some_and(|session| {
+        state.live_session(id).is_some() || !session.status.has_no_process()
+    });
     let resumed = match (record, lock.claim(id)) {
         _ if still_running => Err(anyhow::anyhow!("its process was not seen to end")),
         (Some(session), Some(_)) if session.status == SessionStatus::Interrupted => {

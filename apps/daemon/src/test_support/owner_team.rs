@@ -23,6 +23,7 @@ pub(crate) fn project_session(title: &str) -> Session {
         record_titles: Default::default(),
         background_tasks: Vec::new(),
         switching_account: false,
+        paused: false,
         prompt_on_launch: false,
         default_effort: None,
         orchestration_role: OrchestrationRole::Worker,

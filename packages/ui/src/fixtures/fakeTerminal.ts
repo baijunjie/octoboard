@@ -1,7 +1,7 @@
 /**
  * The terminal sockets of the gallery. A session's terminal URL points at `FIXTURE_ORIGIN`, which
  * `installFakeTerminal` answers in the page itself, so there is no daemon and no failed network
- * request to read off the console: `output` connects and draws a sample (for a dormant session, as
+ * request to read off the console: `output` connects and draws a sample (for a process-less session, as
  * the output its last process left), `mouse` draws that sample from a program with mouse reporting
  * on, `fullscreen` draws in the alternate screen, `paths` draws output that names files and
  * folders, `shell` draws a shell at its prompt (the Terminal panel's shells), `exited` draws the

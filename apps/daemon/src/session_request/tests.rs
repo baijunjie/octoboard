@@ -33,6 +33,7 @@ fn project_session(id: &str) -> Session {
         record_titles: Default::default(),
         background_tasks: Vec::new(),
         switching_account: false,
+        paused: false,
         prompt_on_launch: false,
         default_effort: None,
         orchestration_role: OrchestrationRole::Coordinator,
@@ -1192,7 +1193,7 @@ async fn an_automatic_approval_carries_on_when_the_call_is_dropped() {
 
 const CONVERSATION: &str = "11111111-2222-3333-4444-555555555555";
 
-/// A dormant session of `project-1` that holds a conversation, reporting to `bound_to`.
+/// A session without a process of `project-1` that holds a conversation, reporting to `bound_to`.
 fn holder(id: &str, status: SessionStatus, bound_to: Option<&str>) -> Session {
     Session {
         status,
@@ -1205,7 +1206,7 @@ fn holder(id: &str, status: SessionStatus, bound_to: Option<&str>) -> Session {
 }
 
 /// Stands in for `coordinator::resume::resume_session`, which would launch a real agent: moves the
-/// session out of its dormant status, and counts the calls.
+/// session out of its no-process status, and counts the calls.
 struct Resumer {
     state: Arc<AppState>,
     resumed: Mutex<Vec<String>>,
@@ -1596,7 +1597,7 @@ async fn an_owners_launch_claim_is_not_the_session_running() {
 }
 
 /// A refusal for the claim of an account switch, a handoff or a binding change on the session
-/// itself is not a launch under way: the session is still dormant, so the approval could not be
+/// itself is not a launch under way: the session still has no process, so the approval could not be
 /// carried out. A launch claim of the user's own resume still counts as done.
 #[tokio::test]
 async fn a_switch_holding_the_session_is_not_a_launch_of_it() {
@@ -1667,7 +1668,7 @@ async fn a_switch_holding_the_session_is_not_a_launch_of_it() {
 }
 
 /// A refusal for a switch claim that is gone by the time it is judged is not read as a launch of
-/// the target: with the session still dormant, the approval could not be carried out.
+/// the target: with the session still without a process, the approval could not be carried out.
 #[tokio::test]
 async fn a_switch_claim_gone_meanwhile_is_not_a_launch_of_the_target() {
     let (state, _dir) = fixture("resume-switch-claim-gone");

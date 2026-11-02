@@ -4,7 +4,7 @@ import React, { memo, useId, useLayoutEffect, useRef } from "react";
 
 import { Button } from "../components/controls/Button";
 import { ActionMenu } from "../components/menus/ActionMenu";
-import { ActivityMarker } from "../components/status/ActivityMarker";
+import { TopStatusMarker } from "../components/status/TopStatusMarker";
 import { SessionAgentIcon } from "../components/icons/SessionAgentIcon";
 import { EmptyPanel } from "../components/panel/EmptyPanel";
 import { FadeOverflow } from "../components/text/FadeOverflow";
@@ -22,7 +22,7 @@ import type { NewSessionRequest } from "../dialogs/dialogRequest";
 import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
-import { activityLabelKey, sessionAccountModelLine, sessionDisplayTitle, sessionRowName, statusLabel } from "../sessions/sessionLabel";
+import { sessionAccountModelLine, sessionDisplayTitle, sessionRowName, statusLabel } from "../sessions/sessionLabel";
 import { sessionModelLabel } from "../sessions/sessionModel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 import { useDelegatingIds, useHasBoundSessions, useProjectSessions, useSessionProjectId } from "../store";
@@ -245,7 +245,7 @@ export function ConsoleSessionFocusView({
   const archived = boundArchivedSessions(sessions, consoleSession.id);
   const newSession = (project: Project): NewSessionRequest => ({ kind: "new-session", console: parentConsole, project, binding: { kind: "bound", to: consoleSession } });
   const viewAll = () => handlers.onOpenArchive({ console: parentConsole.id, consoleSession: consoleSession.id });
-  const strip = switchStrip(sessions, parentConsole.id);
+  const strip = switchStrip(sessions, parentConsole.id, delegating);
 
   return (
     <>
@@ -344,9 +344,8 @@ function SwitchStrip({
       aria-label={t("sidebar.focus.switchStrip")}
       className="relative flex shrink-0 gap-1 px-(--row-fill-inset) py-2"
     >
-      {entries.map(({ consoleSession, activity }) => {
+      {entries.map(({ consoleSession, status }) => {
         const current = consoleSession.id === currentId;
-        const activityKey = activityLabelKey(activity);
         return (
           <Button
             key={consoleSession.id}
@@ -354,7 +353,7 @@ function SwitchStrip({
             size="xs"
             variant="tertiary"
             preventFocusOnPress
-            aria-label={activityKey ? t(activityKey, { name: isolate(sessionDisplayTitle(t, consoleSession)) }) : sessionDisplayTitle(t, consoleSession)}
+            aria-label={t("session.status.named", { name: isolate(sessionDisplayTitle(t, consoleSession)), status: statusLabel(t, status) })}
             aria-current={current ? "true" : undefined}
             data-switch-current={current || undefined}
             onPress={() => handlers.onSwitchConsoleSession(consoleSession)}
@@ -368,7 +367,7 @@ function SwitchStrip({
             <FadeOverflow as="span" dir="auto" className="min-w-0" titleWhenClipped={sessionDisplayTitle(t, consoleSession)}>
               {sessionDisplayTitle(t, consoleSession)}
             </FadeOverflow>
-            <ActivityMarker activity={activity} />
+            <TopStatusMarker status={status} />
           </Button>
         );
       })}

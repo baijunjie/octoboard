@@ -599,14 +599,14 @@ it("mounts the switching and resuming statuses empty, then writes them", () => {
   expect(switching.textContent).toBe("");
   act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
   expect(switching.textContent).toBe("Switching account…");
-  const dormant = mountArchived();
-  dormant.show({ resuming: true });
-  expect(statusRegions(dormant.container).map((region) => region.textContent)).toEqual(["", "", ""]);
+  const noProcessPane = mountArchived();
+  noProcessPane.show({ resuming: true });
+  expect(statusRegions(noProcessPane.container).map((region) => region.textContent)).toEqual(["", "", ""]);
   act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
-  expect(statusRegions(dormant.container).map((region) => region.textContent)).toContain("Resuming session…");
+  expect(statusRegions(noProcessPane.container).map((region) => region.textContent)).toContain("Resuming session…");
 });
 
-it("speaks a dormant bar's sentence once, from a region mounted empty, and leaves the button reachable", () => {
+it("speaks a no-process bar's sentence once, from a region mounted empty, and leaves the button reachable", () => {
   const interrupted = sessionOf("s-1", "c-1", undefined, "Work", "interrupted");
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -633,7 +633,7 @@ it("speaks an archived bar's sentence and leaves the history's own announcer to 
   expect(spoken).toEqual(["This session is archived"]);
 });
 
-it("holds the dormant sentence while a modal is open and writes it after the close and the focus move", () => {
+it("holds the no-process sentence while a modal is open and writes it after the close and the focus move", () => {
   const interrupted = sessionOf("s-1", "c-1", undefined, "Work", "interrupted");
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);

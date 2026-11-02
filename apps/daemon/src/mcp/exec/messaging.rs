@@ -37,7 +37,7 @@ pub(super) async fn instruct_session(
 fn point_to_reopen(err: anyhow::Error, target: &Session) -> anyhow::Error {
     match err.downcast_ref::<CodedError>() {
         Some(coded)
-            if coded.code == error_code::SESSION_NOT_RUNNING && target.status.is_dormant() =>
+            if coded.code == error_code::SESSION_NOT_RUNNING && target.status.has_no_process() =>
         {
             anyhow::Error::new(CodedError {
                 code: coded.code,

@@ -328,7 +328,9 @@ asked for is returned whole. For a session whose process has ended, an archived 
 the daemon kept when the process ended, so the field reads the same whether the session is running or not. It is `null`
 only where the daemon never kept any output — no process of the session has printed anything yet, it ended with the
 daemon killed outright before the output was kept, or a new process has since taken the session over and discarded it. A
-session that is waiting for the user carries a note saying so.
+session that is waiting for the user carries a note saying so, and a dormant one a note saying the user is in its view
+of its background agents, that a message to it is held until they leave and that it cannot be interrupted, and to leave
+it be.
 
 Every session record the session tools give — `list_projects`' sessions, `get_session`, `list_sessions`,
 `list_archived`, and the record `rename_session` and `set_session_pinned` answer with — carries `owner` (the id of the
@@ -347,6 +349,11 @@ each entry with `id` and, where Claude Code gives them, `type` and `description`
 Such a session's `status` is `idle`: it takes a message like any other session at its prompt, but its work is not over
 (see "Working in background" in `docs/product/session-statuses.md`).
 
+Each record also carries `paused`: `true` for a session whose `status` is `idle` and whose last turn ended abnormally —
+cancelled, ended by a declined prompt, stopped on a usage limit or failed — and `false` for every other. It names no
+reason. Such a session takes a message like any other at its prompt (see "Paused" in
+`docs/product/session-statuses.md`).
+
 Each of these records also carries `context`, the session's context size as the window shows it (see "Session context
 size" in `docs/product/session-context.md`): an object with `tokens`, plus `window` and `used_percent` — the share of
 the window in use as a whole percentage, by the agent's own accounting as in "The context-size chip" there — only once
@@ -357,10 +364,12 @@ agent's records show one, and for Claude Code after a compaction until the next 
 "context": {"tokens": 120000, "window": 200000, "used_percent": 60}
 ```
 
-The `status` these records carry is the one the window shows, one of `starting`, `working`, `waiting_user`, `idle`,
-`interrupted` and `archived` (see `docs/product/session-statuses.md`): a running session reads `waiting_user` while a
-folder-trust confirmation that needs the user, a Codex action title or a screen only the user can answer holds it there,
-whatever its agent last reported (see "What the statuses are derived from" in `docs/product/session-statuses.md`), and
+The `status` these records carry is the one the window shows, one of `starting`, `working`, `waiting_user`, `dormant`,
+`idle`, `interrupted` and `archived` (see `docs/product/session-statuses.md`): a running session reads `waiting_user`
+while a folder-trust confirmation that needs the user, a Codex action title or a screen only the user can answer holds
+it there, whatever its agent last reported (see "What the statuses are derived from" in
+`docs/product/session-statuses.md`), `dormant` while Claude Code shows one of its views of its background agents (see
+"Dormant" in `docs/product/session-statuses.md`), and
 one restarting after a model or effort change (see "Changing a session's model and effort" in
 `docs/product/model-and-reasoning-effort.md`) or a change of its account's sharing reads `starting` (see "When a change
 is carried out" in `docs/product/sharing-the-default-configuration.md`). Each record also carries `queued_messages` and

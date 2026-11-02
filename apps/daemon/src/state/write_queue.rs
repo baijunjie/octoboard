@@ -121,7 +121,7 @@ impl Drop for OutboxHold {
         // Judged by the process as well as the status: between a process leaving the live map and
         // the exit being saved the record still reads running.
         let writable = record
-            .filter(|record| !record.status.is_dormant())
+            .filter(|record| !record.status.has_no_process())
             .filter(|_| self.state.live_session(target).is_some());
         let Some(record) = writable else {
             // A successor being launched is no process yet but will be: a resume saves it running
@@ -339,10 +339,10 @@ impl AppState {
         // And never a session on its way out. Archiving records the status before the process is
         // gone, so a hook from the dying process can arrive reporting work while the live entry it
         // would be drained through is still registered. Nothing is waiting on this answer: a sender
-        // is refused before it ever queues for a dormant session, and what is held for an
+        // is refused before it ever queues for a session without a process, and what is held for an
         // interrupted one is in the store (`Store::add_kept_message`), not in the queue.
         match self.store.get_session(id) {
-            Ok(Some(record)) if !record.status.is_dormant() => {}
+            Ok(Some(record)) if !record.status.has_no_process() => {}
             _ => return Drain::Pending,
         }
         let Some(live) = self.live_session(id) else {

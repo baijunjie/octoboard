@@ -287,7 +287,7 @@ describe("a live session's replay", () => {
   });
 });
 
-describe("a dormant session's saved output", () => {
+describe("a process-less session's saved output", () => {
   it("is loaded once and read-only, and typing over it sends nothing", async () => {
     controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });
     const saved = lastSocket();
@@ -298,7 +298,7 @@ describe("a dormant session's saved output", () => {
     expect(term.screen).toContain("last words");
     expect(painted).toEqual([]);
 
-    // Every later render of the same dormant session detaches again.
+    // Every later render of the same process-less session detaches again.
     controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });
     await settle();
     expect(FakeSocket.all).toHaveLength(1);
@@ -573,7 +573,7 @@ describe("text a program asks to copy (OSC 52)", () => {
     expect(controller.programCopiedText).toBe("选中的文本");
   });
 
-  it("is ignored in a dormant session's saved output", async () => {
+  it("is ignored in a process-less session's saved output", async () => {
     controller.detach({ keepScreenFor: "a", savedOutputUrl: url("a") });
     lastSocket().receive(copy("saved"));
     await settle();

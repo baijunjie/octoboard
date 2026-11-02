@@ -188,11 +188,15 @@ macro_rules! session_context_field {
 macro_rules! session_record_fields {
     () => {
         "`status` is `starting` (its agent is still launching), `working` (in a turn), \
-         `waiting_user` (needs the user's answer), `idle` (awaiting instructions), \
-         `interrupted` (its process ended) or `archived`; `reopen_session` reopens either when \
-         it is yours. `account` is the account the session runs on, an account's id or \
-         `default` for the agent's default account as `get_account_quotas` lists them, with its \
-         `account_name`; `switch_session_account` refuses the account a session is on already. \
+         `waiting_user` (needs the user's answer), `dormant` (the user is in its \
+         background-agents view: it holds its messages and takes none until they leave, so \
+         leave it alone), `idle` (awaiting instructions), `interrupted` (its process ended) or \
+         `archived`; `reopen_session` reopens either when it is yours. `paused` is true for an \
+         `idle` session whose last turn ended abnormally (cancelled, declined, stopped on a \
+         usage limit or failed): it takes messages like any idle session. `account` is the \
+         account the session runs on, an account's id or `default` for the agent's default \
+         account as `get_account_quotas` lists them, with its `account_name`; \
+         `switch_session_account` refuses the account a session is on already. \
          `observed_model` and `observed_effort` are what the agent's records show the session \
          running with, null until reported; `default_effort` is the effort the agent runs that \
          model at by itself, given when the records name the model but no effort. `pinned` is \
@@ -655,9 +659,9 @@ const INTERRUPT_SESSION: ToolDef = ToolDef {
                   hurry it along. The answer says whether a turn was stopped (`interrupted`), \
                   the session's `status` afterwards, and in `note` what became of the messages \
                   you sent it during that turn. A session not in a turn is left alone. Refused \
-                  for a session that is waiting for the user, not running or still starting, or \
-                  being switched, handed off or restarted, and for a session that is not yours \
-                  (`yours: false`): it is somebody else's, to be left alone.",
+                  for a session that is waiting for the user or `dormant`, not running or still \
+                  starting, or being switched, handed off or restarted, and for a session that is \
+                  not yours (`yours: false`): it is somebody else's, to be left alone.",
     schema: || {
         object_schema(
             json!({
@@ -1041,11 +1045,11 @@ const SET_SESSION_MODEL: ToolDef = ToolDef {
                   account is refused, changing nothing; `list_agent_models` lists them. Refused \
                   too for an archived session (`reopen_session` takes a model and effort), one \
                   that is starting or being switched, handed off or otherwise changed, and one \
-                  waiting for the user, which the restart would take its prompt from — a \
-                  usage-limit dialog alone is not such a wait: the restart ends it, and the turn \
-                  it stopped is continued. Returns the session, whether it was `restarted`, and \
-                  its own `model` and `effort` (`null` is the agent's own default; absent where \
-                  it follows its project's or console's).",
+                  waiting for the user or `dormant`, which the restart would take its prompt or \
+                  view from — a usage-limit dialog alone is not such a wait: the restart ends \
+                  it, and the turn it stopped is continued. Returns the session, whether it was \
+                  `restarted`, and its own `model` and `effort` (`null` is the agent's own \
+                  default; absent where it follows its project's or console's).",
     schema: || {
         object_schema(
             json!({
@@ -1433,11 +1437,12 @@ const GET_SESSION: ToolDef = ToolDef {
          learns its own Octoboard id (`session`) and record. Any session can be read, in any \
          project or console, but one with `yours: false` is not yours to act on, whether nobody \
          owns it (`owner: null` on a project session) or it reports to a different session: leave \
-         it alone. A session that is waiting for the user must be left alone until they have \
-         answered. `owner` says whose it is, `owner_kind` whether that is a console or a project \
-         session, and `role` whether the session itself is a console session. An idle session with \
-         a non-empty `background_tasks` takes messages like any idle session but still has work \
-         running in the background. A non-null `writes_held` says why messages for a running \
+         it alone. A session that is waiting for the user, or `dormant` over its background-agents \
+         view, must be left alone until they have answered or left it. `owner` says whose it is, \
+         `owner_kind` whether that is a console or a project session, and `role` whether the \
+         session itself is a console session. An idle session with a non-empty \
+         `background_tasks` takes messages like any idle session but still has work running in \
+         the background. A non-null `writes_held` says why messages for a running \
          session are queued rather than written into it, whatever its `status` reads; \
          `queued_messages` counts them, and the messages kept for an interrupted session to take \
          when it is resumed (shared information, and the reports and notices for an owner). An \
@@ -1788,10 +1793,10 @@ const LIST_SESSIONS: ToolDef = ToolDef {
                     "enum": ["live", "interrupted", "any"],
                     "description": "`live` (the default): the sessions with a process running \
                                     (each record's `status` is then `starting`, `working`, \
-                                    `waiting_user` or `idle`). `interrupted`: the ones whose \
-                                    process ended without being archived, resumable with \
-                                    `reopen_session` when they are yours. `any`: both. Archived \
-                                    sessions are `list_archived`'s.",
+                                    `waiting_user`, `dormant` or `idle`). `interrupted`: the \
+                                    ones whose process ended without being archived, \
+                                    resumable with `reopen_session` when they are yours. \
+                                    `any`: both. Archived sessions are `list_archived`'s.",
                 },
             }),
             &[],

@@ -14,7 +14,7 @@ opens, is described under "Web addresses" and "File paths" below; the rest holds
 - **Selecting text does not open a link**: a click that leaves a terminal selection, including dragging within a link,
   opens nothing. Other mouse buttons and a Mac's Control-click do not open a link. Right-click and a Mac's Control-click
   open the editing menu described in "Copy, paste and selection" in `docs/product/session-terminal.md`, which has
-  nothing of its own for a link. Opening a link does not resume a dormant session.
+  nothing of its own for a link. Opening a link does not resume an interrupted session or reopen an archived one.
 
 ## Web addresses
 

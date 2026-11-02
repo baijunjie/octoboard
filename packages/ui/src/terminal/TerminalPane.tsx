@@ -10,7 +10,7 @@ import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announ
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { useLatest } from "../components/hooks/useLatest";
 import { Message, useT } from "../i18n/react";
-import { isDormant as isDormantStatus, isLive, type Session } from "../protocol";
+import { hasNoProcess, isLive, type Session } from "../protocol";
 import { useDaemon } from "../store";
 import { useOctoboardTheme } from "../preferences/theme";
 import type { ViewedFile } from "../project-browser/files/TerminalFileViewer";
@@ -36,7 +36,7 @@ interface TerminalPaneProps {
   /** A resume of `session` is in flight: its process is being started. */
   resuming?: boolean;
   /** A modal dialog is open over the window, which hides the pane from assistive technology: the
-   * dormant bar's sentence is written once it has closed and its focus move has been spoken. */
+   * no-process bar's sentence is written once it has closed and its focus move has been spoken. */
   modalOpen?: boolean;
   /** Adds a project when the current console already has a console session but no projects. */
   onAddProject?: () => void;
@@ -190,7 +190,7 @@ export function TerminalPane({
     }),
     [focusTerminal],
   );
-  const isDormant = session ? isDormantStatus(session.status) : false;
+  const noProcess = session ? hasNoProcess(session.status) : false;
   // A starting session's agent is still being launched, so there is no process to connect to and
   // nothing saved to show. The pane waits, covered, for the status that says it is up, and
   // attaches then.
@@ -198,7 +198,7 @@ export function TerminalPane({
   // Whether the session's socket should currently be up at all, per the session's own stored
   // status rather than the controller's last-known socket outcome — a reattach can land on
   // `not_running` by losing a race against the session genuinely ending, so only the authoritative
-  // `Session` record decides between offering Resume (truly dormant) and Reconnect (still live,
+  // `Session` record decides between offering Resume (truly without a process) and Reconnect (still live,
   // just not connected right now).
   const sessionIsLive = session ? isLive(session.status) && !isStarting : false;
 
@@ -217,7 +217,7 @@ export function TerminalPane({
     controllerRef,
     initialStatus: "closed",
     targetId: session?.id,
-    live: !isDormant && sessionIsLive,
+    live: !noProcess && sessionIsLive,
     attach: attachCurrent,
     terminalReconnectDelay,
   });
@@ -235,7 +235,7 @@ export function TerminalPane({
   useEffect(() => {
     const controller = controllerRef.current;
     if (!controller) return;
-    // A dormant session is resumed by the caller before it is ever attached to directly (selecting
+    // A session without a process is resumed by the caller before it is ever attached to directly (selecting
     // an interrupted one, or reopening an archived one) — the daemon has no process to
     // connect the terminal socket to for a session with no running process
     // (`apps/daemon/PROTOCOL.md`), only the output its last one left. Once the resume's
@@ -254,8 +254,8 @@ export function TerminalPane({
       controller.detach({});
       return;
     }
-    if (!session || isDormant) {
-      // `detach` loads the saved screen once on entering dormancy, then keeps that snapshot.
+    if (!session || noProcess) {
+      // `detach` loads the saved screen once when the process is gone, then keeps that snapshot.
       // Whatever attempts were spent belonged to the process that is gone.
       resetAttempts();
       controller.detach({
@@ -275,7 +275,7 @@ export function TerminalPane({
     // terminal on every status update. Only the user's Reconnect (`reconnectNow`) retries then.
     if (controller.currentSessionId === session.id && attemptsSpent()) return;
     attachCurrent(true);
-  }, [session, isDormant, isArchived, isStarting, attachCurrent, terminalUrl]);
+  }, [session, noProcess, isArchived, isStarting, attachCurrent, terminalUrl]);
 
   // A reopen that is refused ends with the session still archived and its history no longer
   // inert; focus that fell to `<body>` while it was goes back to the history.
@@ -296,7 +296,7 @@ export function TerminalPane({
   // for `LOADING_LIMIT_MS` the bare terminal is shown. The count only runs while the socket is
   // open, so the limit never uncovers a terminal that is not connected (a first connect that
   // hangs, a manual Reconnect under way, a resume still starting the process).
-  const awaitingOutput = session !== undefined && !painted && (resuming || !isDormant);
+  const awaitingOutput = session !== undefined && !painted && (resuming || !noProcess);
   const [loadingExpired, setLoadingExpired] = useState(false);
   useEffect(() => {
     setLoadingExpired(false);
@@ -307,9 +307,9 @@ export function TerminalPane({
     return () => clearTimeout(timer);
   }, [awaitingOutput, session?.id, status]);
   const loading = awaitingOutput && !loadingExpired;
-  // The bar offering to resume a dormant session or reopen an archived one.
-  const dormantBar =
-    session && isDormant && !resuming && !switching
+  // The bar offering to resume a session without a process or reopen an archived one.
+  const noProcessBar =
+    session && noProcess && !resuming && !switching
       ? session.status === "archived"
         ? { sessionId: session.id, sentence: t("terminal.archived"), action: t("sidebar.session.reopen") }
         : { sessionId: session.id, sentence: t("terminal.notRunning"), action: t("terminal.resume") }
@@ -318,7 +318,7 @@ export function TerminalPane({
   // whose sharing change did not finish asks first) would be written into a hidden region, and
   // closing the modal moves focus over it, so it waits for the close and the focus move. One already
   // spoken stays in the region through a modal: clearing and rewriting it would say it again.
-  const barSentence = dormantBar?.sentence;
+  const barSentence = noProcessBar?.sentence;
   const [bar, setBar] = useState<{ held: boolean; spoken: string | undefined }>({ held: false, spoken: undefined });
   useEffect(() => {
     if (!barSentence) {
@@ -440,17 +440,17 @@ export function TerminalPane({
       {/* Floats over the terminal rather than covering it: a session that has just ended keeps its
           last output on screen (`TerminalController.detach`), and that output is what says why. Its
           sentence is spoken from a status region that stays mounted while the bar comes and goes (the
-          pane never opens on a dormant session); the visible sentence is hidden from assistive
+          pane never opens on a session without a process); the visible sentence is hidden from assistive
           technology so nothing is said twice, and the button stays reachable. */}
       <StatusAnnouncer text={barSaid} />
       <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
-        {dormantBar && (
+        {noProcessBar && (
           <TerminalNoticeBar
             ref={barRef}
-            sentence={dormantBar.sentence}
-            action={dormantBar.action}
+            sentence={noProcessBar.sentence}
+            action={noProcessBar.action}
             variant="primary"
-            onPress={() => onResume(dormantBar.sessionId)}
+            onPress={() => onResume(noProcessBar.sessionId)}
           />
         )}
       </div>

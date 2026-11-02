@@ -11,20 +11,12 @@ const docs = projectOf("p-docs", console_.id, "Docs");
 const archived = projectOf("p-archived", console_.id, "Archived only", { pinned: true });
 const empty = projectOf("p-empty", console_.id, "No sessions yet", { pinned: true });
 const mobile = projectOf("p-mobile", console_.id, "Mobile app");
-// These consoles expose each avatar status glyph and the priority between neighboring statuses.
-const staging = consoleOf("c-staging", "Staging");
-const preview = projectOf("p-preview", staging.id, "Preview site");
-const build = consoleOf("c-build", "Build");
-const release = projectOf("p-release", build.id, "Release");
-const ready = consoleOf("c-ready", "Ready");
-const starting = consoleOf("c-starting", "Starting");
-const finished = consoleOf("c-finished", "Finished");
-const delegating = consoleOf("c-delegating", "Delegating");
 const watching = { background_tasks: [{ id: "task-watch", type: "shell", description: "pnpm dev" }] };
 
-// One project per activity a collapsed row can show. Website has sessions in all three states and
-// shows the most pressing; Mobile app has one session, idle with a watcher still running, which counts as
-// background work; Search API is working; interrupted-only Docs stays undimmed without an activity marker.
+// Main's projects, one per status a collapsed row can mark: Website has sessions in several states and shows
+// the most pressing; Mobile app has one session, idle with a watcher still running, which counts as
+// background work; Search API is working; interrupted-only Docs is marked with the grey pause. Each of the
+// others is topped by its own status over a working session, or alone where it is itself the status.
 // Pinned projects with no unarchived sessions still follow every unarchived project.
 const sessions = [
   sessionOf("s-web-1", console_.id, website.id, "Fix the summary layout", "working"),
@@ -36,20 +28,70 @@ const sessions = [
   sessionOf("s-bill-1", console_.id, billing.id, "Reconcile March", "idle", { has_conversation: false }),
   sessionOf("s-docs-1", console_.id, docs.id, "Old draft", "interrupted"),
   sessionOf("s-archived-1", console_.id, archived.id, "Completed draft", "archived"),
+];
+
+const state = snapshotState({ consoles: [console_], projects: [archived, empty, website, api, mobile, billing, docs], sessions });
+
+// `state` with a project for every status a collapsed row marks and a console for every status the rail badges,
+// so each of the two shows its own glyph for every status. The new projects follow Main's, and the consoles
+// follow it on the rail in the badges' priority, each holding only what puts its badge on it: a working
+// session beside the status where that status must win over working, nothing else.
+const analytics = projectOf("p-analytics", console_.id, "Analytics");
+const infrastructure = projectOf("p-infrastructure", console_.id, "Infrastructure");
+const designSystem = projectOf("p-design-system", console_.id, "Design system");
+const pipeline = projectOf("p-pipeline", console_.id, "Data pipeline");
+const onboarding = projectOf("p-onboarding", console_.id, "Onboarding");
+const payments = projectOf("p-payments", console_.id, "Payments");
+const staging = consoleOf("c-staging", "Staging");
+const preview = projectOf("p-preview", staging.id, "Preview site");
+const build = consoleOf("c-build", "Build");
+const release = projectOf("p-release", build.id, "Release");
+const ready = consoleOf("c-ready", "Ready");
+const starting = consoleOf("c-starting", "Starting");
+const switching = consoleOf("c-switching", "Switching");
+const interrupted = consoleOf("c-interrupted", "Interrupted");
+const finished = consoleOf("c-finished", "Finished");
+const dormant = consoleOf("c-dormant", "Dormant");
+const paused = consoleOf("c-paused", "Paused");
+const delegating = consoleOf("c-delegating", "Delegating");
+const markerSessions = [
+  ...sessions,
+  sessionOf("s-analytics-1", console_.id, analytics.id, "Watch the background agents", "dormant"),
+  sessionOf("s-analytics-2", console_.id, analytics.id, "Compile the report", "working"),
+  sessionOf("s-infra-1", console_.id, infrastructure.id, "Retry the failed build", "idle", { paused: true }),
+  sessionOf("s-infra-2", console_.id, infrastructure.id, "Rotate the keys", "working"),
+  sessionOf("s-design-1", console_.id, designSystem.id, "Summarize the release", "idle"),
+  sessionOf("s-design-2", console_.id, designSystem.id, "Compile the notes", "working"),
+  sessionOf("s-pipeline-1", console_.id, pipeline.id, "Coordinate the migration", "idle"),
+  sessionOf("s-pipeline-2", console_.id, pipeline.id, "Port the schema", "working", { bound_to: "s-pipeline-1" }),
+  sessionOf("s-onboarding-1", console_.id, onboarding.id, "Launch the agent", "starting", { prompt_on_launch: true }),
+  sessionOf("s-payments-1", console_.id, payments.id, "Update the card form", "idle"),
   sessionOf("s-preview-1", staging.id, preview.id, "Serve the preview", "idle", watching),
   sessionOf("s-preview-2", staging.id, preview.id, "Update the preview", "working"),
   sessionOf("s-release-1", build.id, release.id, "Prepare the release", "working"),
-  sessionOf("s-release-2", build.id, release.id, "Launch the release check", "starting"),
+  sessionOf("s-release-2", build.id, release.id, "Launch the release check", "starting", { prompt_on_launch: true }),
   sessionOf("s-ready-1", ready.id, undefined, "Await the next instruction", "idle", { has_conversation: false }),
   sessionOf("s-ready-2", ready.id, undefined, "Compile the bundle", "working"),
   sessionOf("s-starting-1", starting.id, undefined, "Launch the agent", "starting"),
+  sessionOf("s-switching-1", switching.id, undefined, "Move to the other account", "idle"),
+  sessionOf("s-interrupted-1", interrupted.id, undefined, "Old draft", "interrupted"),
   sessionOf("s-finished-1", finished.id, undefined, "Summarize the release", "idle"),
   sessionOf("s-finished-2", finished.id, undefined, "Compile the notes", "working"),
+  sessionOf("s-dormant-1", dormant.id, undefined, "Watch the background agents", "dormant"),
+  sessionOf("s-dormant-2", dormant.id, undefined, "Compile the report", "working"),
+  sessionOf("s-paused-1", paused.id, undefined, "Retry the failed build", "idle", { paused: true }),
+  sessionOf("s-paused-2", paused.id, undefined, "Compile the report", "working"),
   sessionOf("s-delegating-1", delegating.id, undefined, "Coordinate the migration", "idle"),
   sessionOf("s-delegating-2", delegating.id, undefined, "Port the schema", "working", { bound_to: "s-delegating-1" }),
 ];
-
-const state = snapshotState({ consoles: [console_, ready, staging, build, starting, finished, delegating], projects: [archived, empty, website, api, mobile, billing, docs, preview, release], sessions });
+const markerState = switchingAccount(
+  snapshotState({
+    consoles: [console_, dormant, paused, finished, ready, delegating, staging, build, starting, switching, interrupted],
+    projects: [archived, empty, website, api, mobile, billing, docs, analytics, infrastructure, designSystem, pipeline, onboarding, payments, preview, release],
+    sessions: markerSessions,
+  }),
+  ["s-payments-1", "s-switching-1"],
+);
 
 // One session per status the sidebar draws, each titled by its status and started in the order they sort in.
 // Switching account and Starting sort where they will land: the first has had a conversation, so with Done;
@@ -58,7 +100,9 @@ const glyphConsole = consoleOf("c-glyphs", "Main");
 const glyphProject = projectOf("p-glyphs", glyphConsole.id, "Status glyphs");
 const glyphSessions = [
   sessionOf("s-glyph-waiting", glyphConsole.id, glyphProject.id, "Waiting for you", "waiting_user", { started_at: minutesAgo(10) }),
-  sessionOf("s-glyph-done", glyphConsole.id, glyphProject.id, "Done", "idle", { started_at: minutesAgo(20) }),
+  sessionOf("s-glyph-dormant", glyphConsole.id, glyphProject.id, "Dormant", "dormant", { started_at: minutesAgo(15) }),
+  sessionOf("s-glyph-paused", glyphConsole.id, glyphProject.id, "Paused", "idle", { started_at: minutesAgo(20), paused: true }),
+  sessionOf("s-glyph-done", glyphConsole.id, glyphProject.id, "Done", "idle", { started_at: minutesAgo(25) }),
   sessionOf("s-glyph-switching", glyphConsole.id, glyphProject.id, "Switching account", "idle", { started_at: minutesAgo(30) }),
   sessionOf("s-glyph-idle", glyphConsole.id, glyphProject.id, "Awaiting instructions", "idle", { started_at: minutesAgo(40), has_conversation: false }),
   sessionOf("s-glyph-delegated", glyphConsole.id, glyphProject.id, "Child sessions working", "idle", { started_at: minutesAgo(50) }),
@@ -87,16 +131,16 @@ export const activityScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Every session status glyph, side by side",
-    description: "One session per status, titled by its status and in the order the sidebar ranks them: Waiting for you (orange waving hand), Done (green check mark), Awaiting instructions (green speech bubble), Child sessions working (pinging green ring with a dot in its centre, the working session bound to it nested below), Working in background (pinging hollow green ring), Working (solid blue dot) and Interrupted (grey pause). Switching account and Starting, both a grey turning arc, sort with the status they will reach: Switching account, which has had a conversation, follows Done; Starting, launching with a prompt, follows Working. Hover a glyph for its label.",
+    description: "One session per status, titled by its status and in the order the sidebar ranks them: Waiting for you (orange waving hand), Dormant (orange zz, Zs rising from the bottom left to the top right and shrinking to a speck as they go, a still large and small Z with reduced motion on, between the hand and the green glyphs), Paused (green circled pause sign, ranked above Done), Done (green circled check mark), Awaiting instructions (green speech bubble), Child sessions working (pinging green ring with a dot in its centre, the working session bound to it nested below), Working in background (pinging hollow green ring), Working (solid blue dot) and Interrupted (grey pause). Switching account and Starting, both a grey turning arc, sort with the status they will reach: Switching account, which has had a conversation, follows Done; Starting, launching with a prompt, follows Working. Hover a glyph for its label.",
     state: glyphState,
   },
   {
     id: "collapsed-project-activity",
     group: GROUP,
     category: "normal",
-    title: "Collapsed project rows, by what is going on beneath them",
-    description: "Each collapsed row's marker shows the most pressing activity beneath it: a waving hand for Website (waiting beats working), a pinging hollow green ring for Mobile app, a pinging accent dot for Search API, a speech bubble for Billing and none for Docs. Project order follows session status: Website, Billing, Mobile app, Search API, then Docs. Mobile app's only session is idle with a dev server still running, so its background work sorts after Billing's Awaiting instructions and before Search API's Working, and its marker is the green hollow ring where Search API's is the blue dot. The rail keeps the original inverted waiting hand on yellow and Awaiting instructions speech bubble on green, with 14px circular badges separated from the avatars by the original cutouts. Main shows the waving hand, Finished the check mark on green and Ready the speech bubble, each despite a working session; Delegating shows a ring around a dot on green despite its working child. Staging shows a hollow center on a green background-work badge despite a working session; Build shows a filled center on a blue working badge despite a starting session. Both work indicators breathe gently over 2.4 seconds without expanding and stay still with reduced motion. Avatar priority is Waiting for you, Done, Awaiting instructions, Child sessions working, Working in background, then Working. Starting has only a launching session and no avatar badge; a starting session sorts in the sidebar where it will land, here with Done. Hover a marker to read its tooltip. Docs, whose only session is interrupted, stays undimmed. The pinned Archived only and No sessions yet projects sort after the active ones, dimmed together. Expand from the Projects heading: only the five active projects open, and those two stay folded.",
-    state,
+    title: "Collapsed project rows and rail avatars, by their top status",
+    description: "Every status has its own glyph on a collapsed project row and on a console's avatar on the rail, shown for the most pressing session beneath it (the sidebar's status order). Rows carry the compact glyph, and each row's accessible name ends with its status: Website a waving hand (Waiting for you beats its Done and Working sessions), Analytics the orange zz (Dormant), Infrastructure a green circled pause sign (Paused), Design system a green circled check mark (Done), Billing a green speech bubble (Awaiting instructions), Data pipeline a pinging green ring around a dot (Child sessions working), Mobile app a pinging hollow green ring (Working in background: its only session is idle with a dev server still running), Search API a pinging blue dot (Working), Onboarding and Payments a grey turning arc (Starting; Switching account) and Docs a grey pause (Interrupted). The sidebar sorts Payments and Onboarding where they will land, with Done and Working. Hover a marker to read its tooltip. The rail has one console for each badge, in their priority: Main the inverted waving hand on orange, Dormant the zz on orange like Waiting's, Paused a circled pause sign, Finished a check mark and Ready a speech bubble on green, Delegating a ring around a dot on green, Staging a hollow centre on green (background work), Build a filled centre on blue (Working, its starting session sorting with Working), Starting and Switching a turning arc on grey, and Interrupted a pause sign on grey. Each badge wins over a working session in the same console, except the last three, which have only their own. The badges are 14px circles separated from the avatars by cutouts; Dormant raises no hand, so its avatar has no waiting dot and the rail's waiting count leaves it out. The working and background indicators breathe gently over 2.4 seconds without expanding, and the zz's Zs rise and shrink in a loop; all of them stay still with reduced motion. The pinned Archived only and No sessions yet projects sort after the active ones, dimmed together. Expand from the Projects heading: only the eleven active projects open, and those two stay folded.",
+    state: markerState,
     steps: [
       (ui) => ui.press(ui.t("sidebar.collapseAll")),
       (ui) => ui.wait(500),

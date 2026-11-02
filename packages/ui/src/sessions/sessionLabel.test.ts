@@ -6,7 +6,7 @@ import { displayColumns } from "../i18n/displayColumns";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { Account } from "../protocol";
-import { sessionChoiceTitle, sessionAgentLabel, sessionAriaLabel, sessionDisplayTitle, sessionRowName, sessionWithLocation } from "./sessionLabel";
+import { sessionChoiceTitle, sessionAgentLabel, sessionAriaLabel, sessionDisplayTitle, sessionRowName, sessionWithLocation, statusLabel } from "./sessionLabel";
 
 const t: Translate = ((key: string, ...args: unknown[]) => format("en", key as never, args[0] as never)) as Translate;
 const accounts: Account[] = [accountOf("w", "claude", "Work", "/home/w")];
@@ -28,9 +28,23 @@ describe("sessionAriaLabel", () => {
     ["background", "Working in background"],
     ["done", "Done"],
     ["delegated", "Child sessions working"],
+    ["paused", "Paused"],
+    ["dormant", "Dormant"],
   ] as const)("puts the %s status into the row's accessible name", (status, text) => {
     const session = sessionOf("s", "c", "p", "T", "idle");
     expect(sessionAriaLabel(t, "en", session, accounts, undefined, {}, status)).toContain(text);
+  });
+});
+
+describe("statusLabel", () => {
+  it.each([
+    ["dormant", "en", "Dormant"],
+    ["paused", "en", "Paused"],
+    ["dormant", "zh-Hans", "已休眠"],
+    ["paused", "zh-Hans", "已暂停"],
+  ] as const)("words %s in %s as just that, with no reason", (status, language, text) => {
+    const translate = ((key: string, ...args: unknown[]) => format(language, key as never, args[0] as never)) as Translate;
+    expect(statusLabel(translate, status)).toBe(text);
   });
 });
 

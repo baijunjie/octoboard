@@ -110,7 +110,7 @@ pub(super) async fn list_projects(
         .list_sessions()?
         .into_iter()
         .filter(|session| {
-            !session.status.is_dormant()
+            !session.status.has_no_process()
                 && projects
                     .iter()
                     .any(|project| session.project_id.as_deref() == Some(&project.id))
@@ -154,17 +154,27 @@ pub(super) async fn get_session(
     let owned = owned_count_of(state, &target)?;
     let mut description = describe_session(state, &target, caller, &branches, &owned)?;
     // Interrupted or archived: no process, and its conversation to be resumed.
-    if state.shown_status(&target).is_dormant() {
+    if state.shown_status(&target).has_no_process() {
         let resumable = resumable_of(vec![target.clone()]).await?;
         description["resumable"] = json!(resumable[&target.id]);
     }
     description["recent_output"] = json!(output);
     description["processes"] = json!(processes_of(state, &target.id).await);
-    if state.shown_status(&target) == SessionStatus::WaitingUser {
-        description["note"] = json!(
-            "This session is waiting for the user, not for you. Leave it be until they have \
-             answered."
-        );
+    match state.shown_status(&target) {
+        SessionStatus::WaitingUser => {
+            description["note"] = json!(
+                "This session is waiting for the user, not for you. Leave it be until they have \
+                 answered."
+            );
+        }
+        SessionStatus::Dormant => {
+            description["note"] = json!(
+                "The user is in this session's background-agents view, so it is not at its \
+                 prompt: a message sent to it is held until they leave, and it cannot be \
+                 interrupted. Leave it be."
+            );
+        }
+        _ => {}
     }
     Ok(description)
 }

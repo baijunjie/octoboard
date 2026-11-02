@@ -18,6 +18,7 @@ export {
   useHasBoundSessions,
   useOwnerSessions,
   useProjectSessions,
+  useProjectStatus,
   useSession,
   useSessionShownStatus,
   useSessionProjectId,

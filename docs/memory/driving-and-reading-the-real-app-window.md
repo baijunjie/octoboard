@@ -70,7 +70,7 @@ A mark inside a row moves as the pointer arrives, so never send the pointer to a
 hovered, whether that is coordinates measured off a capture of it un-hovered or the mark's own box read out of the page
 in a browser check. The rows of the sidebar, of focus mode, of the change list and of the avatar field keep their
 controls (a "+", an actions menu) at zero width until the row is hovered, holds focus or is selected; revealing them
-widens the row's end by some 50 px and shifts every mark before them — an activity marker, a git badge — that far
+widens the row's end by some 50 px and shifts every mark before them — a status marker, a git badge — that far
 towards the start. A pointer aimed at the resting position therefore lands on a revealed control and answers with its
 tooltip, which reads exactly like the mark having no tooltip of its own. Approach through the row and then onto the
 mark in a second move, as a user does, or re-measure the target while the pointer already rests in the row.

@@ -1,6 +1,6 @@
 # Archiving and resuming sessions
 
-How a session's process is ended by archiving or by an interruption, how a dormant session — interrupted or archived —
+How a session's process is ended by archiving or by an interruption, how a session without a process — interrupted or archived —
 is resumed or reopened, when its conversation can no longer be resumed, and how long archived sessions are kept.
 Sessions themselves and locking are in `docs/product/sessions.md`, their statuses in `docs/product/session-statuses.md`;
 deleting sessions for good is in `docs/product/deleting-sessions.md`.
@@ -22,8 +22,8 @@ session" in `docs/product/sessions.md`. A console session is archived from its o
 "Console sessions and project sessions" in `docs/product/sessions.md`). The user archives a session from its row's menu.
 A session at its prompt or interrupted, with no unarchived session under it, is archived at once, since nothing is cut
 short, unless a branch or worktree bound to it needs the user's word or its process inspection finds a tree old enough
-to offer a keep choice; one starting, at work, waiting for the user, working in background, being resumed, or with an
-unarchived session under it asks for confirmation first. The confirmation says the session is being archived and can
+to offer a keep choice; one starting, at work, waiting for the user, dormant, working in background, being resumed, or
+with an unarchived session under it asks for confirmation first. The confirmation says the session is being archived and can
 be restored from the archive if the user wants to continue the conversation, and, for a session working in background,
 that the work it is running in the background is stopped. Under that it has up to three sections, each under its own
 heading, in this order, each shown only while it has something to show and set apart from the one above it by a
@@ -74,7 +74,7 @@ as well as sessions started by the owner.
   nothing (see `docs/product/switching-session-accounts.md`).
 
 **Resuming** an interrupted session happens by selecting it, or by pressing "Resume" on its terminal's card (see
-"Interrupted, archived and dormant sessions" in `docs/product/session-terminal.md`, which also names the two ways of
+"Interrupted and archived sessions" in `docs/product/session-terminal.md`, which also names the two ways of
 showing an interrupted session that do not resume it), or, for a project session, by giving its conversation's session
 ID in the session dialog's **Resume conversation** tab (see "Resuming or going to a session of this project from the
 tab" in `docs/product/resuming-a-conversation-by-its-session-id.md`). **Reopening** an archived session is the same
@@ -145,7 +145,7 @@ there, where it is listed, and that selecting an archived one does not relaunch 
 
 ### When a conversation can no longer be resumed
 
-Agents expire their own conversation records by their own rules, so the conversation of a dormant session can be gone
+Agents expire their own conversation records by their own rules, so the conversation of an interrupted or archived session can be gone
 by the time it is reopened. Whether it can still be resumed is judged from the agent's own records, **looking only at
 the account the session is on** — the account directory it last recorded, or the agent's default account — and only
 for the agent's id of the session's current conversation. A copy left in another account by an earlier account switch

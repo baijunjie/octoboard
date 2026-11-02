@@ -12,8 +12,8 @@ which is on to begin with. While it is on, the order is the one below; how it di
 1. projects with at least one unarchived session first, including interrupted sessions;
 2. within each group, pinned projects first;
 3. then by its most urgent unarchived session's status, in the status order below: a project with a session waiting
-   for the user, then one with a session done, awaiting instructions, with child sessions working, working in
-   background, working, and last a project whose unarchived sessions are all interrupted;
+   for the user, then one with a session dormant, paused, done, awaiting instructions, with child sessions working,
+   working in background, working, and last a project whose unarchived sessions are all interrupted;
 4. within each of those, by name, case-insensitively and in natural order, so that "item 2" comes before "item 10".
 
 Each rule applies only among projects the rules before it leave tied. A project's most urgent unarchived session
@@ -50,12 +50,14 @@ interrupted sessions come last of all. The statuses are those of "Session status
 `docs/product/session-statuses.md`:
 
 1. waiting for the user;
-2. done;
-3. awaiting instructions;
-4. child sessions working;
-5. working in background;
-6. working;
-7. interrupted.
+2. dormant;
+3. paused;
+4. done;
+5. awaiting instructions;
+6. child sessions working;
+7. working in background;
+8. working;
+9. interrupted.
 
 Archived sessions are not in the lists this order ranks; they are listed separately.
 
@@ -108,7 +110,7 @@ session's menu offers no Pin or Unpin. A focus mode offers no Pin or Unpin for w
 project's focus mode header nor on a console session's own card in its focus mode (see `docs/product/focus-mode.md`).
 
 **The pin button.** A pinned project or session shows a pin button: on its row in the sidebar, after the row's markers
-(a project's branch badge and activity marker, a session's binding badge) and before the buttons that show only on
+(a project's branch badge and status marker, a session's binding badge) and before the buttons that show only on
 hover, so that while those are hidden the pin buttons of project and session rows line up in one column at the rows'
 end; after the name on a project's heading in a console session's focus mode; and on the status line of its card in a
 focus mode, except a console session's own card in its focus mode, which never shows one. It is always

@@ -97,7 +97,7 @@ hidden pane floats in on hover" below and "Below 1394 px: the sidebar floats" in
 `docs/product/sidebar-drawer.md`), and the right pane's cards,
 docked and floating alike (see "The panel cards" in `docs/product/right-pane-panels.md`) — have the hairline edge and a
 light card shadow, short and faint. Whatever else floats over the content, such as the notice floating over the
-terminal (see "Interrupted, archived and dormant sessions" in `docs/product/session-terminal.md`), casts a large
+terminal (see "Interrupted and archived sessions" in `docs/product/session-terminal.md`), casts a large
 elevation shadow. A card lying in the layout, such as a focus mode's session card (see "What both views show" in
 `docs/product/focus-mode.md`), has no outline and is set apart by the same soft shadow as the content panel's
 edges.

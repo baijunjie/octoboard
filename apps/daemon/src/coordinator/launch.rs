@@ -47,7 +47,7 @@ pub(crate) async fn relaunch_session_with(
     launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
 ) -> Result<()> {
     let mut session = state.session_record(id)?;
-    if !session.status.is_dormant() {
+    if !session.status.has_no_process() {
         // The ordinary cause is a second click landing after the first relaunch already moved the
         // session, so it carries the same code as a launch that is already under way.
         return Err(CodedError::raised(
@@ -506,8 +506,8 @@ pub(crate) fn stop_process(
 pub(crate) const SWITCH_STOP_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Waits for the exit watcher to have seen the session's process gone and recorded the session as
-/// dormant — the state a relaunch starts from, and the one thing that must be true before the
-/// watcher can no longer write over what the relaunch records.
+/// without a process — the state a relaunch starts from, and the one thing that must be true
+/// before the watcher can no longer write over what the relaunch records.
 pub(crate) async fn wait_until_down(state: &Arc<AppState>, id: &str) -> Result<()> {
     wait_until_down_within(state, id, SWITCH_STOP_TIMEOUT).await
 }
@@ -519,7 +519,7 @@ pub(crate) async fn wait_until_down_within(
     timeout: Duration,
 ) -> Result<()> {
     let deadline = Instant::now() + timeout;
-    while state.live_session(id).is_some() || !state.session_record(id)?.status.is_dormant() {
+    while state.live_session(id).is_some() || !state.session_record(id)?.status.has_no_process() {
         if Instant::now() >= deadline {
             // The process may still be running, with nothing recorded and nothing copied.
             return Err(CodedError::raised(

@@ -1,7 +1,7 @@
 use super::*;
 use crate::coordinator::handle;
 use crate::coordinator::test_support::{
-    binding_fixture, bound_session, code_of, console, dormant_with_conversation, lead_session,
+    binding_fixture, bound_session, code_of, console, lead_session, no_process_with_conversation,
     relaunch_stand_in,
 };
 use crate::mcp;
@@ -373,7 +373,7 @@ async fn an_owner_hands_a_session_over_only_where_orchestration_stays_two_levels
             bound_session("child", Idle, "lead"),
             lead_session("spare-lead", Idle, "hub"),
             bound_session("plain", Idle, "hub"),
-            bound_session("dormant", Interrupted, "hub"),
+            bound_session("no-process", Interrupted, "hub"),
             bound_session("starting", Starting, "hub"),
             project_session("peer", Agent::Claude, Idle),
         ],
@@ -541,7 +541,7 @@ async fn a_session_is_released_into_an_unbound_one_that_keeps_its_own_sessions()
             lead_session("lead", Idle, "hub"),
             bound_session("child", Idle, "lead"),
             bound_session("plain", Idle, "hub"),
-            bound_session("dormant", Interrupted, "hub"),
+            bound_session("no-process", Interrupted, "hub"),
             bound_session("by-user", Idle, "hub"),
             project_session("loner", Agent::Claude, Idle),
         ],
@@ -587,10 +587,10 @@ async fn a_session_is_released_into_an_unbound_one_that_keeps_its_own_sessions()
         (plain.bound_to, plain.orchestration_role),
         (None, OrchestrationRole::Coordinator)
     );
-    let dormant = release_session(&state, "dormant", Some("hub"), None)
+    let released = release_session(&state, "no-process", Some("hub"), None)
         .unwrap()
         .session;
-    assert_eq!(dormant.bound_to, None);
+    assert_eq!(released.bound_to, None);
     let by_user = release_session(&state, "by-user", None, None).unwrap();
     assert_eq!(by_user.former_owner, "hub");
     let by_user = by_user.session;
@@ -603,21 +603,21 @@ async fn a_session_is_released_into_an_unbound_one_that_keeps_its_own_sessions()
     assert_eq!(rebound.bound_to.as_deref(), Some("hub"));
 }
 
-/// A dormant session whose owner changed is told when it next starts: the notice is built at
-/// launch from the binding as it stands, ahead of the launch's own instruction. A release and
-/// a transfer leave one, a later change replaces an earlier pending notice, and once the
-/// launch has delivered it nothing is left.
+/// A session without a process whose owner changed is told when it next starts: the notice is built
+/// at launch from the binding as it stands, ahead of the launch's own instruction. A release and a
+/// transfer leave one, a later change replaces an earlier pending notice, and once the launch has
+/// delivered it nothing is left.
 #[tokio::test]
-async fn a_dormant_session_is_told_of_its_new_owner_when_it_next_starts() {
+async fn a_no_process_session_is_told_of_its_new_owner_when_it_next_starts() {
     use SessionStatus::Idle;
     let (state, _dir, _live) = binding_fixture(
         "owner-notice",
         vec![
             console_session("hub", Idle),
             console_session("hub-2", Idle),
-            dormant_with_conversation("released", Agent::Claude, "hub"),
-            dormant_with_conversation("handed", Agent::Claude, "hub"),
-            dormant_with_conversation("replaced", Agent::Claude, "hub"),
+            no_process_with_conversation("released", Agent::Claude, "hub"),
+            no_process_with_conversation("handed", Agent::Claude, "hub"),
+            no_process_with_conversation("replaced", Agent::Claude, "hub"),
         ],
         &["hub", "hub-2"],
     );
@@ -695,8 +695,8 @@ async fn a_failed_launch_keeps_the_notice_and_a_queued_launch_delivers_it() {
         "owner-notice-launch",
         vec![
             console_session("hub", Idle),
-            dormant_with_conversation("claude", Agent::Claude, "hub"),
-            dormant_with_conversation("codex", Agent::Codex, "hub"),
+            no_process_with_conversation("claude", Agent::Claude, "hub"),
+            no_process_with_conversation("codex", Agent::Codex, "hub"),
         ],
         &["hub"],
     );
@@ -730,17 +730,17 @@ async fn a_failed_launch_keeps_the_notice_and_a_queued_launch_delivers_it() {
 /// owed notice and told at the next launch, while the release is still the latest change of
 /// owner: a later transfer or bind drops it, and a blank note is not kept.
 #[tokio::test]
-async fn a_dormant_release_keeps_the_parting_note_for_the_next_launch() {
+async fn a_no_process_release_keeps_the_parting_note_for_the_next_launch() {
     use SessionStatus::Idle;
     let (state, _dir, _live) = binding_fixture(
         "release-note",
         vec![
             console_session("hub", Idle),
             console_session("hub-2", Idle),
-            dormant_with_conversation("noted", Agent::Claude, "hub"),
-            dormant_with_conversation("blank", Agent::Claude, "hub"),
-            dormant_with_conversation("moved", Agent::Claude, "hub"),
-            dormant_with_conversation("rebound", Agent::Claude, "hub"),
+            no_process_with_conversation("noted", Agent::Claude, "hub"),
+            no_process_with_conversation("blank", Agent::Claude, "hub"),
+            no_process_with_conversation("moved", Agent::Claude, "hub"),
+            no_process_with_conversation("rebound", Agent::Claude, "hub"),
         ],
         &["hub", "hub-2"],
     );
@@ -825,7 +825,7 @@ async fn a_failed_write_after_a_release_keeps_the_note_owed() {
         "release-note-failed-write",
         vec![
             console_session("hub", Idle),
-            dormant_with_conversation("gone", Agent::Claude, "hub"),
+            no_process_with_conversation("gone", Agent::Claude, "hub"),
         ],
         &["hub"],
     );
@@ -847,9 +847,9 @@ async fn a_failed_write_after_a_release_keeps_the_note_owed() {
     assert!(prompt.contains("> Mind step 3."), "{prompt}");
 }
 
-/// A release by the user tells the owner the session was released from, when the owner is
-/// running: a dormant one is not told, and a later attempt by it to drive the session is refused
-/// as not its own. The released session is told as for any release.
+/// A release by the user tells the owner the session was released from, when the owner is running:
+/// one without a process is not told, and a later attempt by it to drive the session is refused as
+/// not its own. The released session is told as for any release.
 #[tokio::test]
 async fn a_release_by_the_user_tells_a_running_owner() {
     use crate::test_support::{heard_after_marker, output_containing, running};
@@ -896,7 +896,7 @@ async fn a_release_by_the_user_tells_a_running_owner() {
         None
     );
 
-    // Nothing is owed to a dormant owner, and the release goes through.
+    // Nothing is owed to an owner without a process, and the release goes through.
     release("orphan").await.unwrap();
     assert_eq!(
         state.store.get_session("orphan").unwrap().unwrap().bound_to,

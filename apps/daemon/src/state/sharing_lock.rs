@@ -118,8 +118,8 @@ impl AccountSharingLock {
 
     /// Ends the hold on `id`'s queue ahead of its relaunch, leaving what is queued for the launch's
     /// own triggers to write once the agent can take it (its first hook, its trust screen
-    /// released), as a resume does: the session is still claimed and dormant, which the hold's end
-    /// keeps a queue for.
+    /// released), as a resume does: the session is still claimed and without a process, which the
+    /// hold's end keeps a queue for.
     pub fn release_queue_for_relaunch(&mut self, id: &str) {
         if let Some(hold) = self.holds.remove(id) {
             hold.forward_to(id);

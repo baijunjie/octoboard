@@ -199,7 +199,8 @@ it" in `docs/product/session-terminal.md`).
   Build) and the account it runs under, status, whether it is pinned, and, for a project session with a parent, the
   session it reports to — the console session the binding badge shows, or the project session its row is listed under,
   both in the same wording (see "The binding badge" in `docs/product/sidebar-session-rows.md`); a project row whether it
-  is pinned and, while it carries an activity marker, what that marker means, plus its branch badge's facts (see "The
+  is pinned and the top status of its unarchived sessions while it has any (see "Project rows" in
+  `docs/product/sidebar-project-rows.md`), plus its branch badge's facts (see "The
   branch badge" in `docs/product/project-git-status.md`). A project row also tells it whether it is expanded or
   collapsed.
 
@@ -210,7 +211,7 @@ session (`Ctrl+Tab` or `Ctrl+Shift+Tab` by default) in a console session's focus
 console session (see "The switch strip" in `docs/product/focus-mode.md`). Selecting an archived one does not reopen it:
 it is shown still archived, with its history in place of its terminal (see `docs/product/session-history.md`), and
 pressing Reopen reopens it (see "Archiving, interruption and resuming" in
-`docs/product/archiving-and-resuming-sessions.md` and "Interrupted, archived and dormant sessions" in
+`docs/product/archiving-and-resuming-sessions.md` and "Interrupted and archived sessions" in
 `docs/product/session-terminal.md`). Selecting a session also gives the window's right pane to its own owner: a console
 session's report panel, a project session's project's Files panel (see "What the right pane shows" in
 `docs/product/window-layout.md`). Whatever it is selected from — a sidebar row, a project or console "View archive"

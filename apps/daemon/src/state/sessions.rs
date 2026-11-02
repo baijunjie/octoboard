@@ -64,11 +64,11 @@ impl AppState {
     pub fn save_session(&self, session: &Session) -> Result<()> {
         let live = session
             .status
-            .is_dormant()
+            .has_no_process()
             .then(|| self.live_session(&session.id))
             .flatten();
         // Titles and new control snapshots can publish the row independently, so freeze before
-        // the database exposes dormancy, and undo that freeze if the write fails.
+        // the database exposes the missing process, and undo that freeze if the write fails.
         let update = || self.store.update_session(session);
         let updated = match live {
             Some(live) => live.freeze_output_for(update)?,
@@ -80,16 +80,16 @@ impl AppState {
         Ok(())
     }
 
-    /// Runs `write`, a store write that leaves the session dormant, and tells every client about the
-    /// record it returns. A record deleted in the meantime is not announced: publishing it would
-    /// leave a ghost row in every client.
-    fn write_dormant(
+    /// Runs `write`, a store write that leaves the session without a process, and tells every
+    /// client about the record it returns. A record deleted in the meantime is not announced:
+    /// publishing it would leave a ghost row in every client.
+    fn write_no_process(
         &self,
         id: &str,
         write: impl FnOnce() -> Result<Option<Session>>,
     ) -> Result<()> {
         // Titles and new control snapshots can publish the row independently, so freeze before
-        // the database exposes dormancy, and undo that freeze if the write fails.
+        // the database exposes the missing process, and undo that freeze if the write fails.
         let written = match self.live_session(id) {
             Some(live) => {
                 let mut written = None;
@@ -109,13 +109,13 @@ impl AppState {
 
     /// Archives the session as of now and tells every client; see [`Store::archive_session`].
     pub fn archive_session_record(&self, id: &str) -> Result<()> {
-        self.write_dormant(id, || self.store.archive_session(id, now_millis()))
+        self.write_no_process(id, || self.store.archive_session(id, now_millis()))
     }
 
     /// Interrupts the session as of now unless it is archived, and tells every client; see
     /// [`Store::interrupt_session`].
     pub fn interrupt_session_record(&self, id: &str) -> Result<()> {
-        self.write_dormant(id, || self.store.interrupt_session(id, now_millis()))
+        self.write_no_process(id, || self.store.interrupt_session(id, now_millis()))
     }
 
     /// Writes the session's title and tells every client. Returns the record as it now stands.

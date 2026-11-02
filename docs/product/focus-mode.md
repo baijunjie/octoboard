@@ -215,20 +215,18 @@ console session's focus mode, and only while the console has at least two consol
   `docs/product/order-of-projects-and-sessions.md`), so a chip stays where it is while what it shows changes; pinning or
   unpinning one moves its chip.
 - **A chip** shows the console session's colour (see "The binding badge" in `docs/product/sidebar-session-rows.md`), its
-  title, faded out when too long with the full title then its tooltip, and what is going on in that console session and
-  the sessions bound to it: a waving hand while any of them is waiting for the user, otherwise the *working* glyph while
-  any of them is working, otherwise the *working in background* glyph while any of them is working in background,
-  otherwise nothing — a session merely running is not given a chip's room, so only those three markers can be seen
-  here, the same glyphs as a collapsed project's (see "Project rows" in `docs/product/sidebar-project-rows.md`). The
-  marker carries a **tooltip** saying which of the three it is, in
-  the same words the chip's own name folds in beside the title (see "Tooltips on indicators" in
-  `docs/product/labels-and-tooltips.md`).
+  title, faded out when too long with the full title then its tooltip, and a **status marker**: the glyph, at the compact
+  14 px size, of the top status among that console session and the sessions bound to it that are not archived (see "The
+  top status" in `docs/product/session-statuses.md`), as a collapsed project's row marks its sessions (see "Project
+  rows" in `docs/product/sidebar-project-rows.md`). Every chip has one, whatever that status is — done, awaiting
+  instructions and interrupted included. The marker carries a **tooltip** saying the status in the same words as
+  everywhere else it is said (see "Tooltips on indicators" in `docs/product/labels-and-tooltips.md`).
 - **The console session in focus** has its chip outlined in the accent colour, and is announced as the current one.
 - The chips are on **one row**. When they do not fit it scrolls sideways, with no scrollbar and its edges fading where
   more chips lie beyond; the current chip is scrolled to the middle of the row as the view opens and whenever the
   current chip changes or moves.
 - For assistive technology the strip is a group named for switching console session, and each chip's name is the
-  console session's title together with what is going on in it, in words.
+  console session's title followed by that top status, in words.
 
 **Pressing a chip** enters that console session's focus mode and selects the console session, showing its terminal and
 its report panel; this is a single visit in the window's history (see `docs/product/navigation-history.md`). As
@@ -246,8 +244,8 @@ for its own tabs.
 - Where it works, the keys never reach the terminal, so the agent never receives them. It does nothing while a dialog or
   a menu is open, and is left alone during an input-method composition. A key held down moves one chip only.
 - It enters the next console session's focus mode and selects it, like pressing its chip, except that **it does not
-  resume an interrupted console session**: it only shows it, with its "Not running" card (see "Interrupted, archived and
-  dormant sessions" in `docs/product/session-terminal.md`), so stepping through the chips never starts a process.
+  resume an interrupted console session**: it only shows it, with its "Not running" card (see "Interrupted and archived
+  sessions" in `docs/product/session-terminal.md`), so stepping through the chips never starts a process.
 - Wherever keyboard focus was, it goes to the terminal of the console session moved to, an interrupted one's included.
 - Pressed while focus is inside a report page it is passed to the window (see "Window shortcuts inside a page" in
   `docs/product/report-panel.md`).

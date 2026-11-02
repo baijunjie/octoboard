@@ -37,16 +37,16 @@ const inProject = (id: string, status: SessionStatus, title = id, terminal_title
   sessionOf(id, "c", "p", title, status, { terminal_title, has_conversation: false });
 
 describe("buildStatusItemMenu", () => {
-  it("says so when no session is live", () => {
-    expect(menuOf([inProject("a", "archived"), inProject("b", "interrupted")]).sections).toEqual([
-      { heading: "No sessions running", items: [] },
-    ]);
+  it("says so when every session is archived, or there are none", () => {
+    expect(menuOf([inProject("a", "archived")]).sections).toEqual([{ heading: "No sessions running", items: [] }]);
+    expect(menuOf([]).sections).toEqual([{ heading: "No sessions running", items: [] }]);
   });
 
-  it("raises the icon's hand only while a live session waits for the user", () => {
+  it("lights the icon's dot only while a live session waits for the user or is dormant", () => {
     expect(menuOf([inProject("w", "working"), inProject("i", "idle")]).attention).toBe(false);
     expect(menuOf([inProject("a", "archived"), inProject("b", "interrupted")]).attention).toBe(false);
     expect(menuOf([inProject("w", "working"), inProject("h", "waiting_user")]).attention).toBe(true);
+    expect(menuOf([inProject("w", "working"), inProject("d", "dormant")]).attention).toBe(true);
     expect(menuOf([]).attention).toBe(false);
   });
 
@@ -80,6 +80,42 @@ describe("buildStatusItemMenu", () => {
       ["Working in background (1)", "status:background", ["b"]],
       ["Working (1)", "status:working", ["k"]],
     ]);
+  });
+
+  it("lists dormant and paused sessions under headings of their own, between the raised hand and done, and lights the attention dot for dormant, not for paused", () => {
+    const paused = sessionOf("p", "c", "p", "p", "idle", { paused: true, has_conversation: true });
+    const done = sessionOf("d", "c", "p", "d", "idle", { has_conversation: true });
+    const menu = menuOf([done, paused, inProject("m", "dormant"), inProject("h", "waiting_user")]);
+    expect(menu.sections.map((s) => [s.heading, s.icon, s.items.map((item) => item.session)])).toEqual([
+      ["Waiting for you (1)", "status:waiting_user", ["h"]],
+      ["Dormant (1)", "status:dormant", ["m"]],
+      ["Paused (1)", "status:paused", ["p"]],
+      ["Done (1)", "status:done", ["d"]],
+    ]);
+    expect(menuOf([paused]).attention).toBe(false);
+    expect(menuOf([inProject("m", "dormant")]).attention).toBe(true);
+    expect([...iconKeysOf(menu)]).toEqual(expect.arrayContaining(["status:dormant", "status:paused"]));
+  });
+
+  it("lists starting, switching account and interrupted sessions under headings of their own, after the ones at work in that order", () => {
+    const switching = sessionOf("s", "c", "p", "s", "idle", { switching_account: true });
+    const { sections } = menuOf([inProject("n", "interrupted"), switching, inProject("t", "starting"), inProject("w", "working"), inProject("h", "waiting_user")]);
+    expect(sections.map((s) => [s.heading, s.icon, s.items.map((item) => item.session)])).toEqual([
+      ["Waiting for you (1)", "status:waiting_user", ["h"]],
+      ["Working (1)", "status:working", ["w"]],
+      ["Starting (1)", "status:starting", ["t"]],
+      ["Switching account… (1)", "status:switching", ["s"]],
+      ["Interrupted (1)", "status:interrupted", ["n"]],
+    ]);
+  });
+
+  it("lights the attention dot for neither starting, switching account nor interrupted sessions", () => {
+    expect(menuOf([inProject("t", "starting"), inProject("n", "interrupted"), sessionOf("s", "c", "p", "s", "idle", { switching_account: true })]).attention).toBe(false);
+  });
+
+  it("lists a session once, however many statuses it has a claim to: switching account hides its own status", () => {
+    const switching = sessionOf("s", "c", "p", "s", "waiting_user", { switching_account: true });
+    expect(menuOf([switching]).sections.map((s) => [s.icon, s.items.map((item) => item.session)])).toEqual([["status:switching", ["s"]]]);
   });
 
   it("gives each heading its status glyph and each session its agent's mark", () => {

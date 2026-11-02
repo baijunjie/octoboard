@@ -123,7 +123,7 @@ export type Origin = "console" | "user";
  * offer the request, and the daemon's timeout ends the call. */
 export const SESSION_REQUEST_ACTIONS = ["start", "reopen", "resume", "resume_record", "switch", "handoff"] as const;
 export type SessionRequestAction = (typeof SESSION_REQUEST_ACTIONS)[number];
-export type SessionStatus = "starting" | "working" | "waiting_user" | "idle" | "interrupted" | "archived";
+export type SessionStatus = "starting" | "working" | "waiting_user" | "dormant" | "idle" | "interrupted" | "archived";
 export type HostKind = "local" | "ssh";
 export type ProjectSource = "local" | "parent" | "git";
 
@@ -144,19 +144,19 @@ export type ConsoleSessionColour = (typeof CONSOLE_SESSION_COLOURS)[number];
 
 /** Statuses meaning the session has a running process or is about to: `starting` is one whose agent
  * is still being launched, so it has no terminal to attach to yet. The complement of
- * `DORMANT_STATUSES`. */
-export const LIVE_STATUSES: ReadonlySet<SessionStatus> = new Set(["starting", "working", "waiting_user", "idle"]);
+ * `NO_PROCESS_STATUSES`. */
+export const LIVE_STATUSES: ReadonlySet<SessionStatus> = new Set(["starting", "working", "waiting_user", "dormant", "idle"]);
 
 /** Statuses meaning no process is running for this session — both are resumable via
  * `resume_session`. */
-export const DORMANT_STATUSES: ReadonlySet<SessionStatus> = new Set(["interrupted", "archived"]);
+export const NO_PROCESS_STATUSES: ReadonlySet<SessionStatus> = new Set(["interrupted", "archived"]);
 
 export function isLive(status: SessionStatus): boolean {
   return LIVE_STATUSES.has(status);
 }
 
-export function isDormant(status: SessionStatus): boolean {
-  return DORMANT_STATUSES.has(status);
+export function hasNoProcess(status: SessionStatus): boolean {
+  return NO_PROCESS_STATUSES.has(status);
 }
 
 export interface Host {
@@ -407,6 +407,10 @@ export interface Session {
   /** What an `idle` session has left running in the background; absent when none, and for every
    * other status. The session takes a message like any idle one, but its work is not over. */
   background_tasks?: BackgroundTask[];
+  /** Whether an `idle` session's last turn ended abnormally (cancelled, declined, a usage-limit stop
+   * or a failure); absent otherwise, and for every other status. It takes a message like any idle
+   * one. */
+  paused?: boolean;
   /** Whether an account switch holds the session right now (see `switch_session_account`); absent
    * when none does. */
   switching_account?: boolean;
@@ -548,7 +552,7 @@ export interface AgentAvailability {
 
 /** Where a conversation is held, as `locate_conversation_to_resume` reports it: `archived_session`,
  * an archived session of the asking project (to reopen); `live_session`, another session of it that is
- * not archived, running or dormant; `outside_project`, a session of another project or a console
+ * not archived, running or without a process; `outside_project`, a session of another project or a console
  * session, in any state (`session` is its id); `record`, no session but an agent's own record in `account` (an account id, null for the
  * agent's default account); `not_found`. */
 export type ConversationLocation =

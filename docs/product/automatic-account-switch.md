@@ -42,7 +42,8 @@ alone if it is still held when the wait is over. A session waiting for the user,
 permission prompt, a question, a trust confirmation, a dialog of its agent, a request of its own — is left alone, since
 switching it would end what it waits at. The one exception is the dialog Grok Build shows when its turn stops on the
 usage limit: ending that dialog is the point of the switch, so it does not count as waiting for the user here. A
-session switched or moved to another account meanwhile is left alone. A locked session is switched like any other:
+*dormant* session is left alone in the same way, since switching it would close the view of its background agents the
+user is in (see "Dormant" in `docs/product/session-statuses.md`). A session switched or moved to another account meanwhile is left alone. A locked session is switched like any other:
 the lock keeps a session from being archived or deleted (see "Locking a session" in `docs/product/sessions.md`), and a
 switch does neither. A session left alone for any of these reasons is left as it was, and nobody is told.
 

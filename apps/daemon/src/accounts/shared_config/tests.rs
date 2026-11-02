@@ -2548,7 +2548,7 @@ async fn messages_sent_once_the_process_is_down_are_held_for_the_resume() {
     let mut lock = claimed_and_down(&fixture, "idle").await;
     assert!(fixture.state.live_session("idle").is_none());
 
-    // Queued whichever kind of write, where a dormant session would refuse it.
+    // Queued whichever kind of write, where a session without a process would refuse it.
     for when_blocked in [WhenBlocked::Queue, WhenBlocked::Refuse] {
         let delivery = write_message(&fixture.state, "idle", "sent-while-down", when_blocked);
         assert_eq!(delivery.unwrap(), Delivery::Queued);
@@ -2560,7 +2560,7 @@ async fn messages_sent_once_the_process_is_down_are_held_for_the_resume() {
     assert_eq!(fixture.state.queued_count("idle"), 2);
     drop(lock);
 
-    // Once the change lets the session go it is an ordinary dormant one again.
+    // Once the change lets the session go it is an ordinary one without a process again.
     let err = write_message(&fixture.state, "idle", "late", WhenBlocked::Queue).unwrap_err();
     assert_eq!(code_of(&err), "session_not_running");
 }

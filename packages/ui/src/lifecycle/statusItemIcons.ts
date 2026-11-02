@@ -1,9 +1,11 @@
 import { AGENT_MARKS } from "../components/icons/agentMarks";
 import { DELEGATED_DOT_PX, DELEGATED_RING_PX } from "../components/status/delegatedGlyph";
+import { BUBBLE_SHIFT, HAND_SHIFT, shiftedTransform, type OpticalShift } from "../components/status/opticalCentring";
+import { SLEEP_PATHS } from "../components/status/sleepGlyph";
 import { resolveCssColour, type Appearance } from "../preferences/cssColour";
 import type { StatusItemIcon, StatusItemMenu } from "../platform";
 import type { Agent } from "../protocol";
-import type { StatusKind } from "../sessions/sessionStatus";
+import type { ShownStatusKind } from "../sessions/sessionStatus";
 import type { StatusItemMenuDraft } from "./statusItemMenu";
 
 /** What the shell's menu shows beside a line: the mark of a session's agent, and a heading's status
@@ -18,8 +20,9 @@ import type { StatusItemMenuDraft } from "./statusItemMenu";
 const SIZE = 18;
 const SCALE = 2;
 
-/** lucide's `Hand`, `MessageCircleMore` and `CircleCheck`, the glyphs `StatusIcon` draws for the statuses
- * that are not a dot. `CircleCheck` has a shape that is not all paths, so it is given as markup. */
+/** lucide's `Hand`, `MessageCircleMore`, `CircleCheck`, `CirclePause`, `LoaderCircle` and `Pause`, and the
+ * dormant "zz" (`SLEEP_PATHS`), the glyphs `StatusIcon` draws for the statuses that are not a dot.
+ * `CircleCheck`, `CirclePause` and `Pause` have shapes that are not all paths, so they are given as markup. */
 const HAND = [
   "M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2",
   "M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2",
@@ -33,11 +36,19 @@ const BUBBLE = [
   "M16 12h.01",
 ];
 
+const PAUSED = "<circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"10\" x2=\"10\" y1=\"15\" y2=\"9\"/><line x1=\"14\" x2=\"14\" y1=\"15\" y2=\"9\"/>";
+
+const ARC = ["M21 12a9 9 0 1 1-6.219-8.56"];
+
+const PAUSE = "<rect x=\"14\" y=\"3\" width=\"5\" height=\"18\" rx=\"1\"/><rect x=\"5\" y=\"3\" width=\"5\" height=\"18\" rx=\"1\"/>";
+
 const CHECK = "<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"m16 9-5.5 5.5L8 12\"/>";
 
-function stroked(paths: string[] | string, colour: string): string {
+/** The glyph's strokes, moved by `shift` where the glyph is one whose ink is lopsided (the same shift `StatusIcon` gives it). */
+function stroked(paths: string[] | string, colour: string, shift?: OpticalShift): string {
   const body = typeof paths === "string" ? paths : paths.map((d) => `<path d="${d}"/>`).join("");
-  return `<g fill="none" stroke="${colour}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</g>`;
+  const moved = shift ? ` transform="${shiftedTransform(shift)}"` : "";
+  return `<g${moved} fill="none" stroke="${colour}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</g>`;
 }
 
 /** The glyph's units per CSS pixel of the sidebar's glyphs: the working dot's 8px is drawn with r="5". */
@@ -45,12 +56,15 @@ const MENU_UNITS_PER_PX = 1.25;
 
 /** The glyph colours are the ones the session list draws these statuses in (`StatusIcon`): HeroUI's soft
  * foreground of the status's colour, read from the stylesheet in the system's appearance rather than
- * written down here. */
-function statusGlyph(status: StatusKind, appearance: Appearance): string | undefined {
+ * written down here. Every status but archived has one; `undefined` also stands for a colour the
+ * stylesheet cannot resolve. */
+export function statusGlyph(status: ShownStatusKind, appearance: Appearance): string | undefined {
   const colour = (token: string) => resolveCssColour(`var(--${token}-soft-foreground)`, appearance);
   const accent = colour("accent");
   const success = colour("success");
   const warning = colour("warning");
+  // `StatusIcon`'s `text-app-muted`, the ink of the arc and of interrupted's pause sign.
+  const muted = resolveCssColour("var(--app-muted)", appearance);
   switch (status) {
     // The accent dot of `WorkingDot`, without the ping that cannot be drawn here.
     case "working":
@@ -66,12 +80,22 @@ function statusGlyph(status: StatusKind, appearance: Appearance): string | undef
       return success && `<circle cx="12" cy="12" r="${outer - 1}" fill="none" stroke="${success}" stroke-width="2"/><circle cx="12" cy="12" r="${dot}" fill="${success}"/>`;
     }
     case "waiting_user":
-      return warning && stroked(HAND, warning);
+      return warning && stroked(HAND, warning, HAND_SHIFT);
+    case "dormant":
+      return warning && stroked([...SLEEP_PATHS], warning);
+    case "paused":
+      return success && stroked(PAUSED, success);
     case "idle":
-      return success && stroked(BUBBLE, success);
+      return success && stroked(BUBBLE, success, BUBBLE_SHIFT);
     case "done":
       return success && stroked(CHECK, success);
-    default:
+    // Still, as a menu cannot turn it: switching account shows the same arc as starting.
+    case "starting":
+    case "switching":
+      return muted && stroked(ARC, muted);
+    case "interrupted":
+      return muted && stroked(PAUSE, muted);
+    case "archived":
       return undefined;
   }
 }
@@ -85,7 +109,7 @@ function glyphOf(key: string, appearance: Appearance): { svg: string; template: 
     const template = mark.fill === "currentColor";
     return { svg: `<path d="${mark.d}" fill="${template ? "#000" : mark.fill}" fill-rule="evenodd"/>`, template };
   }
-  const svg = kind === "status" ? statusGlyph(name as StatusKind, appearance) : undefined;
+  const svg = kind === "status" ? statusGlyph(name as ShownStatusKind, appearance) : undefined;
   return svg ? { svg, template: false } : undefined;
 }
 

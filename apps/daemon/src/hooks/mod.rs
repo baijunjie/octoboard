@@ -6,7 +6,7 @@
 //! naive mapping wrong in a way nothing reports. What is handled here:
 //!
 //! - **Claude Code**: `Stop` and `StopFailure` are mutually exclusive, so both mean "turn over"; a
-//!   `Stop` carrying a non-empty `background_tasks` means paused on background work, not finished.
+//!   `Stop` carrying a non-empty `background_tasks` means held on background work, not finished.
 //!   That is an idle session with those tasks running (see [`background_tasks_change`]), not a
 //!   working one: `idle_prompt` fires 60 s after such a `Stop` for a shell, monitor or MCP task,
 //!   and only an agent task suppresses it, so a session read as working would flip to idle at an
@@ -96,7 +96,7 @@ fn claude_status(event: &str, payload: &Value) -> Option<SessionStatus> {
             Some("idle_prompt") => Some(SessionStatus::Idle),
             _ => None,
         },
-        // Idle even when paused on background work: the tasks are tracked beside the status.
+        // Idle even when held on background work: the tasks are tracked beside the status.
         "Stop" | "StopFailure" => Some(SessionStatus::Idle),
         _ => None,
     }
@@ -399,18 +399,51 @@ pub fn turn_cancelled(agent: Agent, event: &str) -> bool {
     }
 }
 
+/// How a turn ended, as far as whether the session is shown paused (see `AppState::set_paused`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TurnOutcome {
+    /// Cancelled (Codex's `Interrupt`, Grok's `StopCancelled`), or failed (Claude Code's and
+    /// Grok's `StopFailure`).
+    Abnormal,
+    /// An ordinary stop at the prompt, including a Claude Code `Stop` that leaves background
+    /// tasks running, and a Claude Code `SessionStart`, which begins a fresh conversation.
+    Normal,
+}
+
+/// How the turn this event ends came to an end, or `None` when the event ends none: it is then no
+/// reason to set or clear the flag. A Claude Code `SessionStart` (the conversation begun afresh,
+/// after `/clear`, say) is a normal outcome: a fresh conversation has no stopped turn. A Grok
+/// `Stop` at teardown (`reason: "shutdown"`) and its `idle_prompt` backstop, which also fires after
+/// an ordinary `Stop`, say nothing of how a turn ended. Claude Code's interrupt and declined
+/// prompts fire no event; those are recovered from its transcript (`crate::records::transcript`).
+pub fn turn_outcome(agent: Agent, event: &str, payload: &Value) -> Option<TurnOutcome> {
+    match (agent, event) {
+        (Agent::Claude, "StopFailure") => Some(TurnOutcome::Abnormal),
+        (Agent::Claude, "Stop" | "SessionStart") => Some(TurnOutcome::Normal),
+        (Agent::Codex, "Interrupt") => Some(TurnOutcome::Abnormal),
+        (Agent::Codex, "Stop") => Some(TurnOutcome::Normal),
+        (Agent::Grok, "StopCancelled" | "StopFailure") => Some(TurnOutcome::Abnormal),
+        (Agent::Grok, "Stop")
+            if payload.get("reason").and_then(Value::as_str) != Some("shutdown") =>
+        {
+            Some(TurnOutcome::Normal)
+        }
+        _ => None,
+    }
+}
+
 /// Whether this event means a turn has ended, and what can be read out of it.
 ///
 /// Distinct from [`status_from_event`] on purpose: several events put a session back to `idle`
 /// without a turn having ended (a `SessionStart`, a cancelled turn), and several turn ends are not
-/// reportable (a Claude Code `Stop` that is only paused). Reading one from the other would make a
-/// phantom report out of each.
+/// reportable (a Claude Code `Stop` that is only held on background work). Reading one from the
+/// other would make a phantom report out of each.
 pub fn turn_end(agent: Agent, event: &str, payload: &Value) -> Option<TurnEnd> {
     match agent {
         Agent::Claude => match event {
-            // A non-empty `background_tasks` means paused on work still running, so the turn is
+            // A non-empty `background_tasks` means held on work still running, so the turn is
             // not over and synthesising here would report an unfinished turn as a result.
-            "Stop" if claude_paused(payload) => None,
+            "Stop" if claude_has_background_work(payload) => None,
             "Stop" => Some(TurnEnd {
                 last_assistant_message: text_field(payload, "last_assistant_message"),
                 failed: false,
@@ -464,9 +497,9 @@ pub fn turn_end(agent: Agent, event: &str, payload: &Value) -> Option<TurnEnd> {
     }
 }
 
-/// Whether a Claude Code `Stop` is only paused on background work: the same list
+/// Whether a Claude Code `Stop` only holds the turn on background work: the same list
 /// [`background_tasks_change`] records, so the two agree.
-fn claude_paused(payload: &Value) -> bool {
+fn claude_has_background_work(payload: &Value) -> bool {
     !claude_background_tasks(payload).is_empty()
 }
 
@@ -483,6 +516,44 @@ fn text_field(payload: &Value, key: &str) -> Option<String> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// Which events end a turn abnormally or normally, per agent, and which say nothing of it.
+    #[test]
+    fn each_agents_events_say_how_a_turn_ended() {
+        use TurnOutcome::{Abnormal, Normal};
+        let none = json!({});
+        let with_tasks = json!({ "background_tasks": [{ "id": "t", "type": "shell" }] });
+        let shutdown = json!({ "reason": "shutdown" });
+        let end_turn = json!({ "reason": "end_turn" });
+        let idle_prompt = json!({ "notificationType": "idle_prompt" });
+        for (agent, event, payload, expected) in [
+            (Agent::Claude, "StopFailure", &none, Some(Abnormal)),
+            (Agent::Claude, "Stop", &none, Some(Normal)),
+            (Agent::Claude, "SessionStart", &none, Some(Normal)),
+            (Agent::Claude, "Stop", &with_tasks, Some(Normal)),
+            (Agent::Claude, "Notification", &idle_prompt, None),
+            (Agent::Claude, "UserPromptSubmit", &none, None),
+            (Agent::Codex, "Interrupt", &none, Some(Abnormal)),
+            (Agent::Codex, "Stop", &none, Some(Normal)),
+            (Agent::Codex, "UserPromptSubmit", &none, None),
+            (Agent::Grok, "StopCancelled", &none, Some(Abnormal)),
+            (Agent::Grok, "StopFailure", &none, Some(Abnormal)),
+            (Agent::Grok, "Stop", &end_turn, Some(Normal)),
+            (Agent::Grok, "Stop", &none, Some(Normal)),
+            (Agent::Grok, "Stop", &shutdown, None),
+            (Agent::Grok, "Notification", &idle_prompt, None),
+            // Another agent's event name is no event of this one.
+            (Agent::Claude, "Interrupt", &none, None),
+            (Agent::Codex, "StopFailure", &none, None),
+            (Agent::Claude, "StopCancelled", &none, None),
+        ] {
+            assert_eq!(
+                turn_outcome(agent, event, payload),
+                expected,
+                "{agent:?} {event}"
+            );
+        }
+    }
 
     /// Octoboard's messages reach Claude Code as pastes, and a long paste is handed to the hook
     /// wrapped (Claude Code 2.1.295); a turn they start is only recognisable with the wrapper off.
@@ -684,11 +755,11 @@ mod tests {
         }
     }
 
-    /// A `Stop` paused on background work leaves the session idle, not working: the `idle_prompt`
+    /// A `Stop` held on background work leaves the session idle, not working: the `idle_prompt`
     /// that follows it a minute later would otherwise flip it at an arbitrary moment. The tasks
     /// are carried beside the status, and the turn is still not a reportable end.
     #[test]
-    fn a_paused_claude_stop_is_idle_with_its_tasks() {
+    fn a_claude_stop_with_background_work_is_idle_with_its_tasks() {
         let stop = json!({"background_tasks": [
             {"id": "b1", "type": "shell", "status": "running", "description": "npm run dev"},
             {"id": "b2"},

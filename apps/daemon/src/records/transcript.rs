@@ -360,7 +360,8 @@ pub(crate) fn back_at_prompt(
     // the session on, which an unconditional write would lose, or the next prompt can have retired
     // the watch and opened a turn that is just as `Working`, which this write would end.
     let moved = state.while_record_watch_current(session_id, generation, || {
-        state.report_agent_status_if(session_id, expected, SessionStatus::Idle)
+        // Every one of these ends the turn abnormally, so the session comes back paused.
+        state.report_paused_if(session_id, expected)
     });
     match moved {
         Some(Ok(true)) => {
@@ -592,6 +593,7 @@ mod tests {
             record_titles: Default::default(),
             background_tasks: Vec::new(),
             switching_account: false,
+            paused: false,
             prompt_on_launch: false,
             default_effort: None,
             orchestration_role: OrchestrationRole::Coordinator,
@@ -659,7 +661,7 @@ mod tests {
     /// A stand-in session is registered and watched the same way in every test below; this bundles
     /// the common setup so each test only has to state what is different about it.
     struct Fixture {
-        _live: StandIn,
+        live: StandIn,
         state: Arc<AppState>,
         _dir: ScratchDir,
         path: PathBuf,
@@ -675,7 +677,7 @@ mod tests {
             let path = dir.join("transcript.jsonl");
             std::fs::write(&path, "").expect("empty transcript");
             Self {
-                _live: live,
+                live,
                 state,
                 _dir: dir,
                 path,
@@ -738,6 +740,10 @@ mod tests {
         })
         .await;
         assert!(applied, "the rejection must be applied");
+        assert!(
+            fixture.live.is_paused(),
+            "a declined prompt leaves it paused"
+        );
     }
 
     /// A watch follows the agent's own status, not the record's: with a session request
@@ -778,7 +784,7 @@ mod tests {
 
         let reported = fixture
             .state
-            .report_agent_status_if("s", SessionStatus::WaitingUser, SessionStatus::Idle)
+            .report_paused_if("s", SessionStatus::WaitingUser)
             .expect("report");
 
         assert!(!reported, "the agent is no longer where the scan read it");
@@ -918,6 +924,7 @@ mod tests {
             reaches(&fixture.state, SessionStatus::Idle).await,
             "the interrupt must be applied"
         );
+        assert!(fixture.live.is_paused(), "an interrupt leaves it paused");
     }
 
     /// An interrupt already in the transcript when the watch is armed belongs to an earlier turn,

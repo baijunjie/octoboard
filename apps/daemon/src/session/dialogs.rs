@@ -57,6 +57,12 @@ pub struct Dialog {
 /// The name of the dialog Grok Build raises when its plan's usage limit is reached.
 const GROK_USAGE_LIMIT: &str = "grok_usage_limit";
 
+/// The names of the dialogs for Claude Code's views of its background agents: a subagent's view,
+/// the agents view, and the task list holding focus.
+const CLAUDE_SUBAGENT_VIEW: &str = "claude_subagent_view";
+const CLAUDE_AGENTS_VIEW: &str = "claude_agents_view";
+const CLAUDE_AGENT_LIST_FOCUS: &str = "claude_agent_list_focus";
+
 impl Dialog {
     /// Whether this is the dialog an agent raises on reaching its usage limit. A session whose only
     /// wait is this one is switched to another account all the same: ending the modal is the point
@@ -66,6 +72,17 @@ impl Dialog {
     /// rate limits" screen is raised before the limit, and is not one.
     pub fn is_usage_limit(&self) -> bool {
         self.code == GROK_USAGE_LIMIT
+    }
+
+    /// Whether this is one of Claude Code's views of its background agents (a subagent's view, the
+    /// agents view, or the task list holding focus). The person is looking at the agents, not at
+    /// a question put to them, so a session showing one reads as dormant rather than waiting for
+    /// the user, though it holds its writes all the same.
+    pub fn is_agents_view(&self) -> bool {
+        matches!(
+            self.code,
+            CLAUDE_SUBAGENT_VIEW | CLAUDE_AGENTS_VIEW | CLAUDE_AGENT_LIST_FOCUS
+        )
     }
 }
 
@@ -159,13 +176,13 @@ const DIALOGS: &[Entry] = &[
     // view itself, so these come before the view's entries.
     entry_on_row(
         Agent::Claude,
-        "claude_agent_list_focus",
+        CLAUDE_AGENT_LIST_FOCUS,
         WrittenMessage::Discarded,
         "Entertoview\u{B7}xtostop",
     ),
     entry_on_row(
         Agent::Claude,
-        "claude_agent_list_focus",
+        CLAUDE_AGENT_LIST_FOCUS,
         WrittenMessage::Discarded,
         "\u{2191}/\u{2193}toselect",
     ),
@@ -177,13 +194,13 @@ const DIALOGS: &[Entry] = &[
     // and ← opens the agents view below.
     entry_on_row(
         Agent::Claude,
-        "claude_subagent_view",
+        CLAUDE_SUBAGENT_VIEW,
         WrittenMessage::Diverted,
         "\u{25EF}main",
     ),
     entry_on_row(
         Agent::Claude,
-        "claude_subagent_view",
+        CLAUDE_SUBAGENT_VIEW,
         WrittenMessage::Diverted,
         "\u{276F}\u{25EF}main",
     ),
@@ -192,7 +209,7 @@ const DIALOGS: &[Entry] = &[
     // session with that text.
     entry(
         Agent::Claude,
-        "claude_agents_view",
+        CLAUDE_AGENTS_VIEW,
         WrittenMessage::Diverted,
         &["Newsessions:", "awaitinginput\u{B7}"],
     ),
@@ -296,9 +313,10 @@ pub fn watch(state: &Arc<AppState>, live: &Arc<LiveSession>) {
 
 /// Whether `dialog` is the session waiting for the user, which its owner is told of. A usage-limit
 /// dialog is not: the session stopped on the limit, and neither a permission nor a question is
-/// open for the user to answer.
+/// open for the user to answer. Nor is a view of the background agents, which the session is
+/// shown at dormant for.
 fn is_a_wait_for_the_user(dialog: &Dialog) -> bool {
-    !dialog.is_usage_limit()
+    !dialog.is_usage_limit() && !dialog.is_agents_view()
 }
 
 async fn poll(state: Arc<AppState>, live: Weak<LiveSession>) {
@@ -502,13 +520,42 @@ mod tests {
         assert_eq!(Sighting::default().after(None).changes, 0);
     }
 
-    /// A usage-limit dialog is no wait for the user, so its owner is not told the session waits.
+    /// A usage-limit dialog and a view of the background agents are no wait for the user, so the
+    /// owner is not told the session waits.
     #[test]
-    fn only_a_dialog_that_is_not_the_usage_limit_is_a_wait_for_the_user() {
+    fn only_a_dialog_that_is_neither_the_usage_limit_nor_an_agents_view_is_a_wait_for_the_user() {
         let limit = recognise(Agent::Grok, GROK_USAGE_LIMIT).unwrap();
         let resume = recognise(Agent::Claude, RESUME_IDLE).unwrap();
         assert!(!is_a_wait_for_the_user(&limit));
         assert!(is_a_wait_for_the_user(&resume));
+        for screen in [SUBAGENT_VIEW, AGENTS_VIEW, AGENT_ROW_FOCUS] {
+            let view = recognise(Agent::Claude, screen).unwrap();
+            assert!(!is_a_wait_for_the_user(&view), "{}", view.code);
+        }
+    }
+
+    /// Exactly the three views of the background agents are agents views; every other recognised
+    /// screen stays a wait for the user.
+    #[test]
+    fn only_the_three_views_of_the_background_agents_are_agents_views() {
+        for (agent, screen, view) in [
+            (Agent::Claude, SUBAGENT_VIEW, true),
+            (Agent::Claude, AGENTS_VIEW, true),
+            (Agent::Claude, AGENT_ROW_FOCUS, true),
+            (Agent::Claude, RESUME_IDLE, false),
+            (Agent::Claude, RESUME_AT_LAUNCH, false),
+            (Agent::Claude, RESUME_FROM_SUMMARY, false),
+            (Agent::Claude, CLAUDE_NOTICE, false),
+            (Agent::Claude, AUTO_DEFAULT, false),
+            (Agent::Codex, CODEX_SIGN_IN, false),
+            (Agent::Codex, CODEX_RESUME_CWD, false),
+            (Agent::Codex, CODEX_MODEL_MIGRATION, false),
+            (Agent::Codex, CODEX_RATE_LIMIT, false),
+            (Agent::Grok, GROK_USAGE_LIMIT, false),
+        ] {
+            let dialog = recognise(agent, screen).unwrap();
+            assert_eq!(dialog.is_agents_view(), view, "{}", dialog.code);
+        }
     }
 
     /// Screens as Codex 0.162.1 draws them: padded rows, a path wrapped inside an option, a

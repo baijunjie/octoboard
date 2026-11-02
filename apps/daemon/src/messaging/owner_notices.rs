@@ -302,7 +302,7 @@ pub(crate) fn owner_from_now_on(agent: Agent, owner: &str) -> String {
 /// left owed a notice for its next launch (see [`owner_notice`]). Also what decides whether a
 /// former owner is told of a release by the user ([`tell_former_owner`]).
 pub(crate) fn is_running(state: &Arc<AppState>, session: &Session) -> bool {
-    !session.status.is_dormant() && state.live_session(&session.id).is_some()
+    !session.status.has_no_process() && state.live_session(&session.id).is_some()
 }
 
 /// [`is_running`], marking a session with no process owed its notice now: for a change of owner

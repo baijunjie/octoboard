@@ -380,6 +380,7 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         record_titles: Default::default(),
         background_tasks: Vec::new(),
         switching_account: false,
+        paused: false,
         prompt_on_launch: false,
         default_effort: None,
         context: None,

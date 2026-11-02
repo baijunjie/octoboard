@@ -137,6 +137,11 @@ pub struct LiveSession {
     /// this process's end: the end is recorded and the owner, if it was to be told, has been sent
     /// the notice (written to it or queued for it) or could not be.
     exit_settled: AtomicBool,
+    /// Set when the agent's last turn ended abnormally (cancelled, declined, a usage limit, a
+    /// failure) and cleared when a turn ends normally, a Claude Code `SessionStart` begins a fresh
+    /// conversation, or the session moves out of idle; see
+    /// `AppState::set_paused`. Per process, so a relaunch starts without it.
+    paused: AtomicBool,
 }
 
 impl std::ops::Deref for LiveSession {
@@ -213,6 +218,7 @@ impl LiveSession {
             ended_on_purpose: AtomicBool::new(false),
             watched_under_claim: AtomicBool::new(false),
             exit_settled: AtomicBool::new(false),
+            paused: AtomicBool::new(false),
         }
     }
 
@@ -279,17 +285,47 @@ impl LiveSession {
     /// the folder-trust confirmation, Codex's title saying it waits on the user, or a dialog on
     /// the screen as the latest look left it.
     pub(crate) fn waits_for_user(&self) -> bool {
-        self.trust.needs_user() || self.needs_user_action() || self.agent_dialog().is_some()
+        self.waits_for_user_unless(|_| false)
     }
 
     /// [`Self::waits_for_user`], except that a usage-limit dialog on the screen (see
-    /// `Dialog::is_usage_limit`) is not a wait that keeps the session from being switched.
+    /// `Dialog::is_usage_limit`) or a view of the background agents is not a wait that keeps the
+    /// session from being switched.
     pub(crate) fn waits_for_user_beyond_usage_limit(&self) -> bool {
+        self.waits_for_user_unless(|dialog| dialog.is_usage_limit() || dialog.is_agents_view())
+    }
+
+    /// [`Self::waits_for_user`] as the status shown judges it: a view of the background agents is
+    /// no wait for the user there, since the session is shown dormant for it instead.
+    pub(crate) fn waits_for_user_outside_agents_view(&self) -> bool {
+        self.waits_for_user_unless(Dialog::is_agents_view)
+    }
+
+    /// [`Self::waits_for_user`] with the dialogs `not_a_wait` picks out left out of it.
+    fn waits_for_user_unless(&self, not_a_wait: impl Fn(&Dialog) -> bool) -> bool {
         self.trust.needs_user()
             || self.needs_user_action()
             || self
                 .agent_dialog()
-                .is_some_and(|dialog| !dialog.is_usage_limit())
+                .is_some_and(|dialog| !not_a_wait(&dialog))
+    }
+
+    /// Whether the screen shows one of Claude Code's views of its background agents (see
+    /// `Dialog::is_agents_view`).
+    pub(crate) fn shows_agents_view(&self) -> bool {
+        self.agent_dialog()
+            .is_some_and(|dialog| dialog.is_agents_view())
+    }
+
+    /// Whether the agent's last turn ended abnormally and nothing has begun since; see
+    /// `AppState::set_paused`.
+    pub(crate) fn is_paused(&self) -> bool {
+        self.paused.load(Ordering::Acquire)
+    }
+
+    /// Sets the flag [`Self::is_paused`] reads, and says whether it changed.
+    pub(crate) fn mark_paused(&self, paused: bool) -> bool {
+        self.paused.swap(paused, Ordering::AcqRel) != paused
     }
 
     pub(crate) fn needs_user_action(&self) -> bool {

@@ -23,6 +23,13 @@ One such kept shortfall is the Stop button's label on a process card in the dark
 rest and 4.2:1 with Stop hovered); see "Hand-built rows and cards". The card is a hand-built surface, so it is a shortfall
 of application-authored styling that the user chose to keep, not an approved departure from a HeroUI component's look.
 
+Another is the dormant session's rising "zz" (`@keyframes status-scroll` in `packages/ui/src/style.css`). Each Z's
+stroke shrinks with the letter as it rises, so on a 1x display a Z in the upper half of its rise (below about 0.8 times
+the large Z, 3–5px tall at 16px) renders at 2–2.7:1, under the 3:1 a state indicator needs, and it fades below that as
+it dwindles to the exit speck; on a 2x display only that last speck does. The large Z entering at the bottom left is
+always at full contrast, and the static glyph shown under reduced motion is unaffected. Keeping the stroke at full
+weight instead would change the look the user confirmed. (Source: user decision.)
+
 ### Confirmed visual choices
 
 #### One definition per semantic colour
@@ -168,7 +175,7 @@ title.
 
 In dark, every floating surface — a dialog, a menu or submenu, a select's or combo box's list, a popover, a tooltip and
 what is drawn as one (the touch and hint popovers, the rail's account quota panel), a toast, and a bar floating over the
-terminal (the dormant session's and the exited shell's) — is drawn on the project's `--floating`, by the user's
+terminal (a session's without a process and the exited shell's) — is drawn on the project's `--floating`, by the user's
 decision, instead of HeroUI's `--overlay` and `--surface`, which are darker than the content panel and sink a menu into
 the sidebar under it. The dark levels follow light's ratio for ratio, where every floating surface is white: the surface
 is 1.11:1 over the panel and 1.02:1 over the sidebar (white: 1.11:1 over the light sidebar, 1.04:1 over the light
@@ -966,7 +973,7 @@ names the mark on its own, so the two cannot drift apart (a session's agent mark
 agent and its account, as text and a `StatusBadge`, reading the same once the badge's comma is spoken; where it also
 lists the model and the effort, the account joins them as a labelled list under the agent, since a bare value such as
 "high" does not say what it is, and the labels are the tooltip's own keys); its own key only where the only string
-naming it folds it into the name of what carries it ("{name}, a session is waiting for you"), since reusing that would
+naming it folds it into the name of what carries it, since reusing that would
 make the tooltip repeat the row's visible name, and composing it out of a fragment is worse to translate. The session
 context mark's card is the one accepted exception: it follows a card design with its own title ("Context window") and
 its own compact "used / limit", "used" and "left" lines, while the trigger's name is one sentence of exact counts; the
@@ -991,7 +998,7 @@ see "A tooltip is the application's own"). It is turned off for every mark that 
 same tap, since the popover must not open over what the press does: the marks of a session row in the sidebar, in a
 focus mode (card and archive preview) and in the archive view (status glyph, agent icon, context size and binding
 badge, plus a focus mode's relative time), the archive submenu's relative time (a menu item), the project row's Git
-badge, the activity marker (a project row, the console-switch chip), a branch's responsible-session badge (an option),
+badge, the top-status marker (a project row, the console-switch chip), a branch's responsible-session badge (an option),
 and the switch behind focus mode's include-console-sessions tooltip. The same mark where it stands alone, such as the
 title bar's status glyph, the requested-sessions dialog's status and agent glyphs, a focus mode's header Git badge and
 the history header's context badge, opens it. The rest of what a row's marks say reaches touch through the row's
@@ -1055,9 +1062,9 @@ and the texts are drawn by a view rather than set in `NSTextField`s, since marki
 cell exposed as a static text of its own. The view takes no role or label and the item keeps its title, or the phrase
 would be exposed twice, or the line would have no title for menu search.
 
-A decoration drawn over the menu bar icon itself, such as the raised hand while a session waits for the user, is
-likewise marked non-element, view and cell: the menu's **Waiting for you** heading is what tells assistive technology
-that state.
+A decoration drawn over the menu bar icon itself, such as the orange dot while a session waits for the user or is
+dormant, is likewise marked non-element, view and cell: the menu's **Waiting for you** or **Dormant** heading is what
+tells assistive technology that state.
 
 ### Where an error is shown
 
@@ -1896,7 +1903,8 @@ measures what a pass over text and glyphs misses:
 
 - Every fill — a chip, a tertiary button, a ghost button's hover — against the surface it sits on.
 - An animated state at its faintest frame. A glyph is animated without lowering its opacity (an `animate-pulse` glyph
-  sinks to about 2:1).
+  sinks to about 2:1); a glyph whose parts move through its box, such as the dormant session's rising Zs, lets the box
+  clip a part that leaves rather than fading it, so every visible part keeps its full contrast at every frame.
 - A translucent fill (HeroUI's soft chip is 15% of its colour) as drawn: composite it over each surface it actually
   lands on — a selected and a hovered row, a dialog's `--overlay` — and measure the label against that; measuring
   against the bare surface or the fill's own colour overstates the contrast.

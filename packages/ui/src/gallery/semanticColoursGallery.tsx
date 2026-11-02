@@ -3,7 +3,7 @@ import { CircleAlert, Info, Sparkles } from "lucide-react";
 import React, { useEffect, useRef } from "react";
 import { setInteractionModality } from "react-aria";
 
-import { ActivityMarker } from "../components/status/ActivityMarker";
+import { TopStatusMarker } from "../components/status/TopStatusMarker";
 import { Button } from "../components/controls/Button";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
 import { ExternalLink } from "../components/text/ExternalLink";
@@ -75,9 +75,9 @@ function Swatches({ meaning }: { meaning: Meaning }): React.ReactElement {
 function Mark({ color }: { color: StatusBadgeColor }): React.ReactElement | null {
   switch (color) {
     case "accent":
-      return <ActivityMarker activity="working" />;
+      return <TopStatusMarker status="working" />;
     case "success":
-      return <ActivityMarker activity="running" />;
+      return <TopStatusMarker status="idle" />;
     case "danger":
       return <StatusMark label="Usage unavailable">Claude Code took too long to report its usage.</StatusMark>;
     case "warning":

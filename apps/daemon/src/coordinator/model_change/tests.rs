@@ -46,6 +46,49 @@ async fn a_session_shows_as_starting_while_a_model_change_restarts_it() {
     assert_eq!(shown(&mut events), Some(SessionStatus::Idle));
 }
 
+/// An owner's change of a model is refused for a session waiting for the user and for one shown
+/// dormant over a view of its background agents, and goes ahead for one at its prompt; the user's
+/// own change is never refused for it.
+#[tokio::test]
+async fn an_owner_cannot_change_the_model_of_a_session_showing_its_background_agents() {
+    let (state, _dir) = console_with_project_and_accounts("coordinator-model-change-view");
+    state
+        .store
+        .insert_session(&project_session("s", Agent::Claude, SessionStatus::Idle))
+        .unwrap();
+    let live = idle_stand_in("s");
+    state.register_live(live.clone());
+    let session = || state.session_record("s").unwrap();
+    assert!(refuse_if_owner_must_wait(&state, ModelAsker::Owner("hub"), &session()).is_ok());
+
+    crate::test_support::show_agents_view(&live);
+    assert_eq!(
+        state.status_for_model_change(&session()),
+        SessionStatus::Dormant
+    );
+    let refused =
+        refuse_if_owner_must_wait(&state, ModelAsker::Owner("hub"), &session()).unwrap_err();
+    assert_eq!(code_of(&refused), error_code::SESSION_WAITING_FOR_USER);
+    assert!(
+        refused.to_string().contains("background-agents view"),
+        "{refused}"
+    );
+    assert!(refuse_if_owner_must_wait(&state, ModelAsker::User, &session()).is_ok());
+
+    // A hand a hook raised wins over the view: the refusal is the plain wait for the user.
+    let mut waiting = session();
+    waiting.status = SessionStatus::WaitingUser;
+    state.save_session(&waiting).unwrap();
+    let refused =
+        refuse_if_owner_must_wait(&state, ModelAsker::Owner("hub"), &session()).unwrap_err();
+    assert_eq!(code_of(&refused), error_code::SESSION_WAITING_FOR_USER);
+    assert!(
+        refused.to_string().contains("waiting for the user"),
+        "{refused}"
+    );
+    assert!(refuse_if_owner_must_wait(&state, ModelAsker::User, &session()).is_ok());
+}
+
 /// A launch that must never run, for a change that records or refuses.
 fn no_launch(_: term::LaunchRequest) -> Result<term::Launch> {
     panic!("nothing is launched")

@@ -911,7 +911,7 @@ where
 {
     let caller = state.session_record(&request.session)?;
     // Withdrawn when its process ended, but that can land while the answer is on its way.
-    if caller.status.is_dormant() || !state.has_process(&caller.id) {
+    if caller.status.has_no_process() || !state.has_process(&caller.id) {
         return Err(not_waiting(&caller.id));
     }
     let (started, result, note) = match &request.ask {
@@ -984,7 +984,7 @@ where
     let before = state.session_record(target)?;
     let mut action = match before.status {
         SessionStatus::Archived => "reopened",
-        status if status.is_dormant() => "resumed",
+        status if status.has_no_process() => "resumed",
         _ => "already_running",
     };
     let owners = if action == "already_running" {
@@ -1057,7 +1057,7 @@ where
 /// under way, which the user's own resume counts as done. A refusal for a claim that is not a
 /// launch of `target` (an archived owner's, or one held for an account switch, a handoff, a
 /// handover of branches or a binding change) counts only when `target` is found out of its
-/// dormant status by now; otherwise the approval could not be carried out.
+/// no-process status by now; otherwise the approval could not be carried out.
 fn refused_as_running(state: &Arc<AppState>, err: &anyhow::Error, target: &str) -> Result<bool> {
     let Some(coded) = err.downcast_ref::<CodedError>() else {
         return Ok(false);
@@ -1066,11 +1066,11 @@ fn refused_as_running(state: &Arc<AppState>, err: &anyhow::Error, target: &str) 
     let launching = match coded.code {
         error_code::SESSION_ALREADY_RUNNING => for_target,
         // A switch's claim raises the same code as a launch's. A claim gone by now falls through
-        // to the dormant re-check.
+        // to the no-process re-check.
         error_code::SESSION_ALREADY_STARTING => for_target && state.is_held_by_launch(target),
         _ => return Ok(false),
     };
-    Ok(launching || !state.session_record(target)?.status.is_dormant())
+    Ok(launching || !state.session_record(target)?.status.has_no_process())
 }
 
 /// How an approval's outcome written into the caller's session opens, which is what tells the turn

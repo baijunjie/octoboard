@@ -144,7 +144,7 @@ pub fn write_message(
     }
     // Nothing to write to and nothing to wait for: a resume starts the agent at its prompt rather
     // than replaying a queue, so queuing here would lose the message silently.
-    if session.status.is_dormant() || state.live_session(id).is_none() {
+    if session.status.has_no_process() || state.live_session(id).is_none() {
         return Err(CodedError::raised(
             error_code::SESSION_NOT_RUNNING,
             "this session is not running",

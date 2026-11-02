@@ -111,7 +111,7 @@ fn deliver_and_archive(
     // A session that reported `done` is archived by the time a second report could arrive, and its
     // process is on its way out. Refusing is what keeps that race from delivering the same round of
     // work to the owner twice.
-    if session.status.is_dormant() {
+    if session.status.has_no_process() {
         // Archiving an owner archives the sessions bound to it first, so this is the reporter of an
         // archived owner too, and "wrapped up" would leave it wondering by whom.
         let owner_archived = session.status == SessionStatus::Archived
@@ -698,6 +698,7 @@ mod tests {
             record_titles: Default::default(),
             background_tasks: Vec::new(),
             switching_account: false,
+            paused: false,
             prompt_on_launch: false,
             default_effort: None,
             orchestration_role: OrchestrationRole::Coordinator,

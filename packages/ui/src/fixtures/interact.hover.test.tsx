@@ -8,7 +8,7 @@ import { Button } from "../components/controls/Button";
 import { change, changeViewFixture, mountRows } from "../project-browser/browserTestSupport";
 import { ChangeList } from "../project-browser/git/ChangeList";
 import { changeItems } from "../project-browser/git/changes";
-import { ActivityMarker } from "../components/status/ActivityMarker";
+import { TopStatusMarker } from "../components/status/TopStatusMarker";
 import { AgentIcon } from "../components/icons/AgentIcon";
 import { AnchoredTooltip } from "../components/hint/AnchoredTooltip";
 import { HelpTip } from "../components/hint/HelpTip";
@@ -54,8 +54,8 @@ afterEach(() => vi.useRealTimers());
 /** The placements the hover steps reach, built from the real glyph: the top bar, a session row with
  * a status glyph and an agent mark that has a tooltip of its own, a row with a status glyph only, a
  * row like focus mode's card, whose glyph carries no tooltip and whose agent mark does, and the
- * activity marker's two hosts: a row with a status glyph before the marker, as a project row has its
- * git badge, and a chip with the marker alone. "Docs" is named as a row with an activity but draws no
+ * status marker's two hosts: a row with a status glyph before the marker, as a project row has its
+ * git badge, and a chip with the marker alone. "Docs" is named as a row with a status but draws no
  * marker, as an expanded project row does, which is what the step's failure case needs. A confirmation
  * dialog's callout lists sessions, one with a tooltip on its glyph and on its agent icon and one
  * with neither; unlike the rows above, that glyph is the named `role="img"` rather than a
@@ -74,16 +74,16 @@ function mountWindow(): void {
       <div role="button" aria-label="Write the migration, Claude Code, Waiting for you">
         <StatusIcon status="waiting_user" decorative withTooltip />
       </div>
-      <div role="button" aria-label="Website, a session is running">
+      <div role="button" aria-label="Website, Awaiting instructions">
         <span>Website</span>
         <StatusIcon status="idle" decorative withTooltip />
-        <ActivityMarker activity="running" />
+        <TopStatusMarker status="idle" />
       </div>
-      <div role="button" aria-label="Hub 2, a session is working">
+      <div role="button" aria-label="Hub 2, Working">
         <span>Hub 2</span>
-        <ActivityMarker activity="working" />
+        <TopStatusMarker status="working" />
       </div>
-      <div role="button" aria-label="Docs, a session is running">
+      <div role="button" aria-label="Docs, Done">
         <span>Docs</span>
       </div>
       <div role="alertdialog">
@@ -192,36 +192,36 @@ it("hoverRowStatus fails for a row that is not there", async () => {
   await done;
 });
 
-it("hoverActivityMarker puts up the activity of the chip it names", async () => {
+it("hoverStatusMarker puts up the status of the chip it names", async () => {
   mountWindow();
-  await settledLive(createUi(document, "en").hoverActivityMarker((name) => name.startsWith("Hub 2")));
-  expect(openTooltip()?.textContent).toBe("A session is working");
+  await settledLive(createUi(document, "en").hoverStatusMarker((name) => name.startsWith("Hub 2")));
+  expect(openTooltip()?.textContent).toBe("Working");
   release(document.querySelector('[aria-label^="Hub 2"] [role=presentation]')!);
 });
 
-it("hoverActivityMarker takes the marker, not the trigger before it", async () => {
+it("hoverStatusMarker takes the marker, not the trigger before it", async () => {
   mountWindow();
-  await settledLive(createUi(document, "en").hoverActivityMarker((name) => name.startsWith("Website")));
-  expect(openTooltip()?.textContent).toBe("A session is running");
+  await settledLive(createUi(document, "en").hoverStatusMarker((name) => name.startsWith("Website")));
+  expect(openTooltip()?.textContent).toBe("Awaiting instructions");
   release(Array.from(document.querySelectorAll('[aria-label^="Website"] [role=presentation]')).at(-1)!);
 });
 
-it("hoverActivityMarker fails for a control with no marker rather than hover another tooltip", async () => {
+it("hoverStatusMarker fails for a control with no marker rather than hover another tooltip", async () => {
   mountWindow();
-  const done = expect(createUi(document, "en").hoverActivityMarker((name) => name.startsWith("Docs"))).rejects.toThrow(/No row or chip/);
+  const done = expect(createUi(document, "en").hoverStatusMarker((name) => name.startsWith("Docs"))).rejects.toThrow(/No row or chip/);
   await vi.advanceTimersByTimeAsync(6000);
   await done;
   expect(openTooltip()).toBeNull();
 });
 
-it("hoverActivityMarker fails where the last tooltip is not an activity's", async () => {
+it("hoverStatusMarker fails where the last tooltip is not a marker's", async () => {
   mountWindow();
-  const done = expect(createUi(document, "en").hoverActivityMarker((name) => name.startsWith("Write the migration"))).rejects.toThrow(
-    /has no activity marker.*Waiting for you/,
+  const done = expect(createUi(document, "en").hoverStatusMarker((name) => name.startsWith("Fix the layout"))).rejects.toThrow(
+    /has no status marker.*Claude Code/,
   );
   await vi.advanceTimersByTimeAsync(3000);
   await done;
-  release(glyphOf("Write the migration"));
+  release(Array.from(document.querySelectorAll('[aria-label^="Fix the layout"] [role=presentation]')).at(-1)!);
 });
 
 it("hoverCalloutStatus puts up the status of the callout's session it names", async () => {
@@ -517,13 +517,13 @@ function mountFocusBadge(status: typeof branchStatus): void {
 }
 
 /** A project row as the sidebar draws it: named with the badge's sentence folded in, the badge (which
- * names nothing itself there) and then the activity marker. */
+ * names nothing itself there) and then the status marker. */
 function mountProjectRow(status: typeof branchStatus): void {
   mountForTooltip(
     <div role="button" aria-label={`Website, ${sentenceOf(status)}`}>
       <span>Website</span>
       <GitBadge status={status} decorative />
-      <ActivityMarker activity="running" />
+      <TopStatusMarker status="idle" />
     </div>,
   );
 }
@@ -657,7 +657,7 @@ it("hoverGitBadge fails where there is no such row", async () => {
   await done;
 });
 
-it("hoverGitBadge says a row's badge has no tooltip rather than hover the activity marker beside it", async () => {
+it("hoverGitBadge says a row's badge has no tooltip rather than hover the status marker beside it", async () => {
   const empty = gitStatusOf("p-1", { branch: null, upstream: null });
   mountProjectRow(empty);
   await expect(createUi(document, "en").hoverGitBadge(empty, "glyph", (name) => name.startsWith("Website"))).rejects.toThrow(

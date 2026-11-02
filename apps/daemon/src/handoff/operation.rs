@@ -208,7 +208,10 @@ pub(crate) fn refuse_unless_it_can_be_handed_off(original: &Session, agent: Agen
                 &[("session", &original.id)],
             ));
         }
-        SessionStatus::WaitingUser | SessionStatus::Idle | SessionStatus::Interrupted => {}
+        SessionStatus::WaitingUser
+        | SessionStatus::Dormant
+        | SessionStatus::Idle
+        | SessionStatus::Interrupted => {}
     }
     coordinator::lifecycle::ensure_unlocked([original.clone()])?;
     if agent == original.agent {
@@ -562,6 +565,7 @@ fn word_of(status: SessionStatus) -> &'static str {
         SessionStatus::Starting => "starting",
         SessionStatus::Working => "working",
         SessionStatus::WaitingUser => "waiting for the user",
+        SessionStatus::Dormant => "viewing its background agents",
         SessionStatus::Idle => "awaiting instructions",
         SessionStatus::Interrupted => "interrupted",
         SessionStatus::Archived => "archived",

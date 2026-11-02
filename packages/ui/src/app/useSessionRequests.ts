@@ -25,7 +25,7 @@ export function useSessionRequests({ confirmLaunch, announce }: { confirmLaunch:
   // Sessions whose `resume_session` is in flight, for the terminal's loading state.
   const [resumingIds, setResumingIds] = useState<ReadonlySet<string>>(new Set());
 
-  // A dormant session can be resumed through several controls, so overlapping requests for the
+  // A session without a process can be resumed through several controls, so overlapping requests for the
   // same session share one in-flight guard.
   const inFlightRef = useRef<Set<string>>(new Set());
 

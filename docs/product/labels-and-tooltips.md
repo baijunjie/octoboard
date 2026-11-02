@@ -87,8 +87,8 @@ application buttons below. These are:
   toggle's tooltip follows its "Show …" / "Hide …" label (see "The sidebar toggle and the panel toggles" in
   `docs/product/window-layout.md`), and each panel toggle's also names its panel (see "The panel toggles in the top bar"
   in `docs/product/right-pane-panels.md`);
-- the rail's buttons — each console's avatar, whose tooltip is the console's name with what is going on in it folded in,
-  the same text as the name announced for it (see "The console switcher" in `docs/product/console-switcher.md`), New
+- the rail's buttons — each console's avatar, whose tooltip is the console's name followed by the top status of its
+  sessions, the same text as the name announced for it (see "The console switcher" in `docs/product/console-switcher.md`), New
   console, the waiting count, whose tooltip says how many sessions are waiting and that pressing it goes to the next
   one, Turn on notifications and Settings (the rail's Account usage button has none, as said below this list);
 - the ⋮ button that opens an action menu — a sidebar row's, the console's in the sidebar's header, the project's in
@@ -295,7 +295,7 @@ with a touch screen such a mark answers a press, and a hover, across at least 24
 smaller. A mark inside a row, a button or an option opens none, as the tap there selects, folds, switches or chooses:
 the status glyph, agent icon, context-size chip and binding badge on a sidebar row, a focus mode card or archived row
 and an archive view row, the relative time on a focus mode card or archived row and on an item of a View archive
-submenu, the branch badge on a project's sidebar row, the activity marker, and the responsible-session badge in the Git
+submenu, the branch badge on a project's sidebar row, the status marker, and the responsible-session badge in the Git
 mode's branch lists. A touch has no route to what such a mark's tooltip says; assistive technology has it in the
 accessible name of what holds the mark.
 
@@ -304,14 +304,13 @@ These are:
 - a session's status glyph on its sidebar row, on the top bar's breadcrumb and on each non-archived session a
   confirmation lists among the ones it affects, whose tooltip says the status in the same words as everywhere else it is
   named — the placements where no status text sits beside the glyph (see `docs/product/session-statuses.md`);
-- the activity marker, the mark standing for what is going on beneath a **collapsed project's row** in the sidebar
-  (see "Project rows" in `docs/product/sidebar-project-rows.md`) and inside focus mode's **console-switch chip** (see
-  "The switch strip" in `docs/product/focus-mode.md`), whose tooltip says which activity it stands for, in the same
-  words the name of the row or chip around it folds in beside the project's or console session's own name. Beneath a
-  collapsed project's row that is one of four — a session waiting for the user, one working, one working in the
-  background, one merely running — while a chip never shows the last of them. The rail's
-  console avatar has its own status selection and badge rules (see "The console switcher" in
-  `docs/product/console-switcher.md`); that decorative badge has no tooltip of its own;
+- the status marker, the glyph of the top status of the sessions beneath a **collapsed project's row** in the sidebar
+  (see "Project rows" in `docs/product/sidebar-project-rows.md`) or inside focus mode's **console-switch chip** (see
+  "The switch strip" in `docs/product/focus-mode.md`), whose tooltip says that status in the same words as everywhere
+  else it is named, the words the name of the row or chip around it says after the project's or console session's own
+  name (see "The top status" in `docs/product/session-statuses.md`). The rail's console avatar marks the same top
+  status with a badge (see "The console switcher" in `docs/product/console-switcher.md`); that decorative badge has no
+  tooltip of its own;
 - the binding badge, the coloured dot on a project session's row bound to a console session, whose tooltip names that
   console session (see "The binding badge" in `docs/product/sidebar-session-rows.md`);
 - a session's agent icon on its row, on a focus mode's card or archived row, on the archive view's row and on each

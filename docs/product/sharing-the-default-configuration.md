@@ -147,6 +147,7 @@ account, or holding its directory, that are in the middle of a turn, idle with b
 for the user's answer (a permission prompt, a question, a session request, or anything else only the user can answer
 that shows the session as waiting for the user — its folder-trust confirmation, a Codex action title, or a screen of its
 agent's own such as Claude Code's "Resume this conversation?"; see "What the statuses are derived from" in
+`docs/product/session-statuses.md`), *dormant* over a view of their background agents (see "Dormant" in
 `docs/product/session-statuses.md`), holding a message of Octoboard's that is queued, being written, or was left unsent
 in its input box, or being started, resumed, switched, handed off or having their owner changed — and a sign-in of the
 account. While any of these runs, `set_account_sharing` is refused with `account_in_use`, with nothing stopped or

@@ -23,6 +23,7 @@ describe("quitHolders", () => {
     ["starting", true],
     ["working", true],
     ["waiting_user", true],
+    ["dormant", true],
     ["idle", false],
     ["interrupted", false],
     ["archived", false],

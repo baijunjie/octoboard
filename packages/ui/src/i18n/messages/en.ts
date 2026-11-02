@@ -63,15 +63,6 @@ export const en = {
   "agents.badge.notInstalled": "Not installed",
   "agents.notInstalled": "{agent} (not installed)",
 
-  // What a session activity marker stands for, in words and on its own, for the tooltip of every
-  // mark that shows one — a collapsed project's row, focus mode's console-switch chip. The
-  // `sidebar.activity.*` messages below say the same thing folded into the name of what it is going
-  // on beneath, which is also what a console's avatar in the rail says as its tooltip.
-  "activity.waiting": "A session is waiting for you",
-  "activity.working": "A session is working",
-  "activity.background": "A session is working in the background",
-  "activity.running": "A session is running",
-
   "startup.daemonFailed.title": "The daemon failed to start",
   "startup.daemonFailed.description": "The daemon is the background process that runs your sessions and terminals.",
   "startup.daemonFailed.remedy": "{appName} cannot work without it. Open {appName} again to try once more.",
@@ -780,12 +771,16 @@ export const en = {
   "session.status.working": "Working",
   "session.status.waitingUser": "Waiting for you",
   "session.status.idle": "Awaiting instructions",
+  "session.status.dormant": "Dormant",
+  "session.status.paused": "Paused",
   "session.status.background": "Working in background",
   "session.status.delegated": "Child sessions working",
   "session.status.done": "Done",
   "session.status.switching": "Switching account…",
   "session.status.interrupted": "Interrupted",
   "session.status.archived": "Archived",
+  "session.status.named": "{name}, {status}",
+  "session.status.namedPinned": "{name}, pinned, {status}",
 
   "titleBar.back": "Back",
   "titleBar.forward": "Forward",
@@ -864,18 +859,6 @@ export const en = {
   "sidebar.project.unpinFailedTitle": "Could not unpin the project",
   "sidebar.session.pinFailedTitle": "Could not pin the session",
   "sidebar.session.unpinFailedTitle": "Could not unpin the session",
-  // What is going on beneath a console or a project, folded into its accessible name, and shown as
-  // text too: a console's avatar in the rail says it as its tooltip. The `activity.*` messages
-  // above say the same thing on its own, for the marker's tooltip, so a change of wording here
-  // belongs there too.
-  "sidebar.activity.waiting": "{name}, a session is waiting for you",
-  "sidebar.activity.working": "{name}, a session is working",
-  "sidebar.activity.background": "{name}, a session is working in the background",
-  "sidebar.activity.running": "{name}, a session is running",
-  "sidebar.activity.waitingPinned": "{name}, pinned, a session is waiting for you",
-  "sidebar.activity.workingPinned": "{name}, pinned, a session is working",
-  "sidebar.activity.backgroundPinned": "{name}, pinned, a session is working in the background",
-  "sidebar.activity.runningPinned": "{name}, pinned, a session is running",
   "sidebar.console.actions": "Actions for console {name}",
   "sidebar.console.addProject": "Add project",
   "sidebar.console.edit": "Console settings",
@@ -1626,6 +1609,7 @@ export const en = {
     "It restarts to take them and keeps its conversation. A turn in progress is cut off, and continued automatically where that is safe.",
   "dialog.sessionModel.restartFresh": "It restarts to take them with a fresh conversation, as nothing has been typed into it yet.",
   "dialog.sessionModel.restartPrompt": "It is waiting for you, and restarting ends the prompt it is showing.",
+  "dialog.sessionModel.restartDormant": "It is showing its background agents, and restarting closes that view.",
   "dialog.sessionModel.nextResume": "It is not running, so it takes them the next time it is resumed.",
   "dialog.sessionModel.heldStarting": "The session is starting…",
   "dialog.sessionModel.heldSwitching": "The session is switching accounts…",

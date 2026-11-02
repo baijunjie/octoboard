@@ -263,6 +263,11 @@ it("says restarting a session waiting for the user ends the prompt it is showing
   expect(document.body.textContent).toContain("It is waiting for you, and restarting ends the prompt it is showing.");
 });
 
+it("says restarting a dormant session closes the view of its background agents it is showing", async () => {
+  await mount(sessionOf("s-1", parentConsole.id, project.id, "Fix search", "dormant"));
+  expect(document.body.textContent).toContain("It is showing its background agents, and restarting closes that view.");
+});
+
 it("does not mention a prompt for a session that is not waiting for the user", async () => {
   await mount(sessionOf("s-1", parentConsole.id, project.id, "Fix search", "working"));
   expect(document.body.textContent).not.toContain("It is waiting for you, and restarting ends the prompt it is showing.");
