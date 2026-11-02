@@ -1,9 +1,10 @@
 # Agent-launch process ledger
 
 `apps/daemon/src/processes/ledger/` owns attribution, persistence and cleanup of the processes an agent launch starts,
-including descendants that leave the agent's terminal session. It reads the native macOS or Linux process table and
-builds process trees for the request layer in `apps/daemon/src/processes/requests/mod.rs`; the wire interface belongs to
-[`apps/daemon/PROTOCOL.md`](../../../PROTOCOL.md).
+including descendants that leave the agent's terminal session. It reads the system's process table through
+`apps/daemon/src/processes/native/` (the macOS and Linux readers, shared with the project shell terminals'
+busy check) and builds process trees for the request layer in `apps/daemon/src/processes/requests/mod.rs`; the wire
+interface belongs to [`apps/daemon/PROTOCOL.md`](../../../PROTOCOL.md).
 
 The ledger is held on `AppState`. Launch setup and the carry-over of a restart (an account switch, a model change, a
 change of an account's sharing) enter through `apps/daemon/src/coordinator/launch.rs`,
@@ -13,10 +14,13 @@ process-end cleanup and shutdown through `apps/daemon/src/coordinator/exit_watch
 `apps/daemon/src/state/process_exit.rs`, startup reconciliation through `apps/daemon/src/main.rs`, and the owner's moves
 of trees through `apps/daemon/src/mcp/process_handover.rs`.
 
-Where things are: `mod.rs` the ledger and launch lifecycle, `attribute.rs` the rules that attribute processes to
-launches, `trees.rs` listings and stop, keep and move by tree, `carry.rs` carry-over between launches, `persist.rs` what
-is kept on disk, `stop.rs` stopping by identity, and `table.rs` with `table/macos.rs` and `table/linux.rs` the
-process-table readers.
+Where things are: `mod.rs` the types, the launch lifecycle, reconciliation and `ForgetLaunch`, `attribute.rs` the rules
+that attribute processes to launches, `scan.rs` the scan of the table, the scanner thread and the stop of what ended
+launches left and what has worked in a removed directory, `looks.rs` the deadline-bounded looks at working directories
+and project directories, `trees.rs` listings and stop, keep and move by tree, `carry.rs` carry-over between launches,
+`persist.rs` what is kept on disk (`Persisted::from_book`, `read_back`), `stop.rs` stopping by identity and the rounds of
+signals that follow what started meanwhile, and `table.rs` the table as the ledger reads it, over
+`processes::native`.
 
 ## External interfaces
 
@@ -41,7 +45,12 @@ process-table readers.
   listings consumed by session and project requests.
 - `ProcessLedger::trees_counted`, `ProcessCount` — count the trees of every project and console session, without
   describing them, for the request layer's global count.
-- `ProcessLedger::listed_lately`, `ProcessLedger::note_listed` — share recent listings between client requests.
+- `ProcessLedger::listed_lately`, `ProcessLedger::note_listed` — share recent listings between client requests; a
+  listing is noted only with the generation read before it.
+- `ProcessLedger::counted_lately`, `ProcessLedger::note_counted`, `ProcessLedger::claim_counting`,
+  `ProcessLedger::lists_generation` — share the global count between client requests: the last counts, the claim that
+  makes overlapping requests wait for one computation, and the generation that keeps a read made before a stop, a keep
+  or the end of a launch from being noted after it.
 - `ProcessLedger::stop_trees`, `ProcessLedger::keep_trees` — apply the user's process-tree choices; a kept tree is
   recorded with the project it is listed under, and `trees_of_project` lists it among the project processes, the trees
   of the project no session owns (kept, and left behind).
@@ -52,6 +61,10 @@ process-table readers.
 
 ## Known limits
 
+- The looks at a working directory or a project directory run as a pass bounded by a deadline (`looks.rs`), and one that
+  outruns it is skipped while it is stuck. Only a directory whose kernel-reported text may lie under a project root is
+  looked at; on macOS the report of the working directory is itself read in such a bounded pass, since it may stat the
+  vnode.
 - A process whose environment cannot be read (an Apple platform binary on macOS, such as `/bin/sleep`) that a shell
   left running in the background is never attributed when that shell exits within one scan interval: its chain no
   longer reaches the launch, the shell's terminal session was never recorded, and it has no readable tag. It is neither

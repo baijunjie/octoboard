@@ -84,8 +84,10 @@ pub(crate) fn signal_group(leader: libc::pid_t, signal: libc::c_int) {
 }
 
 /// Whether the process group `leader` leads has a member other than the leader, or `None` when
-/// the system cannot list its processes. The caller holds `leader` unreaped, so a process found
-/// in that group is the leader's.
+/// the system cannot list its processes. A process found in that group is the leader's when the
+/// caller holds `leader` unreaped, or knows the group has kept a member ever since the leader was
+/// reaped; a caller asking only after the reap accepts that an emptied group whose id was taken
+/// over within that gap answers for the newcomer.
 pub(crate) fn group_has_members(leader: libc::pid_t) -> Option<bool> {
     // SAFETY: `getpgid` only reads; a pid that is gone in the meantime reports an error.
     Some(

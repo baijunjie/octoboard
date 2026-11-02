@@ -5,9 +5,9 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
-use super::require_directory;
+use super::{directory_unreadable, require_directory};
 use crate::git::layout::is_git_repo;
-use crate::protocol::{error_code, Agent, CodedError, DirEntry};
+use crate::protocol::{Agent, DirEntry};
 
 /// Lists the directories under `path`, each flagged with whether it is a git repository.
 ///
@@ -18,17 +18,14 @@ use crate::protocol::{error_code, Agent, CodedError, DirEntry};
 pub fn list_dir(path: &Path) -> Result<Vec<DirEntry>> {
     require_directory(path)?;
     let read = std::fs::read_dir(path).map_err(|err| {
-        CodedError::raised(
-            error_code::DIRECTORY_UNREADABLE,
+        directory_unreadable(
+            path,
+            &err,
             format!(
                 "`{}` could not be read. On a volume the application has no file access to, macOS \
                  asks for permission per volume — grant it and try again: {err}",
                 path.display()
             ),
-            &[
-                ("path", &path.to_string_lossy()),
-                ("detail", &err.to_string()),
-            ],
         )
     })?;
 
@@ -129,6 +126,33 @@ mod tests {
         assert_eq!(entries[0].path, dir.join(".claude").to_string_lossy());
         assert!(entries[0].is_git_repo);
         assert!(!entries[1].is_git_repo);
+    }
+
+    #[test]
+    fn a_directory_that_cannot_be_read_is_reported_with_the_volume_hint() {
+        use std::os::unix::fs::PermissionsExt;
+        // SAFETY: a plain query of this process's effective user.
+        if unsafe { libc::geteuid() } == 0 {
+            // Permissions do not stop the superuser, so there is nothing to refuse.
+            return;
+        }
+        let dir = ScratchDir::new("hostfs-list-locked");
+        let locked = dir.join("locked");
+        std::fs::create_dir(&locked).expect("directory");
+        let chmod = |mode| {
+            std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(mode)).unwrap()
+        };
+        chmod(0o000);
+        let result = std::panic::catch_unwind(|| list_dir(&locked));
+        chmod(0o755);
+        let error = result.expect("listing panicked").unwrap_err();
+        let coded = error.downcast_ref::<crate::protocol::CodedError>().unwrap();
+        assert_eq!(
+            coded.code,
+            crate::protocol::error_code::DIRECTORY_UNREADABLE
+        );
+        assert!(coded.message.contains("macOS"), "{}", coded.message);
+        assert_eq!(coded.params["path"], locked.to_string_lossy());
     }
 
     fn detected_with(label: &str, markers: &[&str]) -> Option<Agent> {

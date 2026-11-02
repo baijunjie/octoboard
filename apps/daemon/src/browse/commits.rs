@@ -18,10 +18,12 @@ use std::sync::atomic::AtomicBool;
 
 use anyhow::Result;
 
-use crate::browse::changes::{self, ChangeRead};
+use crate::browse::budget::ChangeBudget;
+use crate::browse::change_read::{self, ChangeRead};
 use crate::browse::line_counts;
+use crate::browse::scope::Located;
 use crate::browse::tree_diff;
-use crate::browse::{blob, budget, git_error, git_failed, Located};
+use crate::browse::{blob, budget, git_error, git_failed};
 use crate::git::isolated::IsolatedGit;
 use crate::git::run::GitError;
 use crate::processes::subprocess::BoundedFailure;
@@ -93,7 +95,7 @@ pub fn list(
     (base, tip): (&str, &str),
     cancel: &AtomicBool,
 ) -> Result<CommitList> {
-    let from_nothing = changes::is_empty_tree(base);
+    let from_nothing = change_read::is_empty_tree(base);
     if !from_nothing {
         blob::verify_commit(env, &at.root, base, cancel)?;
     }
@@ -143,8 +145,7 @@ pub fn list(
     }
     .map_err(git_error)?;
 
-    let mut entries = 0;
-    let mut path_bytes = 0;
+    let mut taken = ChangeBudget::default();
     // Every field ends in a NUL, the subject's too, so an empty subject is an empty field; the
     // first record of a commit's changes starts with the newline `git` puts between the commit's
     // format and its diff.
@@ -177,15 +178,10 @@ pub fn list(
             else {
                 continue;
             };
-            let bytes = changes::entry_path_bytes(&entry);
-            if entries == budget::MAX_CHANGE_ENTRIES
-                || path_bytes + bytes > budget::MAX_CHANGE_PATH_BYTES
-            {
+            if !taken.admit(&entry) {
                 list.complete = false;
                 break;
             }
-            entries += 1;
-            path_bytes += bytes;
             commit.changes.push(entry);
         }
         // A commit whose changes ran out of budget before any was listed would read as one that
@@ -294,7 +290,7 @@ fn verify(
             blob::verify_commit(env, &at.root, parent, cancel)?;
             Ok(parent.to_string())
         }
-        None => changes::empty_tree(env, at, cancel),
+        None => change_read::empty_tree(env, at, cancel),
     }
 }
 
@@ -308,7 +304,7 @@ pub fn read(
     cancel: &AtomicBool,
 ) -> Result<ChangeRead> {
     let old = verify(env, at, (commit, parent), cancel)?;
-    changes::read_between(env, at, (&old, commit), (&change.old, &change.new), cancel)
+    change_read::read_between(env, at, (&old, commit), (&change.old, &change.new), cancel)
 }
 
 /// Reads the whole bodies of one change of `commit`, checked first as [`read`] checks them, and
@@ -318,11 +314,11 @@ pub fn read_bodies(
     at: &Located,
     (commit, parent): (&str, Option<&str>),
     change: &ComparedChangeRef,
-    expected: &changes::Expected,
+    expected: &change_read::Expected,
     cancel: &AtomicBool,
-) -> Result<changes::BodiesRead> {
+) -> Result<change_read::BodiesRead> {
     let old = verify(env, at, (commit, parent), cancel)?;
-    changes::read_bodies_between(
+    change_read::read_bodies_between(
         env,
         at,
         (&old, commit),

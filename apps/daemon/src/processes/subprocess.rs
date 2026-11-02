@@ -497,12 +497,15 @@ fn run_bounded_with(
             }
             // The child is gone but something it started still holds stdout open, so what has
             // arrived may not be all of it: that is not an output to hand back as whole. A group
-            // that still has a member keeps its id, so it is signalled; a run that reaches the
-            // session does not signal it, as once the session was swept the group may be empty
-            // and its id free to pass to another process. What the sweep missed, if it ran at
+            // that still has a member keeps its id, so it is signalled; one whose holder left it
+            // (a daemonizing helper) may be empty with its id free to pass to another process, and
+            // is not. A run that reaches the session does not signal it either, as once the
+            // session was swept the group may be empty. What the sweep missed, if it ran at
             // all, is left.
             Some((_, at)) if at.elapsed() >= REAP_GRACE => {
-                if leader.reach == Reach::ProcessGroup {
+                if leader.reach == Reach::ProcessGroup
+                    && leader::group_has_members(leader.pid()) == Some(true)
+                {
                     leader::kill_group(leader.pid());
                 }
                 return Err(BoundedFailure::Failed(anyhow::anyhow!(

@@ -9,15 +9,18 @@ use std::sync::Arc;
 
 use base64::Engine as _;
 
+use super::content::file_content;
+use super::scope::resolve_project_path;
 use super::*;
 use crate::git::isolated::tests::test_env;
 use crate::git::isolated::IsolatedGit;
 use crate::protocol::{
-    Agent, BrowseEntry, BrowseRequest, Console, ContentKind, EntryKind, LinkTarget, Project,
-    ProjectSource,
+    Agent, BrowseEntry, BrowseRequest, Console, ContentKind, EntryKind, FileContent, LinkTarget,
+    Project, ProjectSource, ProjectSourceInfo,
 };
 use crate::state::AppState;
 use crate::test_support::{app_state, git, git_bytes, repo_with, ScratchDir, TEST_KEY};
+use crate::wire_path::{self, RelPath};
 
 #[test]
 fn search_request_resolves_the_stored_project_and_echoes_the_query() {

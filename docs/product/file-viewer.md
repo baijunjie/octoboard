@@ -298,30 +298,22 @@ connection was lost and that it is read again once the connection is back.
 
 A click on a file path link in a session's terminal, or in a shell terminal of the Terminal panel (see "The shell
 terminal" in `docs/product/terminal-panel.md`), that names a file inside that terminal's project — its directory or its
-place in a worktree of the same repository (see "File paths" in `docs/product/terminal-links.md`) — first reads the
-file, from the directory it was found in:
-
-- **text, or an image the viewer draws** (see "What it shows" above), opens in the file viewer, showing what was read
-  at once rather than saying it is loading;
-- **any other binary file, or a file larger than the 4 MiB a read delivers**, opens on the machine the daemon runs on
-  with its default application instead, as a path outside the project does;
-- **a read that fails for any other reason** raises an error alert titled that the path could not be opened, with the
-  reason, and nothing opens. A file no longer there — removed, moved or renamed since the link was drawn — gets the
-  remedy of a file that is gone, not that of a path to correct (see "Recovery and unexpected errors" in
-  `docs/product/error-alerts.md`).
-
-**A file the system could launch** (which files those are is in "File paths" in `docs/product/terminal-links.md`) is not
-read first: it always opens in the viewer, which reads and shows it as any file, saying it cannot be displayed where it
-is not text or an image, and it is never opened on the host by the click.
+place in a worktree of the same repository (see "File paths" in `docs/product/terminal-links.md`) — always opens it in
+the file viewer, from the directory it was found in, whatever kind of file it is; it is never opened on the host by the
+click. The viewer reads and shows it as any file (see "What it shows" above): a binary file that is not an image it
+draws, such as a PDF, says it cannot be displayed, and a file that cannot be read says why in the viewer. Such a file is
+opened in its default application only by the user's own choice of Default application in the viewer's header (see
+"The header" above).
 
 **A folder** inside the same project or worktree place opens its **entry file** in the viewer, when it has one: a
 regular file directly in the folder named `README` or `README.<anything>`, or, when there is none, one named
 `index.<extension>`, the names compared without regard to case. Among several candidates of the same kind, a name
 ending in `.md` comes first, then one ending in `.markdown`, then any other, each group in alphabetical order without
 regard to case. A symbolic link is not taken for an entry file, and nothing below the folder's own files is looked at.
-The entry file is read first like a file link, with these differences:
+The entry file is read first, from the directory the folder was found in:
 
-- it is shown without a line — a `:line` written after the folder's path plays no part;
+- when it is text, or an image the viewer draws, it opens in the file viewer, showing what was read at once rather than
+  saying it is loading, and without a line — a `:line` written after the folder's path plays no part;
 - when the folder has no entry file, or its entry file is binary and not an image the viewer draws, is larger than the
   4 MiB a read delivers, or cannot be read for any other reason, the folder itself opens in the file manager on the
   machine the daemon runs on, as a folder outside the project does; an entry file that cannot be read raises no error
@@ -329,7 +321,9 @@ The entry file is read first like a file link, with these differences:
 - **Cmd+click** (Ctrl+click on other systems) opens the folder in the file manager straight away, without looking at
   its entry file. On a file link the modifier changes nothing.
 
-A folder inside a temporary directory always opens in the file manager.
+A folder inside a temporary directory always opens in the file manager. On macOS, wherever a click would open a folder
+in the file manager, one the system treats as a package is refused instead (see "File paths" in
+`docs/product/terminal-links.md`).
 
 **The viewer is shown over the window and leaves the right pane as it is**: no Files panel is opened and no tree row is
 selected. It shows only the file it was opened on: it has no Previous file or Next file, and the arrow keys do not

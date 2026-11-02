@@ -1,20 +1,13 @@
-//! Reading the system's process table without starting a process: which processes of the daemon's
-//! own user there are, and on request what one of them runs, where, with how much memory and on
-//! which listening ports. Each platform's reader is in a module of its own; what is here is
-//! shared.
+//! The system's process table as the ledger reads it: which processes of the daemon's own user
+//! there are, each told by its pid and start time, and on request what one of them runs, where,
+//! with how much memory and on which listening ports. The reads themselves are
+//! `crate::processes::native`'s.
 
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
 
-#[cfg(target_os = "linux")]
-mod linux;
-#[cfg(target_os = "macos")]
-mod macos;
+use crate::processes::native as platform;
 
-#[cfg(target_os = "linux")]
-use linux as platform;
-#[cfg(target_os = "macos")]
-use macos as platform;
+pub use platform::{Cwd, CwdReport, CWD_REPORT_MAY_BLOCK};
 
 /// One process, told from any other that has had its pid before or after it by its start time:
 /// a pid is reused, a pid with a start time is not.
@@ -80,7 +73,15 @@ pub struct Table {
 impl Table {
     /// Reads the system's table, or `None` when it cannot be listed.
     pub fn read() -> Option<Self> {
-        let mut table = Self::from_procs(platform::list()?);
+        let mut table = Self::from_procs(platform::list()?.into_iter().map(|info| Proc {
+            id: Identity {
+                pid: info.pid,
+                start: info.start,
+            },
+            ppid: info.ppid,
+            sid: info.sid,
+            comm: info.comm,
+        }));
         let unlisted: HashSet<i32> = table
             .procs
             .values()
@@ -276,18 +277,12 @@ pub fn argv(id: Identity) -> Option<Vec<String>> {
     id.is_running().then_some(argv)
 }
 
-/// A process's working directory.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Cwd {
-    pub path: PathBuf,
-    /// The directory was removed. `false` also when that could not be told.
-    pub missing: bool,
-}
-
-/// `id`'s working directory, or `None` when it cannot be read or it is not running any more.
-pub fn cwd(id: Identity) -> Option<Cwd> {
-    let cwd = platform::cwd(id.pid)?;
-    id.is_running().then_some(cwd)
+/// What the system reports of `id`'s working directory, without the daemon looking at the
+/// directory, or `None` when it cannot be read; where [`CWD_REPORT_MAY_BLOCK`], the system's own
+/// answer can block as a look would. Whether it is `id`'s, and not that of a process the pid has
+/// passed to since, is for the caller to check once it is done with it.
+pub fn cwd_report(id: Identity) -> Option<CwdReport> {
+    platform::cwd_report(id.pid)
 }
 
 /// How much memory `id` holds resident, in bytes, or `None` when it cannot be read.
@@ -342,7 +337,9 @@ mod tests {
         // SAFETY: `getsid(0)` only reads this process's session.
         assert_eq!(me.sid, unsafe { libc::getsid(0) });
         assert!(argv(me.id).is_some_and(|argv| !argv.is_empty()));
-        let cwd = cwd(me.id).expect("this process's cwd");
+        let cwd = cwd_report(me.id)
+            .and_then(|report| report.looked())
+            .expect("this process's cwd");
         // The system reports the directory with its links resolved (`/private/var` for `/var`
         // on macOS).
         assert_eq!(

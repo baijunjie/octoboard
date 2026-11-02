@@ -159,26 +159,88 @@ pub fn not_a_directory(path: &Path) -> anyhow::Error {
     )
 }
 
-/// Refuses a `path` that is not an existing directory, with `path_not_found` or
-/// `path_not_a_directory`.
+/// The `directory_unreadable` error for `path` failing with `err`, saying `message`.
+pub fn directory_unreadable(path: &Path, err: &std::io::Error, message: String) -> anyhow::Error {
+    CodedError::raised(
+        error_code::DIRECTORY_UNREADABLE,
+        message,
+        &[
+            ("path", &path.to_string_lossy()),
+            ("detail", &err.to_string()),
+        ],
+    )
+}
+
+/// Refuses a `path` that is not an existing directory, with `path_not_found` for one that is not
+/// there, `path_not_a_directory` for one that is something else, and `directory_unreadable` when it
+/// cannot be looked at (no access, or any other I/O failure): only a missing path is absent.
 pub fn require_directory(path: &Path) -> Result<()> {
-    if !path.exists() {
-        return Err(CodedError::raised(
+    match std::fs::metadata(path) {
+        Ok(metadata) if metadata.is_dir() => Ok(()),
+        Ok(_) => Err(not_a_directory(path)),
+        Err(err) if is_not_found(&err) => Err(CodedError::raised(
             error_code::PATH_NOT_FOUND,
             format!("`{}` does not exist", path.display()),
             &[("path", &path.to_string_lossy())],
-        ));
+        )),
+        Err(err) => Err(directory_unreadable(
+            path,
+            &err,
+            format!("`{}` could not be looked at: {err}", path.display()),
+        )),
     }
-    if !path.is_dir() {
-        return Err(not_a_directory(path));
-    }
-    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::test_support::ScratchDir;
+
+    fn code_of(result: Result<()>) -> crate::protocol::Code {
+        let error = result.unwrap_err();
+        error.downcast_ref::<CodedError>().unwrap().code
+    }
+
+    #[test]
+    fn a_directory_is_required_to_exist_and_to_be_one() {
+        let dir = ScratchDir::new("hostfs-require-directory");
+        std::fs::write(dir.join("file"), "x").unwrap();
+        assert!(require_directory(&dir).is_ok());
+        assert_eq!(
+            code_of(require_directory(&dir.join("missing"))),
+            error_code::PATH_NOT_FOUND
+        );
+        assert_eq!(
+            code_of(require_directory(&dir.join("file"))),
+            error_code::PATH_NOT_A_DIRECTORY
+        );
+    }
+
+    /// A path that cannot be looked at is not a path that is absent.
+    #[test]
+    fn a_directory_that_cannot_be_looked_at_is_unreadable_not_missing() {
+        use std::os::unix::fs::PermissionsExt;
+        // SAFETY: a plain query of this process's effective user.
+        if unsafe { libc::geteuid() } == 0 {
+            // Permissions do not stop the superuser, so there is nothing to refuse.
+            return;
+        }
+        let dir = ScratchDir::new("hostfs-require-directory-locked");
+        std::fs::create_dir_all(dir.join("locked/inner")).unwrap();
+        let chmod = |mode| {
+            std::fs::set_permissions(dir.join("locked"), std::fs::Permissions::from_mode(mode))
+                .unwrap()
+        };
+        chmod(0o000);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            require_directory(&dir.join("locked/inner"))
+        }));
+        chmod(0o755);
+        assert_eq!(
+            code_of(result.expect("looking at the path panicked")),
+            error_code::DIRECTORY_UNREADABLE
+        );
+    }
 
     #[test]
     fn a_regular_file_is_read_up_to_its_limit_and_refused_past_it() {

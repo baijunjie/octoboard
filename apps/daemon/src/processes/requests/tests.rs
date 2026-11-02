@@ -5,7 +5,9 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use super::{long_running, ASK_AFTER, ASK_AFTER_OVERRIDE, LIST_FLOOR_OVERRIDE};
+use super::{
+    long_running, ASK_AFTER, ASK_AFTER_OVERRIDE, COUNT_WAIT_OVERRIDE, LIST_FLOOR_OVERRIDE,
+};
 use crate::coordinator::handle;
 use crate::processes::ledger::ProcessTree;
 use crate::protocol::{
@@ -577,7 +579,10 @@ async fn the_global_count_has_an_entry_per_project_and_console_session() {
 
     let deadline = Instant::now() + PATIENCE;
     let counts = loop {
-        let counts = super::list_all(&state).await.unwrap();
+        LIST_FLOOR_OVERRIDE.set(Some(Duration::ZERO));
+        let counts = super::list_all(&state).await;
+        LIST_FLOOR_OVERRIDE.set(None);
+        let counts = counts.unwrap();
         if counts.iter().map(|count| count.trees).sum::<usize>() == 3 {
             break counts;
         }
@@ -598,9 +603,13 @@ async fn the_global_count_has_an_entry_per_project_and_console_session() {
 
     assert_eq!(super::stop(&state, vec![kept]).await.unwrap().len(), 1);
     assert_stops_running(pids[0]);
+    // However long the floor, a stop makes the next count read the table.
     let deadline = Instant::now() + PATIENCE;
     loop {
-        let counts = super::list_all(&state).await.unwrap();
+        LIST_FLOOR_OVERRIDE.set(Some(Duration::from_secs(3600)));
+        let counts = super::list_all(&state).await;
+        LIST_FLOOR_OVERRIDE.set(None);
+        let counts = counts.unwrap();
         let project = counts
             .iter()
             .find(|count| count.project_id.as_deref() == Some("project-1"));
@@ -678,4 +687,143 @@ async fn removing_a_project_stops_its_processes() {
     .unwrap();
     assert_stops_running(pids[0]);
     assert_stops_running(left);
+}
+
+/// The global count computed a moment ago answers again, so clients polling it do not each read
+/// the table.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_global_count_polled_again_at_once_is_answered_from_the_last_one() {
+    let (state, _dir) = console_with_project_and_accounts("process-requests-all-floor");
+    let counted = || {
+        let state = Arc::clone(&state);
+        async move {
+            LIST_FLOOR_OVERRIDE.set(Some(Duration::from_secs(3600)));
+            let counts = super::list_all(&state).await;
+            LIST_FLOOR_OVERRIDE.set(None);
+            counts.unwrap()
+        }
+    };
+    assert_eq!(counted().await, counted().await);
+    assert_eq!(state.process_ledger.counts_computed(), 1);
+
+    LIST_FLOOR_OVERRIDE.set(Some(Duration::ZERO));
+    super::list_all(&state).await.unwrap();
+    LIST_FLOOR_OVERRIDE.set(None);
+    assert_eq!(
+        state.process_ledger.counts_computed(),
+        2,
+        "past the floor the count is computed again"
+    );
+}
+
+/// Counts asked for while one is being computed wait for it and are answered by it, instead of
+/// each reading the table.
+#[tokio::test(flavor = "multi_thread")]
+async fn overlapping_global_counts_share_one_computation() {
+    let (state, _dir) = console_with_project_and_accounts("process-requests-all-claim");
+    // Every read of the table waits until the holder lets go, so the first count stays under way.
+    let (held_tx, held_rx) = std::sync::mpsc::channel::<()>();
+    let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+    let holder = {
+        let state = Arc::clone(&state);
+        std::thread::spawn(move || {
+            let _held = state.process_ledger.hold_scans();
+            held_tx.send(()).unwrap();
+            release_rx.recv().ok();
+        })
+    };
+    held_rx.recv().unwrap();
+    let count = |state: &Arc<AppState>| {
+        let state = Arc::clone(state);
+        tokio::spawn(async move {
+            LIST_FLOOR_OVERRIDE.set(Some(Duration::from_secs(3600)));
+            let counts = super::list_all(&state).await;
+            LIST_FLOOR_OVERRIDE.set(None);
+            counts.unwrap()
+        })
+    };
+    let first = count(&state);
+    let deadline = Instant::now() + PATIENCE;
+    while state.process_ledger.counts_computed() == 0 {
+        assert!(Instant::now() < deadline, "the first count never started");
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    let second = count(&state);
+    // Time for the second to reach the claim; it computes nothing of its own whenever it does.
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    release_tx.send(()).unwrap();
+    holder.join().unwrap();
+    let (first, second) = (first.await.unwrap(), second.await.unwrap());
+    assert_eq!(first, second);
+    assert_eq!(state.process_ledger.counts_computed(), 1);
+}
+
+/// A count asked for while another has been under way for longer than it waits does not wait on
+/// for it: without counts noted before it fails, and with counts noted before it answers with
+/// them, however old.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_count_that_waits_too_long_for_another_answers_with_the_last_counts_or_fails() {
+    let (state, _dir) = console_with_project_and_accounts("process-requests-all-wait");
+    // Every read of the table waits until the holder lets go, so a count stays under way.
+    let hold = |state: &Arc<AppState>| {
+        let state = Arc::clone(state);
+        let (held_tx, held_rx) = std::sync::mpsc::channel::<()>();
+        let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+        let holder = std::thread::spawn(move || {
+            let _held = state.process_ledger.hold_scans();
+            held_tx.send(()).unwrap();
+            release_rx.recv().ok();
+        });
+        held_rx.recv().unwrap();
+        (release_tx, holder)
+    };
+    let count = |state: &Arc<AppState>| {
+        let state = Arc::clone(state);
+        tokio::spawn(async move {
+            LIST_FLOOR_OVERRIDE.set(Some(Duration::ZERO));
+            let counts = super::list_all(&state).await;
+            LIST_FLOOR_OVERRIDE.set(None);
+            counts.unwrap()
+        })
+    };
+    let impatient = |state: &Arc<AppState>| {
+        let state = Arc::clone(state);
+        async move {
+            LIST_FLOOR_OVERRIDE.set(Some(Duration::ZERO));
+            COUNT_WAIT_OVERRIDE.set(Some(Duration::from_millis(100)));
+            let counts = super::list_all(&state).await;
+            COUNT_WAIT_OVERRIDE.set(None);
+            LIST_FLOOR_OVERRIDE.set(None);
+            counts
+        }
+    };
+    let under_way = |computed: usize| {
+        let state = Arc::clone(&state);
+        async move {
+            let deadline = Instant::now() + PATIENCE;
+            while state.process_ledger.counts_computed() < computed {
+                assert!(Instant::now() < deadline, "the count never started");
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        }
+    };
+
+    let (release, holder) = hold(&state);
+    let first = count(&state);
+    under_way(1).await;
+    assert!(
+        impatient(&state).await.is_err(),
+        "no counts were noted to answer with"
+    );
+    release.send(()).unwrap();
+    holder.join().unwrap();
+    let noted = first.await.unwrap();
+
+    let (release, holder) = hold(&state);
+    let second = count(&state);
+    under_way(2).await;
+    assert_eq!(impatient(&state).await.unwrap(), noted);
+    release.send(()).unwrap();
+    holder.join().unwrap();
+    second.await.unwrap();
 }

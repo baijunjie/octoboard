@@ -5,8 +5,9 @@
 
 use anyhow::Result;
 
-use crate::browse::changes;
-use crate::browse::{budget, git_failed, Located};
+use crate::browse::change_read;
+use crate::browse::scope::Located;
+use crate::browse::{budget, git_failed};
 use crate::protocol::{ChangeEntry, ChangeSide};
 use crate::wire_path;
 
@@ -43,9 +44,9 @@ pub(super) fn committed_record<'a>(
     };
     let scope = &at.repository.scope;
     let side = |commit: &str, mode: &[u8], oid: &[u8], path: &[u8]| {
-        let rel = changes::in_scope(scope, path);
+        let rel = change_read::in_scope(scope, path);
         match rel {
-            Some(rel) => changes::head_side(Some(commit), mode, oid, &rel),
+            Some(rel) => change_read::head_side(Some(commit), mode, oid, &rel),
             None => ChangeSide::OutOfScope {
                 repository_path: wire_path::encode(path),
             },

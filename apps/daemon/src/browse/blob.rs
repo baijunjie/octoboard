@@ -254,8 +254,8 @@ pub fn read_blob(
 }
 
 /// The number of lines each of the blobs `oids` holds, in the sense of
-/// [`line_count`](crate::browse::line_count): of the stored bytes, so no filter, attribute or
-/// textconv takes part.
+/// [`line_count`](crate::browse::content::line_count): of the stored bytes, so no filter,
+/// attribute or textconv takes part.
 ///
 /// Every id must be that of a blob: given a commit or a tree, `git grep` walks its whole tree and
 /// prints a line for every file in it.

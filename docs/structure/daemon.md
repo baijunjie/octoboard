@@ -35,8 +35,9 @@ their dispatch is `src/cli/mod.rs`, and their code is `src/cli/` (`hook`, `statu
 ## Directory map
 
 `src/` has one directory per domain, plus a few helpers at its root: `blocking_pass/` (the width of a pass of blocking
-per-entity work, `each_blocking`, and, in `blocking_pass/stalled.rs`, `StalledPasses`, the blocking work that outran its
-deadline and whose thread is still running), `git_workflow.rs` (git workflow settings and `effective`, the one function
+per-entity work, `each_blocking` for an async caller, `blocking_pass/within.rs`'s `within_deadline` for a caller with no
+runtime, and, in `blocking_pass/stalled.rs`, `StalledPasses`, the blocking work that outran its deadline and whose
+thread is still running), `git_workflow.rs` (git workflow settings and `effective`, the one function
 that combines application and project values), `host_tools.rs` (`HostTools`, the seam tests substitute stand-ins
 behind), `instance_lock.rs` (one daemon per data directory), `interface_language.rs` (the languages the interface is
 offered in, mirroring the UI's `i18n/languages.ts`), `log_file.rs` (the rotated `daemon.log`), `loopback.rs` (the
@@ -110,23 +111,32 @@ the captured agent screens and records tests replay.
 - `src/project_git/` — git work on a project's own repository: header, status, push, switch, restore, remote, the ref
   watch (`watch.rs`), the re-read after a session's git moves refs (`ref_moves.rs`), clone.
 - `src/browse/` — project-browsing reads for the control socket and the MCP read tools; `mod.rs`'s `serve` is the entry,
-  with `budget.rs` and `lane.rs` the limits every read is held to.
+  with `budget.rs` (including `ChangeBudget`, the one cut of a change listing) and `lane.rs` the limits every read is held
+  to. `scope.rs` resolves the project, directory and worktree a request works in (and a path for a host action:
+  `resolve_project_path`, `resolve_project_directory`, `project_live_roots`); `changes.rs` lists the worktree's changes
+  and `change_read.rs` reads one change for them, for `compare.rs` and for `commits.rs`; `content.rs` encodes a body for
+  the wire.
 - `src/hostfs/` — host filesystem work: bounded reads, regular-file reads, device/inode identity, listing, whole-file
   replacement, Trash.
-- `src/host_open/`, `src/path_links/` — opening the file manager, default application or terminal; probing and opening
-  the paths a terminal shows.
+- `src/host_open/`, `src/path_links/` — opening the file manager, default application or terminal (every launcher runs
+  through one bounded runner); probing and opening the paths a terminal shows, where `path_links/resolve.rs` is the one
+  place that decides what a link may reach and what is only shown rather than launched.
 - `src/env_shell/` — the user's real shell environment agents are launched with, and resolving a binary on it.
 
 ### Running sessions
 
-- `src/terminal/` — PTY processes and what clients see of them (`pty.rs`, `ptyio.rs`, `ringbuf.rs`, snapshots, titles,
-  reply routing, `shell/` project shell terminals).
+- `src/terminal/` — PTY processes and what clients see of them (`pty.rs` the descriptor, input, reader thread and child
+  lifecycle, `fan.rs` the output fan-out of replay ring, parsed screen and attached clients, `ptyio.rs`, `ringbuf.rs`,
+  snapshots, titles, reply routing, `shell/` project shell terminals).
 - `src/session/` — one running agent process (`LiveSession`), input and message-write gates, `term/` launch, `draft.rs`,
   `swap.rs`, `input_box.rs`, `dialogs.rs`, `trust/` folder-trust confirmations, `interrupt/`, `wait.rs` (polling a
   condition, `wait_for`, and waiting for a session's output to go quiet, `wait_quiet`).
 - `src/titles/` — the title a session shows, from the agent's records, the terminal title and the first prompt.
 - [`src/processes/ledger/`](../../apps/daemon/src/processes/ledger/README.md) — attributing, listing, stopping, keeping
   and carrying over the processes an agent launch started.
+- `src/processes/native/` — the native reads of the system's process table (list, start time, parent and children, a
+  descriptor's path, sockets, working directory), one reader per platform; shared by the ledger's `table.rs` and
+  `terminal/shell/busy.rs`.
 - `src/processes/` — the rest: `requests/` (client-facing process requests), `subprocess.rs` and `leader.rs` (running a
   spawned process within bounds, leading a session of its own), `pids.rs`, `crash_cleanup.rs`.
 
@@ -273,7 +283,10 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Change a session's model and effort; resume checks | `coordinator::model_change::set_session_model`; `coordinator::resume::check_can_resume` and `locate_conversation` |
 | Drop a live session | `coordinator::exit_watch::unregister_live`, which runs `AppState::remove_live` and `after_live_removed` around withdrawing the session's request |
 | Re-read projects when a session's git moves refs | `project_git::ref_moves::moved` |
-| Cap a pass of blocking per-entity work | `blocking_pass::each_blocking` |
+| Cap a pass of blocking per-entity work | `blocking_pass::each_blocking` from async code; from a thread with no runtime, a pass waited for only until a deadline, with a stuck key skipped while it is stuck: `blocking_pass::within_deadline` (the async sibling for paths is `hostfs::place::looked_within`) |
+| Read the system's process table | `src/processes/native/` (`ledger/table.rs` and `terminal/shell/busy.rs` read through it) |
+| Resolve a project path for a host action, or judge what a terminal link may reach | `browse::scope::resolve_project_path` / `resolve_project_directory`; `path_links::resolve::reach`, which holds the refusal rules |
+| Check a directory exists and can be looked at | `hostfs::require_directory` (absence only from NotFound; any other failure is `directory_unreadable`) |
 | Call the running daemon from another process (CLI modes, git hook modes, the MCP stdio bridge) | `src/loopback.rs` (`post`, `connect`, `exchange`; a non-2xx answer is an error whose status `error_status` gives) |
 | Read the clock; format a timestamp | `src/time.rs` (`now_millis`, `now_secs`, the RFC 3339, compact and readable stamps) |
 | Poll a condition, or wait for a session's output to go quiet | `src/session/wait.rs` (`wait_for`, `wait_quiet`) |

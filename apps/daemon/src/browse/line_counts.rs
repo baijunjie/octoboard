@@ -26,7 +26,9 @@ use std::sync::atomic::AtomicBool;
 
 use anyhow::Result;
 
-use crate::browse::{budget, changes, git_error, line_count, live, Cancelled, Located};
+use crate::browse::content::line_count;
+use crate::browse::scope::Located;
+use crate::browse::{budget, change_read, git_error, live, Cancelled};
 use crate::git::isolated::IsolatedGit;
 use crate::git::run::GitError;
 use crate::processes::subprocess::BoundedFailure;
@@ -134,7 +136,7 @@ fn parse<'w>(
     scope: &RelPath,
     wanted: &dyn Fn(&[u8]) -> Option<&'w Wanted>,
 ) -> Vec<(Vec<u8>, Counts)> {
-    let wire = |path: &[u8]| changes::in_scope(scope, path).map(|rel| rel.to_wire());
+    let wire = |path: &[u8]| change_read::in_scope(scope, path).map(|rel| rel.to_wire());
     let mut current = wanted(b"");
     let mut groups = Vec::new();
     if current.is_some() {

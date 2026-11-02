@@ -430,7 +430,7 @@ fn a_commit_list_is_cut_at_its_path_budget() {
     let bytes: Vec<usize> = commit
         .changes
         .iter()
-        .map(super::changes::entry_path_bytes)
+        .map(budget::entry_path_bytes)
         .collect();
     let total: usize = bytes.iter().sum();
     assert!(!listed.complete && commit.changes.len() < count);

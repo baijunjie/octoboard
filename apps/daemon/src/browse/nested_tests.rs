@@ -5,8 +5,8 @@
 
 use std::path::Path;
 
+use super::change_read::AFTER_PATCH;
 use super::change_tests::{present, read_body, read_kind, read_lines, write};
-use super::changes::AFTER_PATCH;
 use super::compare_tests::commit_on;
 use super::tests::{code, Fixture};
 use super::*;

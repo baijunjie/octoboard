@@ -40,22 +40,23 @@
 
 mod attribute;
 mod carry;
+mod looks;
 mod persist;
+mod scan;
 mod stop;
 mod table;
 #[cfg(test)]
 mod tests;
 mod trees;
 
-use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock, Weak};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock};
 use std::time::{Duration, Instant};
 
-use attribute::{Attributed, Book, Launch, ENDED};
-use table::{EnvTag, Identity, Proc, Table};
+use attribute::{Book, Launch, ENDED};
+use table::{EnvTag, Identity};
 
 pub use carry::HeldForLaunch;
 pub use table::TAG_VARIABLE;
@@ -212,6 +213,15 @@ pub struct ProcessLedger {
     /// The trees last listed for a client, by what was listed, with when (see
     /// [`Self::listed_lately`]).
     lists: Mutex<HashMap<String, (Instant, Vec<ProcessTree>)>>,
+    /// The counts last computed for a client, with when (see [`Self::counted_lately`]).
+    counts: Mutex<Option<(Instant, Vec<ProcessCount>)>>,
+    /// How many times what was listed and counted for clients was forgotten (see
+    /// [`Self::lists_generation`]).
+    lists_generation: std::sync::atomic::AtomicU64,
+    /// Held while the counts are computed (see [`Self::claim_counting`]).
+    counting: Arc<tokio::sync::Mutex<()>>,
+    /// The looks at directories that outran their deadline (see `looks.rs`).
+    looks: looks::Looks,
     /// The processes found running after a `SIGKILL`, with when that was last tried, or `None`
     /// once they are to be tried again at the next tick.
     stubborn: Mutex<HashMap<Identity, Option<Instant>>>,
@@ -221,7 +231,20 @@ pub struct ProcessLedger {
     /// [`CWD_GRACE`] for a test that cannot wait that long.
     #[cfg(test)]
     cwd_grace: Mutex<Option<Duration>>,
+    /// How many times the counts were computed, for a test.
+    #[cfg(test)]
+    counts_computed: std::sync::atomic::AtomicUsize,
+    /// What looks at a working directory in place of the file system, for a test.
+    #[cfg(test)]
+    cwd_look: Mutex<Option<CwdLook>>,
+    /// What reads the system's report of a working directory in place of the system, for a test.
+    #[cfg(test)]
+    cwd_read: Mutex<Option<looks::CwdRead>>,
 }
+
+/// A look at a working directory a test puts in place of the file system's.
+#[cfg(test)]
+type CwdLook = Arc<dyn Fn(&table::CwdReport) -> Option<table::Cwd> + Send + Sync>;
 
 impl ProcessLedger {
     /// A ledger for the daemon of the data directory `dir`, which keeps its instance id and its
@@ -242,11 +265,21 @@ impl ProcessLedger {
             closing: AtomicBool::new(false),
             listings: Mutex::new(Listings::new()),
             lists: Mutex::new(HashMap::new()),
+            counts: Mutex::new(None),
+            lists_generation: std::sync::atomic::AtomicU64::new(0),
+            counting: Arc::new(tokio::sync::Mutex::new(())),
+            looks: looks::Looks::default(),
             stubborn: Mutex::new(HashMap::new()),
             #[cfg(test)]
             failing_reads: std::sync::atomic::AtomicUsize::new(0),
             #[cfg(test)]
             cwd_grace: Mutex::new(None),
+            #[cfg(test)]
+            counts_computed: std::sync::atomic::AtomicUsize::new(0),
+            #[cfg(test)]
+            cwd_look: Mutex::new(None),
+            #[cfg(test)]
+            cwd_read: Mutex::new(None),
         })
     }
 
@@ -257,6 +290,22 @@ impl ProcessLedger {
     #[cfg(test)]
     pub(crate) fn without_scanner(&self) {
         self.scanner.set(()).ok();
+    }
+
+    /// How many times the counts were computed, for a test outside the ledger.
+    #[cfg(test)]
+    pub(crate) fn counts_computed(&self) -> usize {
+        self.counts_computed
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Holds every read of the table back until dropped, for a test outside the ledger that needs
+    /// a computation to be under way.
+    #[cfg(test)]
+    pub(crate) fn hold_scans(&self) -> impl Drop + '_ {
+        self.scans
+            .lock()
+            .expect("process ledger scans lock poisoned")
     }
 
     fn book(&self) -> MutexGuard<'_, Book> {
@@ -282,7 +331,7 @@ impl ProcessLedger {
             let ledger = Arc::downgrade(self);
             let spawned = std::thread::Builder::new()
                 .name("process-ledger".to_string())
-                .spawn(move || run_scanner(ledger));
+                .spawn(move || scan::run_scanner(ledger));
             if let Err(err) = spawned {
                 tracing::warn!(%err, "starting the process ledger's thread failed; processes agents leave running are stopped only when their launch ends");
             }
@@ -435,7 +484,7 @@ impl ProcessLedger {
                     "stopping what an ended launch left running"
                 );
             }
-            self.signal(&members);
+            self.signal_round(&members);
         }
     }
 
@@ -477,58 +526,7 @@ impl ProcessLedger {
         // Into the book before anything that can fail: what the user kept must never be taken
         // for an ended launch's by a later scan. The first scan forgets what is gone, and drops
         // what would never be attributed and the sessions it cannot prove are the ones recorded.
-        let before: HashSet<Identity> = {
-            let mut book = self.book();
-            book.kept.extend(persisted.kept.iter().copied());
-            let sessions = |sessions: &[persist::PersistedSession]| {
-                sessions
-                    .iter()
-                    .map(|session| (session.sid, session.leader_start))
-                    .collect::<Vec<_>>()
-            };
-            book.read_back_sessions(
-                sessions(&persisted.sessions),
-                sessions(&persisted.kept_sessions),
-                persisted
-                    .attributed
-                    .iter()
-                    .map(persist::PersistedProcess::identity)
-                    .chain(persisted.kept.iter().copied()),
-            );
-            for kept in &persisted.kept_projects {
-                let id = Identity {
-                    pid: kept.pid,
-                    start: kept.start,
-                };
-                if book.kept.contains(&id) {
-                    book.kept_projects
-                        .entry(id)
-                        .or_insert_with(|| kept.project.clone());
-                }
-            }
-            for session in &persisted.kept_session_projects {
-                if book.kept_sessions.contains_key(&session.sid) {
-                    book.kept_session_projects
-                        .entry(session.sid)
-                        .or_insert_with(|| session.project.clone());
-                }
-            }
-            for process in &persisted.attributed {
-                let id = process.identity();
-                if !book.kept.contains(&id) {
-                    book.attributed.entry(id).or_insert(Attributed {
-                        launch: ENDED.to_string(),
-                        sid: process.sid,
-                    });
-                }
-            }
-            book.dirty = true;
-            book.attributed
-                .iter()
-                .filter(|(_, attributed)| attributed.launch == ENDED)
-                .map(|(id, _)| *id)
-                .collect()
-        };
+        let before = persisted.read_back(&mut self.book());
         let Some(table) = self.scan(true) else {
             tracing::warn!("listing processes failed; what a previous run left is not stopped");
             return;
@@ -570,261 +568,6 @@ impl ProcessLedger {
         self.persist(true);
     }
 
-    /// Reads the table and brings the book up to date with it. A `full` scan may read the
-    /// environment of every process; any other only of processes started since the earliest
-    /// agent this run followed. `None` when the table cannot be read.
-    fn scan(&self, full: bool) -> Option<Table> {
-        let mut scans = self
-            .scans
-            .lock()
-            .expect("process ledger scans lock poisoned");
-        let Some(table) = self.read_table() else {
-            tracing::warn!("listing processes failed; the process ledger is not up to date");
-            return None;
-        };
-        scans.tags.retain(|id, _| table.has(id));
-        scans.unreadable.retain(|id, _| table.has(id));
-        // Which environments the attribution may ask for is decided under the book's lock, with
-        // no system call; they are read outside it, so that a launch being registered on the
-        // runtime never waits behind them.
-        let (horizon, wanted) = {
-            let mut book = self.book();
-            // What a session read back would decide is decided first, as `attribute` does.
-            attribute::prove_read_back(&mut book, &table);
-            let horizon = if full { Some(0) } else { book.horizon };
-            (
-                horizon,
-                attribute::tag_candidates(&book, &table, self.own, horizon),
-            )
-        };
-        let settled_before = table::now().saturating_sub(settled().as_micros() as u64);
-        let mut read: HashMap<Identity, EnvTag> = HashMap::new();
-        for proc in wanted {
-            if scans.tags.contains_key(&proc.id)
-                || scans.unreadable.get(&proc.id) == Some(&proc.comm)
-            {
-                continue;
-            }
-            let tag = table::env_tag(proc.id);
-            #[cfg(test)]
-            {
-                *scans.env_reads.entry(proc.id).or_default() += 1;
-            }
-            match tag {
-                EnvTag::Unreadable => {
-                    scans.unreadable.insert(proc.id, proc.comm.clone());
-                }
-                EnvTag::Untagged if proc.id.start >= settled_before => {}
-                _ => {
-                    scans.unreadable.remove(&proc.id);
-                    scans.tags.insert(proc.id, tag.clone());
-                }
-            }
-            read.insert(proc.id, tag);
-        }
-        let mut book = self.book();
-        let instance = &self.instance;
-        let tags = &scans.tags;
-        let mut tag_of = |proc: &Proc| {
-            if horizon.is_none_or(|horizon| proc.id.start < horizon) {
-                return None;
-            }
-            match read.get(&proc.id).or_else(|| tags.get(&proc.id)) {
-                Some(EnvTag::Tagged {
-                    instance: theirs,
-                    launch,
-                }) if theirs == instance => Some(launch.clone()),
-                _ => None,
-            }
-        };
-        attribute::attribute(&mut book, &table, self.own, &mut tag_of);
-        drop(book);
-        self.advance_listings(&table);
-        Some(table)
-    }
-
-    fn read_table(&self) -> Option<Table> {
-        #[cfg(test)]
-        if self
-            .failing_reads
-            .try_update(Ordering::AcqRel, Ordering::Acquire, |left| {
-                left.checked_sub(1)
-            })
-            .is_ok()
-        {
-            return None;
-        }
-        Table::read()
-    }
-
-    /// One round of signals to `targets` (see [`stop::stop`]): a process kept meanwhile is not
-    /// killed, and one still running after its `SIGKILL` is left for [`STUBBORN_RETRY`], with one
-    /// warning. **Blocks.**
-    fn signal(&self, targets: &[Identity]) {
-        let survivors = stop::stop(targets, &|id| self.book().kept.contains(id));
-        let mut stubborn = self
-            .stubborn
-            .lock()
-            .expect("stubborn processes lock poisoned");
-        let now = Instant::now();
-        for id in survivors {
-            if stubborn.insert(id, Some(now)).is_none() {
-                tracing::warn!(
-                    pid = id.pid,
-                    "a process was still running after SIGKILL; it is tried again only after a while"
-                );
-            }
-        }
-    }
-
-    /// One turn of the scanner thread, for a test outside the ledger, whose ledger has none.
-    #[cfg(test)]
-    pub(crate) fn tick_now(&self) {
-        self.tick();
-    }
-
-    /// One turn of the scanner thread: reads the table while there is anything to follow, stops
-    /// what ended launches left and what has worked in a removed directory for long enough, and
-    /// writes the ledger file when it changed.
-    fn tick(&self) {
-        let idle = {
-            let book = self.book();
-            book.launches.len() <= 1 && book.attributed.is_empty()
-        };
-        if !idle {
-            if let Some(table) = self.scan(false) {
-                let removed: HashSet<Identity> = self
-                    .worked_in_removed_directories(&table)
-                    .into_iter()
-                    .collect();
-                let mut doomed: HashSet<Identity> =
-                    self.book().members_of(ENDED, &table).into_iter().collect();
-                doomed.extend(&removed);
-                {
-                    let mut stubborn = self
-                        .stubborn
-                        .lock()
-                        .expect("stubborn processes lock poisoned");
-                    stubborn.retain(|id, _| table.has(id));
-                    doomed.retain(|id| match stubborn.get(id) {
-                        Some(Some(since)) => since.elapsed() >= STUBBORN_RETRY,
-                        _ => true,
-                    });
-                }
-                let removed_count = doomed.intersection(&removed).count();
-                if removed_count != 0 {
-                    tracing::info!(
-                        count = removed_count,
-                        "stopping processes whose working directory was removed"
-                    );
-                }
-                if !doomed.is_empty() {
-                    self.stop_set(doomed.into_iter().collect(), &table);
-                }
-            }
-        }
-        self.persist(false);
-    }
-
-    /// The attributed processes of launches being followed that have worked in a removed
-    /// directory for [`CWD_GRACE`], with their descendants of the same launch.
-    fn worked_in_removed_directories(&self, table: &Table) -> Vec<Identity> {
-        let grace = self.cwd_grace();
-        let attributed: Vec<(Identity, String)> = self
-            .book()
-            .attributed
-            .iter()
-            .filter(|(id, attributed)| attributed.launch != ENDED && table.has(id))
-            .map(|(id, attributed)| (*id, attributed.launch.clone()))
-            .collect();
-        // Read before the lock is taken: every read is a system call or two, and the lock is held
-        // for the whole of a scan.
-        let missing: Vec<bool> = attributed
-            .iter()
-            .map(|(id, _)| table::cwd(*id).is_some_and(|cwd| cwd.missing))
-            .collect();
-        let mut scans = self
-            .scans
-            .lock()
-            .expect("process ledger scans lock poisoned");
-        scans.missing_since.retain(|id, _| table.has(id));
-        let now = Instant::now();
-        let mut expired = Vec::new();
-        for ((id, launch), missing) in attributed.iter().zip(missing) {
-            if !missing {
-                scans.missing_since.remove(id);
-                continue;
-            }
-            let since = *scans.missing_since.entry(*id).or_insert(now);
-            if now.duration_since(since) >= grace {
-                expired.push((*id, launch));
-            }
-        }
-        drop(scans);
-        let mut doomed: HashSet<Identity> = HashSet::new();
-        for (top, launch) in expired {
-            doomed.insert(top);
-            for (id, of) in &attributed {
-                let below = table
-                    .get(id.pid)
-                    .is_some_and(|proc| table.ancestors(proc).any(|ancestor| ancestor.id == top));
-                if of == launch && below {
-                    doomed.insert(*id);
-                }
-            }
-        }
-        doomed.into_iter().collect()
-    }
-
-    /// Stops `targets`, read in `before`, then, a few times, what started meanwhile that is
-    /// attributed to the same launch as a target and descends from one: through its chain of
-    /// parents, or by sitting in a terminal session a target led. A kept process is left out
-    /// just before each round of signals. **Blocks.**
-    fn stop_set(&self, mut targets: Vec<Identity>, before: &Table) {
-        let launches: HashSet<String> = {
-            let book = self.book();
-            targets
-                .iter()
-                .filter_map(|id| {
-                    book.attributed
-                        .get(id)
-                        .map(|attributed| attributed.launch.clone())
-                })
-                .collect()
-        };
-        let mut stopped: HashSet<Identity> = HashSet::new();
-        let mut led: HashSet<i32> = HashSet::new();
-        let mut known: HashSet<Identity> = before.procs().map(|proc| proc.id).collect();
-        let mut current = Cow::Borrowed(before);
-        for _ in 0..STOP_PASSES {
-            {
-                let book = self.book();
-                targets.retain(|id| !book.kept.contains(id));
-            }
-            if targets.is_empty() {
-                return;
-            }
-            led.extend(
-                targets
-                    .iter()
-                    .filter(|id| {
-                        current
-                            .get(id.pid)
-                            .is_some_and(|proc| proc.id == **id && proc.sid == id.pid)
-                    })
-                    .map(|id| id.pid),
-            );
-            self.signal(&targets);
-            stopped.extend(targets.iter().copied());
-            let Some(table) = self.scan(false) else {
-                return;
-            };
-            targets = follow_ups(&self.book(), &table, &known, &stopped, &led, &launches);
-            known.extend(table.procs().map(|proc| proc.id));
-            current = Cow::Owned(table);
-        }
-    }
-
     /// Writes the ledger file if what a restart needs changed since it was last written; unless
     /// `now`, not sooner than [`WRITE_DEBOUNCE`] after the last write.
     fn persist(&self, now: bool) {
@@ -841,48 +584,7 @@ impl ProcessLedger {
                 return;
             }
             book.dirty = false;
-            persist::Persisted {
-                boot: boot_id(),
-                attributed: book
-                    .attributed
-                    .iter()
-                    .map(|(id, attributed)| persist::PersistedProcess {
-                        pid: id.pid,
-                        start: id.start,
-                        launch: attributed.launch.clone(),
-                        sid: attributed.sid,
-                    })
-                    .collect(),
-                kept: book.kept.iter().copied().collect(),
-                kept_sessions: book
-                    .kept_sessions
-                    .iter()
-                    .map(|(&sid, &leader_start)| persist::PersistedSession { sid, leader_start })
-                    .collect(),
-                sessions: book
-                    .launches
-                    .values()
-                    .flat_map(|launch| launch.sessions.iter())
-                    .map(|(&sid, &leader_start)| persist::PersistedSession { sid, leader_start })
-                    .collect(),
-                kept_projects: book
-                    .kept_projects
-                    .iter()
-                    .map(|(id, project)| persist::PersistedKeptProject {
-                        pid: id.pid,
-                        start: id.start,
-                        project: project.clone(),
-                    })
-                    .collect(),
-                kept_session_projects: book
-                    .kept_session_projects
-                    .iter()
-                    .map(|(&sid, project)| persist::PersistedSessionProject {
-                        sid,
-                        project: project.clone(),
-                    })
-                    .collect(),
-            }
+            persist::Persisted::from_book(&book, boot_id())
         };
         match persist::save(&self.file, &persisted) {
             Ok(()) => *last = Some(Instant::now()),
@@ -892,36 +594,6 @@ impl ProcessLedger {
             }
         }
     }
-}
-
-/// What a stop goes on to after a round of signals: the processes of `table` not `known` before
-/// that are attributed to one of `launches` and descend from what was `stopped`, through their
-/// chain of parents or by sitting in a terminal session one of those `led`.
-fn follow_ups(
-    book: &Book,
-    table: &Table,
-    known: &HashSet<Identity>,
-    stopped: &HashSet<Identity>,
-    led: &HashSet<i32>,
-    launches: &HashSet<String>,
-) -> Vec<Identity> {
-    table
-        .procs()
-        .filter(|proc| {
-            !known.contains(&proc.id)
-                && book
-                    .attributed
-                    .get(&proc.id)
-                    .is_some_and(|attributed| launches.contains(&attributed.launch))
-        })
-        .filter(|proc| {
-            led.contains(&proc.sid)
-                || table
-                    .ancestors(proc)
-                    .any(|ancestor| stopped.contains(&ancestor.id))
-        })
-        .map(|proc| proc.id)
-        .collect()
 }
 
 /// Takes a launch being ended out of the book when dropped, handing what is still attributed to
@@ -947,25 +619,5 @@ impl Drop for ForgetLaunch<'_> {
         self.ledger.forget_lists();
         self.ledger.launch_left.notify_all();
         self.ledger.persist(true);
-    }
-}
-
-/// The scanner thread: reconciles when asked, and ticks every [`SCAN_INTERVAL`] for as long as
-/// the ledger exists.
-fn run_scanner(ledger: Weak<ProcessLedger>) {
-    loop {
-        {
-            let Some(ledger) = ledger.upgrade() else {
-                return;
-            };
-            if ledger.reconcile_pending.swap(false, Ordering::AcqRel) {
-                ledger.reconcile();
-            }
-        }
-        std::thread::sleep(SCAN_INTERVAL);
-        let Some(ledger) = ledger.upgrade() else {
-            return;
-        };
-        ledger.tick();
     }
 }

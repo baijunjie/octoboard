@@ -12,7 +12,8 @@ use axum::response::IntoResponse;
 use crate::protocol::{error_code, CodedError, Event, TermControl, TermEvent};
 use crate::session::{is_terminal_protocol, LiveSession};
 use crate::state::AppState;
-use crate::terminal::pty::{Answering, Attached, PtyCore};
+use crate::terminal::fan::{Answering, Attached};
+use crate::terminal::pty::PtyCore;
 use crate::terminal::shell::ShellProcess;
 
 pub(super) async fn term_ws(

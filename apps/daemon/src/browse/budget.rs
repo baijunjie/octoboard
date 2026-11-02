@@ -1,9 +1,13 @@
 //! The limits every browse read is held to, in one place so they are read together: each one
 //! bounds memory or time on its own, and the retained-bytes reservation is derived from the
 //! others. The values and the measurements behind them are recorded in `apps/daemon/PROTOCOL.md`'s
-//! "Browse budgets" section; a change here is a change there.
+//! "Browse budgets" section; a change here is a change there. A change listing is counted against
+//! its two limits here too (`ChangeBudget`), so the cut is made the same way wherever one is built.
 
 use std::time::Duration;
+
+use crate::browse::content::json_escaped_len;
+use crate::protocol::{ChangeEntry, ChangeSide};
 
 /// The largest file body a read returns. Sized from the tracked files of a set of real projects:
 /// 99.9 % are under 2.4 MB, the largest text file seen was a 2.3 MB string catalog and the largest
@@ -84,6 +88,47 @@ pub const MAX_CHANGE_ENTRIES: usize = 10_000;
 /// The most path bytes, as sent on the wire, one change listing carries before it is cut and marked
 /// incomplete — the bound that holds when the entries are few but their paths are long.
 pub const MAX_CHANGE_PATH_BYTES: usize = 2 * 1024 * 1024;
+
+/// How many path bytes `entry` puts on the wire, counted as JSON writes them.
+pub(super) fn entry_path_bytes(entry: &ChangeEntry) -> usize {
+    let len = |path: &String| json_escaped_len(path.as_bytes());
+    let side = |side: &ChangeSide| match side {
+        ChangeSide::Present { path, .. } => len(path),
+        ChangeSide::OutOfScope { repository_path } => len(repository_path),
+        ChangeSide::Absent => 0,
+    };
+    match entry {
+        ChangeEntry::Staged { old, new, .. }
+        | ChangeEntry::Unstaged { old, new, .. }
+        | ChangeEntry::Untracked { old, new, .. }
+        | ChangeEntry::Committed { old, new, .. } => side(old) + side(new),
+        ChangeEntry::Conflicted { path, .. } => len(path),
+    }
+}
+
+/// What a change listing has taken so far against [`MAX_CHANGE_ENTRIES`] and
+/// [`MAX_CHANGE_PATH_BYTES`].
+#[derive(Debug, Default)]
+pub struct ChangeBudget {
+    entries: usize,
+    path_bytes: usize,
+}
+
+impl ChangeBudget {
+    /// Takes `entry` against the budget, or returns false, leaving the budget as it was, when the
+    /// entry would go past either limit.
+    pub fn admit(&mut self, entry: &ChangeEntry) -> bool {
+        let path_bytes = entry_path_bytes(entry);
+        if self.entries == MAX_CHANGE_ENTRIES
+            || self.path_bytes + path_bytes > MAX_CHANGE_PATH_BYTES
+        {
+            return false;
+        }
+        self.entries += 1;
+        self.path_bytes += path_bytes;
+        true
+    }
+}
 
 /// What one change listing entry takes beyond its paths, counted generously as JSON writes it: two
 /// sides, each with its kind and a source naming a commit, a worktree, a directory or a version and
@@ -317,3 +362,45 @@ const _: () = assert!(BRANCH_LIST_RESERVATION <= READ_RESERVATION);
 const _: () = assert!(MAX_FILE_BYTES <= LINE_COUNT_RESERVATION);
 const _: () = assert!(MAX_PATCH_BYTES <= MAX_FILE_BYTES);
 const _: () = assert!(MAX_RETAINED_PER_CONNECTION <= MAX_RETAINED_BYTES);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::protocol::ConflictKind;
+
+    fn conflicted(path: String) -> ChangeEntry {
+        ChangeEntry::Conflicted {
+            path,
+            conflict: ConflictKind::BothModified,
+        }
+    }
+
+    #[test]
+    fn a_change_budget_refuses_the_entry_past_its_entry_limit() {
+        let mut budget = ChangeBudget::default();
+        for _ in 0..MAX_CHANGE_ENTRIES {
+            assert!(budget.admit(&conflicted("a".into())));
+        }
+        assert!(!budget.admit(&conflicted("a".into())));
+    }
+
+    #[test]
+    fn a_change_budget_refuses_the_entry_past_its_path_limit_without_counting_it() {
+        let mut budget = ChangeBudget::default();
+        assert!(budget.admit(&conflicted("a".repeat(MAX_CHANGE_PATH_BYTES - 1))));
+        assert!(!budget.admit(&conflicted("aa".into())));
+        assert_eq!(
+            (budget.entries, budget.path_bytes),
+            (1, MAX_CHANGE_PATH_BYTES - 1)
+        );
+        assert!(budget.admit(&conflicted("a".into())));
+        assert_eq!(budget.path_bytes, MAX_CHANGE_PATH_BYTES);
+    }
+
+    #[test]
+    fn a_change_budget_counts_paths_as_json_escapes_them() {
+        let mut budget = ChangeBudget::default();
+        assert!(budget.admit(&conflicted("\"\u{1}".into())));
+        assert_eq!(budget.path_bytes, 2 + 6);
+    }
+}

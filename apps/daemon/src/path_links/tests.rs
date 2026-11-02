@@ -1,3 +1,5 @@
+use std::os::unix::fs::PermissionsExt;
+
 use super::*;
 use crate::protocol::PathLinkView;
 use crate::test_support::ScratchDir;
@@ -133,7 +135,11 @@ fn a_refusal_says_why_the_path_is_not_shown() {
     let temp = temp_of(&project);
     let absolute = canonical(&project);
     assert_eq!(
-        refusal(absolute.join("tool").to_str().unwrap(), &temp, &roots),
+        refusal(
+            absolute.join("tool").to_str().unwrap(),
+            &temp,
+            &ProjectRoots::default()
+        ),
         Refusal::Launchable
     );
     assert_eq!(
@@ -222,6 +228,12 @@ fn what_could_be_launched_is_never_opened_and_only_a_project_file_is_kept_to_be_
         "Loud.COMMAND",
         "tool",
         "x.fileloc",
+        "tool.py",
+        "setup.EXE",
+        "App.AppImage",
+        "pkg.deb",
+        "start.jnlp",
+        "run.sh.bak.run",
     ] {
         std::fs::write(dir.join(name), "x").unwrap();
     }
@@ -234,9 +246,19 @@ fn what_could_be_launched_is_never_opened_and_only_a_project_file_is_kept_to_be_
         "Loud.COMMAND",
         "tool",
         "x.fileloc",
+        "tool.py",
+        "setup.EXE",
+        "App.AppImage",
+        "pkg.deb",
+        "start.jnlp",
+        "run.sh.bak.run",
         "Thing.app/Contents/info.txt",
     ];
-    for (temp, scope) in [(no_temp(), "project"), (temp_of(&dir), "temp")] {
+    // In a temp root alone the directory is scratch space; as the project's it is the project's.
+    for (temp, roots, scope) in [
+        (no_temp(), roots, "project"),
+        (temp_of(&dir), ProjectRoots::default(), "temp"),
+    ] {
         let at = |name: &str| {
             let path = canonical(&dir).join(name);
             resolve(path.to_str().unwrap(), None, &temp, &|| roots.clone())
@@ -261,6 +283,47 @@ fn what_could_be_launched_is_never_opened_and_only_a_project_file_is_kept_to_be_
         }
         // A bundle is a folder to open, so it is never reachable.
         assert_eq!(at("Thing.app").map(|r| r.kind), None, "{scope}");
+    }
+}
+
+#[test]
+fn an_interpreter_or_installer_extension_counts_only_on_a_regular_files_own_name() {
+    let dir = ScratchDir::new("path-links-final-extension");
+    for folder in ["vendor/github.com", "pkg.py/inner", "setup.exe/inner"] {
+        std::fs::create_dir_all(dir.join(folder)).unwrap();
+        std::fs::write(dir.join(folder).join("notes.txt"), "x").unwrap();
+    }
+    let files = [
+        "a.jse", "a.WSH", "a.hta", "a.reg", "a.msp", "a.cpl", "a.pif",
+    ];
+    for name in files {
+        std::fs::write(dir.join(name), "x").unwrap();
+    }
+    std::fs::write(dir.join("a.js"), "x").unwrap();
+    std::fs::write(dir.join("a.lnk"), "x").unwrap();
+    let roots = project_roots(&[&dir]);
+    let at = |name: &str| {
+        let path = canonical(&dir).join(name);
+        resolve(path.to_str().unwrap(), None, &no_temp(), &|| roots.clone())
+    };
+    for folder in ["vendor/github.com", "pkg.py", "setup.exe"] {
+        assert_eq!(at(folder).map(|r| r.kind), Some(PathLinkKind::Directory));
+    }
+    for file in [
+        "vendor/github.com/notes.txt",
+        "pkg.py/inner/notes.txt",
+        "setup.exe/inner/notes.txt",
+        "a.js",
+        "a.lnk",
+    ] {
+        assert_eq!(
+            at(file).map(|r| (r.kind, r.launchable)),
+            Some((PathLinkKind::File, false)),
+            "{file}"
+        );
+    }
+    for file in files {
+        assert_eq!(at(file).map(|r| r.launchable), Some(true), "{file}");
     }
 }
 
@@ -430,7 +493,7 @@ fn dots_cannot_lead_out_of_the_roots_a_path_was_checked_against() {
 }
 
 #[test]
-fn only_a_path_outside_the_temp_roots_asks_for_the_project_roots() {
+fn a_path_asks_for_the_project_roots_once_whether_or_not_it_is_under_a_temp_root() {
     let calls = std::cell::Cell::new(0);
     let temp = ScratchDir::new("path-links-lexical");
     let temp_roots = temp_of(&temp);
@@ -439,15 +502,69 @@ fn only_a_path_outside_the_temp_roots_asks_for_the_project_roots() {
         ProjectRoots::default()
     };
     assert!(resolve("/etc/hosts", None, &temp_roots, &project).is_none());
-    assert_eq!(
-        calls.get(),
-        1,
-        "an absolute path outside a temp root needs the project roots"
-    );
+    assert_eq!(calls.get(), 1);
+    // Told apart from a project kept under the temp root, which it may be.
     let inside = canonical(&temp).join("a.txt");
     std::fs::write(&inside, "x").unwrap();
-    assert!(resolve(inside.to_str().unwrap(), None, &temp_roots, &project).is_some());
-    assert_eq!(calls.get(), 1, "a temp path never asks for them");
+    let resolved = resolve(inside.to_str().unwrap(), None, &temp_roots, &project).unwrap();
+    assert_eq!(calls.get(), 2);
+    assert_eq!(resolved.project_root, None);
+}
+
+#[test]
+fn a_project_file_spelled_under_a_temp_root_is_still_the_projects() {
+    let dir = ScratchDir::new("path-links-project-in-temp");
+    std::fs::create_dir(dir.join("sub")).unwrap();
+    std::fs::write(dir.join("sub/a.txt"), "x").unwrap();
+    std::fs::create_dir(dir.join("tree")).unwrap();
+    std::fs::write(dir.join("tree/b.txt"), "x").unwrap();
+    let mut roots = project_roots(&[&dir, &dir.join("tree")]);
+    roots.worktrees[1] = Some("wt".into());
+    // The project's directory is itself the temp root here, as a project kept in `/tmp` is.
+    let temp = temp_of(&dir);
+    for (name, index) in [("sub/a.txt", 0), ("tree/b.txt", 1)] {
+        let path = canonical(&dir).join(name);
+        let resolved = resolve(path.to_str().unwrap(), None, &temp, &|| roots.clone()).unwrap();
+        assert_eq!(resolved.project_root, Some(index), "{name}");
+        assert!(resolved.viewer_only(), "{name}");
+    }
+    // A temp file outside every project root stays a temp file.
+    let elsewhere = ScratchDir::new("path-links-project-in-temp-elsewhere");
+    std::fs::write(elsewhere.join("c.txt"), "x").unwrap();
+    let path = canonical(&elsewhere).join("c.txt");
+    let resolved = resolve(path.to_str().unwrap(), None, &temp_of(&elsewhere), &|| {
+        roots.clone()
+    })
+    .unwrap();
+    assert_eq!(resolved.project_root, None);
+    assert!(!resolved.viewer_only());
+    // A folder of the project that others could have written into is not handed out, as in any
+    // other place under a temp root.
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::create_dir(dir.join("sub/open")).unwrap();
+    std::fs::set_permissions(dir.join("sub/open"), std::fs::Permissions::from_mode(0o777)).unwrap();
+    let path = canonical(&dir).join("sub/open");
+    assert_eq!(
+        refusal(path.to_str().unwrap(), &temp, &roots),
+        Refusal::NotPrivate
+    );
+    // The same however the folder is spelled.
+    assert_eq!(refusal("sub/open", &temp, &roots), Refusal::NotPrivate);
+    // One closed to others is handed out, and is not left to the viewer.
+    std::fs::create_dir(dir.join("sub/closed")).unwrap();
+    std::fs::set_permissions(
+        dir.join("sub/closed"),
+        std::fs::Permissions::from_mode(0o755),
+    )
+    .unwrap();
+    for raw in [
+        canonical(&dir).join("sub/closed").to_str().unwrap(),
+        "sub/closed",
+    ] {
+        let resolved = resolve(raw, None, &temp, &|| roots.clone()).unwrap();
+        assert_eq!(resolved.kind, PathLinkKind::Directory, "{raw}");
+        assert!(!resolved.viewer_only(), "{raw}");
+    }
 }
 
 #[test]
@@ -570,9 +687,13 @@ mod with_state {
             ("../elsewhere.ts", error_code::OUTSIDE_SCOPE),
             ("src/file.ts/below.ts", error_code::FILE_NOT_FOUND),
         ] {
-            let error = open_with(&fixture.state, Some(&project), path, |_| {
-                panic!("{path} must not be opened")
-            })
+            let error = open_with(
+                &fixture.state,
+                Some(&project),
+                path,
+                |_| false,
+                |_| panic!("{path} must not be opened"),
+            )
             .unwrap_err();
             let coded = error.downcast_ref::<CodedError>().unwrap();
             assert_eq!(coded.code, code, "{path}");
@@ -589,6 +710,7 @@ mod with_state {
             &fixture.state,
             Some(&project),
             gone_temp.to_str().unwrap(),
+            |_| false,
             |_| panic!("must not be opened"),
         )
         .unwrap_err();
@@ -617,7 +739,7 @@ mod with_state {
             ],
         );
         let project = fixture.project("worktree-project", &repository);
-        let roots = crate::browse::project_live_roots(
+        let roots = crate::browse::scope::project_live_roots(
             &fixture.state,
             &project,
             &crate::git::isolated::IsolatedGit::from_shell,
@@ -691,9 +813,9 @@ mod with_state {
             .view
             .as_ref()
             .is_none_or(|view| view.worktree.is_none())));
-        // Only what the system could launch is for the viewer alone.
+        // A file in a project is for the viewer alone, whatever it is; a folder and a temp file are not.
         let viewer_only: Vec<_> = links.iter().map(|link| link.viewer_only).collect();
-        assert_eq!(viewer_only, [false, false, true, false, false]);
+        assert_eq!(viewer_only, [true, true, true, false, false]);
         assert_eq!(links[3].kind, PathLinkKind::Directory);
     }
 
@@ -734,16 +856,91 @@ mod with_state {
         let project = fixture.project("launch-project", &directory);
         // Opens nothing, whatever the rule says: a regression must not launch the file.
         let opened = std::cell::Cell::new(false);
-        let error = open_with(&fixture.state, Some(&project), "run.command", |_| {
-            opened.set(true);
-            Ok(())
-        })
+        let error = open_with(
+            &fixture.state,
+            Some(&project),
+            "run.command",
+            |_| false,
+            |_| {
+                opened.set(true);
+                Ok(())
+            },
+        )
         .unwrap_err();
         assert!(!opened.get());
         let coded = error.downcast_ref::<CodedError>().unwrap();
         assert_eq!(coded.code, error_code::PATH_LINK_REFUSED);
         assert_eq!(coded.params["cause"], "launchable");
         assert_eq!(coded.params["path"], "run.command");
+    }
+
+    #[test]
+    fn a_plain_project_file_is_never_opened_on_the_host_but_a_folder_and_a_temp_file_are() {
+        let fixture = Fixture::new();
+        let directory = ScratchDir::new("path-links-open-project-file");
+        std::fs::write(directory.join("notes.txt"), "x").unwrap();
+        std::fs::create_dir(directory.join("src")).unwrap();
+        let project = fixture.project("open-project", &directory);
+        let attempt = |path: &str| {
+            let opened = std::cell::RefCell::new(None);
+            let result = open_with(
+                &fixture.state,
+                Some(&project),
+                path,
+                |_| false,
+                |resolved| {
+                    *opened.borrow_mut() = Some(resolved.to_path_buf());
+                    Ok(())
+                },
+            );
+            (result, opened.into_inner())
+        };
+        let (result, opened) = attempt("notes.txt");
+        assert!(opened.is_none());
+        let error = result.unwrap_err();
+        let coded = error.downcast_ref::<CodedError>().unwrap();
+        assert_eq!(coded.code, error_code::PATH_LINK_REFUSED);
+        assert_eq!(coded.params["cause"], "launchable");
+        let (result, opened) = attempt("src");
+        assert!(result.is_ok());
+        assert_eq!(opened, Some(canonical(&directory.join("src"))));
+        let scratch = ScratchDir::new("path-links-open-temp-file");
+        std::fs::write(scratch.join("out.txt"), "x").unwrap();
+        let in_temp = canonical(&scratch).join("out.txt");
+        let (result, opened) = attempt(in_temp.to_str().unwrap());
+        assert!(result.is_ok());
+        assert_eq!(opened, Some(in_temp));
+    }
+
+    #[test]
+    fn a_folder_the_system_calls_a_package_is_never_opened_but_a_plain_one_is() {
+        let fixture = Fixture::new();
+        let directory = ScratchDir::new("path-links-open-package");
+        std::fs::create_dir_all(directory.join("App.xcodeproj")).unwrap();
+        std::fs::create_dir(directory.join("src")).unwrap();
+        let project = fixture.project("package-project", &directory);
+        let attempt = |path: &str| {
+            let opened = std::cell::Cell::new(false);
+            let result = open_with(
+                &fixture.state,
+                Some(&project),
+                path,
+                |resolved| resolved.extension().is_some_and(|ext| ext == "xcodeproj"),
+                |_| {
+                    opened.set(true);
+                    Ok(())
+                },
+            );
+            (result, opened.get())
+        };
+        let (result, opened) = attempt("App.xcodeproj");
+        assert!(!opened);
+        let error = result.unwrap_err();
+        let coded = error.downcast_ref::<CodedError>().unwrap();
+        assert_eq!(coded.code, error_code::PATH_LINK_REFUSED);
+        assert_eq!(coded.params["cause"], "launchable");
+        let (result, opened) = attempt("src");
+        assert!(result.is_ok() && opened);
     }
 
     #[test]
@@ -764,9 +961,13 @@ mod with_state {
             ],
         );
         let project = fixture.project("ambiguous-project", &repository);
-        let error = open_with(&fixture.state, Some(&project), "a.ts", |_| {
-            panic!("must not be opened")
-        })
+        let error = open_with(
+            &fixture.state,
+            Some(&project),
+            "a.ts",
+            |_| false,
+            |_| panic!("must not be opened"),
+        )
         .unwrap_err();
         let coded = error.downcast_ref::<CodedError>().unwrap();
         assert_eq!(coded.code, error_code::PATH_LINK_REFUSED);

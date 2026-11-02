@@ -1,11 +1,14 @@
 //! The width of a pass of blocking per-entity work, and the runner that holds a pass to it.
-//! [`stalled`] keeps the blocking work that outran its deadline and whose thread is still running.
+//! [`stalled`] keeps the blocking work that outran its deadline and whose thread is still running;
+//! [`within`] runs a pass for a synchronous caller, waited for only until a deadline.
 
 use std::sync::Arc;
 
 mod stalled;
+mod within;
 
 pub use stalled::StalledPasses;
+pub use within::{within_deadline, WithinDeadline};
 
 /// How many blocking per-entity items run at once, in every pass that starts one blocking thread
 /// per project, directory or path. The blocking pool is one pool for the whole daemon and every

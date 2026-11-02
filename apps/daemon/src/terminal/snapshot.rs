@@ -430,9 +430,9 @@ mod tests {
         let mut terminal = TerminalSnapshot::new(3, 40);
         terminal.process(b"retained history\r\nsecond\r\nthird\r\nfourth");
         let mut ring =
-            crate::terminal::ringbuf::RingBuffer::new(crate::terminal::pty::RING_CAPACITY);
+            crate::terminal::ringbuf::RingBuffer::new(crate::terminal::fan::RING_CAPACITY);
         let redraw = b"\r\x1b[2Kfourth";
-        for _ in 0..(crate::terminal::pty::RING_CAPACITY / redraw.len() + 1) {
+        for _ in 0..(crate::terminal::fan::RING_CAPACITY / redraw.len() + 1) {
             ring.push(redraw);
             terminal.process(redraw);
         }

@@ -6,18 +6,10 @@
 use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::AtomicBool;
-use std::time::Duration;
 
-use crate::processes::subprocess::{run_bounded, Bounds, Reach};
+use super::{start, OPEN_BOUNDS};
+use crate::processes::subprocess::run_bounded;
 use crate::protocol::{error_code, CodedError};
-
-const OPEN_BOUNDS: Bounds = Bounds {
-    timeout: Duration::from_secs(15),
-    stdout_limit: 16 * 1024,
-    stderr_limit: 16 * 1024,
-    reach: Reach::ProcessGroup,
-    term_grace: Duration::ZERO,
-};
 
 pub fn open(directory: &Path) -> Result<(), anyhow::Error> {
     validate_directory(directory).map_err(|detail| unavailable(&detail))?;
@@ -86,7 +78,7 @@ fn shows_as_folder(os: &str, path: &Path) -> bool {
 /// itself goes by (a bundle `Info.plist` check misses `.xcodeproj` and the like); when it cannot
 /// be read the folder counts as a package, since selecting it is harmless where opening it may
 /// launch something.
-fn is_macos_package(path: &Path) -> bool {
+pub(crate) fn is_macos_package(path: &Path) -> bool {
     if path.extension().is_none() {
         return false;
     }
@@ -240,10 +232,7 @@ fn validate_directory(directory: &Path) -> Result<(), String> {
     if !directory.is_absolute() {
         return Err("the project directory is not an absolute path".to_string());
     }
-    if !directory.is_dir() {
-        return Err("the project directory does not exist or is not a directory".to_string());
-    }
-    Ok(())
+    crate::hostfs::require_directory(directory).map_err(|err| err.to_string())
 }
 
 fn launch_for(
@@ -265,14 +254,10 @@ fn launch_for(
     Ok(command)
 }
 
-fn start(detached: bool, command: Command) -> Result<(), String> {
-    super::start(detached, command, |command| {
-        run_bounded(command, &OPEN_BOUNDS, &AtomicBool::new(false)).map_err(|err| err.to_string())
-    })
-}
-
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use super::*;
     use crate::protocol::error_parts;
     use crate::test_support::ScratchDir;

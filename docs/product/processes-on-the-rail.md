@@ -86,6 +86,12 @@ A row whose project or console session no longer exists by then opens nothing, a
 The counts are read afresh from the background service every **15 seconds**, and every **3 seconds** while the popover
 is open. A reading that falls due while the window is hidden waits until it is shown again.
 
+The background service shares its counts between readings, from every window and client connected to it: counts it
+worked out less than **2 seconds** earlier answer a reading again, unless a tree has been stopped or kept, or a launch
+has ended, since. Readings that arrive while counts are being worked out wait for that one result rather than each
+working out their own. A reading waits for it at most about **10 seconds**; past that it is answered with the last
+counts worked out, however old, or fails when there are none yet.
+
 A reading that fails keeps the last counts, on the button and in the rows. While the failure lasts, the popover shows an
 amber warning alert at its top (see "Failures shown on the screen" in `docs/product/error-alerts.md`), titled that the
 list could not be refreshed, saying that the counts shown may be out of date, with **Details**. It is announced to

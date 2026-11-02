@@ -280,7 +280,7 @@ async fn a_shell_that_exits_leaves_its_terminal_exited_with_its_output_until_clo
         tokio::time::timeout(PATIENCE, async { while attached.recv().await.is_some() {} }).await;
     assert!(ended.is_ok(), "the attached client was never let go");
 
-    let crate::terminal::pty::Attached { replay, live, .. } = shell.attach();
+    let crate::terminal::fan::Attached { replay, live, .. } = shell.attach();
     assert!(String::from_utf8_lossy(&replay).contains("last-words"));
     assert!(live.is_closed(), "an exited shell's replay is all there is");
 
@@ -411,7 +411,7 @@ async fn a_terminal_starts_only_in_a_worktree_of_its_own_project() {
         ],
     );
     insert_project(&state, &repo);
-    let roots = crate::browse::project_live_roots(&state, "p1", &test_git).unwrap();
+    let roots = crate::browse::scope::project_live_roots(&state, "p1", &test_git).unwrap();
     let worktree = roots
         .iter()
         .find_map(|root| root.worktree.clone())

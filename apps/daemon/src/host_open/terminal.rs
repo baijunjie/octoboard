@@ -12,13 +12,8 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::Duration;
 
 use crate::protocol::{error_code, CodedError};
-
-/// How long `open` may take to hand a directory to Terminal.app. It returns as soon as Terminal
-/// accepts the open, so this only bounds a wedged `open`, not the window the user then has.
-const OPEN_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// What to run, and whether to wait for it. `wait` is only for a launcher that exits once the
 /// terminal has accepted the directory (`open`). A terminal emulator itself has `wait` false.
@@ -83,9 +78,7 @@ const INHERITING: &[&str] = &["x-terminal-emulator", "xterm"];
 
 /// Opens the system terminal at `directory`. `directory` is a project's stored path.
 pub fn open_directory(directory: &Path) -> Result<(), anyhow::Error> {
-    if !directory.is_dir() {
-        return Err(unavailable("the project directory does not exist"));
-    }
+    crate::hostfs::require_directory(directory).map_err(|err| unavailable(&err.to_string()))?;
     // The Linux list is resolved against one login-shell snapshot. A snapshot that did not run
     // is that failure: treating it as "not installed" would report a missing emulator when the
     // lookup never happened. macOS does not consult the snapshot; Terminal.app is `/usr/bin/open`.
@@ -184,10 +177,7 @@ fn start(launch: &Launch) -> Result<(), String> {
     if let Some(directory) = &launch.directory {
         command.current_dir(directory);
     }
-    super::start(!launch.wait, command, |command| {
-        crate::processes::subprocess::run_with_timeout(command, OPEN_TIMEOUT)
-            .map_err(|err| format!("{err:#}"))
-    })
+    super::start(!launch.wait, command)
 }
 
 #[cfg(test)]

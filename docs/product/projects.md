@@ -41,7 +41,9 @@ form says it is checking, and the fields below the path (name, description, tags
 are disabled. An answer that finds the path itself wrong — it does not exist, or is not a directory — is the path
 field's own error: it is said under the field, which is marked invalid, as soon as the answer arrives, without waiting
 for a submit, and keeps them disabled. Any other failure of the check, one that says nothing about the path because the
-check could not run, is shown in an alert directly under the path field instead and keeps them disabled too. Only the
+check could not run, is shown in an alert directly under the path field instead and keeps them disabled too; a path
+that cannot be looked at — Octoboard is not allowed to, or the system fails to say what is there — is such a failure,
+not a path that does not exist. Only the
 latest path's answer counts, and a changed path is read again and its result preselected anew.
 
 For a git URL, the form first checks the repository: once the URL stops changing, the daemon fetches the remote's tip
@@ -331,7 +333,8 @@ Tab stop: the arrow keys, Home and End move between its entries. A directory wit
 saying so, in the compact empty-state row (see "The compact row" in `docs/product/empty-states.md`), which does nothing
 and is skipped by the arrow keys. When the browser is opened on a path that does not exist (such as a default clone
 directory not created yet), it lists the nearest ancestor that does exist instead (a `~/` path goes no higher than the
-home directory), so there is always somewhere to navigate from; any other failure is reported as described next.
+home directory), so there is always somewhere to navigate from; any other failure, including a path that cannot be
+looked at because Octoboard is not allowed to, is reported as described next.
 
 A listing can be held up (a volume's access prompt left unanswered) and answer after one asked for later. Only the
 newest answer is taken: an older listing, or the failure of the listing made as the browser opens, that arrives after a

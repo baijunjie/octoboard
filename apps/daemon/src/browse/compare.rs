@@ -24,10 +24,13 @@ use std::time::Instant;
 
 use anyhow::Result;
 
-use crate::browse::changes::{self, ChangeRead};
+use crate::browse::budget::ChangeBudget;
+use crate::browse::change_read::{self, ChangeRead};
+use crate::browse::content::json_escaped_len;
 use crate::browse::line_counts;
+use crate::browse::scope::Located;
 use crate::browse::tree_diff;
-use crate::browse::{blob, budget, git_error, git_failed, json_escaped_len, Located};
+use crate::browse::{blob, budget, git_error, git_failed};
 use crate::git::isolated::IsolatedGit;
 use crate::git::run::GitError;
 use crate::processes::subprocess::BoundedFailure;
@@ -468,7 +471,7 @@ pub fn list(
             empty: false,
         },
         Base::Empty => ComparisonEndpoint {
-            commit: changes::empty_tree(env, at, cancel)?,
+            commit: change_read::empty_tree(env, at, cancel)?,
             branch: String::new(),
             remote: false,
             empty: true,
@@ -518,21 +521,17 @@ pub fn list(
     }
     .map_err(git_error)?;
     let commits = (comparison.base.as_str(), comparison.right.commit.as_str());
-    let mut path_bytes = 0;
+    let mut taken = ChangeBudget::default();
     let mut fields = stdout.split(|&b| b == 0).filter(|f| !f.is_empty());
     while let Some(meta) = fields.next() {
         let Some(entry) = tree_diff::committed_record("diff-tree", meta, &mut fields, at, commits)?
         else {
             continue;
         };
-        let bytes = changes::entry_path_bytes(&entry);
-        if comparison.changes.len() == budget::MAX_CHANGE_ENTRIES
-            || path_bytes + bytes > budget::MAX_CHANGE_PATH_BYTES
-        {
+        if !taken.admit(&entry) {
             comparison.complete = false;
             break;
         }
-        path_bytes += bytes;
         comparison.changes.push(entry);
     }
     // Released before the counts are read, which hold buffers of their own.
@@ -662,7 +661,7 @@ fn verify_endpoints(
         blob::verify_commit(env, &at.root, &endpoint.commit, cancel)?;
     }
     if left.empty {
-        if !changes::is_empty_tree(base) {
+        if !change_read::is_empty_tree(base) {
             return Err(CodedError::raised(
                 error_code::INVALID_COMMIT,
                 format!("{base} is not the empty tree"),
@@ -686,7 +685,7 @@ pub fn read(
 ) -> Result<ChangeRead> {
     verify_endpoints(env, at, compared, cancel)?;
     let (_, right, base) = compared;
-    changes::read_between(
+    change_read::read_between(
         env,
         at,
         (base, &right.commit),
@@ -702,12 +701,12 @@ pub fn read_bodies(
     at: &Located,
     compared: Compared,
     change: &ComparedChangeRef,
-    expected: &changes::Expected,
+    expected: &change_read::Expected,
     cancel: &AtomicBool,
-) -> Result<changes::BodiesRead> {
+) -> Result<change_read::BodiesRead> {
     verify_endpoints(env, at, compared, cancel)?;
     let (_, right, base) = compared;
-    changes::read_bodies_between(
+    change_read::read_bodies_between(
         env,
         at,
         (base, &right.commit),

@@ -1,9 +1,14 @@
 //! Stopping processes by identity: never by name, port or look, and never a pid that has passed to
-//! another process.
+//! another process; and the ledger's rounds of signals, which go on to what started from a target
+//! while it was being stopped.
 
+use std::borrow::Cow;
+use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
-use super::table::Identity;
+use super::attribute::Book;
+use super::table::{Identity, Table};
+use super::ProcessLedger;
 
 /// How long a process asked to stop has before it is killed.
 pub(super) const STOP_GRACE: Duration = Duration::from_secs(3);
@@ -54,4 +59,105 @@ pub(super) fn signal(id: &Identity, signal: libc::c_int) -> bool {
     }
     // SAFETY: a plain signal to a pid that had the identity's start time a moment ago, as above.
     unsafe { libc::kill(id.pid, signal) == 0 }
+}
+
+impl ProcessLedger {
+    /// One round of signals to `targets` (see [`stop`]): a process kept meanwhile is not
+    /// killed, and one still running after its `SIGKILL` is left for
+    /// [`STUBBORN_RETRY`](super::STUBBORN_RETRY), with one warning. **Blocks.**
+    pub(super) fn signal_round(&self, targets: &[Identity]) {
+        let survivors = stop(targets, &|id| self.book().kept.contains(id));
+        let mut stubborn = self
+            .stubborn
+            .lock()
+            .expect("stubborn processes lock poisoned");
+        let now = Instant::now();
+        for id in survivors {
+            if stubborn.insert(id, Some(now)).is_none() {
+                tracing::warn!(
+                    pid = id.pid,
+                    "a process was still running after SIGKILL; it is tried again only after a while"
+                );
+            }
+        }
+    }
+
+    /// Stops `targets`, read in `before`, then, a few times, what started meanwhile that is
+    /// attributed to the same launch as a target and descends from one: through its chain of
+    /// parents, or by sitting in a terminal session a target led. A kept process is left out
+    /// just before each round of signals. **Blocks.**
+    pub(super) fn stop_set(&self, mut targets: Vec<Identity>, before: &Table) {
+        let launches: HashSet<String> = {
+            let book = self.book();
+            targets
+                .iter()
+                .filter_map(|id| {
+                    book.attributed
+                        .get(id)
+                        .map(|attributed| attributed.launch.clone())
+                })
+                .collect()
+        };
+        let mut stopped: HashSet<Identity> = HashSet::new();
+        let mut led: HashSet<i32> = HashSet::new();
+        let mut known: HashSet<Identity> = before.procs().map(|proc| proc.id).collect();
+        let mut current = Cow::Borrowed(before);
+        for _ in 0..super::STOP_PASSES {
+            {
+                let book = self.book();
+                targets.retain(|id| !book.kept.contains(id));
+            }
+            if targets.is_empty() {
+                return;
+            }
+            led.extend(
+                targets
+                    .iter()
+                    .filter(|id| {
+                        current
+                            .get(id.pid)
+                            .is_some_and(|proc| proc.id == **id && proc.sid == id.pid)
+                    })
+                    .map(|id| id.pid),
+            );
+            self.signal_round(&targets);
+            stopped.extend(targets.iter().copied());
+            let Some(table) = self.scan(false) else {
+                return;
+            };
+            targets = follow_ups(&self.book(), &table, &known, &stopped, &led, &launches);
+            known.extend(table.procs().map(|proc| proc.id));
+            current = Cow::Owned(table);
+        }
+    }
+}
+
+/// What a stop goes on to after a round of signals: the processes of `table` not `known` before
+/// that are attributed to one of `launches` and descend from what was `stopped`, through their
+/// chain of parents or by sitting in a terminal session one of those `led`.
+pub(super) fn follow_ups(
+    book: &Book,
+    table: &Table,
+    known: &HashSet<Identity>,
+    stopped: &HashSet<Identity>,
+    led: &HashSet<i32>,
+    launches: &HashSet<String>,
+) -> Vec<Identity> {
+    table
+        .procs()
+        .filter(|proc| {
+            !known.contains(&proc.id)
+                && book
+                    .attributed
+                    .get(&proc.id)
+                    .is_some_and(|attributed| launches.contains(&attributed.launch))
+        })
+        .filter(|proc| {
+            led.contains(&proc.sid)
+                || table
+                    .ancestors(proc)
+                    .any(|ancestor| stopped.contains(&ancestor.id))
+        })
+        .map(|proc| proc.id)
+        .collect()
 }

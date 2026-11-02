@@ -9,11 +9,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use super::attribute::{Attributed, Book, ENDED};
+use super::looks::LOOK_DEADLINE_OVERRIDE;
+use super::stop::{self, follow_ups};
 use super::table::{self, Identity, Proc, Table};
-use super::{
-    boot_id, follow_ups, persist, stop, ProcessLedger, BOOT_ID_OVERRIDE, SETTLED_OVERRIDE,
-    TAG_VARIABLE,
-};
+use super::{boot_id, persist, ProcessLedger, BOOT_ID_OVERRIDE, SETTLED_OVERRIDE, TAG_VARIABLE};
 use crate::protocol::{Agent, Session, SessionStatus};
 use crate::state::AppState;
 use crate::test_support::{
@@ -721,6 +720,112 @@ fn a_process_whose_directory_was_removed_is_stopped_after_the_grace() {
     assert_stops_running(child);
 }
 
+/// A look at the working directory of a followed process that does not answer, as one on a dead
+/// network mount does not, holds a tick of the scanner for no longer than a look's deadline, and
+/// while that look is stuck no later tick starts another at the same directory.
+#[test]
+fn a_working_directory_that_does_not_answer_does_not_hold_the_scanner() {
+    let (state, dir) = app_state("ledger-cwd-stuck");
+    let work = dir.join("work");
+    std::fs::create_dir(&work).unwrap();
+    let pid_file = dir.join("child");
+    let script = format!(
+        "(cd '{}' && exec {}) &",
+        work.display(),
+        in_own_session(&format!(
+            "{} exec \"/bin/sleep\", \"300\";",
+            perl_write(&pid_file, "$$")
+        ))
+    );
+    let ledger = &state.process_ledger;
+    let _live = agent(&state, "s1", &script);
+    let child = wait_for_pid(&pid_file);
+    let _guard = KillOnDrop(vec![child]);
+    let deadline = Instant::now() + PATIENCE;
+    while launch_of(ledger, child).is_none() {
+        assert!(Instant::now() < deadline, "the child was never attributed");
+        ledger.tick();
+        std::thread::sleep(Duration::from_millis(20));
+    }
+
+    let work = std::fs::canonicalize(&work).unwrap();
+    let (release, held) = std::sync::mpsc::channel::<()>();
+    let held = std::sync::Mutex::new(held);
+    let looks = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let counted = looks.clone();
+    *ledger.cwd_look.lock().unwrap() = Some(Arc::new(move |report: &table::CwdReport| {
+        if report.path() == work {
+            counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            held.lock().unwrap().recv().ok();
+        }
+        report.looked()
+    }));
+    LOOK_DEADLINE_OVERRIDE.set(Some(Duration::from_millis(100)));
+    let begun = Instant::now();
+    ledger.tick();
+    assert!(begun.elapsed() < PATIENCE, "the tick waited for the look");
+    // Past its own deadline, the look still running counts as stuck.
+    std::thread::sleep(Duration::from_millis(150));
+    ledger.tick();
+    LOOK_DEADLINE_OVERRIDE.set(None);
+    assert_eq!(
+        looks.load(std::sync::atomic::Ordering::SeqCst),
+        1,
+        "a second look was started at a directory still stuck"
+    );
+    assert!(
+        is_running(child),
+        "a directory that did not answer counted as removed"
+    );
+    release.send(()).ok();
+}
+
+/// A read of what the system reports of a process's working directory that does not answer — on
+/// macOS the kernel asks the directory's file system for its identity — holds a call for no
+/// longer than a look's deadline, and while it is stuck no later call reads that process's
+/// again; the other processes' directories are read and looked at all the same.
+#[test]
+fn a_working_directory_report_that_does_not_answer_is_left_out_and_not_read_again_while_stuck() {
+    let dir = ScratchDir::new("ledger-cwd-report-stuck");
+    let ledger = ProcessLedger::new(&dir);
+    quiet(&ledger);
+    let me = identity(std::process::id() as i32);
+    let stuck = Identity {
+        pid: me.pid,
+        start: me.start + 1,
+    };
+    let (release, held) = std::sync::mpsc::channel::<()>();
+    let held = std::sync::Mutex::new(held);
+    let reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let counted = reads.clone();
+    *ledger.cwd_read.lock().unwrap() = Some(Arc::new(move |id: Identity| {
+        if id == stuck {
+            counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            held.lock().unwrap().recv().ok();
+            return None;
+        }
+        table::cwd_report(id)
+    }));
+    LOOK_DEADLINE_OVERRIDE.set(Some(Duration::from_millis(500)));
+    let begun = Instant::now();
+    let first = ledger.cwds([me, stuck], None);
+    assert!(begun.elapsed() < PATIENCE, "the call waited for the read");
+    // Past its own deadline, the read still running counts as stuck.
+    std::thread::sleep(Duration::from_millis(550));
+    let again = ledger.cwds([me, stuck], None);
+    LOOK_DEADLINE_OVERRIDE.set(None);
+    for cwds in [&first, &again] {
+        assert!(cwds.contains_key(&me), "{cwds:?}");
+        assert!(!cwds.contains_key(&stuck), "{cwds:?}");
+    }
+    assert_eq!(
+        reads.load(std::sync::atomic::Ordering::SeqCst),
+        1,
+        "a second read was started for a process whose read is still stuck"
+    );
+    release.send(()).ok();
+}
+
 /// The project of the session `s1`, which every keep in these tests needs: a session in none, a
 /// console session, keeps nothing.
 fn in_a_project() -> std::collections::HashMap<String, String> {
@@ -834,7 +939,7 @@ fn an_original_tree_name_keeps_descendants_across_successive_top_exits() {
     assert!(original
         .iter()
         .any(|tree| tree.id == a_id.key() && tree.process_count == 2));
-    ledger.note_listed("s1".to_string(), original);
+    ledger.note_listed("s1".to_string(), ledger.lists_generation(), original);
 
     std::fs::write(&a_end, "").unwrap();
     assert_stops_running(a);
@@ -907,6 +1012,10 @@ fn what_was_left_in_a_removed_directory_of_a_project_is_listed_and_stopped_on_re
     let command = wait_for_pid(&command_file);
     let _guard = KillOnDrop(vec![left, intact_pid, elsewhere_pid, command]);
     let left = identity(left);
+    let (intact_real, elsewhere_real) = (
+        std::fs::canonicalize(&intact).unwrap(),
+        std::fs::canonicalize(&elsewhere).unwrap(),
+    );
     std::fs::remove_dir(&removed).unwrap();
     std::fs::remove_dir(&elsewhere).unwrap();
 
@@ -920,6 +1029,15 @@ fn what_was_left_in_a_removed_directory_of_a_project_is_listed_and_stopped_on_re
     );
     assert!(leftovers[0].cwd_missing);
     assert_eq!(leftovers[0].session_id, None);
+    // Only a directory the system reports under the project's is looked at.
+    let looked = ledger.looks.looked();
+    assert!(looked.contains(&intact_real), "{looked:?}");
+    assert!(
+        !looked
+            .iter()
+            .any(|path| path.starts_with(&elsewhere) || path.starts_with(&elsewhere_real)),
+        "a directory under no project was looked at: {looked:?}"
+    );
     assert!(
         ledger.stop_trees(&[left.key()], &[]).is_empty(),
         "not a leftover without the project's directories"

@@ -5,7 +5,7 @@
 use std::path::Path;
 
 use super::body_tests::version;
-use super::changes::AFTER_PATCH;
+use super::change_read::AFTER_PATCH;
 use super::tests::{bytes_of, code, Fixture};
 use super::*;
 use crate::protocol::{
@@ -15,6 +15,7 @@ use crate::protocol::{
 use crate::test_support::{
     fixture_git, git, git_has_show_ref_exists, git_stdin, repo_with, ScratchDir,
 };
+use crate::wire_path;
 
 /// A change as `read_project_change` answered it.
 #[derive(Debug)]

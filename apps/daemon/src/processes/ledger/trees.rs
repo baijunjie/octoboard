@@ -8,13 +8,15 @@
 //! from them there.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
 use super::attribute::{keep, Attributed, Launch, ENDED};
-use super::table::{self, Identity, Table};
+use super::looks::Roots;
+use super::table::{self, Cwd, Identity, Table};
 use super::ProcessLedger;
 
 /// The longest command a tree reports, in bytes.
@@ -117,7 +119,9 @@ impl ProcessLedger {
         let mut trees = self.session_trees(&table, sessions, Duration::ZERO);
         let mut unowned: Vec<(Identity, Vec<Identity>, bool)> = Vec::new();
         if !leftover_dirs.is_empty() {
-            let members = self.leftover_members(&table, leftover_dirs);
+            let roots = self.roots(leftover_dirs);
+            let members = self.leftover_members(&table, &roots);
+            let members: HashSet<Identity> = members.into_keys().collect();
             unowned.extend(
                 group(&members, &table)
                     .into_iter()
@@ -136,10 +140,11 @@ impl ProcessLedger {
                 .map(|(top, members, _)| (*top, members.as_slice())),
         );
         unowned.sort_by_key(|(top, _, _)| (top.start, top.pid));
+        let mut cwds = self.cwds(unowned.iter().map(|(top, _, _)| *top), None);
         trees.extend(
             unowned
                 .into_iter()
-                .map(|(top, members, kept)| describe(top, &members, None, kept)),
+                .map(|(top, members, kept)| describe(top, &members, None, kept, cwds.remove(&top))),
         );
         trees
     }
@@ -149,12 +154,17 @@ impl ProcessLedger {
     /// with its directory when it is local) that has any, then one per console session of
     /// `sessions` (by id, with its project, `None` for a console session) that has any. A
     /// project's trees are those of its sessions' launches, the ones left behind in its directory
-    /// and the ones kept under it. **Blocks.**
+    /// and the ones kept under it. **Blocks**, where a directory does not answer, for the deadline
+    /// of each pass of looks it makes: at the projects' directories ([`Self::roots`]), then at the
+    /// working directories ([`Self::cwds`]).
     pub fn trees_counted(
         &self,
         sessions: &[(String, Option<String>)],
         projects: &[(String, Option<PathBuf>)],
     ) -> Vec<ProcessCount> {
+        #[cfg(test)]
+        self.counts_computed
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let Some(table) = self.scan(false) else {
             return Vec::new();
         };
@@ -174,11 +184,15 @@ impl ProcessLedger {
             .collect();
         if !local.is_empty() {
             let dirs: Vec<PathBuf> = local.iter().map(|(_, dir)| dir.clone()).collect();
-            let members = self.leftover_members(&table, &dirs);
-            for (top, _) in group(&members, &table) {
-                let project = table::cwd(top).and_then(|cwd| project_of_dir(&cwd.path, &local));
-                if let Some(project) = project {
-                    *by_project.entry(project).or_default() += 1;
+            let roots = self.roots(&dirs);
+            let members = self.leftover_members(&table, &roots);
+            let ids: HashSet<Identity> = members.keys().copied().collect();
+            for (top, _) in group(&ids, &table) {
+                let project = members
+                    .get(&top)
+                    .and_then(|cwd| roots.first_holding(&cwd.path));
+                if let Some(index) = project {
+                    *by_project.entry(local[index].0.clone()).or_default() += 1;
                 }
             }
         }
@@ -224,9 +238,14 @@ impl ProcessLedger {
             .map(|(_, trees)| trees.clone())
     }
 
-    /// Records `trees` as just listed for a client under `key` (see [`Self::listed_lately`]).
-    pub fn note_listed(&self, key: String, trees: Vec<ProcessTree>) {
+    /// Records `trees` as just listed for a client under `key` (see [`Self::listed_lately`]),
+    /// unless what was listed has been forgotten since `generation` was read, before the trees
+    /// were (see [`Self::lists_generation`]).
+    pub fn note_listed(&self, key: String, generation: u64, trees: Vec<ProcessTree>) {
         let mut lists = self.lists.lock().expect("process lists lock poisoned");
+        if self.lists_generation() != generation {
+            return;
+        }
         // A key per session and per project: past a few hundred, what is old enough to be of no
         // use any more is dropped.
         if lists.len() >= LISTINGS_LIMIT {
@@ -235,12 +254,56 @@ impl ProcessLedger {
         lists.insert(key, (Instant::now(), trees));
     }
 
-    /// Forgets what was listed for clients, after something changed what a listing would show.
+    /// The counts of [`Self::trees_counted`] computed for a client less than `floor` ago, unless a
+    /// stop, a keep or the end of a launch has changed what there is since (see
+    /// [`Self::listed_lately`]).
+    pub fn counted_lately(&self, floor: Duration) -> Option<Vec<ProcessCount>> {
+        let counts = self.counts.lock().expect("process counts lock poisoned");
+        counts
+            .as_ref()
+            .filter(|(at, _)| at.elapsed() < floor)
+            .map(|(_, counts)| counts.clone())
+    }
+
+    /// Records `counts` as just computed for a client (see [`Self::counted_lately`]), unless what
+    /// was counted has been forgotten since `generation` was read, before the counts were (see
+    /// [`Self::lists_generation`]).
+    pub fn note_counted(&self, generation: u64, counts: Vec<ProcessCount>) {
+        let mut noted = self.counts.lock().expect("process counts lock poisoned");
+        if self.lists_generation() == generation {
+            *noted = Some((Instant::now(), counts));
+        }
+    }
+
+    /// How many times what was listed and counted for clients has been forgotten: read before a
+    /// listing or a count reads the table, and handed to [`Self::note_listed`] or
+    /// [`Self::note_counted`], so that one read before a stop, a keep or the end of a launch is
+    /// not noted after it and answered for up to the floor as if it came after.
+    pub fn lists_generation(&self) -> u64 {
+        self.lists_generation
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Waits until no other request is computing the counts, and claims that for the caller:
+    /// requests that overlap wait for the one computation and are answered by what it noted
+    /// ([`Self::note_counted`]), instead of each reading the table. The claim is the guard, and
+    /// ends however its holder does.
+    pub async fn claim_counting(&self) -> tokio::sync::OwnedMutexGuard<()> {
+        Arc::clone(&self.counting).lock_owned().await
+    }
+
+    /// Forgets what was listed and counted for clients, after something changed what a listing
+    /// would show.
     pub(super) fn forget_lists(&self) {
+        // Moved on before the clearing, which takes the lock a note checks the generation under,
+        // so a note either lands before the clearing or sees the new generation and is dropped.
+        self.lists_generation
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         self.lists
             .lock()
             .expect("process lists lock poisoned")
             .clear();
+        *self.counts.lock().expect("process counts lock poisoned") = None;
     }
 
     /// Stops each tree `ids` names that is still one: a tree of a launch being followed, one left
@@ -252,7 +315,8 @@ impl ProcessLedger {
         let Some(table) = self.scan(false) else {
             return Vec::new();
         };
-        let named = self.resolve(ids, &table, leftover_dirs, |_| true, true);
+        let roots = self.roots(leftover_dirs);
+        let named = self.resolve(ids, &table, &roots, |_| true, true);
         let targets: Vec<Identity> = named
             .iter()
             .flat_map(|(_, members)| members.iter().copied())
@@ -289,13 +353,16 @@ impl ProcessLedger {
             return Vec::new();
         };
         let leftover_dirs: Vec<PathBuf> = projects.iter().map(|(_, dir)| dir.clone()).collect();
-        let named = self.resolve(ids, &table, &leftover_dirs, |launch| !launch.ending, false);
-        // Read before the lock is taken, as a system call each.
-        let cwds: HashMap<Identity, PathBuf> = named
-            .iter()
-            .flat_map(|(_, members)| members.iter().copied())
-            .filter_map(|id| table::cwd(id).map(|cwd| (id, cwd.path)))
-            .collect();
+        let roots = self.roots(&leftover_dirs);
+        let named = self.resolve(ids, &table, &roots, |launch| !launch.ending, false);
+        // Read before the lock is taken, and only what may lie in a project: only a tree no
+        // session owns is placed by its directory.
+        let cwds = self.cwds(
+            named
+                .iter()
+                .flat_map(|(_, members)| members.iter().copied()),
+            Some(&roots),
+        );
         let mut kept = Vec::new();
         let mut book = self.book();
         for (id, members) in named {
@@ -318,9 +385,10 @@ impl ProcessLedger {
             });
             let project = match session {
                 Some(session) => session_projects.get(&session).cloned(),
-                None => members
-                    .iter()
-                    .find_map(|member| project_of_dir(cwds.get(member)?, projects)),
+                None => members.iter().find_map(|member| {
+                    let index = roots.first_holding(&cwds.get(member)?.path)?;
+                    Some(projects[index].0.clone())
+                }),
             };
             // A tree of a session in no project, a console session's, is not the user's to keep.
             let Some(project) = project else {
@@ -351,7 +419,9 @@ impl ProcessLedger {
         let Some(table) = self.scan(false) else {
             return;
         };
-        let mut members = self.leftover_members(&table, leftover_dirs);
+        let roots = self.roots(leftover_dirs);
+        let mut members: HashSet<Identity> =
+            self.leftover_members(&table, &roots).into_keys().collect();
         members.extend(self.kept_members(&table, Some(project)));
         let trees = group(&members, &table);
         if trees.is_empty() {
@@ -398,7 +468,7 @@ impl ProcessLedger {
         let of_from = |launch: &Launch| {
             launch.session_id.as_deref() == Some(from) && !launch.ending && !launch.held
         };
-        let named = self.resolve(&wanted, &table, &[], of_from, false);
+        let named = self.resolve(&wanted, &table, &Roots::default(), of_from, false);
         let mut book = self.book();
         let Some(receiving) = book.running_launch_of(to, "") else {
             return Err(MoveRefused::NoLaunch);
@@ -493,22 +563,25 @@ impl ProcessLedger {
         let oldest = table::now().saturating_sub(min_age.as_micros() as u64);
         found.retain(|(_, top, _)| top.start <= oldest);
         found.sort_by_key(|(_, top, _)| (top.start, top.pid));
+        let mut cwds = self.cwds(found.iter().map(|(_, top, _)| *top), None);
         found
             .into_iter()
-            .map(|(session, top, members)| describe(top, &members, Some(&session), false))
+            .map(|(session, top, members)| {
+                describe(top, &members, Some(&session), false, cwds.remove(&top))
+            })
             .collect()
     }
 
     /// The trees `ids` name, each with the members to act on as `table` shows them, among the
     /// trees of the launches being followed that `include` accepts and those left behind in
-    /// `leftover_dirs`. A name whose top is not a top any more reaches the members remembered for
-    /// it that are in one of those trees, with what descends from them there. Each process is
+    /// `roots`' directories. A name whose top is not a top any more reaches the members remembered
+    /// for it that are in one of those trees, with what descends from them there. Each process is
     /// given to the first name that reaches it.
     fn resolve(
         &self,
         ids: &[String],
         table: &Table,
-        leftover_dirs: &[PathBuf],
+        roots: &Roots,
         include: impl Fn(&Launch) -> bool,
         with_kept: bool,
     ) -> Vec<(String, Vec<Identity>)> {
@@ -522,8 +595,9 @@ impl ProcessLedger {
                 }
             }
         }
-        if !leftover_dirs.is_empty() {
-            let leftovers = self.leftover_members(table, leftover_dirs);
+        if !roots.is_empty() {
+            let leftovers: HashSet<Identity> =
+                self.leftover_members(table, roots).into_keys().collect();
             for (top, members) in group(&leftovers, table) {
                 current.entry(top).or_insert(members);
             }
@@ -710,19 +784,10 @@ impl ProcessLedger {
         book.dirty = true;
     }
 
-    /// The processes left behind in `dirs` (see [`Self::trees_of_project`]).
-    fn leftover_members(&self, table: &Table, dirs: &[PathBuf]) -> HashSet<Identity> {
-        let mut roots: Vec<PathBuf> = Vec::new();
-        for dir in dirs {
-            roots.push(dir.clone());
-            // The system reports a working directory with its links resolved (`/private/tmp` for
-            // `/tmp` on macOS).
-            if let Ok(resolved) = std::fs::canonicalize(dir) {
-                if resolved != *dir {
-                    roots.push(resolved);
-                }
-            }
-        }
+    /// The processes left behind in `roots`' directories (see [`Self::trees_of_project`]), each
+    /// with its working directory. Only a process whose directory the system reports under one
+    /// of them has the directory looked at, within the deadline of a look.
+    fn leftover_members(&self, table: &Table, roots: &Roots) -> HashMap<Identity, Cwd> {
         let protected = table.protected(self.own);
         let candidates: Vec<Identity> = {
             let book = self.book();
@@ -747,14 +812,9 @@ impl ProcessLedger {
                 .map(|proc| proc.id)
                 .collect()
         };
-        candidates
-            .into_iter()
-            .filter(|id| {
-                table::cwd(*id).is_some_and(|cwd| {
-                    cwd.missing && roots.iter().any(|root| cwd.path.starts_with(root))
-                })
-            })
-            .collect()
+        let mut cwds = self.cwds(candidates, Some(roots));
+        cwds.retain(|_, cwd| cwd.missing && roots.holds(&cwd.path));
+        cwds
     }
 }
 
@@ -776,23 +836,15 @@ fn group(members: &HashSet<Identity>, table: &Table) -> BTreeMap<Identity, Vec<I
     trees
 }
 
-/// The project of `projects` (by id, with its directory) whose directory `cwd` is under.
-fn project_of_dir(cwd: &Path, projects: &[(String, PathBuf)]) -> Option<String> {
-    projects.iter().find_map(|(id, dir)| {
-        let under = cwd.starts_with(dir)
-            || std::fs::canonicalize(dir).is_ok_and(|resolved| cwd.starts_with(resolved));
-        under.then(|| id.clone())
-    })
-}
-
-/// What a client is shown of the tree topped by `top` with `members`, read now.
+/// What a client is shown of the tree topped by `top` with `members`, read now but for `cwd`,
+/// the top's working directory as looked at already.
 fn describe(
     top: Identity,
     members: &[Identity],
     session_id: Option<&str>,
     kept: bool,
+    cwd: Option<Cwd>,
 ) -> ProcessTree {
-    let cwd = table::cwd(top);
     let pids: Vec<i32> = members.iter().map(|id| id.pid).collect();
     ProcessTree {
         id: top.key(),
@@ -823,6 +875,32 @@ fn command_of(id: Identity) -> String {
 mod tests {
     use super::super::table::Proc;
     use super::*;
+
+    /// A listing or a count read before what was listed is forgotten — by a stop, a keep, the end
+    /// of a launch — is not noted after it, where it would answer for up to the floor as if read
+    /// after; one read since is.
+    #[test]
+    fn a_list_or_count_read_before_what_was_listed_is_forgotten_is_not_noted() {
+        let dir = crate::test_support::ScratchDir::new("ledger-lists-generation");
+        let ledger = ProcessLedger::new(&dir);
+        let counts = vec![ProcessCount {
+            project_id: Some("project".to_string()),
+            session_id: None,
+            trees: 1,
+        }];
+        let before = ledger.lists_generation();
+        ledger.forget_lists();
+        ledger.note_counted(before, counts.clone());
+        ledger.note_listed("key".to_string(), before, Vec::new());
+        assert_eq!(ledger.counted_lately(Duration::MAX), None);
+        assert_eq!(ledger.listed_lately("key", Duration::MAX), None);
+
+        let after = ledger.lists_generation();
+        ledger.note_counted(after, counts.clone());
+        ledger.note_listed("key".to_string(), after, Vec::new());
+        assert_eq!(ledger.counted_lately(Duration::MAX), Some(counts));
+        assert_eq!(ledger.listed_lately("key", Duration::MAX), Some(Vec::new()));
+    }
 
     #[test]
     fn a_previously_kept_internal_is_not_listed_as_a_project_process() {

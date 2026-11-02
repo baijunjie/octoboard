@@ -77,7 +77,15 @@ user's own action asks for still does something.
 
 A claim like that is a guard released on `Drop`, never a `begin`/`end` pair: the work runs on a blocking task that
 can panic, and an entity whose claim is never released is excluded from every later refresh for the rest of the
-daemon's life.
+daemon's life. Where overlapping requests wait on the claim to share one computation instead of skipping, that wait has
+a bound, past which the request answers with the last result noted, however old, or fails (not with an empty result,
+which a client shows as "nothing"): work stuck on a dead mount otherwise holds every later request behind it for good.
+
+The result the floor remembers must not outlive what clears it. Where something the daemon does makes it wrong (a stop
+forgets the remembered listings), a result computed from a read made before the clearing but noted after it brings the
+old state back for the rest of the floor. Read a generation counter before the work reads anything, move it on in the
+clearing, and drop the note when it has changed; `processes::requests::list_all` with
+`ProcessLedger::lists_generation` is the shape.
 
 ## Count a long period of the daemon's own on the wall clock, not on a timer of that length
 

@@ -1,7 +1,7 @@
 //! A process the daemon runs on a PTY, as an agent session and a shell terminal each have one:
-//! starting it, the output fan-out to attached terminal clients over a replay ring and a parsed
-//! screen, the reader thread, input, resizing, ending it, and its place in the crash cleanup. What
-//! the process is — an agent or a shell — is the owner's business, not this module's.
+//! starting it, the reader thread that feeds its output to the fan-out (`terminal::fan`), input,
+//! resizing, ending it, and its place in the crash cleanup. What the process is — an agent or a
+//! shell — is the owner's business, not this module's.
 
 use std::io;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
@@ -12,19 +12,13 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Context, Result};
-use bytes::Bytes;
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
-use tokio::sync::mpsc;
 
 use crate::processes::crash_cleanup;
 use crate::processes::leader;
+use crate::terminal::fan::{Attached, Fan};
 use crate::terminal::ptyio;
-use crate::terminal::reply_route::{ReplayMark, ReplyRoute};
-use crate::terminal::ringbuf::RingBuffer;
-use crate::terminal::snapshot::{TerminalSnapshot, MAX_COLS, MAX_ROWS};
-
-/// Terminal replay buffer per process.
-pub const RING_CAPACITY: usize = 2 * 1024 * 1024;
+use crate::terminal::snapshot::{MAX_COLS, MAX_ROWS};
 
 /// Size the PTY starts at. The UI sends a `resize` as soon as it attaches; this only has to be
 /// something sane for the output a process produces before that.
@@ -41,17 +35,6 @@ pub const TERM: &str = "xterm-256color";
 /// measurable difference to throughput at two very different source rates.
 pub const READ_BUF: usize = 8 * 1024;
 
-/// Frames a single attached client may fall behind by before the PTY reader starts waiting on it.
-const SUBSCRIBER_QUEUE: usize = 64;
-
-/// How long the reader waits for one client to drain before dropping it. Until this elapses the
-/// reader does not read from the PTY at all, which is the point: the process's own writes block,
-/// so output is throttled at the source instead of being buffered without bound in the daemon. A
-/// client that has not taken a single frame in this long is gone or wedged, and dropping it (its
-/// socket closes, and it reconnects to a fresh replay) is better than throttling the process for
-/// it.
-const SUBSCRIBER_GRACE: Duration = Duration::from_secs(3);
-
 /// How long [`PtyCore::stop`] waits for the process to take the polite signal before killing it.
 const STOP_GRACE: Duration = Duration::from_secs(3);
 
@@ -59,44 +42,6 @@ const STOP_GRACE: Duration = Duration::from_secs(3);
 /// Bounded because the reader only finishes once nothing holds the PTY open, and a background
 /// process the process started may hold it long after the process is gone.
 pub const FINAL_OUTPUT_DRAIN: Duration = Duration::from_millis(500);
-
-struct Subscriber {
-    id: u64,
-    tx: mpsc::Sender<Bytes>,
-}
-
-/// Raw replay, parsed screen and subscribers share one lock: attaching has no output gap or
-/// duplicate, and freezing captures one exact boundary before exit cleanup can change the screen.
-struct Fan {
-    ring: RingBuffer,
-    terminal: TerminalSnapshot,
-    /// Every byte ever pushed into `ring`, which it forgets and this does not: what lets a caller
-    /// mark a point in the output and later read exactly what came after it.
-    total: u64,
-    subscribers: Vec<Subscriber>,
-    next_id: u64,
-    /// No client follows the output any more; see [`PtyCore::close_output`].
-    closed: bool,
-    /// Which answers to the program's queries are written. Beside the output, since a replay's
-    /// [`ReplayMark`] is taken with it.
-    replies: ReplyRoute,
-}
-
-/// A terminal client registered by [`PtyCore::attach`].
-pub struct Attached {
-    pub replay: Vec<u8>,
-    pub live: mpsc::Receiver<Bytes>,
-    /// For a client following live output: its id among the clients answering the program's
-    /// queries, and where its replay stands for answering them. `None` for a replay alone.
-    pub answering: Option<Answering>,
-}
-
-/// A live client's part in answering the program's queries.
-pub struct Answering {
-    pub client: u64,
-    /// Taken under the same lock as the replay, so no answer lands between the two.
-    pub mark: ReplayMark,
-}
 
 /// A process just started on a PTY, by [`spawn`].
 pub struct Spawned {
@@ -157,20 +102,39 @@ pub fn spawn(command: CommandBuilder, rows: u16, cols: u16) -> Result<Spawned> {
             pixel_height: 0,
         })
         .context("opening a PTY")?;
-    let child = pty.slave.spawn_command(command)?;
-    let pid = child
-        .process_id()
-        .ok_or_else(|| anyhow!("the spawned process has no pid"))?;
+    // Everything that can fail without a process to clean up comes first.
     let fd = pty
         .master
         .as_raw_fd()
         .ok_or_else(|| anyhow!("the PTY master has no file descriptor"))?;
     ptyio::set_nonblocking(fd).context("putting the PTY master into non-blocking mode")?;
     let wake = WakePipe::new().context("opening the reader's wake pipe")?;
+    let child = pty.slave.spawn_command(command)?;
+    started(child, pty.master, fd, wake)
+}
+
+/// Completes a [`Spawned`] from a process just started. `portable-pty` neither kills nor reaps a
+/// child when its handle is dropped, so one that cannot be taken on is killed and reaped here
+/// instead of being left running with nothing to account for it.
+fn started(
+    mut child: Box<dyn Child + Send + Sync>,
+    master: Box<dyn MasterPty + Send>,
+    fd: RawFd,
+    wake: WakePipe,
+) -> Result<Spawned> {
+    let Some(pid) = child.process_id() else {
+        if let Err(err) = child.kill() {
+            tracing::warn!(%err, "killing a process that could not be taken on failed");
+        }
+        if let Err(err) = child.wait() {
+            tracing::warn!(%err, "reaping a process that could not be taken on failed");
+        }
+        return Err(anyhow!("the spawned process has no pid"));
+    };
     Ok(Spawned {
         pid,
         fd,
-        master: pty.master,
+        master,
         child,
         wake,
     })
@@ -208,7 +172,7 @@ pub struct PtyCore {
     /// from [`Self::enter_crash_cleanup`] until the child has exited, and given up before it is
     /// reaped.
     crash_cleanup: Mutex<Option<crash_cleanup::Entry>>,
-    fan: Mutex<Fan>,
+    fan: Fan,
     /// A reader thread is reading the PTY into `fan`; see [`spawn_reader_thread`].
     reader_running: AtomicBool,
     /// [`Self::keep_final_output`] has run. A lock rather than a flag, so that a second caller
@@ -275,15 +239,7 @@ impl PtyCore {
             exit_complete: AtomicBool::new(false),
             exit_cleanup: Mutex::new(()),
             crash_cleanup: Mutex::new(None),
-            fan: Mutex::new(Fan {
-                ring: RingBuffer::new(RING_CAPACITY),
-                terminal: TerminalSnapshot::new(size.rows, size.cols),
-                total: 0,
-                subscribers: Vec::new(),
-                next_id: 0,
-                closed: false,
-                replies: ReplyRoute::default(),
-            }),
+            fan: Fan::new(size.rows, size.cols),
             reader_running: AtomicBool::new(false),
             final_output_kept: Mutex::new(false),
             scratch_dir: Mutex::new(new.scratch_dir),
@@ -293,92 +249,35 @@ impl PtyCore {
         }
     }
 
-    /// Registers a terminal client. The returned replay is everything buffered up to this
-    /// instant, preceded by the terminal's current modes once the buffer no longer holds the
-    /// start, and the receiver picks up with the very next byte after it. Once frozen, returns the
-    /// archived screen with a closed receiver, so exit cleanup cannot replace it; once the output
-    /// is closed, the replay with a closed receiver.
+    /// Registers a terminal client; see [`Fan::attach`].
     pub fn attach(&self) -> Attached {
-        let (tx, live) = mpsc::channel(SUBSCRIBER_QUEUE);
-        let mut fan = self.fan.lock().expect("fan mutex poisoned");
-        if let Some(output) = fan.terminal.frozen() {
-            let replay = output.to_vec();
-            return Attached {
-                replay,
-                live,
-                answering: None,
-            };
-        }
-        let mut replay = fan.ring.snapshot();
-        let replayed = replay.len();
-        let mut preamble = 0;
-        if fan.total > replay.len() as u64 {
-            // The ring has lost its head, and with it the mode sequences a program sends once at
-            // startup. The parsed terminal still knows them, and they describe the end of the
-            // window, which is where the replay leaves the client, so any toggles inside the
-            // window land on the same state.
-            let mut modes = fan.terminal.mode_preamble();
-            preamble = modes.len();
-            modes.append(&mut replay);
-            replay = modes;
-        }
-        if fan.closed {
-            return Attached {
-                replay,
-                live,
-                answering: None,
-            };
-        }
-        let client = fan.next_id;
-        fan.next_id += 1;
-        fan.subscribers.push(Subscriber { id: client, tx });
-        let total = fan.total;
-        let mark = fan
-            .replies
-            .replay_mark(total, replayed, preamble, Instant::now());
-        Attached {
-            replay,
-            live,
-            answering: Some(Answering { client, mark }),
-        }
+        self.fan.attach()
     }
 
     /// Whether this client's answer to the output up to `offset` is the one written; see
-    /// [`ReplyRoute::admit`].
+    /// [`Fan::admit_reply`].
     pub fn admit_reply(&self, client: u64, offset: u64) -> bool {
-        let mut fan = self.fan.lock().expect("fan mutex poisoned");
-        let total = fan.total;
-        fan.replies.admit(client, offset, total, Instant::now())
+        self.fan.admit_reply(client, offset)
     }
 
     /// Ends every attached client's stream once the output it follows is over, and makes every
     /// later [`Self::attach`] a replay alone. Output that still arrives is kept for that replay.
     pub fn close_output(&self) {
-        let mut fan = self.fan.lock().expect("fan mutex poisoned");
-        fan.closed = true;
-        fan.subscribers.clear();
+        self.fan.close();
     }
 
     /// The tail of what this process has printed, at most `max_bytes` of it. Taken from the same
     /// ring buffer a terminal client replays, so it is exactly what the user would see — raw PTY
     /// bytes, escape sequences included, which the caller is responsible for making readable.
     pub fn recent_output(&self, max_bytes: usize) -> Vec<u8> {
-        self.fan
-            .lock()
-            .expect("fan mutex poisoned")
-            .ring
-            .tail(max_bytes)
+        self.fan.recent_output(max_bytes)
     }
 
     /// Freezes a readable screen before termination can clear it. Input and the parser share
     /// the capture boundary; later cleanup output continues to reach live subscribers.
     pub fn freeze_output(&self) {
         let _input = self.lock_input();
-        self.fan
-            .lock()
-            .expect("fan mutex poisoned")
-            .terminal
-            .freeze();
+        self.fan.freeze();
     }
 
     /// Freezes before a record without a process can become observable. The closure only updates
@@ -390,39 +289,20 @@ impl PtyCore {
         update: impl FnOnce() -> anyhow::Result<bool>,
     ) -> anyhow::Result<bool> {
         let _input = self.lock_input();
-        let created = self
-            .fan
-            .lock()
-            .expect("fan mutex poisoned")
-            .terminal
-            .freeze();
+        let created = self.fan.freeze();
         let result = update();
         if created && !matches!(result, Ok(true)) {
-            self.fan
-                .lock()
-                .expect("fan mutex poisoned")
-                .terminal
-                .discard_frozen();
+            self.fan.discard_frozen();
         }
         result
     }
 
     pub fn frozen_output(&self) -> Option<Vec<u8>> {
-        self.fan
-            .lock()
-            .expect("fan mutex poisoned")
-            .terminal
-            .frozen()
-            .map(<[u8]>::to_vec)
+        self.fan.frozen_output()
     }
 
     pub fn is_frozen(&self) -> bool {
-        self.fan
-            .lock()
-            .expect("fan mutex poisoned")
-            .terminal
-            .frozen()
-            .is_some()
+        self.fan.is_frozen()
     }
 
     /// Hands the frozen screen, or the final parsed screen, to `keep` after exit, only once:
@@ -440,13 +320,7 @@ impl PtyCore {
             return;
         }
         self.wait_for_reader(FINAL_OUTPUT_DRAIN);
-        let output = self
-            .fan
-            .lock()
-            .expect("fan mutex poisoned")
-            .terminal
-            .output();
-        keep(&output);
+        keep(&self.fan.output());
         *kept = true;
     }
 
@@ -461,82 +335,37 @@ impl PtyCore {
 
     /// How many bytes this process has printed in all. A mark for [`Self::output_since`].
     pub fn output_total(&self) -> u64 {
-        self.fan.lock().expect("fan mutex poisoned").total
+        self.fan.total()
     }
 
-    /// Whether bracketed paste is on now; see [`TerminalSnapshot::bracketed_paste_on`].
+    /// Whether bracketed paste is on now; see
+    /// [`crate::terminal::snapshot::TerminalSnapshot::bracketed_paste_on`].
     pub fn bracketed_paste_on(&self) -> bool {
-        self.fan
-            .lock()
-            .expect("fan mutex poisoned")
-            .terminal
-            .bracketed_paste_on()
+        self.fan.bracketed_paste_on()
     }
 
-    /// The text of the rows the parsed screen shows now; see [`TerminalSnapshot::visible_text`].
+    /// The text of the rows the parsed screen shows now; see
+    /// [`crate::terminal::snapshot::TerminalSnapshot::visible_text`].
     pub fn screen_text(&self) -> String {
-        self.fan
-            .lock()
-            .expect("fan mutex poisoned")
-            .terminal
-            .visible_text()
+        self.fan.screen_text()
     }
 
     /// [`Self::screen_text`] with faint cells blanked; see
-    /// [`TerminalSnapshot::visible_text_undimmed`].
+    /// [`crate::terminal::snapshot::TerminalSnapshot::visible_text_undimmed`].
     pub fn screen_text_undimmed(&self) -> String {
-        self.fan
-            .lock()
-            .expect("fan mutex poisoned")
-            .terminal
-            .visible_text_undimmed()
+        self.fan.screen_text_undimmed()
     }
 
     /// What this process printed after `mark`, as taken from [`Self::output_total`] — less of it if
     /// the ring buffer has already let some go.
     pub fn output_since(&self, mark: u64) -> Vec<u8> {
-        let fan = self.fan.lock().expect("fan mutex poisoned");
-        let wanted = fan.total.saturating_sub(mark);
-        fan.ring.tail(usize::try_from(wanted).unwrap_or(usize::MAX))
+        self.fan.output_since(mark)
     }
 
     /// Takes one chunk read from the PTY into the replay, the parsed screen and every attached
-    /// client. `before_delivery` is told the new total once the chunk is buffered and before any
-    /// client is handed it, and runs outside every lock here.
-    ///
-    /// Blocks while a slow client catches up, which is how backpressure reaches the process: with
-    /// nobody reading the PTY, its own writes block. The alternative was measured: a reader that
-    /// always runs ahead fills any bounded channel within a fraction of a second under heavy output
-    /// and the client is dropped, at every frame size tested.
+    /// client; see [`Fan::push`], which blocks while a slow client catches up.
     pub fn push_output(&self, data: &[u8], before_delivery: impl FnOnce(u64)) {
-        let chunk = Bytes::copy_from_slice(data);
-        let (targets, total): (Vec<(u64, mpsc::Sender<Bytes>)>, u64) = {
-            let mut fan = self.fan.lock().expect("fan mutex poisoned");
-            fan.ring.push(data);
-            fan.terminal.process(data);
-            fan.total += data.len() as u64;
-            let total = fan.total;
-            fan.replies.note_output(total, Instant::now());
-            let targets = fan
-                .subscribers
-                .iter()
-                .map(|sub| (sub.id, sub.tx.clone()))
-                .collect();
-            (targets, fan.total)
-        };
-
-        before_delivery(total);
-
-        let mut dropped = Vec::new();
-        for (id, tx) in targets {
-            if !send_with_backpressure(&tx, chunk.clone()) {
-                dropped.push(id);
-            }
-        }
-        if !dropped.is_empty() {
-            let mut fan = self.fan.lock().expect("fan mutex poisoned");
-            fan.subscribers.retain(|sub| !dropped.contains(&sub.id));
-        }
+        self.fan.push(data, before_delivery);
     }
 
     /// The lock every write into the input is made under. An owner takes it to keep its own
@@ -574,23 +403,19 @@ impl PtyCore {
             (2..=MAX_COLS).contains(&cols) && (1..=MAX_ROWS).contains(&rows),
             "terminal dimensions exceed the supported range"
         );
-        let mut fan = self.fan.lock().expect("fan mutex poisoned");
-        anyhow::ensure!(
-            fan.terminal.frozen().is_none(),
-            "the terminal's screen has been frozen"
-        );
-        let master = self.master.lock().expect("master mutex poisoned");
-        let Some(master) = master.as_ref() else {
-            anyhow::bail!("the terminal has been hung up");
-        };
-        master.resize(PtySize {
-            rows,
-            cols,
-            pixel_width: 0,
-            pixel_height: 0,
-        })?;
-        fan.terminal.resize(rows, cols);
-        Ok(())
+        self.fan.resize(rows, cols, || {
+            let master = self.master.lock().expect("master mutex poisoned");
+            let Some(master) = master.as_ref() else {
+                anyhow::bail!("the terminal has been hung up");
+            };
+            master.resize(PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            })?;
+            Ok(())
+        })
     }
 
     /// The process group in the foreground of the PTY, the one the terminal's input and its
@@ -649,7 +474,7 @@ impl PtyCore {
     /// revokes the terminal when its process exits, so this is the only thing that ends the
     /// reader while a leftover job holds the PTY open; on macOS that exit already ends it, so a
     /// test there cannot show the need. **Blocks** until the reader thread has finished, which may
-    /// wait out an attached client that has stopped draining (see `SUBSCRIBER_GRACE`).
+    /// wait out an attached client that has stopped draining (see [`Fan::push`]).
     pub fn hang_up(&self) {
         self.close_output();
         let reader = self.reader.lock().expect("reader mutex poisoned").take();
@@ -695,12 +520,7 @@ impl PtyCore {
                 // the session is the child's: a helper that moved to a process group of its own
                 // too, which a signal to the child's group would miss.
                 if self.kill_session_leftovers {
-                    let swept = leader::kill_members(pid);
-                    if !swept.complete {
-                        tracing::warn!(terminal = %self.label, pid, killed = swept.killed, "listing processes failed; the sweep of the exited process's session may be incomplete");
-                    } else if swept.killed > 0 {
-                        tracing::info!(terminal = %self.label, pid, killed = swept.killed, "killed processes the exited process left in its session");
-                    }
+                    leader::kill_members(pid).log(pid, &self.label);
                 }
             }
             None => {}
@@ -865,26 +685,6 @@ impl PtyCore {
     }
 }
 
-/// Hands one chunk to one client, waiting out a full queue up to `SUBSCRIBER_GRACE`. Returns
-/// `false` when the client is gone or has stopped draining, meaning it should be dropped.
-fn send_with_backpressure(tx: &mpsc::Sender<Bytes>, chunk: Bytes) -> bool {
-    let deadline = Instant::now() + SUBSCRIBER_GRACE;
-    let mut pending = chunk;
-    loop {
-        match tx.try_send(pending) {
-            Ok(()) => return true,
-            Err(mpsc::error::TrySendError::Closed(_)) => return false,
-            Err(mpsc::error::TrySendError::Full(chunk)) => {
-                if Instant::now() >= deadline {
-                    return false;
-                }
-                pending = chunk;
-                std::thread::sleep(Duration::from_millis(2));
-            }
-        }
-    }
-}
-
 /// What owns a [`PtyCore`] and wants to see each chunk the reader takes from it.
 pub trait PtyOwner: Send + Sync + 'static {
     fn pty(&self) -> &PtyCore;
@@ -924,12 +724,10 @@ pub fn spawn_reader_thread<T: PtyOwner>(owner: Arc<T>, read_buf_bytes: usize) {
 
 #[cfg(test)]
 mod tests {
+    use std::io;
     use std::time::Instant;
 
-    use super::{send_with_backpressure, SUBSCRIBER_GRACE};
     use crate::test_support::{is_running, KillOnDrop};
-    use bytes::Bytes;
-    use tokio::sync::mpsc;
 
     #[test]
     fn a_wrapped_ring_replays_behind_the_modes_it_lost() {
@@ -944,7 +742,7 @@ mod tests {
         );
 
         let redraw = b"\r\x1b[2Kframe";
-        for _ in 0..super::RING_CAPACITY / redraw.len() + 1 {
+        for _ in 0..crate::terminal::fan::RING_CAPACITY / redraw.len() + 1 {
             live.on_output(redraw);
         }
         let replay = live.attach().replay;
@@ -1119,32 +917,60 @@ mod tests {
         assert!(is_running(same_group) && is_running(own_group));
     }
 
-    #[test]
-    fn a_client_that_keeps_draining_is_never_dropped() {
-        let (tx, mut rx) = mpsc::channel(1);
-        assert!(send_with_backpressure(&tx, Bytes::from_static(b"first")));
-        let drainer = std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(50));
-            rx.blocking_recv();
-            rx
-        });
-        // The queue is full until the drainer takes the first chunk, so this call has to wait
-        // rather than give up — waiting is what pushes backpressure onto the agent.
-        assert!(send_with_backpressure(&tx, Bytes::from_static(b"second")));
-        drainer.join().expect("the drainer thread");
+    /// A child whose pid cannot be read, the one way taking on a started process can fail.
+    #[derive(Debug)]
+    struct Unidentified(Box<dyn portable_pty::Child + Send + Sync>);
+
+    impl portable_pty::ChildKiller for Unidentified {
+        fn kill(&mut self) -> io::Result<()> {
+            self.0.kill()
+        }
+
+        fn clone_killer(&self) -> Box<dyn portable_pty::ChildKiller + Send + Sync> {
+            self.0.clone_killer()
+        }
+    }
+
+    impl portable_pty::Child for Unidentified {
+        fn try_wait(&mut self) -> io::Result<Option<portable_pty::ExitStatus>> {
+            self.0.try_wait()
+        }
+
+        fn wait(&mut self) -> io::Result<portable_pty::ExitStatus> {
+            self.0.wait()
+        }
+
+        fn process_id(&self) -> Option<u32> {
+            None
+        }
     }
 
     #[test]
-    fn a_client_that_stops_draining_is_dropped_after_the_grace_period() {
-        // Held open but never read: the case of a client that is gone or wedged.
-        let (tx, _rx) = mpsc::channel(1);
-        assert!(send_with_backpressure(&tx, Bytes::from_static(b"first")));
+    fn a_process_that_cannot_be_taken_on_is_killed_and_reaped() {
+        use portable_pty::native_pty_system;
 
-        let started = Instant::now();
-        assert!(!send_with_backpressure(&tx, Bytes::from_static(b"second")));
-        assert!(
-            started.elapsed() >= SUBSCRIBER_GRACE,
-            "it must wait out the whole grace period before giving up on a client"
+        let pty = native_pty_system()
+            .openpty(super::PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("a PTY");
+        let mut cmd = portable_pty::CommandBuilder::new("/bin/sleep");
+        cmd.arg("300");
+        let child = pty.slave.spawn_command(cmd).expect("the process");
+        let pid = child.process_id().expect("a pid") as libc::pid_t;
+        let fd = pty.master.as_raw_fd().expect("a descriptor");
+        let wake = super::WakePipe::new().expect("the wake pipe");
+        let outcome = super::started(Box::new(Unidentified(child)), pty.master, fd, wake);
+        assert!(outcome.is_err());
+        // SAFETY: signal 0 only checks that the pid names a process. A reaped child is gone
+        // entirely, where a killed one left unreaped would still be a zombie and answer.
+        assert_ne!(
+            unsafe { libc::kill(pid, 0) },
+            0,
+            "the process was left behind"
         );
     }
 

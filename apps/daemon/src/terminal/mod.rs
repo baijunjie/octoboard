@@ -3,6 +3,7 @@
 //! OSC title observer, which client's answer to a terminal query reaches the program, and the
 //! shell terminals themselves.
 
+pub(crate) mod fan;
 pub(crate) mod pty;
 pub(crate) mod ptyio;
 pub(crate) mod reply_route;

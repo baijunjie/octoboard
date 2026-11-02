@@ -161,7 +161,7 @@ pub async fn create(
     let cwd = {
         let (state, project, worktree) = (state.clone(), project.clone(), worktree.clone());
         tokio::task::spawn_blocking(move || {
-            crate::browse::resolve_project_directory(
+            crate::browse::scope::resolve_project_directory(
                 &state,
                 &project,
                 worktree.as_deref(),

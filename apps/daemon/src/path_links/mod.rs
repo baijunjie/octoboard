@@ -4,10 +4,18 @@
 //! where agents keep scratch files. Symbolic links are resolved before the roots are checked, so a
 //! link cannot lead out of one.
 //!
-//! What could be launched rather than viewed (an application or other bundle, a script or installer
-//! by extension, a file with an executable bit) is never opened by a link click: inside a temp root
-//! it is not reachable at all, and in a project a folder of that kind is not either, while a file
-//! is, as `viewer_only`, to be shown by the file viewer and nothing else (`open` refuses it).
+//! What could be launched rather than viewed is never opened by a link click: an application or
+//! other bundle, a script or installer, a file with an executable bit. A bundle extension counts on
+//! any component of a path, an interpreter or installer extension (`.py`, `.exe`, `.deb`) only on a
+//! regular file's own name, so a folder named `github.com` is still a folder. Inside a temp root
+//! what could be launched is not reachable at all; in a project a folder of that kind is not
+//! either. The system decides what a file's default application does with it, which no list of
+//! extensions can know, so no file in a project is handed to the host's opener at all: each is
+//! `viewer_only`, to be shown by the file viewer, and `open` refuses it. On macOS `open` also
+//! refuses a folder the system types as a package (`.xcodeproj`, `.playground`), which no list
+//! names. Only a file in a temp root, a folder in a project or a folder in a temp root is opened.
+//! A path under a temp root that lies in a project (or a worktree of it) is the project's, however
+//! it is spelled.
 //! Inside a temp root, which other users can write to, the file and every directory down to it must
 //! also belong to the daemon's user and be closed to writes by anyone else. A relative path is
 //! tried against the project's directory and each worktree's place and is reachable only when
@@ -20,16 +28,17 @@
 
 use std::collections::HashMap;
 use std::os::unix::ffi::OsStrExt;
-use std::os::unix::fs::{MetadataExt, PermissionsExt};
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use tokio::sync::Semaphore;
 
-use crate::hostfs::{is_not_found, lexically_normalise};
 use crate::protocol::{error_code, CodedError, PathLink, PathLinkKind, PathLinkView};
+
+mod resolve;
+use resolve::{reach, resolve, Refusal, Resolved, Unreached};
 
 /// The most paths one `probe_path_links` request may ask about.
 pub const MAX_PROBED_PATHS: usize = 64;
@@ -39,52 +48,6 @@ pub static PROBE_PERMITS: Semaphore = Semaphore::const_new(crate::blocking_pass:
 
 /// How long the roots of a project are reused: finding its worktrees runs `git`.
 const ROOTS_TTL: Duration = Duration::from_secs(5);
-
-/// Extensions of things the system launches instead of showing, matched without case on every
-/// component of a path below its root (a bundle is a directory carrying one).
-const LAUNCHABLE_EXTENSIONS: &[&str] = &[
-    "app",
-    "appex",
-    "bundle",
-    "framework",
-    "plugin",
-    "kext",
-    "xpc",
-    "prefpane",
-    "saver",
-    "workflow",
-    "action",
-    "command",
-    "tool",
-    "terminal",
-    "scpt",
-    "scptd",
-    "pkg",
-    "mpkg",
-    "dmg",
-    "sh",
-    "bash",
-    "zsh",
-    "desktop",
-    "webloc",
-    "inetloc",
-    "jar",
-    "term",
-    "fileloc",
-    "afploc",
-    "ftploc",
-    "mailloc",
-    "newsloc",
-    "atloc",
-    "nslloc",
-    "url",
-    "csh",
-    "tcsh",
-    "ksh",
-    "fish",
-    "mobileconfig",
-    "shortcut",
-];
 
 /// The temp roots. `canonical` are the roots as they resolve now; `lexical` are the spellings a
 /// path may start with before it is looked at (`/tmp` and `/private/tmp`, the daemon's temp
@@ -157,287 +120,6 @@ impl ProjectRoots {
     }
 }
 
-/// A path the terminal's text names, as it resolves.
-#[derive(Debug, PartialEq, Eq)]
-pub struct Resolved {
-    pub path: PathBuf,
-    pub kind: PathLinkKind,
-    /// A file in a project root that the system could launch: to be viewed, and refused by `open`.
-    pub launchable: bool,
-    /// The project root it was found in (an index of `ProjectRoots::canonical`); none in a temp root.
-    pub project_root: Option<usize>,
-}
-
-/// What `raw` names, if it is reachable. An absolute path or one starting with `~/` is taken as
-/// written, any other is looked for under each of the project's roots. `project` finds those roots,
-/// and is only called for a path not under a temp root, or one gone from under it.
-pub fn resolve(
-    raw: &str,
-    home: Option<&Path>,
-    temp: &TempRoots,
-    project: &dyn Fn() -> ProjectRoots,
-) -> Option<Resolved> {
-    reach(raw, home, temp, project).ok()
-}
-
-/// Why [`reach`] found nothing.
-#[derive(Debug, PartialEq, Eq)]
-pub enum Unreached {
-    /// Spelled inside a root, but nothing is there now: `in_project` when spelled inside a
-    /// project's root, even one that lies under a temp root.
-    Gone { in_project: bool },
-    /// Anything else not to show, and why.
-    Refused(Refusal),
-}
-
-/// Why a path that is not gone is not to be shown.
-#[derive(Debug, PartialEq, Eq)]
-pub enum Refusal {
-    /// Outside every root: spelled outside them, or resolving outside them (a link leading out).
-    Outside,
-    /// A relative path found in more than one of the project's roots.
-    Ambiguous,
-    /// Something the system would run, which a link never opens.
-    Launchable,
-    /// In a temp root, but not solely the daemon user's, or writable by group or others.
-    NotPrivate,
-    /// Exists, but is neither a file nor a folder (a socket, a device).
-    NotAFileOrFolder,
-    /// The system denied reading the path or a directory on the way to it; holds its text.
-    Denied(String),
-    /// Any other I/O failure looking at the path; holds the system's text.
-    Unreadable(String),
-    /// A path that cannot be looked up at all (empty, containing NUL, or `~/` with no known home).
-    Other,
-}
-
-impl Refusal {
-    /// What an I/O failure on the way to a path means.
-    fn of_io(err: &std::io::Error) -> Self {
-        if err.kind() == std::io::ErrorKind::PermissionDenied {
-            Self::Denied(err.to_string())
-        } else {
-            Self::Unreadable(err.to_string())
-        }
-    }
-
-    /// The error a refused request for `path` is answered with.
-    fn into_error(self, path: &str) -> anyhow::Error {
-        let (cause, detail) = match self {
-            Self::Denied(detail) => {
-                return CodedError::raised(
-                    error_code::PERMISSION_DENIED,
-                    format!("{path} could not be read: {detail}"),
-                    &[("path", path), ("detail", &detail)],
-                )
-            }
-            Self::Outside => {
-                return CodedError::raised(
-                    error_code::OUTSIDE_SCOPE,
-                    format!("{path} leads outside the project and the temp roots"),
-                    &[("path", path), ("action", "open")],
-                )
-            }
-            Self::Ambiguous => ("ambiguous", None),
-            Self::Launchable => ("launchable", None),
-            Self::NotPrivate => ("not_private", None),
-            Self::NotAFileOrFolder => ("not_a_file_or_folder", None),
-            Self::Unreadable(detail) => ("unreadable", Some(detail)),
-            Self::Other => ("other", None),
-        };
-        let mut params = vec![("path", path), ("cause", cause)];
-        if let Some(detail) = &detail {
-            params.push(("detail", detail));
-        }
-        CodedError::raised(
-            error_code::PATH_LINK_REFUSED,
-            format!("{path} is not opened from a link: {cause}"),
-            &params,
-        )
-    }
-}
-
-/// [`resolve`], saying why it found nothing.
-pub fn reach(
-    raw: &str,
-    home: Option<&Path>,
-    temp: &TempRoots,
-    project: &dyn Fn() -> ProjectRoots,
-) -> Result<Resolved, Unreached> {
-    if raw.is_empty() || raw.contains('\0') {
-        return Err(Unreached::Refused(Refusal::Other));
-    }
-    let absolute = if let Some(rest) = raw.strip_prefix("~/") {
-        Some(home.ok_or(Unreached::Refused(Refusal::Other))?.join(rest))
-    } else if Path::new(raw).is_absolute() {
-        Some(PathBuf::from(raw))
-    } else {
-        None
-    };
-    // Folded lexically first, so that a `..` cannot lead `canonicalize` out of the roots the
-    // spelling was checked against.
-    let Some(absolute) = absolute.map(|path| lexically_normalise(&path)) else {
-        let roots = project();
-        let mut found: Vec<PathBuf> = Vec::new();
-        let (mut spelled, mut missing) = (0, 0);
-        let mut failure: Option<Refusal> = None;
-        for root in &roots.canonical {
-            let joined = lexically_normalise(&root.join(raw));
-            if !roots.lexical.iter().any(|root| joined.starts_with(root)) {
-                continue;
-            }
-            spelled += 1;
-            let canonical = match std::fs::canonicalize(joined) {
-                Ok(canonical) => canonical,
-                Err(err) => {
-                    if is_not_found(&err) {
-                        missing += 1;
-                    } else {
-                        let refusal = Refusal::of_io(&err);
-                        // A denied read is the more telling of two failures.
-                        if failure.is_none() || matches!(refusal, Refusal::Denied(_)) {
-                            failure = Some(refusal);
-                        }
-                    }
-                    continue;
-                }
-            };
-            if roots
-                .canonical
-                .iter()
-                .any(|root| canonical.starts_with(root))
-                && !found.contains(&canonical)
-            {
-                found.push(canonical);
-            }
-        }
-        let [canonical] = found.as_slice() else {
-            return Err(if found.len() > 1 {
-                Unreached::Refused(Refusal::Ambiguous)
-            } else if spelled > 0 && missing == spelled {
-                Unreached::Gone { in_project: true }
-            } else {
-                // Nothing found: a failure looking, else every spelling led outside the roots.
-                Unreached::Refused(failure.unwrap_or(Refusal::Outside))
-            });
-        };
-        let index = roots
-            .innermost(canonical)
-            .ok_or(Unreached::Refused(Refusal::Outside))?;
-        let mut resolved = reachable(canonical.clone(), &roots.canonical[index], false, true)
-            .map_err(Unreached::Refused)?;
-        resolved.project_root = Some(index);
-        return Ok(resolved);
-    };
-    if temp.lexical.iter().any(|root| absolute.starts_with(root)) {
-        // A gone path is the project's when it is spelled inside it too, as for a project kept
-        // under a temp root: the project's files are where it is looked for again.
-        let canonical = canonical_or_gone(&absolute, || {
-            project()
-                .lexical
-                .iter()
-                .any(|root| absolute.starts_with(root))
-        })?;
-        let root = temp
-            .canonical
-            .iter()
-            .find(|root| canonical.starts_with(root))
-            .ok_or(Unreached::Refused(Refusal::Outside))?;
-        return reachable(canonical, root, temp.check_owner, false).map_err(Unreached::Refused);
-    }
-    let roots = project();
-    if !roots.lexical.iter().any(|root| absolute.starts_with(root)) {
-        return Err(Unreached::Refused(Refusal::Outside));
-    }
-    let canonical = canonical_or_gone(&absolute, || true)?;
-    let index = roots
-        .innermost(&canonical)
-        .ok_or(Unreached::Refused(Refusal::Outside))?;
-    let mut resolved =
-        reachable(canonical, &roots.canonical[index], false, true).map_err(Unreached::Refused)?;
-    resolved.project_root = Some(index);
-    Ok(resolved)
-}
-
-/// `path` with its links resolved, or why not: gone when nothing is there (see [`is_not_found`]),
-/// `in_project` asked only then.
-fn canonical_or_gone(path: &Path, in_project: impl FnOnce() -> bool) -> Result<PathBuf, Unreached> {
-    std::fs::canonicalize(path).map_err(|err| {
-        if is_not_found(&err) {
-            Unreached::Gone {
-                in_project: in_project(),
-            }
-        } else {
-            Unreached::Refused(Refusal::of_io(&err))
-        }
-    })
-}
-
-/// `canonical`, found inside `root`, with what it is, unless it is not something to show: not a file
-/// or folder, or (with `check_owner`) not solely the daemon's user's from `root` down. What could be
-/// launched is refused too, except a file in a project (`in_project`), which is kept for the viewer.
-fn reachable(
-    canonical: PathBuf,
-    root: &Path,
-    check_owner: bool,
-    in_project: bool,
-) -> Result<Resolved, Refusal> {
-    let metadata = std::fs::metadata(&canonical).map_err(|err| Refusal::of_io(&err))?;
-    let kind = if metadata.is_dir() {
-        PathLinkKind::Directory
-    } else if metadata.is_file() {
-        PathLinkKind::File
-    } else {
-        return Err(Refusal::NotAFileOrFolder);
-    };
-    let launchable = launchable(&canonical, root, &metadata);
-    if launchable && !(in_project && kind == PathLinkKind::File) {
-        return Err(Refusal::Launchable);
-    }
-    if check_owner && !closed_to_others(&canonical, root) {
-        return Err(Refusal::NotPrivate);
-    }
-    Ok(Resolved {
-        path: canonical,
-        kind,
-        launchable,
-        project_root: None,
-    })
-}
-
-/// Whether every entry from the one below `root` down to `canonical` belongs to the daemon's user
-/// and cannot be written by its group or others, as read without following links.
-fn closed_to_others(canonical: &Path, root: &Path) -> bool {
-    let Ok(below) = canonical.strip_prefix(root) else {
-        return false;
-    };
-    // SAFETY: `geteuid` takes no arguments and cannot fail.
-    let me = unsafe { libc::geteuid() };
-    let mut current = root.to_path_buf();
-    below.components().all(|component| {
-        current.push(component);
-        std::fs::symlink_metadata(&current)
-            .is_ok_and(|metadata| metadata.uid() == me && metadata.mode() & 0o022 == 0)
-    })
-}
-
-/// Whether the system could run what `canonical` names, or a bundle it sits in, rather than show it.
-fn launchable(canonical: &Path, root: &Path, metadata: &std::fs::Metadata) -> bool {
-    if metadata.is_file() && metadata.permissions().mode() & 0o111 != 0 {
-        return true;
-    }
-    let below = canonical.strip_prefix(root).unwrap_or(canonical);
-    below.components().any(|component| {
-        let Component::Normal(name) = component else {
-            return false;
-        };
-        Path::new(name).extension().is_some_and(|extension| {
-            let extension = extension.to_string_lossy().to_ascii_lowercase();
-            LAUNCHABLE_EXTENSIONS.contains(&extension.as_str())
-        })
-    })
-}
-
 /// The roots of each project as last found, with when: `project_roots` reuses them for
 /// [`ROOTS_TTL`]. Held in memory only, on `AppState`, and dropped with the project.
 #[derive(Default)]
@@ -446,21 +128,27 @@ pub struct RootsCache(Mutex<HashMap<(String, String), (Instant, ProjectRoots)>>)
 impl RootsCache {
     /// What was found for `project` at `path` within [`ROOTS_TTL`].
     fn get(&self, project: &str, path: &str) -> Option<ProjectRoots> {
-        let cache = self.0.lock().unwrap();
+        let cache = self.0.lock().expect("path link roots cache poisoned");
         let (at, roots) = cache.get(&(project.to_owned(), path.to_owned()))?;
         (at.elapsed() < ROOTS_TTL).then(|| roots.clone())
     }
 
     fn insert(&self, project: &str, path: &str, roots: ProjectRoots) {
-        self.0.lock().unwrap().insert(
-            (project.to_owned(), path.to_owned()),
-            (Instant::now(), roots),
-        );
+        self.0
+            .lock()
+            .expect("path link roots cache poisoned")
+            .insert(
+                (project.to_owned(), path.to_owned()),
+                (Instant::now(), roots),
+            );
     }
 
     /// Drops everything held for `project`, whichever directory it was found at.
     pub fn forget(&self, project: &str) {
-        self.0.lock().unwrap().retain(|(id, _), _| id != project);
+        self.0
+            .lock()
+            .expect("path link roots cache poisoned")
+            .retain(|(id, _), _| id != project);
     }
 }
 
@@ -478,7 +166,7 @@ fn project_roots(state: &crate::state::AppState, project: &str, fresh: bool) -> 
             return roots;
         }
     }
-    let live = crate::browse::project_live_roots(
+    let live = crate::browse::scope::project_live_roots(
         state,
         project,
         &crate::git::isolated::IsolatedGit::from_shell,
@@ -524,7 +212,7 @@ pub fn probe(
     known(state, project)?;
     let temp = temp_roots();
     let home = crate::paths::known_home_dir();
-    // Found at most once, and only for a path not under a temp root, or one gone from under it.
+    // Found at most once, however many paths ask for them.
     let roots = OnceLock::new();
     let lookup = || {
         roots
@@ -540,7 +228,7 @@ pub fn probe(
         .map(|path| {
             let resolved = resolve(&path, home.as_deref(), &temp, &lookup);
             let kind = resolved.as_ref().map_or(PathLinkKind::None, |r| r.kind);
-            let viewer_only = resolved.as_ref().is_some_and(|r| r.launchable);
+            let viewer_only = resolved.as_ref().is_some_and(Resolved::viewer_only);
             let view = resolved.and_then(|resolved| {
                 // Only a path found in the project's roots has a view, and only those need them again.
                 resolved.project_root?;
@@ -612,18 +300,26 @@ fn entry_file(directory: &Path) -> Option<PathBuf> {
 }
 
 /// Opens `path` with the host's default application (a directory in its file manager), after
-/// resolving it again as `probe` does, from the project's roots as they are now.
+/// resolving it again as `probe` does, from the project's roots as they are now. On macOS a folder
+/// the system types as a package is refused like a launchable one; the type is asked only here,
+/// where a path is about to be opened.
 pub fn open(state: &crate::state::AppState, project: Option<&str>, path: &str) -> Result<()> {
-    open_with(state, project, path, |path| {
-        crate::host_open::paths::open_path(path, false)
-    })
+    open_with(
+        state,
+        project,
+        path,
+        |path| cfg!(target_os = "macos") && crate::host_open::paths::is_macos_package(path),
+        |path| crate::host_open::paths::open_path(path, false),
+    )
 }
 
-/// [`open`] with what opens a resolved path given, so that a test can see that nothing is.
+/// [`open`] with what says a folder is a package and what opens a resolved path given, so that a
+/// test can see that nothing is opened.
 fn open_with(
     state: &crate::state::AppState,
     project: Option<&str>,
     path: &str,
+    is_package: impl FnOnce(&Path) -> bool,
     opener: impl FnOnce(&Path) -> Result<()>,
 ) -> Result<()> {
     known(state, project)?;
@@ -635,7 +331,7 @@ fn open_with(
     };
     let resolved = reach(path, home.as_deref(), &temp_roots(), &lookup);
     let resolved = match resolved {
-        Ok(resolved) if !resolved.launchable => resolved,
+        Ok(resolved) if !resolved.viewer_only() => resolved,
         Ok(_) => return Err(Refusal::Launchable.into_error(path)),
         Err(Unreached::Refused(refusal)) => return Err(refusal.into_error(path)),
         Err(Unreached::Gone { in_project }) => {
@@ -649,6 +345,9 @@ fn open_with(
             ))
         }
     };
+    if resolved.kind == PathLinkKind::Directory && is_package(&resolved.path) {
+        return Err(Refusal::Launchable.into_error(path));
+    }
     opener(&resolved.path)
 }
 

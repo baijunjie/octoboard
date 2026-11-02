@@ -30,8 +30,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::Result;
 
+use crate::browse::content::json_escaped_len;
 use crate::browse::source::file_id;
-use crate::browse::{budget, ignored, json_escaped_len, BrowseGit, Cancelled};
+use crate::browse::{budget, ignored, BrowseGit, Cancelled};
 use crate::hostfs::{read_bounded, ReadFailure};
 use crate::protocol::{error_code, BrowseEntry, CodedError, EntryKind, LinkTarget};
 use crate::wire_path::{self, RelPath};

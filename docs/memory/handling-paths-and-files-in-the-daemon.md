@@ -27,12 +27,16 @@ rendered document, a hook's payload. An agent echoes whatever it read, so someon
 opener does not only show: it runs an application or other bundle, a `.command` or shell script, an installer or any
 file with an executable bit, and follows a `.webloc`, `.fileloc` or `.desktop` shortcut on to somewhere else.
 
-So the daemon resolves such a path itself at the moment it opens it, never trusting a client's earlier answer; it must
-lie inside a root the daemon chose once symbolic links are resolved; nothing launchable may sit anywhere along it; and
-inside a root other users can write to (a system temp directory such as `/tmp`), the file and every directory down to
-it must belong to the daemon's user and be closed to writes by group and others, or another user can swap it between
-the check and the open. `resolve` in `apps/daemon/src/path_links/mod.rs` does all of this; extend it rather than write a
-second one.
+So the daemon resolves such a path itself at the moment it opens it, never trusting a client's earlier answer, and it
+must lie inside a root the daemon chose once symbolic links are resolved. What the opener does with a file is up to the
+file's default application on that machine — a Python launcher runs a `.py`, Wine an `.exe`, an installer a `.deb` — and
+no list of extensions can know it, so a file in the user's project is never handed to the opener: it is shown in the
+file viewer instead. A refusal of launchable things (an executable bit, bundle and script extensions, a folder macOS
+types as a package) is only the second line, for what is still opened — a folder, or a file in a temp root. Inside a
+root other users can write to (a system temp directory such as `/tmp`), the file and every directory down to it must
+also belong to the daemon's user and be closed to writes by group and others, or another user can swap it between the
+check and the open. `reach` in `apps/daemon/src/path_links/resolve.rs` decides all of this (a path it answers
+`viewer_only` is refused by `path_links::open`); extend it rather than write a second one.
 
 ## Act destructively on "it is gone" only when `NotFound` said so
 
@@ -117,7 +121,7 @@ The looks read the file system, so they run on blocking threads after the store'
 deadline, and one that outran it is left to finish and, once it has run past its stuck threshold, recorded in a
 `blocking_pass::StalledPasses` under its key, so later decisions take the fallback at once instead of starting another
 thread a stuck mount holds the same way; `hostfs::place::looked_within` and `coordinator::projects::identities_within`
-are the shape. `state.directory_looks` is one registry for every decision of this kind (trust, project removal, branch
+are the shape, and `blocking_pass::within_deadline` the same pass for a caller with no runtime (a thread of its own). `state.directory_looks` is one registry for every decision of this kind (trust, project removal, branch
 cleanup, account removal), so a look with a shorter deadline than theirs — a quick check ahead of a confirmation — keeps
 `hostfs::place::Looking::stuck_after` at the full deadline: a merely slow path recorded as stuck makes all of them take
 a healthy path as unreachable. A decision that must not be cut short by what such an earlier look left running takes

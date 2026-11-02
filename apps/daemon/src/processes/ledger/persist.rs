@@ -1,11 +1,15 @@
 //! What the ledger keeps on disk under the data directory: the instance id that tells this data
 //! directory's daemon's tags from any other's, and the processes attributed and kept, so a daemon
-//! started after a restart or a crash can stop what the previous one left.
+//! started after a restart or a crash can stop what the previous one left. What the book holds
+//! is written down here ([`Persisted::from_book`]), and read back into a book at start
+//! ([`Persisted::read_back`]).
 
+use std::collections::HashSet;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+use super::attribute::{Attributed, Book, ENDED};
 use super::table::Identity;
 use crate::hostfs::replace::{replace_file, Permissions};
 
@@ -57,6 +61,109 @@ pub(super) struct Persisted {
     /// The project each kept terminal session is listed under, for those that have one.
     #[serde(default)]
     pub kept_session_projects: Vec<PersistedSessionProject>,
+}
+
+impl Persisted {
+    /// What `book` holds that a restart needs, written in the boot `boot`.
+    pub fn from_book(book: &Book, boot: Option<String>) -> Self {
+        Self {
+            boot,
+            attributed: book
+                .attributed
+                .iter()
+                .map(|(id, attributed)| PersistedProcess {
+                    pid: id.pid,
+                    start: id.start,
+                    launch: attributed.launch.clone(),
+                    sid: attributed.sid,
+                })
+                .collect(),
+            kept: book.kept.iter().copied().collect(),
+            kept_sessions: book
+                .kept_sessions
+                .iter()
+                .map(|(&sid, &leader_start)| PersistedSession { sid, leader_start })
+                .collect(),
+            sessions: book
+                .launches
+                .values()
+                .flat_map(|launch| launch.sessions.iter())
+                .map(|(&sid, &leader_start)| PersistedSession { sid, leader_start })
+                .collect(),
+            kept_projects: book
+                .kept_projects
+                .iter()
+                .map(|(id, project)| PersistedKeptProject {
+                    pid: id.pid,
+                    start: id.start,
+                    project: project.clone(),
+                })
+                .collect(),
+            kept_session_projects: book
+                .kept_session_projects
+                .iter()
+                .map(|(&sid, project)| PersistedSessionProject {
+                    sid,
+                    project: project.clone(),
+                })
+                .collect(),
+        }
+    }
+
+    /// Takes what the file holds back into `book`: what it kept as kept, with the projects they
+    /// are listed under, its sessions to be proven by the first scan (see
+    /// [`Book::read_back_sessions`]), and every process it attributed and did not keep as an
+    /// ended launch's. Answers the processes held for an ended launch from then on.
+    pub fn read_back(&self, book: &mut Book) -> HashSet<Identity> {
+        book.kept.extend(self.kept.iter().copied());
+        let sessions = |sessions: &[PersistedSession]| {
+            sessions
+                .iter()
+                .map(|session| (session.sid, session.leader_start))
+                .collect::<Vec<_>>()
+        };
+        book.read_back_sessions(
+            sessions(&self.sessions),
+            sessions(&self.kept_sessions),
+            self.attributed
+                .iter()
+                .map(PersistedProcess::identity)
+                .chain(self.kept.iter().copied()),
+        );
+        for kept in &self.kept_projects {
+            let id = Identity {
+                pid: kept.pid,
+                start: kept.start,
+            };
+            if book.kept.contains(&id) {
+                book.kept_projects
+                    .entry(id)
+                    .or_insert_with(|| kept.project.clone());
+            }
+        }
+        for session in &self.kept_session_projects {
+            if book.kept_sessions.contains_key(&session.sid) {
+                book.kept_session_projects
+                    .entry(session.sid)
+                    .or_insert_with(|| session.project.clone());
+            }
+        }
+        for process in &self.attributed {
+            let id = process.identity();
+            if !book.kept.contains(&id) {
+                book.attributed.entry(id).or_insert(Attributed {
+                    launch: ENDED.to_string(),
+                    sid: process.sid,
+                });
+            }
+        }
+        book.dirty = true;
+        book.attributed
+            .iter()
+            .filter(|(_, attributed)| attributed.launch == ENDED)
+            .map(|(id, _)| *id)
+            .collect()
+    }
 }
 
 /// A kept process with the project it is listed under.

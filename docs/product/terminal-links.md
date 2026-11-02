@@ -159,24 +159,42 @@ pointer has to move first.
   - A console session has no project: in it, only absolute and `~/` paths inside a temporary directory are links. A
     project whose directory cannot be found still has its paths inside a temporary directory linked.
 - **Anything that is neither a file nor a folder** is never a link.
-- **What the system could launch rather than show is never opened on the host by a click**: a file with an executable
-  bit, and a path any part of which, below the project or temporary directory, has one of these extensions, compared
-  without regard to case: `app`, `appex`, `bundle`, `framework`, `plugin`, `kext`, `xpc`, `prefpane`, `saver`,
-  `workflow`, `action`, `command`, `tool`, `terminal`, `term`, `scpt`, `scptd`, `pkg`, `mpkg`, `dmg`, `jar`, `sh`,
-  `bash`, `zsh`, `csh`, `tcsh`, `ksh`, `fish`, `desktop`, `webloc`, `inetloc`, `fileloc`, `afploc`, `ftploc`, `mailloc`,
-  `newsloc`, `atloc`, `nslloc`, `url`, `mobileconfig` and `shortcut` — so an application bundle and everything inside it
-  as well. Inside a temporary directory such a path is no link at all, and in the project neither is such a folder. Such
-  a file in the project is a link, which only ever opens in the file viewer (see "Opened from the terminal" in
-  `docs/product/file-viewer.md`).
+- **No file in the project is ever opened on the host by a click**, whatever its type: the system's default application
+  for a file may run it, so every file found in the project — its directory or a worktree's place, including a project
+  kept inside a temporary directory, however its path is written — only ever opens in the file viewer (see "Opened from
+  the terminal" in `docs/product/file-viewer.md`).
+- **What the system could launch rather than show is never opened on the host by a click** either:
+  - a file with an executable bit;
+  - a path any part of which, below the project or temporary directory, has one of these extensions, compared without
+    regard to case — so an application bundle and everything inside it as well: `app`, `appex`, `bundle`, `framework`,
+    `plugin`, `kext`, `xpc`, `prefpane`, `saver`, `workflow`, `action`, `command`, `tool`, `terminal`, `term`, `scpt`,
+    `scptd`, `pkg`, `mpkg`, `dmg`, `jar`, `sh`, `bash`, `zsh`, `csh`, `tcsh`, `ksh`, `fish`, `desktop`, `webloc`,
+    `inetloc`, `fileloc`, `afploc`, `ftploc`, `mailloc`, `newsloc`, `atloc`, `nslloc`, `url`, `mobileconfig` and
+    `shortcut`;
+  - a file — not a folder — whose own name has one of these extensions, which an interpreter or installer handles,
+    compared without regard to case: `py`, `pyw`, `pyc`, `pyo`, `pyz`, `pl`, `rb`, `php`, `ps1`, `vbs`, `vbe`, `wsf`,
+    `wsh`, `jse`, `hta`, `jnlp`, `exe`, `msi`, `msp`, `bat`, `cmd`, `com`, `scr`, `cpl`, `pif`, `reg`, `appimage`,
+    `run`, `bin`, `deb`, `rpm`, `flatpak`, `flatpakref`, `flatpakrepo` and `snap`. A folder so named (`github.com`) is
+    an ordinary folder;
+  - on macOS, a folder the system treats as a package, such as an `.xcodeproj` or a `.playground`, even one no list
+    above names — and a folder whose name has an extension when its type cannot be told. This is decided only as the
+    folder is about to be opened on the host, so such a folder is still a link, and a click that would open it in the
+    file manager is refused.
+
+  Inside a temporary directory such a file or folder, a macOS package apart, is no link at all, and in the project
+  neither is such a folder. A file of this kind in the project is a link like any other project file, opening in the
+  file viewer.
 - **Inside a temporary directory**, which other users can write to, the file or folder and every folder from the
   temporary directory down to it must also belong to the user the daemon runs as and be closed to writes by its group
-  and by others.
-- **A click** on a file inside the project — its directory or a worktree's place — opens it in Octoboard's file viewer,
-  at the path's line, when the viewer can show it; what decides that, and how the viewer then behaves, is in "Opened
-  from the terminal" in `docs/product/file-viewer.md`. A click on a folder there opens the folder's README or index file
-  in the file viewer instead, when it has one the viewer can show; which file that is, and when and how the folder opens
-  in the file manager instead, is in the same section. Anything else opens on the machine the daemon runs on — not on
-  the machine a browser client happens to be open on: a file with its default application, a folder in the file manager.
+  and by others. A file of a project kept inside a temporary directory is exempt, since it only opens in the file
+  viewer; a folder of such a project, however its path is written, must pass this rule all the same.
+- **A click** on a file inside the project opens it in Octoboard's file viewer, at the path's line; how the viewer then
+  behaves is in "Opened from the terminal" in `docs/product/file-viewer.md`. A click on a folder there opens the
+  folder's README or index file in the file viewer instead, when it has one the viewer can show; which file that is, and
+  when and how the folder opens in the file manager instead, is in the same section. Anything else — a file or folder in
+  a temporary directory outside the project, or a project folder that opens in the file manager by that section's rules —
+  opens on the machine the daemon runs on, not on the machine a browser client happens to be open on: a file with its
+  default application, a folder in the file manager.
   A line given with the path plays no part there, so such a file opens as it would from the file manager. A path link
   has no tooltip. The path is checked again by the rules above as it is opened on the host, and one that no longer
   passes them is not opened. Every error alert a click raises is titled that the path could not be opened; which of them

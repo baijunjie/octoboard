@@ -896,7 +896,7 @@ async fn handle_inner(
         } => {
             let state = Arc::clone(state);
             tokio::task::spawn_blocking(move || {
-                let path = crate::browse::resolve_project_path(
+                let path = crate::browse::scope::resolve_project_path(
                     &state,
                     &project,
                     worktree.as_deref(),

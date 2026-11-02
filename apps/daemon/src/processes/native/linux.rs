@@ -1,12 +1,12 @@
 //! The process table on Linux, from `/proc`.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-use super::{Cwd, Identity, Proc};
+use super::{Cwd, ProcInfo};
 
 /// What `/proc/<pid>/stat` says of a process.
 struct Stat {
@@ -70,24 +70,26 @@ fn clock_micros(clock: libc::clockid_t) -> u64 {
 
 /// Now on the clock start times are on: since boot, the time asleep included, as the kernel
 /// counts a process's start.
-pub(super) fn now() -> u64 {
+pub(crate) fn now() -> u64 {
     clock_micros(libc::CLOCK_BOOTTIME)
 }
 
 /// A start time in microseconds since the epoch, for showing: the wall clock now, less how long
 /// ago the process started.
-pub(super) fn epoch_micros(start: u64) -> u64 {
+pub(crate) fn epoch_micros(start: u64) -> u64 {
     clock_micros(libc::CLOCK_REALTIME).saturating_sub(now().saturating_sub(start))
 }
 
 /// What tells this boot of the system from any other, since start times count from boot.
-pub(super) fn boot_id() -> Option<String> {
+pub(crate) fn boot_id() -> Option<String> {
     let id = std::fs::read_to_string("/proc/sys/kernel/random/boot_id").ok()?;
     let id = id.trim();
     (!id.is_empty()).then(|| id.to_string())
 }
 
-pub(super) fn list() -> Option<Vec<Proc>> {
+/// The running processes of the daemon's own effective user, zombies left out, or `None` when
+/// the pids cannot be listed.
+pub(crate) fn list() -> Option<Vec<ProcInfo>> {
     let pids = crate::processes::pids::all()?;
     // SAFETY: `geteuid` only reads.
     let uid = unsafe { libc::geteuid() };
@@ -106,11 +108,9 @@ pub(super) fn list() -> Option<Vec<Proc>> {
                 if stat.zombie {
                     return None;
                 }
-                Some(Proc {
-                    id: Identity {
-                        pid,
-                        start: start_micros(stat.start_ticks)?,
-                    },
+                Some(ProcInfo {
+                    pid,
+                    start: start_micros(stat.start_ticks)?,
                     ppid: stat.ppid,
                     sid: stat.sid,
                     comm: stat.comm,
@@ -120,7 +120,8 @@ pub(super) fn list() -> Option<Vec<Proc>> {
     )
 }
 
-pub(super) fn start_of(pid: i32) -> Option<u64> {
+/// When the process `pid` started, or `None` when there is none or it is a zombie.
+pub(crate) fn start_of(pid: i32) -> Option<u64> {
     let stat = stat(pid)?;
     if stat.zombie {
         return None;
@@ -130,15 +131,18 @@ pub(super) fn start_of(pid: i32) -> Option<u64> {
 
 /// Whether a process that is not a zombie has the pid `pid`, whichever user it runs as: every
 /// user can read any process's `stat`.
-pub(super) fn runs_as_anyone(pid: i32) -> bool {
+pub(crate) fn runs_as_anyone(pid: i32) -> bool {
     stat(pid).is_some_and(|stat| !stat.zombie)
 }
 
-pub(super) fn environment(pid: i32) -> Option<Vec<u8>> {
+/// `pid`'s environment block, `KEY=value` entries each NUL-terminated, or `None` when it cannot
+/// be read.
+pub(crate) fn environment(pid: i32) -> Option<Vec<u8>> {
     std::fs::read(format!("/proc/{pid}/environ")).ok()
 }
 
-pub(super) fn argv(pid: i32) -> Option<Vec<String>> {
+/// `pid`'s arguments, or `None` when they cannot be read.
+pub(crate) fn argv(pid: i32) -> Option<Vec<String>> {
     let cmdline = std::fs::read(format!("/proc/{pid}/cmdline")).ok()?;
     Some(
         cmdline
@@ -149,23 +153,76 @@ pub(super) fn argv(pid: i32) -> Option<Vec<String>> {
     )
 }
 
-/// Removed or not is told from the directory itself, reached through the link, which has no
-/// link left once removed: the path the link reads is the one in the process's own mount
-/// namespace, which may lead elsewhere, or nowhere, in the daemon's. The link reads
-/// ` (deleted)` after the path of a removed directory, which a directory could also be named; so
-/// the suffix is taken off only for a removed one.
-pub(super) fn cwd(pid: i32) -> Option<Cwd> {
-    let link = PathBuf::from(format!("/proc/{pid}/cwd"));
-    let read = std::fs::read_link(&link).ok()?;
-    let missing = std::fs::metadata(&link).ok()?.nlink() == 0;
-    let path = match read.as_os_str().as_bytes().strip_suffix(b" (deleted)") {
-        Some(stripped) if missing => PathBuf::from(std::ffi::OsStr::from_bytes(stripped)),
-        _ => read,
-    };
-    Some(Cwd { path, missing })
+/// What the kernel reports of a process's working directory, read without looking at the
+/// directory itself: what its `/proc` link reads.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CwdReport {
+    pid: i32,
+    read: PathBuf,
 }
 
-pub(super) fn memory(pid: i32) -> Option<u64> {
+/// Reading a [`CwdReport`] does not block on the directory's file system: the kernel writes the
+/// link's text from what it holds of the path, without asking that file system anything.
+pub const CWD_REPORT_MAY_BLOCK: bool = false;
+
+/// The suffix the `cwd` link reads after the path of a removed directory.
+const DELETED: &[u8] = b" (deleted)";
+
+/// What the kernel reports of `pid`'s working directory, or `None` when it cannot be read.
+pub(crate) fn cwd_report(pid: i32) -> Option<CwdReport> {
+    let read = std::fs::read_link(format!("/proc/{pid}/cwd")).ok()?;
+    Some(CwdReport { pid, read })
+}
+
+impl CwdReport {
+    /// A report of a directory at `path`, for a test.
+    #[cfg(test)]
+    pub(crate) fn at(path: impl Into<PathBuf>) -> Self {
+        Self {
+            pid: 0,
+            read: path.into(),
+        }
+    }
+
+    /// The path the link reads, which is where the directory is unless it was removed.
+    pub fn path(&self) -> &Path {
+        &self.read
+    }
+
+    /// The paths the directory may be at, by the report alone: what the link reads, and that
+    /// without the suffix of a removed directory, which a directory could also be named.
+    pub(super) fn candidates(&self) -> impl Iterator<Item = &Path> {
+        let stripped = self
+            .read
+            .as_os_str()
+            .as_bytes()
+            .strip_suffix(DELETED)
+            .map(|stripped| Path::new(std::ffi::OsStr::from_bytes(stripped)));
+        std::iter::once(self.read.as_path()).chain(stripped)
+    }
+
+    /// The directory, looked at through the file system to tell whether it was removed.
+    /// **Blocks** on the file system the directory is on, which may not answer (a dead network
+    /// mount).
+    ///
+    /// Removed or not is told from the directory itself, reached through the link, which has no
+    /// link left once removed: the path the link reads is the one in the process's own mount
+    /// namespace, which may lead elsewhere, or nowhere, in the daemon's. The link reads
+    /// ` (deleted)` after the path of a removed directory, which a directory could also be named;
+    /// so the suffix is taken off only for a removed one.
+    pub fn looked(&self) -> Option<Cwd> {
+        let link = PathBuf::from(format!("/proc/{}/cwd", self.pid));
+        let missing = std::fs::metadata(&link).ok()?.nlink() == 0;
+        let path = match self.read.as_os_str().as_bytes().strip_suffix(DELETED) {
+            Some(stripped) if missing => PathBuf::from(std::ffi::OsStr::from_bytes(stripped)),
+            _ => self.read.clone(),
+        };
+        Some(Cwd { path, missing })
+    }
+}
+
+/// How much memory `pid` holds resident, in bytes, or `None` when it cannot be read.
+pub(crate) fn memory(pid: i32) -> Option<u64> {
     let statm = std::fs::read_to_string(format!("/proc/{pid}/statm")).ok()?;
     let resident: u64 = statm.split_ascii_whitespace().nth(1)?.parse().ok()?;
     // SAFETY: `sysconf` only reads.
@@ -173,10 +230,67 @@ pub(super) fn memory(pid: i32) -> Option<u64> {
     (page > 0).then_some(resident * page as u64)
 }
 
-/// The listening TCP sockets of the system, by inode, from `/proc/net/tcp` and `tcp6`; then the
-/// processes' descriptors that are one of them.
-pub(super) fn listening_ports(pids: &[i32]) -> Vec<u16> {
-    let mut listening = std::collections::HashMap::new();
+/// A reader of each process's children, for a walk down the tree from `top`: from the kernel's
+/// list when this kernel keeps one, decided once from `top`'s own entry, and from a single pass
+/// over `/proc` otherwise, which answers `None` when the pass failed.
+pub(crate) fn children_lister(top: i32) -> impl FnMut(i32) -> Option<Vec<i32>> {
+    // The list is absent on a kernel built without `CONFIG_PROC_CHILDREN`.
+    let listed = std::fs::read_to_string(format!("/proc/{top}/task/{top}/children")).is_ok();
+    let mut by_parent = None;
+    move |pid| {
+        if listed {
+            Some(listed_children(pid))
+        } else {
+            by_parent
+                .get_or_insert_with(children_by_parent)
+                .as_ref()
+                .map(|map| map.get(&pid).cloned().unwrap_or_default())
+        }
+    }
+}
+
+/// The kernel's own list of a process's children, read for each of its threads, since a program
+/// may start a child from any of them. A thread that exited since the listing is skipped.
+fn listed_children(pid: i32) -> Vec<i32> {
+    let Ok(tasks) = std::fs::read_dir(format!("/proc/{pid}/task")) else {
+        return Vec::new();
+    };
+    tasks
+        .flatten()
+        .filter_map(|task| std::fs::read_to_string(task.path().join("children")).ok())
+        .flat_map(|children| {
+            children
+                .split_whitespace()
+                .filter_map(|child| child.parse::<i32>().ok())
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+/// Every process's children, zombies among them, from the parent each one's `stat` names; `None`
+/// when the processes could not be listed.
+fn children_by_parent() -> Option<HashMap<i32, Vec<i32>>> {
+    let mut by_parent = HashMap::<i32, Vec<i32>>::new();
+    for child in crate::processes::pids::all()? {
+        if let Some(stat) = stat(child) {
+            by_parent.entry(stat.ppid).or_default().push(child);
+        }
+    }
+    Some(by_parent)
+}
+
+/// The path of the file `pid` has open as descriptor `fd`, as its `/proc` link reads (`socket:[N]`
+/// for a socket), and the system's error when it could not be read (no such process or
+/// descriptor, or a refusal for another user's process).
+pub(crate) fn fd_path(pid: i32, fd: i32) -> std::io::Result<Option<PathBuf>> {
+    std::fs::read_link(format!("/proc/{pid}/fd/{fd}")).map(Some)
+}
+
+/// The TCP ports any of `pids` listens on, in no order; a process whose descriptors cannot be read
+/// adds nothing. The listening TCP sockets of the system, by inode, from `/proc/net/tcp` and
+/// `tcp6`; then the processes' descriptors that are one of them.
+pub(crate) fn listening_ports(pids: &[i32]) -> Vec<u16> {
+    let mut listening = HashMap::new();
     for table in ["/proc/net/tcp", "/proc/net/tcp6"] {
         if let Ok(text) = std::fs::read_to_string(table) {
             listening.extend(listening_sockets(&text));

@@ -35,9 +35,11 @@ pub fn ask_after() -> Duration {
 }
 
 /// How recently a list of the same session's or project's trees answers a `list_processes`
-/// again: clients poll it on a timer of their own, every few seconds each, and several may be
-/// connected. Short enough that a refresh the user asks for after acting still reads the table;
-/// a stop or a keep through the daemon makes the next list read it whatever the floor.
+/// again, and the count of every project's and console session's trees a
+/// `list_all_processes`: clients poll them on a timer of their own, every few seconds each, and
+/// several may be connected. Short enough that a refresh the user asks for after acting still
+/// reads the table; a stop or a keep through the daemon makes the next list read it whatever the
+/// floor.
 pub const LIST_FLOOR: Duration = Duration::from_secs(2);
 
 #[cfg(test)]
@@ -52,6 +54,29 @@ fn list_floor() -> Duration {
         return floor;
     }
     LIST_FLOOR
+}
+
+/// How long a `list_all_processes` waits for the count another request is computing. Well past
+/// what a computation takes when every look it makes runs to its deadline, so only one that is
+/// stuck past those deadlines is given up on.
+const COUNT_WAIT: Duration = Duration::from_secs(10);
+
+#[cfg(test)]
+thread_local! {
+    /// [`COUNT_WAIT`] for a test, on the test's own thread.
+    static COUNT_WAIT_OVERRIDE: std::cell::Cell<Option<Duration>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// [`COUNT_WAIT`]; under test at least [`PATIENCE`](crate::test_support::PATIENCE), unless a
+/// test overrides it, so a computation slowed by the suite's load is still waited for.
+fn count_wait() -> Duration {
+    #[cfg(test)]
+    return COUNT_WAIT_OVERRIDE
+        .get()
+        .unwrap_or(COUNT_WAIT.max(crate::test_support::PATIENCE));
+    #[cfg(not(test))]
+    COUNT_WAIT
 }
 
 /// The trees `target` names. A session that has no process is refused; a project with none
@@ -75,10 +100,13 @@ pub async fn list(state: &Arc<AppState>, target: ProcessTarget) -> Result<Vec<Pr
             }
             let state = Arc::clone(state);
             Ok(tokio::task::spawn_blocking(move || {
+                let generation = state.process_ledger.lists_generation();
                 let trees = state
                     .process_ledger
                     .trees_of_sessions(&[session_id], Duration::ZERO);
-                state.process_ledger.note_listed(key, trees.clone());
+                state
+                    .process_ledger
+                    .note_listed(key, generation, trees.clone());
                 trees
             })
             .await?)
@@ -102,10 +130,13 @@ pub async fn list(state: &Arc<AppState>, target: ProcessTarget) -> Result<Vec<Pr
             let state = Arc::clone(state);
             Ok(tokio::task::spawn_blocking(move || {
                 let dirs = project_dirs(&project);
+                let generation = state.process_ledger.lists_generation();
                 let trees = state
                     .process_ledger
                     .trees_of_project(&sessions, &project.id, &dirs);
-                state.process_ledger.note_listed(key, trees.clone());
+                state
+                    .process_ledger
+                    .note_listed(key, generation, trees.clone());
                 trees
             })
             .await?)
@@ -115,9 +146,31 @@ pub async fn list(state: &Arc<AppState>, target: ProcessTarget) -> Result<Vec<Pr
 
 /// How many trees each project and each console session has: one entry per project the store
 /// lists that has any, in the store's order, then one per console session that has any. Only
-/// counted, never described. Always read from the table: the floor (`LIST_FLOOR`) caches the
-/// trees listed per target, not counts, and one read of the table is all a count takes.
+/// counted, never described, but counting still reads the whole table and looks at the working
+/// directory of every process that may have been left in a project; clients poll it on a timer
+/// of their own, so counts computed less than [`LIST_FLOOR`] ago answer again, and requests that
+/// overlap wait for one computation and share it, for up to [`COUNT_WAIT`].
 pub async fn list_all(state: &Arc<AppState>) -> Result<Vec<ProcessCount>> {
+    let floor = list_floor();
+    if let Some(counts) = state.process_ledger.counted_lately(floor) {
+        return Ok(counts);
+    }
+    let claim = state.process_ledger.claim_counting();
+    let Ok(claim) = tokio::time::timeout(count_wait(), claim).await else {
+        // The computation under way is stuck, or every later count would wait on it with this
+        // one. The counts noted last answer, however old. Without any, the request fails, as one
+        // that cannot read the store does: a client keeps the counts it shows, where an empty
+        // answer would tell it nothing runs, and a computation of this request's own would hold
+        // another blocking thread on what is likely stuck the same way.
+        if let Some(counts) = state.process_ledger.counted_lately(Duration::MAX) {
+            return Ok(counts);
+        }
+        anyhow::bail!("counting the processes did not finish in time");
+    };
+    // What the computation this request waited for noted.
+    if let Some(counts) = state.process_ledger.counted_lately(floor) {
+        return Ok(counts);
+    }
     let sessions: Vec<(String, Option<String>)> = state
         .store
         .list_sessions()?
@@ -136,7 +189,15 @@ pub async fn list_all(state: &Arc<AppState>) -> Result<Vec<ProcessCount>> {
         .collect();
     let state = Arc::clone(state);
     Ok(tokio::task::spawn_blocking(move || {
-        state.process_ledger.trees_counted(&sessions, &projects)
+        // Held until the counts are noted, or the computation fails, whatever becomes of the
+        // request that is waiting for it.
+        let _claim = claim;
+        let generation = state.process_ledger.lists_generation();
+        let counts = state.process_ledger.trees_counted(&sessions, &projects);
+        state
+            .process_ledger
+            .note_counted(generation, counts.clone());
+        counts
     })
     .await?)
 }
