@@ -1381,11 +1381,13 @@ html.pane-resizing * {
 
 /* While the viewer's find bar is open (`src/viewer/useFind.ts`), each searched scroller starts its text below
    the bar, which floats over the scroller's top trailing corner: the gap scrolls away with the text, so the
-   bar covers the first lines only once the reader has scrolled past them. The gap is the bar's height and top
-   offset, so a scroller with no top padding of its own clears it too. `useFind` reads it to keep a scrolled
-   scroller's text in place as the bar opens and closes, where the browser has no scroll anchoring to do it. */
+   bar covers the first lines only once the reader has scrolled past them. The gap holds the bar centred, measured
+   from the scroller's top edge: its height (one 38px row) with its top offset (`top-2`) above it and the same
+   below. A scroller's own top padding adds to the room below it.
+   `useFind` reads it to keep a scrolled scroller's text in place as the bar opens and closes, where the
+   browser has no scroll anchoring to do it. */
 [data-find-open] {
-  --find-bar-gap: 3.5rem;
+  --find-bar-gap: 3.375rem;
 }
 /* The scroll padding keeps a focused or scrolled-to line below the bar as well, the gap and a little
    room. It is `!important` because the fade sets its own scroll padding inline on the scroller

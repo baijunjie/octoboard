@@ -205,11 +205,11 @@ export function FileViewer({
           {/* The final row keeps the controls next to the file content. Slots preserve their
               order as the Markdown, diff layout and wrapping choices mount. */}
           <RowIconGroup className="h-8 self-end">
+            {find.toggle && <FindToggle {...find.toggle} />}
             <CopyPathButton path={subject.path} />
             <div ref={setMarkdownViewSlot} className="contents" />
             <div ref={setLayoutSlot} className="contents" />
             {wrapClaimed && <WrapToggleHost />}
-            {find.toggle && <FindToggle {...find.toggle} />}
             {subject.host && <HostPathButtons host={subject.host} />}
           </RowIconGroup>
         </div>

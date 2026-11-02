@@ -1,7 +1,7 @@
 # Markdown documents in the file viewer
 
 A Markdown file — one whose name ends in `.md` or `.markdown`, in any case — opens as a **rendered document**, and the
-first of the header's view controls switches between the document and the source. The source is the code view every
+first of the header's view choices switches between the document and the source. The source is the code view every
 other text file gets. The choice is remembered, like the unified-or-split and wrap choices: it holds for the next
 Markdown file, and after the application restarts. A file opened at a line opens in its source instead (see "Opened from
 the terminal" in `docs/product/file-viewer.md`).

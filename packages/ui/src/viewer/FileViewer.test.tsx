@@ -861,14 +861,14 @@ it("draws the size as a badge after the path", () => {
 });
 
 // The header offers Copy path, as a row does, and copies the path the path item shows.
-// Its button is the first control of the group at the row's end.
-it("copies the project-relative path from the view-control group's first button, and says so on the button", async () => {
+// Its button follows Find in file at the start of the group at the row's end.
+it("copies the project-relative path from the view-control group's button after Find, and says so on the button", async () => {
   const writeText = vi.fn(async () => {});
   show(modified("src/dir/c.ts"), undefined, { clipboard: { writeText } });
   const copy = button("Copy path");
   const [detailColumn, group] = [...dialog()!.querySelector("[data-viewer-description]")!.children];
   const pathItem = detailColumn.querySelector("[data-viewer-file-summary]")!.firstElementChild!;
-  expect(group.querySelector("button")).toBe(copy);
+  expect([...group.querySelectorAll("button")].slice(0, 2)).toEqual([button("Find in file"), copy]);
   expect(pathItem.querySelector("button")).toBeNull();
   expect(controlNamed("Copy path").length).toBe(1);
   await act(async () => copy.click());
@@ -998,7 +998,7 @@ it("wraps nothing by default, then wraps files and diffs alike once chosen, and 
 // The two controls portal into places of their own, so the Tab order stays the order on screen
 // whichever mounts first: stepping from a one-sided diff (the wrap choice only) to a two-sided one
 // brings the layout choice in after it.
-it("keeps Copy path, then the layout choice, then the wrap choice, then Find, when the layout choice mounts second", () => {
+it("keeps Find, then Copy path, then the layout choice, then the wrap choice, when the layout choice mounts second", () => {
   const side: ViewerChangeSide = { state: "present", path: "src/c.ts", kind: "file" };
   const change = (key: string, patch: string, old: ViewerChangeSide): ViewerSubject => ({
     key,
@@ -1007,9 +1007,9 @@ it("keeps Copy path, then the layout choice, then the wrap choice, then Find, wh
   });
   const controls = () => [...dialog()!.querySelector("[data-viewer-description]")!.querySelectorAll("button")].map((b) => b.getAttribute("aria-label"));
   show(change("one", "@@ -0,0 +1 @@\n+a\n", { state: "absent" }));
-  expect(controls()).toEqual(["Copy path", "Wrap lines", "Find in file"]);
+  expect(controls()).toEqual(["Find in file", "Copy path", "Wrap lines"]);
   show(change("two", "@@ -1 +1 @@\n-a\n+b\n", side));
-  expect(controls()).toEqual(["Copy path", "Show split diff", "Wrap lines", "Find in file"]);
+  expect(controls()).toEqual(["Find in file", "Copy path", "Show split diff", "Wrap lines"]);
 });
 
 // An image that cannot be decoded falls back to its text on whichever side it happens to, and the

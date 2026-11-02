@@ -32,9 +32,9 @@ The header has three parts, one under the other:
   width. Where the subtitle is still cut off it fades out and carries its full wording as its tooltip.
 - **The details** — the file's path within the project, its size and the path a rename came from — followed by the
   **controls** on a separate final row directly above the content, aligned to its trailing side. Their fixed order is
-  **Copy path**, then the document-or-source choice for a Markdown file (see `docs/product/markdown-documents.md`),
-  then the diff's unified-or-split choice, then the wrap choice (see "Wrapping long lines" below), then **Find in file**
-  (see `docs/product/finding-in-the-file-viewer.md`), then **File manager** and **Default application**. The size shows
+  **Find in file** (see `docs/product/finding-in-the-file-viewer.md`), then **Copy path**, then the document-or-source
+  choice for a Markdown file (see `docs/product/markdown-documents.md`), then the diff's unified-or-split choice, then
+  the wrap choice (see "Wrapping long lines" below), then **File manager** and **Default application**. The size shows
   as a tag of its own, drawn as the title's neutral stage tag is; a rename's origin reads as a sentence naming the path.
   Right after the file's path stand the marks of the **notices about the whole file or change** on screen, one mark per
   notice (see "Notices and stand-ins" below); they belong to the path's own item, and the path's fade cuts only the
@@ -42,7 +42,7 @@ The header has three parts, one under the other:
 
 At most two of the three view choices are ever offered at once, since the document-or-source choice belongs to a whole
 Markdown file's body and the unified-or-split choice to a two-sided diff, and a Markdown diff keeps its source view
-alone. So the header never holds more than Copy path, two view choices, Find in file, File manager and Default
+alone. So the header never holds more than Find in file, Copy path, two view choices, File manager and Default
 application, and the order on screen is also the order the keyboard moves through them.
 
 **Copy path** is the same action a file's row offers, on the same path and in the same form (see "A row's actions" in
@@ -54,7 +54,7 @@ on a row.
 **Each of the three view choices is a single icon button**: its icon shows the view on screen, pressing it switches to
 the other view, and its name — the tooltip and what assistive technology announces — says what pressing will do, so it
 alternates between "Show document" and "Show source", between "Show split diff" and "Show unified diff", and between
-"Wrap lines" and "Don't wrap lines". **Find in file**, offered only while the viewer shows text to search, is the
+"Wrap lines" and "Don't wrap lines". **Find in file**, offered only while the viewer shows text to search, is a
 fourth view control and follows the same convention: its icon is a magnifier, crossed out while the find bar is open,
 its name alternates between "Find in file" and "Close find", and it also tells assistive technology whether the bar is
 expanded. Nothing about the state is said in colour; the whole convention is in "Two-state icon toggles" in

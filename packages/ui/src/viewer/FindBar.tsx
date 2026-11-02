@@ -91,7 +91,7 @@ export function FindBar({
       ref={barRef}
       role="search"
       aria-label={t("viewer.find")}
-      className="floating-surface absolute end-5 top-2 z-20 flex max-w-[calc(100%-2.5rem)] items-center gap-(--row-control-gap) rounded-lg border border-separator bg-overlay p-0.5 text-xs shadow-(--panel-shadow) max-phone:end-2 max-phone:max-w-[calc(100%-1rem)]"
+      className="floating-surface absolute end-5 top-2 z-20 flex max-w-[calc(100%-2.5rem)] items-center gap-(--row-control-gap) rounded-lg border border-separator bg-overlay p-1.5 text-xs shadow-(--panel-shadow) max-phone:end-2 max-phone:max-w-[calc(100%-1rem)]"
       {...focusHandoff}
     >
       {/* Left as typed: a leading or trailing space is part of what is searched for, so the field does
@@ -111,7 +111,7 @@ export function FindBar({
         autoCapitalize="off"
         autoCorrect="off"
         variant="secondary"
-        className="h-7 w-48 min-w-12 shrink text-sm"
+        className="h-6 w-48 min-w-12 shrink text-sm"
         onChange={(event) => onQueryChange(event.target.value)}
         onKeyDown={(event) => {
           if (event.key !== "Enter" || isImeKey(event.nativeEvent)) return;
