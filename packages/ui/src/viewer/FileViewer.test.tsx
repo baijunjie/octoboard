@@ -747,7 +747,7 @@ it("puts the stage and the status in the title and the layout choice on the desc
 });
 
 // The tags are one group, closer to each other than the group is to the name, and each detail of the
-// description line is an item of its own within the details column; the paths carry the file icon. Where a
+// description line is an item of its own in the details' rows; the paths carry the file icon. Where a
 // compared change is from is no detail but the subtitle under the title.
 it("keeps the tags in one group and each detail as an item of its own, the paths with an icon", () => {
   const side = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file", body: { kind: "binary", size: 3 } });
@@ -760,11 +760,14 @@ it("keeps the tags in one group and each detail as an item of its own, the paths
   expect(tags[0].parentElement).toBe(tags[1].parentElement);
   expect(tags[0].parentElement!.children.length).toBe(2);
   const row = dialog()!.querySelector<HTMLElement>("[data-viewer-description]")!;
-  // The full-width details precede the controls in both reading and keyboard order.
-  const [detailColumn, controls] = [...row.children];
+  // The path's row, then the rename origin's row, which the controls end: the details precede the
+  // controls in both reading and keyboard order.
+  const lastRow = row.querySelector("[data-viewer-last-details]")!;
+  const controls = lastRow.nextElementSibling!;
   expect(controls.querySelector("button")).not.toBeNull();
-  const details = [...detailColumn.children];
+  const details = [row.querySelector("[data-viewer-file-summary]")!, lastRow.firstElementChild!];
   expect(details.map((item) => item.textContent)).toEqual(["src/c.ts", "Renamed from src/old.ts"]);
+  expect(details.every((item) => item.compareDocumentPosition(controls) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
   // The path and the rename origin carry the file icon.
   expect(details.filter((item) => item.querySelector("svg")).length).toBe(2);
 });
@@ -866,8 +869,8 @@ it("copies the project-relative path from the view-control group's button after 
   const writeText = vi.fn(async () => {});
   show(modified("src/dir/c.ts"), undefined, { clipboard: { writeText } });
   const copy = button("Copy path");
-  const [detailColumn, group] = [...dialog()!.querySelector("[data-viewer-description]")!.children];
-  const pathItem = detailColumn.querySelector("[data-viewer-file-summary]")!.firstElementChild!;
+  const group = dialog()!.querySelector("[data-viewer-last-details]")!.nextElementSibling!;
+  const pathItem = dialog()!.querySelector("[data-viewer-file-summary]")!.firstElementChild!;
   expect([...group.querySelectorAll("button")].slice(0, 2)).toEqual([button("Find in file"), copy]);
   expect(pathItem.querySelector("button")).toBeNull();
   expect(controlNamed("Copy path").length).toBe(1);
@@ -1066,7 +1069,7 @@ it("offers File manager and Default application last in the controls, on a subje
   const request = vi.fn(async () => ({ type: "ack", id: null }) as never);
   show(textFile("src/a.ts", "x", { project: "p", worktree: "w", path: "src/a.ts" }), undefined, { clipboard: { writeText: async () => {} }, request });
   await settled();
-  const group = dialog()!.querySelector("[data-viewer-description]")!.lastElementChild!;
+  const group = dialog()!.querySelector("[data-viewer-last-details]")!.nextElementSibling!;
   const labels = [...group.querySelectorAll("button")].map((b) => b.getAttribute("aria-label"));
   expect(labels.slice(-2)).toEqual(["Open in file manager", "Open in default application"]);
   act(() => button("Open in file manager").click());

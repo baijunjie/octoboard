@@ -296,9 +296,9 @@ moving to the next, the same order the table takes when it stacks on a narrow wi
 end of a row has to come first in the source, because a float only shortens the lines that follow it; the text it
 leaves beside it then reads after it. That is only a reading-order cost while the row's other content is inert text,
 and it becomes a focus-order one — focus jumping back against the reading direction — the moment a control sits in
-that text. So a control belonging to such a row joins the floating group rather than standing among the text: the
-file viewer's detail row floats Copy path and the view controls to its end, rather than placing a button beside
-the path it copies (`packages/ui/src/viewer/FileViewer.tsx`).
+that text. So a control belonging to such a row joins the floating group rather than standing among the text. Where
+a flex row can put the group at the end without a float, as the file viewer's header does with its controls after
+its details, the group follows the text in the source and the question does not arise.
 
 A control inside a collection's **section header** is reached by neither of those: react-aria's keyboard delegate walks
 the collection's items alone, so the arrow keys never land on a header, Tab inside the collection jumps to the last

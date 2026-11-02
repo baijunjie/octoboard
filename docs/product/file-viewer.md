@@ -30,12 +30,14 @@ The header has three parts, one under the other:
   A subject with no such commits has no such row at all. Its start aligns with the file-path icon in the details
   below. Long branch and commit identifiers can wrap across lines, breaking between characters to use the available
   width. Where the subtitle is still cut off it fades out and carries its full wording as its tooltip.
-- **The details** — the file's path within the project, its size and the path a rename came from — followed by the
-  **controls** on a separate final row directly above the content, aligned to its trailing side. Their fixed order is
-  **Find in file** (see `docs/product/finding-in-the-file-viewer.md`), then **Copy path**, then the document-or-source
-  choice for a Markdown file (see `docs/product/markdown-documents.md`), then the diff's unified-or-split choice, then
-  the wrap choice (see "Wrapping long lines" below), then **File manager** and **Default application**. The size shows
-  as a tag of its own, drawn as the title's neutral stage tag is; a rename's origin reads as a sentence naming the path.
+- **The details** — the file's path within the project, its size and the path a rename came from — beside the
+  **controls**, which hold the end of the details' last row, bottom-aligned with it. They move to a row of their own
+  directly above the content, at its trailing side, only when that last row does not fit beside them; there is no
+  fixed width at which they wrap. Their fixed order is **Find in file** (see
+  `docs/product/finding-in-the-file-viewer.md`), then **Copy path**, then the document-or-source choice for a Markdown
+  file (see `docs/product/markdown-documents.md`), then the diff's unified-or-split choice, then the wrap choice (see
+  "Wrapping long lines" below), then **File manager** and **Default application**. The size shows as a tag of its own,
+  drawn as the title's neutral stage tag is; a rename's origin reads as a sentence naming the path.
   Right after the file's path stand the marks of the **notices about the whole file or change** on screen, one mark per
   notice (see "Notices and stand-ins" below); they belong to the path's own item, and the path's fade cuts only the
   path, never them. They come before the controls in the keyboard's order.
@@ -70,12 +72,13 @@ announced says what pressing does (see "Tooltips on icon-only controls" in `docs
 Neither says anything when it succeeds; a refusal or a failure raises the same error alert as from a row, with the same
 remedy for a file that is no longer there.
 
-The details use the header's full width. The current path, its notice marks and the line counts or file size always
-share one row: counts and size keep their width, and the path shrinks to fit. A rename's origin occupies the next row,
-with compact spacing between rows. Both paths stay on one line; when too long, each fades at its start so its file
-name stays visible, and carries its full path as its tooltip. The title stays on one line and fades rather than
-ending in an ellipsis, with its full text as its tooltip. Both paths show the same name- and
-extension-based icons as file rows (see "Rows and the keyboard" in `docs/product/project-pane.md`), with a generic file
+The details' last row uses the width the controls leave it, or the whole width once they wrap; any row above it takes
+the whole width. The current path, its notice marks and the line counts or file size always share one row: counts and
+size keep their width, and the path shrinks to fit. A rename's origin occupies the next row, with compact spacing
+between rows, and is then the row the controls end. Both paths stay on one line; when too long, each fades at its
+start so its file name stays visible, and carries its full path as its tooltip. The title stays on one line and fades
+rather than ending in an ellipsis, with its full text as its tooltip. Both paths show the same name- and extension-based
+icons as file rows (see "Rows and the keyboard" in `docs/product/project-pane.md`), with a generic file
 icon for unrecognized names. A cut path, title or subtitle runs as a marquee while the pointer is over it (see "Names
 too long for their space" in `docs/product/labels-and-tooltips.md`).
 

@@ -108,15 +108,35 @@ export function FileViewer({
     </RowIconGroup>
   ) : null;
 
-  // The details use the full width and wrap compactly above the controls, whose final row stays
-  // next to the file content. Both paths fade at their start, preserving the file name.
-  // Notices stay outside that path fade, ordered failed, warned, then notes.
   // An untracked file is a change with an absent old side, which `changeStatus` calls added; the
   // list marks it untracked and says so in `subject.status`, which also holds while the content is
   // not read (yet). Without one, a change's sides give it, and a path in conflict has none to compare.
   const status: StatusKey | undefined =
     subject.status ?? (content.state === "change" ? changeStatus(content.change) : content.state === "conflict" ? "conflicted" : undefined);
   const renamedFrom = content.state === "change" ? renamedFromPath(content.change) : undefined;
+  // The current path, its notice marks and the line counts or size: one row, the path shrinking to fit.
+  // Both paths fade at their start, preserving the file name; notices stay outside that fade, ordered
+  // failed, warned, then notes.
+  const fileSummary = (
+    <div data-viewer-file-summary="" className="flex min-w-0 items-center gap-4">
+      <DetailItem className="min-w-0">
+        <PlainMarkedPath path={displayWirePath(subject.path)} icon={<FileTypeIcon path={subject.path} className="size-3.5 shrink-0 text-app-muted" />} />
+        <NoticeSlotBoxes />
+      </DetailItem>
+      {subject.stats && subject.stats.added + subject.stats.removed > 0 && (
+        <DetailItem className="shrink-0">
+          <ChangeLineCounts stats={subject.stats} />
+        </DetailItem>
+      )}
+      {content.state === "file" && (
+        <DetailItem className="shrink-0">
+          <StatusBadge separated={false}>
+            {formatFileSize(language, content.body.size)}
+          </StatusBadge>
+        </DetailItem>
+      )}
+    </div>
+  );
   const statusLabel = status ? t(STATUS_LABELS[status]) : undefined;
   const tags = [subject.stage, statusLabel].filter((tag): tag is string => tag !== undefined);
   // What kind of conflict a conflicted path is in: the status badge's tooltip, and part of the heading's
@@ -181,37 +201,27 @@ export function FileViewer({
     >
       <NoticeSlotsProvider>
         <div ref={headerRef} data-viewer-description="" className="flex min-w-0 shrink-0 flex-col groove-b px-6 max-phone:px-3 text-xs leading-5">
-          <div data-viewer-details="" className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 pt-1.5">
-            <div data-viewer-file-summary="" className="flex w-full min-w-0 items-center gap-4">
-              <DetailItem className="min-w-0">
-                <PlainMarkedPath path={displayWirePath(subject.path)} icon={<FileTypeIcon path={subject.path} className="size-3.5 shrink-0 text-app-muted" />} />
-                <NoticeSlotBoxes />
-              </DetailItem>
-              {subject.stats && subject.stats.added + subject.stats.removed > 0 && (
-                <DetailItem className="shrink-0">
-                  <ChangeLineCounts stats={subject.stats} />
-                </DetailItem>
-              )}
-              {content.state === "file" && (
-                <DetailItem className="shrink-0">
-                  <StatusBadge separated={false}>
-                    {formatFileSize(language, content.body.size)}
-                  </StatusBadge>
-                </DetailItem>
-              )}
+          {/* Every details row but the last takes the whole width above. The last row shares a line with
+              the controls, which end it bottom-aligned; its basis is its content width, so the controls
+              wrap to a line of their own above the content only when that row does not fit beside them.
+              The last row's `pb-1.5` under a `leading-5` line puts the text's centre 16 px above the
+              bottom, as the controls' `h-8` does; their `-mt-0.5` lets a 30 px rename row hold them
+              without growing. */}
+          {renamedFrom !== undefined && <div className="pt-1.5">{fileSummary}</div>}
+          <div className="flex min-w-0 flex-wrap items-end gap-x-4">
+            <div data-viewer-last-details="" className={`min-w-0 flex-auto pb-1.5 ${renamedFrom !== undefined ? "pt-1" : "pt-1.5"}`}>
+              {renamedFrom !== undefined ? <RenamedFrom path={renamedFrom} /> : fileSummary}
             </div>
-            {renamedFrom !== undefined && <RenamedFrom path={renamedFrom} />}
+            {/* Slots preserve their order as the Markdown, diff layout and wrapping choices mount. */}
+            <RowIconGroup className="ms-auto -mt-0.5 h-8">
+              {find.toggle && <FindToggle {...find.toggle} />}
+              <CopyPathButton path={subject.path} />
+              <div ref={setMarkdownViewSlot} className="contents" />
+              <div ref={setLayoutSlot} className="contents" />
+              {wrapClaimed && <WrapToggleHost />}
+              {subject.host && <HostPathButtons host={subject.host} />}
+            </RowIconGroup>
           </div>
-          {/* The final row keeps the controls next to the file content. Slots preserve their
-              order as the Markdown, diff layout and wrapping choices mount. */}
-          <RowIconGroup className="h-8 self-end">
-            {find.toggle && <FindToggle {...find.toggle} />}
-            <CopyPathButton path={subject.path} />
-            <div ref={setMarkdownViewSlot} className="contents" />
-            <div ref={setLayoutSlot} className="contents" />
-            {wrapClaimed && <WrapToggleHost />}
-            {subject.host && <HostPathButtons host={subject.host} />}
-          </RowIconGroup>
         </div>
         {/* The find bar floats over the content's top trailing corner; while it is open the scrolled text
             starts below it (`data-find-open` in style.css), so it covers no line until the reader scrolls.
