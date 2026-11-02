@@ -113,3 +113,46 @@ it("shows the suggestions tooltip on its own button's keyboard focus and leaves 
   expect(document.querySelector('[role="tooltip"]')).toBeNull();
   expect(document.activeElement).toBe(input);
 });
+
+it.each(["mouse", "virtual"] as const)(
+  "brings a partly hidden field into view on a %s press of the suggestions trigger and keeps the list open",
+  (pointer) => {
+    const { container, input } = mountTags(["review"], ["review", "frontend", "backend"]);
+    const box = container.querySelector<HTMLElement>('[data-slot="combo-box-input-group"]')!;
+    const trigger = container.querySelector<HTMLButtonElement>('[data-slot="combo-box-trigger"]')!;
+    // jsdom lays nothing out and never scrolls, so the field stands partly hidden until it is scrolled into view, and a
+    // focus a browser would scroll for is recorded. Either scroll lands once the list is open, as a browser's does.
+    let boxScrolled = false;
+    let focusScrolled = false;
+    box.getBoundingClientRect = () => DOMRect.fromRect({ x: 0, y: boxScrolled ? 400 : 520, width: 300, height: 36 });
+    box.scrollIntoView = vi.fn(() => {
+      boxScrolled = true;
+    });
+    const nativeFocus = HTMLElement.prototype.focus;
+    HTMLElement.prototype.focus = function (this: HTMLElement, options?: FocusOptions) {
+      if (this === input && !options?.preventScroll && document.activeElement !== input) focusScrolled = true;
+      nativeFocus.call(this, options);
+    };
+    onTestFinished(() => {
+      HTMLElement.prototype.focus = nativeFocus;
+    });
+
+    act(() => {
+      if (pointer === "mouse") {
+        const init = { bubbles: true, cancelable: true, button: 0, pointerId: 1, pointerType: "mouse" };
+        trigger.dispatchEvent(new PointerEvent("pointerdown", init));
+        trigger.dispatchEvent(new PointerEvent("pointerup", init));
+      }
+      trigger.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0, detail: pointer === "mouse" ? 1 : 0 }));
+    });
+    expect(document.querySelector('[role="listbox"]')).not.toBeNull();
+    expect(box.scrollIntoView).toHaveBeenCalledWith({ block: "nearest", inline: "nearest" });
+    expect(focusScrolled).toBe(false);
+    act(() => container.dispatchEvent(new Event("scroll")));
+
+    expect(document.activeElement).toBe(input);
+    expect(document.querySelector('[role="listbox"]')).not.toBeNull();
+    // A screen reader's press starts on the first suggestion, as on a field in view.
+    if (pointer === "virtual") expect(input.getAttribute("aria-activedescendant")).toMatch(/frontend$/);
+  },
+);

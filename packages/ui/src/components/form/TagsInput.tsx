@@ -6,7 +6,8 @@ import {
   ListBox,
   TagGroup,
 } from "@heroui/react";
-import React, { useRef, useState } from "react";
+import React, { useContext, useLayoutEffect, useRef, useState } from "react";
+import { ComboBoxStateContext } from "react-aria-components";
 import { useFocusVisible } from "react-aria";
 
 import { MotionListBox } from "../motion/MotionListBox";
@@ -75,6 +76,8 @@ export function TagsInput({
     onChange([...value, suggestions.find((s) => has([s], typed)) ?? typed]);
   };
 
+  const reveal = useRevealOnTriggerPress(inputRef);
+
   const needle = input.trim().toLowerCase();
   const offered = suggestions.filter(
     (s) => !has(value, s) && s.toLowerCase().includes(needle),
@@ -95,6 +98,7 @@ export function TagsInput({
       onSelectionChange={(key) => key !== null && add(String(key))}
       items={offered.map((tag) => ({ id: tag }))}
     >
+      <ComboBoxStateRef onCommit={reveal.onStateCommit} />
       <Label className={hideLabel ? "sr-only" : undefined}>{label}</Label>
       {/* The box is drawn here, as HeroUI's secondary field, for the tags and the input together; the
           input inside it has no frame of its own. The suggestions trigger is the group's last child, the
@@ -109,6 +113,7 @@ export function TagsInput({
           e.preventDefault();
           inputRef.current?.focus();
         }}
+        {...reveal.groupProps}
       >
         {/* `contents`: the tags are laid out in the box's own wrapping row, beside the input. Always
             mounted, and every removal hands focus to the input: the focused tag is unmounted by it, and
@@ -177,6 +182,100 @@ export function TagsInput({
       {description && <Description>{description}</Description>}
     </ComboBox>
   );
+}
+
+type ComboBoxStateValue = React.ContextType<typeof ComboBoxStateContext>;
+
+const isTrigger = (target: EventTarget) =>
+  target instanceof Element && target.closest('[data-slot="combo-box-trigger"]') !== null;
+
+/** Hands the combo box's state, which the combo box keeps to itself, to `onCommit` after every render it changes in. */
+function ComboBoxStateRef({ onCommit }: { onCommit: (state: ComboBoxStateValue) => void }): null {
+  const state = useContext(ComboBoxStateContext);
+  useLayoutEffect(() => onCommit(state));
+  return null;
+}
+
+/** Pressing the suggestions trigger of a field partly out of view brings the field into view and leaves the list open.
+ *
+ * The combo box focuses the input and opens the list on the press, and react-aria closes the list as soon as anything
+ * holding the field scrolls. Left alone, that focus scrolls a partly hidden input into view, which shuts the list as it
+ * opens; kept from scrolling, the list stays open over a field still out of view, and the first key typed scrolls the
+ * input to its caret and shuts it then. So the press, before the combo box sees it, scrolls the whole box into view
+ * (`nearest`, the least scroll; a faded scroller's scroll padding keeps it clear of the fade), the combo box's own
+ * focus is kept from scrolling again, and the list that scroll closes is opened again as the close is committed, before
+ * it is painted.
+ *
+ * A mouse or pen press starts on the primary button's pointerdown; a touch press, and a screen reader's, is the click. */
+function useRevealOnTriggerPress(inputRef: React.RefObject<HTMLInputElement | null>): {
+  onStateCommit: (state: ComboBoxStateValue) => void;
+  groupProps: Pick<React.DOMAttributes<HTMLDivElement>, "onPointerDownCapture" | "onClickCapture">;
+} {
+  const stateRef = useRef<ComboBoxStateValue>(null);
+  // Until when a close is the reveal's scroll's, to be undone; set only once that scroll has arrived.
+  const reopenUntil = useRef(0);
+  const pressedByPointer = useRef(false);
+
+  const onStateCommit = (state: ComboBoxStateValue) => {
+    stateRef.current = state;
+    if (!state || state.isOpen || performance.now() > reopenUntil.current) return;
+    reopenUntil.current = 0;
+    if (document.activeElement !== inputRef.current) return;
+    // The press's own focus strategy, which the close leaves in place: a screen reader's press starts on the first
+    // option. The list, kept mounted through the close, applies it only when it mounts, so it is applied here.
+    state.open(state.focusStrategy, "manual");
+    if (state.focusStrategy === "first") state.selectionManager.setFocusedKey(state.collection.getFirstKey());
+  };
+
+  const reveal = (box: HTMLElement) => {
+    const field = inputRef.current;
+    if (!field || !stateRef.current || stateRef.current.isOpen) return;
+    const focusWithoutScroll = (options?: FocusOptions) => {
+      Reflect.deleteProperty(field, "focus");
+      field.focus({ ...options, preventScroll: true });
+    };
+    field.focus = focusWithoutScroll;
+    setTimeout(() => {
+      if (field.focus === focusWithoutScroll) Reflect.deleteProperty(field, "focus");
+    });
+
+    const before = box.getBoundingClientRect();
+    box.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    const after = box.getBoundingClientRect();
+    if (before.top === after.top && before.left === after.left) return;
+    const arm = () => {
+      stop();
+      reopenUntil.current = performance.now() + 200;
+    };
+    const stop = () => {
+      window.removeEventListener("scroll", arm, true);
+      clearTimeout(timer);
+    };
+    window.addEventListener("scroll", arm, true);
+    const timer = setTimeout(stop, 500);
+  };
+
+  return {
+    onStateCommit,
+    groupProps: {
+      onPointerDownCapture: (e) => {
+        if (e.button !== 0 || e.pointerType === "touch" || !isTrigger(e.target)) return;
+        reveal(e.currentTarget);
+        // The press's click, wherever it lands, follows the release in the same task; a cancelled press has none.
+        pressedByPointer.current = true;
+        const release = () => {
+          window.removeEventListener("pointerup", release, true);
+          window.removeEventListener("pointercancel", release, true);
+          setTimeout(() => (pressedByPointer.current = false));
+        };
+        window.addEventListener("pointerup", release, true);
+        window.addEventListener("pointercancel", release, true);
+      },
+      onClickCapture: (e) => {
+        if (!pressedByPointer.current && isTrigger(e.target)) reveal(e.currentTarget);
+      },
+    },
+  };
 }
 
 /** InputGroup renders its siblings inside the trigger, so a tooltip's focus context there would
