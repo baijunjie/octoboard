@@ -159,6 +159,27 @@ fn a_model_and_effort_come_after_the_rules_and_before_the_task() {
     );
 }
 
+/// A new session and a resume both pass `--no-leader`, which outranks a `[cli] use_leader` the
+/// user's configuration sets, so stopping the process stops the agent's work with it. Where it
+/// sits does not matter: Grok's parser never takes a known flag as another option's value (it
+/// refuses `--rules --no-leader` as a missing value, and a bare `--resume` leaves it a flag).
+#[test]
+fn every_launch_runs_without_groks_leader_mode() {
+    let mut fixture = spec_fixture();
+    with_default_home(&mut fixture);
+    let mut spec = fixture.spec();
+    let fresh = plan_isolated(&spec).expect("plan");
+    spec.resume_agent_session_id = Some("agent-side-id");
+    let resumed = plan_isolated(&spec).expect("plan");
+    for plan in [fresh, resumed] {
+        assert!(
+            plan.args.iter().any(|arg| arg == "--no-leader"),
+            "{:?}",
+            plan.args
+        );
+    }
+}
+
 #[test]
 fn a_pinned_grok_home_replaces_the_users_as_the_source_of_the_farm() {
     let mut fixture = spec_fixture();

@@ -225,10 +225,19 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: &Path) -> Result<LaunchPlan> {
     require_unsandboxed(spec, &source_home, system_dir)?;
     let grok_home = build_grok_home(spec, &source_home)?;
 
-    let mut args = Vec::new();
+    // Grok's leader mode (`[cli] use_leader = true` in the user's configuration, which the farm
+    // copies) makes this TUI only a client of a leader process it starts in a process group of
+    // its own but in the TUI's session. The TUI exits at once on the stop's `SIGTERM` without
+    // ending the turn, so the leader is reached only by the sweep of the exited TUI's session, a
+    // `SIGKILL` mid-turn that fires no `shutdown` hooks and skips the session flush of Grok's own
+    // shutdown.
+    //
+    // `--no-leader`, a TUI flag `grok --help` does not list, keeps the agent in this process,
+    // which the `SIGTERM` ends gracefully, whatever the configuration says.
+    let mut args = vec!["--no-leader".to_string()];
     match spec.resume_agent_session_id {
-        // The id is required: a bare `--resume` swallows whatever argument follows as its
-        // value.
+        // The id is required: a bare `--resume` takes the next argument that is not a known
+        // flag, such as the task, as its value.
         Some(id) => {
             args.push("--resume".to_string());
             args.push(id.to_string());

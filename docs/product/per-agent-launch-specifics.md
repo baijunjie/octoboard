@@ -22,7 +22,7 @@ agent.
 | The model and reasoning effort | `--model`, `--effort` | `-c model=…`, `-c model_reasoning_effort=…` | `--model`, `--reasoning-effort` |
 | An explicit approval choice (see "Approval modes" in `docs/product/per-agent-settings.md`) | `--permission-mode`: `auto` for **Automatic**, `default` for **Ask me**, `bypassPermissions` for **Approve everything** | `-c approvals_reviewer=…`: `auto_review` for **Automatic review**, `user` for **Ask me**; a private-server resume applies it through the server before the terminal attaches (see "Codex" below) | Not applicable |
 | Claude compatibility while on (see "Claude compatibility" in `docs/product/per-agent-settings.md`) | Not applicable | A section appended to the `developer_instructions` text, and Claude Code's MCP servers as `-c mcp_servers.<name>.…` overrides (see "Claude compatibility for Codex" below) | `GROK_CLAUDE_*_ENABLED=true` in the environment (see "Claude compatibility for Grok Build" below) |
-| Anything else | The status line, and under **Approve everything** the acceptance of Claude Code's warning, in the `--settings` JSON | The overrides listed under "Codex" below | Nothing else |
+| Anything else | The status line, and under **Approve everything** the acceptance of Claude Code's warning, in the `--settings` JSON | The overrides listed under "Codex" below | `--no-leader` (see "Grok's leader mode" below) |
 
 The 660 seconds are Octoboard's own 10-minute limit on a forwarded call plus a minute (see "The time limit on
 Octoboard's tools" below and the Codex list below for why). A value the session leaves to the agent's default — no
@@ -269,6 +269,16 @@ setting do so; a conversation begun under the sandbox keeps it, so it is to be c
 Not read: macOS managed preferences for Grok, so a sandbox set only there is not refused up front and the session fails
 inside Grok instead; and the source home's own `requirements.toml` and `managed_config.toml`, which are left out of the
 per-session home, so Grok never loads them for an Octoboard session.
+
+### Grok's leader mode
+
+**Every Grok Build launch passes `--no-leader`** — a new session, a resume, and the relaunches of an account switch and
+a model change alike — so the session's agent runs in the session's own process even where the Grok configuration turns
+leader mode on (`[cli] use_leader = true`). The session neither starts a shared Grok leader process nor connects to one
+already running. Under leader mode the terminal would be only a client of that leader, and stopping the session would
+kill the leader outright mid-turn, so Grok would neither end the turn nor shut the session down cleanly; with
+`--no-leader`, stopping the session ends the agent's work through Grok's own shutdown. Leader mode is not available
+in a session Octoboard starts.
 
 ### The time limit on Octoboard's tools
 

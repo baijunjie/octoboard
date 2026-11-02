@@ -33,7 +33,9 @@ invisible characters was read from the executable of, and measured on, **Claude 
 says about input written before bracketed paste is turned on, and about pasted pieces that end in an image extension, on
 **Claude Code 2.1.310** on 2026-10-25; and what it says about the terminal probe's bracketed-paste toggle at start on
 **Claude Code 2.1.310** on 2026-10-26. What the Claude Code section's "How the global config file is saved, and what a
-kill leaves behind" says was read from the executable of, and measured on, **Claude Code 2.1.316** on 2026-11-02. All three rewrite their hook surface, their payload fields, their configuration
+kill leaves behind" says was read from the executable of, and measured on, **Claude Code 2.1.316** on 2026-11-02. What
+the Grok Build section's "Leader mode leaves the TUI's stop to a `SIGKILL` of the leader" note says was measured on
+**Grok Build 1.0.70** on 2026-11-02. All three rewrite their hook surface, their payload fields, their configuration
 layering and their on-disk layout on upgrade, so check a detail here against the installed version before relying on it.
 
 How Octoboard's status mapping handles these traps is encoded in `apps/daemon/src/hooks/mod.rs`; the product behavior
@@ -769,6 +771,31 @@ prompt asks to be pressed again to quit. During a blocking shell command with a 
 `StopCancelled` and the queued message was submitted 4 ms later. Ctrl-U deletes one line of the composer a press, at the
 start of a line the line break before it, and a line wrapped over two rows in one press; the composer then shows "Input
 cleared · ctrl+z to undo". Not measured: Ctrl-C with the subagents' cancel-turn panel up, and at a permission card.
+
+**Leader mode leaves the TUI's stop to a `SIGKILL` of the leader, so every launch passes `--no-leader`** (1.0.70, in a
+PTY as a session of its own, scratch `GROK_HOME`, fake key, local stand-in for its inference API). Grok's user guide
+documents leader mode as `--leader` or `[cli] use_leader = true` (off by default), and `--no-leader` as forcing a local
+agent; `grok --help` lists neither for the TUI, only `--leader-socket`, but the TUI accepts `--no-leader` on 1.0.41,
+1.0.67 and 1.0.70 (`--no-leader --version` exits 0 where an unknown flag exits 2), and the parser never takes it as
+another option's value, so its place on the line does not matter. With `use_leader = true` the TUI starts `grok agent
+leader --no-exit-on-disconnect …` in a process group of its own but in the TUI's session, listening on
+`$GROK_HOME/leader.sock`, and is only its client; Grok's hooks then run from the leader. A socket path too long for a
+Unix socket fails to bind, and the TUI then never draws. Sent `SIGTERM` mid-turn, the TUI exited at once with status 0
+and fired no hook, while the leader logged "kept session resident across client disconnect (live work)", stayed in the
+exited TUI's session without a terminal, ran the turn on, fired its `end_turn` `Stop` with the turn's `promptId` 114 s
+later, when the held request was answered, and kept running until signalled itself, when it fired the `shutdown` pair.
+Octoboard's stop does not let it get that far: the leader is neither in the TUI's process group nor reached by the
+`SIGTERM`, but the sweep of an exited agent's session `SIGKILL`s it at once. Sweeping the session that way as soon as the
+TUI exited fired no hook at all, mid-turn or in the 135 s after, skipped the "shutdown: flushing session"
+Grok logs on a signal it handles, and left `leader.sock` behind. The same launch line with `--no-leader` and `use_leader
+= true` started no leader and no socket, and `SIGTERM` mid-turn fired `Stop` and `SessionEnd` with `reason` `shutdown`
+from the TUI itself, which exited with status 0, and nothing in the 135 s after; so did a `--resume`. With a leader
+already running on the same socket, a `--no-leader` TUI did not connect to it (nothing new in its `leader.log`). Neither
+`grok models`, `grok -p` nor `grok login --device-auth` started a leader with `use_leader = true`, and `models` and `-p`
+did not connect to a running one; the quota reading runs `grok agent --no-leader stdio`. Not established: whether a
+`requirements.toml` pin of `cli.use_leader`, which Grok's configuration reference allows, outranks `--no-leader`; a
+`[cli] use_leader = true` in the scratch home's `requirements.toml` did not turn leader mode on at all, so it could not
+be tested.
 
 **Grok scans Claude Code's configuration by default.** The `[compat.claude]` table of Grok's `config.toml` has five
 boolean cells, `skills`, `rules` (which covers `CLAUDE.md`), `agents`, `mcps` and `hooks`, each defaulting to true, and
