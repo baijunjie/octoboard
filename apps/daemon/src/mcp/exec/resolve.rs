@@ -163,8 +163,8 @@ pub(crate) fn describe_session(
     // left it, and the hold cannot disagree about a dialog that came up in between.
     let write_hold = state.write_hold(&session.id);
     let shown = state.shown_status(session);
-    // The account by id and name, as `get_account_quotas` and `switch_session_account` name it:
-    // `default` is the agent's default account. Never its directory, which is the user's.
+    // The account by id and name, as `list_agents` and `switch_session_account` name it: `default`
+    // is the agent's default account. Never its directory, which is the user's.
     let account_name = state
         .store
         .account_display_name(session.agent, session.account_id.as_deref())?;

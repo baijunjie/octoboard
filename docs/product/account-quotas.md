@@ -12,7 +12,7 @@ user's choice (see `docs/product/starting-usage-windows.md`), and, for a Codex a
 holds and lets the user redeem one (see `docs/product/usage-limit-resets.md`).
 
 How and when a quota is read, and what a reading leaves behind, is in `docs/product/account-quota-readings.md`; how a
-session reads quotas is in `docs/product/reading-quotas-from-a-session.md`.
+session reads quotas is in `docs/product/listing-agents-from-a-session.md`.
 
 ## Which accounts have a quota
 

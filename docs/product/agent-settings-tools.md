@@ -91,8 +91,8 @@ included — as applying to sessions opened without a choice. A project session'
 `request_session` in its own console, instead prefer the caller's agent; a console session starting a project session
 prefers the project's default, and its request for a console session in its own console prefers its own agent. The
 final agent and account, including automatic fallback when enabled, follow "The agent and account of a session a
-session starts" in `docs/product/hub-orchestration.md`. The tools tell a console session to name another agent or
-account only when the user asked for it.
+session starts" in `docs/product/hub-orchestration.md`, which also says when the tools tell a session to name an agent
+or an account itself.
 
 ## A project's settings
 

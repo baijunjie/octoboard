@@ -80,7 +80,7 @@ readings" below) or put into an error. Settings shows it in the accounts table a
 (see "The accounts table", "The account details dialog" and "The account settings dialog" in
 `docs/product/agent-accounts.md`); nothing else shows it — not the account pickers, the rail's account quota panel,
 the menu bar icon or a session's information — and a session is not given it (see
-`docs/product/reading-quotas-from-a-session.md`).
+`docs/product/listing-agents-from-a-session.md`).
 
 ## When quotas are read
 
@@ -110,8 +110,8 @@ the menu bar icon or a session's information — and a session is not given it (
 - **Opening the rail's account quota panel** asks for the same, each time the panel opens, whether the mouse floats it
   in or a tap or the keyboard opens it; a tap on a panel the mouse floated in is not a new opening (see
   `docs/product/account-quota-panel.md`).
-- **When a session asks**, with `get_account_quotas`' `refresh`, the accounts it covers are read again once their
-  last attempt is at least **60 seconds** old (see `docs/product/reading-quotas-from-a-session.md`).
+- **When a session asks**, with `list_agents`' `refresh`, the accounts it covers are read again once their
+  last attempt is at least **60 seconds** old (see `docs/product/listing-agents-from-a-session.md`).
 - **After a kick** (see `docs/product/starting-usage-windows.md`), the account is read again once the kick has ended,
   whether or not it succeeded.
 - **After a usage limit reset is redeemed**, the account is read again once Codex has been run for it, whatever the

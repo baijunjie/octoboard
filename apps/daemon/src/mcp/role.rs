@@ -345,18 +345,19 @@ fn session_choice_guidance(agent: Agent) -> String {
         "- You do not need sessions of your own: an ordinary task is yours to do, with subagents \
          where they help. Start sessions only for a large requirement that can be developed in \
          parallel on several branches, which you split across them and coordinate, or for a kind \
-         of work another agent handles better than yours, when an account of that agent can open a \
-         session (`{get_account_quotas}` shows which can). Choose which session gets a piece by \
-         how related it is to what the session already holds and how much of its context is used \
-         (`context` in `{get_session}` and `{list_sessions}`; when its window is not known, judge \
-         by `tokens`). Give a piece to an existing session only when it is closely related to that \
-         session's work and the session still has room; start a new session for an unrelated \
-         piece, or when the related session's context is heavily used (about 60% of its window). \
-         Split independent pieces across sessions rather than queuing them on one. A session near \
-         a full context is to be wrapped up and archived, not handed more.",
+         of work another agent handles better than yours — judge that by the agents' tags in \
+         `{list_agents}`, the user's notes on what each agent is for (information to weigh, not a \
+         rule) — when an account of that agent can open a session. Choose which session gets a \
+         piece by how related it is to what the session already holds and how much of its context \
+         is used (`context` in `{get_session}` and `{list_sessions}`; when its window is not \
+         known, judge by `tokens`). Give a piece to an existing session only when it is closely \
+         related to that session's work and the session still has room; start a new session for \
+         an unrelated piece, or when the related session's context is heavily used (about 60% of \
+         its window). Split independent pieces across sessions rather than queuing them on one. A \
+         session near a full context is to be wrapped up and archived, not handed more.",
         get_session = tool("get_session"),
         list_sessions = tool("list_sessions"),
-        get_account_quotas = tool("get_account_quotas"),
+        list_agents = tool("list_agents"),
     )
 }
 
@@ -365,9 +366,10 @@ fn session_choice_guidance(agent: Agent) -> String {
 /// work goes to (for a session that can own some), the ones that move a session to another agent,
 /// another account or another owner, the one that moves branches between sessions, the one that
 /// binds this session to an owner, which one makes a session nobody's, the one that resumes a
-/// conversation on the user's approval, the read of the accounts' quotas (for a session that owns
-/// none, which has no other line naming it), the reads every session has (sessions, histories,
-/// consoles, projects, archives), the list of models, then information, which needs none.
+/// conversation on the user's approval, the read of the agents, their tags and quotas (for a
+/// session that owns none, which has no other line naming it), the reads every session has
+/// (sessions, histories, consoles, projects, archives), the list of models, then information,
+/// which needs none.
 fn relationships(agent: Agent, owns: bool) -> String {
     let tool = |name: &str| qualified_tool_name(agent, name);
     let mut lines = Vec::new();
@@ -401,25 +403,23 @@ fn relationships(agent: Agent, owns: bool) -> String {
         ));
         lines.push(format!(
             "- `{handoff_session}` hands a session of yours off to a new session of another agent \
-             — when its account has run out of quota, say; `{get_account_quotas}` shows what \
-             each account has left. The new session takes its place and stays yours, and the \
-             original is archived. The user approves it first, and may change the agent, account, \
-             model and effort, unless they have chosen to have handoffs approved without \
-             asking.",
+             — when its account has run out of quota, say; `{list_agents}` shows what each account \
+             has left. The new session takes its place and stays yours, and the original is \
+             archived. The user approves it first, and may change the agent, account, model and \
+             effort, unless they have chosen to have handoffs approved without asking.",
             handoff_session = tool("handoff_session"),
-            get_account_quotas = tool("get_account_quotas"),
+            list_agents = tool("list_agents"),
         ));
         lines.push(format!(
             "- `{switch_session_account}` moves a session of yours to another account of its own \
-             agent — when its account has run out of quota, say; `{get_account_quotas}` shows \
-             what each account has left. It keeps its conversation and comes back awaiting \
-             instructions (a turn in progress is cut off), so send it the next step with \
-             `{instruct_session}` — unless the result's `note` says it was sent a prompt to \
-             continue, which you must not repeat. The user approves it first, and may change the \
-             account, model and effort, unless they have chosen to have account switches approved \
-             without asking.",
+             agent — when its account has run out of quota, say; `{list_agents}` shows what each \
+             account has left. It keeps its conversation and comes back awaiting instructions (a \
+             turn in progress is cut off), so send it the next step with `{instruct_session}` — \
+             unless the result's `note` says it was sent a prompt to continue, which you must not \
+             repeat. The user approves it first, and may change the account, model and effort, \
+             unless they have chosen to have account switches approved without asking.",
             switch_session_account = tool("switch_session_account"),
-            get_account_quotas = tool("get_account_quotas"),
+            list_agents = tool("list_agents"),
             instruct_session = tool("instruct_session"),
         ));
         lines.push(format!(
@@ -484,11 +484,12 @@ fn relationships(agent: Agent, owns: bool) -> String {
     ));
     if !owns {
         lines.push(format!(
-            "- `{get_account_quotas}` shows how much plan quota each account has left, as \
-             percentages of each window and with the time it resets; check it before relying on \
-             an account that may be running low. Readings are taken about every five minutes; \
-             `refresh` takes a new one, at most once a minute per account.",
-            get_account_quotas = tool("get_account_quotas"),
+            "- `{list_agents}` shows the agents a session could be opened on, each with its tags \
+             and how much plan quota each of its accounts has left, as percentages of each \
+             window and with the time it resets; check it before relying on an account that may \
+             be running low. Readings are taken about every five minutes; `refresh` takes a new \
+             one, at most once a minute per account.",
+            list_agents = tool("list_agents"),
         ));
     }
     lines.push(format!(
@@ -568,7 +569,7 @@ fn project_session_description(agent: Agent, owner: &Owner) -> String {
     let send_message = qualified_tool_name(agent, "send_message");
     let get_project = qualified_tool_name(agent, "get_project");
     let get_session = qualified_tool_name(agent, "get_session");
-    let get_account_quotas = qualified_tool_name(agent, "get_account_quotas");
+    let list_agents = qualified_tool_name(agent, "list_agents");
     let (dispatcher, owner_noun) = match owner {
         Owner::Console => ("A console session".to_string(), "console session"),
         Owner::Project { session_id } => (
@@ -596,15 +597,14 @@ fn project_session_description(agent: Agent, owner: &Owner) -> String {
          - Report once per round of work rather than per step.\n\
          - `{get_project}` reads this project's settings in Octoboard, read-only; `refresh` \
            checks its git status first.\n\
-         - Your account's plan quota can run out while you work. `{get_session}` with no \
-         `session` names the account you run on (`account`); look it up in \
-         `{get_account_quotas}` (an account the user turned off is not listed there, and yours \
-         may be one), and when that shows it running low, say so in your `{report}` as \
-         `needs_decision`, naming the account and what is left, rather than carrying on until \
-         it stops; your parent session decides whether to move you to another account or hand \
-         you off. If the user turned on automatic switching, Octoboard also moves you to \
-         another account by itself when a turn of yours stops on your account's usage limit: it \
-         tells you when it does, and you carry on there.\n\
+         - Your account's plan quota can run out while you work. `{get_session}` with no `session` \
+         names the account you run on (`account`); look it up in `{list_agents}` (an account the \
+         user turned off is not listed there, and yours may be one), and when that shows it \
+         running low, say so in your `{report}` as `needs_decision`, naming the account and what \
+         is left, rather than carrying on until it stops; your parent session decides whether to \
+         move you to another account or hand you off. If the user turned on automatic switching, \
+         Octoboard also moves you to another account by itself when a turn of yours stops on your \
+         account's usage limit: it tells you when it does, and you carry on there.\n\
          - Your parent session is the {owner_noun} that dispatched you, and you take work only \
          from it, or from the user typing in this terminal. Your parent session can hand you \
          over to another session: Octoboard then tells you so in a message, and from then on \
@@ -902,8 +902,9 @@ mod tests {
     }
 
     /// A project session that owns sessions is told it needs none for an ordinary task, and how to
-    /// choose among them for a parallel one, naming the tools by its agent's own names; a session
-    /// that owns none has no such choice to make.
+    /// choose among them for a parallel one, and when to start one on another agent for work that
+    /// agent handles better, judged by its tags, naming the tools by its agent's own names; a
+    /// session that owns none has no such choice to make.
     #[test]
     fn an_owner_is_told_to_start_sessions_only_for_parallel_branch_work() {
         for agent in Agent::ALL {
@@ -914,7 +915,8 @@ mod tests {
             assert!(bullet.contains("in parallel on several branches"));
             assert!(bullet.contains("another agent handles better than yours"));
             assert!(bullet.contains("an account of that agent can open a session"));
-            assert!(bullet.contains(&qualified_tool_name(agent, "get_account_quotas")));
+            assert!(bullet.contains("by the agents' tags in"));
+            assert!(bullet.contains(&qualified_tool_name(agent, "list_agents")));
             assert!(bullet.contains("about 60% of its window"));
             assert!(bullet.contains(&format!(
                 "`{}`",

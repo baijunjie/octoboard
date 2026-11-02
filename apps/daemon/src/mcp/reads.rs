@@ -1,9 +1,9 @@
 //! The reads every role has, with one scope: any session reads any session, and any console's
 //! projects and archives, whichever its role. `get_session`, `list_sessions`, `list_projects`,
 //! `list_consoles` and `list_archived` are here; the other reads every role has
-//! (`read_session_history`, `get_session_branches`, `list_agent_models`, `get_account_quotas`)
-//! have modules of their own. What a session may *do* to another is narrower, and is each write
-//! tool's own rule in `exec`; reads are not limited to the caller's console, writes are.
+//! (`read_session_history`, `get_session_branches`, `list_agent_models`, `list_agents`) have
+//! modules of their own. What a session may *do* to another is narrower, and is each write tool's
+//! own rule in `exec`; reads are not limited to the caller's console, writes are.
 
 use std::collections::HashMap;
 use std::sync::Arc;

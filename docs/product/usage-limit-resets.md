@@ -46,8 +46,8 @@ The line and button appear in two places:
   its **Usage** meters. The confirmation opens over the details dialog.
 
 They are not shown in Settings' accounts table, the account pickers, the selected session's quota indicator or the
-macOS menu bar icon and its menus, and a session's `get_account_quotas` tool says nothing of them (see
-`docs/product/reading-quotas-from-a-session.md`).
+macOS menu bar icon and its menus, and a session's `list_agents` tool says nothing of them (see
+`docs/product/listing-agents-from-a-session.md`).
 
 ## Only the user redeems a reset
 

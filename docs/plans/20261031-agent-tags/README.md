@@ -41,4 +41,5 @@ them. Tags are information for the agent; Octoboard itself does not select anyth
 ## Milestones
 
 - 01 Storing and editing agent tags (closed)
-- [02 Agent tags for sessions choosing an agent](02-agent-tags-for-sessions-choosing-an-agent.md)
+- 02 Agent tags for sessions choosing an agent (closed)
+- [03 Final confirmation](03-final-confirmation.md)

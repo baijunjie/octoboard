@@ -75,18 +75,18 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            effort (for console sessions and for project sessions). A change to your own model or \
            effort takes effect when this session is next launched. `get_settings` / \
            `update_settings` — read or change the application-wide settings.\n\
-         - `new_session` — start a session in a project and hand it a `brief`. Fill in `goal`, \
-           and `context`, `acceptance` and `constraints` wherever you actually have something to \
-           say; an empty field is omitted from the session's opening prompt rather than sent \
-           blank. Name it with `title`, in the user's language, not \
-           that of the project, its docs and code. It runs on the project's default agent. A \
-           left-out account is selected by the server according to the configured policy. Name \
-           another agent or account only when the user asked for them. The result gives the \
-           session's id and the agent, account, model and effort it actually started with; a \
-           refusal explains why it could not start. The session is yours for its whole life. \
-           Automatic selection may choose another agent when neither agent nor account is named; \
-           a named agent limits selection to it, and a named account preserves both. Unspecified \
-           model and effort follow the final agent.\n\
+         - `new_session` — start a session in a project and hand it a `brief`. Fill in `goal`, and \
+           `context`, `acceptance` and `constraints` wherever you actually have something to say; \
+           an empty field is omitted from the session's opening prompt rather than sent blank. \
+           Name it with `title`, in the user's language, not that of the project, its docs and \
+           code. It runs on the project's default agent. A left-out account is selected by the \
+           server according to the configured policy. Name another account only when the user \
+           asked for it, and another agent only when the user asked for it or its tags \
+           (`list_agents`) fit the work. The result gives the session's id and the agent, account, \
+           model and effort it actually started with; a refusal explains why it could not start. \
+           The session is yours for its whole life. Automatic selection may choose another agent \
+           when neither agent nor account is named; a named agent limits selection to it, and a \
+           named account preserves both. Unspecified model and effort follow the final agent.\n\
          - `instruct_session` — the next instruction for a session already running.\n\
          - `interrupt_session` — stop the turn a session of yours is in the middle of, when it \
            is working on the wrong thing; it keeps its conversation and awaits your next \
@@ -120,10 +120,11 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            with `yours`, `owner`, `project` or `branch`, `limit` sets how many, and `before` \
            takes the previous answer's `next` to read the next page; it can also say \
            whether the agent still holds each conversation, as `resumable`).\n\
-         - `get_account_quotas` — how much plan quota each account of each agent has left, as \
-           percentages; check it before choosing an account or when one may be running out. \
-           Readings are taken about every five minutes; `refresh` takes a new one, at most once \
-           a minute per account, and only when that matters.\n\
+         - `list_agents` — the agents a session could be opened on, each with its tags (the user's \
+           notes on what it is for) and how much plan quota each of its accounts has left, as \
+           percentages; check it before choosing an agent or an account or when one may be \
+           running out. Readings are taken about every five minutes; `refresh` takes a new \
+           one, at most once a minute per account, and only when that matters.\n\
          - `handoff_session` — move a session of yours to a new session of another agent, for \
            instance when its account has run out of quota; the new session takes its place.\n\
          - `handover_branches` — move the responsibility for git branches from one session of \
@@ -238,7 +239,7 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            comes back awaiting instructions and a turn in progress is cut off, so send it the \
            next step with `instruct_session` — unless the result's `note` says it was sent a \
            prompt to continue, which you must not repeat. Use it rather than a handoff when the \
-           same agent can go on. `get_account_quotas` shows which accounts still have quota.\n\
+           same agent can go on. `list_agents` shows which accounts still have quota.\n\
          - `set_session_model` changes the model or reasoning effort of a session of yours, on \
            its own agent and account, without asking the user. A running session is restarted to \
            take them: its process is ended and relaunched resuming its conversation, and it is \

@@ -89,8 +89,8 @@ Where to start, by question:
 - [Account quota readings](product/account-quota-readings.md) — how and when Octoboard reads a quota through the
   agent's CLI, the sign-in email a reading carries, what a reading leaves behind, and what the daemon's log records of
   readings.
-- [Reading quotas from a session](product/reading-quotas-from-a-session.md) — the `get_account_quotas` session tool,
-  its fields and refresh rules.
+- [Listing agents from a session](product/listing-agents-from-a-session.md) — the `list_agents` session tool:
+  the agents a session could be opened on, their tags and accounts, its fields and refresh rules.
 - [The account quota panel](product/account-quota-panel.md) — the rail's Account usage panel.
 - [Starting a usage window](product/starting-usage-windows.md) — kicking a usage window that has not begun counting.
 - [Codex usage limit resets](product/usage-limit-resets.md) — how a Codex account's usage limit resets are read and

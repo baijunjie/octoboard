@@ -23,11 +23,13 @@ The list decides which agents this section shows, and in what order: the agent s
 picker. Every other place that lists agents follows it too, in its order: the console, project, session and handoff
 dialogs' agent pickers and the console dialog's per-agent sections (see "Which agents the agent pickers list" in
 `docs/product/consoles.md`), the rail's account quota panel (see "What the panel shows" in
-`docs/product/account-quota-panel.md`) and the menu bar icon's quota submenus (see "The icon's menu" in
-`docs/product/menu-bar-icon.md`); so does whether a new session of an agent can be opened, or a session handed off to
-it, at all — from the window or by an agent's tool (see "When the agent or the account cannot open a session" in
-`docs/product/opening-sessions.md`). Only this section's Add agent dialog and the welcome screen's supported CLI tools
-list (see "What the welcome screen shows" in `docs/product/welcome-screen.md`) list an agent that was never added.
+`docs/product/account-quota-panel.md`), the menu bar icon's quota submenus (see "The icon's menu" in
+`docs/product/menu-bar-icon.md`) and a session's `list_agents` tool (see
+`docs/product/listing-agents-from-a-session.md`); so does whether a new session of an agent can be opened, or a
+session handed off to it, at all — from the window or by an agent's tool (see "When the agent or the account cannot
+open a session" in `docs/product/opening-sessions.md`). Only this section's Add agent dialog and the welcome screen's
+supported CLI tools list (see "What the welcome screen shows" in `docs/product/welcome-screen.md`) list an agent that
+was never added.
 
 **How the list starts.** The list is decided once, as soon as Octoboard has determined which agents are installed: it
 is filled with every agent that is installed plus every agent the user owns an account of, in the order Claude Code,
@@ -324,8 +326,8 @@ While an account is turned off:
   `docs/product/account-quota-panel.md`); the menu bar icon's quota submenus do not list it, and their opening line
   draws no bars for it (see "The icon's menu" in `docs/product/menu-bar-icon.md`); the rail button's indicator and the
   menu bar icon draw none for it (see "The selected session's quota indicator" in `docs/product/account-quotas.md`);
-  and `get_account_quotas` does not list it, the caller's own account included (see
-  `docs/product/reading-quotas-from-a-session.md`). The one exception is the selected session's own account while
+  and `list_agents` does not list it, the caller's own account included (see
+  `docs/product/listing-agents-from-a-session.md`). The one exception is the selected session's own account while
   that session is running on it — starting, working, waiting for the user or at its prompt, not interrupted or archived: the
   rail's indicator and the menu bar icon still show its quota, and the quota panel and the menu bar icon's quota
   submenu still list it, marked **Disabled**; when it is also the current console's account, that submenu's opening

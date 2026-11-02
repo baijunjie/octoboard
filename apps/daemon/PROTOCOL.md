@@ -1247,7 +1247,7 @@ ResetCredit  { id, title, description, granted_at, expires_at }
   quota itself could be read. It is null when the account reads as signed out, its configuration directory is missing,
   the record cannot be read or names no single address, or, for the default account, the login-shell snapshot could
   not be taken. A failed attempt that keeps the last good `windows` carries its own `email`, not the earlier one. The
-  email is never logged or put in an error, and `get_account_quotas` does not pass it to sessions.
+  email is never logged or put in an error, and `list_agents` does not pass it to sessions.
 - `kind` is `session` (the five-hour window), `weekly`, `weekly_model` (a weekly window of the one model `label` names)
   or `credit_period` (a pool of credits over a billing period). Claude Code reports `session`, `weekly` and one
   `weekly_model` per model with its own weekly limit, Codex `session` and `weekly`, Grok Build one `credit_period`.
@@ -2780,7 +2780,7 @@ one replaces are described in `docs/product/session-requests.md` ("Waiting for t
 | `add_project`, `update_project`, `get_console`, `update_console`, `get_settings`, `update_settings` | yes | — | — |
 | `show_page`, `list_pages`, `delete_pages` | yes | yes, with or without a parent | — |
 | `new_session`, `instruct_session`, `interrupt_session`, `archive_session`, `reopen_session`, `rename_session`, `set_session_pinned` | yes | yes | — |
-| `get_session`, `list_sessions`, `read_session_history`, `get_session_branches`, `list_project_changes`, `list_project_branches`, `read_project_diff`, `list_agent_models`, `list_consoles`, `list_projects`, `list_archived`, `send_message`, `get_account_quotas` | yes | yes | yes |
+| `get_session`, `list_sessions`, `read_session_history`, `get_session_branches`, `list_project_changes`, `list_project_branches`, `read_project_diff`, `list_agent_models`, `list_consoles`, `list_projects`, `list_archived`, `send_message`, `list_agents` | yes | yes | yes |
 | `archive_self` | yes | offered; accepted only without a parent | — |
 | `handoff_session`, `handover_branches`, `handover_processes`, `switch_session_account`, `set_session_model`, `transfer_session`, `release_session` | yes | yes | — |
 | `bind_to_session` | — | offered; accepted only without a parent | — |
@@ -2838,8 +2838,8 @@ directory.
 
 - `get_session`, `list_sessions`, `read_session_history`, `get_session_branches`, `list_project_changes`,
   `list_project_branches`, `read_project_diff`, `list_agent_models`, `list_consoles`, `list_projects`, `list_archived`
-  and `get_account_quotas` (`list_project_changes`, `list_project_branches` and `read_project_diff` read the caller's
-  own console's projects only, below; the third row of the table above, without `send_message`, which writes) have one
+  and `list_agents` (`list_project_changes`, `list_project_branches` and `read_project_diff` read the caller's own
+  console's projects only, below; the third row of the table above, without `send_message`, which writes) have one
   definition and one scope for every role: any session reads any session, and any console's project list and archive.
   What stays narrower is `get_project` (a project session's own project), `get_console` and `get_settings` (the console
   session's own console and the application's settings), and the writes. `list_consoles` answers `{ consoles: [{
@@ -3116,16 +3116,21 @@ directory.
   dropped once any later report or notice about the same session is kept for that parent (shared information does not
   drop it), and at the resume it is dropped if the session no longer waits for the user. See
   `docs/product/reporting-to-owners.md`.
-- `get_account_quotas` takes an optional `agent` (`claude`, `codex` or `grok`), listing only that agent's accounts
-  (every agent's when it is left out), and an optional `refresh`: the accounts it lists are read again first where
-  their last attempt is at least 60 seconds old, as are those of an agent that is installed but not added, which the
-  daemon reads as well, without ever starting a quota window. An account the user turned off is neither listed nor
-  read again, the caller's own included (`get_session` still names a session's account, which is how a session finds
-  its own). Each account carries `can_open` and, when it is false, `cannot_open_reason`: the account is used up, or
-  its last reading found it not logged in, or a change of its sharing is running, the reasons besides being turned off
-  that automatic account selection passes an account over for. The result also carries `auto_select_account`, the
-  setting of that name, read-only, so a session that cannot read `get_settings` knows whether an account it leaves out
-  is chosen for it. See `docs/product/reading-quotas-from-a-session.md`.
+- `list_agents` answers `{ "auto_select_account", "agents": [{ "agent", "tags", "accounts": [...] }] }`: one entry per
+  agent a session could be opened on, the added agents that are installed, in the user's added-list order (every agent
+  while the list is undecided), each with its `tags` (the user's notes on the agent, `[]` when it has none) and its
+  accounts. A removed agent is not listed, so its tags are not shown, and neither is an added agent that is not
+  installed; one not detected yet is listed, its accounts not read yet. It takes an optional `agent` (`claude`, `codex`
+  or `grok`), listing only that agent (every such agent when it is left out; one that is not listed gives
+  `agents: []`), and an optional `refresh`: the accounts it lists are read again first where their last attempt is at
+  least 60 seconds old, as are those of an agent that is installed but not added, which the daemon reads as well,
+  without ever starting a quota window. An account the user turned off is neither listed nor read again, the caller's
+  own included (`get_session` still names a session's account, which is how a session finds its own). Each account
+  carries `can_open` and, when it is false, `cannot_open_reason`: the account is used up, or its last reading found it
+  not logged in, or a change of its sharing is running, the reasons besides being turned off that automatic account
+  selection passes an account over for. The result also carries `auto_select_account`, the setting of that name,
+  read-only, so a session that cannot read `get_settings` knows whether an account it leaves out is chosen for it.
+  See `docs/product/listing-agents-from-a-session.md`.
 - `show_page`, `list_pages` and `delete_pages` are the report panel's tools, offered to a console session and to a
   project coordinator, with or without a parent; a project worker has none. Pages are kept per session. `list_pages`
   lists the report pages the caller pushed, or with `page` answers one of them with its HTML. `delete_pages` withdraws
@@ -3139,8 +3144,8 @@ directory.
   (`pages_deleted` is broadcast), so the panel stops offering their forms; a coordinator with a console parent keeps its
   pages. See `docs/product/report-panel.md`.
 - Every session a tool describes (`list_sessions`, `list_projects`, `get_session` and the rest) carries the facts the
-  write tools depend on: `account` (the account's id, `default` for the agent's default account, as `get_account_quotas`
-  and `switch_session_account` name it) and `account_name`, never the account's directory; `observed_model` and
+  write tools depend on: `account` (the account's id, `default` for the agent's default account, as `list_agents` and
+  `switch_session_account` name it) and `account_name`, never the account's directory; `observed_model` and
   `observed_effort` (what the agent's records show, `null` until reported) and `default_effort` (the effort the agent
   runs the observed model at by itself, `null` when the records name an effort or no model, or the catalogue gives
   none); `pinned`; `locked`; and `branches`, the plain names of the git branches the session is responsible for (empty
@@ -3153,10 +3158,9 @@ directory.
   turn was taken; whether the agent still holds the record is not read, `reopen_session` refusing as
   `conversation_unresumable` when it does not), `model` and `effort` (the session's own launch choices as
   `Session.model` and `Session.effort` carry them: a key absent when it follows its project's or console's setting,
-  `null` for the agent's own default), `orchestration_role` (`coordinator` or `worker`),
-  and `owned_sessions` (its child sessions in any status, archived ones included, as the rules of `transfer_session`
-  count them). Reading them runs no process: `branches` comes from the store and the reflog files, once per repository
-  for a listing.
+  `null` for the agent's own default), `orchestration_role` (`coordinator` or `worker`), and `owned_sessions` (its child
+  sessions in any status, archived ones included, as the rules of `transfer_session` count them). Reading them runs no
+  process: `branches` comes from the store and the reflog files, once per repository for a listing.
 - Every session a tool describes also carries `queued_messages`, the number of messages queued for it and not yet
   written (the messages kept for it while it is interrupted included: shared information, and the reports and notices
   for a parent), and `writes_held`: `null`, or for a running session whose writes are held whatever its `status` reads,

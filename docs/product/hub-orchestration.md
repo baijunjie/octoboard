@@ -344,11 +344,13 @@ and caller. An explicit agent or account wins; automatic selection can change an
   or not-logged-in caller account is passed over. Otherwise the account comes from the project, else the console,
   else the agent's default account. No search of other accounts or agents is added for unavailable accounts.
 - **Named ones win.** A named `agent` restricts automatic selection to that agent. A named `account` is used as given,
-  including `default`, which selects the agent's default account outright. A console session's tools, and every
-  session's `request_session`, tell the caller to name either only when the user asked for it. A project session's
-  `new_session` also lets it name another agent unasked when that agent fits the work better and an account of it can
-  open a session, and another account when that is the way to reach that agent (see "Choosing the session a task goes
-  to" below).
+  including `default`, which selects the agent's default account outright. A console session's `new_session`, and
+  every session's `request_session`, tell the caller to name an account only when the user asked for it, and an agent
+  only when the user asked for it or when that agent's tags fit the work (see
+  `docs/product/listing-agents-from-a-session.md`). A project session's `new_session` lets it name another agent when
+  the user asked for it or when it judges that agent fits the work better, weighing the agents' tags, and an account of
+  it can open a session; and another account when the user asked for it or when that is the way to reach that agent
+  (see "Choosing the session a task goes to" below).
 - **The model and reasoning effort** are not the caller's. Left out, they are inherited for the final selected agent
   from the destination project or console (see "Which model and reasoning effort a session uses" in
   `docs/product/opening-sessions.md`). Explicit values are checked against that agent's offered choices.
@@ -393,7 +395,10 @@ enforce it:
 - An ordinary task needs no sessions of its own: the project session does it itself, with subagents where they help.
 - It starts sessions only for a large requirement that can be developed in parallel on several branches, which it
   splits across them and coordinates, or for a kind of work another agent handles better than its own, when an account
-  of that agent can open a session — `get_account_quotas` shows which can. The text names no agent.
+  of that agent can open a session. Which agent handles a kind of work better it judges by the agents' tags in
+  `list_agents`, presented as the user's notes on what each agent is for — information to weigh, not a rule; the same
+  answer shows which accounts can open a session (see `docs/product/listing-agents-from-a-session.md`). The text names
+  no agent.
 - Weigh how related a piece of work is to what a session already holds, and how much of its context is used —
   `context` in `get_session` and `list_sessions` (see "Session records" in
   `docs/product/what-every-session-reads.md`), judged by `tokens` when the window is not known.
@@ -405,8 +410,8 @@ enforce it:
 - Split independent pieces of work across sessions rather than queuing them on one.
 - Wrap up and archive a session near a full context rather than handing it more.
 
-For work another agent handles better, it may name that agent in `new_session` without the user having asked (see "The
-agent and account of a session a session starts" above).
+For work another agent handles better, weighing the agents' tags, it may name that agent in `new_session` without the
+user having asked (see "The agent and account of a session a session starts" above).
 
 ## A session archiving itself
 

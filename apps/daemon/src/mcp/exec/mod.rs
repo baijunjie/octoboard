@@ -27,6 +27,7 @@ use serde_json::{Map, Value};
 use crate::state::AppState;
 
 use super::account_switch;
+use super::agents;
 use super::bindings;
 use super::handoff;
 use super::handover;
@@ -36,7 +37,6 @@ use super::pages;
 use super::process_handover;
 use super::project_branches;
 use super::project_changes;
-use super::quotas;
 use super::reads;
 use super::session_branches;
 use super::session_model;
@@ -171,7 +171,7 @@ async fn dispatch(
         "list_agent_models" => models::list_agent_models(state, arguments).await,
         "read_session_history" => history::read_session_history(state, &session, arguments).await,
         "get_project" => settings::get_project(state, &session, arguments).await,
-        "get_account_quotas" => quotas::get_account_quotas(state, arguments).await,
+        "list_agents" => agents::list_agents(state, arguments).await,
         "send_message" => send_message(state, &session, arguments).await,
         "transfer_session" => bindings::transfer_session(state, &session, arguments).await,
         "release_session" => bindings::release_session(state, &session, arguments).await,

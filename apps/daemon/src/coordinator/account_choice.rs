@@ -16,7 +16,7 @@ use crate::protocol::{
 use crate::state::AppState;
 
 /// Whether `agent` is not known to be missing; while availability is still undetermined it is kept.
-pub(super) fn agent_is_available(state: &Arc<AppState>, agent: Agent) -> bool {
+pub(crate) fn agent_is_available(state: &Arc<AppState>, agent: Agent) -> bool {
     state.agent_availability_of(agent).availability != Availability::Unavailable
 }
 
@@ -265,12 +265,12 @@ fn open_now(state: &Arc<AppState>, agent: Agent, account: Option<&str>) -> Resul
 
 /// Every account of `agent`, `None` the default account, in the order the user keeps them in
 /// (`Store::account_order`), which the session dialog lists them in: where an automatic choice
-/// finds candidates alike, the earlier one wins. Accounts the saved order does not name follow,
-/// the default account first and then the stored accounts as they are kept. The window's dialogs
-/// rank in the same order to preselect what this would pick
+/// finds candidates alike, the earlier one wins. Accounts the saved order does not name follow, the
+/// default account first and then the stored accounts as they are kept. The window's dialogs rank
+/// in the same order to preselect what this would pick
 /// (`packages/ui/src/accounts/accountChoices.ts`), so a change to the ranking or its order is made
-/// on both sides. The MCP tools that list accounts (`get_account_quotas`, `get_settings`) list them
-/// in this order too.
+/// on both sides. The MCP tools that list accounts (`list_agents`, `get_settings`) list them in
+/// this order too.
 pub(crate) fn account_candidates(
     state: &Arc<AppState>,
     agent: Agent,

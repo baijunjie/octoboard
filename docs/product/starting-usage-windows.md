@@ -21,7 +21,7 @@ one a session asked for (see below), when all of these hold:
   the request goes to one model and cannot start another model's limit;
 - that window has not been kicked in its current episode.
 
-A reading a session asked for with `get_account_quotas`' `refresh` (see `docs/product/reading-quotas-from-a-session.md`) never kicks:
+A reading a session asked for with `list_agents`' `refresh` (see `docs/product/listing-agents-from-a-session.md`) never kicks:
 when it shows an account these conditions would kick, the account is marked due instead, so the background poller reads it again at its next look, within about 15 seconds, and kicks it
 after that reading as it would after any other. What a session's request sets off is a reading and nothing more;
 spending quota to start a window stays the user's setting, acted on at the readings Octoboard takes itself.

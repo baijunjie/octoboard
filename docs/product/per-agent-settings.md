@@ -32,8 +32,10 @@ later change is still being saved the field goes back to the stored tags.
 
 The tags are kept by the daemon with the other application settings, so every window shows the same ones, and a change
 reaches them at once; they survive a restart. **Removing an agent keeps its tags**, which come back when it is added
-again (see "Reordering and removing an agent" in `docs/product/agent-accounts.md`); a removed agent's tags are neither
-offered for the other agents nor shown to sessions. Like Claude compatibility, a console session may read and change
+again (see "Reordering and removing an agent" in `docs/product/agent-accounts.md`); a removed agent's tags are not
+offered for the other agents. Every session reads the tags of the agents a session could be opened on, with their
+accounts, through `list_agents`, which does not list a removed agent (see
+`docs/product/listing-agents-from-a-session.md`). Like Claude compatibility, a console session may read and change
 them (see "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`), and a
 configuration export that includes the application settings carries them (see "The application settings an export
 carries" in `docs/product/configuration-export-and-import.md`).

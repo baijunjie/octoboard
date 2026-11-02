@@ -23,6 +23,7 @@
 //! role text spelling a prefix out.
 
 mod account_switch;
+mod agents;
 mod args;
 mod bindings;
 pub mod console_instructions;
@@ -36,7 +37,6 @@ mod process_handover;
 mod project_branches;
 mod project_browse;
 mod project_changes;
-mod quotas;
 pub(crate) mod reads;
 mod resume_request;
 pub mod role;
@@ -154,7 +154,8 @@ macro_rules! started_by_a_session {
          configured policy. Automatic selection may choose another agent when neither agent nor \
          account is named; an explicit agent limits selection to it, and an explicit account \
          preserves both. Unspecified model and effort follow the final agent. A console session \
-         names another agent or account only when the user asked for it."
+         names another account only when the user asked for it, and another agent only when the \
+         user asked for it or its tags (`list_agents`) fit the work."
     };
 }
 
@@ -195,7 +196,7 @@ macro_rules! session_record_fields {
          `idle` session whose last turn ended abnormally (cancelled, declined, stopped on a \
          usage limit or failed): it takes messages like any idle session. `account` is the \
          account the session runs on, an account's id or `default` for the agent's default \
-         account as `get_account_quotas` lists them, with its `account_name`; \
+         account as `list_agents` lists them, with its `account_name`; \
          `switch_session_account` refuses the account a session is on already. \
          `observed_model` and `observed_effort` are what the agent's records show the session \
          running with, null until reported; `default_effort` is the effort the agent runs that \
@@ -517,11 +518,13 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                       choose another agent when neither agent nor account is named; an explicit \
                       agent limits selection to it, and an explicit account preserves both. \
                       Unspecified model and effort follow the final agent. A refusal explains why \
-                      the session could not start. Name another agent or account only when the \
-                      user asked for it. Use this when you should keep directing the session and \
-                      receiving its reports. To hand your own work to a peer in the next session, \
-                      use `request_session`; if the user only wants handover notes and an end, \
-                      leave the notes and end. Ask the user if their intent is unclear.",
+                      the session could not start. Name another account only when the user asked \
+                      for it. Name another agent only when the user asked for it or when its tags \
+                      (`list_agents`) fit the work. Use this when you should keep directing the \
+                      session and receiving its reports. To hand your own work to a peer in the \
+                      next session, use `request_session`; if the user only wants handover notes \
+                      and an end, leave the notes and end. Ask the user if their intent is \
+                      unclear.",
         schema: || new_session_schema(true),
     },
     INSTRUCT_SESSION,
@@ -551,7 +554,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     LIST_AGENT_MODELS,
     LIST_CONSOLES,
     SEND_MESSAGE,
-    GET_ACCOUNT_QUOTAS,
+    LIST_AGENTS,
     LIST_PAGES,
     SHOW_PAGE,
     DELETE_PAGES,
@@ -1023,7 +1026,7 @@ const SWITCH_SESSION_ACCOUNT: ToolDef = ToolDef {
                   not logged in, say) can come after the user has chosen. Returns the session with \
                   the account it is now on and its model and reasoning effort where it has its \
                   own. `account` in `get_session` shows the account a session is on, to match \
-                  against `get_account_quotas`.",
+                  against `list_agents`.",
     schema: || {
         object_schema(
             json!({
@@ -2025,8 +2028,9 @@ const REQUEST_SESSION: ToolDef = ToolDef {
                   is selected by the server according to the configured policy. Automatic \
                   selection may choose another agent when neither agent nor account is named; a \
                   named agent limits selection to it, and a named account preserves both. \
-                  Unspecified model and effort follow the final agent. Pass an agent or account \
-                  only when the user asked for one. Read the result for the actual session \
+                  Unspecified model and effort follow the final agent. Pass an account only \
+                  when the user asked for one, and an agent only when the user asked for one or \
+                  its tags (`list_agents`) fit the work. Read the result for the actual session \
                   started; a refusal explains why nothing was started.",
     schema: request_session_schema,
 };
@@ -2061,42 +2065,48 @@ const REQUEST_RESUME_SESSION: ToolDef = ToolDef {
     schema: request_resume_session_schema,
 };
 
-/// What every session may read of the plan quota each account has left, to choose an account or
-/// an agent before one runs dry.
-const GET_ACCOUNT_QUOTAS: ToolDef = ToolDef {
-    name: "get_account_quotas",
-    description: "How much plan quota each account has left, read-only: every account of every \
-                  agent that the user has not turned off, the agent's default account (`account: \
-                  \"default\"`) and the stored ones, with its `account_name`, `plan`, and its \
-                  quota `windows` (`kind` `session` is the five-hour window (Claude Code's session \
-                  limit, Codex's 5h limit), `weekly` the weekly one across all models, \
-                  `weekly_model` a weekly window of the model named by `label`, `credit_period` a \
-                  pool of credits over a billing period). All values are percentages of a window: \
-                  `used_percent` and `remaining_percent`, with `resets_at` (milliseconds since the \
-                  epoch) and `window_minutes`; no absolute token or dollar amount is available. \
-                  `exhausted` says the account is used up and cannot open a session until it \
-                  resets, and `exhausted_until` is when (milliseconds since the epoch; null when \
-                  it is not exhausted or the reset time is unknown). `can_open` says a session \
-                  could be opened on the account now; when it is false `cannot_open_reason` says \
-                  why (used up, not logged in, or a change of its sharing settings is running). \
-                  `auto_select_account` says whether automatic account selection is enabled for \
-                  sessions opened without naming an account. Only agents a \
-                  session could be opened on are listed: one that is not installed or not added \
-                  lists no accounts. These are the readings Octoboard last took, refreshed about \
-                  every five minutes, and this call takes a new one only when `refresh` is true, \
-                  and then for the accounts it lists and those of an agent that is installed but \
-                  not added, which Octoboard reads as well: `fetched_at` says how old a reading \
-                  is, `unavailable` gives the reason a reading is missing or could not be \
-                  refreshed (an account not read yet has `fetched_at: null`, as has one of an \
-                  agent not detected yet). Use it to check an account before relying on it, or to \
-                  pick the account for `switch_session_account` or `handoff_session`.",
+/// What every session may read of the agents a session could be opened on: each one's tags, and
+/// the plan quota each of its accounts has left, to choose an agent and an account, or an account
+/// before one runs dry.
+const LIST_AGENTS: ToolDef = ToolDef {
+    name: "list_agents",
+    description: "The agents a session could be opened on, for choosing an agent and an \
+                  account: under `agents`, the agents the user has added that are installed, in \
+                  the order the user keeps them (a removed agent is not listed), each with its \
+                  `tags` — short notes the user put on the agent about what it is for \
+                  (information to weigh, not a rule) — and its `accounts`: every account the \
+                  user has not turned off, the agent's default account (`account: \"default\"`) \
+                  and the stored ones, with its `account_name`, `plan`, and its quota `windows` \
+                  (`kind` `session` is the five-hour window (Claude Code's session limit, \
+                  Codex's 5h limit), `weekly` the weekly one across all models, `weekly_model` a \
+                  weekly window of the model named by `label`, `credit_period` a pool of credits \
+                  over a billing period). All values are percentages of a window: \
+                  `used_percent` and `remaining_percent`, with `resets_at` (milliseconds since \
+                  the epoch) and `window_minutes`; no absolute token or dollar amount is \
+                  available. `exhausted` says the account is used up and cannot open a session \
+                  until it resets, and `exhausted_until` is when (milliseconds since the epoch; \
+                  null when it is not exhausted or the reset time is unknown). `can_open` says a \
+                  session could be opened on the account now; when it is false \
+                  `cannot_open_reason` says why (used up, not logged in, or a change of its \
+                  sharing settings is running). `auto_select_account` says whether automatic \
+                  account selection is enabled for sessions opened without naming an account. \
+                  Naming an agent that is not listed returns `agents: []`. These are the \
+                  readings Octoboard last took, refreshed about every five minutes, and this \
+                  call takes a new one only when `refresh` is true: `fetched_at` says how old a \
+                  reading is, `unavailable` gives the reason a reading is missing or could not \
+                  be refreshed (an account not read yet has `fetched_at: null`, as has one of an \
+                  agent not detected yet). Use it to choose an agent by its tags and an account \
+                  that can open a session, or to pick the account for `switch_session_account` \
+                  or `handoff_session`.",
     schema: || {
         object_schema(
             json!({
                 "agent": {
                     "type": "string",
                     "enum": ["claude", "codex", "grok"],
-                    "description": "List only this agent's accounts. Left out, every agent's.",
+                    "description": "List only this agent; one that is not listed gives \
+                                    `agents: []`. Left out, every added agent that is \
+                                    installed.",
                 },
                 "refresh": {
                     "type": "boolean",
@@ -2131,7 +2141,7 @@ const WORKER_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     LIST_ARCHIVED,
     SEND_MESSAGE,
     GET_PROJECT,
-    GET_ACCOUNT_QUOTAS,
+    LIST_AGENTS,
     REQUEST_SESSION,
     REQUEST_RESUME_SESSION,
 ];
@@ -2153,21 +2163,22 @@ const COORDINATOR_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
                       Unspecified model and effort follow the final agent. A refusal explains why \
                       the session could not start. Name another account only when the user asked \
                       for it, or when it is the way to reach another agent. Name another agent \
-                      only when the user asked for it or when you judge it fits the work better \
-                      and an account of it can open a session. Returns the new session's id, its \
-                      agent, the account it opened on (`account`, `account_name`) and the `model` \
-                      and `effort` it was launched with (`null` is the agent's own default), and \
-                      with `branches` the ones that moved and a `note` on how the handover went. \
-                      The brief is rendered into the session's opening prompt; `title` names the \
-                      session in the user's language. A session started this way cannot start \
-                      sessions of its own, and only this project is available; a session \
-                      elsewhere, or one that should not report to you, is one `request_session` \
-                      asks the user for. To give the new session a branch you are responsible for, \
-                      pass it in `branches`; `handover_branches` moves the branches of any session \
-                      of yours later. Use this only when you should keep directing the session and \
-                      receiving its reports. To hand your own work to a peer in the next session, \
-                      use `request_session`; if the user only wants handover notes and an end, \
-                      leave the notes and end. Ask the user if their intent is unclear.",
+                      only when the user asked for it or when you judge it fits the work better, \
+                      weighing the agents' tags in `list_agents`, and an account of it can open a \
+                      session. Returns the new session's id, its agent, the account it opened on \
+                      (`account`, `account_name`) and the `model` and `effort` it was launched \
+                      with (`null` is the agent's own default), and with `branches` the ones that \
+                      moved and a `note` on how the handover went. The brief is rendered into the \
+                      session's opening prompt; `title` names the session in the user's language. \
+                      A session started this way cannot start sessions of its own, and only this \
+                      project is available; a session elsewhere, or one that should not report to \
+                      you, is one `request_session` asks the user for. To give the new session a \
+                      branch you are responsible for, pass it in `branches`; `handover_branches` \
+                      moves the branches of any session of yours later. Use this only when you \
+                      should keep directing the session and receiving its reports. To hand your \
+                      own work to a peer in the next session, use `request_session`; if the user \
+                      only wants handover notes and an end, leave the notes and end. Ask the user \
+                      if their intent is unclear.",
         schema: || new_session_schema(false),
     },
     INSTRUCT_SESSION,
@@ -2201,7 +2212,7 @@ const COORDINATOR_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     LIST_PROJECTS,
     SEND_MESSAGE,
     GET_PROJECT,
-    GET_ACCOUNT_QUOTAS,
+    LIST_AGENTS,
     LIST_PAGES,
     SHOW_PAGE,
     DELETE_PAGES,
@@ -2229,8 +2240,8 @@ fn request_session_schema() -> Value {
     schema["properties"]["agent"]["description"] = json!(
         "The agent the session runs. Left out, it is your own agent for a session in your own \
          console, or the project's default agent when you are a console session and name a \
-         project, and the agent the other console (and its project) sets for one elsewhere. \
-         Pass one only when the user asked for it."
+         project, and the agent the other console (and its project) sets for one elsewhere. Pass \
+         one only when the user asked for it, or when its tags (`list_agents`) fit the work."
     );
     schema["properties"]["account"]["description"] = json!(
         "The account the session runs on: an account's id or name, or `default` for the agent's \
@@ -2352,11 +2363,12 @@ fn new_session_schema(with_project: bool) -> Value {
             "enum": ["claude", "codex", "grok"],
             "description": if with_project {
                 "The agent the session runs. Left out, it is the project's default agent. Pass \
-                 another only when the user asked for it."
+                 another only when the user asked for it, or when its tags (`list_agents`) fit the \
+                 work."
             } else {
                 "The agent the session runs. Left out, it is your own agent. Pass another only \
-                 when the user asked for it, or when you judge it fits the work better and an \
-                 account of it can open a session."
+                 when the user asked for it or when you judge it fits the work better, weighing \
+                 the agents' tags in `list_agents`, and an account of it can open a session."
             },
         },
         "account": {
@@ -2626,13 +2638,14 @@ mod tests {
         }
     }
 
-    /// A project session that owns sessions may choose another agent for work that fits it better,
-    /// where a console session starts another agent's session only when the user asked: both the
-    /// tool's description and its `agent` argument say so.
+    /// A session names another agent unasked only by its judgement of the work: a project session
+    /// that owns sessions when it finds the agent fits better, weighing the agents' tags, and a
+    /// console session or a `request_session` only when the agent's tags fit; the account is
+    /// named only when the user asked, and `handoff_session` says nothing of tags.
     #[test]
-    fn only_a_project_session_may_choose_another_agent_unasked() {
-        let text = |role| {
-            let tool = tool_by_name(role, false, "new_session").unwrap();
+    fn a_session_may_choose_another_agent_by_its_tags_but_an_account_only_when_asked() {
+        let text = |role, tool: &str| {
+            let tool = tool_by_name(role, false, tool).unwrap();
             let schema = (tool.schema)();
             (
                 tool.description.to_string(),
@@ -2640,15 +2653,40 @@ mod tests {
                     .as_str()
                     .unwrap()
                     .to_string(),
+                schema["properties"]["account"]["description"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string(),
             )
         };
-        let (description, agent) = text(Role::Project);
+        let (description, agent, _) = text(Role::Project, "new_session");
         assert!(description.contains("fits the work better"));
         assert!(agent.contains("fits the work better"));
-        let (description, agent) = text(Role::Console);
-        assert!(!description.contains("fits the work better"));
-        assert!(!agent.contains("fits the work better"));
-        assert!(agent.contains("only when the user asked for it"));
+        assert!(description.contains("`list_agents`"));
+        assert!(agent.contains("`list_agents`"));
+        for (role, tool) in [
+            (Role::Console, "new_session"),
+            (Role::Console, "request_session"),
+            (Role::Project, "request_session"),
+        ] {
+            let (description, agent, account) = text(role, tool);
+            assert!(
+                description.contains("its tags (`list_agents`) fit the work"),
+                "{tool}: {description}"
+            );
+            assert!(
+                agent.contains("its tags (`list_agents`) fit the work"),
+                "{tool}: {agent}"
+            );
+            assert!(!agent.contains("fits the work better"), "{tool}: {agent}");
+            assert!(
+                account.contains("Pass one only when the user asked for it"),
+                "{tool}: {account}"
+            );
+            assert!(!account.contains("`list_agents`"), "{tool}: {account}");
+        }
+        let (description, _, _) = text(Role::Console, "handoff_session");
+        assert!(!description.contains("tags"), "{description}");
     }
 
     /// What a session is offered follows from its role and whether it is bound: only a session that
@@ -2680,7 +2718,7 @@ mod tests {
                 "list_archived",
                 "send_message",
                 "get_project",
-                "get_account_quotas",
+                "list_agents",
                 "request_session",
                 "request_resume_session"
             ]
@@ -2720,7 +2758,7 @@ mod tests {
                 "list_projects",
                 "send_message",
                 "get_project",
-                "get_account_quotas",
+                "list_agents",
                 "list_pages",
                 "show_page",
                 "delete_pages"
@@ -2764,7 +2802,7 @@ mod tests {
                 "list_agent_models",
                 "list_consoles",
                 "send_message",
-                "get_account_quotas",
+                "list_agents",
                 "list_pages",
                 "show_page",
                 "delete_pages"
@@ -2784,7 +2822,7 @@ mod tests {
             "list_consoles",
             "list_projects",
             "list_archived",
-            "get_account_quotas",
+            "list_agents",
         ] {
             let described = |role, worker| {
                 let tool = tool_by_name(role, worker, read).unwrap_or_else(|| panic!("{read}"));

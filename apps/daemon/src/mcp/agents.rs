@@ -1,9 +1,9 @@
-//! The tool with which a session reads how much plan quota each account has left,
-//! `get_account_quotas`. It returns the readings the daemon already holds (`AccountQuotas`), so
-//! what it says is as old as each reading's `fetched_at`; only a call that asks to `refresh` waits
-//! for new ones, and then only for the accounts not read within the last minute, whichever way
-//! the last reading came (`quotas::refresh_on_demand`). A refresh never starts a quota
-//! window.
+//! The tool with which a session reads the agents it could start a session on, `list_agents`: each
+//! one's tags and the plan quota each of its accounts has left. It returns the readings the daemon
+//! already holds (`AccountQuotas`), so what it says is as old as each reading's `fetched_at`; only
+//! a call that asks to `refresh` waits for new ones, and then only for the accounts not read within
+//! the last minute, whichever way the last reading came (`quotas::refresh_on_demand`). A refresh
+//! never starts a quota window.
 
 use std::sync::Arc;
 
@@ -12,7 +12,7 @@ use serde_json::{json, Map, Value};
 
 use crate::accounts::quotas::{self, ShellSource};
 use crate::coordinator;
-use crate::protocol::{now_millis, Agent, QuotaWindow};
+use crate::protocol::{now_millis, Account, Agent, QuotaWindow};
 use crate::state::AppState;
 
 use super::args::{optional_agent, optional_bool};
@@ -33,28 +33,29 @@ const NOT_SIGNED_IN: &str = "It is not logged in; log in to it in Settings → A
 const SHARING_IN_PROGRESS: &str = "A change of its sharing settings is in progress; try again \
                                    when it has ended.";
 
-/// Every account of every agent a session could be opened on (or of `agent`, when the caller names
-/// one), with the reading held for it, in the order automatic account selection weighs them
-/// (`account_choice::account_candidates`): the order the user keeps them in, the ones it does not
-/// name after it. An account the user turned off is left out, the caller's own included: it
-/// is shown on the account settings page alone. An agent that is not installed or not added has
-/// none (the poller still reads one that is installed but not added); one not yet detected is
-/// listed, its accounts not read yet. An account is judged exhausted by the rule that keeps it
-/// from opening a session (`AccountQuotas::exhausted`), and `can_open` also takes in an account
-/// the last reading found not logged in and a running change of its sharing, the reasons
-/// automatic account selection passes an account over for. `auto_select_account` is the setting,
-/// so a caller that cannot read the settings knows whether an account it leaves out is chosen for
-/// it.
+/// Every agent a session could be opened on (or `agent`, when the caller names one), each with
+/// its tags and its accounts and the reading held for each. The agents are the added ones in the
+/// order the user keeps them in, every agent while the list is undecided; a removed agent is not
+/// listed, so its tags are not shown, and neither is one that is not installed. One not yet
+/// detected is listed, its accounts not read yet. The accounts are in the order automatic account
+/// selection weighs them (`account_choice::account_candidates`): the order the user keeps them in,
+/// the ones it does not name after it. An account the user turned off is left out, the caller's
+/// own included: it is shown on the account settings page alone. An account is judged exhausted by
+/// the rule that keeps it from opening a session (`AccountQuotas::exhausted`), and `can_open` also
+/// takes in an account the last reading found not logged in and a running change of its sharing,
+/// the reasons automatic account selection passes an account over for. `auto_select_account` is
+/// the setting, so a caller that cannot read the settings knows whether an account it leaves out
+/// is chosen for it.
 ///
 /// With `refresh` the readings of those accounts, and of an agent that is installed but not added
 /// (which the poller reads too), the ones the user turned off excepted, are first taken again
 /// where the last attempt is over a minute old; a call within the minute is not an error, it gets
 /// what is held.
-pub(super) async fn get_account_quotas(
+pub(super) async fn list_agents(
     state: &Arc<AppState>,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    get_account_quotas_with(
+    list_agents_with(
         state,
         arguments,
         Arc::new(crate::env_shell::cached_snapshot),
@@ -62,8 +63,8 @@ pub(super) async fn get_account_quotas(
     .await
 }
 
-/// [`get_account_quotas`] reading in the shell environment `shell` gives.
-async fn get_account_quotas_with(
+/// [`list_agents`] reading in the shell environment `shell` gives.
+async fn list_agents_with(
     state: &Arc<AppState>,
     arguments: &Map<String, Value>,
     shell: ShellSource,
@@ -77,81 +78,104 @@ async fn get_account_quotas_with(
         };
         quotas::refresh_on_demand(state, &scope, shell).await;
     }
-    let accounts = state.store.list_accounts()?;
+    let stored = state.store.list_accounts()?;
     let now = now_millis();
+    let added = state
+        .store
+        .added_agents()?
+        .unwrap_or_else(|| Agent::ALL.to_vec());
+    let tags = state.store.agent_tags()?;
     let mut listed = Vec::new();
-    for agent in Agent::ALL {
-        if only.is_some_and(|only| only != agent)
-            || !coordinator::account_choice::agent_can_open(state, agent)?
-        {
+    for agent in added {
+        if only.is_some_and(|only| only != agent) {
             continue;
         }
-        let mut candidates = Vec::new();
-        for id in coordinator::account_choice::account_candidates(state, agent)? {
-            candidates.push(match id {
-                None => (
-                    None,
-                    None,
-                    state.store.default_account_name(agent)?,
-                    state.store.account_disabled(agent, None)?,
-                ),
-                Some(id) => {
-                    let Some(account) = accounts
-                        .iter()
-                        .find(|account| account.agent == agent && account.id == id)
-                    else {
-                        continue;
-                    };
-                    (
-                        Some(account.id.as_str()),
-                        Some(account.config_dir.as_str()),
-                        account.name.clone(),
-                        account.disabled,
-                    )
-                }
-            });
+        if !coordinator::account_choice::agent_is_available(state, agent) {
+            continue;
         }
-        for (id, config_dir, name, disabled) in candidates {
-            if disabled {
-                continue;
-            }
-            let (held, exhausted) = state
-                .account_quotas
-                .held_and_exhausted(agent, id, config_dir, now);
-            let cannot_open = if exhausted.is_some() {
-                Some(USED_UP)
-            } else if state.account_quotas.signed_out(agent, id, config_dir) {
-                Some(NOT_SIGNED_IN)
-            } else if id.is_some_and(|id| state.sharing_locked(id).is_some()) {
-                Some(SHARING_IN_PROGRESS)
-            } else {
-                None
-            };
-            listed.push(json!({
-                "agent": agent,
-                "account": id.unwrap_or("default"),
-                "account_name": name,
-                "plan": held.as_ref().and_then(|quota| quota.plan.as_deref()),
-                "fetched_at": held.as_ref().map(|quota| quota.fetched_at),
-                "exhausted": exhausted.is_some(),
-                "exhausted_until": exhausted.and_then(|exhausted| exhausted.resets_at),
-                "can_open": cannot_open.is_none(),
-                "cannot_open_reason": cannot_open,
-                "unavailable": match &held {
-                    Some(quota) => quota.unavailable.as_ref().map(|reason| reason.message.as_str()),
-                    None => Some(NOT_READ_YET),
-                },
-                "windows": held
-                    .as_ref()
-                    .map(|quota| quota.windows.iter().map(describe_window).collect::<Vec<_>>())
-                    .unwrap_or_default(),
-            }));
-        }
+        listed.push(json!({
+            "agent": agent,
+            "tags": tags.get(agent.wire_name()).cloned().unwrap_or_default(),
+            "accounts": agent_accounts(state, agent, &stored, now)?,
+        }));
     }
     Ok(json!({
         "auto_select_account": state.store.auto_select_account()?,
-        "accounts": listed,
+        "agents": listed,
     }))
+}
+
+/// The accounts of `agent` a session could be opened on, with the reading held for each, as
+/// [`list_agents`] describes them. `stored` is every stored account.
+fn agent_accounts(
+    state: &Arc<AppState>,
+    agent: Agent,
+    stored: &[Account],
+    now: i64,
+) -> Result<Vec<Value>> {
+    let mut candidates = Vec::new();
+    for id in coordinator::account_choice::account_candidates(state, agent)? {
+        candidates.push(match id {
+            None => (
+                None,
+                None,
+                state.store.default_account_name(agent)?,
+                state.store.account_disabled(agent, None)?,
+            ),
+            Some(id) => {
+                let Some(account) = stored
+                    .iter()
+                    .find(|account| account.agent == agent && account.id == id)
+                else {
+                    continue;
+                };
+                (
+                    Some(account.id.as_str()),
+                    Some(account.config_dir.as_str()),
+                    account.name.clone(),
+                    account.disabled,
+                )
+            }
+        });
+    }
+    let mut listed = Vec::new();
+    for (id, config_dir, name, disabled) in candidates {
+        if disabled {
+            continue;
+        }
+        let (held, exhausted) = state
+            .account_quotas
+            .held_and_exhausted(agent, id, config_dir, now);
+        let cannot_open = if exhausted.is_some() {
+            Some(USED_UP)
+        } else if state.account_quotas.signed_out(agent, id, config_dir) {
+            Some(NOT_SIGNED_IN)
+        } else if id.is_some_and(|id| state.sharing_locked(id).is_some()) {
+            Some(SHARING_IN_PROGRESS)
+        } else {
+            None
+        };
+        listed.push(json!({
+            "agent": agent,
+            "account": id.unwrap_or("default"),
+            "account_name": name,
+            "plan": held.as_ref().and_then(|quota| quota.plan.as_deref()),
+            "fetched_at": held.as_ref().map(|quota| quota.fetched_at),
+            "exhausted": exhausted.is_some(),
+            "exhausted_until": exhausted.and_then(|exhausted| exhausted.resets_at),
+            "can_open": cannot_open.is_none(),
+            "cannot_open_reason": cannot_open,
+            "unavailable": match &held {
+                Some(quota) => quota.unavailable.as_ref().map(|reason| reason.message.as_str()),
+                None => Some(NOT_READ_YET),
+            },
+            "windows": held
+                .as_ref()
+                .map(|quota| quota.windows.iter().map(describe_window).collect::<Vec<_>>())
+                .unwrap_or_default(),
+        }));
+    }
+    Ok(listed)
 }
 
 fn describe_window(window: &QuotaWindow) -> Value {
@@ -227,12 +251,35 @@ mod tests {
         }
     }
 
-    fn entry<'a>(result: &'a Value, agent: &str, account: &str) -> &'a Value {
-        result["accounts"]
+    /// The agent entries of a result, by agent.
+    fn agents_of(result: &Value) -> Vec<&Value> {
+        result["agents"].as_array().unwrap().iter().collect()
+    }
+
+    /// The entry of `agent`, which must be listed.
+    fn agent_entry<'a>(result: &'a Value, agent: &str) -> &'a Value {
+        agents_of(result)
+            .into_iter()
+            .find(|entry| entry["agent"] == agent)
+            .unwrap_or_else(|| panic!("no entry for {agent}: {result}"))
+    }
+
+    /// The account ids of `agent`, in the order listed.
+    fn account_ids<'a>(result: &'a Value, agent: &str) -> Vec<&'a Value> {
+        agent_entry(result, agent)["accounts"]
             .as_array()
             .unwrap()
             .iter()
-            .find(|entry| entry["agent"] == agent && entry["account"] == account)
+            .map(|entry| &entry["account"])
+            .collect()
+    }
+
+    fn entry<'a>(result: &'a Value, agent: &str, account: &str) -> &'a Value {
+        agent_entry(result, agent)["accounts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|entry| entry["account"] == account)
             .unwrap_or_else(|| panic!("no entry for {agent} {account}: {result}"))
     }
 
@@ -259,16 +306,11 @@ mod tests {
             .account_quotas
             .hold_in_dir_for_test(&failed, "/tmp/claude-b");
 
-        let result = get_account_quotas(&state, &arguments(json!({ "agent": "claude" })))
+        let result = list_agents(&state, &arguments(json!({ "agent": "claude" })))
             .await
             .unwrap();
 
-        let ids: Vec<&Value> = result["accounts"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|entry| &entry["account"])
-            .collect();
+        let ids = account_ids(&result, "claude");
         assert_eq!(ids, ["default", "claude-a", "claude-b"]);
 
         let default = entry(&result, "claude", "default");
@@ -322,9 +364,7 @@ mod tests {
             );
         }
 
-        let result = get_account_quotas(&state, &arguments(json!({})))
-            .await
-            .unwrap();
+        let result = list_agents(&state, &arguments(json!({}))).await.unwrap();
 
         assert_eq!(entry(&result, "codex", "codex-a")["exhausted"], true);
         assert_eq!(
@@ -359,15 +399,10 @@ mod tests {
             )
             .unwrap();
 
-        let result = get_account_quotas(&state, &arguments(json!({ "agent": "claude" })))
+        let result = list_agents(&state, &arguments(json!({ "agent": "claude" })))
             .await
             .unwrap();
-        let ids: Vec<&Value> = result["accounts"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|entry| &entry["account"])
-            .collect();
+        let ids = account_ids(&result, "claude");
         assert_eq!(ids, ["claude-b", "default", "claude-a"]);
     }
 
@@ -385,22 +420,17 @@ mod tests {
             .set_default_account_disabled(Agent::Claude, true)
             .unwrap();
 
-        let result = get_account_quotas(&state, &arguments(json!({ "agent": "claude" })))
+        let result = list_agents(&state, &arguments(json!({ "agent": "claude" })))
             .await
             .unwrap();
-        let ids: Vec<&Value> = result["accounts"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|entry| &entry["account"])
-            .collect();
+        let ids = account_ids(&result, "claude");
         assert_eq!(ids, ["claude-b"]);
 
         state.store.set_account_disabled("claude-a", false).unwrap();
-        let result = get_account_quotas(&state, &arguments(json!({ "agent": "claude" })))
+        let result = list_agents(&state, &arguments(json!({ "agent": "claude" })))
             .await
             .unwrap();
-        assert_eq!(result["accounts"].as_array().unwrap().len(), 2);
+        assert_eq!(account_ids(&result, "claude").len(), 2);
         assert_eq!(entry(&result, "claude", "claude-a")["can_open"], true);
     }
 
@@ -421,9 +451,7 @@ mod tests {
         let account = state.store.get_account("codex-b").unwrap().unwrap();
         let (_, lock) = state.lock_account_sharing(&account, |_, _| Ok(())).unwrap();
 
-        let result = get_account_quotas(&state, &arguments(json!({})))
-            .await
-            .unwrap();
+        let result = list_agents(&state, &arguments(json!({}))).await.unwrap();
         assert_eq!(entry(&result, "codex", "default")["can_open"], true);
         assert_eq!(
             entry(&result, "codex", "default")["cannot_open_reason"],
@@ -441,9 +469,7 @@ mod tests {
         );
 
         drop(lock);
-        let result = get_account_quotas(&state, &arguments(json!({})))
-            .await
-            .unwrap();
+        let result = list_agents(&state, &arguments(json!({}))).await.unwrap();
         assert_eq!(entry(&result, "codex", "codex-b")["can_open"], true);
     }
 
@@ -475,9 +501,7 @@ mod tests {
                 .hold_in_dir_for_test(&held, &format!("/tmp/{id}"));
         }
 
-        let result = get_account_quotas(&state, &arguments(json!({})))
-            .await
-            .unwrap();
+        let result = list_agents(&state, &arguments(json!({}))).await.unwrap();
 
         assert_eq!(entry(&result, "codex", "codex-a")["can_open"], false);
         assert_eq!(
@@ -493,23 +517,19 @@ mod tests {
         let (state, _dir) = shared_console_state("quotas-auto-select");
         available(&state, &[Agent::Claude]);
 
-        let off = get_account_quotas(&state, &arguments(json!({})))
-            .await
-            .unwrap();
+        let off = list_agents(&state, &arguments(json!({}))).await.unwrap();
         assert_eq!(off["auto_select_account"], false);
 
         state.store.set_auto_select_account(true).unwrap();
-        let on = get_account_quotas(&state, &arguments(json!({})))
-            .await
-            .unwrap();
+        let on = list_agents(&state, &arguments(json!({}))).await.unwrap();
         assert_eq!(on["auto_select_account"], true);
     }
 
-    /// `agent` narrows the list to one agent. An agent that is not installed, or not on the added
-    /// list, has no accounts listed; one not detected yet lists them, not read yet.
+    /// `agent` narrows the list to one agent. An agent that is not installed is not listed, nor is
+    /// one not on the added list; one not detected yet lists its accounts, not read yet.
     #[tokio::test]
-    async fn the_agent_argument_filters_and_an_uninstalled_or_unadded_agent_is_left_out() {
-        let (state, _dir) = shared_console_state("quotas-filter");
+    async fn the_agent_argument_filters_and_an_uninstalled_agent_is_not_listed() {
+        let (state, _dir) = shared_console_state("agents-filter");
         state.set_agent_availability(vec![AgentAvailability {
             agent: Agent::Grok,
             availability: Availability::Unavailable,
@@ -517,43 +537,86 @@ mod tests {
         }]);
         insert_account(&state, Agent::Grok, "grok-a");
 
-        let all = get_account_quotas(&state, &arguments(json!({})))
-            .await
-            .unwrap();
-        let agents: Vec<&Value> = all["accounts"]
-            .as_array()
-            .unwrap()
-            .iter()
+        let all = list_agents(&state, &arguments(json!({}))).await.unwrap();
+        let agents: Vec<&Value> = agents_of(&all)
+            .into_iter()
             .map(|entry| &entry["agent"])
             .collect();
         assert_eq!(agents, ["claude", "codex"]);
-        assert_eq!(all["accounts"][0]["fetched_at"], Value::Null);
+        assert_eq!(entry(&all, "claude", "default")["fetched_at"], Value::Null);
 
-        let codex = get_account_quotas(&state, &arguments(json!({ "agent": "codex" })))
+        let codex = list_agents(&state, &arguments(json!({ "agent": "codex" })))
             .await
             .unwrap();
-        assert_eq!(codex["accounts"].as_array().unwrap().len(), 1);
-        assert_eq!(codex["accounts"][0]["agent"], "codex");
+        assert_eq!(agents_of(&codex).len(), 1);
+        assert_eq!(account_ids(&codex, "codex"), ["default"]);
+
+        let grok = list_agents(&state, &arguments(json!({ "agent": "grok" })))
+            .await
+            .unwrap();
+        assert_eq!(grok["agents"], json!([]));
 
         state
             .store
             .set_added_agents_if_undecided(&[Agent::Claude])
             .unwrap();
-        let added = get_account_quotas(&state, &arguments(json!({})))
-            .await
-            .unwrap();
-        assert_eq!(added["accounts"].as_array().unwrap().len(), 1);
-        assert_eq!(added["accounts"][0]["agent"], "claude");
+        let added = list_agents(&state, &arguments(json!({}))).await.unwrap();
+        assert_eq!(agents_of(&added).len(), 1);
+        assert_eq!(agent_entry(&added, "claude")["agent"], "claude");
 
-        let grok = get_account_quotas(&state, &arguments(json!({ "agent": "grok" })))
-            .await
-            .unwrap();
-        assert_eq!(grok["accounts"], json!([]));
-
-        let err = get_account_quotas(&state, &arguments(json!({ "agent": "gemini" })))
+        let err = list_agents(&state, &arguments(json!({ "agent": "gemini" })))
             .await
             .expect_err("unknown agent");
         assert!(err.to_string().contains("gemini"), "{err}");
+    }
+
+    /// The agents are the added ones in the order the user keeps them in, each with its tags (an
+    /// empty list when it has none); a removed agent is not listed, so its tags are not shown, and
+    /// they come back when it is added again.
+    #[tokio::test]
+    async fn the_agents_carry_their_tags_in_the_added_order_and_a_removed_agent_is_not_listed() {
+        let (state, _dir) = shared_console_state("agents-tags");
+        available(&state, &[Agent::Claude, Agent::Codex, Agent::Grok]);
+        state
+            .store
+            .set_added_agents_if_undecided(&[Agent::Codex, Agent::Claude, Agent::Grok])
+            .unwrap();
+        state
+            .store
+            .set_agent_tags(
+                Agent::Codex,
+                vec!["review".to_string(), "tests".to_string()],
+            )
+            .unwrap();
+        state
+            .store
+            .set_agent_tags(Agent::Grok, vec!["search".to_string()])
+            .unwrap();
+
+        let result = list_agents(&state, &arguments(json!({}))).await.unwrap();
+        let agents: Vec<&Value> = agents_of(&result)
+            .into_iter()
+            .map(|entry| &entry["agent"])
+            .collect();
+        assert_eq!(agents, ["codex", "claude", "grok"]);
+        assert_eq!(
+            agent_entry(&result, "codex")["tags"],
+            json!(["review", "tests"])
+        );
+        assert_eq!(agent_entry(&result, "claude")["tags"], json!([]));
+        assert_eq!(agent_entry(&result, "grok")["tags"], json!(["search"]));
+        assert_eq!(account_ids(&result, "codex"), ["default"]);
+
+        state.store.remove_added_agent(Agent::Grok).unwrap();
+        let removed = list_agents(&state, &arguments(json!({}))).await.unwrap();
+        assert_eq!(agents_of(&removed).len(), 2);
+        assert!(!removed.to_string().contains("search"), "{removed}");
+
+        state.store.add_added_agent(Agent::Grok).unwrap();
+        let back = list_agents(&state, &arguments(json!({ "agent": "grok" })))
+            .await
+            .unwrap();
+        assert_eq!(agent_entry(&back, "grok")["tags"], json!(["search"]));
     }
 
     /// `refresh` takes new readings before answering, once per account a minute: a second call
@@ -575,7 +638,7 @@ mod tests {
             let (state, shell) = (state.clone(), shell.clone());
             async move {
                 let arguments = arguments(json!({ "agent": "claude", "refresh": refresh }));
-                get_account_quotas_with(&state, &arguments, shell).await
+                list_agents_with(&state, &arguments, shell).await
             }
         };
 
@@ -597,7 +660,7 @@ mod tests {
         assert_eq!(reads.load(Ordering::SeqCst), 1);
         assert_eq!(again, refreshed);
 
-        let err = get_account_quotas(&state, &arguments(json!({ "refresh": "yes" })))
+        let err = list_agents(&state, &arguments(json!({ "refresh": "yes" })))
             .await
             .expect_err("not a boolean");
         assert!(err.to_string().contains("refresh"), "{err}");
