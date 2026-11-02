@@ -68,7 +68,16 @@ pub fn watch_exit(state: &Arc<AppState>, live: Arc<LiveSession>) {
             let (state, live) = (state.clone(), live.clone());
             tokio::task::spawn_blocking(move || state.process_ledger.end_launch(&live.launch_id))
         };
-        let _ = tokio::join!(saving, ending);
+        // A hook the agent waited on before it exited (Claude Code's HTTP hook, Grok Build's
+        // command hook) is queued already, since the route answers once it has queued the
+        // event, but may not have been applied yet. Whether the exit cut a turn short is read
+        // off the status those events leave, so a `Stop` still being applied would otherwise
+        // find the turn recorded as cut short and the flag no longer its to clear. Bounded
+        // (`HookQueues::settled`). An asynchronous command hook (Codex's, Claude Code's command
+        // form) can still post after the exit; an end of the turn cut short that arrives so is
+        // taken by `AppState::apply_late_turn_event`.
+        let settling = state.hook_queues.settled(&live.id);
+        let _ = tokio::join!(saving, ending, settling);
         live.note_input_recovery_ended();
         // Recorded while the process is still the session's: no launch can be claimed while
         // it is registered (`begin_launch`), so the row cannot belong to a relaunch yet — one
@@ -77,7 +86,11 @@ pub fn watch_exit(state: &Arc<AppState>, live: Arc<LiveSession>) {
         let exit = state
             .live_session(&live.id)
             .is_some_and(|current| Arc::ptr_eq(&current, &live))
-            .then(|| state.store.record_session_exit(&live.id, now_millis()));
+            .then(|| {
+                state.end_process_record(&live.id, |own| {
+                    state.store.record_session_exit(&live.id, now_millis(), own)
+                })
+            });
         unregister_live(&state, &live);
         match exit {
             Some(Ok(Some((before, session)))) => {
@@ -149,6 +162,68 @@ mod tests {
         until_unregistered(&state, "s").await;
         assert_eq!(state.saved_output("s"), None);
         assert!(!dir.join("output").join("s").exists());
+    }
+
+    /// An agent that exits at its prompt under a request's hand had no turn to cut short, though
+    /// the hand holds its record at waiting for the user.
+    #[tokio::test]
+    async fn an_exit_under_a_request_hand_over_an_idle_agent_leaves_the_session_unpaused() {
+        let (state, dir) = app_state("exit-watch-request-hand");
+        insert_record(&state, &dir, "s", SessionStatus::Idle);
+        let live = fake_live_session("s", Agent::Claude, 80, 24, "sleep 0.2");
+        state.register_live(live.clone());
+        state.raise_request_hand("s").unwrap();
+        watch_exit(&state, live.clone());
+
+        until_unregistered(&state, "s").await;
+        assert_eq!(
+            state.session_record("s").unwrap().status,
+            SessionStatus::Interrupted
+        );
+        assert!(!state.last_turn_abnormal("s"));
+    }
+
+    /// A `Stop` queued before the agent exited and still being applied when the exit is seen is
+    /// applied before the exit is recorded, so the turn it ended normally is not recorded as cut
+    /// short.
+    #[tokio::test]
+    async fn a_stop_still_being_applied_when_the_process_exits_decides_how_the_turn_ended() {
+        let (state, dir) = app_state("exit-watch-stop-in-flight");
+        insert_record(&state, &dir, "s", SessionStatus::Working);
+        let live = fake_live_session("s", Agent::Claude, 80, 24, "true");
+        state.register_live(live.clone());
+        // Queued as the hook route queues it, with its application held back.
+        let stop = bytes::Bytes::from_static(br#"{"hook_event_name": "Stop"}"#);
+        assert_eq!(
+            state.hook_queues.push("s", stop),
+            crate::hooks::queue::Push::StartWorker
+        );
+        watch_exit(&state, live.clone());
+
+        // Past the poll that sees the process gone: the exit waits for the event, as long as
+        // `PATIENCE` under test.
+        let deadline = Instant::now() + PATIENCE;
+        while !live.poll_exit() {
+            assert!(Instant::now() < deadline, "the stand-in never exited");
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        tokio::time::sleep(super::EXIT_POLL_INTERVAL + Duration::from_millis(200)).await;
+        assert_eq!(
+            state.session_record("s").unwrap().status,
+            SessionStatus::Working,
+            "the exit is not recorded while the event is being applied"
+        );
+        let draining = state.clone();
+        tokio::task::spawn_blocking(move || crate::hooks::apply::drain_hook_queue(&draining, "s"))
+            .await
+            .unwrap();
+
+        until_unregistered(&state, "s").await;
+        assert_eq!(
+            state.session_record("s").unwrap().status,
+            SessionStatus::Interrupted
+        );
+        assert!(!state.last_turn_abnormal("s"));
     }
 
     /// Waits, up to `PATIENCE`, for the exit watcher to let go of the session.

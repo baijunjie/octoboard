@@ -875,6 +875,15 @@ status at a clean quit is still its prompt. The quits measured were `/exit`, `/q
   detaches it ("Disconnected from this task"), and `SessionEnd` fires when the server ends.
 - Grok — `SessionEnd`, then `Stop` with `reason` `shutdown`.
 
+### Stopped by a signal mid-turn
+
+Sent `SIGTERM` while a turn is in progress (the model request held open), no agent reports the turn as having ended
+normally. Measured on Codex 0.163.0 and Claude Code 2.1.316 in an isolated probe:
+
+- Claude Code — fires only `SessionEnd` with `reason` `other`, carrying the turn's `prompt_id`; no `Stop`.
+- Codex — exits at once (status 15) and fires no hook at all: no `Stop`, `Interrupt` or `SessionEnd`.
+- Grok — not measured; it fires `Stop` with `reason` `shutdown`, which names no `promptId`.
+
 ## Moving a conversation to another config directory
 
 All three agents resume a conversation under a second config directory when **the session's own record** is copied

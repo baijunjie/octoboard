@@ -48,6 +48,9 @@ pub(super) struct TurnState {
     /// its prompt (`note_turn_end`). Only ever moves on, so a reader that compares it with an
     /// earlier reading sees an end even when the next turn has already started.
     ends: u64,
+    /// The id of the turn the session's latest event that names one belongs to
+    /// (`hooks::turn_key`): while the agent is working, its current turn's.
+    key: Option<String>,
 }
 
 /// What closing a turn amounted to.
@@ -110,6 +113,25 @@ impl AppState {
             .expect("turn lock poisoned")
             .get(id)
             .is_some_and(|turn| turn.echo_pending)
+    }
+
+    /// Notes the turn id an event of the session's own carried (`hooks::turn_key`).
+    pub fn note_turn_key(&self, id: &str, key: String) {
+        self.turns
+            .lock()
+            .expect("turn lock poisoned")
+            .entry(id.to_string())
+            .or_default()
+            .key = Some(key);
+    }
+
+    /// The id of the turn the session's latest event named, if any (see [`Self::note_turn_key`]).
+    pub(super) fn turn_key_of(&self, id: &str) -> Option<String> {
+        self.turns
+            .lock()
+            .expect("turn lock poisoned")
+            .get(id)
+            .and_then(|turn| turn.key.clone())
     }
 
     /// This session is still working on its open turn. Anything that is not a turn ending counts,

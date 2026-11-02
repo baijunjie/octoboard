@@ -906,3 +906,194 @@ async fn a_new_claude_conversation_clears_the_paused_flag() {
     }
     assert_eq!(last, Some((SessionStatus::Idle, false)));
 }
+
+/// A running session of `agent` in the middle of the turn `prompt` opens, as its hooks report
+/// it, with its scratch directory and its stand-in process.
+fn session_in_turn(
+    label: &str,
+    agent: Agent,
+    prompt: &str,
+) -> (
+    Arc<AppState>,
+    crate::test_support::ScratchDir,
+    crate::test_support::StandIn,
+) {
+    let (state, dir) = app_state(label);
+    state
+        .store
+        .insert_console(&crate::test_support::console(&dir))
+        .unwrap();
+    state
+        .store
+        .insert_session(&crate::protocol::Session {
+            agent,
+            ..crate::test_support::console_session("s", SessionStatus::Idle)
+        })
+        .unwrap();
+    let live = crate::test_support::fake_live_session("s", agent, 80, 24, "sleep 30");
+    state.register_live(live.clone());
+    apply_hook(&state, "s", prompt.as_bytes());
+    assert_eq!(
+        state.session_record("s").unwrap().status,
+        SessionStatus::Working
+    );
+    (state, dir, live)
+}
+
+/// The process ending as its exit watcher records it, cutting the turn short.
+fn end_process(state: &Arc<AppState>) {
+    exit_at(state, crate::protocol::now_millis());
+    assert!(state.last_turn_abnormal("s"), "the end cut the turn short");
+}
+
+/// The exit watcher's record of the process ending at `ended_at`: the end written, then the live
+/// entry gone.
+fn exit_at(state: &Arc<AppState>, ended_at: i64) {
+    state
+        .end_process_record("s", |own| {
+            state.store.record_session_exit("s", ended_at, own)
+        })
+        .unwrap()
+        .expect("ended");
+    crate::coordinator::exit_watch::end_process_for_test(state, "s");
+}
+
+/// Each agent's events of one turn, by the id it gives a turn: a prompt opening `t1`, a normal
+/// end of `t1` and of `t0`, and an abnormal end of `t1` where the agent reports one.
+fn late_turn_events(agent: Agent) -> [String; 4] {
+    match agent {
+        Agent::Claude => [
+            r#"{"hook_event_name": "UserPromptSubmit", "prompt_id": "t1"}"#.to_string(),
+            r#"{"hook_event_name": "Stop", "prompt_id": "t1"}"#.to_string(),
+            r#"{"hook_event_name": "Stop", "prompt_id": "t0"}"#.to_string(),
+            r#"{"hook_event_name": "StopFailure", "prompt_id": "t1"}"#.to_string(),
+        ],
+        Agent::Codex => [
+            r#"{"hook_event_name": "UserPromptSubmit", "turn_id": "t1"}"#.to_string(),
+            r#"{"hook_event_name": "Stop", "turn_id": "t1"}"#.to_string(),
+            r#"{"hook_event_name": "Stop", "turn_id": "t0"}"#.to_string(),
+            r#"{"hook_event_name": "Interrupt", "turn_id": "t1"}"#.to_string(),
+        ],
+        Agent::Grok => [
+            r#"{"hookEventName": "UserPromptSubmit", "promptId": "t1"}"#.to_string(),
+            r#"{"hookEventName": "Stop", "reason": "end_turn", "promptId": "t1"}"#.to_string(),
+            r#"{"hookEventName": "Stop", "reason": "end_turn", "promptId": "t0"}"#.to_string(),
+            r#"{"hookEventName": "StopCancelled", "promptId": "t1"}"#.to_string(),
+        ],
+    }
+}
+
+/// A normal end of the turn the process ended in, posted after the end, clears the flag the end
+/// set; an end of another turn, or the turn's own abnormal end, leaves it.
+#[tokio::test]
+async fn a_late_normal_end_of_the_turn_cut_short_clears_the_paused_flag() {
+    for agent in [Agent::Claude, Agent::Codex, Agent::Grok] {
+        let [prompt, stop, other_stop, abnormal] = late_turn_events(agent);
+
+        let (state, _dir, _live) = session_in_turn("hook-late-stop", agent, &prompt);
+        end_process(&state);
+        apply_hook(&state, "s", stop.as_bytes());
+        let record = state.session_record("s").unwrap();
+        assert_eq!(record.status, SessionStatus::Interrupted, "{agent:?}");
+        assert!(
+            !record.paused,
+            "{agent:?}: the turn ended normally after all"
+        );
+
+        let (state, _dir, _live) = session_in_turn("hook-late-other-stop", agent, &prompt);
+        end_process(&state);
+        apply_hook(&state, "s", other_stop.as_bytes());
+        assert!(
+            state.last_turn_abnormal("s"),
+            "{agent:?}: another turn's end"
+        );
+
+        let (state, _dir, _live) = session_in_turn("hook-late-abnormal", agent, &prompt);
+        end_process(&state);
+        apply_hook(&state, "s", abnormal.as_bytes());
+        assert!(state.last_turn_abnormal("s"), "{agent:?}: an abnormal end");
+        // The abnormal end settled the turn, so nothing of it is taken as its end any more.
+        apply_hook(&state, "s", stop.as_bytes());
+        assert!(state.last_turn_abnormal("s"), "{agent:?}: settled already");
+    }
+}
+
+/// A late end of the turn cut short that arrives once the session is running again belongs to
+/// the process that ended: it neither clears the flag nor moves the new process, however often
+/// it is posted.
+#[tokio::test]
+async fn a_late_end_of_the_turn_cut_short_leaves_a_resumed_session_alone() {
+    for agent in [Agent::Claude, Agent::Codex, Agent::Grok] {
+        let [prompt, stop, ..] = late_turn_events(agent);
+        let (state, _dir, _old) = session_in_turn("hook-late-stop-resumed", agent, &prompt);
+        end_process(&state);
+        state
+            .store
+            .update_session_lifecycle_if("s", SessionStatus::Interrupted, SessionStatus::Idle, None)
+            .unwrap()
+            .expect("relaunched");
+        let live = crate::test_support::fake_live_session("s", agent, 80, 24, "sleep 30");
+        state.register_live(live.clone());
+
+        apply_hook(&state, "s", stop.as_bytes());
+        let record = state.session_record("s").unwrap();
+        assert_eq!(record.status, SessionStatus::Idle, "{agent:?}");
+        assert!(
+            record.paused,
+            "{agent:?}: the resumed session is still paused"
+        );
+
+        // A new turn of the new process is not ended by the old turn's end either, one posted
+        // again included.
+        let next = prompt.replace("t1", "t2");
+        apply_hook(&state, "s", next.as_bytes());
+        apply_hook(&state, "s", stop.as_bytes());
+        assert_eq!(
+            state.session_record("s").unwrap().status,
+            SessionStatus::Working,
+            "{agent:?}"
+        );
+    }
+}
+
+/// An archive ends the turn before the process is gone, and the exit recorded afterwards is the
+/// same end: a late normal end of the turn still clears the flag on the archived record.
+#[tokio::test]
+async fn a_late_normal_end_of_a_turn_an_archive_cut_short_clears_the_paused_flag() {
+    let [prompt, stop, ..] = late_turn_events(Agent::Codex);
+    let (state, _dir, _live) = session_in_turn("hook-late-stop-archived", Agent::Codex, &prompt);
+    state.archive_session_record("s").unwrap();
+    assert!(state.last_turn_abnormal("s"));
+    // The exit recorded afterwards writes an `ended_at` of its own.
+    let archived_at = state.session_record("s").unwrap().ended_at.unwrap();
+    exit_at(&state, archived_at + 1_000);
+
+    apply_hook(&state, "s", stop.as_bytes());
+    let record = state.session_record("s").unwrap();
+    assert_eq!(record.status, SessionStatus::Archived);
+    assert_eq!(record.ended_at, Some(archived_at + 1_000));
+    assert!(!record.paused);
+}
+
+/// A request's hand held over a working agent remembers it working, but the exit recorded after
+/// an archive is the archive's own end: it does not set again the flag a late normal end of the
+/// turn cleared.
+#[tokio::test]
+async fn the_exit_after_an_archive_does_not_set_again_a_flag_a_late_end_cleared() {
+    let [prompt, stop, ..] = late_turn_events(Agent::Codex);
+    let (state, _dir, _live) = session_in_turn("hook-late-stop-hand", Agent::Codex, &prompt);
+    state.raise_request_hand("s").unwrap();
+    state.archive_session_record("s").unwrap();
+    assert!(state.last_turn_abnormal("s"));
+
+    apply_hook(&state, "s", stop.as_bytes());
+    assert!(!state.last_turn_abnormal("s"));
+    let archived_at = state.session_record("s").unwrap().ended_at.unwrap();
+    exit_at(&state, archived_at + 1_000);
+    let record = state.session_record("s").unwrap();
+    assert_eq!(record.status, SessionStatus::Archived);
+    assert!(
+        !record.paused,
+        "the hand still says working, but the turn has ended"
+    );
+}

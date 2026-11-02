@@ -33,6 +33,7 @@ mod background;
 mod claims;
 mod forget;
 mod git_status;
+mod late_turn_end;
 mod left_for_limit;
 mod live;
 mod mcp_tokens;
@@ -226,6 +227,13 @@ pub struct AppState {
     /// rather than the hand, and so the status can be restored when the request ends. Always taken
     /// before `session_requests`, never after. Dropped with the session's other bookkeeping.
     request_hands: Mutex<HashMap<String, SessionStatus>>,
+    /// For each session whose process ended in the middle of a turn, that turn, so that its own
+    /// normal end posted after the process had gone can still clear the paused flag the end set
+    /// (`late_turn_end`). Held in memory only: such an end comes from the ended process's own
+    /// hook forwarder, seconds after it, and a later daemon has a key that forwarder does not
+    /// carry. Not dropped with the session's other bookkeeping, which goes with the process;
+    /// dropped with the record.
+    ended_turns: Mutex<HashMap<String, late_turn_end::EndedTurn>>,
     /// The background work each session's agent last said it left running
     /// (`Session::background_tasks`). Held in memory only: the work belongs to the agent process
     /// and goes with it, so nothing is worth keeping across a daemon restart. Dropped with the
@@ -296,6 +304,7 @@ impl AppState {
             #[cfg(test)]
             model_change_stop_timeout: Mutex::new(None),
             request_hands: Mutex::new(HashMap::new()),
+            ended_turns: Mutex::new(HashMap::new()),
             background_tasks: Mutex::new(HashMap::new()),
             default_efforts: Mutex::new(HashMap::new()),
             next_tasks_ticket: std::sync::atomic::AtomicU64::new(0),

@@ -10,8 +10,12 @@ process ending always moves the session out of — working, a live waiting-for-u
 an account switch under way — may live in process memory. (Source: user instruction)
 
 When such a state follows from how a turn ended, do not rely on the agent's hook for it alone: a process killed
-mid-turn fires no hook, so every write that records the process ending has to set it too, from the status stored at
-that moment.
+mid-turn fires no hook, so every write that records the process ending has to set it too. Judge it on the agent's own
+status at that moment, not the stored one, which something other than the agent can hold (a waiting session request
+holds it at `waiting_user` over an agent at its prompt); fall back to the stored status only where nothing else is left
+to judge by (a daemon that went down without stopping its sessions). Nor is the process end final for that turn: a
+hook the agent does not wait for (all of Codex's, Claude Code's command-form hooks) can arrive after the exit, so what
+the end decided must stay revisable by a late end of the same turn, told apart by the turn id it carries.
 
 ## Live state the daemon derives goes on `AppState`, never into a stored record
 

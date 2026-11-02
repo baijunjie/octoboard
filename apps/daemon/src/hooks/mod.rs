@@ -277,6 +277,18 @@ fn grok_field<'a>(payload: &'a Value, camel: &str, snake: &str) -> Option<&'a st
         .and_then(Value::as_str)
 }
 
+/// The id of the turn this event belongs to, where the agent gives one: Claude Code's `prompt_id`,
+/// stable for the whole turn; Codex's `turn_id`, which an automatic compaction after a `Stop` also
+/// carries; Grok Build's `promptId` (also spelled `prompt_id`). Events outside a turn carry none.
+pub fn turn_key(agent: Agent, payload: &Value) -> Option<String> {
+    let key = match agent {
+        Agent::Claude => payload.get("prompt_id").and_then(Value::as_str),
+        Agent::Codex => payload.get("turn_id").and_then(Value::as_str),
+        Agent::Grok => grok_field(payload, "promptId", "prompt_id"),
+    }?;
+    (!key.is_empty()).then(|| key.to_string())
+}
+
 /// Whether this payload belongs to a subagent rather than to the session itself.
 ///
 /// Subagent events reach Octoboard's hooks because its hooks are registered for the whole agent,

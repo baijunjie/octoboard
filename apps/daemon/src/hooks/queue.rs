@@ -26,6 +26,24 @@ const MAX_QUEUED: usize = 256;
 /// How long [`HookQueues::settled`] waits for a session's queue to drain before giving up.
 const SETTLE_BOUND: Duration = Duration::from_secs(2);
 
+/// [`SETTLE_BOUND`], widened to `PATIENCE` under test so a test holding an event back is not
+/// raced by it, and lowered by [`SETTLE_OVERRIDE`] for the test proving it runs out.
+fn settle_bound() -> Duration {
+    #[cfg(test)]
+    {
+        SETTLE_OVERRIDE
+            .with(std::cell::Cell::get)
+            .unwrap_or(crate::test_support::PATIENCE)
+    }
+    #[cfg(not(test))]
+    SETTLE_BOUND
+}
+
+#[cfg(test)]
+thread_local! {
+    static SETTLE_OVERRIDE: std::cell::Cell<Option<Duration>> = const { std::cell::Cell::new(None) };
+}
+
 #[derive(Default)]
 pub struct HookQueues {
     sessions: Mutex<HashMap<String, VecDeque<Bytes>>>,
@@ -118,7 +136,7 @@ impl HookQueues {
                 woken.await;
             }
         };
-        let _ = tokio::time::timeout(SETTLE_BOUND, wait).await;
+        let _ = tokio::time::timeout(settle_bound(), wait).await;
     }
 
     /// Whether any event, of any session, is waiting or being applied.
@@ -172,6 +190,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn settled_returns_once_the_queue_drains_and_gives_up_on_a_wedged_one() {
+        SETTLE_OVERRIDE.with(|bound| bound.set(Some(SETTLE_BOUND)));
         let queues = std::sync::Arc::new(HookQueues::default());
         queues.settled("s").await;
 

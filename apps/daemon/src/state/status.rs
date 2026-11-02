@@ -440,7 +440,7 @@ mod tests {
             state.apply_hook_status("s", at_end).unwrap();
             let shown = |state: &AppState| state.wire_session(state.session_record("s").unwrap());
 
-            state.store.record_session_exit("s", 1).unwrap();
+            state.store.record_session_exit("s", 1, None).unwrap();
             let ended = shown(&state);
             assert_eq!(ended.status, SessionStatus::Interrupted, "{label}");
             assert!(!ended.paused, "an interrupted session is not shown paused");

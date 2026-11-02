@@ -42,6 +42,7 @@ impl AppState {
         self.forget_sharing_activity(id);
         self.forget_handoff_package(id);
         self.forget_request_hand(id);
+        self.forget_ended_turn(id);
     }
 
     pub(super) fn forget_session_bookkeeping(&self, id: &str) {

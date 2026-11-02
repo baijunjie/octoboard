@@ -289,6 +289,15 @@ mode's card and every accessible name say only that it is paused.
   A process that ends while the session is at its prompt — the agent quit from its prompt, say — leaves the flag as the
   last turn left it.
 
+  Whether a turn was in progress is judged on the agent's own status: a waiting session request holding the session at
+  *waiting for the user* over an agent at its prompt is not a turn in progress, so its process ending leaves the flag
+  as the last turn left it. The one exception is a daemon that went down without stopping its sessions: what the
+  request held is gone with it, so the status last recorded decides, and such a session comes back paused.
+
+  Hook events the agent had already delivered are applied before the end of its process is recorded — waited on for
+  up to 2 seconds when a process exits, and for up to half a second across all sessions when the application quits —
+  so a turn that ended normally just before the end reads as having ended normally.
+
 **What clears it:**
 
 - the next turn beginning, or anything else that moves the agent's own status off its prompt, such as a permission
@@ -301,6 +310,21 @@ mode's card and every accessible name say only that it is paused.
 - the agent no longer having the session's conversation, so that its next launch opens a fresh one.
 
 Grok Build's turn-end backstop and its turn end at shutdown neither set nor clear it.
+
+**A turn's own end can arrive after its process ended.** Codex does not wait for any of its hooks, nor Claude Code for
+hooks given in the command form (see "What is injected on every launch" in `docs/product/launching-agents.md`), so
+the end of a turn they reported just before the process ended can reach Octoboard only after that end has marked the
+turn as cut short. Such a late end is still taken for that turn when it arrives within 10 seconds of the process
+ending and names the turn — Claude Code's `prompt_id`, Codex's `turn_id`, Grok Build's `promptId`:
+
+- a normal end clears the flag, so the session comes back *done* rather than *paused* — only while the session has
+  been neither resumed nor ended again since;
+- an abnormal end leaves it set;
+- an end that names no turn, or another turn, never clears it.
+
+Nothing of such a late event reaches a process started in the session since. A session whose process Octoboard stops
+itself in the middle of a turn — archiving, interrupting, quitting — stays paused: stopped so, Codex reports nothing, Claude Code
+only the end of its session, and Grok Build only its turn end at shutdown, which names no turn.
 
 **It is kept with the session, not with its process**, so it outlives the process ending: a resume, an account switch,
 a change of model and effort or of its account's sharing that brings the session back at its prompt brings it back

@@ -107,15 +107,27 @@ impl AppState {
         Ok(())
     }
 
-    /// Archives the session as of now and tells every client; see [`Store::archive_session`].
+    /// Archives the session as of now and tells every client; see [`Store::archive_session`]. A
+    /// turn cut short is judged on the agent's own status, and remembered for its late end
+    /// ([`Self::end_process_record`]).
     pub fn archive_session_record(&self, id: &str) -> Result<()> {
-        self.write_no_process(id, || Ok(self.store.archive_session(id, now_millis())?))
+        self.write_no_process(id, || {
+            let ended = self
+                .end_process_record(id, |own| self.store.archive_session(id, now_millis(), own))?;
+            Ok(ended.map(|(_, session)| session))
+        })
     }
 
     /// Interrupts the session as of now unless it is archived, and tells every client; see
-    /// [`Store::interrupt_session`].
+    /// [`Store::interrupt_session`]. A turn cut short is judged and remembered as in
+    /// [`Self::archive_session_record`].
     pub fn interrupt_session_record(&self, id: &str) -> Result<()> {
-        self.write_no_process(id, || Ok(self.store.interrupt_session(id, now_millis())?))
+        self.write_no_process(id, || {
+            let ended = self.end_process_record(id, |own| {
+                self.store.interrupt_session(id, now_millis(), own)
+            })?;
+            Ok(ended.map(|(_, session)| session))
+        })
     }
 
     /// Writes the session's title and tells every client. Returns the record as it now stands.

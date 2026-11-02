@@ -654,21 +654,29 @@ say that its work is not over.
 `Session.paused` is `true` on a session at its prompt (`idle`) whose last turn ended abnormally, and absent otherwise.
 It is a plain flag: it names no reason. A turn ends abnormally when the user cancels it or an owner's
 `interrupt_session` does, when a declined permission prompt or question ends it, when it stops on a usage limit, and
-when it fails (an overload, a network or API error, a Codex turn that failed), and when the session's process ends
-while a turn is in progress. It is set by Claude Code's `StopFailure`, Codex's `Interrupt`, Grok Build's
-`StopCancelled` and `StopFailure`, by the cases recovered outside the hooks: a Claude Code decline or interrupt found in
-its transcript, a Claude Code or Grok Build cancel only the terminal title shows, and a Codex turn that failed, found in
-its rollout; and by the session losing its process — exiting, interrupted, archived, or left behind by a daemon that
-went down — while its agent was `working` or `waiting_user`. It is cleared when a turn ends normally (a `Stop`, with or
-without background tasks), when a Claude Code `SessionStart` begins a fresh conversation (`source` `startup`, or
-`clear` after `/clear`; a `resume` or `compact` leaves it), when the session's own status moves off its prompt (the
-next prompt makes it `working`; a waiting session request that holds the record at `waiting_user` leaves it), and when
-the agent no longer has the conversation and the next launch opens a fresh one; Grok Build's `idle_prompt` backstop neither sets nor clears it. It is stored with the
-session, so it outlives the process: a resume, an account switch or a change of model and effort that brings the
-session back at its prompt brings it back paused when its last turn ended abnormally or was cut short, and a process
-that ends while the session is at its prompt leaves it as it was. It is present on the record, and published, only
-while the status shown is `idle`. It does not change `status`, and a paused session takes messages like any idle
-session.
+when it fails (an overload, a network or API error, a Codex turn that failed), and when the session's process ends while
+a turn is in progress. It is set by Claude Code's `StopFailure`, Codex's `Interrupt`, Grok Build's `StopCancelled` and
+`StopFailure`, by the cases recovered outside the hooks: a Claude Code decline or interrupt found in its transcript, a
+Claude Code or Grok Build cancel only the terminal title shows, and a Codex turn that failed, found in its rollout; and
+by the session losing its process — exiting, interrupted, archived, or left behind by a daemon that went down — while
+its agent was `working` or `waiting_user`. That is the agent's own status: a waiting session request that holds the
+record at `waiting_user` over an agent at its prompt does not count, except where the daemon went down without stopping
+its sessions and the record is all that is left to judge by. A hook event the daemon has already queued when the process
+exits or the daemon shuts down is applied first, within a bound, so a `Stop` it carries decides how the turn ended. An
+end of the turn that was cut short, posted after the process ended by a hook the agent did not wait for (Codex's, Claude
+Code's command hooks), is still taken for that turn when it names it (Claude Code's `prompt_id`, Codex's `turn_id`, Grok
+Build's `promptId`) and arrives within ten seconds of the end: a normal end clears the flag while the session is still
+without a process from that end, and nothing of such an event reaches a process started since. An end that names no
+turn, or another one, does not clear it. It is cleared when a turn ends normally (a `Stop`, with or without background
+tasks), when a Claude Code `SessionStart` begins a fresh conversation (`source` `startup`, or `clear` after `/clear`; a
+`resume` or `compact` leaves it), when the session's own status moves off its prompt (the next prompt makes it
+`working`; a waiting session request that holds the record at `waiting_user` leaves it), and when the agent no longer
+has the conversation and the next launch opens a fresh one; Grok Build's `idle_prompt` backstop neither sets nor clears
+it. It is stored with the session, so it outlives the process: a resume, an account switch or a change of model and
+effort that brings the session back at its prompt brings it back paused when its last turn ended abnormally or was cut
+short, and a process that ends while the session is at its prompt leaves it as it was. It is present on the record, and
+published, only while the status shown is `idle`. It does not change `status`, and a paused session takes messages like
+any idle session.
 
 `status` `dormant` is a live session whose terminal shows one of Claude Code's views of its background agents (a
 subagent's view, the agents view, or the task list holding focus). It is computed in the status a client is shown and

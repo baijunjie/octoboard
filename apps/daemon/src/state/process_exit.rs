@@ -3,11 +3,30 @@
 
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Result;
 
 use super::AppState;
 use crate::session::LiveSession;
+
+/// How long a shutdown waits, for all its sessions together, for the hook events already queued
+/// to be applied before it records them interrupted. Far below the seconds the application gives
+/// the daemon to stop (`DAEMON_EXIT_GRACE` in the desktop shell's `sidecar.rs`), which the agents'
+/// own graceful exit has to fit in too; events are applied in well under a millisecond, so only a
+/// wedged queue reaches it.
+const SHUTDOWN_HOOK_SETTLE: Duration = Duration::from_millis(500);
+
+/// [`SHUTDOWN_HOOK_SETTLE`], widened to `PATIENCE` under test so a test holding an event back is
+/// not raced by it.
+fn shutdown_hook_settle() -> Duration {
+    #[cfg(test)]
+    {
+        SHUTDOWN_HOOK_SETTLE.max(crate::test_support::PATIENCE)
+    }
+    #[cfg(not(test))]
+    SHUTDOWN_HOOK_SETTLE
+}
 
 impl AppState {
     /// Ends every running session, leaving each one interrupted and resumable. Used by the exit
@@ -15,6 +34,16 @@ impl AppState {
     pub async fn stop_all_sessions(self: &Arc<Self>) {
         self.shutting_down.store(true, Ordering::Release);
         let sessions = self.live_sessions();
+        // A turn the agent ended a moment ago may still be on its way through the hook queue.
+        // Applied first, its `Stop` decides how that turn ended; applied after the interruption
+        // below, it would find the turn recorded as cut short and the session no longer running
+        // for the flag to be cleared on.
+        let settling = async {
+            for live in &sessions {
+                self.hook_queues.settled(&live.id).await;
+            }
+        };
+        let _ = tokio::time::timeout(shutdown_hook_settle(), settling).await;
         for live in &sessions {
             if let Err(err) = self.interrupt_session_record(&live.id) {
                 tracing::warn!(session = %live.id, %err, "marking the session interrupted failed");
@@ -139,6 +168,36 @@ mod tests {
         state.stop_all_sessions().await;
         let saved = state.saved_output("s").expect("the output was kept");
         assert!(String::from_utf8_lossy(&saved).contains("still here"));
+    }
+
+    /// A `Stop` queued before the shutdown and still being applied when it begins is applied
+    /// before the session is recorded interrupted, so the turn it ended normally is not recorded
+    /// as cut short.
+    #[tokio::test]
+    async fn a_stop_still_being_applied_at_shutdown_decides_how_the_turn_ended() {
+        let (state, dir) = app_state("state-shutdown-stop-in-flight");
+        insert_record(&state, &dir, "s", SessionStatus::Working);
+        let live = fake_live_session("s", Agent::Claude, 80, 24, "sleep 30");
+        state.register_live(live.clone());
+        let stop = bytes::Bytes::from_static(br#"{"hook_event_name": "Stop"}"#);
+        state.hook_queues.push("s", stop);
+
+        let draining = state.clone();
+        let drain = async move {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            tokio::task::spawn_blocking(move || {
+                crate::hooks::apply::drain_hook_queue(&draining, "s")
+            })
+            .await
+            .unwrap();
+        };
+        tokio::join!(state.stop_all_sessions(), drain);
+
+        assert_eq!(
+            state.session_record("s").unwrap().status,
+            SessionStatus::Interrupted
+        );
+        assert!(!state.last_turn_abnormal("s"));
     }
 
     /// Once the daemon has begun to stop its sessions, no claim is granted, and a process that

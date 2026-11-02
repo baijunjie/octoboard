@@ -124,4 +124,37 @@ mod tests {
         assert_eq!(shown(&state).status, SessionStatus::Idle);
         assert!(shown(&state).paused);
     }
+
+    /// A process ended under a request's hand is judged on its agent's own status, not the
+    /// `WaitingUser` the hand holds the record at: an agent at its prompt had no turn to cut short,
+    /// and one working or waiting on the user inside a turn had.
+    #[tokio::test]
+    async fn a_process_ended_under_a_request_hand_is_judged_on_its_agents_own_status() {
+        type End = fn(&AppState);
+        let ends: [(&str, End); 2] = [
+            ("interrupt", |state| {
+                state.interrupt_session_record("s").unwrap()
+            }),
+            ("archive", |state| {
+                state.archive_session_record("s").unwrap()
+            }),
+        ];
+        for (label, end) in ends {
+            for (own, cut_short) in [
+                (SessionStatus::Idle, false),
+                (SessionStatus::Working, true),
+                (SessionStatus::WaitingUser, true),
+            ] {
+                let (state, dir) = app_state("request-hand-end");
+                insert_record(&state, &dir, "s", own);
+                state.raise_request_hand("s").unwrap();
+                assert_eq!(
+                    state.session_record("s").unwrap().status,
+                    SessionStatus::WaitingUser
+                );
+                end(&state);
+                assert_eq!(state.last_turn_abnormal("s"), cut_short, "{label} {own:?}");
+            }
+        }
+    }
 }

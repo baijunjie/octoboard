@@ -277,14 +277,14 @@ mod tests {
             .unwrap()
             .is_some());
         assert!(store.get_session("session-1").unwrap().unwrap().locked);
-        assert!(store.archive_session("session-1", 1).is_err());
+        assert!(store.archive_session("session-1", 1, None).is_err());
         assert!(store.delete_session("session-1").is_err());
         assert!(store.delete_session_if_unused("session-1").is_err());
         assert!(store.delete_project("project-1").is_err());
         assert!(store.delete_console("console-1").is_err());
         assert!(store.get_project("project-1").unwrap().is_some());
         store.set_session_locked("session-1", false).unwrap();
-        store.archive_session("session-1", 1).unwrap();
+        store.archive_session("session-1", 1, None).unwrap();
         store.set_session_locked("session-1", true).unwrap();
         assert!(store.delete_session_if_archived("session-1").is_err());
         drop(store);

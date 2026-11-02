@@ -30,12 +30,42 @@ pub struct RecordUpdate {
     pub observed_boundary: Option<String>,
 }
 
+/// The statuses at which an agent is in the middle of a turn: `working`, or `waiting_user` on a
+/// prompt or question inside it. One list for [`cuts_turn_short`] and [`cut_short_turn`], so the
+/// rule and the SQL that writes it cannot drift apart.
+const TURN_IN_PROGRESS: [SessionStatus; 2] = [SessionStatus::Working, SessionStatus::WaitingUser];
+
+/// The rule [`cut_short_turn`] writes: an agent at `status` when its process ended was cut short.
+pub fn cuts_turn_short(status: SessionStatus) -> bool {
+    TURN_IN_PROGRESS.contains(&status)
+}
+
 /// The `last_turn_abnormal` assignment of a write that ends the session's process: a turn in
-/// progress at that moment (the agent `working`, or `waiting_user` on a prompt or question inside
-/// it) was cut short, so it ended abnormally; any other status keeps what the last turn left.
-/// SQLite evaluates it against the row as it was before the write.
-const CUT_SHORT_TURN: &str = "last_turn_abnormal = CASE WHEN status IN ('working', 'waiting_user')
-                                                      THEN 1 ELSE last_turn_abnormal END";
+/// progress at that moment ([`TURN_IN_PROGRESS`]) was cut short, so it ended abnormally; any other
+/// status keeps what the last turn left. `agents_own` is the SQL of the agent's own status where
+/// the stored one is not it (a waiting session request's hand holds the record at `waiting_user`
+/// over an agent at any status), `NULL` where it is. It counts only while the stored row still
+/// has a process: a row the process has already been recorded gone from (the exit of a process an
+/// archive or a shutdown ended) was settled by that first end, which a late end of its turn may
+/// have revised since. SQLite evaluates it against the row as it was before the write.
+fn cut_short_turn(agents_own: &str) -> String {
+    let in_progress = sql_statuses(&TURN_IN_PROGRESS);
+    let no_process = sql_statuses(&[SessionStatus::Archived, SessionStatus::Interrupted]);
+    format!(
+        "last_turn_abnormal = CASE WHEN status NOT IN ({no_process})
+                                        AND COALESCE({agents_own}, status) IN ({in_progress})
+                                   THEN 1 ELSE last_turn_abnormal END"
+    )
+}
+
+/// `statuses` as an SQL list of their stored texts.
+fn sql_statuses(statuses: &[SessionStatus]) -> String {
+    statuses
+        .iter()
+        .map(|status| format!("'{}'", enum_to_text(status)))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
 
 pub(super) const SESSION_COLUMNS: &str =
     "id, agent, agent_session_id, console_id, project_id, host_id,
@@ -295,46 +325,96 @@ impl Store {
     }
 
     /// Archives the session as of `ended_at`, from whatever status it is at, a turn in progress
-    /// recorded as cut short (`CUT_SHORT_TURN`); a locked session is refused by the schema.
-    /// Returns the record as it now stands, or `None` when the session is gone.
-    pub fn archive_session(&self, id: &str, ended_at: i64) -> Result<Option<Session>> {
-        self.update_session_row(
+    /// recorded as cut short (`cut_short_turn`, judged on `agents_own` where the agent's own
+    /// status is not the stored one); a locked session is refused by the schema. Returns the
+    /// status the session was at and the record as it now stands, or `None` when the session is
+    /// gone.
+    pub fn archive_session(
+        &self,
+        id: &str,
+        ended_at: i64,
+        agents_own: Option<SessionStatus>,
+    ) -> Result<Option<(SessionStatus, Session)>> {
+        self.end_session_row(
             id,
             &format!(
-                "UPDATE sessions SET status = ?2, ended_at = ?3, {CUT_SHORT_TURN} WHERE id = ?1"
+                "UPDATE sessions SET status = ?2, ended_at = ?3, {} WHERE id = ?1",
+                cut_short_turn("?4")
             ),
-            params![id, enum_to_text(&SessionStatus::Archived), ended_at],
+            params![
+                id,
+                enum_to_text(&SessionStatus::Archived),
+                ended_at,
+                agents_own.as_ref().map(enum_to_text),
+            ],
         )
     }
 
     /// Interrupts the session as of `ended_at`, unless it is archived: an archive is the user's
     /// decision and outlasts the process going away. A turn in progress is recorded as cut short
-    /// (`CUT_SHORT_TURN`). Returns the record as it now stands, or `None` when the session is
+    /// (`cut_short_turn`, judged on `agents_own` as in [`Self::archive_session`]). Returns the
+    /// status the session was at and the record as it now stands, or `None` when the session is
     /// archived or gone.
-    pub fn interrupt_session(&self, id: &str, ended_at: i64) -> Result<Option<Session>> {
-        self.update_session_row(
+    pub fn interrupt_session(
+        &self,
+        id: &str,
+        ended_at: i64,
+        agents_own: Option<SessionStatus>,
+    ) -> Result<Option<(SessionStatus, Session)>> {
+        self.end_session_row(
             id,
             &format!(
-                "UPDATE sessions SET status = ?2, ended_at = ?3, {CUT_SHORT_TURN}
-                 WHERE id = ?1 AND status != ?4"
+                "UPDATE sessions SET status = ?2, ended_at = ?3, {}
+                 WHERE id = ?1 AND status != ?4",
+                cut_short_turn("?5")
             ),
             params![
                 id,
                 enum_to_text(&SessionStatus::Interrupted),
                 ended_at,
                 enum_to_text(&SessionStatus::Archived),
+                agents_own.as_ref().map(enum_to_text),
             ],
         )
     }
 
     /// Records that the session's process ended at `ended_at`: an archived session stays archived,
     /// anything else becomes interrupted, and a turn in progress is recorded as having ended
-    /// abnormally (`CUT_SHORT_TURN`). Returns the status the session was at and the record as
-    /// it now stands, or `None` when the session is gone; both are read under the write's lock.
+    /// abnormally (`cut_short_turn`, judged on `agents_own` as in [`Self::archive_session`]).
+    /// Returns the status the session was at and the record as it now stands, or `None` when the
+    /// session is gone.
     pub fn record_session_exit(
         &self,
         id: &str,
         ended_at: i64,
+        agents_own: Option<SessionStatus>,
+    ) -> Result<Option<(SessionStatus, Session)>> {
+        self.end_session_row(
+            id,
+            &format!(
+                "UPDATE sessions SET status = CASE WHEN status = ?2 THEN status ELSE ?3 END,
+                                     ended_at = ?4, {}
+                 WHERE id = ?1",
+                cut_short_turn("?5")
+            ),
+            params![
+                id,
+                enum_to_text(&SessionStatus::Archived),
+                enum_to_text(&SessionStatus::Interrupted),
+                ended_at,
+                agents_own.as_ref().map(enum_to_text),
+            ],
+        )
+    }
+
+    /// Runs `update`, a write that ends the session's process, and returns the status the session
+    /// was at before it with the record as it now stands, all read under the write's lock; `None`
+    /// when the session is gone or the write changed nothing.
+    fn end_session_row(
+        &self,
+        id: &str,
+        update: &str,
+        params: impl rusqlite::Params,
     ) -> Result<Option<(SessionStatus, Session)>> {
         let conn = self.lock();
         let select = format!("SELECT {SESSION_COLUMNS} FROM sessions WHERE id = ?1");
@@ -344,21 +424,29 @@ impl Store {
         else {
             return Ok(None);
         };
-        conn.execute(
-            &format!(
-                "UPDATE sessions SET status = CASE WHEN status = ?2 THEN status ELSE ?3 END,
-                                     ended_at = ?4, {CUT_SHORT_TURN}
-                 WHERE id = ?1"
-            ),
-            params![
-                id,
-                enum_to_text(&SessionStatus::Archived),
-                enum_to_text(&SessionStatus::Interrupted),
-                ended_at,
-            ],
-        )?;
+        if conn.execute(update, params)? == 0 {
+            return Ok(None);
+        }
         let after = conn.query_row(&select, params![id], read_session)?;
         Ok(Some((before.status, after)))
+    }
+
+    /// Clears the flag the end of the session's process at `ended_at` set for a turn it cut short,
+    /// for that turn's own normal end arriving after it. Only while the record is still as that
+    /// end left it — without a process, and ended at `ended_at` — so it touches neither a process
+    /// started since nor a later end. Returns the record as it now stands when it changed.
+    pub fn clear_cut_short_turn(&self, id: &str, ended_at: i64) -> Result<Option<Session>> {
+        self.update_session_row(
+            id,
+            "UPDATE sessions SET last_turn_abnormal = 0
+             WHERE id = ?1 AND ended_at = ?2 AND status IN (?3, ?4) AND last_turn_abnormal = 1",
+            params![
+                id,
+                ended_at,
+                enum_to_text(&SessionStatus::Interrupted),
+                enum_to_text(&SessionStatus::Archived),
+            ],
+        )
     }
 
     /// Persists what the agent's records gave sessions, only while the source still belongs to the
@@ -789,12 +877,15 @@ impl Store {
     /// Moves every session that a previous daemon left mid-flight to `interrupted`. The daemon
     /// owns the agent processes, so none of them survived its exit — whatever the stored status
     /// says — and a turn one was in was cut short. Archived sessions are already without a process
-    /// on purpose and are left alone.
+    /// on purpose and are left alone. Only the stored status is left to judge a turn on: a session
+    /// request's hand was the previous daemon's memory, so one it held over an agent at its prompt
+    /// when it went down without stopping its sessions reads as a turn cut short.
     pub fn mark_live_sessions_interrupted(&self) -> Result<usize> {
         let changed = self.lock().execute(
             &format!(
-                "UPDATE sessions SET status = ?1, ended_at = ?2, {CUT_SHORT_TURN}
-                 WHERE status NOT IN (?1, ?3)"
+                "UPDATE sessions SET status = ?1, ended_at = ?2, {}
+                 WHERE status NOT IN (?1, ?3)",
+                cut_short_turn("NULL")
             ),
             params![
                 enum_to_text(&SessionStatus::Interrupted),
@@ -1095,7 +1186,10 @@ mod tests {
             .unwrap()
             .is_none());
 
-        assert!(store.archive_session("session-1", 1).unwrap().is_some());
+        assert!(store
+            .archive_session("session-1", 1, None)
+            .unwrap()
+            .is_some());
         assert!(store
             .delete_session_if_archived("session-1")
             .unwrap()
@@ -1104,8 +1198,14 @@ mod tests {
             .set_session_title("session-1", "Gone")
             .unwrap()
             .is_none());
-        assert!(store.archive_session("session-1", 2).unwrap().is_none());
-        assert!(store.record_session_exit("session-1", 2).unwrap().is_none());
+        assert!(store
+            .archive_session("session-1", 2, None)
+            .unwrap()
+            .is_none());
+        assert!(store
+            .record_session_exit("session-1", 2, None)
+            .unwrap()
+            .is_none());
         drop(store);
     }
 
@@ -1125,18 +1225,22 @@ mod tests {
             .unwrap()
             .expect("working");
 
-        let archived = store
-            .archive_session("session-1", 10)
+        let (before, archived) = store
+            .archive_session("session-1", 10, None)
             .unwrap()
             .expect("archived");
+        assert_eq!(before, SessionStatus::Working);
         assert_eq!(archived.status, SessionStatus::Archived);
         assert!(store
             .set_running_status("session-1", SessionStatus::Idle)
             .unwrap()
             .is_none());
-        assert!(store.interrupt_session("session-1", 20).unwrap().is_none());
+        assert!(store
+            .interrupt_session("session-1", 20, None)
+            .unwrap()
+            .is_none());
         let (before, exited) = store
-            .record_session_exit("session-1", 20)
+            .record_session_exit("session-1", 20, None)
             .unwrap()
             .expect("exited");
         assert_eq!(before, SessionStatus::Archived);
@@ -1153,7 +1257,7 @@ mod tests {
             .unwrap()
             .expect("relaunched");
         let (before, exited) = store
-            .record_session_exit("session-1", 30)
+            .record_session_exit("session-1", 30, None)
             .unwrap()
             .expect("exited");
         assert_eq!(before, SessionStatus::Working);
@@ -1190,7 +1294,7 @@ mod tests {
                     .is_none(),
                 "an unchanged flag is no change"
             );
-            store.interrupt_session("session-1", 10).unwrap();
+            store.interrupt_session("session-1", 10, None).unwrap();
             assert!(
                 store
                     .set_last_turn_abnormal("session-1", false)
@@ -1266,13 +1370,13 @@ mod tests {
         type End = fn(&Store);
         let ends: [(&str, End); 4] = [
             ("exit", |store| {
-                store.record_session_exit("session-1", 10).unwrap();
+                store.record_session_exit("session-1", 10, None).unwrap();
             }),
             ("interrupt", |store| {
-                store.interrupt_session("session-1", 10).unwrap();
+                store.interrupt_session("session-1", 10, None).unwrap();
             }),
             ("archive", |store| {
-                store.archive_session("session-1", 10).unwrap();
+                store.archive_session("session-1", 10, None).unwrap();
             }),
             ("daemon gone", |store| {
                 store.mark_live_sessions_interrupted().unwrap();
@@ -1302,6 +1406,88 @@ mod tests {
                 let ended = store.require_session("session-1").unwrap();
                 assert!(ended.status.has_no_process(), "{label} {status:?}");
                 assert_eq!(ended.paused, after, "{label} {status:?} {before}");
+            }
+        }
+    }
+
+    /// A late clear of a turn cut short holds only while the record is as that end left it: not
+    /// for another end, and not once the session is running again.
+    #[test]
+    fn a_turn_cut_short_is_cleared_only_while_the_record_stands_as_its_end_left_it() {
+        let path = temp_db("session-cut-short-clear");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        store
+            .insert_session(&Session {
+                status: SessionStatus::Working,
+                ..session(None)
+            })
+            .expect("insert");
+        store.record_session_exit("session-1", 10, None).unwrap();
+        assert!(store
+            .clear_cut_short_turn("session-1", 9)
+            .unwrap()
+            .is_none());
+        let cleared = store
+            .clear_cut_short_turn("session-1", 10)
+            .unwrap()
+            .expect("cleared");
+        assert!(!cleared.paused);
+
+        store
+            .update_session_lifecycle_if(
+                "session-1",
+                SessionStatus::Interrupted,
+                SessionStatus::Idle,
+                None,
+            )
+            .unwrap()
+            .expect("relaunched");
+        store.set_last_turn_abnormal("session-1", true).unwrap();
+        assert!(store
+            .clear_cut_short_turn("session-1", 10)
+            .unwrap()
+            .is_none());
+    }
+
+    /// Where the agent's own status is given apart from the stored one — a request's hand holding
+    /// the record at waiting for the user — the end judges the turn on the agent's.
+    #[test]
+    fn a_process_ending_judges_the_turn_on_the_agents_own_status_where_it_is_given() {
+        type End = fn(&Store, Option<SessionStatus>);
+        let ends: [(&str, End); 3] = [
+            ("exit", |store, own| {
+                store.record_session_exit("session-1", 10, own).unwrap();
+            }),
+            ("interrupt", |store, own| {
+                store.interrupt_session("session-1", 10, own).unwrap();
+            }),
+            ("archive", |store, own| {
+                store.archive_session("session-1", 10, own).unwrap();
+            }),
+        ];
+        for (label, end) in ends {
+            for (own, after) in [
+                (SessionStatus::Idle, false),
+                (SessionStatus::Working, true),
+                (SessionStatus::WaitingUser, true),
+            ] {
+                let path = temp_db("session-cut-short-own");
+                let store = Store::open(&path).expect("store");
+                store
+                    .insert_console(&console(None, None, None))
+                    .expect("console");
+                store
+                    .insert_session(&Session {
+                        status: SessionStatus::WaitingUser,
+                        ..session(None)
+                    })
+                    .expect("insert");
+                end(&store, Some(own));
+                let ended = store.require_session("session-1").unwrap();
+                assert_eq!(ended.paused, after, "{label} {own:?}");
             }
         }
     }

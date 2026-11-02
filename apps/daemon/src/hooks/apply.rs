@@ -63,10 +63,24 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
     let payload: serde_json::Value =
         serde_json::from_slice(body).unwrap_or(serde_json::Value::Null);
 
+    // An event of the turn the end of the session's process cut short comes from the ended
+    // process, posted after the end by a hook the agent did not wait for: it is that turn's
+    // late word, and nothing of it reaches whatever runs in the session now.
+    let agent = hook_agent(state, session_id);
+    let turn_key = agent
+        .filter(|agent| !hooks::is_subagent(Some(*agent), &payload))
+        .and_then(|agent| hooks::turn_key(agent, &payload));
+    if let (Some(agent), Some(key)) = (agent, &turn_key) {
+        let outcome = hooks::event_name(&payload)
+            .and_then(|event| hooks::turn_outcome(agent, &event, &payload));
+        if state.apply_late_turn_event(session_id, key, outcome) {
+            return;
+        }
+    }
+
     // Marked before anything of this event can release a queue: the first hook ends the trust
     // hold below, and its drain must not write into an error's prompt. A subagent's failure is
     // its own business, never the session's.
-    let agent = hook_agent(state, session_id);
     if let (Some(agent), Some(event)) = (agent, hooks::event_name(&payload)) {
         if !hooks::is_subagent(Some(agent), &payload)
             && hooks::stopped_on_agent_error(agent, &event, &payload)
@@ -106,6 +120,14 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
             state.apply_background_tasks_change(session_id, change);
         }
         return;
+    }
+
+    // Kept only for a running process: it is what an end of that process remembers the turn by.
+    if let Some(key) = turn_key
+        .clone()
+        .filter(|_| state.live_session(session_id).is_some())
+    {
+        state.note_turn_key(session_id, key);
     }
 
     if let Some(agent_session_id) = hooks::agent_session_id(&payload) {
@@ -152,7 +174,8 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
                         let status = suppress_auto_review_hook(state, session_id, status);
                         // Before the status write, so the record it publishes already carries
                         // whether the turn that ended left the session paused.
-                        if let Some(outcome) = hooks::turn_outcome(agent, &event, &payload) {
+                        let outcome = hooks::turn_outcome(agent, &event, &payload);
+                        if let Some(outcome) = outcome {
                             state.set_paused(session_id, outcome == hooks::TurnOutcome::Abnormal);
                         }
                         // Read before the status lands: a Claude Code watch, and a Grok one past
@@ -175,6 +198,17 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
                             Ok(_) => {}
                             Err(err) => {
                                 tracing::debug!(session = %session_id, %event, %err, "applying the hook status failed");
+                            }
+                        }
+                        // The end of the process can land between the check at the top and these
+                        // writes, which a record without a process refuses: the turn's end is then
+                        // its late word after all.
+                        if let (Some(key), Some(outcome)) = (&turn_key, outcome) {
+                            if state
+                                .session_record(session_id)
+                                .is_ok_and(|session| session.status.has_no_process())
+                            {
+                                state.apply_late_turn_event(session_id, key, Some(outcome));
                             }
                         }
                         arm_record_watches(
