@@ -156,6 +156,10 @@ the earlier steps do not run them separately (the related tests a step runs to c
 
 ### This project
 
+- Within "Before starting work": when creating a branch to work on, record the branch it merges back into with
+  `git config branch.<name>.targetBranch <target branch>`, so the checks measure the branch against its own target
+  (`pnpm verify --quick` from the local target, the pre-push hook a new branch from the remote one) instead of
+  guessing it from the remote HEAD.
 - Within "Change check": when this round's changes touch the UI (components, styles, UI copy and catalogs, how an
   error or a state is shown), also dispatch the `ui-checker` subagent, in parallel with `change-checker`, handing it
   the changed files, the requirement and the trade-offs the user settled (including any rule of the UI standard or
