@@ -155,7 +155,10 @@ that way, extend it until it can rather than reporting the pass the other order 
 
 The app renders in WKWebView, so a pass in Chrome says nothing: a HeroUI tag's remove button that ignored the mouse in
 WebKit passed a scripted click in Chrome. Run a browser check of the page in Playwright's `webkit` and drive the pointer
-through `page.mouse` rather than a click dispatched from script. The same holds for where focus scrolls a scroller:
+through `page.mouse` rather than a click dispatched from script. A gallery step's `ui.press` is such a click, with no
+pointer events at all (a virtual press), and a jsdom test dispatches its events by hand, so neither shows what a change
+to a press's pointer handling does to a real mouse press: a field focused early on `pointerdown` passed both and
+closed the list it opened on every real click. The same holds for where focus scrolls a scroller:
 the engines' focus scrolls differ in timing and in what CSS they honour (see the "Focus scrolled to the edge of a
 scroller that fades there" section of `docs/ui-accessibility.md`), so a `scroll-margin` fix that holds a list still in
 Chrome can leave it jumping in WebKit. Playwright is a pinned devDependency of `packages/ui`,

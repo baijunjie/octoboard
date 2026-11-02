@@ -239,6 +239,21 @@ warns about:
   the control's `aria-label`; wherever it cannot see the repeat — a rich title whose words are the name, a control
   wrapped in `IndicatorTooltip` — pass `aria-describedby=""` on the control yourself, as `ArchiveView.tsx`,
   `TrustedFoldersSection.tsx` and `FocusView.tsx` do. A tooltip that says more than the name keeps the link.
-- Never name as an `AnchoredTooltip`'s anchor an element the UI itself scrolls: react-aria closes a tooltip as soon as
-  anything containing its anchor scrolls, so a label that runs as a marquee and anchors to itself loses its tooltip to
-  its own marquee.
+
+## A non-modal react-aria overlay closes as soon as anything holding its trigger scrolls, a focus scroll included
+
+react-aria closes an open non-modal overlay it positions — a combo box's list, a non-modal popover, a tooltip — on
+any scroll of an element that contains its trigger or anchor, the window included (`useCloseOnScroll`, through
+`useOverlayPosition`); a modal popover, such as a select's or a menu's, is exempt. Only a scroll of an `<input>` or
+`<textarea>` itself is ignored. So:
+
+- Never name as an `AnchoredTooltip`'s anchor an element the UI itself scrolls: a label that runs as a marquee and
+  anchors to itself loses its tooltip to its own marquee.
+- A press that opens a list and focuses something partly out of view in its scroller closes the list it opened: the
+  browser's scroll to the focused element lands a frame after the open. Keeping that focus from scrolling is not
+  enough for a text field, since the first key typed scrolls it to its caret and closes the list then. Bring the field
+  into view in the component, before react-aria handles the press, as `useRevealOnTriggerPress` in
+  `packages/ui/src/components/form/TagsInput.tsx` does.
+- A gallery scenario or a test whose list closes only in a short window, or only with the control near a scroller's
+  edge, is showing this defect in the app: fix the component, and never add a step that scrolls or focuses the control
+  into view first, which hides the defect from every later check.
