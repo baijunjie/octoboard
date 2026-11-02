@@ -41,6 +41,10 @@ afterEach(() => {
 });
 
 const upserted = (id: string): Event => ({ type: "session_upserted", session: sessionOf(id, "c", "p", id, "working") });
+const open = (socket: FakeSocket) => socket.dispatchEvent(new globalThis.Event("open"));
+const drop = (socket: FakeSocket) => socket.dispatchEvent(new globalThis.Event("close"));
+// The client reads only a snapshot's `type`.
+const snapshot = { type: "snapshot" };
 
 it("delivers the broadcasts that arrive between two frames as one batch, in arrival order", () => {
   const client = new DaemonClient("ws://test");
@@ -106,7 +110,7 @@ it("keeps waiting for a request queued while connecting once the socket opens an
     (error: unknown) => (settled = error),
   );
   socket.readyState = FakeSocket.OPEN;
-  socket.dispatchEvent(new globalThis.Event("open"));
+  open(socket);
   const id = (JSON.parse(socket.sent[0]) as { id: string }).id;
   vi.advanceTimersByTime(10_000);
   await Promise.resolve();
@@ -114,4 +118,47 @@ it("keeps waiting for a request queued while connecting once the socket opens an
   socket.receive({ type: "ack", id });
   await reply;
   expect(settled).toEqual({ type: "ack", id });
+});
+
+it("spends the reconnect budget on a daemon that accepts the socket and closes it before any snapshot", () => {
+  const client = new DaemonClient("ws://test");
+  const states: string[] = [];
+  client.onConnectionChange((state) => states.push(state));
+  for (const delay of [500, 1000]) {
+    open(FakeSocket.last);
+    drop(FakeSocket.last);
+    expect(states.at(-1)).toBe("reconnecting");
+    vi.advanceTimersByTime(delay);
+  }
+  open(FakeSocket.last);
+  drop(FakeSocket.last);
+  expect(states.at(-1)).toBe("closed");
+  // Nothing is retried on its own once the budget is spent.
+  const last = FakeSocket.last;
+  vi.advanceTimersByTime(60_000);
+  expect(FakeSocket.last).toBe(last);
+});
+
+it("gives a connection that delivered its snapshot the whole budget again when it drops", () => {
+  const client = new DaemonClient("ws://test");
+  const states: string[] = [];
+  client.onConnectionChange((state) => states.push(state));
+  // One attempt is spent on a socket that closed before its snapshot.
+  open(FakeSocket.last);
+  drop(FakeSocket.last);
+  vi.advanceTimersByTime(500);
+  // The next one works, then drops.
+  open(FakeSocket.last);
+  FakeSocket.last.receive(snapshot);
+  expect(states.at(-1)).toBe("open");
+  drop(FakeSocket.last);
+  expect(states.at(-1)).toBe("reconnecting");
+  // Both automatic attempts are available again.
+  vi.advanceTimersByTime(500);
+  drop(FakeSocket.last);
+  expect(states.at(-1)).toBe("reconnecting");
+  vi.advanceTimersByTime(1000);
+  open(FakeSocket.last);
+  FakeSocket.last.receive(snapshot);
+  expect(states.at(-1)).toBe("open");
 });

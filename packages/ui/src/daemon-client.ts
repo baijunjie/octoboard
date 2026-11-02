@@ -105,7 +105,6 @@ export class DaemonClient {
     this.socket = socket;
     socket.addEventListener("open", () => {
       if (!current()) return;
-      this.reconnectAttempts = 0;
       for (const queued of this.sendQueue.splice(0)) {
         clearTimeout(queued.timer);
         socket.send(queued.payload);
@@ -114,7 +113,13 @@ export class DaemonClient {
     });
     socket.addEventListener("message", (ev) => {
       if (!current()) return;
-      this.receive(JSON.parse(ev.data as string) as Event);
+      const event = JSON.parse(ev.data as string) as Event;
+      // The budget is given back only once the connection has proved itself by delivering its
+      // snapshot, not on `open`: the daemon accepts the socket before it builds the snapshot, and
+      // one that cannot build it closes the socket right after, so resetting on `open` would retry
+      // that daemon forever.
+      if (event.type === "snapshot") this.reconnectAttempts = 0;
+      this.receive(event);
     });
     socket.addEventListener("close", () => {
       if (!current()) return;
