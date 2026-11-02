@@ -531,6 +531,10 @@ are now wrong or it leaves out one thing, the meaning has changed.
   pronoun or role would be ambiguous — two things of the same kind on the screen that the sentence must tell apart — and
   never just to restate what an earlier sentence already named. This narrows "Reference and scope" above for this
   project. (the user's decision)
+- **Input placeholders**: an optional input names the default or empty state it takes when left empty, and a
+  multi-value field's input, once its list holds an item, invites adding another; neither is an example. This
+  replaces "Input placeholders" above for those inputs. (the "Input placeholders" section of
+  `docs/ui-accessibility.md`)
 - **Empty-state copy**: an empty state's title carries no punctuation at all, a comma inside it included, which is
   stricter than the "Empty-state titles" rule above; what the title cannot hold goes in the line under it, and a
   state said in one breath somewhere else — a notice over content shown anyway, a live region speaking for a panel

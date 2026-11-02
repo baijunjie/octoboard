@@ -10,8 +10,8 @@ that matches another of the project's tags ignoring case is dropped, the first s
 same way on every machine, whatever its language settings, here as in the tags offered and the sidebar's filter. Agents carry tags under
 the same rules (see "Agent tags" in `docs/product/per-agent-settings.md`).
 
-The optional Tags field's empty text input distinguishes a project with no tags from one with no additional tag being
-entered. Leaving that input empty adds nothing and keeps any tags already picked.
+The optional Tags field's empty text input says the project has no tags while none is picked, and invites adding a tag
+once one is. Leaving that input empty adds nothing and keeps any tags already picked.
 
 ## Picked tags
 

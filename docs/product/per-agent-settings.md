@@ -19,10 +19,10 @@ for Claude Code and Codex, and above Claude compatibility for Grok Build. The ro
 applies to every account of the agent and, under them across the row's full width, the same Tags field as a project's
 (see "Editing a project" in `docs/product/projects.md`), its picked tags looking and behaving as there (see "Picked
 tags" in `docs/product/project-tags.md`). The field has no visible label of its own; its accessible name is "Tags for"
-and the agent. Its empty text input says whether the agent has no tags or no additional tag is being entered. The tags
-offered are the distinct tags the added agents carry (every agent's while the list of added agents is undecided; see
-"Added agents" in `docs/product/agent-accounts.md`), tags differing only in case counting as one, so a tag used on one
-agent is offered for the others; a typed tag matching an offered one takes its spelling.
+and the agent. Its empty text input says the agent has no tags while none is picked, and invites adding a tag once one
+is. The tags offered are the distinct tags the added agents carry (every agent's while the list of added agents is
+undecided; see "Added agents" in `docs/product/agent-accounts.md`), tags differing only in case counting as one, so a
+tag used on one agent is offered for the others; a typed tag matching an offered one takes its spelling.
 
 Each change is saved as it is made, as the agent's whole list; the field stays usable meanwhile. While a save is
 unanswered the field shows the list last asked for, so changes made in quick succession build on one another. Once the

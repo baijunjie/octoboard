@@ -510,6 +510,10 @@ Every editable text input has a non-empty placeholder, including fields whose cu
 - When the empty state means an inherited setting or no value, name that default state accurately rather than
   inventing a concrete value. A default that belongs to each item in a batch must not be presented as one shared
   value.
+- In a multi-value field whose input adds items to a list shown with it (such as the Tags field's picked tags), the
+  field's value is the list, not the input's text. While the list is empty, the placeholder names that empty state
+  like any optional input ("No tags"). Once it holds an item there is no empty state left to name, and leaving the
+  input empty keeps the list as it is, so the placeholder invites adding another ("Add a tag").
 
 The placeholder is a hint, never an initial input value or a substitute for the field's label, accessible name,
 description or validation. Leaving a field empty retains its existing requiredness and default behavior.

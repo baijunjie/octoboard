@@ -330,7 +330,7 @@ export function ProjectDialog({
           value={tags}
           onChange={setTags}
           suggestions={knownTags}
-          placeholder={t(tags.length ? "dialog.project.noAdditionalTags" : "dialog.project.noTags")}
+          placeholder={t(tags.length ? "dialog.project.addTag" : "dialog.project.noTags")}
           isDisabled={locked}
         />
         <AgentAccountField

@@ -77,7 +77,7 @@ export function AgentTagsSetting({ agent }: { agent: Agent }): React.ReactElemen
           value={shown}
           onChange={change}
           suggestions={offered}
-          placeholder={t(shown.length ? "settings.accounts.tags.noAdditional" : "settings.accounts.tags.none")}
+          placeholder={t(shown.length ? "settings.accounts.tags.add" : "settings.accounts.tags.none")}
         />
       }
     />
