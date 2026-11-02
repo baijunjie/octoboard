@@ -885,6 +885,12 @@ normally. Measured on Codex 0.163.0, Claude Code 2.1.316 and Grok Build 1.0.70 i
 - Grok — fires `SessionEnd` and `Stop`, both with `reason` `shutdown` and in either order, neither naming a
   `promptId`; no `StopCancelled` or `StopFailure`. It exits with status 0, and its record notes no end of the turn.
 
+Grok Build's hooks doc says its session-end `Stop` carries `reason` `channel_closed` or `shutdown`, naming no trigger
+for the former. On 1.0.70 no ending produced `channel_closed`, mid-turn or idle: `SIGTERM` or `SIGHUP` to the leader,
+the PTY master closed, stdin closed or `session/close` on `grok agent stdio` all fire the `shutdown` pair above, and
+`SIGKILL` fires nothing. Each of Octoboard's teardowns is one of these, so a `channel_closed` `Stop` is not expected
+from it; were one to arrive, Octoboard's mapping, which only sets `shutdown` aside, would read it as a normal turn end.
+
 ## Moving a conversation to another config directory
 
 All three agents resume a conversation under a second config directory when **the session's own record** is copied
