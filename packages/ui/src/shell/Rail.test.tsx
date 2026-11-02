@@ -78,7 +78,11 @@ it.each(AVATAR_TEXT)("says on the avatar's tooltip, in its accessible name's wor
   enter(avatar);
   expect(openTooltip()).toBeNull();
   settle();
-  expect(openTooltip()?.textContent).toBe(name);
+  expect(openTooltip()?.textContent).toBe(`Main, ${words}`);
+  const statusBadge = openTooltip()?.querySelector('[data-variant="soft"]');
+  expect(statusBadge?.textContent).toBe(words);
+  expect(statusBadge?.getAttribute("data-color")).toBe(words === "Waiting for you" ? "warning" : "success");
+  expect(statusBadge?.querySelector("svg")).toBeNull();
   expect(avatar.getAttribute("aria-label")).toBe(name);
   // The tooltip repeats the name, so it must not be announced a second time as a description.
   expect(avatar.getAttribute("aria-describedby")).toBeFalsy();
@@ -128,7 +132,7 @@ it("gives the badge no tooltip or name of its own", () => {
   enter(badge);
   settle();
   // Only one tooltip is open at a time, so what shows is whose it is: the avatar's, not the badge's.
-  expect(openTooltip()?.textContent).toBe(`${isolate("Main")}, Waiting for you`);
+  expect(openTooltip()?.textContent).toBe("Main, Waiting for you");
   expect(badge.hasAttribute("aria-label")).toBe(false);
   leave(badge);
   settle();
@@ -149,7 +153,7 @@ it("opens on keyboard focus, and not on hover while the hidden sidebar floats in
     avatar.focus();
   });
   settle();
-  expect(openTooltip()?.textContent).toBe(`${isolate("Main")}, Waiting for you`);
+  expect(openTooltip()?.textContent).toBe("Main, Waiting for you");
   expect(avatar.getAttribute("aria-describedby")).toBeFalsy();
 
   act(() => avatar.blur());

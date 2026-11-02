@@ -22,18 +22,20 @@ Pinning, project grouping and the sidebar's choice to order by status or date do
 | Top status | Badge |
 |---|---|
 | Waiting for the user | A contrasting waving hand on an orange disc |
-| Paused | A contrasting circled pause sign on a green disc |
+| Paused | A contrasting pause sign on a green disc |
 | Done | A contrasting check mark on a green disc |
 | Awaiting instructions | A contrasting speech bubble on a green disc |
 
 The hand waves as its status glyph does (see "Status glyphs" in `docs/product/session-statuses.md`); where the system
 asks for reduced motion, it stays still. The other badges are still.
 
-The badge is decorative and has no tooltip or accessible name of its own. **The avatar's tooltip and accessible name
-are the same text**: the console's name followed by the top status, in the words the status is said in everywhere
-("Name, Done"), or the bare console name when it has no badge. When that tooltip opens, and why a mouse user with the
-docked sidebar hidden does not get to read it, is in "Tooltips on icon-only controls" in
-`docs/product/labels-and-tooltips.md`.
+The avatar's circular badge is decorative and has no tooltip or accessible name of its own. **The avatar's tooltip
+shows the console's name followed by a text-only status badge**, with a soft orange fill for waiting for the user and
+a soft green fill for paused, done or awaiting instructions. The tooltip's status badge has no icon. The avatar's
+accessible name carries the same information as one phrase ("Name, Done"), using the status wording shared across the
+application; the tooltip does not repeat it as an accessible description. With no eligible status, both contain only
+the console's name. When that tooltip opens, and why a mouse user with the docked sidebar hidden does not get to read
+it, is in "Tooltips on icon-only controls" in `docs/product/labels-and-tooltips.md`.
 
 **Right-clicking** (or Control-clicking) an avatar opens that console's action menu at the pointer, the same menu as
 the sidebar's header carries (see "The console header" in `docs/product/sidebar.md`). It does not switch to the console.

@@ -15,6 +15,7 @@ import { RailQuotaEntry } from "./RailQuotaEntry";
 import { useArchivedOwnerSessions, useConsoleStatus } from "../store";
 import { ActionMenu } from "../components/menus/ActionMenu";
 import { AvatarStatusBadge } from "../components/status/TopStatusMarker";
+import { StatusBadge } from "../components/status/StatusBadge";
 import { CHROME_BUTTON_FILLS, CHROME_CURRENT_FILLS, ChromeButton } from "./ChromeButton";
 import { ConsoleAvatar } from "./ConsoleAvatar";
 import { NotificationsBell } from "./NotificationsBell";
@@ -109,14 +110,24 @@ const ConsoleTile = memo(function ConsoleTile({
   const sessions = useArchivedOwnerSessions(thisConsole.id);
   const tileRef = useRef<HTMLDivElement>(null);
   const label = status ? t("session.status.named", { name: isolate(thisConsole.name), status: statusLabel(t, status) }) : thisConsole.name;
+  const tooltip = status ? (
+    <span className="flex items-center gap-2">
+      <span dir="auto" className="min-w-0 [overflow-wrap:anywhere]">{thisConsole.name}</span>
+      <StatusBadge variant="soft" color={status === "waiting_user" ? "warning" : "success"} overflow="wrap">
+        {statusLabel(t, status)}
+      </StatusBadge>
+    </span>
+  ) : thisConsole.name;
   return (
     <div ref={tileRef} data-list-motion={thisConsole.id} className="flex">
-      <TitledControl title={label} placement="end" focusOnly={hoverOpensSidebar}>
+      <TitledControl title={tooltip} placement="end" focusOnly={hoverOpensSidebar}>
         <Button
           isIconOnly
           size="sm"
           variant="ghost"
           aria-label={label}
+          // The markup tooltip repeats the name, which TitledControl only detects for plain text.
+          aria-describedby=""
           aria-current={current ? "true" : undefined}
           // Not styling: `usePanePeekPointer` (`Sidebar.tsx`) matches this to keep the floating sidebar
           // up while the pointer is on an avatar, which lies outside the card and its gap. Without it

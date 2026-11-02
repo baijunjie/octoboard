@@ -1,4 +1,4 @@
-import { Check, CirclePause, Hand, MessageCircleMore } from "lucide-react";
+import { Check, Hand, MessageCircleMore, Pause } from "lucide-react";
 import React from "react";
 
 import { type ShownStatusKind } from "../../sessions/sessionStatus";
@@ -49,7 +49,7 @@ export function AvatarStatusBadge({ status, className = "" }: { status: ShownSta
     case "paused":
       return (
         <span aria-hidden="true" className={`${disc} bg-success text-success-foreground`}>
-          <CirclePause strokeWidth={2.5} className="size-2.5" />
+          <Pause strokeWidth={2.5} className="size-2.5" />
         </span>
       );
     case "done":
