@@ -9,7 +9,7 @@ import { dialogAround } from "../components/dialog/dialogElement";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
-import { replaceOverrides, shortcutOverrides } from "../shortcuts/store";
+import { replaceOverrides, shortcutOverrides, type Overrides } from "../shortcuts/store";
 import { useDaemon } from "../store";
 import { fileFailure } from "./failureText";
 import {
@@ -36,7 +36,7 @@ import { raiseError } from "../components/alerts/raiseError";
 type Stage =
   | { kind: "choose" }
   | { kind: "review"; fileName: string; document: unknown; inspection: Inspection }
-  | { kind: "result"; result: Imported; shortcuts?: { applied: number; skipped: number } };
+  | { kind: "result"; result: Imported; shortcuts?: { applied: number; skipped: number; overrides: Overrides } };
 
 /** How long after the window regains focus a file may still arrive before the picker is taken as
  * dismissed: a browser reports the chosen file just after the focus returns. */

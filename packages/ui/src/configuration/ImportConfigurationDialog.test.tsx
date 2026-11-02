@@ -271,7 +271,11 @@ it("says nothing of keyboard shortcuts when the document carries none", async ()
 it("says what the document's keyboard shortcuts would do on this device", async () => {
   onTestFinished(() => shortcutOverrides.set({}));
   await reviewingSettings({ text: withShortcuts({ lock: LOCK, bad: 1 }) });
-  expect(settingLines()["Keyboard shortcuts"]).toEqual({ badge: "Set to the file's", note: "1 of the file's shortcuts differs from the default. They apply to this device or browser only." });
+  expect(settingLines()["Keyboard shortcuts"]).toEqual({
+    badge: "Set to the file's",
+    note: "1 of the file's shortcuts differs from the default. They apply to this device or browser only.",
+    values: ["Lock or unlock the session: ⇧⌃K (now ⇧⌃L)"],
+  });
 });
 
 it("replaces this device's keyboard shortcuts with the document's once the settings are applied, and reports it", async () => {
@@ -283,7 +287,7 @@ it("replaces this device's keyboard shortcuts with the document's once the setti
   expect(bindingFor("pin")).toEqual({ code: "KeyP", primary: true, shift: true });
   await openTab("Application settings");
   const applied = resultSettingLines();
-  expect(applied["Keyboard shortcuts"]).toEqual({ badge: "1 change from the default", note: "1 shortcut in the file could not be applied here and was left out." });
+  expect(applied["Keyboard shortcuts"]).toEqual({ badge: "1 change from the default", note: "1 shortcut in the file could not be applied here and was left out.", values: ["Lock or unlock the session: ⇧⌃K"] });
 });
 
 it("leaves this device's keyboard shortcuts alone unless the settings are included", async () => {
@@ -304,7 +308,7 @@ it("puts every shortcut back to its default when the document carries an empty s
   onTestFinished(() => shortcutOverrides.set({}));
   shortcutOverrides.set({ pin: PIN });
   await reviewingSettings({ text: withShortcuts({}), reply: echoing() });
-  expect(settingLines()["Keyboard shortcuts"]).toEqual({ badge: "Back to defaults", note: "They apply to this device or browser only." });
+  expect(settingLines()["Keyboard shortcuts"]).toEqual({ badge: "Back to defaults", note: "They apply to this device or browser only.", values: ["Pin or unpin the session: ⇧⌃P (now ⇧⌃J)"] });
   expect(text()).not.toContain("0 of them");
   await press("Import");
   expect(bindingFor("pin")).toEqual({ code: "KeyP", primary: true, shift: true });
@@ -431,14 +435,65 @@ describe("the git workflow settings", () => {
     return (body: RequestBody) => (body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected" as const, ...REVIEW, settings }) : reply(body));
   };
 
-  it("notes that applying changes them when the file's differ from this machine's", async () => {
-    await reviewingSettings({ reply: inspecting(FILE, { ...FILE, development: "worktree" }) });
-    expect(settingLines()["Git workflow"]).toEqual({ badge: "Set to the file's" });
+  it("lists the items that applying would change, each with what it is now", async () => {
+    await reviewingSettings({ reply: inspecting(FILE, { ...FILE, development: "worktree", rebase_before_merge: false, delivery: "ask" }) });
+    expect(settingLines()["Git workflow"]).toEqual({
+      badge: "Set to the file's",
+      values: [
+        "Where sessions develop: On the current branch (now In a worktree of its own)",
+        "Rebase before delivery: On (now Off)",
+        "Delivery: Merge locally (now Ask each time)",
+      ],
+    });
   });
 
-  it("notes that applying changes nothing when they are the same", async () => {
+  it("lists nothing when they are the same", async () => {
     await reviewingSettings({ reply: inspecting(FILE, FILE) });
     expect(settingLines()["Git workflow"]).toEqual({ badge: "No change" });
+  });
+
+  it("lists every item that differs, whichever it is", async () => {
+    await reviewingSettings({ reply: inspecting(FILE, { development: "branch", squash_before_delivery: true, rebase_before_merge: false, delivery: "pull_request", revert_gate: false }) });
+    expect(settingLines()["Git workflow"].values).toEqual([
+      "Where sessions develop: On the current branch (now On a branch of its own)",
+      "Squash commits before delivery: Off (now On)",
+      "Rebase before delivery: On (now Off)",
+      "Delivery: Merge locally (now Open a pull request)",
+      "Revert gate: On (now Off)",
+    ]);
+  });
+});
+
+describe("the Claude compatibility and agent tags", () => {
+  const inspecting = (settings: Partial<NonNullable<typeof REVIEW.settings>>) => (body: RequestBody) =>
+    body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected" as const, ...REVIEW, settings: { ...REVIEW.settings!, ...settings } }) : reply(body);
+
+  it("list the agents applying would change, each with what it is now", async () => {
+    await reviewingSettings({
+      reply: inspecting({
+        claude_compatibility: { codex: false, grok: true },
+        current_claude_compatibility: { codex: true, grok: true },
+        agent_tags: { codex: ["review", "ci"], grok: [], claude: ["same"] },
+        current_agent_tags: { codex: [], grok: ["old"], claude: ["same"] },
+      }),
+    });
+    const lines = settingLines();
+    expect(lines["Claude compatibility"]).toEqual({ badge: "Set to the file's", values: ["Codex: Off (now On)"] });
+    expect(lines["Agent tags"]).toEqual({ badge: "Set to the file's", values: ["Codex: review, ci (now No tags)", "Grok Build: No tags (now old)"] });
+  });
+
+  it("list nothing when they are the same", async () => {
+    await reviewingSettings({
+      reply: inspecting({
+        claude_compatibility: { codex: true },
+        current_claude_compatibility: { codex: true },
+        agent_tags: { codex: ["review"] },
+        current_agent_tags: { codex: ["review"] },
+      }),
+    });
+    const lines = settingLines();
+    expect(lines["Claude compatibility"]).toEqual({ badge: "No change" });
+    expect(lines["Agent tags"]).toEqual({ badge: "No change" });
   });
 });
 

@@ -1782,6 +1782,12 @@ an accent outline, and hover uses the default fill. A close mark has a separate 
 hover, deepened while pressed, so it stays distinct from the tab beneath it. These styles apply only to the Terminal
 panel.
 
+Key caps set inline in a line of small muted text, such as the shortcuts listed under a line of the configuration
+import's settings, take a compact size by the user's decision: 20px tall, 12px text and a 6px radius, in place of
+HeroUI's 24px, 14px and 8px, which stood out of the 14px text around them. Only the size changes; HeroUI's colours
+stay. Lines holding them are 24px tall, so a wrapped line of caps never touches the next. Key caps on a row of their
+own, as in Settings and menus, keep HeroUI's size.
+
 ### Form controls on a surface
 
 A form control on a surface — in a dialog, a popover, a card — takes HeroUI's `variant="secondary"` (`TextField`,

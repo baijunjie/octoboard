@@ -93,13 +93,22 @@ export async function press(label: string): Promise<void> {
   await act(async () => button.click());
 }
 
-/** The lines of a settings list, by setting name: the badge, and the muted note under it where
- * there is one. */
-export function settingLinesOf(list: Element): Record<string, { badge: string; note?: string }> {
+/** The lines of a settings list, by setting name: the badge, the muted note under it where there is one and the
+ * values listed under that where there are any. */
+export function settingLinesOf(list: Element): Record<string, { badge: string; note?: string; values?: string[] }> {
   return Object.fromEntries(
     Array.from(list.querySelectorAll(":scope > li")).map((li) => {
-      const [head, note] = Array.from(li.children);
-      return [head.firstElementChild!.textContent, { badge: head.lastElementChild!.textContent!, ...(note && { note: note.textContent! }) }];
+      const [head, ...rest] = Array.from(li.children);
+      const note = rest.find((child) => child.tagName === "SPAN");
+      const values = rest.find((child) => child.tagName === "UL");
+      return [
+        head.firstElementChild!.textContent,
+        {
+          badge: head.lastElementChild!.textContent!,
+          ...(note && { note: note.textContent! }),
+          ...(values && { values: Array.from(values.children).map((value) => value.textContent!) }),
+        },
+      ];
     }),
   );
 }

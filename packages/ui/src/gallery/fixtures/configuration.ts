@@ -70,6 +70,14 @@ const accountsMachine = snapshotState({
     default_account_names: { grok: "Main" },
   },
 });
+/** The agent tags this machine has in the application settings scenarios: Claude Code and Grok Build tagged. */
+const MACHINE_AGENT_TAGS = { claude: ["personal"], grok: ["trial"] };
+
+/** The machine of the application settings scenarios: the one of the other import scenarios with agents that have tags. */
+const taggedState = snapshotState({
+  ...layout,
+  settings: { ...DEFAULT_SETTINGS, added_agents: ALL_AGENTS, default_clone_dir: DEFAULT_CLONE_DIR, accounts, agent_tags: MACHINE_AGENT_TAGS },
+});
 const noConsoleState = snapshotState({
   consoles: [],
   projects: [],
@@ -663,6 +671,23 @@ const ACCOUNTS_ONLY_RESULT = imported({
 const WITH_ACCOUNTS_SETTING_OFF: Omit<Inspection, "type"> = { ...WITH_SETTING_OFF, accounts: ACCOUNTS_ONLY.accounts };
 const SETTINGS_FAILED_RESULT: Omit<Imported, "type"> = { ...SETTINGS_FAILED_CONSOLES_RESULT, accounts: ACCOUNTS_ONLY_RESULT.accounts };
 
+/** The agent tags the file of those scenarios carries: Codex with several, and Claude Code with none, which replaces the
+ * tag it has here. Grok Build is not listed, so its tag stays as it is. */
+const FILE_AGENT_TAGS = { codex: ["review", "backend", "nightly"], claude: [] };
+
+/** `REVIEW` with the tags above, and with one setting the file leaves as this machine has it, so that the review has a
+ * line that reads No change beside the ones that change: the sidebar order, which the file also has on. */
+const SETTINGS_REVIEW: Omit<Inspection, "type"> = {
+  ...REVIEW,
+  settings: { ...REVIEW.settings!, sidebar_order_by_status: true, agent_tags: FILE_AGENT_TAGS, current_agent_tags: MACHINE_AGENT_TAGS },
+};
+
+/** What importing `SETTINGS_REVIEW` came to. */
+const SETTINGS_RESULT: Omit<Imported, "type"> = {
+  ...MIXED_RESULT,
+  settings_applied: { ...MIXED_RESULT.settings_applied!, sidebar_order_by_status: true, agent_tags: FILE_AGENT_TAGS },
+};
+
 const reviewing = (extra: Partial<ConfigurationFixture> = {}): ConfigurationFixture => ({ file: FILE, inspection: REVIEW, imported: MIXED_RESULT, ...extra });
 
 export const configurationScenarios: Scenario[] = [
@@ -831,9 +856,9 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, review of the application settings",
-    description: "Application settings ticked in the What to import group: the Application settings tab appears beside Consoles and projects (with a warning glyph) and is the one open. It holds one card, with no checkbox of its own. Lines that turn a setting on carry a muted consequence line (the automatic-switch line, \"Automatically switch accounts at the usage limit\", says a session that stops at its account's usage limit is then switched to another account with usage left and carries on), lines that turn one off do not (their \"Turns off\" badge is neutral, not accented), Git workflow, Claude compatibility and Agent tags read \"Set to the file's\" (the file turns Codex's compatibility off and gives Codex a tag), and keyboard shortcuts read \"Set to the file's\" with a note that 3 of the file's shortcuts differ from the defaults and apply to this device or browser only. Lines the device already has read No change in the same card; shortcuts that are all defaults read \"Back to defaults\", with a consequence line that they apply to this device or browser only.",
-    state,
-    configuration: reviewing({ file: SHORTCUTS_FILE }),
+    description: "Application settings ticked in the What to import group: the Application settings tab appears beside Consoles and projects (with a warning glyph) and is the one open. It holds one card, with no checkbox of its own. Lines that turn a setting on carry a muted consequence line (the automatic-switch line, \"Automatically switch accounts at the usage limit\", says a session that stops at its account's usage limit is then switched to another account with usage left and carries on), lines that turn one off do not (their \"Turns off\" badge is neutral, not accented), and \"Order the sidebar by status\", which the device already has as the file does, reads No change with nothing under it. The four lines with several values read \"Set to the file's\" and list under the badge only what applying would change, each as the file's value with what it is now in brackets: Git workflow lists four of its five items (where sessions develop, rebase before delivery, delivery, revert gate; \"Squash commits before delivery\" is the same and is left out); Claude compatibility lists Codex, Off (now On); Agent tags lists Codex with three tags (now No tags) and Claude Code with No tags (now personal), and not Grok Build, which the file does not list; Keyboard shortcuts says 3 of the file's shortcuts differ from the defaults and apply to this device or browser only, then lists each of the three as its key caps with the current ones in brackets (scroll the card to the end of the list).",
+    state: taggedState,
+    configuration: reviewing({ file: SHORTCUTS_FILE, inspection: SETTINGS_REVIEW, imported: SETTINGS_RESULT }),
     steps: [
       ...importFromSettings,
       chooseFile,
@@ -1119,9 +1144,9 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import result, the application settings applied",
-    description: "The Application settings tab holds the \"Application settings applied\" card, whose badges read On, Off, \"Matches the file\" (git workflow, Claude compatibility and agent tags, in that order) and \"3 changes from the defaults\", the last with a muted line saying 2 shortcuts could not be applied. The Consoles and projects tab keeps its warning glyph. Shortcuts back to their defaults read Defaults, without that muted line.",
-    state,
-    configuration: reviewing({ file: SHORTCUTS_FILE }),
+    description: "The Application settings tab holds the \"Application settings applied\" card, whose switches read On or Off. The four lines with several values come after them and list what was applied under their badge, with no \"now\" values: Git workflow (\"Matches the file\") lists all five items, Claude compatibility (\"Matches the file\") lists Codex, Off, Agent tags (\"Matches the file\") lists Codex with its three tags and Claude Code as No tags, and Keyboard shortcuts (\"3 changes from the defaults\") lists the three that were applied as key caps, under a muted line saying 2 shortcuts could not be applied. The Consoles and projects tab keeps its warning glyph.",
+    state: taggedState,
+    configuration: reviewing({ file: SHORTCUTS_FILE, inspection: SETTINGS_REVIEW, imported: SETTINGS_RESULT }),
     steps: [
       ...importFromSettings,
       chooseFile,

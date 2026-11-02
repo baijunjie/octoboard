@@ -11,6 +11,7 @@ import { errorAlerts } from "../components/alerts/errorAlerts";
 import { setLanguage } from "../i18n/language";
 import type { Event, ImportedProject } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import type { Overrides } from "../shortcuts/store";
 import { ImportResult } from "./ImportResult";
 import { documentSettings, openTab, settingLinesOf } from "./testSupport";
 
@@ -234,7 +235,7 @@ function settingLines(container: Element): ReturnType<typeof settingLinesOf> {
   return settingLinesOf(container.querySelector("section[aria-labelledby] > ul")!);
 }
 
-it("tells of each application setting that was applied, and of the git workflow", () => {
+it("tells of each application setting that was applied, and lists the values of the git workflow, Claude compatibility and agent tags", () => {
   const daemon = { store: createStateStore({}) } as Daemon;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -258,8 +259,20 @@ it("tells of each application setting that was applied, and of the git workflow"
     "Automatically approve account switches": { badge: "Off" },
     "Automatically approve handoffs": { badge: "On" },
     "Ask questions as choices": { badge: "Off" },
-    "Git workflow": { badge: "Matches the file" },
+    "Git workflow": {
+      badge: "Matches the file",
+      values: [
+        "Where sessions develop: In a worktree of its own",
+        "Squash commits before delivery: Off",
+        "Rebase before delivery: On",
+        "Delivery: Ask each time",
+        "Revert gate: Off",
+      ],
+    },
   });
+  render({ claude_compatibility: { codex: false, grok: true }, agent_tags: { codex: ["review", "ci"], grok: [] } });
+  expect(settingLines(container)["Claude compatibility"]).toEqual({ badge: "Matches the file", values: ["Codex: Off", "Grok Build: On"] });
+  expect(settingLines(container)["Agent tags"]).toEqual({ badge: "Matches the file", values: ["Codex: review, ci", "Grok Build: No tags"] });
 });
 
 it("tells what came of the keyboard shortcuts in the settings card, and the ones left out under them", () => {
@@ -270,13 +283,16 @@ it("tells what came of the keyboard shortcuts in the settings card, and the ones
     act(() => root.unmount());
     container.remove();
   });
-  const render = (shortcuts: { applied: number; skipped: number }) =>
+  const render = (shortcuts: { applied: number; skipped: number; overrides: Overrides }) =>
     act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", id: null, consoles: [], settings_applied: documentSettings({ auto_pull_repositories: true }), settings_error: null, accounts: null }} shortcuts={shortcuts} /></DaemonProvider>));
-  render({ applied: 2, skipped: 0 });
-  expect(settingLines(container)["Keyboard shortcuts"]).toEqual({ badge: "2 changes from the defaults" });
-  render({ applied: 1, skipped: 2 });
-  expect(settingLines(container)["Keyboard shortcuts"]).toEqual({ badge: "1 change from the default", note: "2 shortcuts in the file could not be applied here and were left out." });
-  render({ applied: 0, skipped: 0 });
+  render({ applied: 2, skipped: 0, overrides: { lock: { code: "KeyK", primary: true, shift: true }, pin: { code: "KeyJ", primary: true, shift: true } } });
+  const listed = settingLines(container)["Keyboard shortcuts"];
+  expect(listed.badge).toBe("2 changes from the defaults");
+  expect(listed.values).toHaveLength(2);
+  render({ applied: 1, skipped: 2, overrides: { lock: { code: "KeyK", primary: true, shift: true } } });
+  expect(settingLines(container)["Keyboard shortcuts"]).toMatchObject({ badge: "1 change from the default", note: "2 shortcuts in the file could not be applied here and were left out." });
+  expect(settingLines(container)["Keyboard shortcuts"].values).toHaveLength(1);
+  render({ applied: 0, skipped: 0, overrides: {} });
   expect(settingLines(container)["Keyboard shortcuts"]).toEqual({ badge: "Defaults" });
 });
 

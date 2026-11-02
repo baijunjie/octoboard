@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { REVIEW } from "../fixtures/configurationReview";
 import type { ImportedConsole, InspectedAccount, InspectedAccounts, InspectedConsole } from "../protocol";
 import { hasClaudeCompatibility } from "../agents/claudeCompatibility";
+import { defaultBinding } from "../shortcuts/commands";
 import {
   accountChoicesFor,
   accountResolutionsOf,
@@ -11,7 +12,6 @@ import {
   availableFor,
   carriedRegions,
   choicesFor,
-  claudeCompatibilityChanges,
   directoryProblem,
   documentShortcuts,
   hasAccountDirectoryProblem,
@@ -161,14 +161,27 @@ describe("the keyboard shortcuts of a document", () => {
   });
 
   it("are counted as those that can stand, and compared with the ones given", () => {
-    expect(shortcutsReview({ lock, bad: 1 }, {})).toEqual({ count: 1, changes: true });
-    expect(shortcutsReview({ lock }, { lock })).toEqual({ count: 1, changes: false });
-    expect(shortcutsReview({}, {})).toEqual({ count: 0, changes: false });
-    expect(shortcutsReview({}, { pin })).toEqual({ count: 0, changes: true });
+    expect(shortcutsReview({ lock, bad: 1 }, {})).toMatchObject({ count: 1, changed: [expect.anything()] });
+    expect(shortcutsReview({ lock }, { lock })).toMatchObject({ count: 1, changed: [] });
+    expect(shortcutsReview({}, {})).toMatchObject({ count: 0, changed: [] });
+    expect(shortcutsReview({}, { pin })).toMatchObject({ count: 0, changed: [expect.anything()] });
+  });
+
+  it("list the commands whose binding would change, with the binding they would get and the one they have", () => {
+    const lockDefault = defaultBinding("lock");
+    const pinDefault = defaultBinding("pin");
+    expect(shortcutsReview({ lock, bad: 1 }, {}).changed).toEqual([{ label: "settings.shortcuts.command.lock", binding: lock, current: lockDefault }]);
+    expect(shortcutsReview({ lock }, { lock }).changed).toEqual([]);
+    expect(shortcutsReview({}, { pin }).changed).toEqual([{ label: "settings.shortcuts.command.pin", binding: pinDefault, current: pin }]);
+    // Only the commands that differ, in the order the commands are listed.
+    expect(shortcutsReview({ pin: lock }, { lock }).changed).toEqual([
+      { label: "settings.shortcuts.command.lock", binding: lockDefault, current: lock },
+      { label: "settings.shortcuts.command.pin", binding: lock, current: pinDefault },
+    ]);
   });
 
   it("count a swap and a chain whole", () => {
-    expect(shortcutsReview({ lock: { code: "KeyP", primary: true, shift: true }, pin: { code: "KeyL", primary: true, shift: true } }, {})).toEqual({ count: 2, changes: true });
+    expect(shortcutsReview({ lock: { code: "KeyP", primary: true, shift: true }, pin: { code: "KeyL", primary: true, shift: true } }, {})).toMatchObject({ count: 2, changed: [expect.anything(), expect.anything()] });
   });
 });
 
@@ -196,13 +209,6 @@ describe("Claude compatibility in a document", () => {
     expect(hasClaudeCompatibilityChoices({ claude: true })).toBe(false);
     expect(hasClaudeCompatibilityChoices({ other: true } as never)).toBe(false);
     expect(hasClaudeCompatibilityChoices({ claude: true, grok: false })).toBe(true);
-    expect(claudeCompatibilityChanges({ claude: false }, { claude: true })).toBe(false);
-  });
-
-  it("changes only where an agent this machine reports differs", () => {
-    expect(claudeCompatibilityChanges({ codex: false }, { codex: true, grok: true })).toBe(true);
-    expect(claudeCompatibilityChanges({ codex: true }, { codex: true, grok: true })).toBe(false);
-    expect(claudeCompatibilityChanges({ codex: false }, {})).toBe(false);
   });
 });
 

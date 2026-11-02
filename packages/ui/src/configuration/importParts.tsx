@@ -16,6 +16,7 @@ import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { AccountFallback, Agent, ImportFailure } from "../protocol";
 import { useFailureNode } from "./failureText";
 import { type DirectoryProblem } from "./importPlan";
+import type { SettingValue } from "./importValues";
 
 /**
  * The look of one card of the import dialog: a console's projects, an agent's accounts, the applied or applicable
@@ -87,9 +88,10 @@ export function DirectoryChoiceField({
   );
 }
 
-/** One line of a settings card: the setting's name, a badge for what came or would come of it and,
- * where that is worth knowing, a muted note under it. */
-export function SettingLine({ label, badge, tone = "default", children }: { label: string; badge: string; tone?: StatusBadgeColor; children?: React.ReactNode }): React.ReactElement {
+/** One line of a settings card: the setting's name, a badge for what came or would come of it, where that is worth
+ * knowing a muted note under it and, for a setting made of several items, a muted list of the `values` the badge
+ * speaks of. */
+export function SettingLine({ label, badge, tone = "default", values, children }: { label: string; badge: string; tone?: StatusBadgeColor; values?: SettingValue[]; children?: React.ReactNode }): React.ReactElement {
   return (
     <li className="flex flex-col gap-0.5 py-2">
       <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -97,6 +99,18 @@ export function SettingLine({ label, badge, tone = "default", children }: { labe
         <StatusBadge color={tone} variant="soft">{badge}</StatusBadge>
       </span>
       {children && <span className="text-sm text-app-muted">{children}</span>}
+      {values && values.length > 0 && (
+        // Lines 24px tall, so a row with tags or key caps keeps the rhythm of a plain row and wrapped lines of
+        // chips do not touch. A row that wraps hangs its later lines, so they do not read as rows of their own; the
+        // chips inside (blocks that would inherit the indent) take none.
+        <ul className="flex flex-col text-sm leading-6 text-app-muted">
+          {values.map(({ item, value }) => (
+            <li key={item} className="ps-4 -indent-4 [&_*]:indent-0">
+              <Message id="configuration.import.settingValue" params={{ item, value }} />
+            </li>
+          ))}
+        </ul>
+      )}
     </li>
   );
 }

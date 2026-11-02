@@ -186,17 +186,27 @@ refused.
 
 One card, with a line for each of the document's switches naming the setting with a badge for what applying would change
 from what is set now: **Turns on**, with what then follows in that setting's own words (see "The application settings an
-export carries" in `docs/product/configuration-export-and-import.md`); **Turns off**; or **No change**. One more line
-covers all five application-wide git workflow settings, named **Git workflow**, badged **Set to the file's** when they
-differ from the current ones and **No change** when they do not. A document that carries a Claude compatibility choice
-for an agent that has the setting adds one line for them all, named **Claude compatibility**, badged **Set to the
-file's** when applying would change the value of an agent this machine reports and **No change** when it would not; a
-document with no such choice has no line. A document that carries tags for an agent this build knows adds one line for
-them all, named **Agent tags**, badged **Set to the file's** when applying would change an agent's tags here and **No
-change** when it would not; a document with none has no line. A document that carries keyboard shortcuts adds a line for
-them, badged **Set to the file's**, with how many of the file's shortcuts differ from the defaults — counting only those
-that can be used here — and that they apply to this device or browser only; **Back to defaults**, with that it applies
-to this device or browser only; or **No change**, when the file's are the ones this device already has.
+export carries" in `docs/product/configuration-export-and-import.md`); **Turns off**; or **No change**.
+
+The settings made of several items have one line each. When applying would change such a setting, its line lists under
+the badge each item that would change, one per row: the item, then the file's value, then in brackets the value it has
+now. A line with no item to list is badged **No change**, so a changing badge never stands without a list:
+
+- **Git workflow**, always present, covering all five application-wide git workflow settings: badged **Set to the
+  file's**, it lists each of the five whose value differs from the current one, named and worded as the settings page
+  names them (see "The five settings" in `docs/product/git-workflow-settings.md`), a switch as **On** or **Off**. Squash
+  commits before delivery, Rebase before delivery and Delivery are listed when they differ even where the file's Where
+  sessions develop is **On the current branch**, since their values are written all the same.
+- **Claude compatibility**, present when the document carries a choice for an agent that has the setting: badged **Set
+  to the file's**, it lists each agent that has the setting and that this machine reports whose value would change,
+  **On** or **Off**.
+- **Agent tags**, present when the document carries tags for an agent this build knows: badged **Set to the file's**, it
+  lists each such agent whose tags would change, its tags shown as tags, or **No tags** for none.
+- **Keyboard shortcuts**, present when the document carries them: badged **Set to the file's**, with how many of the
+  file's shortcuts differ from the defaults — counting only those that can be used here — and that they apply to this
+  device or browser only; or **Back to defaults**, when none of them does, with that it applies to this device or
+  browser only. Under that note it lists each command whose shortcut would change, the shortcuts shown as key caps. It
+  is **No change** when the file's shortcuts are the ones this device already has.
 
 Whether the settings are applied is the **Application settings** checkbox of What to import; the card has no choice of
 its own.
@@ -280,9 +290,16 @@ accounts are logged in as any other (see `docs/product/logging-accounts-in.md`).
 When the application settings could not be applied, a red compact alert titled that the application settings could not
 be imported, saying so with the reason, its remedy and **Details** (see "Failures shown on the screen" in
 `docs/product/error-alerts.md`), and nothing else. When they were applied, a card headed **Application settings
-applied**, with a line for each setting applied, badged **On** or **Off**; one line for the git workflow settings,
-badged **Matches the file**; one line for Claude compatibility, when the document carried a choice for an agent that has
-the setting, badged **Matches the file**; one line for agent tags, when the document carried tags for an agent this
-build knows, badged **Matches the file**; and, when this device applied the file's keyboard shortcuts, a line for them
-badged with how many changes from the defaults its shortcuts now have, or **Defaults**, with how many of the file's
-shortcuts could not be used here and were left out said under it, when any were. This tab has no totals.
+applied**, with a line for each setting applied, badged **On** or **Off**, and a line for each setting made of
+several items that lists under it, one per row, the item and the value applied, worded as in the review:
+
+- one line for the git workflow settings, badged **Matches the file**, listing all five;
+- one line for Claude compatibility, when the document carried a choice for an agent that has the setting, badged
+  **Matches the file**, listing each agent the document carried that has the setting, **On** or **Off**;
+- one line for agent tags, when the document carried tags for an agent this build knows, badged **Matches the file**,
+  listing each such agent with its tags shown as tags, or **No tags** for none;
+- and, when this device applied the file's keyboard shortcuts, a line for them badged with how many changes from the
+  defaults its shortcuts now have, or **Defaults**, with how many of the file's shortcuts could not be used here and
+  were left out said under it, when any were, and then each shortcut applied, as key caps — none for Defaults.
+
+This tab has no totals.

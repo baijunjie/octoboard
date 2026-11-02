@@ -239,12 +239,12 @@ describe("the overrides", () => {
     expect(stored()).toBeNull();
   });
 
-  it("are replaced as a whole by an import, which reports what stood", () => {
+  it("are replaced as a whole by an import, which reports what stood and which overrides were set", () => {
     setBinding("pin", { code: "KeyJ", primary: true, shift: true });
-    expect(replaceOverrides({ lock: { code: "KeyK", primary: true, shift: true }, bad: 1 })).toEqual({ applied: 1, skipped: 1 });
+    expect(replaceOverrides({ lock: { code: "KeyK", primary: true, shift: true }, bad: 1 })).toEqual({ applied: 1, skipped: 1, overrides: { lock: { code: "KeyK", primary: true, shift: true } } });
     expect(bindingFor("pin")).toEqual(defaultBinding("pin"));
     expect(bindingFor("lock")).toEqual({ code: "KeyK", primary: true, shift: true });
-    expect(replaceOverrides({})).toEqual({ applied: 0, skipped: 0 });
+    expect(replaceOverrides({})).toEqual({ applied: 0, skipped: 0, overrides: {} });
     expect(stored()).toBeNull();
   });
 });

@@ -118,14 +118,9 @@ export function setBinding(id: CommandId, binding: Binding): ShortcutProblem | u
   return undefined;
 }
 
-/** Replaces every override with those the imported `value` holds; says how many stood and how many entries could not. */
-export function replaceOverrides(value: unknown): { applied: number; skipped: number } {
+/** Replaces every override with those the imported `value` holds; says how many stood, how many entries could not, and which overrides were set. */
+export function replaceOverrides(value: unknown): { applied: number; skipped: number; overrides: Overrides } {
   const { overrides, skipped } = sanitizeOverrides(value);
   shortcutOverrides.set(overrides);
-  return { applied: Object.keys(overrides).length, skipped };
-}
-
-/** Whether two sets of overrides bind every command alike. */
-export function overridesEqual(a: Overrides, b: Overrides): boolean {
-  return REBINDABLE_COMMANDS.every((command) => bindingsEqual(a[command.id] ?? command.binding, b[command.id] ?? command.binding));
+  return { applied: Object.keys(overrides).length, skipped, overrides };
 }

@@ -14,8 +14,10 @@ import type {
 } from "../protocol";
 import { AGENT_LABEL } from "../agents/agents";
 import { hasClaudeCompatibility } from "../agents/claudeCompatibility";
-import { sameValue } from "../store/sameValue";
-import { overridesEqual, sanitizeOverrides, type Overrides } from "../shortcuts/store";
+import type { PlainMessageKey } from "../i18n/catalog";
+import { bindingsEqual, type Binding } from "../shortcuts/binding";
+import { REBINDABLE_COMMANDS } from "../shortcuts/commands";
+import { effectiveBindings, sanitizeOverrides, type Overrides } from "../shortcuts/store";
 import type { Region } from "./RegionTabs";
 
 /** What the daemon answers to inspecting a configuration document. */
@@ -338,10 +340,19 @@ export function documentShortcuts(document: unknown): Record<string, unknown> | 
 }
 
 /** What applying a document's shortcuts would do here: how many changed shortcuts it holds that can stand on
- * this client, and whether they differ from the `current` ones. */
-export function shortcutsReview(shortcuts: Record<string, unknown>, current: Overrides): { count: number; changes: boolean } {
+ * this client, and the commands whose binding would change from the `current` ones, in the order the commands are
+ * listed, each with the binding it would get and the one it has now: none when applying would change nothing. */
+export function shortcutsReview(
+  shortcuts: Record<string, unknown>,
+  current: Overrides,
+): { count: number; changed: { label: PlainMessageKey; binding: Binding; current: Binding }[] } {
   const { overrides } = sanitizeOverrides(shortcuts);
-  return { count: Object.keys(overrides).length, changes: !overridesEqual(overrides, current) };
+  const wanted = effectiveBindings(overrides);
+  const now = effectiveBindings(current);
+  const changed = REBINDABLE_COMMANDS
+    .filter((command) => !bindingsEqual(wanted[command.id], now[command.id]))
+    .map((command) => ({ label: command.label, binding: wanted[command.id], current: now[command.id] }));
+  return { count: Object.keys(overrides).length, changed };
 }
 
 /** Whether a document's Claude compatibility choices say anything: an empty object is a machine where the user
@@ -350,21 +361,8 @@ export function hasClaudeCompatibilityChoices(choices: Partial<Record<Agent, boo
   return Object.keys(choices).some(hasClaudeCompatibility);
 }
 
-/** Whether applying a document's Claude compatibility `wanted` would change a value here. Only an agent that has
- * the setting and that this machine reports in `current` counts: the daemon skips the others, and for an agent it
- * does not report nothing is known to compare with. */
-export function claudeCompatibilityChanges(wanted: Partial<Record<Agent, boolean>>, current: Partial<Record<Agent, boolean>>): boolean {
-  return (Object.entries(wanted) as [Agent, boolean][]).some(([agent, on]) => hasClaudeCompatibility(agent) && current[agent] !== undefined && current[agent] !== on);
-}
-
 /** Whether a document's agent tags say anything: an empty object is a machine where no agent has tags, and a key for
  * an agent this build does not know counts for nothing. */
 export function hasAgentTags(tags: Partial<Record<Agent, string[]>>): boolean {
   return Object.keys(tags).some((agent) => Object.hasOwn(AGENT_LABEL, agent));
-}
-
-/** Whether applying a document's agent tags `wanted` would change a list here: the tags of each agent the document
- * lists replace that agent's, and an agent it does not list keeps its own. */
-export function agentTagsChange(wanted: Partial<Record<Agent, string[]>>, current: Partial<Record<Agent, string[]>>): boolean {
-  return (Object.entries(wanted) as [Agent, string[]][]).some(([agent, tags]) => !sameValue(tags, current[agent] ?? []));
 }
