@@ -56,9 +56,8 @@ function colorClasses(color: StatusBadgeColor, variant: StatusBadgeVariant): str
  * 4.75:1 danger and 6.45:1 help, at the worst on a hovered control fill (the neutral fill read by the focus view's
  * count badge on the sidebar's hovered tertiary button is 9.42:1); in dark 7.26:1 neutral, 4.51:1 accent, 5.06:1
  * success, 5.54:1 warning, 4.59:1 danger and 5.71:1 help, at the worst on a floating surface's hovered control fill.
- * The fills sit 1.07:1-1.25:1 off a light surface and 1.09:1-1.32:1 off a dark one (the neutral one 1.17:1-1.18:1 and
- * 1.22:1-1.36:1), and the hairline 1.15:1-1.52:1 from its fill in light and 1.27:1-2.33:1 in dark (neutral
- * 1.38:1-1.48:1 and 1.40:1-1.58:1).
+ * The fills and the hairline are decorative, held to no contrast ratio: the fills stay a faint step off their surface
+ * and the hairline a faint edge off its fill.
  *
  * A comma that only assistive technology reads keeps the name and the value apart, which
  * `separated={false}` leaves out for a badge with no name before it. `single` is for one character

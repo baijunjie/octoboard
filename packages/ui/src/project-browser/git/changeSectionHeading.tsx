@@ -16,9 +16,8 @@ import { SECTION_LABELS, sectionKey, type ChangeSection } from "./changes";
 /** Every section heading is one line of this height, which, with the rows' (`ROW_HEIGHT`), is what
  * lets the list be virtualized. */
 export const HEADING_HEIGHT = 30;
-/** A section's heading uses the pane's control fill so it stays a step off the
- * panel: 1.15:1 from it in light and 1.23:1 in dark, with muted text above 4.5:1 on both fills.
- * `h-[30px]` is `HEADING_HEIGHT`.
+/** A section's heading uses the pane's control fill so it stays a step off the panel, with muted text above 4.5:1 on
+ * both fills. `h-[30px]` is `HEADING_HEIGHT`.
  * `ChangeSectionHeading` lays out the band's folding button and any trailing view controls or mark. */
 export const HEADING_CLASS = "flex h-[30px] groove-b bg-default text-xs font-medium text-app-muted";
 

@@ -238,9 +238,9 @@ export function OptionSelect<T extends string>({
       {/* The trigger and the mark share a box, as the mark is laid over the trigger's trailing room. */}
       <div className="relative">
         {/* Joined: the two parts square the corners they meet at and touch. Nothing is drawn between
-            them: a gap shows the dialog's surface through at about 1.3:1 in the light theme, and a
-            border would sit close to this variant's fill in the dark one, and HeroUI's own input
-            group draws no boundary between its parts either. */}
+            them: a gap shows the dialog's surface through in the light theme, and a border would sit close to this
+            variant's fill in the dark one, and HeroUI's own input group draws no boundary between its parts
+            either. */}
         <Select.Trigger
           ref={trigger}
           data-marquee-scope

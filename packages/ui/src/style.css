@@ -365,14 +365,11 @@ html {
    cell draws it bare; a popover, a menu and a select trigger add a hairline edge of the foreground (`--edge`, the bar's
    `edge` prop), since the track there is hardly off its surface. The edge is an inset shadow on both bars alike: inside
    the track, so the bars keep their 4:3 heights and end together, and painted under the fill, so it outlines only the
-   empty part (over the fill it would leave a 3px bar a single pixel of its colour). From the tokens, track against the
-   surface, light / dark: the table cell 1.27 / 1.86; a popover or menu 1.19 / 1.86; a trigger 1.00 / 1.50 (the fills
-   against it are under `.quota-meter--claude`). The edge as drawn (25% of the foreground over the track) against the
-   surface outside it and the track inside it, light / dark: a popover or menu 2.02 and 1.70 / 3.53 and 1.90; a trigger
-   1.69 and 1.69 / 2.85 and 1.90. The edge is a hint at a track that is already there, not a control boundary, so it is
-   not held to 3:1; against a dark popover's surface it happens to pass it. In dark the track is a step lighter than
-   `--default`, which on a select trigger is the trigger's own fill and on a floating surface 1.24:1 off it: a track
-   that faint is lost on a dark ground, where a light one at 1.19:1 still reads. */
+   empty part (over the fill it would leave a 3px bar a single pixel of its colour). The edge (25% of the foreground
+   over the track) is a hint at a track that is already there, not a control boundary, so it is not held to 3:1. The
+   fills' ratios against the track are under `.quota-meter--claude`. In dark the track is a step lighter than
+   `--default`, which on a select trigger is the trigger's own fill and on a floating surface only a faint step off it:
+   a track that faint is lost on a dark ground, where a light one just as faint still reads. */
 .quota-bar-track {
   background-color: var(--default);
 }
@@ -530,21 +527,17 @@ html {
      / `--chrome-current` are the tints a control, a pressed control and the current console's tile
      take on it: translucent, so they read on the material and on `--chrome`. Below 594 px (the
      `phone` breakpoint) the rail is inside the sidebar drawer's card and sits on `--panel-sidebar`
-     instead, where the current tile is 1.60:1 in light and 2.05:1 in dark. The current tile is
-     the one that has to be found at a glance, so it is the strongest: 1.59:1 on the light material
-     (#e2e4e5), 1.57:1 on its darker variant (#d0d2d3) and 1.59:1 on `--chrome`, 1.84:1 on the dark
-     material (#484a4b) and 1.96:1 on dark `--chrome`, where `--chrome-hover` and `--chrome-active`
-     are 1.14:1 to 1.31:1 in light and 1.21:1 to 1.53:1 in dark.
+     instead, where the current tile stands apart just as well. The current tile is the one that has to be found at a
+     glance, so it is the strongest of the three tints on the material and on `--chrome` in both appearances, with
+     `--chrome-hover` and `--chrome-active` fainter steps.
    - The content panel is always opaque, since text-heavy UI must never sit on the material.
      `--panel` is the main area and has to equal the terminal's own background (`XTERM_THEMES` in
      `terminal/xtermThemes.ts`) so the terminal does not look like a box inside a box;
-     `--panel-sidebar` is both side panes', a touch greyer than `--panel` in light and a touch lighter
-     in dark (1.06:1 and 1.09:1 against it: a step that shows without drawing a box).
-     `--panel-hover` / `--panel-selected` are the tints a row takes on either of them, translucent
-     so a control inside a hovered row (its "⋯" menu, which hovers with `--default`, see
-     `.sidebar-fills` below) can stack its own hover on top. The selected tint is held to what keeps
-     `--app-muted` text on a selected sidebar row at 4.5:1 (4.65:1 light, 4.58:1 dark) while still
-     standing apart from the rows around it (1.17:1 light, 1.25:1 dark).
+     `--panel-sidebar` is both side panes', a touch greyer than `--panel` in light and a touch lighter in dark (a faint
+     step that shows without drawing a box). `--panel-hover` / `--panel-selected` are the tints a row takes on either
+     of them, translucent so a control inside a hovered row (its "⋯" menu, which hovers with `--default`, see
+     `.sidebar-fills` below) can stack its own hover on top. The selected tint is held to what keeps `--app-muted` text
+     on a selected sidebar row at 4.5:1 (4.65:1 light, 4.58:1 dark) while still standing apart from its neighbours.
    `--chrome-muted` is measured on the real material as well as on `--chrome`, since the material
    is not `--chrome`: in the dark appearance the material is #484a4b behind the window, far lighter
    than `--chrome`, where `--app-muted` is 3.39:1. `--chrome-muted` is 5.63:1 on that and 12.08:1 on
@@ -588,11 +581,10 @@ html {
      panel in both themes, white in light. Its dark value is in the dark block.
      `--panel-row-hover` / `--panel-row-selected` are an interactive card's hover and selected fills, in place of a
      row's `--panel-hover` / `--panel-selected`: those darken a light row towards the sidebar, which a card already
-     lighter than the sidebar would sink back into. In light the hover tint stays faint (1.05:1 off the sidebar,
-     1.06:1 off the card; the selected fill is 1.03:1 off the sidebar) and the selected fill is an accent tint rather than a darker grey, so it reads by hue
-     and by the card's accent border, not by sinking to the sidebar's grey. `--app-muted` holds 5.58:1 on the
-     selected fill and 5.70:1 on the hover one; the "⋯" button's translucent `--default` fills stack on either at
-     the same ratios as on the card at rest (1.20:1 and 1.31:1). */
+     lighter than the sidebar would sink back into. In light the hover tint stays faint, and the selected fill is an
+     accent tint rather than a darker grey, so it reads by hue and by the card's accent border, not by sinking to the
+     sidebar's grey. `--app-muted` holds 5.58:1 on the selected fill and 5.70:1 on the hover one; the "⋯" button's
+     translucent `--default` fills stack on either as they do on the card at rest. */
   --panel-row: var(--surface);
   --panel-row-hover: oklch(0 0 0 / 0.025);
   --panel-row-selected: color-mix(in oklab, var(--accent) 7%, var(--panel-row));
@@ -618,13 +610,13 @@ html {
   --sidebar-fill: oklch(1 0 0 / 0.07);
   --sidebar-fill-hover: oklch(1 0 0 / 0.11);
   --control-fill: oklch(0.33 0.006 286);
-  /* Lighter than the panel (L 0.27, 1.07:1) where HeroUI's own card colour (L 0.21) falls below it, but not
-     lighter still: a secondary button's `--control-fill` (L 0.33) stays 1.16:1 off it, where it vanished on
+  /* Lighter than the panel (L 0.27) where HeroUI's own card colour (L 0.21) falls below it, but not
+     lighter still: a secondary button's `--control-fill` (L 0.33) stays a step off it, where it vanished on
      a card of its own colour, and a danger-soft label reads 4.47:1 on it (4.2:1 with the button hovered),
      the lighter the card the lower. That shortfall in dark is kept by the user's decision; see
      docs/ui-accessibility.md, "Conformance level and exceptions". */
   --panel-row: oklch(0.29 0.006 286);
-  /* Dark: 1.22:1 (hover) and 1.23:1 (selected) off the sidebar; `--app-muted` 4.69:1 and 4.65:1 on them. */
+  /* Dark: `--app-muted` holds 4.69:1 on the hover fill and 4.65:1 on the selected one. */
   --panel-row-hover: oklch(1 0 0 / 0.045);
   --panel-row-selected: color-mix(in oklab, var(--accent) 12%, var(--panel-row));
   --control-fill-hover: oklch(0.36 0.006 286);
@@ -647,13 +639,11 @@ html {
 }
 
 /* The fills of HeroUI's `--default` family inside the sidebar and report panel. A ghost button's hover and pressed
-   fill, a tertiary button's fill and the filter keyword's tag all come from `--default`, which is the
-   sidebar's own colour in dark (L 0.274 against 0.27) and a step from it in light (1.08:1), so a
-   control would show no fill at all. The sidebar takes its own translucent tints, stronger than a
-   row's (`--panel-hover`): 1.19:1 (resting) and 1.31:1 (hovered) against the light sidebar, 1.24:1
-   and 1.41:1 against the dark one, the same on a selected row. `--default-hover` and
-   `--default-soft` are computed from `--default` on `<html>`, so the family is overridden whole
-   here: setting `--default` alone on this subtree would leave them behind. The fills are
+   fill, a tertiary button's fill and the filter keyword's tag all come from `--default`, which is the sidebar's own
+   colour in dark (L 0.274 against 0.27) and only a faint step from it in light, so a control would show no fill at
+   all. The sidebar takes its own translucent tints, stronger than a row's (`--panel-hover`), and stacking the same way
+   on a selected row. `--default-hover` and `--default-soft` are computed from `--default` on `<html>`, so the family
+   is overridden whole here: setting `--default` alone on this subtree would leave them behind. The fills are
    translucent, so they are also what an inline Switch, Checkbox or Input added to the sidebar later
    would get as its track or field. */
 .sidebar-fills {
@@ -667,13 +657,11 @@ html {
    `--overlay`, and the project pane, whose surface is `--panel-sidebar` (the pane's tabs, header and Git
    mode; the report panel on the same surface takes `.sidebar-fills`). HeroUI tunes `--default` for the
    page background (dark L 0.12), and these are lighter: a control drawn from `--default` lands almost on
-   its surface (1.19:1 and 1.08:1 in light against a dialog and the panel, 1.01:1 in dark against the
-   panel). `--control-fill` and `--control-fill-hover` are opaque steps off the surface instead: 1.27:1
-   resting and 1.39:1 hovered against a light dialog, 1.15:1 and 1.26:1 against the light panel, and
-   1.23:1 and 1.39:1 against the dark panel. In dark a dialog is one of the floating surfaces, which set
-   these two to their own fills (see the rule for them below), so the class there resolves to those. The
-   family is overridden whole, as `.sidebar-fills` does, since `--default-hover` and `--default-soft` are
-   computed on `<html>`.
+   its surface (in dark against the panel it is barely off it at all). `--control-fill` and
+   `--control-fill-hover` are opaque steps off the surface instead, resting and hovered. In dark a dialog is one of
+   the floating surfaces, which set these two to their own fills (see the rule for them below), so the class there
+   resolves to those. The family is overridden whole, as `.sidebar-fills` does, since `--default-hover` and
+   `--default-soft` are computed on `<html>`.
 
    Unlike `.sidebar-fills`, whose tints are translucent so that a control on a hovered or selected
    row stacks its own on top, these are opaque, because a dialog's and the pane's surfaces are flat
@@ -686,9 +674,8 @@ html {
    visual choices" in docs/ui-accessibility.md). Everything a dialog, the pane or such a tooltip or
    popover draws from `--default` takes the fills: a secondary button, a tab list, a ghost button's
    hover, a toggle button, a search field and a select in their secondary variant, and the file
-   viewer's image checkerboard (`.viewer-checkerboard`), whose squares step 1.10:1 from its ground in
-   light, and in dark 1.41:1 in a dialog and 1.28:1 in the pane (on HeroUI's own fill 1.04:1 in light
-   and 1.05:1 in dark), inside the viewer's frame surface like every other frame. */
+   viewer's image checkerboard (`.viewer-checkerboard`), whose squares step faintly from its ground
+   (on HeroUI's own fill hardly at all), inside the viewer's frame surface like every other frame. */
 .control-fills {
   --default: var(--control-fill);
   --default-hover: var(--control-fill-hover);
@@ -701,9 +688,8 @@ html {
    session tree's branch connectors. It is set a step further from the surfaces than HeroUI's own,
    whose dark value (L 0.25) is the dark
    sidebar's own colour and vanishes there, as a branch connector on the dark sidebar would. This is
-   a quiet line on every surface it divides: 1.29 / 1.22 against `--panel` and `--panel-sidebar` in
-   light, 1.35 / 1.23 in dark (a floating surface takes its own, below), lighter than the dark
-   surfaces rather than darker so it reads as an edge. Not a control's boundary, so it is not held
+   a quiet line on every surface it divides (a floating surface takes its own, below), lighter than
+   the dark surfaces rather than darker so it reads as an edge. Not a control's boundary, so it is not held
    to 3:1. The light selector excludes the dark theme rather than relying on order, since an
    unlayered root declaration would otherwise beat the library's layered dark rule. */
 :root:not(.dark):not([data-theme="dark"]) {
@@ -772,7 +758,7 @@ html {
    the badge's alone. The neutral fill is the foreground at 8% in light and 10% in dark, translucent like the coloured
    ones, so it deepens on a grey surface (a hovered or selected row) instead of vanishing into it as an opaque
    grey would; over white it is close to HeroUI's light `--default`; dark takes 10% rather than the 8% that would match
-   its `--default` over a dialog, which would sit only 1.10:1 off `--background`. Its text is HeroUI's
+   its `--default` over a dialog, which would sit barely off `--background`. Its text is HeroUI's
    `--default-foreground` and its hairline `--app-muted` at 28%. The four HeroUI colours take their soft fill and their
    soft foreground pulled toward the foreground where it misses 4.5:1 on a surface a tag sits on (the measured minima
    are in `StatusBadge`'s comment); the help one is the app's purple. */
@@ -945,15 +931,13 @@ html {
    terminal or over the file viewer's content (`floating-surface`: the terminal notice bar, the viewer's find
    bar). HeroUI draws them on `--overlay` and `--surface` (L 0.21), darker than the content
    panel, so a menu sinks into the sidebar under it. Here they are drawn on `--floating`, a step lighter than the panel,
-   as a white surface sits over the light window, and every level follows light ratio for ratio: the surface 1.11:1 over
-   `--panel` and 1.02:1 over `--panel-sidebar` (white 1.11:1 over the light sidebar and 1.04:1 over the light panel);
-   the `--default` family 1.24:1 resting and 1.39:1 hovered (light's control fill 1.27:1 and 1.39:1); `--border` and
-   `--separator`, the edge of HeroUI's outline button, its tab list and its menu dividers, 1.36:1 (light 1.35:1);
-   HeroUI's secondary `Surface` (`--surface-secondary`), the recessed frame of raw diagnostics, a confirmation's branch
-   list, licence texts and the file viewer's checkerboard, 1.14:1 below the surface (light 1.15:1). Every floating
-   surface is the one colour, as in light, so one over another (a tooltip over a menu, a confirmation over Settings) is
-   set apart by `--overlay-shadow`. A deliberate departure from HeroUI's look, kept in docs/ui-accessibility.md's
-   "Confirmed visual choices" section; light keeps HeroUI's own.
+   as a white surface sits over the light window, and every level keeps light's step: the surface's over `--panel` and
+   `--panel-sidebar`, the `--default` family's resting and hovered, `--border` and `--separator` (the edge of HeroUI's
+   outline button, its tab list and its menu dividers), and HeroUI's secondary `Surface` (`--surface-secondary`, the
+   recessed frame of raw diagnostics, a confirmation's branch list, licence texts and the file viewer's checkerboard)
+   below the surface. Every floating surface is the one colour, as in light, so one over another (a tooltip over a menu,
+   a confirmation over Settings) is set apart by `--overlay-shadow`. A deliberate departure from HeroUI's look, kept in
+   docs/ui-accessibility.md's "Confirmed visual choices" section; light keeps HeroUI's own.
 
    The step is small because HeroUI's `--muted` on a fill that holds secondary text (a placeholder, a menu item's
    description under the pointer) keeps 4.5:1 only up to L 0.335, the resting fill; on the hovered fill it is 4.05:1.
@@ -1614,8 +1598,8 @@ html.pane-resizing * {
 }
 /* A chip is drawn from the shared tints (`--tint-*` above, also the badge's): its fill and text are `--tint-{colour}-bg`
    and `--tint-{colour}-fg` for the colour it carries, an alert's included, and it never takes the hairline (the neutral
-   text is HeroUI's `--default-foreground`). HeroUI's soft default is half of `--default` over the surface, 1.09:1 on a
-   light card and 1.08:1 on a dark one, which does not read as a tag. Only the colours are set here: the shape is
+   text is HeroUI's `--default-foreground`). HeroUI's soft default is half of `--default` over the surface, hardly off a
+   card in either appearance, which does not read as a tag. Only the colours are set here: the shape is
    HeroUI's and the size follows the text (above). */
 .inline-reference.chip--soft[data-color="default"] { --chip-bg: var(--tint-default-bg); --chip-fg: var(--default-foreground); }
 .inline-reference.chip--soft[data-color="accent"] { --chip-bg: var(--tint-accent-bg); --chip-fg: var(--tint-accent-fg); }

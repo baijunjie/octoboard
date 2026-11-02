@@ -30,6 +30,12 @@ it dwindles to the exit speck; on a 2x display only that last speck does. The la
 always at full contrast, and the static glyph shown under reduced motion is unaffected. Keeping the stroke at full
 weight instead would change the look the user confirmed. (Source: user decision.)
 
+Contrast figures are recorded only where they show a threshold is met (especially a minimum close to it), record an
+accepted shortfall, or show why a value was chosen against a threshold. Decorative fills, tints, edges and surface
+steps that are not held to a threshold are described in words, not measured figures: such a figure drifts whenever a
+token changes, and no conclusion rests on it. A recorded ratio is taken as "Auditing a change to a colour token or a
+surface" describes.
+
 ### Confirmed visual choices
 
 #### One definition per semantic colour
@@ -112,8 +118,7 @@ instead of a token) and an edge, which both components read, so a chip and a bad
 coloured fill is HeroUI's `--{colour}-soft`, its edge the solid `--{colour}` mixed down (HeroUI has no border token);
 the neutral fill is the foreground at 8% in light and 10% in dark, translucent like the coloured ones, so it is close to
 HeroUI's `--default` over white and deepens on a grey surface (a hovered or selected row) instead of vanishing
-into it, 1.17:1 to 1.18:1 off a light surface and 1.22:1 to 1.36:1 off a dark one. Its edge is the secondary text colour
-at 28%. Only the bordered badge draws the edge; a chip never has one.
+into it. Its edge is the secondary text colour at 28%. Only the bordered badge draws the edge; a chip never has one.
 
 Every colour and variant keeps at least 4.5:1 for its text on every surface it sits on (fields, dialogs, popovers,
 tooltips, sidebar rows and cards), measured as drawn over each surface; where HeroUI's soft foreground falls short on
@@ -177,17 +182,17 @@ In dark, every floating surface — a dialog, a menu or submenu, a select's or c
 what is drawn as one (the touch and hint popovers, the rail's account quota panel), a toast, and a bar floating over the
 terminal (a session's without a process and the exited shell's) — is drawn on the project's `--floating`, by the user's
 decision, instead of HeroUI's `--overlay` and `--surface`, which are darker than the content panel and sink a menu into
-the sidebar under it. The dark levels follow light's ratio for ratio, where every floating surface is white: the surface
-is 1.11:1 over the panel and 1.02:1 over the sidebar (white: 1.11:1 over the light sidebar, 1.04:1 over the light
-panel); the `--default` family on it is 1.24:1 resting and 1.39:1 hovered (light's control fill: 1.27:1 and 1.39:1);
-`--border` and `--separator`, which HeroUI's outline button, tab list and menu dividers draw with, are 1.36:1 (light:
-1.35:1); HeroUI's secondary `Surface`, the recessed frame of raw diagnostics, a confirmation's branch list, licence
-texts and the file viewer's checkerboard, is 1.14:1 below it (light: 1.15:1). All floating surfaces share the one
-colour, as in light, so one over another — a tooltip over a menu or a dialog, a confirmation over Settings, a status
-mark's popover over the quota panel — is set apart by its edge: dark `--overlay-shadow` is a hairline and a drop shadow
-instead of HeroUI's faint inset line. The rule is the floating-surface rule in `packages/ui/src/style.css`, which lists
-the surfaces; a new kind of floating surface joins that list (a bar of the app's own takes its `floating-surface` class,
-which in dark also gives it that edge). Light keeps HeroUI's own surfaces and shadows.
+the sidebar under it. The dark levels follow light's step for step, where every floating surface is white: the surface
+stands off the panel and the sidebar as white does off the light ones; the `--default` family on it, resting and
+hovered, steps as light's control fill does; `--border` and `--separator`, which HeroUI's outline button, tab list and
+menu dividers draw with, match light's; HeroUI's secondary `Surface`, the recessed frame of raw diagnostics, a
+confirmation's branch list, licence texts and the file viewer's checkerboard, sits a step below it. All floating
+surfaces share the one colour, as in light, so one over another — a tooltip over a menu or a dialog, a confirmation
+over Settings, a status mark's popover over the quota panel — is set apart by its edge: dark `--overlay-shadow` is a
+hairline and a drop shadow instead of HeroUI's faint inset line. The rule is the floating-surface rule in
+`packages/ui/src/style.css`, which lists the surfaces; a new kind of floating surface joins that list (a bar of the
+app's own takes its `floating-surface` class, which in dark also gives it that edge). Light keeps HeroUI's own
+surfaces and shadows.
 
 The step is held small by HeroUI's `--muted`, which keeps 4.5:1 on a fill holding secondary text (a placeholder, a menu
 item's description under the pointer) only up to that resting fill. The user accepted the shortfalls the lighter ground
@@ -198,10 +203,10 @@ label still says what it does; a secondary button's label is 4.32:1 on its hover
 
 A tooltip or popover is portalled to the end of `<body>`, so it never inherits the `.control-fills` that the pane or
 dialog around its trigger carries, and a control drawn from `--default` inside it, a secondary button or a ghost
-button's hover, would sit at about 1.19:1 against its `--overlay` surface. The shared tooltip and popover components
+button's hover, would land almost on its `--overlay` surface. The shared tooltip and popover components
 (`IndicatorTooltip`, `AnchoredTooltip`, `TitledControl`, and the touch popover they open, which is drawn as a tooltip)
-therefore carry `control-fills` themselves, giving 1.27:1 in light; in dark the floating-surface rule above sets the
-fills itself (1.24:1). A new tooltip or popover that can hold a control drawn from `--default` carries `control-fills`
+therefore carry `control-fills` themselves, giving a step in light; in dark the floating-surface rule above sets
+the fills itself. A new tooltip or popover that can hold a control drawn from `--default` carries `control-fills`
 too. In light the project filter's popover keeps HeroUI's own fills: it holds a search field, and the remap would leave
 the field's `--field-border` and `--field-focus`, computed from the root's `--default`, no longer matching its fill. In
 dark it takes the floating fills like every floating surface: the secondary search field draws every state from the
@@ -1809,9 +1814,9 @@ instead: the `panel-edge` hairline round the card and a groove between rows, wit
 dialog's own background. A card's header row (`CARD_HEADER_CLASS`, the same file) takes the fill of the fields in the
 rows (`--control-fill`, the dialog's floating fill), so the heading reads apart from the rows under it in both
 appearances; no field sits in a header, so the shared fill hides nothing. That fill and the hairline are decorative and
-not held to 3:1 (about 1.25:1 off the dialog in both appearances); the header's text and glyphs are held to their usual
-ratios against it, the muted project count being the closest at about 4.6:1. These fills stay in the import dialog: the
-dialog's surface and HeroUI's controls are not restyled for them.
+not held to 3:1; the header's text and glyphs are held to their usual ratios against it, the muted project count
+being the closest at about 4.6:1. These fills stay in the import dialog: the dialog's surface and HeroUI's controls
+are not restyled for them.
 
 An unarchived locked session communicates its state through a persistent warning-coloured lock button with an Unlock
 accessible name and tooltip. Hovering or keyboard-focusing the button changes the glyph to an open lock; unlocking
@@ -1820,12 +1825,11 @@ hands keyboard focus to the row before the button disappears. Keyboard focus kee
 Focus-mode session cards lie on `--panel-row`, as the Processes panel's cards do (below), over the sidebar's
 `--panel-sidebar`. A row's `--panel-hover` / `--panel-selected` would darken a light card back towards the sidebar's
 grey, so a card takes its own fills, `--panel-row-hover` and `--panel-row-selected` (`.panel-row-fills`): a faint tint
-for hover, and an accent tint for selected, which reads by hue and by the accent border rather than by luminance
-(light: 1.05:1 and 1.03:1 off the sidebar; dark: 1.22:1 and 1.23:1). Neither fill is held to 3:1: hover is a hover
-tint, and the selected state is carried by the accent border. `--app-muted` text holds 4.5:1 on each in both
-appearances (lowest 4.65:1, dark selected), and the "⋯" button's translucent fills stack on them at the same ratios as
-on the card at rest. Their titles use the shared single-line fading label, including its full-name tooltip and hover
-marquee, rather than an ellipsis or a line clamp.
+for hover, and an accent tint for selected, which reads by hue and by the accent border rather than by luminance.
+Neither fill is held to 3:1: hover is a hover tint, and the selected state is carried by the accent border.
+`--app-muted` text holds 4.5:1 on each in both appearances (lowest 4.65:1, dark selected), and the "⋯" button's
+translucent fills stack on them as they do on the card at rest. Their titles use the shared single-line fading label,
+including its full-name tooltip and hover marquee, rather than an ellipsis or a line clamp.
 
 The Processes panel's process cards are hand-built on `--panel-row`: the surface (white) in light, and in dark
 `oklch(0.29 0.006 286)`, one step above the panel's `oklch(0.27)` so the card still reads as raised, with the panel
@@ -1860,7 +1864,7 @@ panel, the account details and the usage-reset confirmation — carries its mean
 from assistive technology, and the option's description or the cell's hidden text states the remaining usage; a meter
 states it in its own accessible name and value, while its drawn headline is hidden. Its track is `--default`, which
 inside `.control-fills` (Settings, the dialogs, the rail panel) is `--control-fill`; in dark the compact bar's
-`.quota-bar-track` is a step lighter than its `--default`, so it can be seen on a dark popover (1.86:1 off it). The
+`.quota-bar-track` is a step lighter than its `--default`, so it can be seen on a dark popover. The
 track is not held to 3:1 against its surface. The fill's agent colour is kept at 3:1 or better against every track it is
 drawn on at full opacity, in both appearances, though nothing requires it: a bar's state never rests on its colour
 alone. The grey of a used-up account is not: it is meant to recede, a step fainter than the agent colours, and its badge
