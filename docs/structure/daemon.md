@@ -184,7 +184,7 @@ the rest of its type is read as production code, which can only add an edge, nev
 | `protocol` | `accounts` | types | a sharing failure goes on the wire in the types account sharing reports it in |
 | `protocol` | `config_document` | types | the configuration document and its import's findings go on the wire as the types export and import build |
 | `protocol` | `git_workflow` | types | the Git workflow settings and overrides go on the wire as the types `git_workflow` resolves |
-| `protocol` | `processes` | types | a process tree goes on the wire as the ledger's own `ProcessTree` |
+| `protocol` | `processes` | types | a process tree and a project's or console session's count go on the wire as the ledger's own `ProcessTree` and `ProcessCount` |
 | `protocol` | `titles` | types | a session record carries the titles read off its agent's records as `RecordTitles` |
 | `git` | `browse` | `budget::GIT_READ_TIMEOUT`, `budget::GIT_STDERR` | `IsolatedGit` is bounded by browse's read budgets, which keep every read limit in one place |
 | `processes` | `state` | types | `processes::requests` answers the clients' process requests off `AppState` |

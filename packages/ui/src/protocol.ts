@@ -105,6 +105,17 @@ export interface ProcessTree {
   ports: number[];
 }
 
+/** How many trees there are under one project, or for one console session; exactly one of `project_id` and
+ * `session_id` is set. */
+export interface ProcessCount {
+  /** The project the trees are listed under; absent for a console session. */
+  project_id?: string;
+  /** The console session whose trees these are; absent for a project. */
+  session_id?: string;
+  /** How many trees, at least one. */
+  trees: number;
+}
+
 /** A bound item a request forces or keeps, named as its `SessionBranchItem` names it and in the
  * state the user was shown it in: a forced removal goes only while it still stands so. */
 export interface SessionBranchTarget {
@@ -1605,6 +1616,8 @@ export type RequestBody =
    * session of the project, then the project's processes: its leftovers and the trees kept under it. */
   | { type: "list_processes"; session_id: string }
   | { type: "list_processes"; project_id: string }
+  /** How many process trees each project and each console session has. */
+  | { type: "list_all_processes" }
   /** Stops the trees that are still a followed launch's, a project's leftovers or kept trees. */
   | { type: "stop_processes"; ids: string[] }
   /** Makes the trees the user's: no session stops them, and the daemon stops them only when a
@@ -1874,6 +1887,7 @@ export type Event =
   | { type: "session_branches_inspected"; id: string | null; items: SessionBranchItem[]; processes?: ProcessTree[] }
   | { type: "account_trash_inspected"; id: string | null; outcome: AccountTrashOutcome }
   | { type: "processes_listed"; id: string | null; trees: ProcessTree[] }
+  | { type: "all_processes_listed"; id: string | null; counts: ProcessCount[] }
   /** `ids` are the trees that were stopped. */
   | { type: "processes_stopped"; id: string | null; ids: string[] }
   /** `ids` are the trees that were kept. */

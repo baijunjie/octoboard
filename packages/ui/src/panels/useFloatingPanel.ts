@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 
-import { focusLanding, focusLandingWithoutText, focusTopBar } from "../components/focus/regionFocus";
-import { interactionIsTouch } from "../input/touchInput";
-import { OWNER_KINDS, panelId, shownKinds, type OwnerKind, type PanelStacks } from "./stackState";
+import { focusTopBar } from "../components/focus/regionFocus";
+import { landInPanel } from "./panelLanding";
+import { OWNER_KINDS, shownKinds, type OwnerKind, type PanelStacks } from "./stackState";
 import type { PanelKind } from "../layout/panelKind";
 
 type Kinds = Partial<Record<OwnerKind, PanelKind>>;
@@ -83,25 +83,7 @@ export function useFloatingPanel({
 
   // Each `open` asks once, whether or not the kind it floats was already floating.
   const [focusRequest, setFocusRequest] = useState<{ kind: PanelKind }>();
-  useEffect(() => {
-    if (!focusRequest) return;
-    const card = document.getElementById(panelId(focusRequest.kind));
-    // Opened by a tap, it lands where no on-screen keyboard is raised (`interactionIsTouch`).
-    const land = interactionIsTouch() ? focusLandingWithoutText : focusLanding;
-    if (!card || land(card)) return;
-    // Focus the user moves elsewhere meanwhile stays there. Focus that only fell to `<body>`, as it
-    // does from the agent terminal the panel has just made inert, was moved by no one.
-    const from = document.activeElement;
-    const movedByUser = () => {
-      const active = document.activeElement;
-      return active !== from && active !== document.body && active !== null;
-    };
-    const observer = new MutationObserver(() => {
-      if (movedByUser() || land(card)) observer.disconnect();
-    });
-    observer.observe(card, { childList: true, subtree: true });
-    return () => observer.disconnect();
-  }, [focusRequest]);
+  useEffect(() => (focusRequest ? landInPanel(focusRequest.kind) : undefined), [focusRequest]);
 
   const shown = kind !== undefined;
   const layout = useRef({ shown, floats });

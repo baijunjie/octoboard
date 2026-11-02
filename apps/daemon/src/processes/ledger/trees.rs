@@ -53,6 +53,24 @@ pub struct ProcessTree {
     pub ports: Vec<u16>,
 }
 
+/// How many trees there are under one project, or for one console session, in the count of
+/// every project's and console session's trees. It names a project or a console session, never
+/// both.
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ProcessCount {
+    /// The project the trees are listed under; absent for a console session.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub project_id: Option<String>,
+    /// The console session whose trees these are; absent for a project.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub session_id: Option<String>,
+    /// How many trees, at least one.
+    pub trees: usize,
+}
+
 /// Why [`ProcessLedger::move_trees`] moved nothing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MoveRefused {
@@ -124,6 +142,74 @@ impl ProcessLedger {
                 .map(|(top, members, kept)| describe(top, &members, None, kept)),
         );
         trees
+    }
+
+    /// How many trees each project and each console session has, from one read of the table and
+    /// without describing any tree: one entry per project of `projects` (by id, in this order,
+    /// with its directory when it is local) that has any, then one per console session of
+    /// `sessions` (by id, with its project, `None` for a console session) that has any. A
+    /// project's trees are those of its sessions' launches, the ones left behind in its directory
+    /// and the ones kept under it. **Blocks.**
+    pub fn trees_counted(
+        &self,
+        sessions: &[(String, Option<String>)],
+        projects: &[(String, Option<PathBuf>)],
+    ) -> Vec<ProcessCount> {
+        let Some(table) = self.scan(false) else {
+            return Vec::new();
+        };
+        let ids: Vec<String> = sessions.iter().map(|(id, _)| id.clone()).collect();
+        let mut by_project: HashMap<String, usize> = HashMap::new();
+        let mut by_console: HashMap<String, usize> = HashMap::new();
+        for (session, _, _) in self.session_tops(&table, &ids) {
+            match sessions.iter().find(|(id, _)| *id == session) {
+                Some((_, Some(project))) => *by_project.entry(project.clone()).or_default() += 1,
+                Some((id, None)) => *by_console.entry(id.clone()).or_default() += 1,
+                None => {}
+            }
+        }
+        let local: Vec<(String, PathBuf)> = projects
+            .iter()
+            .filter_map(|(id, dir)| dir.clone().map(|dir| (id.clone(), dir)))
+            .collect();
+        if !local.is_empty() {
+            let dirs: Vec<PathBuf> = local.iter().map(|(_, dir)| dir.clone()).collect();
+            let members = self.leftover_members(&table, &dirs);
+            for (top, _) in group(&members, &table) {
+                let project = table::cwd(top).and_then(|cwd| project_of_dir(&cwd.path, &local));
+                if let Some(project) = project {
+                    *by_project.entry(project).or_default() += 1;
+                }
+            }
+        }
+        let kept = self.kept_members(&table, None);
+        {
+            let book = self.book();
+            for (_, members) in group(&kept, &table) {
+                let Some(project) = members
+                    .iter()
+                    .find_map(|member| book.kept_projects.get(member))
+                else {
+                    continue;
+                };
+                *by_project.entry(project.clone()).or_default() += 1;
+            }
+        }
+        let of_projects = projects.iter().filter_map(|(id, _)| {
+            Some(ProcessCount {
+                project_id: Some(id.clone()),
+                session_id: None,
+                trees: by_project.get(id).copied()?,
+            })
+        });
+        let of_consoles = sessions.iter().filter_map(|(id, _)| {
+            Some(ProcessCount {
+                project_id: None,
+                session_id: Some(id.clone()),
+                trees: by_console.get(id).copied()?,
+            })
+        });
+        of_projects.chain(of_consoles).collect()
     }
 
     /// The trees listed for a client under `key` less than `floor` ago, unless a stop, a keep or
@@ -363,6 +449,33 @@ impl ProcessLedger {
         Ok(moves.into_iter().map(|(id, _)| id).collect())
     }
 
+    /// The tops of the trees of `sessions` in `table`, each with its session and members.
+    fn session_tops(
+        &self,
+        table: &Table,
+        sessions: &[String],
+    ) -> Vec<(String, Identity, Vec<Identity>)> {
+        let launches = self.launch_trees(table);
+        let mut found: Vec<(String, Identity, Vec<Identity>)> = Vec::new();
+        let book = self.book();
+        for (launch, trees) in launches {
+            let Some(session) = book
+                .launches
+                .get(&launch)
+                .and_then(|launch| launch.session_id.as_ref())
+                .filter(|session| sessions.contains(session))
+            else {
+                continue;
+            };
+            found.extend(
+                trees
+                    .into_iter()
+                    .map(|(top, members)| (session.clone(), top, members)),
+            );
+        }
+        found
+    }
+
     /// The trees of `sessions` in `table` (see [`Self::trees_of_sessions`]), every one of them
     /// remembered whatever its age.
     fn session_trees(
@@ -371,26 +484,7 @@ impl ProcessLedger {
         sessions: &[String],
         min_age: Duration,
     ) -> Vec<ProcessTree> {
-        let launches = self.launch_trees(table);
-        let mut found: Vec<(String, Identity, Vec<Identity>)> = Vec::new();
-        {
-            let book = self.book();
-            for (launch, trees) in launches {
-                let Some(session) = book
-                    .launches
-                    .get(&launch)
-                    .and_then(|launch| launch.session_id.as_ref())
-                    .filter(|session| sessions.contains(session))
-                else {
-                    continue;
-                };
-                found.extend(
-                    trees
-                        .into_iter()
-                        .map(|(top, members)| (session.clone(), top, members)),
-                );
-            }
-        }
+        let mut found = self.session_tops(table, sessions);
         self.remember(
             found
                 .iter()

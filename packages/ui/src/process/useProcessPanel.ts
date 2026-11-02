@@ -2,7 +2,8 @@ import { createContext, useContext, useState } from "react";
 
 import { ownerKey, type AsideOwner } from "../layout/asideOwner";
 import { useSession } from "../store";
-import { useProcessTrees, type ProcessPolling } from "./useProcessTrees";
+import type { ProcessPolling } from "./usePolled";
+import { useProcessTrees } from "./useProcessTrees";
 
 /** The project filter follows a changed sidebar selection, while a manual choice lasts until that
  * selection changes again. The owner is part of the key so a previous owner's list is never shown. */

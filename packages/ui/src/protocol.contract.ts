@@ -116,6 +116,7 @@ export type Checked = [
   Assert<Equals<P.PathLinkKind, G.PathLinkKind>>,
   Assert<Equals<P.PathLinkView, G.PathLinkView>>,
   Assert<Equals<P.PerAgent<Probe>, G.PerAgent<Probe>>>,
+  Assert<Equals<P.ProcessCount, G.ProcessCount>>,
   Assert<Equals<P.ProcessTree, G.ProcessTree>>,
   Assert<Equals<P.Project, G.Project>>,
   Assert<Equals<P.ProjectAccount, G.ProjectAccount>>,

@@ -52,27 +52,28 @@ export interface NoticeToastFixture {
 export type AccountTrashAnswer = AccountTrashOutcome | FixtureError | "pending";
 
 /** The daemon's process ledger as a scenario sets it, for the Processes panel and the archive
- * confirmation's stop options (`fixtureDaemon.ts` answers `list_processes`, `stop_processes`,
- * `keep_processes` and the processes of `inspect_session_branches` from it). Stopping a tree, a project process
- * included, takes it out of the list the panel reads; keeping a session's tree makes it a kept project process, which
- * stays listed, and archiving a session ends its trees but the ones kept. */
+ * confirmation's stop options (`fixtureDaemon.ts` answers `list_processes`, `list_all_processes` (the rail's counts of
+ * every project's), `stop_processes`, `keep_processes` and the processes of `inspect_session_branches` from it).
+ * Stopping a tree, a project process included, takes it out of the list the panel reads; keeping a session's tree
+ * makes it a kept project process, which stays listed, and archiving a session ends its trees but the ones kept. */
 export interface ProcessesFixture {
   /** The trees of running launches, each naming its session. A session that is not running has no
    * process, so its trees are never listed. */
   trees?: (ProcessTree & { session_id: string })[];
   /** The project processes of a project, by project id: trees no session owns, kept ones and ones left behind in a
-   * removed directory, which a project's removal stops. */
+   * removed directory, which a project's removal stops. A project the state does not have stands in for a removed one,
+   * which the daemon leaves out of its counts: such a project's trees are counted by no request. */
   projectProcesses?: Record<string, Omit<ProcessTree, "session_id">[]>;
-  /** What `list_processes` answers instead of the trees: `"pending"` is a list that is never answered
-   * (the panel's loading line), an error one the daemon refuses. */
+  /** What `list_processes` and `list_all_processes` answer instead of the trees: `"pending"` is a list that is never
+   * answered (the panel's loading line; the rail has no button until it is), an error one the daemon refuses. */
   list?: "pending" | FixtureError;
   /** What `list_processes` answers for a project's own list (the request a removal confirmation makes per project)
    * instead of its trees, by project id: the refusal, while the other projects' lists, and the session lists, are
    * answered as usual. */
   projectList?: Record<string, FixtureError>;
-  /** What `list_processes` answers instead of the trees once a second has passed since the first ask: the list is
-   * answered at first and its next poll (the panel asks again every few seconds while it is on screen) is refused, so
-   * the panel shows the trees with the refresh failure over them. */
+  /** What `list_processes` and `list_all_processes` answer instead of the trees once a second has passed since the
+   * first ask of each: the list is answered at first and its next poll (the panel, and the rail's list while it is
+   * open, ask again every few seconds) is refused, so the panel shows the trees with the refresh failure over them. */
   listLater?: FixtureError;
   /** What `stop_processes` answers instead of stopping: never answered, or refused. */
   stop?: "pending" | FixtureError;

@@ -5,7 +5,12 @@ import { useT } from "../../i18n/react";
 import { Button } from "../controls/Button";
 import { DiagnosticBlock } from "../alerts/DiagnosticBlock";
 import { Hint } from "../hint/Hint";
+import { usePopoverOwnerProps } from "../hint/popoverOwner";
 import { FadedScroller, useFadeRegion } from "../scroll/scrollFade";
+
+/** Marks the popover of a status mark, so that a panel it is shown from can tell it is part of that panel: it is
+ * portalled out of it (`PopoverOwnerContext` names the panel). */
+export const STATUS_MARK_POPOVER = "[data-status-mark-popover]";
 
 /** What a mark says: an error, a warning, or a note that is neither. */
 export type MarkTone = "danger" | "warning" | "note";
@@ -143,6 +148,7 @@ function PopoverMark({
   children?: React.ReactNode;
 }): React.ReactElement {
   const t = useT();
+  const owner = usePopoverOwnerProps();
   // No body of its own: the label (or `line`, its richer form) is the one line of reason. It cannot also
   // name the popover, or a screen reader would say it as the dialog's name and again as its content, so
   // the tone does.
@@ -155,7 +161,7 @@ function PopoverMark({
   const handBackToHeading = ({ wasPressed, trigger }: { wasPressed: boolean; trigger: HTMLElement | null }) => {
     if (!wasPressed || !inHeader) return;
     const band = trigger?.closest("[role=row]")?.querySelector<HTMLElement>("[data-section-heading]");
-    const popovers = [...document.querySelectorAll("[data-status-mark-popover]")];
+    const popovers = [...document.querySelectorAll(STATUS_MARK_POPOVER)];
     requestAnimationFrame(() => requestAnimationFrame(() => {
       const active = document.activeElement;
       const unclaimed = !active || active === document.body || active === trigger || popovers.some((popover) => popover.contains(active));
@@ -171,7 +177,7 @@ function PopoverMark({
       // inside (`MarkBody`), above the actions.
       contentClassName={plain ? undefined : "flex flex-col"}
       bodyClassName={plain ? undefined : "flex min-h-0 flex-col gap-2"}
-      contentProps={{ "data-status-mark-popover": "", ...(markId && { "data-status-mark-id": markId }) }}
+      contentProps={{ "data-status-mark-popover": "", ...owner, ...(markId && { "data-status-mark-id": markId }) }}
       onClosed={handBackToHeading}
       trigger={({ onMouseHoverChange: _, expanded: __, popupId: ___, ...wiring }) => (
         <MarkButton {...wiring} {...header} data-status-mark-id={markId} label={label} glyph={glyph} inline={inline} text={text} />

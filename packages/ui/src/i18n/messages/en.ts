@@ -872,6 +872,11 @@ export const en = {
     other: "{count} sessions are waiting for you. Go to the next one.",
   },
   "rail.waitingBadgeOverflow": "99+",
+  "rail.countBadgeOverflow": "99+",
+  "rail.processes": {
+    one: "{count} process is running. Show where it runs.",
+    other: "{count} processes are running. Show where they run.",
+  },
   "rail.notifications.enable": "Turn on notifications",
   "rail.quota": "Account usage",
   "rail.quota.selected": "Account usage: {agent}, {account}, {quota}",
@@ -2800,6 +2805,15 @@ export const en = {
   "processes.project": "Project processes",
   "processes.project.note": "These processes belong to no session. They are never stopped automatically; only you can stop them.",
   "processes.sessionUnknown": "Unknown session",
+  "processes.global.show": {
+    one: "{name} has {count} process running. Show the processes panel.",
+    other: "{name} has {count} processes running. Show the processes panel.",
+  },
+  "processes.global.showIn": {
+    one: "{name} in {console} has {count} process running. Show the processes panel.",
+    other: "{name} in {console} has {count} processes running. Show the processes panel.",
+  },
+  "processes.global.refreshFailed": "The counts shown may be out of date.",
   "processes.commandUnknown": "Unknown command",
   "processes.cwdUnknown": "Working directory unknown",
   "processes.cwdDeleted": "Directory deleted",
@@ -2810,9 +2824,9 @@ export const en = {
   },
   "processes.started": "started {age}",
   "processes.startedNow": "started just now",
-  "processes.count": {
-    one: "{count} process",
-    other: "{count} processes",
+  "processes.childCount": {
+    one: "{count} child process",
+    other: "{count} child processes",
   },
   "processes.stop": "Stop",
   "processes.stopNamed": "Stop {command}",

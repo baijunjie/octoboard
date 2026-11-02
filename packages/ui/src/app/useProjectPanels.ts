@@ -9,8 +9,9 @@ import type { ProjectPanelKind } from "../sidebar/types";
 import { useDaemon } from "../store";
 import { startShellTerminal } from "../terminal/shell/shellTerminals";
 
-/** Opening a project's panel from the sidebar, as its top-bar toggle opens it, and a shell terminal in one of its
- * folders. Both are one function for good, for the sidebar's rows and the project browser's row actions. */
+/** Opening a panel of the aside's owner (a project, or a console session's report), a project's as its top-bar toggle
+ * opens it, and a shell terminal in one of a project's folders. Each is one function for good, for the sidebar's rows,
+ * the project browser's row actions and the global process list. */
 export function useProjectPanels({
   setOwnerByUser,
   asideFloats,
@@ -35,14 +36,14 @@ export function useProjectPanels({
   showAllOf: (projectId: string) => void;
 }) {
   const daemon = useDaemon();
-  /** Puts a project's `kind` panel on screen: the project owns the aside, and the panel opens
-   * docked, or floating in a narrow window (a maximized panel stays maximized), without selecting or
-   * starting any session: the terminal beside it stays as it is. */
-  const showProjectPanel = (project: string, kind: ProjectPanelKind) => {
-    setOwnerByUser({ kind: "project", project });
-    if (asideFloats) return openFloating("project", kind);
-    setPanelStack("project", openPanel(panelStacks.project, kind, OWNER_KINDS.project));
-    noteOpened("project", kind);
+  /** Puts the `kind` panel of the aside's `owner` (a project, or a console session's report) on screen: the owner owns
+   * the aside, and the panel opens docked, or floating in a narrow window (a maximized panel stays maximized),
+   * without selecting or starting any session: the terminal beside it stays as it is. */
+  const showPanel = (owner: AsideOwner, kind: PanelKind) => {
+    setOwnerByUser(owner);
+    if (asideFloats) return openFloating(owner.kind, kind);
+    setPanelStack(owner.kind, openPanel(panelStacks[owner.kind], kind, OWNER_KINDS[owner.kind]));
+    noteOpened(owner.kind, kind);
     // The sidebar's drawer in a narrow window covers what was asked for.
     if (sidebarOpen) closeSidebar();
   };
@@ -53,18 +54,19 @@ export function useProjectPanels({
     if (kind === "files") setProjectBrowserMode(project.id, "files");
     // Every session's processes, not those of the selected session the panel would follow.
     if (kind === "processes") showAllOf(project.id);
-    showProjectPanel(project.id, kind);
+    showPanel({ kind: "project", project: project.id }, kind);
     if (kind === "terminal") void startShellTerminal(daemon, project.id, { ifNone: true });
   };
 
   /** Shows a project's Terminal panel and starts a new shell terminal in the folder, which
    * becomes the shown tab and takes focus. */
   const openShellTerminal = ({ project, worktree, path }: HostPath) => {
-    showProjectPanel(project, "terminal");
+    showPanel({ kind: "project", project }, "terminal");
     void startShellTerminal(daemon, project, { place: { ...(worktree !== undefined && { worktree }), path }, focus: true });
   };
 
   const stableOpenProjectPanel = useStableHandler(openProjectPanel);
   const stableOpenShellTerminal = useStableHandler(openShellTerminal);
-  return { stableOpenProjectPanel, stableOpenShellTerminal };
+  const stableShowPanel = useStableHandler(showPanel);
+  return { stableOpenProjectPanel, stableOpenShellTerminal, stableShowPanel };
 }

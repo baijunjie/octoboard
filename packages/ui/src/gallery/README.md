@@ -26,10 +26,12 @@ which resets the dev app's `octoboard.*` preferences (hence port 5175 for `pnpm 
   optional staging of the fixture daemon and platform (errors, never-answered requests, an updater, permissions, a
   clipboard, a terminal behaviour, and so on, each documented where it is declared), `steps` that reach component-local
   state the way a user does, and `liveChanges`.
-- The page sets `data-gallery-ready` on `<html>` once its steps have run, its own toasts have been raised and finite
-  animations have ended; automation waits on it before capturing. A failure of the gallery's own machinery (a step that
-  threw, a fixture that cannot be answered as the real daemon would, an exit transition that never ends) is painted over
-  the page as a `[data-gallery-failure]` overlay (`packages/ui/src/fixtures/banner.ts`); check a capture for it.
+- The frame page (`gallery-frame.html`, run by `frame.tsx`) sets `data-gallery-ready` on its `<html>` once its steps have
+  run, its own toasts have been raised and finite animations have ended; the shell (`gallery.html`, `shell.tsx`) only
+  reads it from its iframe and never sets it, so automation waits on it by opening the frame URL directly, and
+  captures only after it. A failure of the gallery's own machinery (a step that threw, a fixture that cannot be answered
+  as the real daemon would, an exit transition that never ends) is painted over the page as a `[data-gallery-failure]` overlay
+  (`packages/ui/src/fixtures/banner.ts`); check a capture for it.
 - `chrome=1` in a frame URL gives the page the desktop window's `windowChrome` capability, so what only the desktop app
   offers can be driven in a browser. A scenario's `desktopApp` gives it that and the native menu bar as well, for a view
   that exists only in the app (the full Keyboard shortcuts list). Which keys are drawn (⌘ or Ctrl) and whether Back and

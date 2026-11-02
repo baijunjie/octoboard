@@ -774,6 +774,10 @@ export const zhHans: Translation<"other"> = {
     other: "有 {count} 个会话在等你。前往下一个。",
   },
   "rail.waitingBadgeOverflow": "99+",
+  "rail.countBadgeOverflow": "99+",
+  "rail.processes": {
+    other: "有 {count} 个进程在运行。查看它们在哪里运行。",
+  },
   "rail.notifications.enable": "开启通知",
   "rail.quota": "账户用量",
   "rail.quota.selected": "账户用量：{agent}，{account}，{quota}",
@@ -2574,6 +2578,13 @@ export const zhHans: Translation<"other"> = {
   "processes.project": "项目进程",
   "processes.project.note": "这些进程不属于任何会话，不会被自动停止，只能由你来停止。",
   "processes.sessionUnknown": "未知会话",
+  "processes.global.show": {
+    other: "{name} 有 {count} 个进程在运行。显示进程面板。",
+  },
+  "processes.global.showIn": {
+    other: "{name}（{console}）有 {count} 个进程在运行。显示进程面板。",
+  },
+  "processes.global.refreshFailed": "显示的数量可能已过时。",
   "processes.commandUnknown": "未知命令",
   "processes.cwdUnknown": "工作目录未知",
   "processes.cwdDeleted": "目录已删除",
@@ -2583,8 +2594,8 @@ export const zhHans: Translation<"other"> = {
   },
   "processes.started": "{age}启动",
   "processes.startedNow": "刚刚启动",
-  "processes.count": {
-    other: "{count} 个进程",
+  "processes.childCount": {
+    other: "含 {count} 个子进程",
   },
   "processes.stop": "停止",
   "processes.stopNamed": "停止 {command}",

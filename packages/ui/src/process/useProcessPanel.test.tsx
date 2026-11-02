@@ -8,7 +8,7 @@ import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import type { AsideOwner } from "../layout/asideOwner";
 import type { Event, ProcessTree, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
-import type { ProcessPolling } from "./useProcessTrees";
+import type { ProcessPolling } from "./usePolled";
 import { useProcessPanel } from "./useProcessPanel";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

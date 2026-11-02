@@ -66,6 +66,7 @@ Once it holds more than it can show, each of these fades at its edge:
   the project list" in `docs/product/sidebar.md`);
 - the list of accounts in the **rail's account quota panel** (see "What the panel shows" in
   `docs/product/account-quota-panel.md`);
+- the **rail's Processes popover** (see "The rows" in `docs/product/processes-on-the-rail.md`);
 - the **directory browser's** list of directories (see "Browsing directories" in
   `docs/product/projects.md`);
 - the **update notice's release notes** (see "A newer version is available" in `docs/product/in-app-updates.md`);

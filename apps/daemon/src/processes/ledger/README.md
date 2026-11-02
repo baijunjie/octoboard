@@ -39,6 +39,8 @@ process-table readers.
 - `ProcessLedger::reconcile` — reconcile persisted attribution with the running process table.
 - `ProcessLedger::trees_of_sessions`, `ProcessLedger::trees_of_project`, `ProcessTree` — produce the process-tree
   listings consumed by session and project requests.
+- `ProcessLedger::trees_counted`, `ProcessCount` — count the trees of every project and console session, without
+  describing them, for the request layer's global count.
 - `ProcessLedger::listed_lately`, `ProcessLedger::note_listed` — share recent listings between client requests.
 - `ProcessLedger::stop_trees`, `ProcessLedger::keep_trees` — apply the user's process-tree choices; a kept tree is
   recorded with the project it is listed under, and `trees_of_project` lists it among the project processes, the trees

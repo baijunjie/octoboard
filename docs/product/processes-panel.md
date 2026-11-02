@@ -11,9 +11,10 @@ stop or keep them. Both kinds of owner have it:
 
 It is **closed** until the user opens it, from its toggle in the top bar, whose icon is a square with a pulse line
 across it and whose label is "Show processes panel" or "Hide processes panel" (see "The panel toggles in the top bar" in
-`docs/product/right-pane-panels.md`). Its header's title is "Processes". A project's panel has a session-filter toggle
-in the header (see "The session filter" below); neither kind has Maximize panel. For assistive technology the panel is a
-region named "Processes".
+`docs/product/right-pane-panels.md`), or from a row of the rail's Processes popover, which counts the trees of every
+project and console session (see `docs/product/processes-on-the-rail.md`). Its header's title is "Processes". A
+project's panel has a session-filter toggle in the header (see "The session filter" below); neither kind has Maximize
+panel. For assistive technology the panel is a region named "Processes".
 
 ## What it lists
 
@@ -78,9 +79,10 @@ Each tree is a card:
 - **its working directory**, after a folder glyph, or a crossed-out folder glyph and a line saying it is unknown,
   with an amber "Directory deleted" badge after it when the directory was removed;
 - **a line of facts**: how much memory the tree uses, the ports it listens on, when its top process started ("started
-  just now", or how long ago, kept up to date), and, for a tree of more than one process, how many it holds. The facts
-  stay on one line, fading out where they are cut, with the whole line as their tooltip; this also applies to the
-  facts in a process's confirmation and Details disclosure.
+  just now", or how long ago, kept up to date), and, for a tree with child processes, how many child processes it holds
+  (its processes other than the top one), as "N child processes". The facts stay on one line, fading out where they
+  are cut, with the whole line as their tooltip; this also applies to the facts in a process's confirmation and Details
+  disclosure.
 
 What a tree is and what these facts are taken from is in "Process information and actions" in
 `docs/product/background-processes.md`.

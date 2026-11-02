@@ -5,7 +5,7 @@ import { daemonMessage } from "../errors/daemonMessage";
 import { FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
 import type { Translate } from "../i18n/catalog";
 import { currentLanguage, t } from "../i18n/language";
-import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, scopeCause, type Account, type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type ConsoleSessionColour, type Launch, type LaunchChange, type PerAgent, type ResetCreditOutcome, type ProjectAccount, type BrowseEntry, type Console, type DirEntry, type Event, type PathLinkKind, type PathLinkView, type ProcessTree, type Project, type QuotaWindow, type RequestBody, type Session, type SharingCause, type SessionRecordsPresence, type ShellTerminal, type GitWorkflowOverride, type GitWorkflowOverrideChanges, type SourceUnavailableCause } from "../protocol";
+import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, scopeCause, type Account, type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type ConsoleSessionColour, type Launch, type LaunchChange, type PerAgent, type ProcessCount, type ResetCreditOutcome, type ProjectAccount, type BrowseEntry, type Console, type DirEntry, type Event, type PathLinkKind, type PathLinkView, type ProcessTree, type Project, type QuotaWindow, type RequestBody, type Session, type SharingCause, type SessionRecordsPresence, type ShellTerminal, type GitWorkflowOverride, type GitWorkflowOverrideChanges, type SourceUnavailableCause } from "../protocol";
 import { hasClaudeCompatibility } from "../agents/claudeCompatibility";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
 import { exhaustedQuotaWindow, isNotLoggedIn } from "../accounts/quotaFormat";
@@ -111,8 +111,9 @@ const LOGIN_FAILURE_DETAIL = [
  * a command still finishing (the daemon's `ASK_AFTER`, repeated here as the fixture stands on the daemon's side). */
 const PROCESS_ASK_AFTER_MS = 30_000;
 
-/** How long after its first `list_processes` the fixture daemon starts answering with a scenario's `listLater`: past
- * the moments a dialog asks twice while it mounts (StrictMode), before its next poll. */
+/** How long after its first `list_processes` (or, for the rail's list, its first `list_all_processes`) the fixture
+ * daemon starts answering with a scenario's `listLater`: past the moments a dialog asks twice while it mounts
+ * (StrictMode), before its next poll. */
 const LIST_LATER_AFTER_MS = 1000;
 
 /** The names the real daemon's file name search skips at every depth, with everything beneath them:
@@ -396,6 +397,17 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
     return kept.map(({ tree }) => tree.id);
   };
   let firstListedAt: number | undefined;
+  let firstAllListedAt: number | undefined;
+  // The count of trees as the daemon's `list_all_processes` answers it: one entry for each project the store has that
+  // has trees, in the store's order (its running sessions' trees and the ones no session owns), then one for each
+  // console session with trees. What is kept under a project the store no longer has is not reported.
+  const allProcessCounts = (): ProcessCount[] => {
+    const { projects, sessions } = store.getState();
+    const owned = (project: string) => [...sessions.values()].filter((session) => session.project_id === project).flatMap((session) => treesOfSession(session.id));
+    const counts: ProcessCount[] = [...projects.keys()].map((project_id) => ({ project_id, trees: owned(project_id).length + (projectProcesses.get(project_id)?.length ?? 0) }));
+    for (const session of sessions.values()) if (session.project_id === null) counts.push({ session_id: session.id, trees: treesOfSession(session.id).length });
+    return counts.filter((count) => count.trees > 0);
+  };
   const projectFiles = (project: string) => restoredFiles.get(project) ?? scenario.filesByProject?.[project] ?? scenario.files ?? SAMPLE_FILES;
   const git = scenario.git === undefined ? SAMPLE_GIT : scenario.git;
   /** The absolute spelling of a path the terminal showed: as given when absolute or home-relative, else under the asking project's folder. */
@@ -1369,6 +1381,13 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
           if (refused) return fail(refused);
           const running = [...store.getState().sessions.values()].filter((session) => session.project_id === body.project_id && hasProcess(session.id));
           return { type: "processes_listed", id: null, trees: [...running.flatMap((session) => treesOfSession(session.id)), ...oldestFirst(projectProcesses.get(body.project_id) ?? [])] };
+        }
+        case "list_all_processes": {
+          if (scenario.processes?.list === "pending") return new Promise<Event>(() => {});
+          if (scenario.processes?.list) return fail(scenario.processes.list);
+          firstAllListedAt ??= Date.now();
+          if (scenario.processes?.listLater && Date.now() - firstAllListedAt >= LIST_LATER_AFTER_MS) return fail(scenario.processes.listLater);
+          return { type: "all_processes_listed", id: null, counts: allProcessCounts() };
         }
         case "stop_processes": {
           if (scenario.processes?.stop === "pending") return new Promise<Event>(() => {});

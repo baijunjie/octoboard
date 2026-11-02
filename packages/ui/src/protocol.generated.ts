@@ -1003,6 +1003,11 @@ export type Event = {
   trees: Array<ProcessTree>,
 }
 | {
+  "type": "all_processes_listed",
+  id: string | null,
+  counts: Array<ProcessCount>,
+}
+| {
   "type": "processes_stopped",
   id: string | null,
   ids: Array<string>,
@@ -1987,6 +1992,26 @@ export type PerAgent<T> = {
 };
 
 /**
+ * How many trees there are under one project, or for one console session, in the count of
+ * every project's and console session's trees. It names a project or a console session, never
+ * both.
+ */
+export type ProcessCount = {
+  /**
+   * The project the trees are listed under; absent for a console session.
+   */
+  project_id?: string,
+  /**
+   * The console session whose trees these are; absent for a project.
+   */
+  session_id?: string,
+  /**
+   * How many trees, at least one.
+   */
+  trees: number,
+};
+
+/**
  * A group of one launch's processes as the user sees it: a top process — one whose parent is not
  * the same launch's — and its descendants of that launch.
  */
@@ -2613,6 +2638,8 @@ export type Request = {
     | {
   project_id: string,
 }) | {
+  "type": "list_all_processes"
+} | {
   "type": "stop_processes",
   ids: Array<string>,
 }
@@ -3298,6 +3325,8 @@ export type RequestBody = {
   | {
   project_id: string,
 }) | {
+  "type": "list_all_processes"
+} | {
   "type": "stop_processes",
   ids: Array<string>,
 }

@@ -46,17 +46,19 @@ product docs name for parts of the window:
   inside localized wording (see "What follows the language" in `docs/product/language.md`) and a name the user typed all
   read in the direction of their own text inside right-to-left prose — one the sentence sets as code reads left to right
   — and the quotation marks, parentheses and full stop the sentence puts around them stay where the sentence puts them.
-- The rail's waiting count carries its badge at the hand glyph's top left rather than its top right, so the badge points
-  into the content panel and the overflow pill stays clear of the window's edge, the rail being down the window's right
-  edge (see "The rail" in `docs/product/window-layout.md`).
+- The rail's waiting count carries its badge at the hand glyph's top left rather than its top right, and so does the
+  rail's Processes button at its glyph's, so the badge points into the content panel and the overflow pill stays clear
+  of the window's edge, the rail being down the window's right edge (see "The rail" in
+  `docs/product/window-layout.md`).
 - The rail's Account usage indicator fills its capsules from the right (see "The selected session's quota indicator" in
   `docs/product/account-quotas.md`).
 - Icons that point a direction or show a side are mirrored: Back and Forward, the sidebar toggle, whose pane is drawn on
   its own side, the breadcrumb's separators, the report panel's previous-page and next-page buttons, the file viewer's
   Previous file and Next file buttons and its wrap control, focus mode's back button, the directory browser's
   parent-directory entry, the Open panel item's icon in a project's action menu, a window with a panel at its side, an
-  action menu's submenu chevron, which points towards the side the submenu opens on — left here — and the chevron of a
-  collapsed project row, which points left. An expanded row's chevron points down, as in left-to-right.
+  action menu's submenu chevron, which points towards the side the submenu opens on — left here — the chevron of a
+  collapsed project row and the chevron at the end of a row in the rail's Processes popover, which point left. An
+  expanded row's chevron points down, as in left-to-right.
 - Glyphs that hang their rows or lines off the leading side are mirrored too: the Projects heading's Expand all projects
   / Collapse all projects button, whose own chevrons stay vertical, the Git mode's Group by folder toggle in either of
   its two states, and the "View all" glyph of an archive submenu and of a focus mode's archived list.
@@ -66,11 +68,12 @@ product docs name for parts of the window:
 - **The macOS window buttons** — close, minimise and zoom stay at the window's top left, and the top bar keeps its clear
   space for them there (see "The top bar" in `docs/product/window-layout.md`).
 - **The notifications bell's dot**, a mark on the glyph itself rather than a decoration of the layout: it stays at the
-  glyph's top right, unlike the waiting count's badge above it on the rail.
+  glyph's top right, unlike the waiting count's and the Processes button's badges above it on the rail.
 - **Notation read in a fixed order**: a keyboard shortcut's key caps, wherever they are shown (see "How a combination is
   written and matched" in `docs/product/keyboard-shortcuts.md`), stay in the order the shortcut is written in; the
   report panel's position reads "current / total", so "1 / 12" is page 1 of 12 (see "Paging through the history" in
-  `docs/product/report-panel.md`); and the waiting count's overflow label reads "99+".
+  `docs/product/report-panel.md`); and the overflow label of the waiting count and of the Processes button reads
+  "99+".
 - **A literal to type, and program text**: the query parameter and the environment-variable names the startup screen
   gives when it has no daemon address or key to connect with (`?port=`, `?key=`, `VITE_DAEMON_PORT`, `VITE_DAEMON_KEY`,
   `OCTOBOARD_DAEMON_PORT`) and the

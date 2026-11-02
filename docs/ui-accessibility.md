@@ -98,7 +98,8 @@ choice, while retaining the component's layout, selection and keyboard behaviour
 A status label such as "Not added", "Not installed" or "Logged in", and any other qualifier after a name (a session's
 account in its agent mark's tooltip where that names only the agent and its account, "Not in the list", a file's change
 status or size, "Read-only"), is a badge after the name, never parenthesised text in the name's own style and never an
-`InlineReference`. It is the shared `StatusBadge`, the only small badge component. It takes a semantic colour —
+`InlineReference`. It is the shared `StatusBadge`, the only small badge component for a status; a bare count after a
+row's name (the rail processes panel's rows, a Focus view chip's count) is the shared `CountBadge` instead. It takes a semantic colour —
 `default` (neutral), `accent`, `success`, `warning`, `danger` or `help` (the project's purple, for help and hints) — and
 one of two variants:
 
@@ -179,7 +180,7 @@ does itself for its success, warning and danger toasts, instead of leaving it in
 title.
 
 In dark, every floating surface — a dialog, a menu or submenu, a select's or combo box's list, a popover, a tooltip and
-what is drawn as one (the touch and hint popovers, the rail's account quota panel), a toast, and a bar floating over the
+what is drawn as one (the touch and hint popovers, the rail's account quota and processes panels), a toast, and a bar floating over the
 terminal (a session's without a process and the exited shell's) — is drawn on the project's `--floating`, by the user's
 decision, instead of HeroUI's `--overlay` and `--surface`, which are darker than the content panel and sink a menu into
 the sidebar under it. The dark levels follow light's step for step, where every floating surface is white: the surface
@@ -442,10 +443,10 @@ needs an equivalent reachable another way; Close terminal in the panel's tab-row
 
 ### A floating panel that does not take the window
 
-A panel that floats in from a button and leaves the rest of the window usable (the rail's account quota panel, and the
-popover of an error or warning mark) is a large tooltip with a body: one component (`Hint`, kind `popover`) gives both
+A panel that floats in from a button and leaves the rest of the window usable (the rail's account quota panel, its
+processes panel, and the popover of an error or warning mark) is a large tooltip with a body: one component (`Hint`, kind `popover`) gives both
 the same input logic. It is not a region: it is reached through its button, the way a menu is. Its dialog is named by
-what the panel is (Quota, the mark's name, a tone's word for a mark of one line), never by the text it holds: VoiceOver
+what the panel is (Quota, Processes, the mark's name, a tone's word for a mark of one line), never by the text it holds: VoiceOver
 reads both a dialog's name and its content as focus enters it, so a dialog named by its own text is read twice.
 
 **The input matrix**, by what the input can do:
@@ -478,16 +479,24 @@ terminal or an editor before the surface decides where focus goes.
 - **Closing.** After a close that is not the grace's own (Escape, an outside press, an action such as Try again) a
   pointer still resting on the trigger does not open it again: the hover is armed again once the pointer has moved off
   the trigger and the surface and comes back.
-- **A surface that holds another.** The rail's panel holds status marks, whose popovers are portalled out of it but
-  belong to it: an outside press inside such a popover is not outside, the panel stays open while the pointer crosses
-  into it (React raises pointer enter and leave along the component tree, portals included), and Escape goes to the
-  popover first where the popover would take it (focus in it, or its hover form with focus somewhere that does not keep
-  Escape); otherwise the panel's own rule applies.
+- **A surface that holds another.** The rail's quota panel holds status marks, and its processes panel the Details
+  popover of its refresh warning; their popovers are portalled out of the panel but belong to it, and each is tagged
+  with the panel that opened it (`PopoverOwnerContext`), so only the panel's own count: an outside press inside such a
+  popover is not outside, the panel stays open while the pointer crosses into it (React raises pointer enter and leave
+  along the component tree, portals included), and Escape goes to the popover first where the popover would take it
+  (focus in it, or its hover form with focus somewhere that does not keep Escape); otherwise the panel's own rule
+  applies. While such a popover is open the hover form stays open whatever the pointer does — a modal one makes the
+  panel inert, and the browser then reports a pointer leave the user never made — and once it closes, the panel closes
+  a short grace later unless the pointer is resting on the panel or its trigger. A popover opened anywhere else is a
+  covering modal like any other.
 
-The rail's quota panel adds that its button has no tooltip: hovering it opens the panel, which shows everything a
-tooltip would, so the button carries only its accessible name (the selected session's remaining quota, every window it
-draws included). A modal opened by something other than a press on the entry (Settings from the native menu)
-closes the panel in either form, rather than leaving it up under the modal.
+The rail's quota and processes panels add that their buttons have no tooltip: hovering one opens its panel, which shows
+everything a tooltip would, so the button carries only its accessible name (the selected session's remaining quota,
+every window it draws included; how many processes run). A modal opened by something other than a press on the entry
+(Settings from the native menu, a status mark's or Details popover opened elsewhere in the window) closes the panel in
+either form, rather than leaving it up under the modal. Closing a processes panel with focus inside it hands focus to
+its button after React's commit, so react-aria sees the move and draws the ring; a row's press instead lands focus in
+the Processes panel it opens.
 
 ### A touch gesture is never the only way
 
@@ -772,8 +781,8 @@ has to tell the control apart from its neighbours even where the tooltip's text 
 same text. Which control's tooltip repeats its name and which one's is the shorter of the two is settled per control in
 the "Tooltips on icon-only controls" section of `docs/product/labels-and-tooltips.md`; `ActionMenu` gives its trigger a
 name of that shape by default. The exception is a button whose hover opens a floating panel that shows what
-its tooltip would say — the rail's Account usage button (above), a status mark, the help tip's "?": it carries only
-its accessible name. So does a Files or Git tree chevron, whose whole row does what it does (see "Buttons").
+its tooltip would say — the rail's Account usage and Processes buttons (above), a status mark, the help tip's "?": it
+carries only its accessible name. So does a Files or Git tree chevron, whose whole row does what it does (see "Buttons").
 
 A tap does not open that tooltip, and on such a control it must not: a tap on an icon-only button or a menu trigger runs
 its action, so `TitledControl` has no touch popover. A control whose only action is to show its text is a popover hint
@@ -1130,7 +1139,8 @@ Where an error or a warning is shown follows from how it arises, not from the sc
 
 Rules 3 and 4 are "On the screen: an Alert when it matters, a mark at its point otherwise" below.
 
-The Processes panel keeps a failed refresh visible as a warning Alert above its existing rows and actions. The list
+The Processes panel, and the rail's processes panel over its counts, keep a failed refresh visible as a warning Alert
+above their existing rows and actions. The list
 may be stale, so the warning stays until a refresh succeeds; polling continues while it is shown.
 
 **An error alert is for the exceptional, never for a refusal the window could have foreseen.** An action that cannot go
@@ -1354,8 +1364,8 @@ instructions and any list in them are start-aligned, so a list's bullets stay be
 
 Of what is shown on the screen rather than in the error alert dialog (rules 3 and 4 of "Where an error is shown"),
 where an error, a warning or a note is shown follows from whether it matters — not from how much it has to say or how
-busy the layout around it is. The Processes panel's refresh warning is the explicit exception in "Where an error is
-shown":
+busy the layout around it is. The refresh warnings of the Processes panel and of the rail's processes panel are the
+explicit exception in "Where an error is shown":
 
 - **An important error from automatic behaviour** — one that blocks what follows (a lookup a form makes on its own
   failing, which stops the form from going on; a reason a dialog cannot proceed), or one a component cannot do its job
@@ -2162,7 +2172,7 @@ indicator is a fixed right-pointing chevron, while react-aria opens the submenu 
 
 **A badge or overlay placed with physical offsets needs an `rtl:` twin.** Tailwind's logical utilities mirror
 themselves, but a hand-placed decoration — and any mask cut for it — does not: give each one its mirrored counterpart,
-as `packages/ui/src/shell/Rail.tsx` does for the waiting count and its hole. Where a library offers only physical
+as `packages/ui/src/shell/CountedGlyph.tsx` does for a rail count and its hole. Where a library offers only physical
 placements, pick the placement from the language (`textDirection(useCurrentLanguage())`).
 
 Verify a direction change by rendering it, not by reading it: the gallery serves every scenario under `ar`, and a

@@ -71,6 +71,10 @@ pub enum Event {
         id: Option<String>,
         trees: Vec<crate::processes::ledger::ProcessTree>,
     },
+    AllProcessesListed {
+        id: Option<String>,
+        counts: Vec<crate::processes::ledger::ProcessCount>,
+    },
     ProcessesStopped {
         id: Option<String>,
         ids: Vec<String>,

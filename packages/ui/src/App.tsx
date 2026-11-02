@@ -35,6 +35,7 @@ import { useStatusItemMenu } from "./lifecycle/useStatusItemMenu";
 import { useWaitingNotifications } from "./lifecycle/useWaitingNotifications";
 import { sessionDisplayTitle } from "./sessions/sessionLabel";
 import { PANEL_ENTRIES } from "./panels/panelRegistry";
+import { useProcessJump } from "./app/useProcessJump";
 import { ProcessPanelProvider } from "./process/useProcessPanel";
 import { RightPane } from "./panels/RightPane";
 import { panelId, panelRegion, shownPanelRegions } from "./panels/stackState";
@@ -331,7 +332,7 @@ export function App(): React.ReactElement {
     openSettings();
   };
 
-  const { stableOpenProjectPanel, stableOpenShellTerminal } = useProjectPanels({
+  const { stableOpenProjectPanel, stableOpenShellTerminal, stableShowPanel } = useProjectPanels({
     setOwnerByUser,
     asideFloats,
     openFloating,
@@ -341,6 +342,13 @@ export function App(): React.ReactElement {
     sidebarOpen: panes.sidebarOpen,
     closeSidebar: panes.closeSidebar,
     showAllOf: processPanel.showAllOf,
+  });
+
+  const openProcesses = useProcessJump({
+    asideFloats,
+    switchConsole,
+    openProjectPanel: stableOpenProjectPanel,
+    showPanel: stableShowPanel,
   });
 
   // A selection can leave a console session's focus mode after a status or binding change. Its
@@ -541,6 +549,7 @@ export function App(): React.ReactElement {
           onOpenArchive={stableOpenArchive}
           waitingCount={waitingCount}
           onNextWaiting={stableNextWaiting}
+          onOpenProcesses={openProcesses}
           onOpenSettings={openSettingsFromDrawer}
           onOpenSettingsAt={stableOpenSettingsAt}
           focusTerminal={focusTerminal}

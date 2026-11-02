@@ -94,14 +94,17 @@ The panel closes:
   holding text — which closes the popover alone, the panel staying open;
 - on a **press outside** the button and the panel, which also does whatever it does where it lands (for a panel opened
   by a tap or the keyboard, the press is swallowed, as a menu's);
-- when a **modal dialog or a menu opens** by any other way, such as Settings from the application menu.
+- when a **modal dialog, a menu or a popover opens** by any other way, such as Settings from the application menu
+  or a status mark's popover opened elsewhere in the window.
 
 After it closes by Escape or a press outside, a mouse still resting on the button does not open it again until it has
 left the button and come back.
 
 An account's failure or warning mark (see "Quota states" in `docs/product/account-quotas.md`) opens its popover from
 inside the panel, by the mouse resting on it or a tap, and that popover counts as part of the panel: a press inside it,
-its own opening, and the mouse crossing from the panel into it do not close the panel. How it opens and closes is in
+its own opening, and the mouse crossing from the panel into it do not close the panel. While it is open, the panel
+stays open however the mouse leaves it; once it has gone, a panel the mouse floated in closes at once unless the mouse
+is resting on the panel or the button. How it opens and closes is in
 "Failures, warnings and notes marked at their point" in `docs/product/error-alerts.md`; which of it and the panel Escape
 closes is in the Escape item above.
 

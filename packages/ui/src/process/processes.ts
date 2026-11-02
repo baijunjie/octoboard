@@ -1,4 +1,4 @@
-import type { ProcessTree } from "../protocol";
+import type { ProcessCount, ProcessTree } from "../protocol";
 import type { Daemon } from "../store";
 
 type Request = Daemon["request"];
@@ -26,4 +26,12 @@ export async function keepProcesses(request: Request, ids: string[]): Promise<st
   const result = await request({ type: "keep_processes", ids });
   if (result.type !== "processes_kept") throw new Error(`unexpected reply ${result.type}`);
   return result.ids;
+}
+
+/** How many trees each project and each console session has: an entry per project with any, then one per console
+ * session with any. */
+export async function listAllProcesses(request: Request): Promise<ProcessCount[]> {
+  const result = await request({ type: "list_all_processes" });
+  if (result.type !== "all_processes_listed") throw new Error(`unexpected reply ${result.type}`);
+  return result.counts;
 }

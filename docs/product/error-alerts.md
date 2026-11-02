@@ -254,12 +254,14 @@ The places with a compact alert:
   (see "The user's approval of an owner's switch" in `docs/product/switching-session-accounts.md` and "The user's
   approval of an owner's handoff" in `docs/product/handing-off-sessions.md`).
 
-Two failures that leave their component doing its job are an **amber warning alert** above or in place of what they
+Three failures that leave their component doing its job are an **amber warning alert** above or in place of what they
 concern, with a title, one sentence, **Details** where there is more to show and no other button, announced once as
 it appears:
 
 - the Processes panel's list that could not be refreshed while the last one still shows, above it (see "Loading,
   refreshing and failures" in `docs/product/processes-panel.md`);
+- the counts of the rail's Processes popover that could not be refreshed while the last ones still show, at its top
+  (see "Keeping the count current" in `docs/product/processes-on-the-rail.md`);
 - the project processes that could not be listed in the confirmation of removing a project or deleting a console, in
   their section (see "The project's processes" in `docs/product/removing-projects.md`).
 

@@ -605,6 +605,14 @@ async fn handle_inner(
             }))
         }
 
+        RequestBody::ListAllProcesses => {
+            let counts = crate::processes::requests::list_all(state).await?;
+            Ok(Some(Event::AllProcessesListed {
+                id: request_id,
+                counts,
+            }))
+        }
+
         RequestBody::StopProcesses { ids } => {
             let ids = crate::processes::requests::stop(state, ids).await?;
             Ok(Some(Event::ProcessesStopped {

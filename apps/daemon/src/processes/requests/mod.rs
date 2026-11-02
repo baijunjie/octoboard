@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 
-use crate::processes::ledger::ProcessTree;
+use crate::processes::ledger::{ProcessCount, ProcessTree};
 use crate::protocol::{error_code, CodedError, ProcessTarget, Project};
 use crate::state::AppState;
 use crate::store::LOCAL_HOST_ID;
@@ -111,6 +111,34 @@ pub async fn list(state: &Arc<AppState>, target: ProcessTarget) -> Result<Vec<Pr
             .await?)
         }
     }
+}
+
+/// How many trees each project and each console session has: one entry per project the store
+/// lists that has any, in the store's order, then one per console session that has any. Only
+/// counted, never described. Always read from the table: the floor (`LIST_FLOOR`) caches the
+/// trees listed per target, not counts, and one read of the table is all a count takes.
+pub async fn list_all(state: &Arc<AppState>) -> Result<Vec<ProcessCount>> {
+    let sessions: Vec<(String, Option<String>)> = state
+        .store
+        .list_sessions()?
+        .into_iter()
+        .filter(|session| state.has_process(&session.id))
+        .map(|session| (session.id, session.project_id))
+        .collect();
+    let projects: Vec<(String, Option<PathBuf>)> = state
+        .store
+        .list_projects()?
+        .into_iter()
+        .map(|project| {
+            let dir = (project.host_id == LOCAL_HOST_ID).then(|| PathBuf::from(project.path));
+            (project.id, dir)
+        })
+        .collect();
+    let state = Arc::clone(state);
+    Ok(tokio::task::spawn_blocking(move || {
+        state.process_ledger.trees_counted(&sessions, &projects)
+    })
+    .await?)
 }
 
 /// The directories a leftover of `project` is looked for in: its own, when it is local.

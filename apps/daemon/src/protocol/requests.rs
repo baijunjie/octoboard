@@ -511,6 +511,9 @@ pub enum RequestBody {
         #[serde(flatten)]
         target: ProcessTarget,
     },
+    /// How many process trees each project and each console session has: running sessions' trees,
+    /// leftovers and kept trees alike. See `crate::processes::requests`.
+    ListAllProcesses,
     /// Stops the process trees `ids` name that still qualify: a tree of a launch being followed,
     /// a leftover of a local project, or a kept tree, which is the user's no more once stopped.
     /// See `crate::processes::requests`.

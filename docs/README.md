@@ -92,6 +92,8 @@ Where to start, by question:
 - [Listing agents from a session](product/listing-agents-from-a-session.md) — the `list_agents` session tool:
   the agents a session could be opened on, their tags and accounts, its fields and refresh rules.
 - [The account quota panel](product/account-quota-panel.md) — the rail's Account usage panel.
+- [Processes on the rail](product/processes-on-the-rail.md) — the rail's Processes button and its popover: the
+  running processes counted per project and console session, and the jump to each one's Processes panel.
 - [Starting a usage window](product/starting-usage-windows.md) — kicking a usage window that has not begun counting.
 - [Codex usage limit resets](product/usage-limit-resets.md) — how a Codex account's usage limit resets are read and
   shown, and redeeming one from the rail's panel or the account details dialog.

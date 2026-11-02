@@ -14,7 +14,7 @@ const tree = (extra: Partial<ProcessTree> = {}): ProcessTree => ({
 
 it("gives memory and age, then the ports and the process count only when there are any", () => {
   expect(processFacts(translate("en"), "en", tree(), NOW)).toBe("3.4 MB of memory · started 2 hours ago");
-  expect(processFacts(translate("en"), "en", tree({ ports: [8080], process_count: 2 }), NOW)).toBe("3.4 MB of memory · listening on port \u20688080\u2069 · started 2 hours ago · 2 processes");
+  expect(processFacts(translate("en"), "en", tree({ ports: [8080], process_count: 2 }), NOW)).toBe("3.4 MB of memory · listening on port \u20688080\u2069 · started 2 hours ago · 1 child process");
 });
 
 it("says a tree that has just started so", () => {

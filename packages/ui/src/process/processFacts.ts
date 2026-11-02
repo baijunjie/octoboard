@@ -15,6 +15,6 @@ export function processFacts(t: Translate, language: Language, tree: ProcessTree
     t("processes.memory", { size: formatFileSize(language, tree.memory_bytes) }),
     ...(tree.ports.length > 0 ? [t("processes.ports", { count: tree.ports.length, ports: joinValues(language, tree.ports.map((port) => isolate(String(port)))) })] : []),
     isJustNow(tree.started_at, now) ? t("processes.startedNow") : t("processes.started", { age: formatRelativeTime(language, tree.started_at, now) }),
-    ...(tree.process_count > 1 ? [t("processes.count", { count: tree.process_count })] : []),
+    ...(tree.process_count > 1 ? [t("processes.childCount", { count: tree.process_count - 1 })] : []),
   ].join(" · ");
 }

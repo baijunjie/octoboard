@@ -1,4 +1,4 @@
-import { Badge, Switch } from "@heroui/react";
+import { Switch } from "@heroui/react";
 import { ArrowLeft, FolderPlus, List, MessageSquarePlus } from "lucide-react";
 import React, { memo, useId, useLayoutEffect, useRef } from "react";
 
@@ -28,6 +28,7 @@ import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 import { useDelegatingIds, useHasBoundSessions, useProjectSessions, useSessionProjectId } from "../store";
 import { useDaemon, useDaemonStore, useDaemonStoreEqual, useSessionLaunch, useSessionShownStatus } from "../store";
 import { BindingBadge } from "../components/status/BindingBadge";
+import { CountBadge } from "../components/status/CountBadge";
 import { GitBadge } from "./GitBadge";
 import { projectMenu } from "./menus";
 import { NewSessionButton } from "./NewSessionButton";
@@ -491,18 +492,7 @@ function BoundElsewhere({
             <FadeOverflow as="span" dir="auto" className="min-w-0" titleWhenClipped={sessionDisplayTitle(t, owner)}>
               {sessionDisplayTitle(t, owner)}
             </FadeOverflow>
-            <Badge
-              size="sm"
-              className="static transform-none"
-              aria-hidden="true"
-              style={{
-                "--badge-bg": "var(--tint-default-bg)",
-                "--badge-fg": "var(--default-foreground)",
-                "--badge-border": "transparent",
-              } as React.CSSProperties}
-            >
-              <Badge.Label>{bound}</Badge.Label>
-            </Badge>
+            <CountBadge count={bound} />
           </Button>
         ))}
       </div>

@@ -16,7 +16,7 @@ import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./restoreSample";
 import type { FixtureFile } from "./sampleFiles";
 import { SAMPLE_GIT } from "./sampleGit";
 import { quotaFailure, quotaOf, quotaWindow, resetCreditOf, resetCreditsOf } from "./quotas";
-import { accountOf, accountSharingOf, branchItemOf, broadcastErrorToast, consoleOf, gitStatusOf, leftoverOf, pageOf, processTreeOf, projectOf, sessionNoticeToast, sessionOf, shellTerminalOf, snapshotState, worktreeItemOf } from "./builders";
+import { accountOf, accountSharingOf, branchItemOf, broadcastErrorToast, consoleOf, gitStatusOf, keptOf, leftoverOf, pageOf, processTreeOf, projectOf, sessionNoticeToast, sessionOf, shellTerminalOf, snapshotState, worktreeItemOf } from "./builders";
 import { DEFAULT_GIT_WORKFLOW, FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
 
 describe("the fixture daemon's session archiving", () => {
@@ -2210,6 +2210,29 @@ describe("the fixture daemon's process ledger", () => {
     await expect(list(daemon, { project_id: project.id })).resolves.toEqual(["1:1", "2:1", "3:1", "6:1"]);
     await expect(list(daemon, { project_id: other.id })).resolves.toEqual(["4:1"]);
     await expect(daemon.request({ type: "list_processes", project_id: "missing" })).rejects.toMatchObject({ code: "unknown_project" });
+  });
+
+  it("counts every project's trees in the store's order, then each console session's, and leaves out a project that is gone", async () => {
+    const hub = sessionOf("hub", "c", undefined, "Hub", "idle");
+    const quiet = sessionOf("quiet", "c", undefined, "Quiet", "idle");
+    const hubTree = processTreeOf("7:1", hub, "caddy run", 30);
+    const kept = keptOf("8:1", "node serve.mjs", 300);
+    const daemon = createFixtureDaemon({
+      state: snapshotState({ consoles: [consoleOf("c", "Main")], projects: [project, other], sessions: [running, working, idleElsewhere, interrupted, hub, quiet] }),
+      processes: { trees: [young, old, mine, away, stale, hubTree], projectProcesses: { [project.id]: [left], gone: [kept] } },
+    });
+    const counts = async () => {
+      const reply = await daemon.request({ type: "list_all_processes" });
+      if (reply.type !== "all_processes_listed") throw new Error(`unexpected reply ${reply.type}`);
+      return reply.counts;
+    };
+    expect(await counts()).toEqual([
+      { project_id: project.id, trees: 4 },
+      { project_id: other.id, trees: 1 },
+      { session_id: hub.id, trees: 1 },
+    ]);
+    await daemon.request({ type: "stop_processes", ids: ["7:1", "4:1"] });
+    expect(await counts()).toEqual([{ project_id: project.id, trees: 4 }]);
   });
 
   it("lists in an archive's inspection only the trees that have run for 30 seconds, and none unless asked", async () => {

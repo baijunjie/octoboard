@@ -58,10 +58,12 @@ the daemon's `protocol::bindings` test) by `protocol.contract.ts`; `appConfig.ts
   `Dialog` frame and toolkit), `form/`, `controls/`, `menus/`, `hint/` (the one component behind tooltips and floating
   popovers), `text/`, `status/`, `icons/`, `tabs/`, `motion/`, `scroll/`, `focus/`, `announce/`, `panel/`, `host/`,
   `hooks/` (breakpoints, `createLauncher`).
-- `src/shell/` — the window chrome: `TitleBar`, `Rail`, `NotificationsBell`, `ContentPanel`, `Toasts`,
-  `ConnectionBanner`, `Scrim`, `ErrorAlerts` (the error acknowledgement host).
+- `src/shell/` — the window chrome: `TitleBar`, `Rail` (with its quota and global-processes entries, `RailQuotaEntry` and `RailProcessesEntry`),
+  `NotificationsBell`, `ContentPanel`, `Toasts`, `ConnectionBanner`, `Scrim`, `ErrorAlerts` (the error acknowledgement
+  host).
 - `src/app/` — the hooks `App.tsx` is composed of, one concern each (dialog routing, console switching, session
-  selection and actions, focus mode, archive view, pane layout and widths, project panels, announcements).
+  selection and actions, focus mode, archive view, pane layout and widths, project panels, jumps from the global process
+  list to a Processes panel, announcements).
 
 ### Feature directories
 
@@ -83,7 +85,7 @@ the daemon's `protocol::bindings` test) by `protocol.contract.ts`; `appConfig.ts
 - `src/settings/` — the settings modal and its sections; `accounts/` the Agent accounts section.
 - `src/dialogs/` — the feature dialogs (console, project, session, request, handoff, account switch, model, trust,
   archive and removal choices), on the `components/dialog/` toolkit.
-- `src/process/` — the Processes panel and its data.
+- `src/process/` — the Processes panel and its data, and the polled global process count the rail shows.
 - `src/configuration/` — configuration export and import dialogs, and the list of plain switch settings.
 - `src/about/`, `src/updates/` — the licenses dialog and its data; the UI side of self-update.
 
@@ -156,6 +158,11 @@ New code uses these rather than a second implementation. None is enforced by a c
 | An xterm terminal view | `useTerminalController` and `useTerminalReconnect`, with `TerminalCover` and `TerminalNoticeBar` (`src/terminal/`), shared by the session pane and shell terminals |
 | Poll the lists on screen | `useAutoRefresh` (`src/project-browser/autoRefresh.ts`); treat a failed browse request through `projectBrowseFailure` (`browseError.ts`) |
 | Open a dialog from a control outside its window | `createLauncher` (`src/components/hooks/createLauncher.ts`) |
+| Poll a daemon answer that is shown or counted (process trees, the global process counts) | `usePolled` (`src/process/usePolled.ts`), under `useProcessTrees` and `useAllProcesses`, rather than a timer of its own |
+| A count in a small badge set in a row, or on a rail glyph | `CountBadge` (`src/components/status/CountBadge.tsx`) in a row; `CountedGlyph` (`src/shell/CountedGlyph.tsx`) on a rail glyph |
+| A rail entry's panel that opens status marks and Details popovers | tag them with `PopoverOwnerContext` (`src/components/hint/popoverOwner.ts`), ask about them through `nestedPopovers` (`src/shell/nestedPopover.ts`), and close the panel under another modal with `CloseWhenCovered` (`src/shell/`) |
+| Put a panel of the aside's owner (a project, or a console session) on screen | `showPanel` from `useProjectPanels` (`src/app/`); a jump from the global process list is `useProcessJump` |
+| Send focus into a panel the user opened deliberately | `landInPanel` (`src/panels/panelLanding.ts`), as `useFloatingPanel` and `useProcessJump` do |
 | Queue best-effort pushes to the native shell in order | `useSerialPush` (`src/lifecycle/useSerialPush.ts`) |
 | Browse directories in a picker | `useDirectoryBrowse` with `DirectoryPicker` (`src/components/dialog/`) |
 | Delete options of a dialog that deletes sessions | `useSessionDeletionOptions` (`src/dialogs/`) |

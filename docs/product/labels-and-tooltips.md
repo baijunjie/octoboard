@@ -90,7 +90,8 @@ application buttons below. These are:
 - the rail's buttons — each console's avatar, whose tooltip is the console's name followed by its eligible top status,
   when one is present, the same text as the name announced for it (see "The console switcher" in `docs/product/console-switcher.md`), New
   console, the waiting count, whose tooltip says how many sessions are waiting and that pressing it goes to the next
-  one, Turn on notifications and Settings (the rail's Account usage button has none, as said below this list);
+  one, Turn on notifications and Settings (the rail's Account usage and Processes buttons have none, as said below this
+  list);
 - the ⋮ button that opens an action menu — a sidebar row's, the console's in the sidebar's header, the project's in
   focus mode, a file or folder's in the Files mode's tree or a file's in the Git mode's change list (see "A row's
   actions" in `docs/product/project-pane.md`), and, in Settings' Agent accounts section, an account's and each agent
@@ -136,7 +137,9 @@ application buttons below. These are:
 The rail's **Account usage** button is an exception: it has **no tooltip**, on hover or on keyboard focus. Resting the
 mouse on it floats its panel in instead (see "Opening the panel" in `docs/product/account-quota-panel.md`), and its
 accessible name, which states the selected session's quota when the button shows one, is described in "The selected
-session's quota indicator" in `docs/product/account-quotas.md`.
+session's quota indicator" in `docs/product/account-quotas.md`. The rail's **Processes** button has no tooltip either:
+resting the mouse on it floats its popover in, and its accessible name is described in "The button" in
+`docs/product/processes-on-the-rail.md`.
 
 The **expand arrow** before a folder's row in the Files mode's tree and in the Git mode's change list, and before a
 commit row there, is an exception too: it has **no tooltip** and no hover fill of its own, being a bare arrow glyph.

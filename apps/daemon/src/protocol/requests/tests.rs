@@ -58,6 +58,17 @@ fn list_processes_reads_a_session_or_a_project() {
     assert!(serde_json::from_str::<Request>(r#"{"type":"list_processes"}"#).is_err());
 }
 
+/// `list_all_processes` takes no target.
+#[test]
+fn list_all_processes_reads_without_a_target() {
+    assert!(matches!(
+        serde_json::from_str::<Request>(r#"{"type":"list_all_processes","id":"r1"}"#)
+            .unwrap()
+            .body,
+        RequestBody::ListAllProcesses
+    ));
+}
+
 /// The bound items a request forces or keeps arrive with the state they were shown in, and
 /// leaving both lists out names none.
 #[test]

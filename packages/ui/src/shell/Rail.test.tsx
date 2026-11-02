@@ -49,6 +49,7 @@ function avatarOf(statuses: Case[], hoverOpensSidebar = false): HTMLButtonElemen
           onOpenArchive={() => {}}
           waitingCount={0}
           onNextWaiting={() => {}}
+          onOpenProcesses={() => true}
           onOpenSettings={() => {}}
           onOpenSettingsAt={() => {}}
           focusTerminal={() => {}}

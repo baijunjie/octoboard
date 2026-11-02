@@ -85,7 +85,7 @@ it("lists a session's trees with their command, working directory, ports, memory
   const text = rows()[0].textContent!.replace(/[\u2066-\u2069]/g, "");
   expect(text).toContain("npm run dev");
   expect(text).toContain("/work/search");
-  expect(text).toContain("120 MB of memory · listening on ports 3000 and 5173 · started 5 minutes ago · 3 processes");
+  expect(text).toContain("120 MB of memory · listening on ports 3000 and 5173 · started 5 minutes ago · 2 child processes");
   expect(rows()[1].textContent).toContain("2.5 MB of memory · started 5 minutes ago");
   expect(rows()[1].textContent).not.toContain("process");
   expect(panel().querySelector("h2")?.textContent).toBe("Processes");
@@ -324,7 +324,7 @@ it("cancels a stop confirmation without sending a request", async () => {
   expect(sent(daemon, "stop_processes")).toEqual([]);
   expect(confirmation().textContent).toContain("This process and its child processes will be stopped.");
   expect(confirmation().textContent).toContain("npm run dev");
-  expect(confirmation().textContent).toContain("4 processes");
+  expect(confirmation().textContent).toContain("3 child processes");
   await act(async () => [...confirmation().querySelectorAll("button")].find((element) => element.textContent === "Cancel")!.click());
   expect(sent(daemon, "stop_processes")).toEqual([]);
   expect(rows()).toHaveLength(1);

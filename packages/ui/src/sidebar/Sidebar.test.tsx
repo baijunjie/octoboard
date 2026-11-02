@@ -296,6 +296,7 @@ function mountPeeking() {
         onOpenArchive={vi.fn()}
         waitingCount={0}
         onNextWaiting={vi.fn()}
+        onOpenProcesses={() => true}
         onOpenSettings={vi.fn()}
         onOpenSettingsAt={vi.fn()}
         focusTerminal={vi.fn()}

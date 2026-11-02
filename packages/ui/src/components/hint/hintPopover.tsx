@@ -13,6 +13,9 @@ export const HOVER_OPEN_DELAY_MS = 250;
 /** How long the pointer may be off both the trigger and the panel before the panel goes, so that
  * crossing the gap between them does not close it. */
 export const HOVER_CLOSE_DELAY_MS = 150;
+/** How often a hold (`holdsOpen`) is asked about while the grace waits on it, so that the panel is dealt with soon
+ * after the surface it held goes. */
+const HOLD_POLL_MS = 50;
 
 /** Whether `target` is inside either of `elements`. */
 function insideAny(target: EventTarget | null, ...elements: Array<Element | null>): boolean {
@@ -42,16 +45,24 @@ export function keepsEscapeFromPanel(target: Element | null): boolean {
  * terminal nor closes a drawer.
  * An outside press is one beyond the trigger, the panel and what `isInside` adds. Both end in
  * `onDismiss`.
+ *
+ * While `holdsOpen` says a surface the panel opened is up (a popover portalled out of it), the grace
+ * does not close the panel, however the pointer left: the browser fires the panel's pointer leave when
+ * that surface goes modal, though the pointer did not move. The hold is asked again every `HOLD_POLL_MS`;
+ * once the surface is gone the panel closes at once, unless the pointer is then resting on the panel or the
+ * trigger.
  */
 function useHoverPopover({
   pressed = false,
   isInside,
   yieldsEscape,
+  holdsOpen,
   onDismiss,
 }: {
   pressed?: boolean;
   isInside?: (target: EventTarget | null) => boolean;
   yieldsEscape?: (event: KeyboardEvent) => boolean;
+  holdsOpen?: () => boolean;
   onDismiss: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
@@ -71,6 +82,24 @@ function useHoverPopover({
     setHovered(false);
   });
   const dismiss = useStableHandler(onDismiss);
+  const held = useStableHandler(() => holdsOpen?.() === true);
+  /** Starts the grace that ends the hover, put off for as long as `holdsOpen` says so. */
+  const startGrace = () => {
+    clearTimeout(closeTimer.current);
+    let wasHeld = false;
+    const settle = () => {
+      if (held()) {
+        wasHeld = true;
+        closeTimer.current = setTimeout(settle, HOLD_POLL_MS);
+        return;
+      }
+      // The leave that started the grace may have been the page going inert under a pointer that never moved: once
+      // the hold ends, a pointer still resting on the panel or the trigger keeps it open.
+      if (wasHeld && (panel.current?.matches(":hover") || trigger.current?.matches(":hover"))) return;
+      setHovered(false);
+    };
+    closeTimer.current = setTimeout(settle, HOVER_CLOSE_DELAY_MS);
+  };
   const check = useStableHandler((event: KeyboardEvent | PointerEvent) => {
     if (event instanceof KeyboardEvent) {
       if (event.key !== "Escape" || isImeKey(event) || yieldsEscape?.(event)) return;
@@ -99,7 +128,7 @@ function useHoverPopover({
     if (isHovered) {
       if (!hovered && !pressed) openTimer.current = setTimeout(() => setHovered(true), HOVER_OPEN_DELAY_MS);
     } else if (!pressed) {
-      closeTimer.current = setTimeout(() => setHovered(false), HOVER_CLOSE_DELAY_MS);
+      startGrace();
     }
   };
 
@@ -116,7 +145,7 @@ function useHoverPopover({
       },
       onPointerLeave: (event: React.PointerEvent) => {
         if (event.pointerType !== "mouse" || pressed) return;
-        closeTimer.current = setTimeout(() => setHovered(false), HOVER_CLOSE_DELAY_MS);
+        startGrace();
       },
     },
   };
@@ -162,8 +191,10 @@ interface HoverPopoverTrigger {
  * - `placement` and `offset` default to the tooltip's; `contentClassName` and `bodyClassName` style the
  *   surface and its body; `contentProps` adds `data-*` attributes (a marker for what watches presses
  *   outside itself).
- * - `isInside` and `yieldsEscape` are for a surface that holds others (see `useHoverPopover`).
+ * - `isInside`, `yieldsEscape` and `holdsOpen` are for a surface that holds others (see `useHoverPopover`).
  * - `onOpenChange` is told when it opens or closes, `onClosed` when it closes and whether it was the press form.
+ *   `onClosed` comes before the surface has left the document, and the press form returns focus to its trigger only
+ *   once it has: a caller that then moves focus elsewhere waits for the removal first.
  */
 export function PopoverHint({
   trigger,
@@ -175,6 +206,7 @@ export function PopoverHint({
   contentProps,
   isInside,
   yieldsEscape,
+  holdsOpen,
   onOpenChange,
   onClosed,
   children,
@@ -189,6 +221,7 @@ export function PopoverHint({
   contentProps?: Record<`data-${string}`, string>;
   isInside?: (target: EventTarget | null) => boolean;
   yieldsEscape?: (event: KeyboardEvent) => boolean;
+  holdsOpen?: () => boolean;
   onOpenChange?: (open: boolean) => void;
   onClosed?: (closed: { wasPressed: boolean; trigger: HTMLElement | null }) => void;
   children: (surface: { close: () => void; form: HoverPopoverForm; popupId: string }) => React.ReactNode;
@@ -199,7 +232,7 @@ export function PopoverHint({
   // still be resting on the trigger, where the hover would open it again. The hover is armed again once
   // a move of the pointer is seen outside the trigger and the surface.
   const rested = useRef(false);
-  const hover = useHoverPopover({ pressed, isInside, yieldsEscape, onDismiss: () => close() });
+  const hover = useHoverPopover({ pressed, isInside, yieldsEscape, holdsOpen, onDismiss: () => close() });
   const { trigger: triggerRef, panel } = hover;
   const mode: HoverPopoverForm | null = pressed ? "press" : hover.hovered ? "hover" : null;
   const open = mode !== null;

@@ -148,7 +148,8 @@ const UPWARD: &[Upward] = &[
         from: "protocol",
         to: "processes",
         scope: Scope::Types,
-        reason: "a process tree goes on the wire as the ledger's own ProcessTree",
+        reason: "a process tree and a project's or console session's count go on the wire as the \
+                 ledger's own ProcessTree and ProcessCount",
     },
     Upward {
         from: "protocol",

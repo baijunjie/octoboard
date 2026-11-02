@@ -5,7 +5,8 @@ They belong to that launch even when the agent is at its prompt, the command tha
 they have detached into another terminal session. This does not depend on the agent reporting background tasks or
 remembering to clean them up. The status an agent reports is separate (see "Working in background" in
 `docs/product/session-statuses.md`). The user sees, stops and keeps these processes in the right pane's Processes panel
-(see `docs/product/processes-panel.md`).
+(see `docs/product/processes-panel.md`); the rail's Processes button counts them across every project and console
+session (see `docs/product/processes-on-the-rail.md`).
 
 ## Which processes belong to a launch
 
@@ -40,9 +41,11 @@ below.
 
 When an agent's process ends, Octoboard stops the processes it can attribute to that launch, except those the user chose
 to keep and those carried over (below). This applies to an agent exiting on its own, archiving, an interruption and the
-daemon shutting down. Cleanup runs before the session is recorded as having no process, so an archive's worktree
-removal follows it. A launch's attributed processes that remain in a deleted working directory for at least **60
-seconds** are also stopped while the agent is still running.
+daemon shutting down, which quitting the application does (see "Quitting" in `docs/product/application-lifecycle.md`):
+of the processes listed in Processes panels, a quit leaves running only those no session owns, the kept ones and those
+left behind in a project (see "Processes left behind in a project" below). Cleanup runs before the session is
+recorded as having no process, so an archive's worktree removal follows it. A launch's attributed processes that
+remain in a deleted working directory for at least **60 seconds** are also stopped while the agent is still running.
 
 A handoff, an account switch, a change of a session's model and a change of its account's sharing **carry the processes
 over** instead of stopping them. In a handoff, what the original session's launch started passes to the session that

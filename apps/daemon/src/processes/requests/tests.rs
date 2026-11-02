@@ -554,6 +554,67 @@ async fn a_console_sessions_tree_is_not_kept() {
     assert_stops_running(pid);
 }
 
+/// The global count has an entry for each project with a tree (a session's and a kept one alike)
+/// and one for each console session with a tree, and none for a stopped one.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_global_count_has_an_entry_per_project_and_console_session() {
+    let (state, dir) = console_with_project_and_accounts("process-requests-all");
+    let (_live, pids) = agent_with(&state, "s1", &[&dir.join("one"), &dir.join("two")]);
+    let (_hub, hub_pid) = console_agent(&state, &dir.join("hub-child"));
+    let _guard = KillOnDrop(vec![pids[0], pids[1], hub_pid]);
+    let trees = trees_when(&state, session_s1, 2).await;
+    let kept = trees
+        .iter()
+        .find(|tree| tree.id.starts_with(&format!("{}:", pids[0])))
+        .unwrap()
+        .id
+        .clone();
+    trees_when(&state, session_hub, 1).await;
+    assert_eq!(
+        super::keep(&state, vec![kept.clone()]).await.unwrap().len(),
+        1
+    );
+
+    let deadline = Instant::now() + PATIENCE;
+    let counts = loop {
+        let counts = super::list_all(&state).await.unwrap();
+        if counts.iter().map(|count| count.trees).sum::<usize>() == 3 {
+            break counts;
+        }
+        assert!(Instant::now() < deadline, "never 3 trees: {counts:?}");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    };
+    assert_eq!(counts.len(), 2);
+    assert_eq!(counts[0].project_id.as_deref(), Some("project-1"));
+    assert_eq!(
+        (counts[0].session_id.as_deref(), counts[0].trees),
+        (None, 2)
+    );
+    assert_eq!(counts[1].project_id, None);
+    assert_eq!(
+        (counts[1].session_id.as_deref(), counts[1].trees),
+        (Some("hub"), 1)
+    );
+
+    assert_eq!(super::stop(&state, vec![kept]).await.unwrap().len(), 1);
+    assert_stops_running(pids[0]);
+    let deadline = Instant::now() + PATIENCE;
+    loop {
+        let counts = super::list_all(&state).await.unwrap();
+        let project = counts
+            .iter()
+            .find(|count| count.project_id.as_deref() == Some("project-1"));
+        if project.map(|count| count.trees) == Some(1) {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "never 1 tree left for project-1: {counts:?}"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
 /// The confirmation of a project's removal is told of the project's processes, kept and left
 /// behind alike, and the removal stops them, the folder left in place.
 #[tokio::test(flavor = "multi_thread")]

@@ -9,7 +9,11 @@ import { focusFellToPage } from "./regionFocus";
  * a hand-off whose trigger is a render rather than a call site, such as the daemon taking the last
  * console away. The user did not ask for the move, so the keyboard modality is set first and the
  * destination shows its focus ring, except on a touch screen (`ringForAutomaticFocus`). With `ring` false
- * that is left to `to`, for one that moves focus only on some of its calls.
+ * that is left to `to`, for one that moves focus only on some of its calls. `to` runs inside React's commit,
+ * where React drops the focus event, so a destination whose ring comes from react-aria's `useFocusRing` gets
+ * no `data-focus-visible` (Chromium's `:focus-visible` fallback hides this; WKWebView after a click shows no
+ * ring): for such a destination, `to` defers its `focus()` with `queueMicrotask`, checking again that the
+ * target is still connected and that focus is still unclaimed.
  *
  * `to` runs inside React's commit, where React drops the focus events it would pass to its handlers, so
  * a destination focused there would not know it holds focus (react-aria's `data-focus-visible` ring, a

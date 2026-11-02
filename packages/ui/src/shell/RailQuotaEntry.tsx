@@ -9,7 +9,11 @@ import { defaultAccountName, noAgentState, pickableAgents } from "../agents/agen
 import { PATH_VAR_PARAMS } from "../components/text/literalParams";
 import { AgentTabList } from "../components/tabs/AgentTabList";
 import { ChromeButton } from "./ChromeButton";
+import { CloseWhenCovered } from "./CloseWhenCovered";
+import { nestedPopovers } from "./nestedPopover";
+import { STATUS_MARK_POPOVER } from "../components/status/StatusMark";
 import { Hint, keepsEscapeFromPanel } from "../components/hint/Hint";
+import { PopoverOwnerContext } from "../components/hint/popoverOwner";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { EmptyPanel } from "../components/panel/EmptyPanel";
 import { FADE_SIZE, FadedScroller, type FadeRegion, useFadeRegion } from "../components/scroll/scrollFade";
@@ -22,7 +26,6 @@ import { useDaemon, useDaemonStore } from "../store";
 import { useNow } from "../format/useNow";
 import { AccountNameLine, AccountQuotaSummary } from "../quota/AccountQuotaSummary";
 import { ResetCreditsLine, UseResetCreditDialog, useResetFocusReturn } from "../quota/ResetCredits";
-import { MODAL_OPEN } from "../components/focus/regionFocus";
 import { useAccountQuota } from "../quota/useAccountQuota";
 import { exhaustedQuotaWindow, remainingPercentAt, type QuotaBar } from "../accounts/quotaFormat";
 import { listedQuotaAccounts, type QuotaRow } from "../quota/quotaListing";
@@ -31,10 +34,11 @@ import { accountInUse, accountQuotaLabel, sessionQuotaBarOf } from "../quota/ses
 /** Asks to use a reset credit of an account (its id, null for the default account) under the name the panel shows it by. */
 type ResetRequest = (account: string | null, name: string) => void;
 
-/** The popover of a `StatusMark` in the panel, which is portalled out of it but belongs to it. */
-const NESTED_POPOVER = "[data-status-mark-popover]";
-/** The one of those that a mouse hover opened, which Escape closes before it closes the panel. */
-const NESTED_TOPMOST = `${NESTED_POPOVER}[data-escape-topmost]`;
+/** The one of the status marks' popovers that a mouse hover opened, which Escape closes before it closes the panel. */
+const NESTED_TOPMOST = `${STATUS_MARK_POPOVER}[data-escape-topmost]`;
+const OWNER = "rail-quota";
+
+const nested = nestedPopovers(OWNER);
 
 /** The longest the clock goes unread, so a reset that passes while the system sleeps (when timers may
  * pause) is noticed within a minute of waking. */
@@ -155,12 +159,15 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
         contentClassName="w-96 max-w-[calc(100vw-4rem)] p-0 text-sm"
         // A status mark's popover is portalled out of the panel but belongs to it, and Escape with one
         // open (by hover, which holds no focus) is the mark's to take first, where it would take it.
-        isInside={(target) => target instanceof Element && target.closest(NESTED_POPOVER) != null}
+        isInside={(target) => nested.holding(target) !== null}
         yieldsEscape={(event) => {
           const target = event.target instanceof Element ? event.target : null;
-          if (target?.closest(NESTED_POPOVER)) return true;
-          return document.querySelector(NESTED_TOPMOST) != null && !keepsEscapeFromPanel(target);
+          if (nested.holding(target)) return true;
+          return nested.opened().some((popover) => popover.matches(NESTED_TOPMOST)) && !keepsEscapeFromPanel(target);
         }}
+        // A press-form status mark's popover is modal: it makes the panel inert, and the browser answers with a pointer
+        // leave on the panel though the pointer did not move. That must not close the panel and take the popover with it.
+        holdsOpen={() => nested.opened().length > 0}
         // The quotas already held are shown whether or not this succeeds, and the daemon's own poller
         // keeps them current, so a failed request has nothing to report.
         onOpenChange={(open) => {
@@ -186,8 +193,8 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
         )}
       >
         {({ close, form, popupId }) => (
-          <>
-            <CloseWhenCovered close={close} own={popupId} />
+          <PopoverOwnerContext.Provider value={OWNER}>
+            <CloseWhenCovered close={close} own={popupId} owner={OWNER} />
             <QuotaPanel
               // The tab it opens on: the agent whose quota the button shows, if any.
               shownAgent={session && bar ? session.agent : undefined}
@@ -218,7 +225,7 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
                 setResetting({ account, name });
               }}
             />
-          </>
+          </PopoverOwnerContext.Provider>
         )}
       </Hint>
       {resetting && <UseResetCreditDialog account={resetting.account} accountName={resetting.name} onClose={() => {
@@ -227,24 +234,6 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
       }} />}
     </>
   );
-}
-
-/** Closes the panel it is rendered in when a modal is opened by something other than a press here
- * (Settings from the native menu), which covers the panel and would otherwise leave it up under the
- * modal, taking the modal's Escape. Modals and menus portal in as direct children of the body, so only
- * those are watched. Not covering: a hover-opened panel (`aria-modal="false"`), the panel's own dialog
- * in its press form (`own`), and a status mark's popover opened from inside it, whose portal would
- * otherwise read as such a modal and close the panel it came from. */
-function CloseWhenCovered({ close, own }: { close: () => void; own: string }): null {
-  useEffect(() => {
-    const modalWatch = new MutationObserver(() => {
-      const covering = Array.from(document.querySelectorAll(MODAL_OPEN)).some((modal) => !modal.closest(NESTED_POPOVER) && modal.id !== own);
-      if (covering) close();
-    });
-    modalWatch.observe(document.body, { childList: true });
-    return () => modalWatch.disconnect();
-  }, []);
-  return null;
 }
 
 /** The panel's contents: one tab per agent that is added and installed and has an account to list, in the order they were

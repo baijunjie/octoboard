@@ -3,7 +3,7 @@ import type { Preferences } from "../../fixtures/preferences";
 import type { Ui, Step } from "../../fixtures/interact";
 import type { ProcessTree } from "../../protocol";
 import type { Scenario } from "../scenario";
-import { SAMPLE, keptOf, leftoverOf, processTreeOf, sessionOf, snapshotState } from "../../fixtures/builders";
+import { SAMPLE, consoleOf, keptOf, leftoverOf, processTreeOf, projectOf, sessionOf, snapshotState } from "../../fixtures/builders";
 
 const { console: console_, web } = SAMPLE;
 const GROUP = "Processes";
@@ -75,13 +75,47 @@ const stopRefused: FixtureError = { code: "internal_error", params: { detail: "t
 const archivedPreview = sessionOf("s-proc-archived", console_.id, web.id, "Migrate the build to Vite", "archived");
 const filterState = snapshotState({ consoles: [console_], projects: [web], sessions: [preview, summary, archivedPreview] });
 
+// The rail's list of every project's processes, counted per project and console session. Website (Main) has two
+// sessions' trees beside a kept one and one left behind; Search API (Main) has only a kept tree; Mobile app, in the
+// Staging console, has two sessions' trees; the console session with the long title has two of its own.
+const staging = consoleOf("c-staging", "Staging");
+const mobile = projectOf("p-mobile", staging.id, "Mobile app");
+const mobileSession = sessionOf("s-proc-mobile", staging.id, mobile.id, "Ship the beta build", "working");
+const mobileTests = sessionOf("s-proc-mobile-tests", staging.id, mobile.id, "Run the device tests", "working");
+const longHub = sessionOf("s-proc-hub", console_.id, undefined, "Review the nightly digest and the reports it sends to the whole team before the stand-up", "idle", { colour: "teal" });
+const railState = snapshotState({
+  consoles: [console_, staging],
+  projects: [web, SAMPLE.api, mobile],
+  sessions: [preview, summary, mobileSession, mobileTests, longHub],
+});
+const railTrees = [
+  processTreeOf("500:1", preview, VITE, 95, { process_count: 6, memory_bytes: 412_000_000, ports: [5173, 24678] }),
+  processTreeOf("501:1", summary, "node scripts/build-summary.mjs --watch", 40, { process_count: 2, memory_bytes: 96_000_000 }),
+  processTreeOf("502:1", mobileSession, "pnpm exec expo start --tunnel", 25, { cwd: "/Users/dev/code/mobile-app", process_count: 4, memory_bytes: 210_000_000, ports: [8081] }),
+  processTreeOf("504:1", mobileTests, "pnpm exec detox test --watch", 12, { cwd: "/Users/dev/code/mobile-app", process_count: 3, memory_bytes: 150_000_000 }),
+  processTreeOf("503:1", longHub, "caddy run --config /Users/dev/Caddyfile --watch", 180, { cwd: "/Users/dev", ports: [2019, 8443] }),
+  processTreeOf("505:1", longHub, "tail -f /Users/dev/digest/logs/send.log", 90, { cwd: "/Users/dev/digest", memory_bytes: 1_000_000 }),
+];
+const railProcesses = {
+  [web.id]: [
+    keptOf("510:1", "node scripts/serve-docs.mjs --port 4000", 300, { memory_bytes: 64_000_000, ports: [4000] }),
+    leftoverOf("511:1", "esbuild --service=0.21.5 --ping", 610, { cwd: `${WEBSITE}/.worktrees/old-nav`, memory_bytes: 24_000_000 }),
+  ],
+  [SAMPLE.api.id]: [keptOf("512:1", "uvicorn app.main:app --reload --port 8000", 420, { cwd: "/Users/dev/code/search-api", process_count: 3, memory_bytes: 88_000_000, ports: [8000] })],
+};
+// More than the badge can count, kept under one project.
+const manyKept = Array.from({ length: 104 }, (_, index) => keptOf(`${600 + index}:1`, `node scripts/watch-${index}.mjs`, 10 + index));
+// Website 4, Search API 1, Mobile app 2 and the console session 2.
+const RAIL_COUNT = 9;
+const railButton = (ui: Ui, count: number) => ui.press(ui.t("rail.processes", { count }));
+
 export const processScenarios: Scenario[] = [
   {
     id: "processes-session",
     group: GROUP,
     category: "normal",
     title: "Processes of a session, one row of each kind",
-    description: "The native right panel is open beside the selected session. Its session filter is shown automatically for the selected session, and stays visible when focus leaves it. The picker has no label and follows the session's long title: the text fades before a visible gap to its clear (×) button. Choose 800px to inspect the narrow docked panel or 420px for the floating panel. Below the general message it lists that session's processes, oldest first, each in a white card whose leading success-green Play icon stays still. At the end of the command's line, hovering the row or moving keyboard focus into it reveals a danger-soft Stop and a secondary Keep button without moving the command; touch devices show both directly. The directory and the facts line below take the card's whole width, with or without the buttons. The top-bar Processes toggle uses a SquareActivity glyph; the leading command control lines up with the folder icon before its working directory. The Vite command is longer than the row: it fades at the right edge and its tooltip (hover it) shows it whole; under it come the working directory and one line of facts: memory, the two ports it listens on (\"5173 and 24678\"), its age and, for a tree of several, the number of processes. The newest row reads \"started just now\". The row with no readable command says Unknown command over Working directory unknown, which starts in the text column, level with the directories above it, and the row whose directory was deleted carries a soft warning badge Directory deleted after the path.",
+    description: "The native right panel is open beside the selected session. Its session filter is shown automatically for the selected session, and stays visible when focus leaves it. The picker has no label and follows the session's long title: the text fades before a visible gap to its clear (×) button. Choose 800px to inspect the narrow docked panel or 420px for the floating panel. Below the general message it lists that session's processes, oldest first, each in a white card whose leading success-green Play icon stays still. At the end of the command's line, hovering the row or moving keyboard focus into it reveals a danger-soft Stop and a secondary Keep button without moving the command; touch devices show both directly. The directory and the facts line below take the card's whole width, with or without the buttons. The top-bar Processes toggle uses a SquareActivity glyph; the leading command control lines up with the folder icon before its working directory. The Vite command is longer than the row: it fades at the right edge and its tooltip (hover it) shows it whole; under it come the working directory and one line of facts: memory, the two ports it listens on (\"5173 and 24678\"), its age and, for a tree of several processes, the number of its child processes, one fewer than the tree holds (\"5 child processes\" for the Vite tree; a single process shows no such count). The newest row reads \"started just now\". The row with no readable command says Unknown command over Working directory unknown, which starts in the text column, level with the directories above it, and the row whose directory was deleted carries a soft warning badge Directory deleted after the path.",
     state: snapshotState({ consoles: [console_], projects: [web], sessions: [longPreview, summary] }),
     preferences: panelPreferences,
     processes: { trees: sessionTrees },
@@ -283,6 +317,57 @@ export const processScenarios: Scenario[] = [
     steps: [...openSession, (ui) => ui.focusControl(stopOf(ui, pair[0])), (ui) => ui.press(stopOf(ui, pair[0])), (ui) => ui.confirm(), (ui) => ui.wait(400)],
   },
   {
+    id: "processes-rail-overview",
+    group: GROUP,
+    category: "normal",
+    title: "Running processes by project and console session, from the rail",
+    description: "The rail's Processes button carries a small count and has opened its list, a popover named Processes. There is one row for each project with running processes, its name over the console it belongs to, its count and a chevron at the end, including Mobile app of the other console; console sessions follow, one row each with the session's title over its console and the count, a long title clipping with a fade. The first row has focus. The badge is the sum of the counts shown. The rows list no process.",
+    state: railState,
+    preferences: panelPreferences,
+    processes: { trees: railTrees, projectProcesses: railProcesses },
+    steps: [(ui) => railButton(ui, RAIL_COUNT)],
+  },
+  {
+    id: "processes-rail-count-overflow",
+    group: GROUP,
+    category: "normal",
+    title: "Rail Processes button with more than 99 processes",
+    description: "The Processes button's badge reads 99+ in its wider pill, cut out of the glyph like the narrower count's, and clear of the content panel's edge. The list is closed.",
+    state: railState,
+    preferences: panelPreferences,
+    processes: { projectProcesses: { [web.id]: manyKept } },
+  },
+  {
+    id: "processes-rail-jump",
+    group: GROUP,
+    category: "normal",
+    title: "Rail list row opened in its project's Processes panel",
+    description: "The Mobile app row, a project of the Staging console, was pressed in the rail's list: the list has closed, Staging is now the current console and the project's Processes panel is open beside it, listing both sessions' processes, Ship the beta build and Run the device tests, with the session filter hidden although no session is selected in the sidebar. At a narrow width the panel floats over the conversation. Focus is in the Processes panel, not on the rail's button.",
+    state: railState,
+    preferences: panelPreferences,
+    processes: { trees: railTrees, projectProcesses: railProcesses },
+    steps: [
+      (ui) => railButton(ui, RAIL_COUNT),
+      (ui) => ui.press(ui.t("processes.global.showIn", { name: mobile.name, console: staging.name, count: 2 })),
+      (ui) => ui.wait(600),
+    ],
+  },
+  {
+    id: "processes-rail-jump-console-session",
+    group: GROUP,
+    category: "normal",
+    title: "Rail list console-session row opened in its Processes panel",
+    description: "The row of the console session with the long title was pressed in the rail's list: the list has closed and the console session's own Processes panel is open beside it, with its two trees and no session filter, although no session is selected in the sidebar. At a narrow width the panel floats over the conversation.",
+    state: railState,
+    preferences: panelPreferences,
+    processes: { trees: railTrees, projectProcesses: railProcesses },
+    steps: [
+      (ui) => railButton(ui, RAIL_COUNT),
+      (ui) => ui.press(ui.t("processes.global.showIn", { name: longHub.title, console: console_.name, count: 2 })),
+      (ui) => ui.wait(600),
+    ],
+  },
+  {
     id: "processes-stop-pending",
     group: GROUP,
     category: "normal",
@@ -326,5 +411,17 @@ export const processScenarios: Scenario[] = [
     preferences: panelPreferences,
     processes: { trees: pair, stop: stopRefused },
     steps: [...openSession, (ui) => ui.press(stopOf(ui, pair[0])), (ui) => ui.confirm()],
+  },
+  {
+    id: "processes-rail-refresh-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Rail list could not be refreshed",
+    description: "The rail's list was read and shows two project rows, and its latest poll failed: a warning Alert titled \"Could not refresh the list\" stands at the top of the popover, above the rows, saying the counts shown may be out of date, with a Details disclosure for the daemon's own text.",
+    state: railState,
+    preferences: panelPreferences,
+    processes: { projectProcesses: { [web.id]: railProcesses[web.id].slice(0, 1), [SAMPLE.api.id]: railProcesses[SAMPLE.api.id] }, listLater: listFailed },
+    // The list is asked again as it opens, which has to come after the failure sets in, a second after the first ask.
+    steps: [(ui) => ui.wait(1300), (ui) => railButton(ui, 2)],
   },
 ];

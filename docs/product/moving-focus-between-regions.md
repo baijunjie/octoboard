@@ -30,7 +30,8 @@ regions, `F6` goes to the first region shown and `Shift+F6` to the last.
 
 The rail's account quota panel is not a region and does not change the cycle: both keys work as usual while the mouse
 has floated it in. A panel opened by a tap or the keyboard is modal, as a menu is, so the keys wait until it closes (see
-"Opening the panel" in `docs/product/account-quota-panel.md`).
+"Opening the panel" in `docs/product/account-quota-panel.md`). The rail's Processes popover is the same (see "Opening
+and closing the popover" in `docs/product/processes-on-the-rail.md`).
 
 **A region not on screen is skipped**: a docked sidebar the user has hidden, the floating sidebar while it is closed,
 the rail below 594 px while that sidebar overlay is closed, the rail then coming in only with it (see "Below 594 px: the
