@@ -1,6 +1,6 @@
 import type { Language } from "../i18n/languages";
 import type { Agent, AgentAvailability, Session } from "../protocol";
-import { type State } from "../store";
+import type { State } from "../store";
 import type { Fixture } from "../fixtures/fixture";
 import type { Step } from "../fixtures/interact";
 import type { Preferences } from "../fixtures/preferences";
@@ -21,7 +21,7 @@ import { previewCopy as chinese } from "./locales/zh-Hans";
 import { createIdleScript, createTerminalScript } from "./terminals";
 import { terminalCopy } from "./terminalScripts";
 import type { TerminalScript } from "../fixtures/fakeTerminal";
-import { DEFAULT_SETTINGS } from "../store";
+import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 
 export type PreviewScene = "overview" | "focus" | "changes";
 

@@ -9,7 +9,9 @@ import { writeStartingPreferences } from "../fixtures/preferences";
 import { afterFrames, applyDocumentTheme } from "../fixtures/pageFrame";
 import { copyFor, createPreviewScenario, type PreviewScene } from "./scenarios";
 
-// No application modules may evaluate before this: preferences must never touch the host origin.
+// The static imports above evaluate before this, so none of them may read or keep a preference as
+// it is evaluated (the language among them): it would be settled from, and kept in, the host
+// origin's storage. Anything that does is imported in `start()`.
 installPreviewStorage();
 const removeScrollBridge = installPreviewScrollBridge();
 const removeKeyboardGuard = installPreviewKeyboardGuard();
