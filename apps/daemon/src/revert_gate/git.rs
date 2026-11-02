@@ -3,13 +3,18 @@
 
 use std::collections::HashSet;
 use std::ffi::{OsStr, OsString};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use anyhow::{bail, Result};
 
 use crate::git::env as git_env;
+use crate::git::reflog;
+use crate::git::remote_branch::split_remote_branch;
+use crate::git::repo_files::{rebasing_branch, uses_reftable};
+use crate::git::worktrees::parse_worktree_list;
 use crate::processes::subprocess;
 
 /// The deadline of each `git` call. The gate runs synchronously inside the user's `git`, so a
@@ -24,6 +29,10 @@ pub(super) struct Git {
     program: OsString,
     dir: Option<PathBuf>,
     env: Vec<(OsString, OsString)>,
+    /// The repository's remotes, listed the first time a remote-tracking branch has to be split.
+    remotes: OnceLock<Vec<String>>,
+    /// The repository's common git directory, resolved the first time it is needed.
+    common_dir: OnceLock<PathBuf>,
 }
 
 impl Git {
@@ -34,6 +43,8 @@ impl Git {
             program: OsString::from("git"),
             dir: None,
             env: std::env::vars_os().collect(),
+            remotes: OnceLock::new(),
+            common_dir: OnceLock::new(),
         }
     }
 
@@ -43,6 +54,8 @@ impl Git {
             program: OsString::from(program),
             dir: Some(dir),
             env,
+            remotes: OnceLock::new(),
+            common_dir: OnceLock::new(),
         }
     }
 
@@ -52,6 +65,32 @@ impl Git {
             Some(dir) => Ok(dir.clone()),
             None => Ok(std::env::current_dir()?),
         }
+    }
+
+    /// The names of the repository's remotes, asked of `git` once.
+    fn remotes(&self) -> Result<&[String]> {
+        if let Some(remotes) = self.remotes.get() {
+            return Ok(remotes);
+        }
+        let listing = self.read(["remote"])?;
+        Ok(self.remotes.get_or_init(|| {
+            lossy(&listing)
+                .lines()
+                .filter(|name| !name.is_empty())
+                .map(str::to_string)
+                .collect()
+        }))
+    }
+
+    /// The repository's common git directory, asked of `git` once.
+    fn common_dir(&self) -> Result<&Path> {
+        if let Some(common) = self.common_dir.get() {
+            return Ok(common);
+        }
+        let common = self
+            .dir()?
+            .join(lossy(&self.read(["rev-parse", "--git-common-dir"])?).trim());
+        Ok(self.common_dir.get_or_init(|| common))
     }
 
     fn command<I, S>(&self, args: I) -> Command
@@ -155,14 +194,6 @@ pub(super) fn lossy(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
-/// A full object id, SHA-1 or SHA-256.
-pub(super) fn is_oid(text: &str) -> bool {
-    matches!(text.len(), 40 | 64)
-        && text
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-}
-
 /// Empty, or all zeros: the id git uses for "no object".
 pub(super) fn is_null(oid: &str) -> bool {
     oid.bytes().all(|byte| byte == b'0')
@@ -207,32 +238,43 @@ pub(super) struct Tip {
 }
 
 impl Tip {
-    /// The branch a ref is, or `None` for any other ref and for a remote's `HEAD`.
-    fn of(refname: &str) -> Option<Self> {
+    /// The branch a ref is, or `None` for any other ref and for a remote's `HEAD`. The
+    /// repository's remotes, which tell where a remote-tracking ref's remote ends, are listed only
+    /// when a remote-tracking ref is met.
+    fn of(refname: &str, git: &Git) -> Result<Option<Self>> {
         let refname = refname.rsplit(" -> ").next().unwrap_or(refname);
         if let Some(name) = refname.strip_prefix("refs/heads/") {
-            return Some(Self {
+            return Ok(Some(Self {
                 name: name.to_string(),
                 remote: false,
-            });
+            }));
         }
-        let (_, name) = refname.strip_prefix("refs/remotes/")?.split_once('/')?;
-        (name != "HEAD").then(|| Self {
-            name: name.to_string(),
-            remote: true,
-        })
+        let Some(rest) = refname.strip_prefix("refs/remotes/") else {
+            return Ok(None);
+        };
+        let remotes = git.remotes()?;
+        Ok(
+            split_remote_branch(rest, remotes.iter().map(String::as_str))
+                .filter(|(_, name)| *name != "HEAD")
+                .map(|(_, name)| Self {
+                    name: name.to_string(),
+                    remote: true,
+                }),
+        )
     }
 }
 
 /// The [`Tip`]s among `refnames`, each once.
-fn tips<'a>(refnames: impl IntoIterator<Item = &'a str>) -> Vec<Tip> {
+fn tips<'a>(refnames: impl IntoIterator<Item = &'a str>, git: &Git) -> Result<Vec<Tip>> {
     let mut found: Vec<Tip> = Vec::new();
-    for tip in refnames.into_iter().filter_map(Tip::of) {
-        if !found.contains(&tip) {
-            found.push(tip);
+    for refname in refnames {
+        if let Some(tip) = Tip::of(refname, git)? {
+            if !found.contains(&tip) {
+                found.push(tip);
+            }
         }
     }
-    found
+    Ok(found)
 }
 
 /// The local and remote-tracking branches pointing at `commit`.
@@ -244,7 +286,7 @@ pub(super) fn tips_at(git: &Git, commit: &str) -> Result<Vec<Tip>> {
         "refs/heads/",
         "refs/remotes/",
     ])?;
-    Ok(tips(lossy(&out).split_whitespace()))
+    tips(lossy(&out).split_whitespace(), git)
 }
 
 /// The parents of `commit`, and the branches pointing at it (see [`tips_at`]), from one `git`: it
@@ -265,28 +307,22 @@ pub(super) fn parents_and_tips(git: &Git, commit: &str) -> Result<(Vec<String>, 
     let (parents, decorations) = out.split_once('\0').unwrap_or((&out, ""));
     Ok((
         parents.split_whitespace().map(str::to_string).collect(),
-        tips(decorations.trim().split(", ")),
+        tips(decorations.trim().split(", "), git)?,
     ))
 }
 
-/// The commit the local branch was created at, as its reflog's oldest entry records it. A branch
-/// whose reflog is missing or expired, or whose oldest entry is not its creation, has none:
-/// a later entry would pass for a fork point that is too recent, which would hold the branch's
-/// own changes against it. Whether that commit is where the branch forked from the target branch
-/// is for the caller to judge: a branch can be created on someone else's unmerged work.
+/// The commit the local branch was created at, as the entry that created it in its reflog
+/// records (see [`reflog::creation_of`]). A branch whose reflog is missing or expired has none: a
+/// later entry would pass for a fork point that is too recent, which would hold the branch's own
+/// changes against it. So has a branch in a repository that keeps no reflog files (reftable).
+/// Whether that commit is where the branch forked from the target branch is for the caller to
+/// judge: a branch can be created on someone else's unmerged work.
 pub(super) fn creation_point(git: &Git, branch: &str) -> Result<Option<String>> {
-    let listing = git.line_lenient([
-        "reflog",
-        "show",
-        "--no-show-signature",
-        "--format=%H %gs",
-        &format!("refs/heads/{branch}"),
-    ])?;
-    let oldest = listing.lines().next_back().unwrap_or_default();
-    Ok(oldest
-        .split_once(' ')
-        .filter(|(oid, why)| is_oid(oid) && why.starts_with("branch: Created from"))
-        .map(|(oid, _)| oid.to_string()))
+    let common = git.common_dir()?;
+    if uses_reftable(common) {
+        return Ok(None);
+    }
+    Ok(reflog::creation_of(common, branch.as_bytes()).map(|creation| creation.commit))
 }
 
 pub(super) fn is_ancestor(git: &Git, a: &str, b: &str) -> Result<bool> {
@@ -306,13 +342,34 @@ pub(super) fn rev_count(git: &Git, args: &[&str]) -> Result<usize> {
     Ok(lossy(&out).trim().parse().unwrap_or(0))
 }
 
+/// The ref the branch `branch` has on each remote the repository has, one pattern for each. A
+/// `*` for the remote would not match a remote whose name holds a slash. `for-each-ref` matches a
+/// pattern as a prefix up to a slash, so what it lists is kept only where it equals a pattern.
+fn remote_patterns(git: &Git, branch: &str) -> Result<Vec<String>> {
+    Ok(git
+        .remotes()?
+        .iter()
+        .map(|remote| format!("refs/remotes/{remote}/{branch}"))
+        .collect())
+}
+
+/// The remote-tracking refs of the branch `branch` on any remote.
 pub(super) fn remote_refs(git: &Git, branch: &str) -> Result<Vec<String>> {
-    let out = git.read([
-        "for-each-ref",
-        "--format=%(refname)",
-        &format!("refs/remotes/*/{branch}"),
-    ])?;
-    Ok(lossy(&out).split_whitespace().map(str::to_string).collect())
+    let patterns = remote_patterns(git, branch)?;
+    if patterns.is_empty() {
+        return Ok(Vec::new());
+    }
+    let out = git.read(
+        ["for-each-ref", "--format=%(refname)"]
+            .into_iter()
+            .map(str::to_string)
+            .chain(patterns.iter().cloned()),
+    )?;
+    Ok(lossy(&out)
+        .split_whitespace()
+        .filter(|refname| patterns.iter().any(|pattern| pattern == refname))
+        .map(str::to_string)
+        .collect())
 }
 
 /// The tips of the branch's own remote-tracking branches: the same-named ones, and its upstream,
@@ -324,34 +381,48 @@ pub(super) fn remote_tips(
     branch: &str,
     skip_upstream: &dyn Fn(&str) -> bool,
 ) -> Result<Vec<String>> {
-    // The branch's own line carries its upstream; the remote-tracking ones carry their tips.
-    let out = git.read([
-        "for-each-ref",
-        "--format=%(refname)%09%(objectname)%09%(upstream)",
-        &format!("refs/remotes/*/{branch}"),
-        &format!("refs/heads/{branch}"),
-    ])?;
+    // The branch's own line carries its upstream; the remote-tracking ones carry their tips. A
+    // pattern also matches the refs below it, so only exact names are taken.
+    let own = format!("refs/heads/{branch}");
+    let patterns = remote_patterns(git, branch)?;
+    let out = git.read(
+        [
+            "for-each-ref",
+            "--format=%(refname)%09%(objectname)%09%(upstream)%09%(upstream:remotename)",
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .chain(patterns.iter().cloned())
+        .chain([own.clone()]),
+    )?;
     let (mut refs, mut tips) = (Vec::new(), Vec::new());
-    let mut upstream = String::new();
+    let (mut upstream, mut upstream_remote) = (String::new(), String::new());
     for line in lossy(&out).lines() {
         let mut fields = line.split('\t');
-        let (Some(refname), Some(oid), Some(up)) = (fields.next(), fields.next(), fields.next())
+        let (Some(refname), Some(oid), Some(up), Some(remote)) =
+            (fields.next(), fields.next(), fields.next(), fields.next())
         else {
             continue;
         };
         if refname.starts_with("refs/remotes/") {
+            if !patterns.iter().any(|pattern| pattern == refname) {
+                continue;
+            }
             refs.push(refname.to_string());
             if !tips.iter().any(|tip| tip == oid) {
                 tips.push(oid.to_string());
             }
-        } else {
+        } else if refname == own {
             upstream = up.to_string();
+            upstream_remote = remote.to_string();
         }
     }
+    // The remote is the one `git` reads from the configuration; `.` is an upstream that is a local
+    // branch, which has none.
     let name = upstream
         .strip_prefix("refs/remotes/")
-        .and_then(|rest| rest.split_once('/'))
-        .map(|(_, name)| name);
+        .and_then(|rest| rest.strip_prefix(upstream_remote.as_str()))
+        .and_then(|rest| rest.strip_prefix('/'));
     if name.is_some_and(|name| !skip_upstream(name)) && !refs.contains(&upstream) {
         let tip = git.line_lenient([
             "rev-parse",
@@ -370,11 +441,20 @@ pub(super) fn remote_tips(
 /// that does not exist), the unique same-named branch on a remote is used instead; with no or
 /// several same-named branches there is no ref and the hint is written `<remote>/<branch>`.
 pub(super) fn upstream_of(git: &Git, branch: &str) -> Result<(Option<String>, String)> {
-    let upstream = git.line_lenient([
+    // A pattern also matches the refs below it (`refs/heads/main/x` for `main`), so only the
+    // branch's own line is taken.
+    let own = format!("refs/heads/{branch}");
+    let listed = lossy(&git.read_lenient([
         "for-each-ref",
-        "--format=%(upstream)",
-        &format!("refs/heads/{branch}"),
-    ])?;
+        "--format=%(refname)%09%(upstream)",
+        own.as_str(),
+    ])?);
+    let upstream = listed
+        .lines()
+        .find_map(|line| line.strip_prefix(own.as_str())?.strip_prefix('\t'))
+        .unwrap_or_default()
+        .trim()
+        .to_string();
     if !upstream.is_empty() && git.succeeds(["rev-parse", "--verify", "-q", upstream.as_str()])? {
         return Ok((Some(upstream), format!("{branch}@{{u}}")));
     }
@@ -395,28 +475,23 @@ pub(super) fn upstream_of(git: &Git, branch: &str) -> Result<(Option<String>, St
 /// each worktree's rebase state directory instead.
 pub(super) fn busy_branches(git: &Git) -> Result<HashSet<String>> {
     let mut names = HashSet::new();
-    let listing = git.read(["worktree", "list", "--porcelain"])?;
-    for line in lossy(&listing).split('\n') {
-        if let Some(name) = line.strip_prefix("branch refs/heads/") {
-            names.insert(name.to_string());
+    let listing = git.read(["worktree", "list", "--porcelain", "-z"])?;
+    for record in parse_worktree_list(&listing) {
+        if let Some(branch) = record.branch {
+            names.insert(lossy(&branch));
         }
     }
-    let common = git
-        .dir()?
-        .join(lossy(&git.read(["rev-parse", "--git-common-dir"])?).trim());
-    let mut gitdirs = vec![common.clone()];
+    let common = git.common_dir()?;
+    let mut gitdirs = vec![common.to_path_buf()];
     if let Ok(linked) = std::fs::read_dir(common.join("worktrees")) {
         gitdirs.extend(linked.filter_map(Result::ok).map(|entry| entry.path()));
     }
-    for gitdir in gitdirs {
-        for state in ["rebase-merge", "rebase-apply"] {
-            let Ok(head) = std::fs::read(gitdir.join(state).join("head-name")) else {
-                continue;
-            };
-            if let Some(name) = lossy(&head).trim().strip_prefix("refs/heads/") {
-                names.insert(name.to_string());
-            }
-        }
-    }
+    // Like the rest of the gate, an unreadable state is skipped.
+    names.extend(
+        gitdirs
+            .iter()
+            .filter_map(|gitdir| rebasing_branch(gitdir))
+            .map(|branch| lossy(&branch)),
+    );
     Ok(names)
 }

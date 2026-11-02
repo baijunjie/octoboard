@@ -5,7 +5,8 @@
 
 use std::path::Path;
 
-use crate::project_git::run_git_read;
+use crate::git::run::Runner;
+use crate::project_git::project_git;
 use crate::protocol::{GitStatus, Project};
 use crate::state::AppState;
 
@@ -35,8 +36,8 @@ pub(crate) const BRANCH_HEADER_ARGS: &[&str] = &[
 /// separate invocation rather than reviving this one's enumeration for every sweep that does not
 /// need it. `--ignore-submodules=all` likewise stops `git` from running a status inside every
 /// checked-out submodule, which the header does not depend on either.
-pub(crate) fn read_branch_header(path: &Path, status: &mut GitStatus) {
-    match read_header(path) {
+pub(crate) fn read_branch_header(git: &Runner, path: &Path, status: &mut GitStatus) {
+    match read_header(git, path) {
         Ok(header) => apply_header(status, header),
         Err(err) => {
             tracing::debug!(%err, "reading the local branch state failed");
@@ -46,8 +47,10 @@ pub(crate) fn read_branch_header(path: &Path, status: &mut GitStatus) {
 }
 
 /// Reads the local branch header with `git status`, without touching the remote.
-pub(crate) fn read_header(path: &Path) -> Result<BranchHeader, String> {
-    run_git_read(path, BRANCH_HEADER_ARGS).map(|output| parse_branch_header(&output))
+pub(crate) fn read_header(git: &Runner, path: &Path) -> Result<BranchHeader, String> {
+    git.read(path, BRANCH_HEADER_ARGS)
+        .map(|output| parse_branch_header(&String::from_utf8_lossy(&output)))
+        .map_err(|err| err.to_string())
 }
 
 pub(crate) fn apply_header(status: &mut GitStatus, header: BranchHeader) {
@@ -136,7 +139,8 @@ pub(crate) fn parse_branch_header(output: &str) -> BranchHeader {
 /// header, or the error of failing to read it, reaches the held status: see
 /// `AppState::publish_git_reread`.
 pub(crate) fn publish_reread(state: &AppState, project: &Project) {
-    state.publish_git_reread(&project.id, read_header(Path::new(&project.path)));
+    let header = project_git(state).and_then(|git| read_header(&git, Path::new(&project.path)));
+    state.publish_git_reread(&project.id, header);
 }
 
 /// Parses `+<ahead> -<behind>` as printed after `# branch.ab `; a part that does not match reads
@@ -157,11 +161,10 @@ fn parse_ab(text: &str) -> (u32, u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::git::run::{Access, UserGit};
-    use crate::project_git::{git_command, run_git_command, GIT_COMMAND_TIMEOUT};
+    use crate::git::run::{Access, WorkDir};
+    use crate::project_git::test_git;
     use crate::test_support::{
-        git, git_dir_state, isolated_git_env, move_modification_time_back, repo_with, ScratchDir,
-        SYSTEM_GIT,
+        git, git_dir_state, move_modification_time_back, repo_with, ScratchDir,
     };
 
     #[test]
@@ -259,8 +262,8 @@ mod tests {
         repo
     }
 
-    /// Runs the branch-header read in `repo` with the given access, as [`run_git_read`] would
-    /// but over [`isolated_git_env`] and the system `git`, and returns what it reported.
+    /// Runs the branch-header read in `repo` with the given access, as the check does but over
+    /// [`test_git`], and returns what it reported.
     fn read_header(repo: &Path, access: Access) -> BranchHeader {
         parse_branch_header(&run_header_args(repo, BRANCH_HEADER_ARGS, access))
     }
@@ -268,13 +271,10 @@ mod tests {
     /// [`read_header`]'s command with `args` in place of [`BRANCH_HEADER_ARGS`], returning its
     /// raw output.
     fn run_header_args(repo: &Path, args: &[&str], access: Access) -> String {
-        let mut command = git_command(
-            &UserGit::new(SYSTEM_GIT, isolated_git_env()),
-            repo,
-            args,
-            access,
-        );
-        run_git_command(&mut command, GIT_COMMAND_TIMEOUT).expect("the branch header is read")
+        let git = test_git();
+        let mut command = git.command(access, WorkDir::At(repo), args);
+        let output = git.run(&mut command).expect("the branch header is read");
+        String::from_utf8_lossy(&output).into_owned()
     }
 
     #[test]
@@ -319,17 +319,32 @@ mod tests {
                 "s",
             ],
         );
-        // A status run inside the submodule consults its fsmonitor command, which leaves a
-        // marker; the superproject's own status never does, as it is configured only there.
+        // A status run inside the submodule hashes its changed file through a clean filter that
+        // leaves a marker; the superproject's own status never does, as the filter and the
+        // attribute naming it are configured only there.
         let marker = repo.join("marker");
+        let attributes = repo.join("sub-attributes");
+        std::fs::write(&attributes, "a.txt filter=mark\n").expect("the attributes are written");
+        let inside = repo.join("s");
         git(
-            &repo.join("s"),
+            &inside,
             &[
                 "config",
-                "core.fsmonitor",
-                &format!("touch '{}'; :", marker.display()),
+                "core.attributesFile",
+                attributes.to_str().expect("the scratch path is UTF-8"),
             ],
         );
+        git(
+            &inside,
+            &[
+                "config",
+                "filter.mark.clean",
+                &format!("touch '{}'; cat", marker.display()),
+            ],
+        );
+        // The same size with another modification time, so only hashing the file tells.
+        std::fs::write(inside.join("a.txt"), b"bus\n").expect("the file is writable");
+        move_modification_time_back(&inside.join("a.txt"));
 
         read_header(&repo, Access::Read);
         assert!(

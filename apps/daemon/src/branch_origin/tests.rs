@@ -4,8 +4,10 @@ use std::time::Duration;
 
 mod target_branch;
 
+use super::reconcile::reconcile;
+use super::record::birth_of;
 use super::*;
-use crate::browse::compare;
+use crate::browse::compare::{self, BranchList};
 use crate::git::isolated::IsolatedGit;
 use crate::session_git_hooks::fixture::{project, succeeds, Fixture};
 use crate::test_support::{git, isolated_git_env, ScratchDir, PATIENCE, SYSTEM_GIT};
@@ -308,6 +310,25 @@ fn a_branch_whose_reflog_does_not_begin_with_its_creation_has_no_birth() {
     assert!(birth("fresh", "HEAD").is_some());
 }
 
+/// The creation is the entry that begins at nothing, whatever message the tool that made the
+/// branch wrote, as the revert gate takes it (`git::reflog::creation_of`).
+#[test]
+fn a_branch_made_by_update_ref_has_a_birth_like_one_made_by_branch() {
+    let fixture = Fixture::new();
+    let now = now_millis() / 1000;
+    let head = String::from_utf8(git(&fixture.repo, &["rev-parse", "HEAD"]))
+        .unwrap()
+        .trim()
+        .to_string();
+    git(&fixture.repo, &["branch", "plain"]);
+    git(
+        &fixture.repo,
+        &["update-ref", "-m", "imported", "refs/heads/by-ref", &head],
+    );
+    assert!(birth_of(&fixture.common_dir, "plain", &head, now).is_some());
+    assert!(birth_of(&fixture.common_dir, "by-ref", &head, now).is_some());
+}
+
 // -- the record's lifetime ----------------------------------------------------
 
 #[test]
@@ -384,8 +405,19 @@ fn deleting_a_project_waits_for_a_write_holding_the_gate() {
     fixture.as_session("a", &["branch", "topic"]);
     fixture.deliver(1);
 
-    let gate = fixture.state.branch_origins.gate(&fixture.common_dir);
-    let held = gate.lock().unwrap();
+    let (held_tx, held_rx) = std::sync::mpsc::channel();
+    let (release, released) = std::sync::mpsc::channel::<()>();
+    let holder = {
+        let state = Arc::clone(&fixture.state);
+        let common_dir = fixture.common_dir.clone();
+        std::thread::spawn(move || {
+            state.branch_origins.serialized(&common_dir, || {
+                held_tx.send(()).unwrap();
+                released.recv().unwrap();
+            });
+        })
+    };
+    held_rx.recv_timeout(PATIENCE).expect("the gate is taken");
     let (done, deleted) = std::sync::mpsc::channel();
     let state = Arc::clone(&fixture.state);
     let path = fixture.repo.to_string_lossy().into_owned();
@@ -413,7 +445,8 @@ fn deleting_a_project_waits_for_a_write_holding_the_gate() {
         deleted.try_recv().is_err(),
         "the deletion waits for the gate"
     );
-    drop(held);
+    release.send(()).unwrap();
+    holder.join().unwrap();
 
     deleted
         .recv_timeout(PATIENCE)

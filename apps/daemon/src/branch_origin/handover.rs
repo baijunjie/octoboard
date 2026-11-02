@@ -1,11 +1,14 @@
 //! Moving the responsibility for git branches between sessions, for the callers that have checked
 //! the branches are the giver's: `request_session` on approval, `new_session` with `branches`, and
-//! the owner's `handover_branches`. The record move itself is [`super::hand_over`].
+//! the owner's `handover_branches`. The record move itself is [`hand_over`].
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use anyhow::Result;
+
+use super::{is_same_branch, recorded_title, repo_key};
 use crate::protocol::Session;
 use crate::state::AppState;
 use crate::store::BranchMove;
@@ -50,7 +53,7 @@ pub async fn move_branches(
         let (from, to_id) = (from.id.clone(), to.id.clone());
         let to_title = to.title.clone();
         tokio::task::spawn_blocking(move || {
-            super::hand_over(&state, &repository, &branches, &from, &to_id, &to_title)
+            hand_over(&state, &repository, &branches, &from, &to_id, &to_title)
         })
     };
     match moving.await {
@@ -64,6 +67,72 @@ pub async fn move_branches(
             Handed::Failed(handover.branches.clone())
         }
     }
+}
+
+/// The first of `branches` of `repo` that `session` has no handover to give, or `None` when it
+/// is responsible for all of them. A branch is not the session's when it has no row, when its row
+/// names another responsible session, or when it is no longer the branch the row was made for. In
+/// a reftable repository the last cannot be told (see the header of [`super`]), so a branch
+/// deleted since the last listing still passes there. The answer is a snapshot: [`hand_over`]
+/// compares again when it moves.
+pub fn first_not_held_by(
+    state: &AppState,
+    repo: &Path,
+    branches: &[String],
+    session: &str,
+) -> Result<Option<String>> {
+    let rows = state.store.branch_origins(&repo_key(repo))?;
+    Ok(branches
+        .iter()
+        .find(|branch| {
+            !rows.iter().any(|row| {
+                row.branch == **branch
+                    && row.responsible_session == session
+                    && is_same_branch(repo, row)
+            })
+        })
+        .cloned())
+}
+
+/// Moves the responsible session of `branches` of `repo` from `from` to `to`, called `to_title`
+/// (cut as attribution cuts it), only where it is `from` now, and says which moved and which did
+/// not. Under the repository's gate, as every other write to its rows is: a reconcile that has
+/// read its snapshot would otherwise write the old responsible session back over the move.
+pub fn hand_over(
+    state: &AppState,
+    repo: &Path,
+    branches: &[String],
+    from: &str,
+    to: &str,
+    to_title: &str,
+) -> Result<BranchMove> {
+    state.branch_origins.serialized(repo, || {
+        Ok(state.store.move_branch_responsibility(
+            &repo_key(repo),
+            branches,
+            from,
+            to,
+            &recorded_title(to_title),
+            crate::time::now_millis(),
+        )?)
+    })
+}
+
+/// Moves every branch `from` is responsible for to `to`, a session of the same project, and
+/// returns the branches moved, as wire paths. Blocking: it reads the repository's origins and
+/// takes its gate.
+pub fn hand_over_all(state: &AppState, from: &Session, to: &Session) -> Result<Vec<String>> {
+    let mut moved = Vec::new();
+    for repo in super::bound::bound_in(state, std::slice::from_ref(from))? {
+        // `bound_in` lists only the branches `from` is responsible for.
+        let branches: Vec<String> = repo
+            .branches
+            .into_iter()
+            .map(|branch| branch.branch)
+            .collect();
+        moved.extend(hand_over(state, &repo.repo, &branches, &from.id, &to.id, &to.title)?.moved);
+    }
+    Ok(moved)
 }
 
 /// A branch name given as a wire path, as text.

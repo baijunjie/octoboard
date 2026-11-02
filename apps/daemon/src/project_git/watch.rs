@@ -20,18 +20,16 @@
 //! that is not a repository when it is added, or at daemon start, is picked up by the first check
 //! that finds it is one (`status::run_checks`).
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use tokio::sync::mpsc::UnboundedReceiver;
-use tokio::task::JoinSet;
-use tokio::time::Instant;
 
-use crate::blocking_pass::BLOCKING_WIDTH;
 use crate::git::layout::is_git_repo;
+use crate::project_git::debounced::{Debounced, Timing};
 use crate::project_git::header;
 use crate::protocol::Project;
 use crate::state::AppState;
@@ -291,74 +289,31 @@ pub fn watch_now(state: &AppState, project: &Project) {
 }
 
 /// Turns the paths a watch reports into debounced re-reads: a project is read once its refs have
-/// been quiet for [`DEBOUNCE`]. A project is read by one thread at a time, and a change that
-/// arrives while it is being read owes it one more read afterwards, so reads of a project never
-/// overlap or finish out of order. At most [`BLOCKING_WIDTH`] projects are read at once.
-/// Ends when the watcher, which holds the sending half, is dropped.
+/// been quiet for [`DEBOUNCE`] ([`super::debounced`]), and one more time straight after a read
+/// during which a change arrived. Ends when the watcher, which holds the sending half, is dropped.
 async fn rereads(state: Arc<AppState>, mut receiver: UnboundedReceiver<Vec<PathBuf>>) {
-    let mut due: HashMap<String, Instant> = HashMap::new();
-    let mut reading: JoinSet<()> = JoinSet::new();
-    let mut project_of: HashMap<tokio::task::Id, String> = HashMap::new();
-    let mut again: HashSet<String> = HashSet::new();
-    let busy = |project_of: &HashMap<tokio::task::Id, String>, id: &str| {
-        project_of.values().any(|reading| reading == id)
-    };
-    loop {
-        // Only what can start now sets a wakeup; with every place taken, a finishing read does.
-        let next = if reading.len() < BLOCKING_WIDTH {
-            due.iter()
-                .filter(|(id, _)| !busy(&project_of, id))
-                .map(|(_, at)| *at)
-                .min()
-        } else {
-            None
-        };
-        tokio::select! {
-            paths = receiver.recv() => {
-                let Some(paths) = paths else { break };
-                for id in state.git_watch.concerned(&paths) {
-                    if busy(&project_of, &id) {
-                        again.insert(id);
-                    } else {
-                        due.insert(id, Instant::now() + DEBOUNCE);
-                    }
-                }
-            }
-            Some(finished) = reading.join_next_with_id(), if !reading.is_empty() => {
-                let task = match finished {
-                    Ok((task, ())) => task,
-                    Err(err) => err.id(),
-                };
-                if let Some(id) = project_of.remove(&task) {
-                    if again.remove(&id) {
-                        due.insert(id, Instant::now());
-                    }
-                }
-            }
-            _ = tokio::time::sleep_until(next.unwrap_or_else(Instant::now)), if next.is_some() => {}
+    let scheduler = Arc::new(Debounced::new(Timing {
+        debounce: DEBOUNCE,
+        max_delay: None,
+        owed: Duration::ZERO,
+    }));
+    while let Some(paths) = receiver.recv().await {
+        for id in state.git_watch.concerned(&paths) {
+            scheduler.report(id.clone(), || {
+                let state = state.clone();
+                move || reread_project(&state, &id)
+            });
         }
-        let now = Instant::now();
-        let ready: Vec<String> = due
-            .iter()
-            .filter(|(id, at)| **at <= now && !busy(&project_of, id))
-            .map(|(id, _)| id.clone())
-            .collect();
-        for id in ready {
-            if reading.len() >= BLOCKING_WIDTH {
-                break;
-            }
-            due.remove(&id);
-            match state.store.get_project(&id) {
-                Ok(Some(project)) => {
-                    let state = state.clone();
-                    let task = reading.spawn_blocking(move || reread(&state, &project));
-                    project_of.insert(task.id(), id);
-                }
-                Ok(None) => {}
-                Err(err) => {
-                    tracing::warn!(project = %id, %err, "reading a project to re-read its git status failed")
-                }
-            }
+    }
+}
+
+/// Reads the project `id` names, if the store still has it, and re-reads it.
+fn reread_project(state: &AppState, id: &str) {
+    match state.store.get_project(id) {
+        Ok(Some(project)) => reread(state, &project),
+        Ok(None) => {}
+        Err(err) => {
+            tracing::warn!(project = %id, %err, "reading a project to re-read its git status failed")
         }
     }
 }
@@ -377,6 +332,7 @@ mod tests {
     use super::*;
     use crate::protocol::Event;
     use crate::test_support::{app_state, git, repo_with};
+    use tokio::time::Instant;
 
     /// How long a test waits for the watch to report a ref change. Long: while the
     /// crate's tests run in parallel, macOS's file events go missing for tens of seconds at a time

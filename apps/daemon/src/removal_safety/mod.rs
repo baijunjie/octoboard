@@ -15,6 +15,8 @@
 //! the way is its [`Overlap`]. The home directory, the root of a disk and a directory holding
 //! Octoboard's data are protected whatever else is found.
 
+pub mod project;
+
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -31,7 +33,8 @@ use crate::state::AppState;
 pub(crate) const TRASH_LOOK_DEADLINE: Duration = Duration::from_secs(5);
 
 /// Whether `directory` is the root of a disk: `/`, or a mount point such as `/Volumes/Backup`,
-/// which sits on a different device from its parent.
+/// which sits on a different device from its parent. A directory or parent that cannot be read
+/// counts as one, since unknown never destroys.
 fn is_disk_root(directory: &Path) -> bool {
     use std::os::unix::fs::MetadataExt;
     let Some(parent) = directory.parent() else {
@@ -39,7 +42,7 @@ fn is_disk_root(directory: &Path) -> bool {
     };
     match (std::fs::metadata(directory), std::fs::metadata(parent)) {
         (Ok(this), Ok(above)) => this.dev() != above.dev(),
-        _ => false,
+        _ => true,
     }
 }
 
@@ -655,6 +658,15 @@ impl Worktrees {
 mod tests {
     use super::*;
     use crate::test_support::{app_state, git, repo_with};
+
+    /// A directory whose device cannot be read is not told apart from a disk root, so it is
+    /// protected; an ordinary directory in the same place is not.
+    #[test]
+    fn an_unreadable_directory_counts_as_a_disk_root() {
+        let dir = crate::test_support::ScratchDir::new("trash-safety-disk-root");
+        assert!(is_disk_root(&dir.join("missing")));
+        assert!(!is_disk_root(&dir));
+    }
 
     /// A directory whose linked worktree lives elsewhere keeps its repository in it: that is in
     /// the way for [`Overlap::Whole`], which looks for the repository, and not for

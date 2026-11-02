@@ -1,7 +1,8 @@
 //! The `pre-push` path of the gate: a pull request is merged on the remote and its target branch
-//! never moves locally, so what a push is about to publish is checked here (see the module header
-//! of [`super`] for the rules). A pushed branch with no recorded target branch is checked against
-//! the default target branch, the first resident guarded branch, unless it is guarded itself.
+//! never moves locally, so what a push is about to publish is checked here (see "A push" in
+//! `docs/product/revert-gate.md`). A pushed branch with no recorded target branch is checked
+//! against the default target branch, the first resident guarded branch, unless it is guarded
+//! itself.
 
 use anyhow::Result;
 
@@ -9,7 +10,9 @@ use super::content::find_reverts;
 use super::git::{
     has_commit, is_ancestor, is_null, is_space, lossy, remote_refs, short, upstream_of, Git,
 };
-use super::{check_move, describe, fork_points_of, forks_of_others, Inputs, Route, Verdict};
+use super::local::{check_move, fork_points_of, forks_of_others};
+use super::report::describe;
+use super::{Inputs, Route, Verdict};
 
 /// One ref of a push that the gate has something to say about: a branch being pushed (not
 /// deleted) that is guarded or has a target branch, recorded or by default.

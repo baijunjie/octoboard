@@ -6,17 +6,18 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::git::layout::is_git_repo;
-use crate::git::run::{self, Access, Limits, Policy, UserGit, WorkDir};
+use crate::git::repo_files::operation_in_progress;
+use crate::git::run::{Access, Limits, Policy, Runner, WorkDir};
+use crate::git::tree_entries::entries;
 use crate::project_git::header;
 use crate::protocol::{error_code, CodedError, Project};
 use crate::state::AppState;
 
-/// No pager and no configured filesystem monitor, and no recursion into submodules, which a
-/// discard must leave alone. Objects are read only under their own ids (no replacement objects)
-/// and one a partial clone lacks is never fetched.
+/// No configured filesystem monitor, for the restore's writes as for its reads, and no recursion
+/// into submodules, which a discard must leave alone. Objects are read only under their own ids
+/// (no replacement objects) and one a partial clone lacks is never fetched.
 const RESTORE: Policy = Policy::new(
     &[
-        "--no-pager",
         "-c",
         "core.fsmonitor=false",
         "-c",
@@ -26,13 +27,13 @@ const RESTORE: Policy = Policy::new(
 );
 
 pub fn restore_project(state: &AppState, project: &Project) -> anyhow::Result<()> {
-    let git = UserGit::cached_shell()?;
+    let git = Runner::new((state.host_tools.get().git)()?, RESTORE, LIMITS);
     restore(Path::new(&project.path), &project.id, &git)?;
     header::publish_reread(state, project);
     Ok(())
 }
 
-fn restore(path: &Path, project: &str, git: &UserGit) -> anyhow::Result<()> {
+fn restore(path: &Path, project: &str, git: &Runner) -> anyhow::Result<()> {
     if !is_git_repo(path) {
         return Err(CodedError::raised(
             error_code::NOT_A_GIT_REPOSITORY,
@@ -40,7 +41,7 @@ fn restore(path: &Path, project: &str, git: &UserGit) -> anyhow::Result<()> {
             &[("project", project)],
         ));
     }
-    let run = |args: &[&[u8]], access| run_git(path, git, args, access, LIMITS);
+    let run = |args: &[&[u8]], access| run_git(path, git, args, access);
     let status_out = run(
         &[
             b"status",
@@ -68,77 +69,42 @@ fn restore(path: &Path, project: &str, git: &UserGit) -> anyhow::Result<()> {
     let directory = run(&[b"rev-parse", b"--absolute-git-dir"], Access::Read)?;
     let directory = directory.strip_suffix(b"\n").unwrap_or(&directory);
     let directory = PathBuf::from(OsStr::from_bytes(directory));
-    for marker in [
-        "MERGE_HEAD",
-        "CHERRY_PICK_HEAD",
-        "REVERT_HEAD",
-        "rebase-merge",
-        "rebase-apply",
-        "sequencer",
-        "BISECT_LOG",
-    ] {
-        if directory
-            .join(marker)
-            .try_exists()
-            .map_err(|err| failed(&err.to_string()))?
-        {
-            return Err(CodedError::raised(
-                error_code::GIT_OPERATION_IN_PROGRESS,
-                "Finish or abort the Git operation in progress before restoring changes.",
-                &[],
-            ));
-        }
+    if operation_in_progress(&directory).map_err(|err| failed(&err.to_string()))? {
+        return Err(CodedError::raised(
+            error_code::GIT_OPERATION_IN_PROGRESS,
+            "Finish or abort the Git operation in progress before restoring changes.",
+            &[],
+        ));
     }
 
     // A non-recursive restore still rewrites gitlinks in the index. Exclude the union of HEAD
     // and the index so an added, removed or changed submodule is preserved on both sides.
     let index = run(&[b"ls-files", b"--stage", b"-z"], Access::Read)?;
     let head = run(&[b"ls-tree", b"-r", b"-z", b"HEAD"], Access::Read)?;
-    let indexed_paths: std::collections::HashSet<&[u8]> = index
-        .split(|byte| *byte == 0)
-        .filter_map(|entry| {
-            entry
-                .iter()
-                .position(|byte| *byte == b'\t')
-                .map(|tab| &entry[tab + 1..])
-        })
-        .collect();
-    for entry in head.split(|byte| *byte == 0) {
-        if entry.starts_with(b"160000 ") {
-            continue;
-        }
-        if let Some(tab) = entry.iter().position(|byte| *byte == b'\t') {
-            let name = &entry[tab + 1..];
-            if !indexed_paths.contains(name) {
-                match std::fs::symlink_metadata(path.join(OsStr::from_bytes(name))) {
-                    Ok(_) => return Err(failed("a file removed from the index still exists on disk; move it aside before restoring changes.")),
-                    Err(err) if err.kind() == std::io::ErrorKind::NotFound
-                        || err.kind() == std::io::ErrorKind::NotADirectory => {}
-                    Err(err) => return Err(failed(&err.to_string())),
-                }
+    let indexed_paths: std::collections::HashSet<&[u8]> =
+        entries(&index).map(|entry| entry.path).collect();
+    for entry in entries(&head).filter(|entry| !entry.is_gitlink) {
+        if !indexed_paths.contains(entry.path) {
+            match std::fs::symlink_metadata(path.join(OsStr::from_bytes(entry.path))) {
+                Ok(_) => return Err(failed("a file removed from the index still exists on disk; move it aside before restoring changes.")),
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound
+                    || err.kind() == std::io::ErrorKind::NotADirectory => {}
+                Err(err) => return Err(failed(&err.to_string())),
             }
         }
     }
     let mut exclusions = Vec::new();
     let mut has_files = false;
-    for entry in index
-        .split(|byte| *byte == 0)
-        .chain(head.split(|byte| *byte == 0))
-    {
-        if !entry.is_empty() && !entry.starts_with(b"160000 ") {
-            if let Some(tab) = entry.iter().position(|byte| *byte == b'\t') {
-                has_files = true;
-                protect_untracked_collisions(path, &entry[tab + 1..])?;
+    for entry in entries(&index).chain(entries(&head)) {
+        if entry.is_gitlink {
+            let mut spec = b":(exclude,literal)".to_vec();
+            spec.extend_from_slice(entry.path);
+            if !exclusions.contains(&spec) {
+                exclusions.push(spec);
             }
-        }
-        if entry.starts_with(b"160000 ") {
-            if let Some(tab) = entry.iter().position(|byte| *byte == b'\t') {
-                let mut spec = b":(exclude,literal)".to_vec();
-                spec.extend_from_slice(&entry[tab + 1..]);
-                if !exclusions.contains(&spec) {
-                    exclusions.push(spec);
-                }
-            }
+        } else {
+            has_files = true;
+            protect_untracked_collisions(path, entry.path)?;
         }
     }
     if !has_files {
@@ -195,27 +161,23 @@ const LIMITS: Limits = Limits {
     stderr: 64 * 1024,
 };
 
-fn run_git(
-    path: &Path,
-    git: &UserGit,
-    args: &[&[u8]],
-    access: Access,
-    limits: Limits,
-) -> anyhow::Result<Vec<u8>> {
-    run::run_checked(&mut restore_command(path, git, args, access), limits, None)
+fn run_git(path: &Path, git: &Runner, args: &[&[u8]], access: Access) -> anyhow::Result<Vec<u8>> {
+    git.run(&mut restore_command(path, git, args, access))
         .map_err(|err| failed(&err.to_string()))
 }
 
 /// The `git <args>` command [`run_git`] runs in `path`.
 fn restore_command(
     path: &Path,
-    git: &UserGit,
+    git: &Runner,
     args: &[&[u8]],
     access: Access,
 ) -> std::process::Command {
-    let mut command = git.command(&RESTORE, access, WorkDir::At(path));
-    command.args(args.iter().map(|arg| OsStr::from_bytes(arg)));
-    command
+    git.command(
+        access,
+        WorkDir::At(path),
+        args.iter().map(|arg| OsStr::from_bytes(arg)),
+    )
 }
 
 fn failed(detail: &str) -> anyhow::Error {
@@ -229,15 +191,22 @@ fn failed(detail: &str) -> anyhow::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::git::env::BASE_OPTIONS;
+    use crate::git::run::UserGit;
     use crate::test_support::{
         git, isolated_git_env, pinned_shell_env, repo_with, CommandLine, ScratchDir, SYSTEM_GIT,
     };
+
+    /// The restore's runner over `git`.
+    fn restore_git(git: UserGit) -> Runner {
+        Runner::new(git, RESTORE, LIMITS)
+    }
 
     fn discard(path: &Path) -> anyhow::Result<()> {
         restore(
             path,
             "project",
-            &UserGit::new(SYSTEM_GIT, isolated_git_env()),
+            &restore_git(UserGit::new(SYSTEM_GIT, isolated_git_env())),
         )
     }
 
@@ -246,14 +215,14 @@ mod tests {
     /// only the read gets the index guard.
     #[test]
     fn a_read_and_the_restore_build_their_command_lines() {
-        let git = UserGit::new("/opt/git", pinned_shell_env());
-        let leading = [
-            "--no-pager",
+        let git = restore_git(UserGit::new("/opt/git", pinned_shell_env()));
+        let mut leading = BASE_OPTIONS.to_vec();
+        leading.extend([
             "-c",
             "core.fsmonitor=false",
             "-c",
             "submodule.recurse=false",
-        ];
+        ]);
         let objects = [("GIT_NO_REPLACE_OBJECTS", "1"), ("GIT_NO_LAZY_FETCH", "1")];
         let read = restore_command(
             Path::new("/repo"),
@@ -263,6 +232,8 @@ mod tests {
         );
         let mut args = leading.to_vec();
         args.extend([
+            "-c",
+            "core.fsmonitor=false",
             "-c",
             "diff.autoRefreshIndex=false",
             "ls-files",
@@ -293,11 +264,11 @@ mod tests {
     #[test]
     fn a_git_that_outlasts_its_deadline_fails_the_restore_with_the_stop() {
         let repo = repo_with("restore-timeout", &[(b"a.txt", b"ours\n")]);
-        let git = UserGit::new(SYSTEM_GIT, isolated_git_env());
+        let git = restore_git(UserGit::new(SYSTEM_GIT, isolated_git_env()))
+            .with_limits(Limits::deadline(Duration::from_millis(100)));
         // An alias standing in for a `git` that is slow to finish.
         let args: [&[u8]; 3] = [b"-c", b"alias.nap=!sleep 1", b"nap"];
-        let limits = Limits::deadline(Duration::from_millis(100));
-        let err = run_git(&repo, &git, &args, Access::Write, limits).expect_err("it is stopped");
+        let err = run_git(&repo, &git, &args, Access::Write).expect_err("it is stopped");
         let coded = err.downcast_ref::<CodedError>().unwrap();
         assert_eq!(coded.code, error_code::GIT_RESTORE_FAILED);
         assert!(
@@ -532,7 +503,12 @@ mod tests {
                 .map(|(key, value)| (key.to_string(), value)),
         );
         env.insert("GIT_LITERAL_PATHSPECS".to_string(), "1".to_string());
-        restore(&repo, "project", &UserGit::new(SYSTEM_GIT, env)).unwrap();
+        restore(
+            &repo,
+            "project",
+            &restore_git(UserGit::new(SYSTEM_GIT, env)),
+        )
+        .unwrap();
         assert_eq!(std::fs::read(repo.join("a")).unwrap(), b"ours");
         assert_eq!(std::fs::read(other.join("a")).unwrap(), b"keep");
     }

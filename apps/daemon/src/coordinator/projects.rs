@@ -15,11 +15,11 @@ use crate::branch_cleanup;
 use crate::git_workflow::{GitWorkflowOverride, GitWorkflowOverrideChanges};
 use crate::hostfs;
 use crate::project_git;
-use crate::project_trash;
 use crate::protocol::{
     error_code, Agent, CodedError, Console, Event, Launch, LaunchChange, PerAgent, Present,
     Project, ProjectAccount, ProjectSource, Session, SessionBranchTarget,
 };
+use crate::removal_safety::project;
 use crate::state::AppState;
 use crate::store::LOCAL_HOST_ID;
 
@@ -196,12 +196,10 @@ pub async fn add_project(
     };
 
     let mut associated = associated_directories(state, &console_id).await?;
-    let remote_urls = directory_remote_urls(
-        &associated,
-        source,
-        &directories,
-        project_git::remote::read_remote_url,
-    )
+    let reading = state.clone();
+    let remote_urls = directory_remote_urls(&associated, source, &directories, move |path| {
+        project_git::remote::read_remote_url(&reading, path)
+    })
     .await?;
 
     let mut added = Vec::new();
@@ -427,7 +425,7 @@ pub(super) async fn delete_project(
     }
     // Checked before any session is stopped, so a refusal leaves everything as it was.
     let to_trash = if trash_directory {
-        project_trash::directory_to_trash(
+        project::directory_to_trash(
             state,
             &deleted,
             &state.store.list_projects()?,
@@ -484,7 +482,7 @@ pub(super) async fn delete_project(
         let trash = state.host_tools.get().trash;
         tokio::task::spawn_blocking(move || trash(&directory))
             .await?
-            .map_err(|failure| project_trash::trash_failed(&failure))?;
+            .map_err(|failure| project::trash_failed(&failure))?;
         // Requests run concurrently, so a session may have been started in the project
         // while the folder moved, and nothing held it back. The folder is gone by now, so
         // the project is removed regardless: such a session is ended here as well as it
@@ -543,7 +541,7 @@ pub(super) async fn inspect_project_removal(
     // A removal that would be refused takes nothing along: its refusal is the answer, and
     // a client lists nothing for it. One a path that could not be resolved decided is kept
     // for the removal to repeat, so it takes nothing along either.
-    project_trash::inspected(state, &project, &state.store.list_projects()?).await?;
+    project::inspected(state, &project, &state.store.list_projects()?).await?;
     let id = project.id.clone();
     let deleted_project = project.clone();
     let planning = Arc::clone(state);

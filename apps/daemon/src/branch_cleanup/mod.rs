@@ -28,9 +28,12 @@
 //! fails the archive or deletion it follows: the item is reported as left, unless it turns out to
 //! be gone all the same.
 
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, MutexGuard};
+
+use crate::branch_origin::KeyedGates;
+use crate::git::run::{Policy, Runner};
+use crate::git::worktrees::WORKTREE_GIT_LIMITS;
+use crate::host_tools::Tools;
 
 pub mod project;
 pub mod remove;
@@ -39,34 +42,29 @@ pub mod survey;
 #[cfg(test)]
 mod tests;
 
+/// No configured filesystem monitor for the cleanup's writes either, which a read never starts
+/// (`crate::git::env`): `git worktree remove` checks the worktree it removes with a status of its
+/// own, and a monitor started there would be a program run for a worktree on its way out. A read
+/// gets the setting a second time from its guard, which changes nothing.
+const UNMONITORED: Policy = Policy::new(&["-c", "core.fsmonitor=false"], &[]);
+
+/// The cleanup's `git`: the user's own, as `tools` hands it out, under [`UNMONITORED`] and
+/// [`WORKTREE_GIT_LIMITS`].
+pub(crate) fn cleanup_git(tools: &Tools) -> anyhow::Result<Runner> {
+    (tools.git)().map(|git| Runner::new(git, UNMONITORED, WORKTREE_GIT_LIMITS))
+}
+
 /// What `AppState` holds for the cleanup: one gate per repository, which keeps an archive's and a
 /// deletion's removals in the same repository from running at once and acting on each other's
-/// half-done work. A gate is dropped once nobody holds or waits on it.
+/// half-done work.
 #[derive(Default)]
 pub struct Cleanups {
-    gates: Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>,
+    gates: KeyedGates<PathBuf>,
 }
 
 impl Cleanups {
-    fn gates(&self) -> MutexGuard<'_, HashMap<PathBuf, Arc<Mutex<()>>>> {
-        self.gates
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-    }
-
-    /// Runs `work` holding the gate of `repo`. It guards an order rather than any state, so a
-    /// poisoned one is taken all the same.
+    /// Runs `work` holding the gate of `repo`.
     fn serialized<T>(&self, repo: &Path, work: impl FnOnce() -> T) -> T {
-        let gate = Arc::clone(self.gates().entry(repo.to_path_buf()).or_default());
-        let done = {
-            let _held = gate.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-            work()
-        };
-        let mut gates = self.gates();
-        // The map's own handle and this one: nobody else holds or waits on it.
-        if Arc::strong_count(&gate) == 2 {
-            gates.remove(repo);
-        }
-        done
+        self.gates.serialized(repo, work)
     }
 }

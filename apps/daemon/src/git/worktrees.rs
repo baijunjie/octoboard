@@ -1,4 +1,64 @@
-//! The parsed output of `git worktree list --porcelain -z`.
+//! A repository's worktrees: the parsed list `git worktree list --porcelain -z` gives, with each
+//! one's root and branch ([`worktrees`]), and whether one holds changes a removal would discard
+//! ([`changes`]). The reads run through the caller's [`Runner`].
+
+use std::ffi::OsStr;
+use std::os::unix::ffi::OsStrExt;
+use std::path::{Path, PathBuf};
+use std::time::Duration;
+
+use crate::git::run::{GitError, Limits, Runner};
+
+/// What each `git` that reads or removes worktrees is held to: a deadline of two minutes, since a
+/// forced removal deletes a whole worktree and a status walks a large one, and no output ceiling,
+/// the output being small by nature.
+pub(crate) const WORKTREE_GIT_LIMITS: Limits = Limits::deadline(Duration::from_secs(120));
+
+/// One worktree of the repository, as `git worktree list` gives it.
+pub(crate) struct Listed {
+    pub(crate) root: PathBuf,
+    pub(crate) branch: Option<Vec<u8>>,
+    pub(crate) main: bool,
+    pub(crate) locked: bool,
+    /// Its directory is gone, and only git's record of it is left.
+    pub(crate) prunable: bool,
+}
+
+/// The repository's worktrees, the main one first.
+pub(crate) fn worktrees(git: &Runner, repo: &Path) -> Result<Vec<Listed>, GitError> {
+    let stdout = git.read(repo, ["worktree", "list", "--porcelain", "-z"])?;
+    Ok(parse_worktree_list(&stdout)
+        .iter()
+        .enumerate()
+        .filter(|(_, record)| !record.bare)
+        .map(|(at, record)| {
+            let path = Path::new(OsStr::from_bytes(&record.path));
+            Listed {
+                root: std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf()),
+                branch: record.branch.clone(),
+                main: at == 0,
+                locked: record.locked,
+                prunable: record.prunable,
+            }
+        })
+        .collect())
+}
+
+/// Whether the worktree at `root` holds anything `git worktree remove` refuses to discard:
+/// modified tracked files or untracked ones, the same `git status` it asks itself.
+pub(crate) fn changes(git: &Runner, root: &Path) -> Result<bool, GitError> {
+    let stdout = git.read(
+        root,
+        [
+            "status",
+            "--porcelain",
+            "-z",
+            "--ignore-submodules=none",
+            "--untracked-files=normal",
+        ],
+    )?;
+    Ok(!stdout.is_empty())
+}
 
 /// One record of `git worktree list --porcelain -z`.
 #[derive(Debug, Default, PartialEq, Eq)]

@@ -80,15 +80,19 @@ is checked, and a request to the daemon that does not say which includes them. E
 format and version. The choice is about projects alone: the accounts' directories are written whatever it says (see
 "The accounts" below).
 
+In either mode a project's remote URL goes into the document without any credential it carries, removed as a remote
+URL is whenever it is shown (see "A credential is never shown" in `docs/product/agent-settings-tools.md`), so a
+document never carries one: `https://user:token@example.com/r.git` is written `https://example.com/r.git`.
+
 - **Full paths included** — each project's path is its absolute directory path on the exporting machine, and its remote
-  URL is the one recorded for it, whatever it is. A project's path, a remote URL that is itself a local path or a
-  `file://` URL, and an account directory outside the home directory are the only paths of the exporting machine
-  anywhere in the document, which is the thing to look at before handing the file to someone else.
+  URL is the one recorded for it, whatever kind of URL it is. A project's path, a remote URL that is itself a local
+  path or a `file://` URL, and an account directory outside the home directory are the only paths of the exporting
+  machine anywhere in the document, which is the thing to look at before handing the file to someone else.
 - **Full paths left out** — each project's path is only the last segment of its directory path, its directory name
-  (empty for a path with none, such as `/`), and its remote URL is kept only when it may be cloned from (see "What may
-  be cloned from" below); any other remote URL, such as a local path or a `file://` URL, is left out. Such a document
-  holds no path of the exporting machine but, when it carries the accounts, an account directory outside the home
-  directory.
+  (empty for a path with none, such as `/`), and its remote URL is kept only when, without its credential, it may be
+  cloned from (see "What may be cloned from" below); any other remote URL, such as a local path or a `file://` URL, is
+  left out. Such a document holds no path of the exporting machine but, when it carries the accounts, an account
+  directory outside the home directory.
 
 ### How an account reference travels
 
@@ -280,6 +284,11 @@ form, which leaves the judgement to git (see "Associating a project" in `docs/pr
   whitespace or control character anywhere in it and a host that cannot be read as an option;
 - **refused**: a path on the daemon's host, a `file://` URL, `ftp://` and `ftps://`, and git's helper transports
   (`ext::`, `fd::`), which can make git run a command of the document's choosing.
+
+A URL that carries a credential, in the sense of "A credential is never shown" in
+`docs/product/agent-settings-tools.md`, is not accepted either, as the console session's `add_project` refuses one (see
+"Adding a project with its settings" there), so a hand-edited document cannot plant a credential in a clone; the
+inspection gives such a URL without its credential.
 
 A URL that is not accepted is not offered as a clone, and asking for the clone of such a project anyway is refused for
 that project.

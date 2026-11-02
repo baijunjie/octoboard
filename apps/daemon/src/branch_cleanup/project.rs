@@ -8,13 +8,13 @@
 //! shown — one that has gained changes since stays — and a worktree that is another project's
 //! folder, or holds one, is never touched, nor one that is the home directory, the root of a disk
 //! or holds Octoboard's data. Nor is one of which that cannot be told ([`WorktreeRemovability`]):
-//! it is listed as staying, and stays with the removal, which reports it as left.
-//! An inspection that held one back keeps it under a token that the removal confirmed after it
-//! sends back (`crate::project_trash::UnresolvedRemovals`), so that worktree stays even once it
-//! can be told: the confirmation showed it staying. As the removal runs only once the project's
+//! it is listed as staying, and stays with the removal, which reports it as left. An inspection
+//! that held one back keeps it under a token that the removal confirmed after it sends back
+//! (`crate::removal_safety::project::UnresolvedRemovals`), so that worktree stays even once it can
+//! be told: the confirmation showed it staying. As the removal runs only once the project's
 //! sessions have no process, it looks again just before it carries out: an outside worktree that
-//! has come to be or hold another project's folder by then stays too, and one of which that can
-//! no longer be told is held back.
+//! has come to be or hold another project's folder by then stays too, and one of which that can no
+//! longer be told is held back.
 //!
 //! When the folder holds the repository — the common directory is inside it — every linked
 //! worktree of the repository outside the folder goes, bound to a session or not, since none of
@@ -37,12 +37,13 @@ use anyhow::Result;
 
 use super::remove::{names, wait_until_stopped};
 use super::survey::{
-    exists, failed, is_merged, item_of, stored_names, Removability, WorktreeRemovability,
+    exists, failed, is_merged, item_of, BoundListing, Removability, WorktreeRemovability,
     PROJECT_FOLDER_UNTOLD,
 };
 use crate::branch_origin::bound::bound_in;
-use crate::git::branch_git::{changes, worktrees, BranchGit, Listed};
 use crate::git::repo_files::repository_of;
+use crate::git::run::Runner;
+use crate::git::worktrees::{changes, worktrees, Listed};
 use crate::hostfs::trash::TrashFailure;
 use crate::protocol::{
     Project, SessionBranchItem, SessionBranchKind, SessionBranchState, SessionBranchTarget,
@@ -51,7 +52,8 @@ use crate::state::AppState;
 use crate::wire_path;
 
 /// What a plan reads of where each item stands: everything, for a confirmation to show, or only
-/// what the removal itself needs, so a removal's request runs no `git status` or merge check.
+/// what the removal itself needs. A removal plan runs no merge check, and a `git status` only for
+/// a locked outside worktree whose repository goes with the folder.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Reads {
     Inspection,
@@ -211,27 +213,21 @@ pub(super) fn plan_with(
     if survives && bound.is_empty() {
         return Ok(None);
     }
-    let git = (state.host_tools.get().git)()?;
+    let git = super::cleanup_git(&state.host_tools.get())?;
     let mut judge = WorktreeRemovability::of(state, Some(&project.id), home, data)?;
-    let listed = worktrees(&git, &repo).map_err(anyhow::Error::msg)?;
-    let names = stored_names(&git, &repo, &bound);
+    let listing = BoundListing::of(&git, &repo, &bound)?;
     let full = reads == Reads::Inspection;
-    let bound_branch = |worktree: &Listed| {
-        names
-            .iter()
-            .find(|(name, _)| worktree.branch.as_deref() == Some(name.as_slice()))
-            .map(|(_, branch)| *branch)
-    };
     // The outside worktrees it would take, but for another project's folder.
     let outside = |worktree: &&Listed| {
         !worktree.main
             && !worktree.root.starts_with(&folder)
             && !worktree.prunable
-            && !(survives && bound_branch(worktree).is_none())
+            && !(survives && listing.bound_branch(worktree).is_none())
     };
     judge.look(
         state,
-        listed
+        listing
+            .listed
             .iter()
             .filter(outside)
             .map(|worktree| worktree.root.clone()),
@@ -243,7 +239,7 @@ pub(super) fn plan_with(
     let mut going: HashSet<PathBuf> = HashSet::new();
     let mut taken = Vec::new();
     let mut untold = Vec::new();
-    for worktree in &listed {
+    for worktree in &listing.listed {
         if worktree.main {
             continue;
         }
@@ -254,7 +250,7 @@ pub(super) fn plan_with(
         if !outside(&worktree) {
             continue;
         }
-        let bound_by = bound_branch(worktree);
+        let bound_by = listing.bound_branch(worktree);
         let item = |state| {
             item_of(
                 &repo,
@@ -281,8 +277,11 @@ pub(super) fn plan_with(
             ));
             continue;
         }
-        // A status that cannot be read counts as changes, so they are shown.
-        let uncommitted = full && changes(&git, &worktree.root).unwrap_or(true);
+        // A status that cannot be read counts as changes, so they are shown. A locked one is read
+        // for the removal too where the repository goes with the folder: its status can no longer
+        // be read by the time a force of it is carried out, and this reading stands in for it.
+        let read = full || (worktree.locked && !survives);
+        let uncommitted = read && changes(&git, &worktree.root).unwrap_or(true);
         let state = if worktree.locked {
             SessionBranchState::Locked
         } else if uncommitted {
@@ -298,8 +297,8 @@ pub(super) fn plan_with(
 
     let mut branches = Vec::new();
     if survives {
-        for (name, branch) in names {
-            let stays = listed.iter().any(|worktree| {
+        for (name, branch) in listing.names {
+            let stays = listing.listed.iter().any(|worktree| {
                 worktree.branch.as_deref() == Some(name.as_slice())
                     && !going.contains(&worktree.root)
             });
@@ -348,7 +347,7 @@ pub async fn carry_out_once_stopped(
     let unfinished = removal.clone_items();
     let done = tokio::task::spawn_blocking(move || {
         let tools = state.host_tools.get();
-        match (tools.git)() {
+        match super::cleanup_git(&tools) {
             Ok(git) => {
                 let repo = removal.repo.clone();
                 state.branch_cleanups.serialized(&repo, || {
@@ -387,7 +386,7 @@ impl Items {
 /// records the moves left behind are pruned and every branch no worktree still has checked out is
 /// deleted. What the removal holds back is left.
 pub(crate) fn carry_out(
-    git: &BranchGit,
+    git: &Runner,
     removal: Removal,
     forced: &[SessionBranchTarget],
     trash: impl Fn(&Path) -> Result<(), TrashFailure>,
@@ -404,9 +403,13 @@ pub(crate) fn carry_out(
                 kept.insert(root);
                 continue;
             };
-            // Read now rather than at the plan: the user agreed to what they were shown. One that
-            // cannot be read counts as changes, which a force without them does not take.
-            item.uncommitted = changes(git, &root).unwrap_or(true);
+            // Read now rather than at the plan where the repository survives: the user agreed to
+            // what they were shown. Where it went with the folder, `git` can no longer read the
+            // worktree, and the plan's reading, made while it was there, stands. One that cannot
+            // be read counts as changes, which a force without them does not take.
+            if removal.survives {
+                item.uncommitted = changes(git, &root).unwrap_or(true);
+            }
             if target.state != SessionBranchState::Locked
                 || (item.uncommitted && !target.uncommitted)
             {
@@ -446,6 +449,7 @@ pub(crate) fn carry_out(
     let listed = match worktrees(git, &removal.repo) {
         Ok(listed) => listed,
         Err(detail) => {
+            let detail = detail.to_string();
             left.extend(
                 removal
                     .branches

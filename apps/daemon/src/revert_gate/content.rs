@@ -8,7 +8,8 @@ use std::os::unix::ffi::OsStringExt;
 
 use anyhow::{Context, Result};
 
-use super::git::{is_ancestor, is_null, is_oid, is_space, lossy, Git};
+use super::git::{is_ancestor, is_null, is_space, lossy, Git};
+use crate::git::object_id::is_object_id;
 
 /// How many commits to look back. A revert usually comes from a branch developed in parallel in
 /// the same period, so its base is not far behind; too large a value reads many more blobs on
@@ -274,7 +275,7 @@ fn recent_commits(git: &Git, old: &str, forks: &[String], window: usize) -> Resu
     let (mut current, mut i) = (None, 0);
     while i < fields.len() {
         let field = lossy(fields[i]);
-        if is_oid(field.trim_matches(is_space)) {
+        if is_object_id(field.trim_matches(is_space)) {
             current = index.get(field.trim_matches(is_space)).copied();
             i += 1;
         } else if let (true, Some(at)) = (is_record(&fields, i), current) {
@@ -378,7 +379,7 @@ fn tree_entries(git: &Git, commit: &str, paths: &[Path]) -> Result<HashMap<Path,
         let (oid, kind) = line.split_once(' ').unwrap_or((&line, ""));
         result.insert(
             path.clone(),
-            (kind == "blob" && is_oid(oid)).then(|| oid.to_string()),
+            (kind == "blob" && is_object_id(oid)).then(|| oid.to_string()),
         );
     }
     Ok(result)

@@ -2,37 +2,64 @@
 //! up for without a checkout.
 
 use std::collections::HashMap;
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use crate::git::run::{self, Access, Limits, Policy, UserGit, WorkDir};
+use crate::git::run::{Access, GitError, Limits, Policy, Runner, UserGit, WorkDir};
 use crate::hostfs::listing::detect_agent_from_names;
-use crate::processes::subprocess::BoundedFailure;
 use crate::protocol::{error_code, Agent, CodedError};
 
 /// How long a clone may run before it is given up on. Generous — a large repository over a slow
 /// connection legitimately takes minutes — but bounded, so a stalled transfer cannot hold a
 /// blocking thread for the rest of the daemon's life.
-const CLONE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30 * 60);
+const CLONE_LIMITS: Limits = Limits::deadline(std::time::Duration::from_secs(30 * 60));
 
-/// A `git` command for the user's remote work, run with `shell_env`, the user's shell environment
-/// that agents are launched with, rather than the daemon's own: a daemon started from Finder has a
+/// How long the fetch of a probe may run. Much shorter than a clone's: it fetches one commit and
+/// its trees, no file contents, and the user is waiting on it with a form held shut.
+const PROBE_LIMITS: Limits = Limits::deadline(std::time::Duration::from_secs(60));
+
+/// How long listing the fetched tip may run; it reads a local repository.
+const LIST_LIMITS: Limits = Limits::deadline(std::time::Duration::from_secs(10));
+
+/// The `git` for the user's remote work, run with `shell_env`, the user's shell environment that
+/// agents are launched with, rather than the daemon's own: a daemon started from Finder has a
 /// minimal `PATH` with no `git` on it, and its own environment may carry the agent-session markers
 /// that environment exists to filter out. Only the user's own git configuration is taken from it,
 /// as for every `git` the daemon runs. Made non-interactive, so a missing credential or an unknown
-/// host key fails at once instead of waiting on a terminal nobody is watching; the caller gives it
-/// a deadline.
-fn git_command(shell_env: &HashMap<String, String>) -> Result<std::process::Command> {
-    let git = UserGit::from_env(shell_env.clone())?;
-    Ok(git.command(&Policy::PLAIN, Access::Write, WorkDir::Inherited))
+/// host key fails at once instead of waiting on a terminal nobody is watching, under the plain
+/// policy and `limits`.
+fn remote_work_git(shell_env: &HashMap<String, String>, limits: Limits) -> Result<Runner> {
+    Ok(Runner::new(
+        UserGit::from_env(shell_env.clone())?,
+        Policy::PLAIN,
+        limits,
+    ))
+}
+
+/// The `git clone <args>` that `git` runs, which reaches the remote with the user's own ssh
+/// (`UserGit::remote_command`), in the daemon's own working directory, as it names every path it
+/// works on. A clone reads no repository's configuration, only the system and global ones, so
+/// `core.sshCommand` is read from those: by a `git config` run in `/`, outside any repository,
+/// rather than wherever the daemon happens to be.
+fn clone_with(git: &Runner, args: &[&OsStr]) -> std::process::Command {
+    let ssh = git.git().ssh_configuration(Path::new("/"));
+    let mut command = git.remote_command(
+        Access::Write,
+        WorkDir::Inherited,
+        [OsStr::new("clone")],
+        &ssh,
+    );
+    command.args(args);
+    command
 }
 
 /// Clones `remote_url` into a new directory under `parent` and returns that directory. Blocking:
 /// the caller runs it off the runtime.
 ///
-/// Runs as [`git_command`] with a deadline far longer than a probe's, because a clone legitimately
-/// runs for minutes.
+/// Runs as [`remote_work_git`] with a deadline far longer than a probe's, because a clone
+/// legitimately runs for minutes.
 pub fn clone_repo(remote_url: &str, parent: &Path) -> Result<PathBuf> {
     let name = repo_name(remote_url).ok_or_else(|| {
         CodedError::raised(
@@ -53,38 +80,25 @@ pub fn clone_repo(remote_url: &str, parent: &Path) -> Result<PathBuf> {
 
     let shell_env =
         crate::env_shell::launch_snapshot().context("snapshotting the shell environment")?;
-    let mut command = clone_command(&shell_env, remote_url, &target)?;
-    let output = run::run(&mut command, Limits::deadline(CLONE_TIMEOUT), None)
-        .map_err(BoundedFailure::into_error)
-        .context("running `git clone`")?;
-    if !output.status.success() {
-        let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(CodedError::raised(
+    let git = remote_work_git(&shell_env, CLONE_LIMITS)?;
+    match git.run(&mut clone_command(&git, remote_url, &target)) {
+        Ok(_) => Ok(target),
+        Err(GitError::Exited { stderr, .. }) => Err(CodedError::raised(
             error_code::GIT_CLONE_FAILED,
-            format!("`git clone` failed: {detail}"),
-            &[("detail", &detail)],
-        ));
+            format!("`git clone` failed: {stderr}"),
+            &[("detail", &stderr)],
+        )),
+        Err(GitError::Stopped(stopped)) => Err(stopped.into_error().context("running `git clone`")),
     }
-    Ok(target)
 }
 
 /// The `git clone` [`clone_repo`] runs.
-fn clone_command(
-    shell_env: &HashMap<String, String>,
-    remote_url: &str,
-    target: &Path,
-) -> Result<std::process::Command> {
-    let mut command = git_command(shell_env)?;
-    command.arg("clone").arg("--").arg(remote_url).arg(target);
-    Ok(command)
+fn clone_command(git: &Runner, remote_url: &str, target: &Path) -> std::process::Command {
+    clone_with(
+        git,
+        &[OsStr::new("--"), OsStr::new(remote_url), target.as_os_str()],
+    )
 }
-
-/// How long the fetch of a probe may run. Much shorter than a clone's: it fetches one commit and
-/// its trees, no file contents, and the user is waiting on it with a form held shut.
-const PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
-
-/// How long listing the fetched tip may run; it reads a local repository.
-const LIST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// A scratch directory for one probe, removed when the probe ends.
 struct ProbeDir(PathBuf);
@@ -96,14 +110,14 @@ impl Drop for ProbeDir {
 }
 
 /// Checks that `remote_url` can be reached with the user's credentials and returns the agent its
-/// top level is set up for (see [`detect_agent_from_names`]), running `git` as [`git_command`] does
-/// with `shell_env`. Blocking: the caller runs it off the runtime.
+/// top level is set up for (see [`detect_agent_from_names`]), running `git` as
+/// [`remote_work_git`] does with `shell_env`. Blocking: the caller runs it off the runtime.
 ///
 /// A shallow, blobless, checkout-less clone into a scratch directory, whose top-level names are
 /// then listed: that fetches the tip commit and its trees but no file, and works for any remote
 /// (`git ls-remote` would show refs only). A remote that does not support filtering sends the
 /// whole tip commit instead, which is still no history. A repository that cannot be read, or
-/// whose fetch outlasts [`PROBE_TIMEOUT`], is `git_remote_unreachable`. An empty repository is
+/// whose fetch outlasts [`PROBE_LIMITS`], is `git_remote_unreachable`. An empty repository is
 /// reachable and names no agent.
 pub fn probe_remote_agent(
     remote_url: &str,
@@ -121,56 +135,47 @@ pub fn probe_remote_agent(
             &[("detail", detail)],
         )
     };
-    let mut clone = probe_clone_command(shell_env, remote_url, &scratch.0)?;
-    let output = run::run(&mut clone, Limits::deadline(PROBE_TIMEOUT), None)
-        .map_err(|stopped| unreachable(&stopped.to_string()))?;
-    if !output.status.success() {
-        return Err(unreachable(String::from_utf8_lossy(&output.stderr).trim()));
+    let git = remote_work_git(shell_env, PROBE_LIMITS)?;
+    git.run(&mut probe_clone_command(&git, remote_url, &scratch.0))
+        .map_err(|err| unreachable(&err.to_string()))?;
+    let list = git.with_limits(LIST_LIMITS);
+    match list.run(&mut probe_list_command(&list, &scratch.0)) {
+        Ok(stdout) => Ok(detect_agent_from_names(
+            String::from_utf8_lossy(&stdout).lines(),
+        )),
+        // Any failure to list the tip answers "no agent": the clone has just succeeded, so the
+        // remote is reachable, and the usual cause is an empty repository, whose `HEAD` is unborn.
+        Err(GitError::Exited { .. }) => Ok(None),
+        Err(GitError::Stopped(stopped)) => {
+            Err(stopped.into_error().context("running `git ls-tree`"))
+        }
     }
-    let mut list = probe_list_command(shell_env, &scratch.0)?;
-    let listed = run::run(&mut list, Limits::deadline(LIST_TIMEOUT), None)
-        .map_err(BoundedFailure::into_error)
-        .context("running `git ls-tree`")?;
-    // Any failure to list the tip answers "no agent": the clone has just succeeded, so the remote
-    // is reachable, and the usual cause is an empty repository, whose `HEAD` is unborn.
-    if !listed.status.success() {
-        return Ok(None);
-    }
-    let listing = String::from_utf8_lossy(&listed.stdout);
-    Ok(detect_agent_from_names(listing.lines()))
 }
 
 /// The fetch of [`probe_remote_agent`], into `scratch`.
-fn probe_clone_command(
-    shell_env: &HashMap<String, String>,
-    remote_url: &str,
-    scratch: &Path,
-) -> Result<std::process::Command> {
-    let mut clone = git_command(shell_env)?;
-    clone
-        .args([
-            "clone",
-            "--depth",
-            "1",
-            "--filter=blob:none",
-            "--no-checkout",
-            "--quiet",
-        ])
-        .arg("--")
-        .arg(remote_url)
-        .arg(scratch);
-    Ok(clone)
+fn probe_clone_command(git: &Runner, remote_url: &str, scratch: &Path) -> std::process::Command {
+    clone_with(
+        git,
+        &[
+            OsStr::new("--depth"),
+            OsStr::new("1"),
+            OsStr::new("--filter=blob:none"),
+            OsStr::new("--no-checkout"),
+            OsStr::new("--quiet"),
+            OsStr::new("--"),
+            OsStr::new(remote_url),
+            scratch.as_os_str(),
+        ],
+    )
 }
 
-/// The listing of the tip [`probe_remote_agent`] fetched into `scratch`.
-fn probe_list_command(
-    shell_env: &HashMap<String, String>,
-    scratch: &Path,
-) -> Result<std::process::Command> {
-    let mut list = git_command(shell_env)?;
-    list.args(["ls-tree", "--name-only", "HEAD"])
-        .current_dir(scratch);
-    Ok(list)
+/// The listing of the tip [`probe_remote_agent`] fetched into `scratch`, which reaches no remote.
+fn probe_list_command(git: &Runner, scratch: &Path) -> std::process::Command {
+    git.command(
+        Access::Write,
+        WorkDir::At(scratch),
+        ["ls-tree", "--name-only", "HEAD"],
+    )
 }
 
 /// The repository name from a clone URL, for both `https://host/owner/repo(.git)` and
@@ -246,26 +251,32 @@ mod tests {
     }
 
     /// The command lines of a clone and of a probe's two steps, pinned whole: none gets an index
-    /// guard or a leading option, the clones run wherever the daemon is and the listing in the
-    /// probe's scratch directory.
+    /// guard or a leading option beyond the base ones, the clones run wherever the daemon is and
+    /// the listing in the probe's scratch directory.
     #[test]
     fn a_clone_and_a_probe_build_their_command_lines() {
         use crate::test_support::{pinned_shell_env, CommandLine};
 
         let env = pinned_shell_env();
         let git = crate::env_shell::resolve_binary("git", &env).expect("a git on the pinned PATH");
+        let runner = remote_work_git(&env, CLONE_LIMITS).unwrap();
         let url = "https://example.com/r.git";
-        let clone = super::clone_command(&env, url, Path::new("/parent/r")).unwrap();
+        let based = |args: &[&'static str]| {
+            let mut all = crate::git::env::BASE_OPTIONS.to_vec();
+            all.extend_from_slice(args);
+            all
+        };
+        let clone = super::clone_command(&runner, url, Path::new("/parent/r"));
         assert_eq!(
             CommandLine::of(&clone),
-            CommandLine::pinned(&git, &["clone", "--", url, "/parent/r"], &[], None)
+            CommandLine::pinned(&git, &based(&["clone", "--", url, "/parent/r"]), &[], None)
         );
-        let probe = super::probe_clone_command(&env, url, Path::new("/scratch")).unwrap();
+        let probe = super::probe_clone_command(&runner, url, Path::new("/scratch"));
         assert_eq!(
             CommandLine::of(&probe),
             CommandLine::pinned(
                 &git,
-                &[
+                &based(&[
                     "clone",
                     "--depth",
                     "1",
@@ -275,21 +286,49 @@ mod tests {
                     "--",
                     url,
                     "/scratch"
-                ],
+                ]),
                 &[],
                 None
             )
         );
-        let list = super::probe_list_command(&env, Path::new("/scratch")).unwrap();
+        let list = super::probe_list_command(&runner, Path::new("/scratch"));
         assert_eq!(
             CommandLine::of(&list),
             CommandLine::pinned(
                 &git,
-                &["ls-tree", "--name-only", "HEAD"],
+                &based(&["ls-tree", "--name-only", "HEAD"]),
                 &[],
                 Some("/scratch")
             )
         );
+    }
+
+    /// A clone, with no repository of its own to read, reaches the remote with the ssh the user's
+    /// global configuration sets, unable to prompt; the listing after it reaches no remote.
+    #[test]
+    fn a_clone_runs_the_ssh_command_of_the_users_global_configuration() {
+        use crate::test_support::CommandLine;
+
+        let dir = ScratchDir::new("clone-ssh");
+        let global = dir.join("gitconfig");
+        std::fs::write(&global, "[core]\n\tsshCommand = ssh -i /k\n").unwrap();
+        let mut env = crate::test_support::isolated_git_env();
+        env.insert(
+            "GIT_CONFIG_GLOBAL".to_string(),
+            global.to_string_lossy().into_owned(),
+        );
+        let url = "git@example.invalid:o/r.git";
+        let ssh_command = |command: &std::process::Command| {
+            CommandLine::of(command).env["GIT_SSH_COMMAND"].clone()
+        };
+        let expected = Some("ssh -oBatchMode=yes -i /k".to_string());
+        let runner = remote_work_git(&env, CLONE_LIMITS).unwrap();
+        let clone = super::clone_command(&runner, url, Path::new("/parent/r"));
+        assert_eq!(ssh_command(&clone), expected);
+        let probe = super::probe_clone_command(&runner, url, Path::new("/scratch"));
+        assert_eq!(ssh_command(&probe), expected);
+        let list = super::probe_list_command(&runner, Path::new("/scratch"));
+        assert_eq!(ssh_command(&list), Some("ssh -oBatchMode=yes".to_string()));
     }
 
     #[test]

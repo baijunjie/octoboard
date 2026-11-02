@@ -67,10 +67,9 @@ const LAYERS: &[(&str, &[&str])] = &[
             "host_tools",
             "path_links",
             "project_git",
-            "project_trash",
+            "removal_safety",
             "revert_gate",
             "terminal",
-            "trash_safety",
         ],
     ),
     (

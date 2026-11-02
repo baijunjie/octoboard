@@ -12,14 +12,20 @@ use crate::test_support::{
     git, isolated_git_env, pinned_shell_env, CommandLine, ScratchDir, TEST_KEY,
 };
 
-/// The command lines of the probes, pinned whole: no leading option or index guard, at the
-/// filesystem root, and with the system-wide configuration where the build reads it — the
-/// user's own `GIT_CONFIG_NOSYSTEM` removed.
+/// The command lines of the probes, pinned whole: no leading option beyond the base ones and no
+/// index guard, at the filesystem root, and with the system-wide configuration where the build
+/// reads it — the user's own `GIT_CONFIG_NOSYSTEM` removed.
 #[test]
 fn the_probes_build_their_command_lines() {
-    let git = UserGit::new("/opt/git", pinned_shell_env());
+    let git = Runner::new(
+        UserGit::new("/opt/git", pinned_shell_env()),
+        Policy::PLAIN,
+        PROBE_LIMITS,
+    );
     let expected = |args: &[&str], extra: &[(&str, &str)]| {
-        let mut line = CommandLine::pinned("/opt/git", args, extra, Some("/"));
+        let mut all = crate::git::env::BASE_OPTIONS.to_vec();
+        all.extend_from_slice(args);
+        let mut line = CommandLine::pinned("/opt/git", &all, extra, Some("/"));
         line.env.remove("GIT_CONFIG_NOSYSTEM");
         line
     };

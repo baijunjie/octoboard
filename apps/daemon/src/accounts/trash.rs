@@ -4,7 +4,7 @@
 //! holds what they run on, and for a directory whose loss would be drastic or would take files
 //! that belong to something else: the home directory, a disk's root, Octoboard's own data, an
 //! agent's default configuration directory, another account's directory, or a registered project's
-//! folder inside it (`trash_safety` tells directories apart, by device and inode). A path that
+//! folder inside it (`removal_safety` tells directories apart, by device and inode). A path that
 //! cannot be looked at refuses too, as a failed move: the directory itself, the home directory,
 //! Octoboard's data directory, or another account's, an agent's default or a project's path that
 //! decides whether the directory holds or overlaps it. `inspect_account_trash` answers the
@@ -22,10 +22,10 @@ use crate::hostfs::place::{Looking, Stuck};
 use crate::protocol::{
     error_code, Account, AccountTrashOutcome, AccountTrashSharing, Agent, CodedError,
 };
-use crate::state::AppState;
-use crate::trash_safety::{
+use crate::removal_safety::{
     looked_at_for_trash, Blocked, Failure, Overlap, Unresolved, TRASH_LOOK_DEADLINE,
 };
+use crate::state::AppState;
 
 /// The `cause` of an `account_directory_trash_failed` where whether the directory holds or overlaps
 /// another account's, an agent's default or a project's directory could not be told.

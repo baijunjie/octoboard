@@ -16,17 +16,15 @@ watching), serde. The crate is a member of the root Cargo workspace beside the d
 
 `src/main.rs` hands a named CLI mode to `cli::run`; otherwise it takes the instance lock, opens the store, binds
 `127.0.0.1` on an OS-assigned port, generates the per-launch key, prints the handshake line (port and key) and runs the
-server. The CLI modes other processes start are `hook`, `git-ref`, `gate-hook`, `revert-gate`, `status-line` and `mcp`:
+server. The CLI modes other processes start are `hook`, `git-ref`, `gate-hook`, `status-line` and `mcp`:
 their dispatch is `src/cli/mod.rs`, and their code is `src/cli/` (`hook`, `status-line`), `src/session_git_hooks/`
-(`git-ref`, `gate-hook`), `src/revert_gate/` (`revert-gate`) and `src/mcp/stdio.rs` (`mcp`). The routes are in
-`src/server/`. Each mode takes the running daemon's port and the launch key (`--port`, `--key`) except `revert-gate`:
+(`git-ref`, `gate-hook`) and `src/mcp/stdio.rs` (`mcp`). The routes are in `src/server/`. Each mode takes the running
+daemon's port and the launch key (`--port`, `--key`):
 
 - `hook` — posts an agent's hook payload from stdin to `POST /hook/:session`.
 - `git-ref` — posts created branches and moved refs a session's `reference-transaction` hook saw.
 - `gate-hook` — run by a session's `reference-transaction` and `pre-push` dispatchers: asks the daemon whether the
   revert gate applies, runs it in-process, and exits with its status (3 rejects).
-- `revert-gate` — runs the revert gate directly with guarded branches, target branches and fork points as arguments;
-  exits 3 to reject a change that undoes work already merged into a guarded branch.
 - `status-line` — the status line the Claude Code adapter injects: posts the context window to
   `POST /context-window/:session` and runs the user's own status line with the same input.
 - `mcp` — the MCP server each adapter registers for a session: speaks MCP on stdin/stdout and forwards tool calls to
@@ -39,14 +37,14 @@ per-entity work, `each_blocking` for an async caller, `blocking_pass/within.rs`'
 runtime, and, in `blocking_pass/stalled.rs`, `StalledPasses`, the blocking work that outran its deadline and whose
 thread is still running), `git_workflow.rs` (git workflow settings and `effective`, the one function
 that combines application and project values), `host_tools.rs` (`HostTools`, the seam tests substitute stand-ins
-behind), `instance_lock.rs` (one daemon per data directory), `interface_language.rs` (the languages the interface is
+behind, `git` among them: the one place a project's git gets the user's `git`), `instance_lock.rs` (one daemon per data directory), `interface_language.rs` (the languages the interface is
 offered in, mirroring the UI's `i18n/languages.ts`), `log_file.rs` (the rotated `daemon.log`), `loopback.rs` (the
 std-only HTTP client to the daemon's own loopback address that the CLI modes, the git hook modes and the MCP stdio
 bridge call the running daemon with), `paths.rs` (where Octoboard keeps its files under the data directory),
-`project_trash.rs` and `trash_safety.rs` (which folders may be moved to the Trash), `time.rs` (the clock, `now_millis`
-and `now_secs`, and the RFC 3339, compact and readable timestamps) and `wire_path.rs` (`RelPath`, the canonical wire
-form of a path or branch name). Test-only files (`tests.rs`, `*_tests.rs`, `test_support/` and `store/test_support.rs`,
-and the `layering_tests/` directory) sit beside the code they test, and `apps/daemon/testdata/` holds
+`time.rs` (the clock, `now_millis` and `now_secs`, and the RFC 3339, compact and readable timestamps) and
+`wire_path.rs` (`RelPath`, the canonical wire form of a path or branch name). Test-only files (`tests.rs`, `*_tests.rs`,
+`test_support/` and `store/test_support.rs`, and the `layering_tests/` directory) sit beside the code they test, and
+`apps/daemon/testdata/` holds
 the captured agent screens and records tests replay.
 
 ### Wire and server
@@ -72,12 +70,18 @@ the captured agent screens and records tests replay.
   message), `outbox.rs` (the per-session ordered queue), `reporting.rs`, `sharing.rs`, `owner_notices.rs` (every notice
   to an owner), `texts.rs` (fixed texts in Octoboard's own name).
 - `src/handoff/` — the handoff package built for a session another takes over, and the `hand_off_session` operation.
-- `src/branch_origin/` — which session is responsible for a git branch (records, handover, listing, reflog reads).
+- `src/branch_origin/` — which session is responsible for a git branch: the record (`record.rs`, `target.rs`), the
+  reconcile against the repository's branches (`reconcile.rs`), forks (`forks.rs`), handover (`handover.rs`), the
+  listing, and `gate.rs` with `KeyedGates`, the keyed mutex branch cleanup shares.
 - `src/branch_cleanup/` — cleaning up branches and worktrees bound to archived or deleted sessions.
+- `src/removal_safety/` — which folder may be moved to the Trash or which linked worktree removed without taking away
+  what belongs to something else; `project.rs` is the part for removing a project's folder.
 - [`src/session_git_hooks/`](../../apps/daemon/src/session_git_hooks/README.md) — the git hooks of a project session and
   the `git-ref` and `gate-hook` modes.
-- `src/revert_gate/` — the revert gate engine behind `revert-gate` and in-process `gate-hook`.
-- `src/config_document/` — export and import of the configuration document that carries state between devices.
+- `src/revert_gate/` — the revert gate engine run in-process by `gate-hook`: `local.rs` decides a ref update, `push.rs` a
+  push, `report.rs` words a rejection, `content.rs` the content criteria, `git.rs` the gate's own `git`.
+- `src/config_document/` — export and import of the configuration document that carries state between devices
+  (`import/projects.rs` places an imported project).
 
 ### Storage and state
 
@@ -106,10 +110,14 @@ the captured agent screens and records tests replay.
 
 ### Host work: git and filesystem
 
-- `src/git/` — the one layer for running `git` and reading repository layout from disk: `env.rs`, `run.rs`, `layout.rs`,
-  `repo_files.rs`, `worktree_list.rs`, `isolated.rs`, `branch_git.rs`.
+- `src/git/` — the one layer for running `git` and reading repository layout from disk: `env.rs` the settings every
+  command shares, `run.rs` building and running (`Runner`), `layout.rs` and `repo_files.rs` where a repository's files
+  are and what they say, `reflog.rs` a branch's creation entry, `worktrees.rs` worktrees and their changes,
+  `isolated.rs` the reads isolated from the user's environment, and the small readings of git's text shared by several
+  families (`object_id.rs`, `remote_branch.rs`, `tree_entries.rs`).
 - `src/project_git/` — git work on a project's own repository: header, status, push, switch, restore, remote, the ref
-  watch (`watch.rs`), the re-read after a session's git moves refs (`ref_moves.rs`), clone.
+  watch (`watch.rs`), the re-read after a session's git moves refs (`ref_moves.rs`), clone; `debounced.rs` is the
+  scheduler `watch.rs` and `ref_moves.rs` share.
 - `src/browse/` — project-browsing reads for the control socket and the MCP read tools; `mod.rs`'s `serve` is the entry,
   with `budget.rs` (including `ChangeBudget`, the one cut of a change listing) and `lane.rs` the limits every read is held
   to. `scope.rs` resolves the project, directory and worktree a request works in (and a path for a host action:
@@ -211,7 +219,7 @@ the rest of its type is read as production code, which can only add an edge, nev
 | host | `env_shell`, `git`, `host_open`, `hostfs`, `instance_lock`, `log_file`, `paths`, `processes` |
 | storage | `git_workflow`, `store` |
 | state | `state` |
-| workspace | `branch_cleanup`, `branch_origin`, `browse`, `host_tools`, `path_links`, `project_git`, `project_trash`, `revert_gate`, `terminal`, `trash_safety` |
+| workspace | `branch_cleanup`, `branch_origin`, `browse`, `host_tools`, `path_links`, `project_git`, `removal_safety`, `revert_gate`, `terminal` |
 | agent sessions | `accounts`, `adapter`, `agents`, `handoff`, `hooks`, `messaging`, `records`, `session`, `session_git_hooks`, `session_tools`, `titles` |
 | control | `config_document`, `coordinator`, `mcp`, `session_request` |
 | entry | `cli`, `server` |
@@ -273,11 +281,11 @@ New code uses these rather than a second implementation. None is enforced by a c
 
 | Need | Entry point |
 |---|---|
-| Run `git` in a user's repository or against their remote | `src/git/run.rs`: `UserGit` with a call site's `Policy`, `run` and `run_checked`, `GitError`. Browse reads use `IsolatedGit` (`src/git/isolated.rs`). The revert gate's own `src/revert_gate/git.rs`, which runs inside the user's hook, is the one exception |
+| Run `git` in a user's repository or against their remote | `src/git/run.rs`: a family's `Runner` (`UserGit` with the call site's `Policy` and `Limits`; `read`, `write`, and `write_remote` for a command that may reach a remote) and `GitError`, the one error type. A command that reaches a remote is built with `remote_command` so the user's own ssh applies (`src/git/env.rs`). Get the user's `git` from `HostTools::git`. Browse reads use `IsolatedGit` (`src/git/isolated.rs`). The revert gate's own `src/revert_gate/git.rs`, which runs inside the user's hook, is the one exception |
 | Replace a file whole | `hostfs::replace::replace_file` (`src/hostfs/replace.rs`) |
 | Read from the disk within a bound | `hostfs::read_bounded` (with cancel), `read_regular` / `open_regular` for files the project does not own (`src/hostfs/mod.rs`); a project's files go through `browse::live` |
 | Read an agent's record | `src/records/line_file.rs`, the bounded line reader (also what record watches use) |
-| Tell directories apart; move to Trash | `src/hostfs/identity.rs` (device and inode); `hostfs::trash::move_to_trash` under `src/trash_safety.rs`'s rules; account directories by `accounts::dirs::account_dir_key` |
+| Tell directories apart; move to Trash | `src/hostfs/identity.rs` (device and inode); `hostfs::trash::move_to_trash` under `src/removal_safety/`'s rules; account directories by `accounts::dirs::account_dir_key` |
 | List every process id | `processes::pids::all` (only `crash_cleanup.rs` keeps its own listing, which must not allocate) |
 | Run a spawned process within bounds | `src/processes/subprocess.rs` (`run_bounded`, `run_exchange`, `Bounds`) |
 | Run an agent's CLI as an account for a short query | `src/accounts/cli_run.rs`: `query` (admits the run, held to `Bounds::agent_query`), `AdmittedCommand::run`, and `run_query` only where the account's directory is already held (a sign-in); `last_stderr_line` words a failure |

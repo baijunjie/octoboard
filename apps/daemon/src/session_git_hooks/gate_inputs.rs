@@ -21,7 +21,9 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::branch_origin::{is_same_branch, repo_key, reported_repository};
-use crate::browse::compare;
+use crate::browse::{budget, compare};
+use crate::git::isolated::IsolatedGit;
+use crate::git::remote_branch::split_remote_branch;
 use crate::git::repo_files::{remote_default_branch_in_files, repository_of, uses_reftable};
 use crate::git_workflow;
 use crate::revert_gate::GateInputs;
@@ -107,15 +109,30 @@ fn default_branch(state: &AppState, repo: &Path) -> Option<String> {
             .and_then(|branch| String::from_utf8(branch).ok());
     }
     let found = (state.host_tools.get().git)().and_then(|git| {
-        compare::remote_default_branch(&git.browse_env(), repo, &AtomicBool::new(false))
+        let (isolated, cancel) = (IsolatedGit::of(git), AtomicBool::new(false));
+        let Some(upstream) = compare::remote_default_branch(&isolated, repo, &cancel)? else {
+            return Ok(None);
+        };
+        // `<remote>/<branch>` as a wire path: decoded before it is split by the remotes the
+        // repository has, which `git` prints as they are. A remote's own name may hold a slash.
+        let Some(upstream) = branch_name(&upstream.name) else {
+            return Ok(None);
+        };
+        let listing = isolated.run(
+            repo,
+            "remote",
+            &[],
+            budget::UPSTREAM_REMOTES_STDOUT,
+            &cancel,
+        )?;
+        let listing = String::from_utf8_lossy(&listing);
+        Ok(
+            split_remote_branch(&upstream, listing.lines().filter(|name| !name.is_empty()))
+                .map(|(_, branch)| branch.to_string()),
+        )
     });
     match found {
-        // `<remote>/<branch>`; a remote whose own name holds a slash is not told apart.
-        Ok(Some(upstream)) => upstream
-            .name
-            .split_once('/')
-            .and_then(|(_, branch)| branch_name(branch)),
-        Ok(None) => None,
+        Ok(branch) => branch,
         Err(err) => {
             tracing::debug!(repository = %repo.display(), %err, "revert gate: no default branch");
             None

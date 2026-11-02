@@ -19,10 +19,12 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::git::env::SshConfiguration;
 use crate::git::layout::is_git_repo;
+use crate::git::run::{Runner, WorkDir};
 use crate::project_git::header::read_branch_header;
+use crate::project_git::project_git;
 use crate::project_git::remote::{self, Remote};
-use crate::project_git::run_git_write;
 use crate::protocol::{GitActivity, GitStatus, Project};
 use crate::state::{AppState, GitCheckClaim};
 
@@ -259,31 +261,27 @@ fn check_project(state: &Arc<AppState>, project: &Project, force_pull: bool) {
     };
     let checking = DelayedChecking::start(state, status.clone(), delay);
 
-    // The remotes are read with their URLs by the same call that tells which one to fetch, so
-    // keeping the recorded URL current costs the check no `git` of its own.
-    let run = remote::runner(&path);
-    let inspection = remote::inspect(&run);
-    remote::record_inspected(state, &project.id, inspection.as_ref());
-    let remotes = inspection
-        .as_ref()
-        .map_or(&[][..], |i| i.remotes.as_slice());
-    if !remotes.is_empty() {
-        let remote = fetch_remote(remotes, inspection.as_ref().and_then(|i| i.upstream()));
-        let mut args = vec!["fetch", "--quiet"];
-        if let Some(remote) = &remote {
-            args.push(remote);
-        }
-        if let Err(err) = run_git_write(&path, &args) {
-            tracing::debug!(%err, "fetching the remote failed");
+    // A `git` that cannot be had fails every step alike: its error is the check's, as a failed
+    // branch read's would be, and with nothing read nothing is pullable.
+    let git = match project_git(state) {
+        Ok(git) => Some(git),
+        Err(err) => {
+            tracing::debug!(%err, "no git to check the project with");
             status.error = Some(err);
+            None
         }
+    };
+    let mut ssh = SshConfiguration::Unknown;
+    if let Some(git) = &git {
+        ssh = fetch_remote_of(state, git, &project.id, &path, &mut status);
+        read_branch_header(git, &path, &mut status);
     }
-    read_branch_header(&path, &mut status);
     // From here the published statuses are the check's own: Pulling, then the final one.
     checking.cancel();
 
-    if (force_pull || auto_pull_enabled(state)) && pullable(&status) {
-        fast_forward(state, &path, &mut status);
+    if let Some(git) = git.filter(|_| (force_pull || auto_pull_enabled(state)) && pullable(&status))
+    {
+        fast_forward(state, &git, &path, &mut status, &ssh);
     }
 
     status.activity = GitActivity::Idle;
@@ -292,6 +290,47 @@ fn check_project(state: &Arc<AppState>, project: &Project, force_pull: bool) {
     // reinserted right after `publish_git_status` just cleared it.
     state.record_git_check_completed(&project.id);
     state.publish_git_status(status);
+}
+
+/// Fetches the remote of the repository at `path` that the check fetches from, and keeps the URLs
+/// it read along the way as the project's recorded ones. Whatever stops the fetch records its
+/// message on `status`, as a failed fast-forward does: a remote configuration that cannot be read
+/// is no repository without a remote, and the badge must not show it as a check that succeeded.
+/// Returns what that read says of `core.sshCommand`, for the check's later `git` that may reach the
+/// remote.
+fn fetch_remote_of(
+    state: &AppState,
+    git: &Runner,
+    project_id: &str,
+    path: &Path,
+    status: &mut GitStatus,
+) -> SshConfiguration {
+    // The remotes are read with their URLs by the same call that tells which one to fetch, so
+    // keeping the recorded URL current costs the check no `git` of its own.
+    let run = remote::runner(git, path);
+    let inspection = remote::inspect(&run);
+    remote::record_inspected(state, project_id, inspection.as_ref().ok());
+    let inspection = match inspection {
+        Ok(inspection) => inspection,
+        Err(err) => {
+            tracing::debug!(%err, "reading the remotes failed");
+            status.error = Some(err.to_string());
+            return SshConfiguration::Unknown;
+        }
+    };
+    if inspection.remotes.is_empty() {
+        return inspection.ssh;
+    }
+    let remote = fetch_remote(&inspection.remotes, inspection.upstream());
+    let mut args = vec!["fetch", "--quiet"];
+    if let Some(remote) = &remote {
+        args.push(remote);
+    }
+    if let Err(err) = git.write_remote(WorkDir::At(path), &args, &inspection.ssh) {
+        tracing::debug!(%err, "fetching the remote failed");
+        status.error = Some(err.to_string());
+    }
+    inspection.ssh
 }
 
 /// The in-flight status of a check, published only if the check is still running after the delay
@@ -431,7 +470,11 @@ fn pull_project(state: &AppState, project: &Project, mut status: GitStatus) {
     status.upstream = None;
     status.ahead = 0;
     status.behind = 0;
-    read_branch_header(&path, &mut status);
+    // A `git` that cannot be had is a re-read that failed, and the gate stays shut the same way.
+    let Ok(git) = project_git(state) else {
+        return;
+    };
+    read_branch_header(&git, &path, &mut status);
     if !pullable(&status) {
         // Nothing to report, whether the branch genuinely moved on since its last check or the
         // re-read above failed and left the gate blank: either way that check's own numbers stay
@@ -442,7 +485,8 @@ fn pull_project(state: &AppState, project: &Project, mut status: GitStatus) {
     // check against the remote that failed, which is exactly what the badge's failure mark stands for
     // (see "The branch badge" in `docs/product/project-git-status.md`), and a local fast-forward
     // says nothing about whether that fetch would succeed now.
-    fast_forward(state, &path, &mut status);
+    let ssh = git.git().ssh_configuration(&path);
+    fast_forward(state, &git, &path, &mut status, &ssh);
     status.activity = GitActivity::Idle;
     // No `record_git_check_completed` here, unlike `check_project`: nothing above went to the
     // remote, so the next sweep's own check must not be held off on this project's account.
@@ -470,17 +514,29 @@ fn pullable(status: &GitStatus) -> bool {
 
 /// Fast-forwards the branch onto its upstream and reads the branch header again, reporting the
 /// fast-forward in flight on `status` while it runs. `status` must have passed `pullable`. A
-/// fast-forward `git` refuses records its message, as a failed fetch does.
-fn fast_forward(state: &AppState, path: &Path, status: &mut GitStatus) {
+/// fast-forward `git` refuses records its message, as a failed fetch does. `ssh` is what the
+/// repository's configuration says of `core.sshCommand`: in a partial clone the merge may fetch the
+/// objects it needs from the promisor remote, so it runs the user's ssh as a fetch does.
+fn fast_forward(
+    state: &AppState,
+    git: &Runner,
+    path: &Path,
+    status: &mut GitStatus,
+    ssh: &SshConfiguration,
+) {
     status.activity = GitActivity::Pulling;
     state.publish_git_status(status.clone());
     // `@{upstream}` rather than the upstream's short name, which a local branch of the same name
     // (`origin/main`) would shadow and fast-forward the branch onto instead.
-    if let Err(err) = run_git_write(path, &["merge", "--ff-only", "@{upstream}"]) {
+    if let Err(err) = git.write_remote(
+        WorkDir::At(path),
+        ["merge", "--ff-only", "@{upstream}"],
+        ssh,
+    ) {
         tracing::debug!(%err, "fast-forwarding the branch failed");
-        status.error = Some(err);
+        status.error = Some(err.to_string());
     }
-    read_branch_header(path, status);
+    read_branch_header(git, path, status);
 }
 
 /// Which remote name, if any, to pass to `git fetch` — a pure function over the repository's
@@ -628,8 +684,91 @@ mod tests {
             activity: GitActivity::Idle,
             error: None,
         };
-        fast_forward(&state, &repo, &mut status);
+        let git = project_git(&state).unwrap();
+        fast_forward(&state, &git, &repo, &mut status, &SshConfiguration::Unset);
         assert_eq!(status.error, None);
         assert_eq!(rev("HEAD"), upstream);
+    }
+
+    /// A merge in a partial clone can fetch from the promisor remote, so it gets the ssh a fetch
+    /// gets. The `post-merge` hook of the fast-forward sees what the merge's environment holds.
+    #[test]
+    fn the_pull_runs_the_ssh_the_repository_is_configured_with() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (state, _dir) = app_state("git-status-pull-ssh");
+        let repo = repo_with("git-status-pull-ssh-repo", &[(b"a.txt", b"one\n")]);
+        let branch = String::from_utf8(git(&repo, &["symbolic-ref", "--short", "HEAD"])).unwrap();
+        let branch = branch.trim();
+        git(&repo, &["commit", "-q", "--allow-empty", "-m", "upstream"]);
+        let upstream = String::from_utf8(git(&repo, &["rev-parse", "HEAD"])).unwrap();
+        git(&repo, &["reset", "-q", "--hard", "HEAD~"]);
+        git(
+            &repo,
+            &["update-ref", "refs/remotes/origin/main", upstream.trim()],
+        );
+        for (key, value) in [
+            ("remote.origin.url", "/nonexistent"),
+            ("remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"),
+            (&format!("branch.{branch}.remote"), "origin"),
+            (&format!("branch.{branch}.merge"), "refs/heads/main"),
+            ("core.hooksPath", ".git/hooks"),
+        ] {
+            git(&repo, &["config", key, value]);
+        }
+        let seen = repo.join("seen-ssh");
+        let hook = repo.join(".git/hooks/post-merge");
+        std::fs::create_dir_all(hook.parent().unwrap()).unwrap();
+        std::fs::write(
+            &hook,
+            format!(
+                "#!/bin/sh\nprintf '%s' \"$GIT_SSH_COMMAND\" > '{}'\n",
+                seen.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let mut status = GitStatus {
+            project: "project-1".to_string(),
+            repository: true,
+            branch: Some(branch.to_string()),
+            detached: false,
+            upstream: Some("origin/main".to_string()),
+            ahead: 0,
+            behind: 1,
+            activity: GitActivity::Idle,
+            error: None,
+        };
+        let git = project_git(&state).unwrap();
+        let configured = SshConfiguration::Command("ssh -i /key".to_string());
+        fast_forward(&state, &git, &repo, &mut status, &configured);
+        assert_eq!(status.error, None);
+        let seen = std::fs::read_to_string(seen).expect("the hook ran");
+        assert_eq!(seen, "ssh -oBatchMode=yes -i /key");
+    }
+
+    /// A remote configuration that cannot be read stops the fetch and is recorded on the status as
+    /// `git`'s own message, not shown as a check that went through.
+    #[test]
+    fn unreadable_remotes_are_recorded_as_the_checks_error() {
+        let (state, dir) = app_state("git-status-remotes-unreadable");
+        let git = project_git(&state).unwrap();
+        let mut status = GitStatus {
+            project: "project-1".to_string(),
+            repository: true,
+            branch: None,
+            detached: false,
+            upstream: None,
+            ahead: 0,
+            behind: 0,
+            activity: GitActivity::Checking,
+            error: None,
+        };
+        let plain = dir.join("plain");
+        std::fs::create_dir(&plain).unwrap();
+        fetch_remote_of(&state, &git, "project-1", &plain, &mut status);
+        let error = status.error.expect("the failure is recorded");
+        assert!(error.contains("not a git repository"), "{error}");
     }
 }

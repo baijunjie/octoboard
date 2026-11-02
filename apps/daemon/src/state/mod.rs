@@ -272,8 +272,8 @@ pub struct AppState {
     /// blocking thread is still stuck (`crate::coordinator::projects`). Held in memory only.
     pub stalled_directory_passes: StalledPasses<String>,
     /// The removal inspections' refusals that a path that could not be resolved decided, by token
-    /// (`crate::project_trash`). Held in memory only. Dropped with their project.
-    pub unresolved_removals: crate::project_trash::UnresolvedRemovals,
+    /// (`crate::removal_safety::project`). Held in memory only. Dropped with their project.
+    pub unresolved_removals: crate::removal_safety::project::UnresolvedRemovals,
     /// The processes each agent launch started outside its terminal session, stopped when the
     /// launch ends (`crate::processes::ledger`).
     pub process_ledger: Arc<crate::processes::ledger::ProcessLedger>,

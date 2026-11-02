@@ -46,19 +46,27 @@ responsible session" in `docs/product/branch-responsible-session.md`), the same 
 Both follow the branch's record: a rename carries them to the new name, a handover leaves them as they are, and they go
 when the record goes. A branch no session's git reported creating has neither recorded.
 
-Where the gate needs the fork point of a branch that has none recorded, it takes instead the commit the branch's
-reflog records it being created at (the reflog's oldest entry, when that entry is the branch's creation), but only
-where that commit lies on the side the branch is merged into: an ancestor of the moved branch's value before the move,
-or of one of the moved branch's own remote-tracking tips that the move takes in (see "What it refuses" below); for a
-push, an ancestor of the value the remote has, or, for a check against a target branch, of that target's
-remote-tracking tip. A branch created on work not on that side — someone else's unmerged branch, say — therefore has
-no fork point, nor does a branch whose reflog is missing or has expired, or whose oldest entry is not its creation. A
-guarded branch never takes a fork point from its reflog.
+Where the gate needs the fork point of a branch that has none recorded, it takes instead the commit the branch's reflog
+records it being created at (the reflog's oldest entry, when that entry is the branch's creation: one with no value
+before it, whatever command wrote it — `git branch`, `git switch -c`, a `git update-ref` from no value), but only where
+that commit lies on the side the branch is merged into: an ancestor of the moved branch's value before the move, or of
+one of the moved branch's own remote-tracking tips that the move takes in (see "What it refuses" below); for a push, an
+ancestor of the value the remote has, or, for a check against a target branch, of that target's remote-tracking tip. A
+branch created on work not on that side — someone else's unmerged branch, say — therefore has no fork point, nor does a
+branch whose reflog is missing or has expired, or whose oldest entry is not its creation, nor any branch of a repository
+whose references are kept in reftable format, whose reflog is not read. A guarded branch never takes a fork point from
+its reflog.
 
 ## What it refuses
 
-A branch's **own remote-tracking branches**, below, are the remote-tracking branches of its name on any remote, and its
-upstream where that has another name, unless the upstream is a guarded branch or the branch's recorded target branch.
+A branch's **own remote-tracking branches**, below, are the remote-tracking branches of exactly its name on any remote,
+and its upstream where that has another name, unless the upstream is a guarded branch or the branch's recorded target
+branch. To tell whose remote-tracking branch a ref is — for these, and for another branch's tip a move merges in
+(below) — a ref under `refs/remotes/` is split by the remotes the repository has configured, the longest configured
+remote name that fits winning, so a remote whose name holds a `/` is told from a branch name that holds one. A ref
+there that names no configured remote, as one a removed remote left behind, is no remote's branch, and a branch nested
+under another's name (`origin/feat/sub` for `feat`) is not that branch's. Whether a commit is already published, below,
+counts every ref under `refs/remotes/`.
 
 ### A local update of a guarded branch
 

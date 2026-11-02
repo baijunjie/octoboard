@@ -148,8 +148,9 @@ again until its next check, or until its refs change (see "Following changes to 
   `docs/product/projects.md`).
 - Otherwise the repository's remotes are read, and the project's recorded remote URL is made the one that read gives,
   which is how that value is kept true to a repository whose remote changed outside Octoboard (same section). A read
-  that could not be made leaves the recorded value alone. A changed value reaches the open windows at once; nothing
-  about the badge changes with it.
+  that could not be made leaves the recorded value alone, skips the fetch below and records `git`'s own message for
+  the badge, as a failed fetch does; the branch and the counts are still read. A changed value reaches the open
+  windows at once; nothing about the badge changes with it.
 - The remote is then fetched — **remote refs only**: nothing in the working tree moves and no branch changes.
   The remote fetched is the current branch's upstream remote; with no upstream and exactly one remote configured, that
   one; with no upstream and several, `git`'s own default. A repository with no remote at all is not fetched, and that
@@ -271,6 +272,22 @@ environment (see "Associating a project" in `docs/product/projects.md`).
 fails immediately instead — and every `git` call of a check is given at most two minutes, so a check cannot hang; a
 call that runs out reports only that it did not finish in time. A push's own bounds are in "Pushing the current
 branch" in `docs/product/project-git-actions.md`.
+
+**A command that reaches a remote uses the user's own ssh.** The fetch, the push, a git association's clone and the
+form's check of a git URL reach the remote, and so, in a partial clone, can the fast-forward and a branch switch, which
+fetch the objects they lack. Each runs the ssh program `git` itself would pick: the shell's `GIT_SSH_COMMAND`, else the
+`core.sshCommand` setting, else the shell's `GIT_SSH`, else `ssh`; the shell's `GIT_SSH_VARIANT` is kept for a
+`GIT_SSH` wrapper. Where that program is `ssh` itself, it is kept from prompting as above. Any other program — `plink`,
+a wrapper script — runs as the user configured it, and a prompt it opens is ended only by the command's time limit. A
+`core.sshCommand` that cannot be read leaves plain `ssh`. For the clone and the form's check, `core.sshCommand` comes
+from the user's system and global configuration only, so one that only a conditional include (`includeIf`) supplies
+for the new repository's directory is not used there; `GIT_SSH_COMMAND` or a global `core.sshCommand` is.
+
+A `git` that only reads — the remotes read and the branch read, among others — never starts the file-system monitor the
+user's configuration may name (`core.fsmonitor`), and never rewrites the repository's index. A command that writes,
+the fetch, the fast-forward, the push and its hooks among them, keeps the user's monitor; only restoring file changes
+(see "Restoring file changes" in `docs/product/project-git-actions.md`) and the branch and worktree cleanup turn it off
+for their writes too.
 
 ## Automatically pulling repositories
 

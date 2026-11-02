@@ -10,7 +10,8 @@ use std::time::{Duration, Instant};
 use super::report::lines;
 use super::survey::{exists, failed, survey, BranchSurvey, WorktreeRemovability, WorktreeSurvey};
 use crate::branch_origin::bound::{bound_in, Bound};
-use crate::git::branch_git::{worktrees, BranchGit};
+use crate::git::run::Runner;
+use crate::git::worktrees::worktrees;
 use crate::protocol::{
     Session, SessionBranchItem, SessionBranchKind, SessionBranchState, SessionBranchTarget,
     SessionStatus,
@@ -59,7 +60,7 @@ pub async fn remove_once_stopped(
     }
     let unfinished = bound.clone();
     let removed = tokio::task::spawn_blocking(move || {
-        let git = match (state.host_tools.get().git)() {
+        let git = match super::cleanup_git(&state.host_tools.get()) {
             Ok(git) => git,
             Err(err) => return all_failed(&bound, &format!("{err:#}")),
         };
@@ -170,8 +171,9 @@ pub(super) fn consents(target: &SessionBranchTarget, item: &SessionBranchItem) -
 }
 
 /// The branches some worktree of the repository has checked out now.
-fn held_branches(git: &BranchGit, repo: &Path) -> Result<HashSet<Vec<u8>>, String> {
-    Ok(worktrees(git, repo)?
+fn held_branches(git: &Runner, repo: &Path) -> Result<HashSet<Vec<u8>>, String> {
+    Ok(worktrees(git, repo)
+        .map_err(|err| err.to_string())?
         .into_iter()
         .filter_map(|worktree| worktree.branch)
         .collect())
@@ -179,7 +181,7 @@ fn held_branches(git: &BranchGit, repo: &Path) -> Result<HashSet<Vec<u8>>, Strin
 
 pub(super) fn remove_in(
     state: &AppState,
-    git: &BranchGit,
+    git: &Runner,
     bound: &Bound,
     judge: &mut WorktreeRemovability,
     forced: &[SessionBranchTarget],

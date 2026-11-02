@@ -3,14 +3,22 @@
 ## Build and run every `git` the daemon spawns through `git::run`, and give it a deadline
 
 Every `git` the daemon starts goes through `apps/daemon/src/git/run.rs` (`docs/structure/daemon.md`, "Shared entry
-points", which also names the one exception). Take a `UserGit` (`UserGit::cached_shell` on a path that repeats), get the
-command from `UserGit::command` with its call-site family's `Policy` and an `Access` (`Access::Read` for anything that
-only reads the repository, a status-only `git diff --quiet` included, which adds the index guard), then add the
-subcommand and arguments to the `Command` it hands back. Start from there rather than from `Command::new` or from
-`git::env::non_interactive`, and set none of the variables `apps/daemon/src/git/env.rs` sets at a call site; that
-module's header carries the reason for each one, and a call site that assembles its own takes some of them and misses
-the rest. Global options or variables fixed for a whole family of call sites go in a `Policy` defined beside its users
-(`UNMONITORED` in `apps/daemon/src/git/branch_git.rs` is the shape), not repeated per call.
+points", which also names the one exception). A family of call sites gets one `Runner`: the user's `UserGit` from
+`HostTools::git`, with a `Policy` and `Limits` defined as constants beside its users (`UNMONITORED` in
+`apps/daemon/src/branch_cleanup/mod.rs` is the shape). Run through its `read` (anything that only reads the repository,
+a status-only `git diff --quiet` included, which adds the index guard), `write` or `write_remote`; where the command needs
+adjusting first, build it with `Runner::command` or `remote_command` and hand it to `Runner::run`. Start from there
+rather than from `Command::new` or from `git::env::non_interactive`, and set none of the variables
+`apps/daemon/src/git/env.rs` sets at a call site; that module's header carries the reason for each one, and a call site
+that assembles its own takes some of them and misses the rest. Global options or variables fixed for a whole family go
+in its `Policy`, not repeated per call — and a `-c` on a write reaches the user's hooks that write runs (through
+`GIT_CONFIG_PARAMETERS`), so put one there only where those hooks may see it.
+
+A command that may reach a remote is built with `remote_command` or `write_remote` and an `SshConfiguration` — taken from
+the configuration read the caller already makes, else `UserGit::ssh_configuration` — or the plain `ssh` the daemon sets
+overrides the user's `core.sshCommand`, and a fetch that works from their shell fails or authenticates as another
+account. That covers more than fetch, push, clone and `ls-remote`: a fast-forward or a branch switch in a partial clone
+fetches the objects it lacks from the promisor remote, so it counts too.
 
 The environment is part of that, for a command that writes as much as for one that reads: `UserGit::command` passes
 the user's login-shell snapshot through `git::env::user_configuration_only` on the way in. That filter keeps what says
@@ -31,10 +39,10 @@ read-only — `git status` and `git diff` rewrite `.git/index` for a tracked fil
 content did not, and the `index.lock` they hold is what fails the `git add` an agent is running in that same
 repository.
 
-The deadline stays the call site's own: run the command through `git::run::run` or `run_checked` with the call site's
-`Limits` (`Limits::deadline` when the output is small by nature, output ceilings where it is not) and its cancel flag
-where it has one, rather than `Command::output`. That kills the whole process group rather than the direct child,
-which is what also reaps the `ssh` that `git` forked.
+The deadline is the family's: its `Runner`'s `Limits` (`Limits::deadline` when the output is small by nature, output
+ceilings where it is not), with `Runner::with_limits` for a run of the family that needs another bound, never
+`Command::output`. The runner kills the whole process group rather than the direct child, which is what also reaps the
+`ssh` that `git` forked.
 
 ## A `git` that only adds to a browse reply gets a short deadline and a budget of its own, and failing leaves it out
 
@@ -70,7 +78,7 @@ The `--` matters because an operand of that form is also a valid path, so a work
 one makes `git` refuse the whole command as an ambiguous argument — a condition that depends on what the user has on
 disk, which no fixture without such a file reproduces.
 
-## Name a ref to `git` by its full name or `@{upstream}`, never by a short name
+## Name a ref to `git` by its full name or `@{upstream}`, and match what it lists by the exact refname
 
 Applies wherever daemon code passes a branch, an upstream or a remote-tracking branch back to `git` as a revision
 (`merge`, `rev-list`, `log`, `rev-parse`). `git` resolves a short name by trying `$GIT_DIR/<name>`, `refs/<name>`,
@@ -79,6 +87,13 @@ local branch named `origin/main`, takes the name, and the command quietly acts o
 onto `origin/main` lands on the local branch. Anyone working in the repository, an agent included, can create such a
 ref. Write `refs/heads/<branch>` or `refs/remotes/<remote>/<branch>`, take an upstream from `%(upstream)`, which prints
 it in full, or name it `@{upstream}`; a short name such as the branch header's `upstream` is for showing.
+
+Looking a ref up is the other half. `git for-each-ref <pattern>` with no wildcard in the pattern matches the name and
+every ref below it, so `refs/remotes/origin/feat` also lists `refs/remotes/origin/feat/sub` when the branch itself is
+gone: keep only the lines whose `%(refname)` equals a name asked for, rather than taking the first line or any line.
+A remote's name may hold a `/` too, so neither a `refs/remotes/*/<branch>` pattern nor a split at the first or last
+`/` of `<remote>/<branch>` finds the remote: name one pattern per configured remote, and split a short remote-tracking
+name with `git::remote_branch::split_remote_branch` (`apps/daemon/src/git/remote_branch.rs`).
 
 ## Compare the paths `git` prints with names read from disk only in one Unicode form
 

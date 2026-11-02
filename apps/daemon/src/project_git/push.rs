@@ -10,9 +10,11 @@
 use std::path::Path;
 
 use crate::git::layout::is_git_repo;
+use crate::git::remote_branch::split_remote_branch;
+use crate::git::run::WorkDir;
 use crate::project_git::header::{self, BranchHeader};
 use crate::project_git::remote::{self, Remote};
-use crate::project_git::run_git_push;
+use crate::project_git::{project_git, PUSH_LIMITS};
 use crate::protocol::{error_code, CodedError, Project};
 use crate::state::AppState;
 
@@ -82,7 +84,8 @@ pub fn push_current_branch(state: &AppState, project: &Project) -> Result<(), an
             &[("project", &project.id)],
         ));
     }
-    let header = header::read_header(path).map_err(|detail| push_failed(&detail))?;
+    let git = project_git(state).map_err(|detail| push_failed(&detail))?;
+    let header = header::read_header(&git, path).map_err(|detail| push_failed(&detail))?;
     // Published before the push is marked in flight: the badge draws the push on its ahead count,
     // which a commit nothing has re-read yet would leave at zero, and nothing drawn.
     state.publish_git_reread(&project.id, Ok(header.clone()));
@@ -93,13 +96,14 @@ pub fn push_current_branch(state: &AppState, project: &Project) -> Result<(), an
             &[],
         ));
     };
-    let run = remote::runner(path);
-    let inspection = remote::inspect(&run)
-        .ok_or_else(|| push_failed("the repository's remotes could not be read"))?;
+    let run = remote::runner(&git, path);
+    let inspection = remote::inspect(&run).map_err(|err| push_failed(&err.to_string()))?;
     let plan = plan_push(&header, &inspection.remotes).map_err(refusal)?;
     let args = plan.args();
     let refs: Vec<&str> = args.iter().map(String::as_str).collect();
-    run_git_push(path, &refs).map_err(|detail| push_failed(&detail))?;
+    git.with_limits(PUSH_LIMITS)
+        .write_remote(WorkDir::At(path), &refs, &inspection.ssh)
+        .map_err(|err| push_failed(&err.to_string()))?;
     header::publish_reread(state, project);
     Ok(())
 }
@@ -156,7 +160,10 @@ pub(crate) fn plan_push(
         return Err(PushRefusal::UnsafeName);
     }
     if let Some(upstream) = header.upstream.as_deref() {
-        let Some((remote, remote_branch)) = split_upstream(upstream, remotes) else {
+        // `git`'s short upstream, `origin/main`.
+        let Some((remote, remote_branch)) =
+            split_remote_branch(upstream, remotes.iter().map(|remote| remote.name.as_str()))
+        else {
             return Err(PushRefusal::UpstreamNotARemote);
         };
         if !usable(remote) || !usable(remote_branch) {
@@ -178,29 +185,6 @@ pub(crate) fn plan_push(
         remote: remote.to_string(),
         local: local.to_string(),
     })
-}
-
-/// `upstream` is `git`'s short upstream, `origin/main`. The remote is the longest configured
-/// name that is a prefix of it followed by `/`, so a remote named `origin` does not take an
-/// upstream of `origin-fork/main`, and a remote named `fork/origin` wins over `fork` for
-/// `fork/origin/main`.
-fn split_upstream<'a>(upstream: &'a str, remotes: &'a [Remote]) -> Option<(&'a str, &'a str)> {
-    let mut best: Option<(&str, &str)> = None;
-    for remote in remotes {
-        let mut prefix = String::new();
-        prefix.push_str(&remote.name);
-        prefix.push('/');
-        let Some(rest) = upstream.strip_prefix(&prefix) else {
-            continue;
-        };
-        if rest.is_empty() {
-            continue;
-        }
-        if best.is_none_or(|(name, _)| remote.name.len() > name.len()) {
-            best = Some((remote.name.as_str(), rest));
-        }
-    }
-    best
 }
 
 /// `origin` when the repository has it, otherwise its only remote. Several remotes and no

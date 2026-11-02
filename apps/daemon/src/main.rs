@@ -33,9 +33,9 @@ mod path_links;
 mod paths;
 mod processes;
 mod project_git;
-mod project_trash;
 mod protocol;
 mod records;
+mod removal_safety;
 mod revert_gate;
 mod server;
 mod session;
@@ -49,7 +49,6 @@ mod terminal;
 mod test_support;
 mod time;
 mod titles;
-mod trash_safety;
 mod wire_path;
 
 use std::sync::Arc;

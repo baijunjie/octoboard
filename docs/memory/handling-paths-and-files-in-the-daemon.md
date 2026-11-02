@@ -113,7 +113,7 @@ Decide which way a path that cannot be resolved (nothing there, unreadable, no i
 a match does. Where a match grants something, as trust coverage does, it matches nothing, with no fallback to the text.
 Where a match is what protects, as refusing a second project at one directory does, it falls back to the normalised
 text. Where a missed match destroys something — moving a folder to the Trash, removing a linked worktree — a path that
-cannot be resolved counts as a match, and that decision is made only in `apps/daemon/src/trash_safety.rs`
+cannot be resolved counts as a match, and that decision is made only in `apps/daemon/src/removal_safety/mod.rs`
 (`looked_at_for_trash` for a move to the Trash, `Worktrees` for a worktree's removal), whose module header says which
 paths fall back to their text; it also protects the home directory, the root of a disk and a directory holding
 Octoboard's data whatever else is found. Code that destroys a directory asks it; extend it rather than write a second.

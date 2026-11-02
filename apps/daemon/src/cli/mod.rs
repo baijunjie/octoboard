@@ -1,7 +1,6 @@
 //! The command line: the daemon itself when no mode is named, and the modes other processes start
-//! it in — an agent's hook, a session's git hooks, the revert gate, the Claude Code status line and
-//! the MCP server — each of which runs in a process of its own. All but the revert gate call the
-//! running daemon; the revert gate runs the gate directly from its arguments.
+//! it in — an agent's hook, a session's git hooks, the Claude Code status line and the MCP server —
+//! each of which runs in a process of its own and calls the running daemon.
 
 pub(crate) mod hook;
 pub(crate) mod status_line;
@@ -72,12 +71,6 @@ pub(crate) enum Command {
         #[command(subcommand)]
         hook: revert_gate::Hook,
     },
-    /// Decide whether a `reference-transaction` hook's ref updates, or with `pre-push` the refs
-    /// of a push, undo changes already merged into a guarded branch; exits 3 to reject. Runs the
-    /// gate directly with the guarded branches, target branches and fork points given as
-    /// arguments; the session's hook dispatchers go through `gate-hook` instead, which asks the
-    /// daemon for them.
-    RevertGate(revert_gate::Args),
     /// Report a Claude Code session's context window and run the user's own status line. This is
     /// the status line the Claude Code adapter injects; it is not meant to be run by hand.
     StatusLine {
@@ -161,7 +154,6 @@ pub(crate) fn run(command: Command) -> Result<()> {
         } => std::process::exit(session_git_hooks::gate_mode::run(
             &session, port, &key, &hook,
         )),
-        Command::RevertGate(args) => std::process::exit(revert_gate::run(&args)),
         // On the path of every status line update, and its stdout is the user's status line's.
         Command::StatusLine {
             session,

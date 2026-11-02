@@ -10,15 +10,17 @@ use anyhow::Result;
 
 use crate::branch_origin::bound::{bound_in, Bound, BoundBranch};
 use crate::branch_origin::repo_key;
-use crate::git::branch_git::{changes, worktrees, BranchGit, Listed};
 use crate::git::layout::admin_dir;
 use crate::git::repo_files::uses_reftable;
+use crate::git::run::Runner;
+use crate::git::tree_entries::entries;
+use crate::git::worktrees::{changes, worktrees, Listed};
 use crate::hostfs::place::Looking;
 use crate::protocol::{
     Session, SessionBranchCause, SessionBranchItem, SessionBranchKind, SessionBranchState,
 };
+use crate::removal_safety::{Blocked, Unresolved, Worktrees, TRASH_LOOK_DEADLINE};
 use crate::state::AppState;
-use crate::trash_safety::{Blocked, Unresolved, Worktrees, TRASH_LOOK_DEADLINE};
 use crate::wire_path;
 
 /// What is bound to `sessions`, and where each item stands now. Runs no `git` when none of the
@@ -29,7 +31,7 @@ pub fn inspect(state: &AppState, sessions: &[Session]) -> Result<Vec<SessionBran
     if bound.is_empty() {
         return Ok(Vec::new());
     }
-    let git = (state.host_tools.get().git)()?;
+    let git = super::cleanup_git(&state.host_tools.get())?;
     let mut judge = WorktreeRemovability::of_projects(state, None)?;
     let mut items = Vec::new();
     for repo in &bound {
@@ -103,9 +105,12 @@ pub async fn left_by(state: &Arc<AppState>, sessions: Vec<Session>) -> Vec<Sessi
         })
 }
 
-pub(super) fn failed(mut item: SessionBranchItem, detail: String) -> SessionBranchItem {
+pub(super) fn failed(
+    mut item: SessionBranchItem,
+    detail: impl std::fmt::Display,
+) -> SessionBranchItem {
     item.state = SessionBranchState::Failed;
-    item.detail = Some(detail);
+    item.detail = Some(detail.to_string());
     item.cause = None;
     item
 }
@@ -203,7 +208,7 @@ pub(super) enum Removability {
 }
 
 /// The worktrees a cleanup may remove, judged against every project's folder but one, the home
-/// directory and Octoboard's data directory as `trash_safety` judges them ([`Worktrees`]).
+/// directory and Octoboard's data directory as `removal_safety` judges them ([`Worktrees`]).
 ///
 /// The paths are read off the store's lock, each distinct one once per cleanup, a few at a time,
 /// each bounded by [`TRASH_LOOK_DEADLINE`].
@@ -286,8 +291,8 @@ impl WorktreeRemovability {
 
 /// The branches of `bound` that are still there, each with its name as bytes. A reftable
 /// repository has no reflog files for `is_same_branch` to find gone, so there it is asked.
-pub(super) fn stored_names<'b>(
-    git: &BranchGit,
+fn stored_names<'b>(
+    git: &Runner,
     repo: &Path,
     bound: &'b [BoundBranch],
 ) -> Vec<(Vec<u8>, &'b BoundBranch)> {
@@ -301,14 +306,36 @@ pub(super) fn stored_names<'b>(
         .collect()
 }
 
+/// A repository's worktrees as git lists them, and the bound branches that are still there: what
+/// a survey and a project's removal both start from.
+pub(super) struct BoundListing<'b> {
+    pub(super) listed: Vec<Listed>,
+    /// As [`stored_names`] returns them.
+    pub(super) names: Vec<(Vec<u8>, &'b BoundBranch)>,
+}
+
+impl<'b> BoundListing<'b> {
+    pub(super) fn of(git: &Runner, repo: &Path, bound: &'b [BoundBranch]) -> Result<Self> {
+        Ok(Self {
+            listed: worktrees(git, repo)?,
+            names: stored_names(git, repo, bound),
+        })
+    }
+
+    /// The bound branch `worktree` has checked out, if it has one.
+    pub(super) fn bound_branch(&self, worktree: &Listed) -> Option<&'b BoundBranch> {
+        self.names
+            .iter()
+            .find(|(name, _)| worktree.branch.as_deref() == Some(name.as_slice()))
+            .map(|(_, branch)| *branch)
+    }
+}
+
 // -- where it stands -----------------------------------------------------------
 
 /// Where a bound linked worktree that is not, as far as can be told, another project's folder
 /// and holds none stands, and whether it has uncommitted changes.
-fn worktree_state(
-    git: &BranchGit,
-    worktree: &Listed,
-) -> (SessionBranchState, bool, Option<String>) {
+fn worktree_state(git: &Runner, worktree: &Listed) -> (SessionBranchState, bool, Option<String>) {
     // A status that cannot be read counts as changes, so a force never takes changes nobody saw.
     let uncommitted = || !worktree.prunable && changes(git, &worktree.root).unwrap_or(true);
     if worktree.locked {
@@ -323,7 +350,7 @@ fn worktree_state(
     match changes(git, &worktree.root) {
         Ok(false) => (SessionBranchState::Removable, false, None),
         Ok(true) => (SessionBranchState::UncommittedChanges, true, None),
-        Err(detail) => (SessionBranchState::Failed, false, Some(detail)),
+        Err(detail) => (SessionBranchState::Failed, false, Some(detail.to_string())),
     }
 }
 
@@ -356,32 +383,27 @@ impl Survey {
 
 pub(super) fn survey(
     state: &AppState,
-    git: &BranchGit,
+    git: &Runner,
     bound: &Bound,
     judge: &mut WorktreeRemovability,
 ) -> Result<Survey, String> {
-    let listed = worktrees(git, &bound.repo)?;
-    let names = stored_names(git, &bound.repo, &bound.branches);
-    let bound_branch = |worktree: &Listed| {
-        names
-            .iter()
-            .find(|(name, _)| worktree.branch.as_deref() == Some(name.as_slice()))
-            .map(|(_, branch)| *branch)
-    };
+    let listing =
+        BoundListing::of(git, &bound.repo, &bound.branches).map_err(|err| err.to_string())?;
     judge.look(
         state,
-        listed
+        listing
+            .listed
             .iter()
-            .filter(|worktree| !worktree.main && bound_branch(worktree).is_some())
+            .filter(|worktree| !worktree.main && listing.bound_branch(worktree).is_some())
             .map(|worktree| worktree.root.clone()),
     );
 
     let mut worktrees = Vec::new();
-    for worktree in &listed {
+    for worktree in &listing.listed {
         if worktree.main {
             continue;
         }
-        let Some(branch) = bound_branch(worktree) else {
+        let Some(branch) = listing.bound_branch(worktree) else {
             continue;
         };
         let item = |state| {
@@ -415,8 +437,9 @@ pub(super) fn survey(
     }
 
     let mut branches = Vec::new();
-    for (name, branch) in names {
-        let holder_states: Vec<Option<SessionBranchState>> = listed
+    for (name, branch) in listing.names {
+        let holder_states: Vec<Option<SessionBranchState>> = listing
+            .listed
             .iter()
             .filter(|worktree| worktree.branch.as_deref() == Some(name.as_slice()))
             .map(|holder| {
@@ -463,7 +486,7 @@ pub(super) fn survey(
 }
 
 /// Whether the branch `name` exists.
-pub(super) fn exists(git: &BranchGit, repo: &Path, name: &[u8]) -> bool {
+pub(super) fn exists(git: &Runner, repo: &Path, name: &[u8]) -> bool {
     let reference = [b"refs/heads/".as_slice(), name].concat();
     git.read(
         repo,
@@ -480,7 +503,7 @@ pub(super) fn exists(git: &BranchGit, repo: &Path, name: &[u8]) -> bool {
 /// Whether the worktree at `root` has initialized submodules, which `git worktree remove` refuses
 /// without force: the same two signs it looks for, a `modules` directory in the worktree's own git
 /// directory, or a gitlink in the index whose path holds a repository.
-fn has_submodules(git: &BranchGit, root: &Path) -> bool {
+fn has_submodules(git: &Runner, root: &Path) -> bool {
     if admin_dir(root).is_some_and(|admin| admin.join("modules").is_dir()) {
         return true;
     }
@@ -494,18 +517,17 @@ fn has_submodules(git: &BranchGit, root: &Path) -> bool {
     ) else {
         return false;
     };
-    stdout
-        .split(|&b| b == 0)
-        .filter_map(|entry| {
-            let (head, path) = entry.split_at(entry.iter().position(|&b| b == b'\t')?);
-            head.starts_with(b"160000 ").then(|| &path[1..])
-        })
-        .any(|path| root.join(OsStr::from_bytes(path)).join(".git").exists())
+    let mut gitlinks = entries(&stdout).filter(|entry| entry.is_gitlink);
+    gitlinks.any(|entry| {
+        root.join(OsStr::from_bytes(entry.path))
+            .join(".git")
+            .exists()
+    })
 }
 
 /// Whether `git branch -d` would take the branch `name` as merged: into its upstream when that
 /// exists, into `HEAD` otherwise. Anything that cannot be told counts as not merged.
-pub(super) fn is_merged(git: &BranchGit, repo: &Path, name: &[u8]) -> bool {
+pub(super) fn is_merged(git: &Runner, repo: &Path, name: &[u8]) -> bool {
     let reference = [b"refs/heads/".as_slice(), name].concat();
     let upstream = git
         .read(

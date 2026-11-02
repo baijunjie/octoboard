@@ -18,7 +18,7 @@ use crate::browse::{budget, git_error, BrowseGit};
 use crate::git::isolated::IsolatedGit;
 use crate::git::layout::{admin_dir, find_dot_git};
 use crate::git::run::GitError;
-use crate::git::worktree_list::parse_worktree_list;
+use crate::git::worktrees::parse_worktree_list;
 use crate::protocol::{error_code, CodedError};
 use crate::wire_path::{self, RelPath};
 

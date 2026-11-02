@@ -24,10 +24,18 @@ use anyhow::Result;
 use super::bound::bound_in;
 use super::handover::branch_name;
 use crate::browse::compare;
-use crate::git::branch_git::{changes, worktrees, BranchGit, Listed};
+use crate::git::isolated::IsolatedGit;
+use crate::git::run::{GitError, Policy, Runner};
+use crate::git::worktrees::{changes, worktrees, Listed, WORKTREE_GIT_LIMITS};
 use crate::protocol::{Session, UpstreamInfo};
 use crate::state::AppState;
 use crate::wire_path;
+
+/// The `git` of these reads: the user's own, as the host tools hand it out, under the plain policy
+/// and [`WORKTREE_GIT_LIMITS`].
+fn branch_git(state: &AppState) -> Result<Runner> {
+    (state.host_tools.get().git)().map(|git| Runner::new(git, Policy::PLAIN, WORKTREE_GIT_LIMITS))
+}
 
 /// How many commits and changed files are listed; the totals are always given.
 const LISTED_COMMITS: usize = 50;
@@ -77,7 +85,7 @@ pub fn of_session(state: &AppState, session: &Session) -> Result<Vec<BranchState
     if bound.is_empty() {
         return Ok(Vec::new());
     }
-    let git = (state.host_tools.get().git)()?;
+    let git = branch_git(state)?;
     let mut states = Vec::new();
     for repo in &bound {
         let names: Vec<Vec<u8>> = repo
@@ -177,7 +185,7 @@ pub fn worktrees_of(
             })
             .collect()
     };
-    let git = match (state.host_tools.get().git)() {
+    let git = match branch_git(state) {
         Ok(git) => git,
         Err(err) => {
             tracing::warn!(%err, "reading the worktrees of branches failed");
@@ -204,7 +212,7 @@ pub fn worktrees_of(
 
 /// Where the branch `name` is checked out among `listed`, and why its changes could not be read
 /// when they could not.
-fn worktree_of(git: &BranchGit, listed: &[Listed], name: &[u8]) -> (Worktree, Option<String>) {
+fn worktree_of(git: &Runner, listed: &[Listed], name: &[u8]) -> (Worktree, Option<String>) {
     let Some(worktree) = listed
         .iter()
         .find(|worktree| worktree.branch.as_deref() == Some(name))
@@ -233,7 +241,7 @@ fn worktree_of(git: &BranchGit, listed: &[Listed], name: &[u8]) -> (Worktree, Op
 }
 
 /// Reads each of `names`, branches of `repo`, against one listing of its worktrees.
-fn read_branches(git: &BranchGit, repo: &Path, names: &[Vec<u8>]) -> Vec<BranchState> {
+fn read_branches(git: &Runner, repo: &Path, names: &[Vec<u8>]) -> Vec<BranchState> {
     let listed = worktrees(git, repo);
     let main_branch = listed
         .as_ref()
@@ -260,13 +268,9 @@ fn read_branches(git: &BranchGit, repo: &Path, names: &[Vec<u8>]) -> Vec<BranchS
 
 /// The remote branch of the main working copy's branch `main`: the one it tracks, else the one of
 /// its name on a remote. The remote default branch the Git mode falls back to is not looked for.
-fn main_upstream(
-    git: &BranchGit,
-    repo: &Path,
-    main: &[u8],
-) -> Result<Option<UpstreamInfo>, String> {
+fn main_upstream(git: &Runner, repo: &Path, main: &[u8]) -> Result<Option<UpstreamInfo>, String> {
     let list = compare::branches_in(
-        &git.browse_env(),
+        &IsolatedGit::of(git.git().clone()),
         repo,
         repo,
         false,
@@ -285,7 +289,7 @@ fn main_upstream(
 }
 
 fn read_branch(
-    git: &BranchGit,
+    git: &Runner,
     repo: &Path,
     listed: &[Listed],
     name: &[u8],
@@ -354,7 +358,7 @@ fn shortened(reference: &[u8]) -> String {
 
 /// Fills in the commits and changed files of `branch` against `base`: what it has done since the
 /// two forked, as `git diff base...branch` takes it.
-fn compare(git: &BranchGit, repo: &Path, state: &mut BranchState, base: &OsStr, branch: &OsStr) {
+fn compare(git: &Runner, repo: &Path, state: &mut BranchState, base: &OsStr, branch: &OsStr) {
     let range = [base.as_bytes(), b"..", branch.as_bytes()].concat();
     let range = OsStr::from_bytes(&range);
     let count = text(
@@ -434,7 +438,7 @@ fn compare(git: &BranchGit, repo: &Path, state: &mut BranchState, base: &OsStr, 
 }
 
 /// The trimmed text a read prints.
-fn text(git: &BranchGit, repo: &Path, args: &[&OsStr]) -> Result<String, String> {
+fn text(git: &Runner, repo: &Path, args: &[&OsStr]) -> Result<String, GitError> {
     let stdout = git.read(repo, args)?;
     Ok(String::from_utf8_lossy(&stdout).trim().to_owned())
 }

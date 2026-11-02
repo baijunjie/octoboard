@@ -1,5 +1,5 @@
 //! Which folder removing a project may move to the Trash: never one whose loss would be drastic,
-//! nor one that would take another project's files along, as `trash_safety` decides it: the
+//! nor one that would take another project's files along, as `removal_safety` decides it: the
 //! refusals' codes and wording are this module's. A project's folder that cannot be told apart
 //! from another's counts as shared with it, so what an inspection could not resolve is kept
 //! ([`UnresolvedRemovals`]) for the removal confirmed after it to repeat.
@@ -11,13 +11,11 @@ use std::sync::Mutex;
 use anyhow::Result;
 use uuid::Uuid;
 
+use super::{looked_at_for_trash, Blocked, Failure, Overlap, Unresolved, TRASH_LOOK_DEADLINE};
 use crate::hostfs::place::Looking;
 use crate::hostfs::trash::TrashFailure;
 use crate::protocol::{error_code, Code, CodedError, Params, Project};
 use crate::state::AppState;
-use crate::trash_safety::{
-    looked_at_for_trash, Blocked, Failure, Overlap, Unresolved, TRASH_LOOK_DEADLINE,
-};
 
 /// The [`PROJECT_DIRECTORY_TRASH_FAILED`] a project's folder raises when the Trash did not take it.
 ///
@@ -248,7 +246,7 @@ pub async fn directory_to_trash(
 /// directory is the same, inside it or holds it, or another project's Git repository lies inside
 /// it, as a linked worktree's does: trashing would take that project's files too ([`Overlap`]).
 ///
-/// A path that cannot be resolved refuses the move as `trash_safety::looked_at_for_trash` says:
+/// A path that cannot be resolved refuses the move as `removal_safety::looked_at_for_trash` says:
 /// as shared with that project when it is another project's, and with
 /// [`PROJECT_DIRECTORY_TRASH_FAILED`] when it is the folder itself, the home directory or
 /// Octoboard's data directory, its `cause` `unanswered` where the look gave no answer in time and

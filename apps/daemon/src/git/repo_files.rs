@@ -1,7 +1,8 @@
 //! What a repository's administrative files say, read from the filesystem rather than asked of
 //! `git`: which repository a directory or a git directory is in, whether its references are in
-//! reftable format, whether a reference exists (loose or packed), and the remote default branch a
-//! remote's `HEAD` file names.
+//! reftable format, whether a reference exists (loose or packed), whether an operation (a merge, a
+//! rebase) is in progress and which branch a rebase is on, and the remote default branch a remote's
+//! `HEAD` file names.
 //!
 //! A file read is cheaper than a process, and callers run while other work waits on the
 //! repository. For that reason a file is opened only as a regular file and without blocking: a
@@ -19,6 +20,9 @@ use crate::hostfs::open_regular;
 /// How much of `packed-refs` is searched for a reference: a line per reference, so this is far
 /// more than a repository's branches come to, and a file past it is searched only as far as this.
 const MAX_PACKED_REFS_SEARCHED: u64 = 16 * 1024 * 1024;
+
+/// How much of a rebase state's `head-name` file is read: one reference name.
+const MAX_HEAD_NAME: usize = 4 * 1024;
 
 /// How much of a symbolic reference's file is read: `ref: ` and a reference name.
 const MAX_SYMBOLIC_REF: u64 = 4 * 1024;
@@ -48,15 +52,21 @@ pub(crate) fn uses_reftable(common_dir: &Path) -> bool {
     common_dir.join("reftable").is_dir()
 }
 
+/// Whether `name` is made of components that can be joined onto a repository's path as they are:
+/// none empty, `.` or `..`, and no NUL.
+pub(crate) fn is_plain_ref_name(name: &[u8]) -> bool {
+    !name.is_empty()
+        && !name.contains(&0)
+        && name
+            .split(|&b| b == b'/')
+            .all(|part| !part.is_empty() && part != b"." && part != b"..")
+}
+
 /// Whether the reference `name` (`refs/heads/main`) exists in the repository, as a loose file or a
 /// line of `packed-refs`. A name with an empty or dot component is no reference, and is never
 /// joined onto the repository's path.
 pub(crate) fn reference_exists(common_dir: &Path, name: &[u8]) -> bool {
-    let plain = !name.is_empty()
-        && name
-            .split(|&b| b == b'/')
-            .all(|part| !part.is_empty() && part != b"." && part != b"..");
-    if !plain || name.contains(&0) {
+    if !is_plain_ref_name(name) {
         return false;
     }
     if common_dir.join(OsStr::from_bytes(name)).is_file() {
@@ -73,6 +83,41 @@ pub(crate) fn reference_exists(common_dir: &Path, name: &[u8]) -> bool {
                 .position(|&b| b == b' ')
                 .is_some_and(|at| &line[at + 1..] == name)
         })
+}
+
+/// The state a merge, a cherry-pick, a revert, a rebase or a bisect leaves in a git directory.
+const OPERATION_MARKERS: [&str; 7] = [
+    "MERGE_HEAD",
+    "CHERRY_PICK_HEAD",
+    "REVERT_HEAD",
+    "rebase-merge",
+    "rebase-apply",
+    "sequencer",
+    "BISECT_LOG",
+];
+
+/// Whether an operation is in progress in the worktree whose git directory is `git_dir`. An error
+/// where a marker cannot be looked at, which is no answer either way.
+pub(crate) fn operation_in_progress(git_dir: &Path) -> std::io::Result<bool> {
+    for marker in OPERATION_MARKERS {
+        if git_dir.join(marker).try_exists()? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// The branch a rebase in the worktree whose git directory is `git_dir` is on, from its state's
+/// `head-name` file. HEAD is detached during a rebase, so nothing else says. `None` for no rebase
+/// and for a state that cannot be read as one, which the caller takes as not busy.
+pub(crate) fn rebasing_branch(git_dir: &Path) -> Option<Vec<u8>> {
+    ["rebase-merge", "rebase-apply"].iter().find_map(|state| {
+        let head =
+            crate::hostfs::read_regular(&git_dir.join(state).join("head-name"), MAX_HEAD_NAME)
+                .ok()?;
+        let name = head.trim_ascii().strip_prefix(b"refs/heads/")?;
+        (!name.is_empty()).then(|| name.to_vec())
+    })
 }
 
 /// The branch the repository's remote default branch is, read from the files of a repository
@@ -155,6 +200,37 @@ mod tests {
             Some(b"alpha-main".to_vec()),
             "a head naming a branch that is gone does not count"
         );
+    }
+
+    #[test]
+    fn an_operation_in_progress_is_told_from_the_markers_in_the_git_directory() {
+        let repo = repo_with("repo-files-operation", &[(b"a", b"a")]);
+        let git_dir = repository_of(&repo).unwrap();
+        assert!(!operation_in_progress(&git_dir).unwrap());
+        std::fs::write(git_dir.join("MERGE_HEAD"), "x\n").unwrap();
+        assert!(operation_in_progress(&git_dir).unwrap());
+        std::fs::remove_file(git_dir.join("MERGE_HEAD")).unwrap();
+        std::fs::create_dir(git_dir.join("rebase-merge")).unwrap();
+        assert!(operation_in_progress(&git_dir).unwrap());
+    }
+
+    #[test]
+    fn a_rebase_names_its_branch_and_a_fifo_in_its_place_names_none() {
+        let repo = repo_with("repo-files-rebasing", &[(b"a", b"a")]);
+        let git_dir = repository_of(&repo).unwrap();
+        assert_eq!(rebasing_branch(&git_dir), None);
+        std::fs::create_dir(git_dir.join("rebase-merge")).unwrap();
+        let head_name = git_dir.join("rebase-merge/head-name");
+        std::fs::write(&head_name, "refs/heads/feature/x\n").unwrap();
+        assert_eq!(rebasing_branch(&git_dir), Some(b"feature/x".to_vec()));
+        std::fs::write(&head_name, "detached HEAD\n").unwrap();
+        assert_eq!(rebasing_branch(&git_dir), None);
+        std::fs::remove_file(&head_name).unwrap();
+        mkfifo(&head_name);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        std::thread::spawn(move || sender.send(rebasing_branch(&git_dir)));
+        let read = receiver.recv_timeout(crate::test_support::PATIENCE);
+        assert_eq!(read.expect("the state read blocked"), None);
     }
 
     #[test]

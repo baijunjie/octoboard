@@ -61,9 +61,9 @@ use anyhow::{anyhow, bail, Context, Result};
 
 use crate::adapter::shell_quote;
 use crate::env_shell;
-use crate::git::run::{self, Access, Limits, Policy, UserGit, WorkDir};
+use crate::git::run::{Access, GitError, Limits, Policy, Runner, UserGit, WorkDir};
 use crate::paths;
-use crate::processes::subprocess::{self, BoundedFailure};
+use crate::processes::subprocess;
 
 /// The oldest git the variables are given to: `GIT_CONFIG_COUNT` needs 2.31 and the
 /// `reference-transaction` hook 2.28, and 2.36 is the floor the rest of the daemon holds git to.
@@ -278,7 +278,11 @@ fn prepare(
     shell_env: &HashMap<String, String>,
     self_exe: &str,
 ) -> Result<PathBuf> {
-    let git = UserGit::new(git, shell_env.clone());
+    let git = Runner::new(
+        UserGit::new(git, shell_env.clone()),
+        Policy::PLAIN,
+        PROBE_LIMITS,
+    );
     let version = git_version(&git)?;
     if version < MIN_GIT {
         bail!(
@@ -357,41 +361,54 @@ fn render(values: &Rendering<'_>) -> String {
 /// A `git` run to learn about the installed git, in the user's environment less anything that
 /// could point it at a repository or a configuration item, and with its system-wide configuration
 /// read where the build reads it: the dispatcher scans a `GIT_CONFIG_SYSTEM` of the hook's own.
-fn probe(git: &UserGit, args: &[&str]) -> Command {
-    let mut command = git.command(&Policy::PLAIN, Access::Write, WorkDir::At(Path::new("/")));
+fn probe(git: &Runner, args: &[&str]) -> Command {
+    let mut command = git.command(Access::Write, WorkDir::At(Path::new("/")), args);
     command
         .env_remove("GIT_CONFIG_SYSTEM")
         .env_remove("GIT_CONFIG_NOSYSTEM");
-    command.args(args);
     command
 }
 
 /// The [`probe`] that names the system-wide configuration file: git is asked to edit it, with
 /// `echo` as the editor.
-fn system_file_probe(git: &UserGit) -> Command {
+fn system_file_probe(git: &Runner) -> Command {
     let mut command = probe(git, &["config", "--system", "--edit"]);
     command.env("GIT_EDITOR", "echo");
     command
 }
 
-fn exec_path(git: &UserGit) -> Result<String> {
-    let mut command = probe(git, &["--exec-path"]);
-    let output = run::run(&mut command, PROBE_LIMITS, None).map_err(BoundedFailure::into_error)?;
-    let path = String::from_utf8(output.stdout)?;
+/// [`probe`] run with `args`: its stdout where `git` succeeded, `None` where it ran and failed,
+/// and the stop as an error where it did not run to an exit.
+fn probe_run(git: &Runner, args: &[&str]) -> Result<Option<Vec<u8>>> {
+    run_probe(git, &mut probe(git, args))
+}
+
+/// Runs `command`, built by [`probe`], as [`probe_run`] does.
+fn run_probe(git: &Runner, command: &mut Command) -> Result<Option<Vec<u8>>> {
+    match git.run(command) {
+        Ok(stdout) => Ok(Some(stdout)),
+        Err(GitError::Exited { .. }) => Ok(None),
+        Err(GitError::Stopped(stopped)) => Err(stopped.into_error()),
+    }
+}
+
+fn exec_path(git: &Runner) -> Result<String> {
+    let Some(stdout) = probe_run(git, &["--exec-path"])? else {
+        bail!("`git --exec-path` gave no path");
+    };
+    let path = String::from_utf8(stdout)?;
     let path = path.trim();
-    if !output.status.success() || !path.starts_with('/') {
+    if !path.starts_with('/') {
         bail!("`git --exec-path` gave no path");
     }
     Ok(path.to_string())
 }
 
-fn git_version(git: &UserGit) -> Result<(u32, u32)> {
-    let mut command = probe(git, &["--version"]);
-    let output = run::run(&mut command, PROBE_LIMITS, None).map_err(BoundedFailure::into_error)?;
-    if !output.status.success() {
+fn git_version(git: &Runner) -> Result<(u32, u32)> {
+    let Some(stdout) = probe_run(git, &["--version"])? else {
         bail!("`git --version` failed");
-    }
-    parse_version(&String::from_utf8_lossy(&output.stdout))
+    };
+    parse_version(&String::from_utf8_lossy(&stdout))
         .ok_or_else(|| anyhow!("unrecognised `git --version` output"))
 }
 
@@ -408,13 +425,12 @@ fn parse_version(output: &str) -> Option<(u32, u32)> {
 /// manual page, or of its HTML page where no manual page is installed. Read from the files
 /// themselves rather than through `git help`, which needs `man` and a pager. Whatever cannot be
 /// read adds nothing, and the built-in list stands alone.
-fn documented_hook_names(git: &UserGit) -> Vec<String> {
+fn documented_hook_names(git: &Runner) -> Vec<String> {
     let path_of = |flag: &str| -> Option<PathBuf> {
-        let mut command = probe(git, &[flag]);
-        let output = run::run(&mut command, PROBE_LIMITS, None).ok()?;
-        let path = String::from_utf8(output.stdout).ok()?;
+        let stdout = probe_run(git, &[flag]).ok()??;
+        let path = String::from_utf8(stdout).ok()?;
         let path = path.trim();
-        (output.status.success() && !path.is_empty()).then(|| PathBuf::from(path))
+        (!path.is_empty()).then(|| PathBuf::from(path))
     };
     if let Some(man) = path_of("--man-path") {
         let page = man.join("man5/githooks.5");
@@ -497,24 +513,21 @@ fn is_hook_name(name: &str) -> bool {
 /// found by asking git to edit it with `echo` as the editor, and any other file it reports a value
 /// from outside the user's and the repository's scopes — Apple's git reads one inside Xcode, for
 /// one. The dispatcher scans each for a `core.hooksPath` it would otherwise not know about.
-fn system_config_files(git: &UserGit) -> Vec<PathBuf> {
+fn system_config_files(git: &Runner) -> Vec<PathBuf> {
     let mut files = Vec::new();
-    let mut command = system_file_probe(git);
-    if let Ok(output) = run::run(&mut command, PROBE_LIMITS, None) {
-        let path = String::from_utf8_lossy(&output.stdout);
+    if let Ok(Some(stdout)) = run_probe(git, &mut system_file_probe(git)) {
+        let path = String::from_utf8_lossy(&stdout);
         let path = path.trim();
-        if output.status.success() && path.starts_with('/') {
+        if path.starts_with('/') {
             files.push(PathBuf::from(path));
         }
     }
-    let mut command = probe(
+    let listing = probe_run(
         git,
         &["config", "-z", "--list", "--show-origin", "--show-scope"],
     );
-    if let Ok(output) = run::run(&mut command, PROBE_LIMITS, None) {
-        if output.status.success() {
-            files.extend(other_scope_files(&output.stdout));
-        }
+    if let Ok(Some(stdout)) = listing {
+        files.extend(other_scope_files(&stdout));
     }
     files.sort();
     files.dedup();

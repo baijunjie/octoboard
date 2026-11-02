@@ -133,6 +133,17 @@ fn the_default_branch_of_a_remote_that_is_not_origin_is_read_from_its_head_file(
 /// Skipped where `git` does not know the format.
 #[test]
 fn the_default_branch_of_a_reftable_repository_is_asked_of_git() {
+    reftable_default_branch("origin");
+}
+
+/// The branch comes back wire-encoded, remote included, so a `%` in the remote's name has to be
+/// decoded before the name is split by the remotes `git` lists.
+#[test]
+fn the_default_branch_of_a_reftable_repository_whose_remote_name_holds_a_percent_sign() {
+    reftable_default_branch("team%one");
+}
+
+fn reftable_default_branch(remote: &str) {
     let fixture = gated_fixture();
     let repo = ScratchDir::new("branch-origin-gate-reftable");
     let init = fixture_git(&repo)
@@ -143,22 +154,32 @@ fn the_default_branch_of_a_reftable_repository_is_asked_of_git() {
         return;
     }
     commit_file(&repo, "a.txt", &numbered("alpha", 3), "base");
-    git(&repo, &["config", "remote.origin.url", "/nowhere"]);
+    git(
+        &repo,
+        &["config", &format!("remote.{remote}.url"), "/nowhere"],
+    );
     git(
         &repo,
         &[
             "config",
-            "remote.origin.fetch",
-            "+refs/heads/*:refs/remotes/origin/*",
+            &format!("remote.{remote}.fetch"),
+            &format!("+refs/heads/*:refs/remotes/{remote}/*"),
         ],
     );
-    git(&repo, &["update-ref", "refs/remotes/origin/trunk", "HEAD"]);
+    git(
+        &repo,
+        &[
+            "update-ref",
+            &format!("refs/remotes/{remote}/trunk"),
+            "HEAD",
+        ],
+    );
     git(
         &repo,
         &[
             "symbolic-ref",
-            "refs/remotes/origin/HEAD",
-            "refs/remotes/origin/trunk",
+            &format!("refs/remotes/{remote}/HEAD"),
+            &format!("refs/remotes/{remote}/trunk"),
         ],
     );
     fixture

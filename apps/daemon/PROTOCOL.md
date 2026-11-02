@@ -155,7 +155,7 @@ the request id as if it were a record id.
 | `open_project_terminal` | `project` | Opens the system terminal at the project's directory, on the daemon's host. On macOS that is Terminal.app (`open -a Terminal`), which starts a shell in the directory. On Linux there is no single system terminal, so the first installed program in a fixed list that can be given the directory is used (a program that only inherits its working directory is used when none of those is installed). Answered with `ack` once the terminal has been asked to open, not when its window closes. Refused with `terminal_unavailable` when the directory does not exist, the operating system has no system terminal Octoboard can open, no emulator is installed, or the launch fails. An unknown project is `unknown_project` |
 | `open_project_directory` | `project` | Opens the project's directory in the system file manager on the daemon's host: `/usr/bin/open -- <directory>` on macOS, or `xdg-open <directory>` on Linux (looked up in the user's login-shell `PATH`). On macOS, answered with `ack` once `open` exits successfully, bounded to 15 seconds. On Linux, `xdg-open` is detached into its own session and reaped in the background because it may run for the file manager's lifetime; `ack` means the process was spawned, and later launcher failures are not observed. Neither waits for the file manager window to close, and quitting the daemon does not close it. Refused with `directory_unavailable` when the path is not an existing absolute directory, the operating system is unsupported, the Linux login-shell environment or `xdg-open` is unavailable, the process cannot be spawned, or on macOS `open` fails or times out. An unknown project is `unknown_project` |
 | `push_project_branch` | `project` | Pushes the project's current branch and only that branch, never with `--force` and never as a bare `git push` (which would follow `push.default`). A branch that has an upstream is pushed to that remote branch. A branch with no upstream is pushed to `origin` when the repository has one, otherwise to its only remote, and that push records the upstream; several remotes and no `origin` is `no_push_remote`, and nothing is pushed. The local branch header is re-read first (no fetch) and broadcast, so the push is shown against the current ahead count even for a commit nothing had noticed yet; then it publishes `pushing` activity during the request, retaining that branch, counts and error. It takes precedence over overlapping checks and pulls until the push ends; success and failure both restore the latest underlying activity. A project takes one push at a time: a request made while one is in flight is refused with `push_in_progress`, because a second `git push` would run the repository's `pre-push` hook again alongside the first. Answered with `ack` once `git push` has exited. A success is followed by `project_git_status` from a local re-read of the branch header, with no fetch, so the badge's ahead count can drop. Also refused, with nothing pushed: `not_a_git_repository`, `not_on_a_branch` (a detached `HEAD`), `no_commits_to_push` (a branch with no commit yet), `upstream_not_a_remote` (the upstream does not name a remote of this repository), `git_push_failed` (`git`'s own message, or a branch name that cannot be placed in a refspec). An unknown project is `unknown_project` |
-| `switch_project_branch` | `project`, `branch` | Switches the project's own worktree to an existing local branch; `branch` is its canonical wire name below `refs/heads/`, as listed by `list_project_branches`. Requires `.git` in the project directory itself. Validates the literal local reference before `git switch --no-guess -- <branch>`; never creates a branch, guesses a remote branch, forces, stashes, fetches, pushes or fast-forwards. Answered with `ack` after Git exits. Success publishes a local `project_git_status` re-read to every client. Failure is `unknown_project`, `not_a_git_repository`, or `git_switch_failed` with `detail` (Git's own message when it ran). Local changes that prevent switching, a branch checked out in another worktree, a deleted branch or invalid wire/reference name are errors. Uses the filtered, non-interactive Git environment below and a two-minute bound per call. Concurrent Git operations are not serialized with it |
+| `switch_project_branch` | `project`, `branch` | Switches the project's own worktree to an existing local branch; `branch` is its canonical wire name below `refs/heads/`, as listed by `list_project_branches`. Requires `.git` in the project directory itself. Validates the literal local reference before `git switch --no-guess -- <branch>`; never creates a branch, guesses a remote branch, forces, stashes, fetches, pushes or fast-forwards (in a partial clone, Git may still fetch missing objects lazily, over the user's own ssh). Answered with `ack` after Git exits. Success publishes a local `project_git_status` re-read to every client. Failure is `unknown_project`, `not_a_git_repository`, or `git_switch_failed` with `detail` (Git's own message when it ran). Local changes that prevent switching, a branch checked out in another worktree, a deleted branch or invalid wire/reference name are errors. Uses the filtered, non-interactive Git environment below and a two-minute bound per call. Concurrent Git operations are not serialized with it |
 | `restore_project_changes` | `project` | After confirmation in the client, restores staged and unstaged tracked changes in the project's own worktree to `HEAD`, including deleting staged additions absent from `HEAD`. Preserves untracked and ignored files, submodule worktrees and gitlinks, commits, the branch and other worktrees. Requires `.git` in the project directory itself, like the branch badge; repository subdirectory projects are refused. Answered with `ack` after Git exits; success publishes a local `project_git_status` re-read without fetching. Refused with `unknown_project`, `not_a_git_repository`, `restore_not_on_branch` (detached HEAD), `no_commits_to_restore` (unborn branch), `git_operation_in_progress` (merge, rebase, cherry-pick, revert or bisect), or `git_restore_failed` (`detail`). Each Git call is limited to two minutes and 16 MiB stdout / 64 KiB stderr; an inspection that exceeds a bound fails before restoration. A path occupied on disk after removal from the index, a directory where a tracked file belongs, or a symbolic link or file blocking a tracked ancestor is refused before restoration so untracked or ignored content is preserved. Uses the filtered Git environment below. Confirmation is a client responsibility; the request carries the confirmed destructive intent. Git can restore some paths before a later path fails; an error does not promise rollback. Concurrent Git operations, including those from running agents, are not serialized with this request |
 | `pull_project_branch` | `project` | Checks one project against its remote and fast-forwards it right now, the same work `refresh_git_status` does per project (see "Daemon behaviour, per project" below), except that the one-minute floor does not apply and the fast-forward happens whether or not `auto_pull_repositories` is on, under the same rule (`upstream` set, `behind > 0`, `ahead == 0`). Answered with `ack` at once; the status follows as `project_git_status` broadcasts. A project whose check is already running gets one more check, with the fast-forward, as soon as that one ends, so the request ends in a fast-forward attempt; any number of requests meanwhile share that one rerun. A project whose check is only waiting for a place in a sweep, or in the fast-forward pass started by turning `auto_pull_repositories` on (at most four projects are checked at once, across every client) does not wait behind it: that check runs at once with the fast-forward, in its place, so the request costs one fetch and no rerun. The in-flight `checking` status is broadcast at once for the request, without the 400 ms delay a sweep's check has. The rerun is skipped too if the project has been removed meanwhile. A project that is not a git repository is reported as such (`repository: false`). An unknown project is `unknown_project` |
 | `create_account` | `agent`, `name`, `config_dir` | Both fields are required: an account always has a name and a directory. `name` is trimmed and must be non-empty and unique within `agent` (compared trimmed, case-insensitively, including against the default account's own name); a collision is `account_name_taken`, naming the account it collides with. `config_dir` must be absolute or start with `~/`, and is stored lexically normalised; existence is not checked. The normalised directory must not equal another account's of the same `agent`, nor the default account's directory (as the daemon resolved it; until that is determined, the conventional `~/.claude`, `~/.codex` or `~/.grok`); compared lexically without following symlinks, folding case on macOS (a case-insensitive file system) and byte-exact elsewhere, the stored text staying as typed, and a collision is `config_dir_taken`, naming the account using it. Broadcasts `settings_updated` |
@@ -1474,7 +1474,8 @@ DocumentAccount   { name, directory, share_default_config: bool, disabled: bool 
   machine; the format `version` is unchanged, and an import reads such a name as a directory name, not a path (see
   "Configuration import").
 - **`remote_url`** is what is recorded for the project (see "Records"); the export reads it from the stored record
-  and runs no `git`. It is absent for a directory that is not a repository and for one with no remote. With
+  and runs no `git`. It is absent for a directory that is not a repository and for one with no remote. A credential
+  in it (`https://user:token@host/...`) is removed in either mode, so the document never carries one. With
   `include_paths` false it is kept only when it may be cloned from
   (`project_git::remote_url::is_clonable_url`); a local path or a `file:` URL is dropped, as it would point into the
   exporting machine.
@@ -1608,16 +1609,18 @@ Failure           { code, params, message }             // as an `error` reply c
   clone when the URL may be cloned from (below) and the directory the clone would create does not exist yet. The
   `default` is the first offered of the recorded path, the derived path and the clone, and absent when nothing is
   offered. A project with no offer is left out unless the caller points at a directory.
-- **What may be cloned from.** `remote_url` is checked as data: an `http`, `https`, `ssh`, `git+ssh`, `ssh+git` or `git`
-  URL, or the `host:path` form, with no whitespace or control character in it and a host that does not begin with `-`,
-  nor does the part before it. A local path, a `file:` URL, `ftp` and the helper transports (`ext::`, `fd::`) are not
-  offered and are refused when chosen (`import_choice_unavailable`), so a document cannot make the daemon run a command
-  or read a path of this machine. This is stricter than `add_project`, which leaves the choice to git: a few transports
-  git supports are not accepted here. The recorded path is likewise taken only if it is absolute (not relative, not
-  starting with `~`), and the derived path is built from the last segment of the path after its `.` and `..` are
-  resolved. A bare name, a `path` of one plain segment (what an export without paths records), is never a recorded path
-  and so never offers `exported_path`; it is taken only as the directory name of the derived choice. `""`, `.`, `..`
-  and a relative path of several segments yield no derived path either.
+- **What may be cloned from.** `remote_url` is checked as data: an `http`, `https`, `ssh`, `git+ssh`, `ssh+git` or
+  `git` URL, or the `host:path` form, with no whitespace or control character in it and a host that does not begin
+  with `-`, nor does the part before it. A local path, a `file:` URL, `ftp` and the helper transports (`ext::`,
+  `fd::`) are not offered and are refused when chosen (`import_choice_unavailable`), so a document cannot make the
+  daemon run a command or read a path of this machine. A URL with a credential in it is refused the same way (as
+  `add_project` refuses it), so a hand-edited document cannot plant one, and the inspection shows the URL without it.
+  This is stricter than `add_project`, which leaves the choice to git: a few transports git supports are not accepted
+  here. The recorded path is likewise taken only if it is absolute (not relative, not starting with `~`), and the
+  derived path is built from the last segment of the path after its `.` and `..` are resolved. A bare name, a `path`
+  of one plain segment (what an export without paths records), is never a recorded path and so never offers
+  `exported_path`; it is taken only as the directory name of the derived choice. `""`, `.`, `..` and a relative path
+  of several segments yield no derived path either.
 - **Account references.** A reference is rebound to the account of the agent whose field holds it with the same name,
   compared without regard to case. One that matches no account is bound to that agent's default account (`null` on a
   console, `default` on a project, pinned rather than inheriting) and is listed in `account_fallbacks`: on the console
@@ -1843,18 +1846,19 @@ one-minute floor does not apply (see `refresh_git_status` above):
    counts and error of the project's previous status (none before its first check), so the badge keeps showing them
    while the check runs; the check itself starts from a blank status, which the steps below fill in.
 3. Read the repository's remotes with the URL each is configured with, `git config --get-regexp
-   '^remote\..*\.url$'` (all of `git`'s configuration, the same set `git remote` and `git fetch` read), and make
-   the project's recorded `remote_url` the one that read gives (see "Records" above): when it differs from the
-   stored value, write it and broadcast `project_upserted`. A read that fails, or an upstream that could not be
-   read when it was needed to choose between remotes, leaves the stored value as it is. This is the same call that
-   tells which remote to fetch, not an extra one (a repository the call finds no remote in is asked once more, `git
-   rev-parse --git-dir`, to tell it from a damaged `.git`; that confirmation covers only an empty result, since
-   both commands search the parent directories, and what a damaged `.git` makes them read may come from the global
-   configuration or an enclosing repository until it is repaired). Then, if the repository has no remote at all,
-   skip the fetch — that is not an error. Otherwise run `git fetch --quiet` in the project's directory, in the
-   environment "Git environment" describes (as is every `git` of these steps); a failure (offline, authentication, no
-   upstream remote) records `error` and the check continues to the next step regardless, so the branch name and the
-   last known numbers still show.
+   '^(remote\..*\.url|core\.sshcommand)$'` (all of `git`'s configuration, the same set `git remote` and `git fetch`
+   read; the `core.sshCommand` it finds is the ssh of this check's fetch and fast-forward), and make the project's
+   recorded `remote_url` the one that read gives (see "Records" above): when it differs from the stored value, write
+   it and broadcast `project_upserted`. A read that fails, or an upstream that could not be read when it was needed to
+   choose between remotes, leaves the stored value as it is; a read that fails also skips the fetch and records
+   `git`'s message as `error`. This is the same call that tells which remote to fetch, not an extra one (a repository
+   the call finds no remote in is asked once more, `git rev-parse --git-dir`, to tell it from a damaged `.git`; that
+   confirmation covers only an empty result, since both commands search the parent directories, and what a damaged
+   `.git` makes them read may come from the global configuration or an enclosing repository until it is repaired).
+   Then, if the repository has no remote at all, skip the fetch — that is not an error. Otherwise run `git fetch
+   --quiet` in the project's directory, in the environment "Git environment" describes (as is every `git` of these
+   steps); a failure (offline, authentication, no upstream remote) records `error` and the check continues to the next
+   step regardless, so the branch name and the last known numbers still show.
 4. Read the local state in one call, `git status --porcelain=v2 --branch --untracked-files=no --ignore-submodules=all`,
    taking `branch`, `detached`, `upstream`, `ahead` and `behind` from its `# branch.*` header lines;
    `--untracked-files=no` skips enumerating the worktree's files and `--ignore-submodules=all` the status of every
@@ -1914,28 +1918,47 @@ of a console no client is showing stays in the daemon's status for it until that
 ### Git environment
 
 Every `git` the daemon runs in a project's repository or against its remote — the status check's fetch, `git status`
-and fast-forward, `push_project_branch`, `switch_project_branch`, `restore_project_changes`, the reads of a project's remote URL, and every browse request — starts from
-the user's own shell environment, so that it is their `git`, with their configuration and credentials, and is built
-the same way:
+and fast-forward, `push_project_branch`, `switch_project_branch`, `restore_project_changes`, the reads of a project's
+remote URL, every browse request, and cloning a project or probing a remote (`probe_git_remote`) — starts from the
+user's own shell environment, so that it is their `git`, with their configuration and credentials, and is built the
+same way:
 
 - It cannot prompt: `GIT_TERMINAL_PROMPT=0` and `GIT_SSH_COMMAND=ssh -oBatchMode=yes` turn a missing credential, an
   unknown host key or a passphrase-protected key with no agent into an immediate failure, and the askpass helpers are
   removed.
+- A command that reaches a remote — the fetch, the push, the clone and the probe, and the fast-forward and the
+  branch switch, which in a partial clone fetch what they lack from the promisor remote — runs the ssh `git` itself
+  would pick instead of the plain one: the shell's `GIT_SSH_COMMAND`, else `core.sshCommand` (for the fetch, the push
+  and the fast-forward from the repository's configuration, taken in the read of its remotes, or in one read of its
+  own for a switch and for a fast-forward outside a check; for the clone and the probe from the system and global
+  configuration), else the shell's `GIT_SSH`, else `ssh`. Where that program is `ssh` itself,
+  `-oBatchMode=yes` is put in right after its name. Any other program (`plink`, a wrapper script, a command line
+  starting with a variable assignment) runs as the user configured it, since it may not take the option; a prompt it
+  opens is then ended by the command's time limit. A `core.sshCommand` that could not be read leaves the plain
+  `ssh -oBatchMode=yes`. A `core.sshCommand` that only a conditional include (`includeIf "gitdir:"`,
+  `hasconfig:`) supplies for the new repository is not seen by a clone, which reads the configuration from outside
+  any repository, and is not used there; `GIT_SSH_COMMAND` or a global `core.sshCommand` is.
 - Every `GIT_*` variable of the shell is removed except those that say which of the user's own material to use and how
   to reach a remote with it: `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM` and `GIT_CONFIG_NOSYSTEM` for their
   configuration, and `GIT_SSL_CAINFO`, `GIT_SSL_CAPATH`, `GIT_SSL_CERT`, `GIT_SSL_KEY`, `GIT_SSL_CERT_TYPE`,
   `GIT_SSL_KEY_TYPE`, `GIT_SSL_VERSION`, `GIT_SSL_CIPHER_LIST`, `GIT_PROXY_COMMAND`, `GIT_HTTP_PROXY_AUTHMETHOD`,
   `GIT_PROXY_SSL_CAINFO`, `GIT_PROXY_SSL_CERT` and `GIT_PROXY_SSL_KEY` for the certificates, keys, TLS settings and
-  proxy helper of a connection. That takes out everything that could point `git` at another repository, worktree,
-  index, object store or ref namespace, configuration passed through the environment, and `GIT_SSL_NO_VERIFY`. Without
-  it, a `GIT_DIR` exported in the shell would send a project's check to another repository and its fetch to that
-  repository's remotes; with too little kept, a fetch that works from the user's shell fails here, and its message
-  stays in the project's `error` for every later check.
+  proxy helper of a connection, and `GIT_SSH_VARIANT`, which tells git how to call a `GIT_SSH` wrapper. That takes out
+  everything that could point `git` at another repository, worktree, index, object store or ref namespace,
+  configuration passed through the environment, and `GIT_SSL_NO_VERIFY`. Without it, a `GIT_DIR` exported in the shell
+  would send a project's check to another repository and its fetch to that repository's remotes; with too little kept,
+  a fetch that works from the user's shell fails here, and its message stays in the project's `error` for every later
+  check. The shell's `GIT_SSH_COMMAND` and `GIT_SSH` are removed too, and are only read to choose the ssh of a command
+  that reaches a remote, as above.
+- Every command starts with `--no-pager`.
 - A command that only reads also gets `GIT_OPTIONAL_LOCKS=0` and `-c diff.autoRefreshIndex=false`, so it never
-  rewrites the index of a repository an agent is working in.
+  rewrites the index of a repository an agent is working in, and `-c core.fsmonitor=false`: a configured file-system
+  monitor is a program `git` would start on anything that refreshes the index, run each time or, as `git`'s own monitor
+  daemon, left running in the background after the command. A command that writes keeps the user's monitor, as the
+  hooks it runs (a push's `pre-push` hook among them) would otherwise inherit the setting; only the restore and the
+  branch cleanup (worktree and branch removal) turn it off for their writes too.
 
-Cloning a project and probing a remote (`probe_git_remote`) are the exception: they are started by the user on the spot,
-run non-interactively, and pass the whole shell environment.
+A clone, and the probe's own clone, run in the daemon's own working directory, as they name every path they work on.
 
 ### Shell terminals
 

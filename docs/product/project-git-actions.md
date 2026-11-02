@@ -64,8 +64,8 @@ fails comes after the branch read was published, so the badge already shows that
   is not run. The reason says the name cannot be used in a refspec. The local branch's name is judged before the
   upstream. A remote or remote-branch name is judged only after the upstream has matched a remote, so an upstream
   that matches none is `upstream_not_a_remote` even when its text would not be a usable name.
-- The branch cannot be read, or the remotes cannot be read: `git_push_failed`. The branch's reason is `git`'s own
-  message, or that the read did not finish in time. The remotes' reason says they could not be read.
+- The branch cannot be read, or the remotes cannot be read: `git_push_failed`. The reason is `git`'s own message for
+  the read that failed, or that it did not finish in time.
 - `git push` itself fails, including a remote that rejects the update, a missing credential, or a push that does
   not finish within 30 minutes: `git_push_failed`, with `git`'s own message, or that it did not finish in time.
 
@@ -106,7 +106,9 @@ choosing it does nothing and it is not worded as a failure.
 
 Selecting another branch closes the menus and switches immediately, without confirmation. It changes the project's
 own worktree, including a linked worktree, regardless of which worktree the Git pane is reviewing. It never creates
-a branch, guesses a remote branch, fetches, pushes or pulls. It does not force the switch or stash or discard local
+a branch, guesses a remote branch, fetches, pushes or pulls; only in a partial clone may `git` itself fetch objects
+the branch needs and the clone lacks, over the user's own ssh (see "The environment a check runs `git` in" in
+`docs/product/project-git-status.md`). It does not force the switch or stash or discard local
 changes: changes Git can carry safely stay, and a conflict, a branch checked out in another worktree, or another Git
 refusal fails with an error alert. Running agent sessions do not prevent a switch; the working tree can change
 underneath them. Other Git operations are not serialized with the switch.

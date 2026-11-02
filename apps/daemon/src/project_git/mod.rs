@@ -2,10 +2,13 @@
 //! header ([`status`], [`header`]), fetching and fast-forwarding, pushing ([`push`]), switching
 //! branches ([`switch`]), restoring ([`restore`]), the project's remotes ([`remote`],
 //! [`remote_url`]), re-reading its refs when the platform reports them changed ([`watch`]) or a
-//! session's git reports moving them ([`ref_moves`]), and cloning ([`clone`]). The runners the
-//! others share for a project's repository are here.
+//! session's git reports moving them ([`ref_moves`]) through one debounced scheduler
+//! ([`debounced`]), and cloning ([`clone`]). The `git` the others share for a project's
+//! repository ([`project_git`]) is here, and so is the lookup of the stored projects in one
+//! repository ([`projects_in_repository`]).
 
 pub mod clone;
+pub mod debounced;
 pub mod header;
 pub mod push;
 pub mod ref_moves;
@@ -19,7 +22,10 @@ pub mod watch;
 use std::path::Path;
 use std::time::Duration;
 
-use crate::git::run::{self, Access, GitError, Limits, Policy, UserGit, WorkDir};
+use crate::git::repo_files::repository_of;
+use crate::git::run::{Limits, Policy, Runner};
+use crate::protocol::Project;
+use crate::state::AppState;
 
 /// Upper bound on one `git` subprocess other than a push (`fetch`, `status`, `merge`).
 /// `GIT_TERMINAL_PROMPT=0` and `ssh -oBatchMode=yes` (see `crate::git::env`) turn a missing
@@ -30,6 +36,10 @@ use crate::git::run::{self, Access, GitError, Limits, Policy, UserGit, WorkDir};
 /// project excluded from every later sweep, for the rest of the daemon's life.
 const GIT_COMMAND_TIMEOUT: Duration = Duration::from_secs(120);
 
+/// What each `git` of a project's repository is held to, a push apart: [`GIT_COMMAND_TIMEOUT`],
+/// and no output ceiling, its output being small by nature.
+const LIMITS: Limits = Limits::deadline(GIT_COMMAND_TIMEOUT);
+
 /// Upper bound on one `git push`. A push runs the repository's `pre-push` hook before anything is
 /// sent, and a hook that runs the project's checks (tests, a build) legitimately takes minutes, so
 /// the two minutes of [`GIT_COMMAND_TIMEOUT`] would kill it mid-check and the user would never see
@@ -37,95 +47,104 @@ const GIT_COMMAND_TIMEOUT: Duration = Duration::from_secs(120);
 /// is reported in the end rather than left running for the rest of the daemon's life.
 const GIT_PUSH_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 
-/// Runs `git` with `args` in `path` and returns its stdout as UTF-8, reading the repository and
-/// nothing more. A read whose only interesting output is its exit status still goes through here
-/// and drops what it returns, never through [`run_git_write`]: see [`Access`].
-pub(crate) fn run_git_read(
-    path: &Path,
-    args: &[impl AsRef<std::ffi::OsStr>],
-) -> Result<String, String> {
-    run_git_access(path, args, Access::Read, GIT_COMMAND_TIMEOUT)
-}
+/// What a `git push` is held to: [`GIT_PUSH_TIMEOUT`] in place of [`LIMITS`]'s bound. Its output,
+/// which `git` sends to stderr, the `pre-push` hook's included, is what a failed push reports.
+pub(crate) const PUSH_LIMITS: Limits = Limits::deadline(GIT_PUSH_TIMEOUT);
 
-/// Runs `git` with `args` in `path` and discards its stdout, for a step that writes to the
-/// repository: a fetch, a fast-forward or a branch switch.
-pub(crate) fn run_git_write(
-    path: &Path,
-    args: &[impl AsRef<std::ffi::OsStr>],
-) -> Result<(), String> {
-    run_git_access(path, args, Access::Write, GIT_COMMAND_TIMEOUT).map(|_| ())
-}
-
-/// [`run_git_write`] for `git push`, under [`GIT_PUSH_TIMEOUT`] in place of the shorter bound of
-/// the other writes: the `pre-push` hook it runs may take minutes, and its output, which `git`
-/// sends to stderr, is what a failed push reports.
-pub(crate) fn run_git_push(
-    path: &Path,
-    args: &[impl AsRef<std::ffi::OsStr>],
-) -> Result<(), String> {
-    run_git_access(path, args, Access::Write, GIT_PUSH_TIMEOUT).map(|_| ())
-}
-
-/// What all of the above run: the user's `git` from the cached shell environment, and the command
-/// [`git_command`] builds over it. The error is the verbatim stderr of a failed `git`, the
-/// operating-system message of a failure to even start it, or a timeout past `timeout` — carried
-/// as is, untranslated, into `GitStatus` or the error of the step that failed.
-fn run_git_access(
-    path: &Path,
-    args: &[impl AsRef<std::ffi::OsStr>],
-    access: Access,
-    timeout: Duration,
-) -> Result<String, String> {
-    let git = UserGit::cached_shell().map_err(|err| format!("{err:#}"))?;
-    run_git_command(&mut git_command(&git, path, args, access), timeout)
-}
-
-/// The `git <args>` command to run in `path`, with the `git` passed in rather than looked up, so a
-/// test can point it at something of its own instead of the user's login shell.
+/// The `git` of a project's own repository: the user's own, as the host tools hand it out (the
+/// stand-in a test puts in its place), under the plain policy and [`LIMITS`].
 ///
-/// Only the `GIT_*` variables of the user's shell that say which of their own material to use are
-/// kept (see `crate::git::env::user_configuration_only`): a `GIT_DIR` or `GIT_WORK_TREE` exported
-/// in the login shell would otherwise send the branch read, the fetch and the fast-forward alike to
-/// another repository, and the remote name picked from this project's repository would be fetched
-/// there.
-fn git_command(
-    git: &UserGit,
-    path: &Path,
-    args: &[impl AsRef<std::ffi::OsStr>],
-    access: Access,
-) -> std::process::Command {
-    let mut command = git.command(&Policy::PLAIN, access, WorkDir::At(path));
-    command.args(args);
-    command
+/// A failed run's error is the verbatim stderr of `git`, the operating-system message of a failure
+/// to even start it, or a timeout — carried as is, untranslated, into `GitStatus` or the error of
+/// the step that failed; so is the error here, of a `git` that cannot be had at all.
+pub(crate) fn project_git(state: &AppState) -> Result<Runner, String> {
+    (state.host_tools.get().git)()
+        .map(project_runner)
+        .map_err(|err| format!("{err:#}"))
 }
 
-/// Runs a command [`git_command`] built, to completion within `timeout`, and returns its stdout as
-/// UTF-8.
-fn run_git_command(
-    command: &mut std::process::Command,
-    timeout: Duration,
-) -> Result<String, String> {
-    run::run_checked(command, Limits::deadline(timeout), None)
-        .map(|stdout| String::from_utf8_lossy(&stdout).into_owned())
-        .map_err(GitError::into_message)
+/// The stored projects whose directory is in the repository with canonical common directory
+/// `repository`, the linked worktrees of one repository counting as it. A directory that cannot be
+/// traced to a repository is in none. Blocking: it resolves every project's directory.
+pub(crate) fn projects_in_repository(
+    state: &AppState,
+    repository: &Path,
+) -> anyhow::Result<Vec<Project>> {
+    Ok(in_repository(state, repository)?.collect())
+}
+
+/// Whether any stored project is in the repository, as [`projects_in_repository`] counts it,
+/// resolving directories only until one is found. Blocking.
+pub(crate) fn has_projects_in_repository(
+    state: &AppState,
+    repository: &Path,
+) -> anyhow::Result<bool> {
+    Ok(in_repository(state, repository)?.next().is_some())
+}
+
+/// The projects [`projects_in_repository`] lists, each directory resolved as it is reached.
+fn in_repository<'a>(
+    state: &AppState,
+    repository: &'a Path,
+) -> anyhow::Result<impl Iterator<Item = Project> + 'a> {
+    Ok(state
+        .store
+        .list_projects()?
+        .into_iter()
+        .filter(move |project| {
+            repository_of(Path::new(&project.path)).as_deref() == Some(repository)
+        }))
+}
+
+/// [`project_git`] over `git`.
+fn project_runner(git: crate::git::run::UserGit) -> Runner {
+    Runner::new(git, Policy::PLAIN, LIMITS)
+}
+
+/// [`project_git`] over the system `git` and [`crate::test_support::isolated_git_env`], for a test
+/// that runs one of this module's steps without an `AppState`.
+#[cfg(test)]
+pub(crate) fn test_git() -> Runner {
+    use crate::test_support::{isolated_git_env, SYSTEM_GIT};
+
+    project_runner(crate::git::run::UserGit::new(
+        SYSTEM_GIT,
+        isolated_git_env(),
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::header::BRANCH_HEADER_ARGS;
     use super::*;
+    use crate::git::env::BASE_OPTIONS;
+    use crate::git::run::{self, Access, UserGit, WorkDir};
     use crate::test_support::{
         isolated_git_env, redirecting_overrides, repo_pair, repo_with, CommandLine, PATIENCE,
         SYSTEM_GIT,
     };
 
-    /// The command line of a read and of a write, pinned whole: the read gets the index guard ahead
-    /// of the arguments, the write does not, and both run in the repository.
+    /// The command line of a read and of a write, pinned whole: both start with the base options,
+    /// the read gets the read guard ahead of the arguments, the write does not, so a push's hook
+    /// keeps the user's monitor, and both run in the repository.
     #[test]
     fn a_read_and_a_write_build_their_command_lines() {
-        let git = UserGit::new("/opt/git", crate::test_support::pinned_shell_env());
-        let read = git_command(&git, Path::new("/repo"), BRANCH_HEADER_ARGS, Access::Read);
-        let mut args = vec!["-c", "diff.autoRefreshIndex=false"];
+        let git = project_runner(UserGit::new(
+            "/opt/git",
+            crate::test_support::pinned_shell_env(),
+        ));
+        let read = git.command(
+            Access::Read,
+            WorkDir::At(Path::new("/repo")),
+            BRANCH_HEADER_ARGS,
+        );
+        let mut args = BASE_OPTIONS.to_vec();
+        args.extend([
+            "-c",
+            "core.fsmonitor=false",
+            "-c",
+            "diff.autoRefreshIndex=false",
+        ]);
         args.extend_from_slice(BRANCH_HEADER_ARGS);
         assert_eq!(
             CommandLine::of(&read),
@@ -136,20 +155,16 @@ mod tests {
                 Some("/repo")
             )
         );
-        let write = git_command(
-            &git,
-            Path::new("/repo"),
-            &["push", "--porcelain", "origin"],
+        let write = git.command(
             Access::Write,
+            WorkDir::At(Path::new("/repo")),
+            ["push", "--porcelain", "origin"],
         );
+        let mut args = BASE_OPTIONS.to_vec();
+        args.extend(["push", "--porcelain", "origin"]);
         assert_eq!(
             CommandLine::of(&write),
-            CommandLine::pinned(
-                "/opt/git",
-                &["push", "--porcelain", "origin"],
-                &[],
-                Some("/repo")
-            )
+            CommandLine::pinned("/opt/git", &args, &[], Some("/repo"))
         );
     }
 
@@ -172,18 +187,14 @@ mod tests {
         let mut unfiltered = crate::git::env::non_interactive(Path::new(SYSTEM_GIT), &env);
         unfiltered.current_dir(&*ours).args(args);
         assert_eq!(
-            run_git_command(&mut unfiltered, GIT_COMMAND_TIMEOUT)
-                .expect("the unfiltered read runs"),
-            "theirs\n"
+            run::run_checked(&mut unfiltered, LIMITS, None).expect("the unfiltered read runs"),
+            b"theirs\n"
         );
 
-        // One access is enough: the filter is applied before `git_command` tells a read from a
+        // One access is enough: the filter is applied before the command tells a read from a
         // write, so a write goes through the very same line.
-        let mut command = git_command(&UserGit::new(SYSTEM_GIT, env), &ours, &args, Access::Read);
-        assert_eq!(
-            run_git_command(&mut command, GIT_COMMAND_TIMEOUT).expect("the read runs"),
-            "ours\n"
-        );
+        let git = project_runner(UserGit::new(SYSTEM_GIT, env));
+        assert_eq!(git.read(&ours, args).expect("the read runs"), b"ours\n");
     }
 
     #[test]
@@ -193,16 +204,14 @@ mod tests {
         // push.
         let args = ["-c", "alias.nap=!sleep 1", "nap"];
         let slow = |timeout| {
-            let mut command = git_command(
-                &UserGit::new(SYSTEM_GIT, isolated_git_env()),
-                &repo,
-                &args,
-                Access::Write,
-            );
-            run_git_command(&mut command, timeout)
+            test_git()
+                .with_limits(Limits::deadline(timeout))
+                .write(&repo, args)
         };
-        let err = slow(Duration::from_millis(100)).expect_err("the short bound is exceeded");
-        assert!(err.contains("did not finish"), "{err}");
+        let err = slow(Duration::from_millis(100))
+            .expect_err("the short bound is exceeded")
+            .to_string();
+        assert_eq!(err, "git did not finish within 100ms");
         slow(PATIENCE).expect("the long bound is not");
     }
 }

@@ -16,7 +16,7 @@
 
 use crate::wire_path;
 
-use super::git_files::first_reflog_line;
+use super::creation_of;
 use crate::git::repo_files::{reference_exists, uses_reftable};
 
 use std::path::Path;
@@ -31,8 +31,8 @@ pub(super) fn target_of(common_dir: &Path, branch: &str, head: Option<&str>) -> 
     let target = if uses_reftable(common_dir) {
         head.map(str::to_string)
     } else {
-        let (_, message) = first_reflog_line(common_dir, branch)?;
-        let start = message.strip_prefix(CREATED_FROM)?;
+        let creation = creation_of(common_dir, branch)?;
+        let start = creation.message.strip_prefix(CREATED_FROM)?;
         if start == b"HEAD" {
             head.map(str::to_string)
         } else {

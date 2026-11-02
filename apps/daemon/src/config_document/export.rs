@@ -520,8 +520,11 @@ fn document_project(
             directory_name(&project.path)
         },
         source: project.source,
+        // A remote recorded with a credential in it (`https://token@host/...`) must not leave the
+        // machine in a file meant to be shared.
         remote_url: project
             .remote_url
+            .map(|url| remote_url::without_credentials(&url))
             .filter(|url| include_paths || remote_url::is_clonable_url(url)),
         default_agent: project.default_agent,
         pinned: project.pinned,
@@ -866,6 +869,30 @@ mod tests {
             projects(true)["local-remote"].as_deref(),
             Some("/Users/someone/origin.git")
         );
+    }
+
+    #[test]
+    fn a_credential_in_a_recorded_remote_is_left_out_of_the_document() {
+        let (state, _dir) = crate::test_support::app_state("config-export-credentials");
+        populated(&state.store);
+        let mut secret = project("project-secret", "console-1", "secret");
+        secret.source = ProjectSource::Git;
+        secret.remote_url = Some("https://user:token@example.com/team/secret.git".to_string());
+        state.store.insert_project(&secret).unwrap();
+
+        for include_paths in [true, false] {
+            let remote = build(&state.store, &Selection::full(include_paths))
+                .expect("built")
+                .consoles
+                .into_iter()
+                .flat_map(|console| console.projects)
+                .find(|project| project.name == "secret")
+                .and_then(|project| project.remote_url);
+            assert_eq!(
+                remote.as_deref(),
+                Some("https://example.com/team/secret.git")
+            );
+        }
     }
 
     #[test]

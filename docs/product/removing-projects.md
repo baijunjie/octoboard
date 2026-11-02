@@ -84,8 +84,9 @@ running will still be stopped, announced as it appears, and no count (see "Failu
   the protected folders below never apply to it; it is refused only when another project's directory holds it, when
   another project is at that same file or at a link to it, or when another project could not be looked at.
 - It is refused, before any session is ended and with the project kept, for:
-  - the home directory, the root of a disk (`/` or a mount point, such as a mounted volume), or a folder that holds
-    Octoboard's own data (`project_directory_protected`);
+  - the home directory, the root of a disk (`/` or a mount point, such as a mounted volume; a folder whose device, or
+    whose parent folder's, cannot be read counts as one), or a folder that holds Octoboard's own data
+    (`project_directory_protected`);
   - a folder shared with another project: another project's directory is the same folder, lies inside it or holds
     it, or another project's Git repository lies inside it, as a linked worktree's does when its main repository is
     this folder (`project_directory_shared`). The refusal names that other project, which has to be removed first.

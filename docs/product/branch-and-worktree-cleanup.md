@@ -297,8 +297,11 @@ otherwise be left without its folder:
   included, and a branch is deleted merged or not. What is moved can be recovered from the Trash; a deleted branch
   cannot.
 - **A locked worktree** goes only when the user chooses so (below), and only while it has no uncommitted changes the
-  confirmation did not show. It is moved to the Trash first and only then unlocked, where the repository outlives the
-  folder, so one whose move fails keeps its lock. A branch a locked worktree has checked out goes only with it.
+  confirmation did not show. Where the repository outlives the folder, its changes are read again right before it is
+  moved; where the folder holds the repository, they are read when the removal starts, before the project's sessions
+  are ended and the folder goes to the Trash, since they can no longer be read once the repository has gone. It is
+  moved to the Trash first and only then unlocked, where the repository outlives the folder, so one whose move fails
+  keeps its lock. A branch a locked worktree has checked out goes only with it.
 - **Never touched**: the main worktree, a worktree that is another project's folder or holds one, one that is the home
   folder, the root of a disk or a folder holding Octoboard's own data — neither listed nor reported — and one of which
   that cannot be told (see "A worktree that is or holds a project's folder" above). One that cannot be told is reported

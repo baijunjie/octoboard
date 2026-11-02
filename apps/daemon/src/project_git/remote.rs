@@ -17,8 +17,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::blocking_pass::each_blocking;
+use crate::git::env::SshConfiguration;
 use crate::git::layout::is_git_repo;
-use crate::git::run::{self, Access, GitError, Limits, Policy, UserGit, WorkDir};
+use crate::git::remote_branch::split_remote_branch;
+use crate::git::run::{GitError, Limits, Runner};
 use crate::protocol::{Event, Project};
 use crate::state::AppState;
 
@@ -29,62 +31,28 @@ use crate::state::AppState;
 /// URL alone.
 const READ_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// Why a `git` read did not produce output. `code` is the exit status, absent when `git` did not
-/// run to an exit at all (it could not be started, timed out, or was killed by a signal).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GitFailure {
-    pub code: Option<i32>,
-    pub message: String,
-}
-
-impl GitFailure {
-    fn unrun(err: impl std::fmt::Display) -> Self {
-        Self {
-            code: None,
-            message: err.to_string(),
-        }
-    }
-}
-
-impl From<GitError> for GitFailure {
-    fn from(err: GitError) -> Self {
-        match err {
-            GitError::Exited { code, stderr } => Self {
-                code,
-                message: stderr,
-            },
-            GitError::Stopped(stopped) => Self::unrun(stopped),
-        }
-    }
-}
+/// What each `git` read here is held to: [`READ_TIMEOUT`], and no output ceiling, a repository's
+/// remotes being few.
+const READ_LIMITS: Limits = Limits::deadline(READ_TIMEOUT);
 
 /// What runs `git <args>` in a repository and returns its stdout, or why it did not.
-pub type RunGit<'a> = &'a dyn Fn(&[&str]) -> Result<String, GitFailure>;
+pub type RunGit<'a> = &'a dyn Fn(&[&str]) -> Result<String, GitError>;
 
-/// The runner for the repository at `path`: `git` in the user's shell environment, unable to
-/// prompt, and held back from rewriting the repository's index.
-pub fn runner(path: &Path) -> impl Fn(&[&str]) -> Result<String, GitFailure> + '_ {
-    move |args| run_read(path, args)
-}
-
-fn run_read(path: &Path, args: &[&str]) -> Result<String, GitFailure> {
-    let git = UserGit::cached_shell().map_err(|err| GitFailure::unrun(format!("{err:#}")))?;
-    let mut command = read_command(&git, path, args);
-    run::run_checked(&mut command, Limits::deadline(READ_TIMEOUT), None)
-        .map(|stdout| String::from_utf8_lossy(&stdout).into_owned())
-        .map_err(GitFailure::from)
-}
-
-/// The `git <args>` command to run in `path`, with the `git` passed in rather than looked up so a
-/// test can point it at something else than the user's login shell.
+/// The runner for the repository at `path`: `git` (a project's, `super::project_git`) held to
+/// [`READ_LIMITS`], each command a read, which keeps it from rewriting the repository's index.
 ///
-/// Of the `GIT_*` variables only those saying which of the user's own material to use are kept
-/// (see `crate::git::env::user_configuration_only`), and more is at stake here than elsewhere:
-/// what this reads is written to the database and broadcast, not shown for a moment.
-fn read_command(git: &UserGit, path: &Path, args: &[&str]) -> std::process::Command {
-    let mut command = git.command(&Policy::PLAIN, Access::Read, WorkDir::At(path));
-    command.args(args);
-    command
+/// Of the `GIT_*` variables of the user's shell only those saying which of their own material to
+/// use are kept (see `crate::git::env::user_configuration_only`), and more is at stake here than
+/// elsewhere: what this reads is written to the database and broadcast, not shown for a moment.
+pub fn runner<'a>(
+    git: &Runner,
+    path: &'a Path,
+) -> impl Fn(&[&str]) -> Result<String, GitError> + 'a {
+    let git = git.with_limits(READ_LIMITS);
+    move |args| {
+        git.read(path, args)
+            .map(|stdout| String::from_utf8_lossy(&stdout).into_owned())
+    }
 }
 
 /// A configured remote of a repository: its name and its URL as written in the configuration.
@@ -112,6 +80,9 @@ pub struct Inspection<'a> {
     /// In the order `git config` lists them, which is by configuration scope — system, then
     /// global, then local, then worktree; empty when the repository has no remote.
     pub remotes: Vec<Remote>,
+    /// Its `core.sshCommand`, taken in the same read, for a fetch or a push from it to reach a
+    /// remote with (`UserGit::remote_command`) at no `git` of its own.
+    pub ssh: SshConfiguration,
     run: RunGit<'a>,
     upstream: OnceCell<Upstream>,
 }
@@ -123,7 +94,7 @@ impl Inspection<'_> {
                 // Nothing to read: there is no remote for an upstream to name.
                 Upstream::None
             } else {
-                upstream_remote(self.run)
+                upstream_remote(self.run, &self.remotes)
             }
         })
     }
@@ -139,10 +110,10 @@ impl Inspection<'_> {
     }
 
     /// The URL to record as the project's remote: `origin`'s, else the upstream remote's, else the
-    /// first remote listed, which by the scope order of `remotes` is a system or global one before any of the
-    /// repository's own. A repository with no `origin` and no upstream, configured with only a
-    /// local remote beside a global one, therefore records the global one's URL, which may have
-    /// nothing to do with it; the combination is rare enough to leave.
+    /// first remote listed, which by the scope order of `remotes` is a system or global one before
+    /// any of the repository's own. A repository with no `origin` and no upstream, configured with
+    /// only a local remote beside a global one, therefore records the global one's URL, which may
+    /// have nothing to do with it; the combination is rare enough to leave.
     ///
     /// The inner `None` is a repository with no remote; the outer is "cannot tell", which is an
     /// upstream that could not be read in a repository with no `origin`, and leaves the recorded
@@ -170,71 +141,84 @@ impl Inspection<'_> {
     }
 }
 
-/// Reads the repository's remotes with `run`. `None` is a read that could not be made, which is
-/// not the same as a repository with no remote: the first leaves the recorded URL alone, the
-/// second clears it.
-pub fn inspect(run: RunGit) -> Option<Inspection> {
-    Some(Inspection {
-        remotes: list_remotes(run)?,
+/// Reads the repository's remotes with `run`. An error is a read that could not be made, carrying
+/// the failure that stopped it, which is not the same as a repository with no remote: the first
+/// leaves the recorded URL alone, the second clears it.
+pub fn inspect(run: RunGit) -> Result<Inspection, GitError> {
+    let (remotes, ssh) = read_remote_configuration(run)?;
+    Ok(Inspection {
+        remotes,
+        ssh,
         run,
         upstream: OnceCell::new(),
     })
 }
 
-/// The remotes in the repository's configuration, with the URL each is configured with. The read
-/// takes `git`'s whole configuration — system, global, local and worktree — the same set `git
-/// remote` and `git fetch` see, so a remote that only the user's global configuration defines is
-/// found here as well as fetched from. `git config` applies no `insteadOf` rewrite. The pattern
-/// ends in `.url` so a `pushurl` is not read as a remote.
+/// The keys [`read_remote_configuration`] reads: each remote's URL, and `core.sshCommand`, in the
+/// lower case `git config` matches and prints them in.
+const REMOTE_CONFIGURATION_KEYS: &str = r"^(remote\..*\.url|core\.sshcommand)$";
+
+/// The remotes in the repository's configuration, with the URL each is configured with, and its
+/// `core.sshCommand`. The read takes `git`'s whole configuration — system, global, local and
+/// worktree — the same set `git remote` and `git fetch` see, so a remote that only the user's
+/// global configuration defines is found here as well as fetched from. `git config` applies no
+/// `insteadOf` rewrite. The pattern ends in `.url` so a `pushurl` is not read as a remote.
 ///
 /// `git config --get-regexp` answers "nothing matched" with exit status 1, and that status alone
 /// means the repository has no remote, once a repository is confirmed to be there. Any other
 /// failure — a different status, a timeout, a `git` killed by a signal, which also prints nothing —
-/// is a read that could not be made.
+/// is a read that could not be made, and is the error returned.
 ///
-/// The confirmation covers only an empty result. Where there is no repository at all, `git config`
-/// reads the global configuration and can exit 1 just the same, so an empty result is checked with
-/// `git rev-parse --git-dir` before it is taken for a repository with no remote, which keeps a
-/// damaged `.git` from clearing the recorded URL. A result with content is not confirmed and cannot
-/// be traced to its source: both commands search the parent directories, so a damaged `.git` can
-/// have the read answer for a repository enclosing this one. That case opens only while the `.git`
-/// is damaged, and closes when it is repaired, at the next check. Reading the user's global
-/// configuration is not that case — it is the parity with `git remote` described above, and it
-/// holds for a healthy repository too.
-fn list_remotes(run: RunGit) -> Option<Vec<Remote>> {
-    match run(&["config", "--get-regexp", r"^remote\..*\.url$"]) {
-        Ok(output) => Some(parse_remote_urls(&output)),
-        Err(failure) if failure.code == Some(1) => {
-            let confirmed = run(&["rev-parse", "--git-dir"]);
-            if let Err(failure) = &confirmed {
-                tracing::debug!(?failure, "no remote read, and no repository confirmed");
-            }
-            confirmed.ok().map(|_| Vec::new())
-        }
+/// The confirmation covers only a result with no remote in it. Where there is no repository at all,
+/// `git config` reads the global configuration and can exit 1 just the same, so an empty result is
+/// checked with `git rev-parse --git-dir` before it is taken for a repository with no remote, which
+/// keeps a damaged `.git` from clearing the recorded URL. A result with content is not confirmed
+/// and cannot be traced to its source: both commands search the parent directories, so a damaged
+/// `.git` can have the read answer for a repository enclosing this one. That case opens only while
+/// the `.git` is damaged, and closes when it is repaired, at the next check. Reading the user's
+/// global configuration is not that case — it is the parity with `git remote` described above, and
+/// it holds for a healthy repository too.
+fn read_remote_configuration(run: RunGit) -> Result<(Vec<Remote>, SshConfiguration), GitError> {
+    let (remotes, ssh) = match run(&["config", "-z", "--get-regexp", REMOTE_CONFIGURATION_KEYS]) {
+        Ok(output) => parse_remote_configuration(&output),
+        Err(failure) if failure.code() == Some(1) => (Vec::new(), SshConfiguration::Unset),
         Err(failure) => {
             tracing::debug!(?failure, "reading the repository's remotes failed");
-            None
+            return Err(failure);
+        }
+    };
+    if remotes.is_empty() {
+        if let Err(failure) = run(&["rev-parse", "--git-dir"]) {
+            tracing::debug!(?failure, "no remote read, and no repository confirmed");
+            return Err(failure);
         }
     }
+    Ok((remotes, ssh))
 }
 
-/// The remotes in the output of `git config --get-regexp`, whose lines read
-/// `remote.<name>.url <value>`; a remote name may itself contain dots. A remote configured with
-/// several URLs is read as its first. A pure function over the text, so it is unit-tested with
+/// The remotes and the `core.sshCommand` in the output of `git config -z --get-regexp`, whose
+/// entries read `<key>\n<value>`, each ended by a NUL; a remote name may itself contain dots. A
+/// remote configured with several URLs is read as its first, while `core.sshCommand` set more than
+/// once is its last, as `git` takes it. A pure function over the text, so it is unit-tested with
 /// literal strings.
-fn parse_remote_urls(output: &str) -> Vec<Remote> {
+fn parse_remote_configuration(output: &str) -> (Vec<Remote>, SshConfiguration) {
     let mut remotes: Vec<Remote> = Vec::new();
-    for line in output.lines() {
-        let Some((key, url)) = line.split_once(' ') else {
+    let mut ssh = None;
+    for entry in output.split('\0') {
+        let Some((key, value)) = entry.split_once('\n') else {
             continue;
         };
+        if key == "core.sshcommand" {
+            ssh = Some(value.to_string());
+            continue;
+        }
         let Some(name) = key
             .strip_prefix("remote.")
             .and_then(|rest| rest.strip_suffix(".url"))
         else {
             continue;
         };
-        let url = url.trim();
+        let url = value.trim();
         if name.is_empty() || url.is_empty() || remotes.iter().any(|remote| remote.name == name) {
             continue;
         }
@@ -243,32 +227,31 @@ fn parse_remote_urls(output: &str) -> Vec<Remote> {
             url: url.to_string(),
         });
     }
-    remotes
+    (remotes, SshConfiguration::of(ssh))
 }
 
 /// The branch's upstream remote, e.g. `origin` for an upstream of `origin/main`. A branch with no
 /// upstream is the ordinary case for a fresh one, and is [`Upstream::None`], not a failure.
-fn upstream_remote(run: RunGit) -> Upstream {
+fn upstream_remote(run: RunGit, remotes: &[Remote]) -> Upstream {
     match run(&[
         "rev-parse",
         "--abbrev-ref",
         "--symbolic-full-name",
         "@{upstream}",
     ]) {
-        Ok(output) => remote_from_upstream_ref(&output)
-            .map_or(Upstream::None, |name| Upstream::Remote(name.to_string())),
-        Err(failure) if failure.code.is_none() => {
+        Ok(output) => split_remote_branch(
+            output.trim(),
+            remotes.iter().map(|remote| remote.name.as_str()),
+        )
+        .map_or(Upstream::None, |(name, _)| {
+            Upstream::Remote(name.to_string())
+        }),
+        Err(failure) if failure.code().is_none() => {
             tracing::debug!(?failure, "reading the branch's upstream failed");
             Upstream::Unknown
         }
         Err(_) => Upstream::None,
     }
-}
-
-/// The remote name from an `@{upstream}` ref such as `origin/main` — a pure function over the text
-/// so the split is unit-tested with literal strings rather than a real repository.
-fn remote_from_upstream_ref(ref_text: &str) -> Option<&str> {
-    ref_text.trim().split_once('/').map(|(remote, _)| remote)
 }
 
 /// Where a project's directory stands, as far as its remote is concerned.
@@ -295,26 +278,41 @@ fn classify(path: &Path) -> Directory {
     }
 }
 
-/// What the project at `path` should have recorded, read with `run`. The outer `None` is "cannot
-/// tell": the directory cannot be seen, or the remotes could not be read. The inner is the answer:
-/// a directory that is there but is not a repository, and a repository without a remote, have no
-/// URL, and that is no error.
-fn observe_with(path: &Path, run: RunGit) -> Option<Option<String>> {
+/// What the project at `path` should have recorded, its repository's remotes read by `read`,
+/// which runs only where there is a repository. The outer `None` is "cannot tell": the directory
+/// cannot be seen, or the remotes could not be read. The inner is the answer: a directory that is
+/// there but is not a repository, and a repository without a remote, have no URL, and that is no
+/// error.
+fn observe_with(
+    path: &Path,
+    read: impl FnOnce() -> Option<Option<String>>,
+) -> Option<Option<String>> {
     match classify(path) {
         Directory::Unseen => None,
         Directory::NotARepository => Some(None),
-        Directory::Repository => inspect(run).and_then(|inspection| inspection.url()),
+        Directory::Repository => read(),
     }
 }
 
-fn observe(path: &Path) -> Option<Option<String>> {
-    observe_with(path, &runner(path))
+/// The URL a repository's remotes, read with `run`, give; `None` where they could not be read.
+fn url_with(run: RunGit) -> Option<Option<String>> {
+    inspect(run).ok().and_then(|inspection| inspection.url())
+}
+
+fn observe(state: &AppState, path: &Path) -> Option<Option<String>> {
+    observe_with(path, || match super::project_git(state) {
+        Ok(git) => url_with(&runner(&git, path)),
+        Err(err) => {
+            tracing::debug!(%err, "no git to read the project's remotes with");
+            None
+        }
+    })
 }
 
 /// The URL to record for the project at `path`; blocking, the caller runs it off the runtime. Both
 /// kinds of "nothing to record" are `None` here: association stores nothing either way.
-pub fn read_remote_url(path: &Path) -> Option<String> {
-    observe(path).flatten()
+pub fn read_remote_url(state: &AppState, path: &Path) -> Option<String> {
+    observe(state, path).flatten()
 }
 
 /// For the git status check, once it has found the project's directory is not a repository: clears
@@ -377,7 +375,7 @@ pub fn reconcile_remote_urls(state: &Arc<AppState>) {
     let state = state.clone();
     tokio::spawn(async move {
         each_blocking(projects, move |project| {
-            reconcile_project(&state, &project, observe)
+            reconcile_project(&state, &project, |path| observe(&state, path))
         })
         .await;
     });
@@ -396,36 +394,13 @@ fn reconcile_project(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::git::run::UserGit;
     use crate::protocol::{Agent, Console, ProjectSource};
     use crate::store::LOCAL_HOST_ID;
     use crate::test_support::{
         app_state, fixture_git, git, isolated_git_env, redirecting_overrides, repo_pair, repo_with,
-        CommandLine, ScratchDir, SYSTEM_GIT,
+        ScratchDir, SYSTEM_GIT,
     };
-
-    /// The command line of a read, pinned whole: the index guard ahead of the arguments, in the
-    /// repository.
-    #[test]
-    fn a_read_builds_its_command_line() {
-        let git = UserGit::new("/opt/git", crate::test_support::pinned_shell_env());
-        let args = ["config", "--get-regexp", r"^remote\..*\.url$"];
-        let command = read_command(&git, Path::new("/repo"), &args);
-        assert_eq!(
-            CommandLine::of(&command),
-            CommandLine::pinned(
-                "/opt/git",
-                &[
-                    "-c",
-                    "diff.autoRefreshIndex=false",
-                    "config",
-                    "--get-regexp",
-                    r"^remote\..*\.url$"
-                ],
-                &[("GIT_OPTIONAL_LOCKS", "0")],
-                Some("/repo")
-            )
-        );
-    }
 
     fn remote(name: &str, url: &str) -> Remote {
         Remote {
@@ -436,11 +411,11 @@ mod tests {
 
     #[test]
     fn remotes_are_read_from_the_url_keys_and_not_from_pushurls() {
-        let remotes = parse_remote_urls(
-            "remote.origin.url https://example.com/o/r.git\n\
-             remote.origin.pushurl ssh://git@example.com/o/r.git\n\
-             remote.my.fork.url /srv/git/r\n\
-             remote.origin.url ignored-second-value\n",
+        let (remotes, ssh) = parse_remote_configuration(
+            "remote.origin.url\nhttps://example.com/o/r.git\0\
+             remote.origin.pushurl\nssh://git@example.com/o/r.git\0\
+             remote.my.fork.url\n/srv/git/r\0\
+             remote.origin.url\nignored-second-value\0",
         );
         assert_eq!(
             remotes,
@@ -449,19 +424,79 @@ mod tests {
                 remote("my.fork", "/srv/git/r")
             ]
         );
-        assert_eq!(parse_remote_urls(""), Vec::new());
+        assert_eq!(ssh, SshConfiguration::Unset);
+        assert_eq!(
+            parse_remote_configuration(""),
+            (Vec::new(), SshConfiguration::Unset)
+        );
     }
 
+    /// `core.sshCommand` is its last value, whole, a line break in it included, and an empty one
+    /// is no setting.
     #[test]
-    fn the_remote_name_splits_off_the_first_path_segment_of_an_upstream_ref() {
-        assert_eq!(remote_from_upstream_ref("origin/main"), Some("origin"));
-        // A branch name containing a slash of its own still yields the remote alone: a remote
-        // name never contains one.
-        assert_eq!(
-            remote_from_upstream_ref("upstream/feature/thing"),
-            Some("upstream")
+    fn the_ssh_command_is_read_beside_the_remotes() {
+        let (remotes, ssh) = parse_remote_configuration(
+            "core.sshcommand\nssh -i first\0\
+             remote.origin.url\nu-origin\0\
+             core.sshcommand\nssh -i 'a key'\nsecond line\0",
         );
-        assert_eq!(remote_from_upstream_ref("origin"), None);
+        assert_eq!(remotes, vec![remote("origin", "u-origin")]);
+        assert_eq!(
+            ssh,
+            SshConfiguration::Command("ssh -i 'a key'\nsecond line".to_string())
+        );
+        assert_eq!(
+            parse_remote_configuration("core.sshcommand\n\0").1,
+            SshConfiguration::Unset
+        );
+    }
+
+    /// A configuration with `core.sshCommand` and no remote still has its repository confirmed
+    /// before it is taken for one with no remote.
+    #[test]
+    fn an_ssh_command_without_a_remote_is_confirmed_like_no_remote() {
+        let confirmed = |there: bool| {
+            move |args: &[&str]| match args[0] {
+                "config" => Ok("core.sshcommand\nssh -i k\0".to_string()),
+                _ if there => Ok(".git\n".to_string()),
+                _ => Err(GitError::Exited {
+                    code: Some(128),
+                    stderr: "not a git repository".to_string(),
+                }),
+            }
+        };
+        let there = confirmed(true);
+        let inspection = inspect(&there).expect("confirmed");
+        assert!(inspection.remotes.is_empty());
+        assert_eq!(
+            inspection.ssh,
+            SshConfiguration::Command("ssh -i k".to_string())
+        );
+        let missing = confirmed(false);
+        assert!(inspect(&missing).is_err());
+    }
+
+    /// A remote's own name may hold a slash, so the upstream is split by the configured remotes.
+    #[test]
+    fn the_upstream_remote_is_the_longest_configured_name_that_begins_the_upstream() {
+        let upstream = |names: &[&str], upstream: &str| {
+            let reads = std::cell::Cell::new(0);
+            let run = fake(names, Some(upstream), &reads);
+            inspect(&run)
+                .expect("listed")
+                .upstream()
+                .map(str::to_string)
+        };
+        assert_eq!(upstream(&["origin"], "origin"), Some("origin".to_string()));
+        assert_eq!(
+            upstream(&["team", "team/origin"], "team/origin"),
+            Some("team/origin".to_string())
+        );
+        assert_eq!(
+            upstream(&["team", "origin"], "team"),
+            Some("team".to_string())
+        );
+        assert_eq!(upstream(&["origin"], "elsewhere"), None);
     }
 
     /// A runner answering from a fixed list of remotes and an upstream, counting how many times
@@ -470,24 +505,24 @@ mod tests {
         names: &[&str],
         upstream: Option<&str>,
         upstream_reads: &'a std::cell::Cell<u32>,
-    ) -> impl Fn(&[&str]) -> Result<String, GitFailure> + 'a {
+    ) -> impl Fn(&[&str]) -> Result<String, GitError> + 'a {
         let listing: String = names
             .iter()
-            .map(|name| format!("remote.{name}.url u-{name}\n"))
+            .map(|name| format!("remote.{name}.url\nu-{name}\0"))
             .collect();
         let upstream = upstream.map(|name| format!("{name}/main\n"));
         move |args| match args[0] {
-            "config" if listing.is_empty() => Err(GitFailure {
+            "config" if listing.is_empty() => Err(GitError::Exited {
                 code: Some(1),
-                message: String::new(),
+                stderr: String::new(),
             }),
             "config" => Ok(listing.clone()),
             "rev-parse" if args[1] == "--git-dir" => Ok(".git\n".to_string()),
             _ => {
                 upstream_reads.set(upstream_reads.get() + 1);
-                upstream.clone().ok_or(GitFailure {
+                upstream.clone().ok_or(GitError::Exited {
                     code: Some(128),
-                    message: "no upstream".to_string(),
+                    stderr: "no upstream".to_string(),
                 })
             }
         }
@@ -522,11 +557,11 @@ mod tests {
             move |args: &[&str]| match args[0] {
                 "config" => Ok(names
                     .iter()
-                    .map(|name| format!("remote.{name}.url u-{name}\n"))
+                    .map(|name| format!("remote.{name}.url\nu-{name}\0"))
                     .collect()),
-                _ => Err(GitFailure {
+                _ => Err(GitError::Exited {
                     code: None,
-                    message: "killed".to_string(),
+                    stderr: "killed".to_string(),
                 }),
             }
         };
@@ -537,10 +572,10 @@ mod tests {
         );
         // A branch with no upstream is an exit status, and is a branch with no upstream.
         let no_upstream = |args: &[&str]| match args[0] {
-            "config" => Ok("remote.b.url u-b\nremote.a.url u-a\n".to_string()),
-            _ => Err(GitFailure {
+            "config" => Ok("remote.b.url\nu-b\0remote.a.url\nu-a\0".to_string()),
+            _ => Err(GitError::Exited {
                 code: Some(128),
-                message: "no upstream".to_string(),
+                stderr: "no upstream".to_string(),
             }),
         };
         assert_eq!(
@@ -554,9 +589,9 @@ mod tests {
         let failing = |code: Option<i32>| {
             move |args: &[&str]| match args[0] {
                 "rev-parse" => Ok(".git\n".to_string()),
-                _ => Err(GitFailure {
+                _ => Err(GitError::Exited {
                     code,
-                    message: String::new(),
+                    stderr: String::new(),
                 }),
             }
         };
@@ -566,22 +601,63 @@ mod tests {
         );
         // A `git` killed by a signal exits with no status and prints nothing, which is not "no
         // remote" and must not clear a recorded URL.
-        assert!(inspect(&failing(None)).is_none());
-        assert!(inspect(&failing(Some(128))).is_none());
+        assert!(inspect(&failing(None)).is_err());
+        assert!(inspect(&failing(Some(128))).is_err());
+    }
+
+    /// The inspection's one `git config` read gives the repository's `core.sshCommand` beside its
+    /// remotes, from its own configuration.
+    #[test]
+    fn the_inspection_reads_the_repositorys_ssh_command() {
+        let repo = repo_with("remote-ssh-command", &[(b"a.txt", b"one\n")]);
+        let run = |args: &[&str]| {
+            let output = fixture_git(&repo).args(args).output().expect("git runs");
+            if output.status.success() {
+                Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+            } else {
+                Err(GitError::Exited {
+                    code: output.status.code(),
+                    stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+                })
+            }
+        };
+        assert_eq!(inspect(&run).expect("read").ssh, SshConfiguration::Unset);
+        git(&repo, &["config", "core.sshCommand", "ssh -i /k"]);
+        let inspection = inspect(&run).expect("read");
+        assert!(inspection.remotes.is_empty());
+        assert_eq!(
+            inspection.ssh,
+            SshConfiguration::Command("ssh -i /k".to_string())
+        );
+        git(
+            &repo,
+            &["remote", "add", "origin", "git@example.invalid:o/r.git"],
+        );
+        let inspection = inspect(&run).expect("read");
+        assert_eq!(
+            inspection.remotes,
+            vec![remote("origin", "git@example.invalid:o/r.git")]
+        );
+        assert_eq!(
+            inspection.ssh,
+            SshConfiguration::Command("ssh -i /k".to_string())
+        );
     }
 
     /// `git` through the fixture helper's isolated environment rather than the user's login shell.
     fn observe_in(dir: &Path) -> Option<Option<String>> {
-        observe_with(dir, &|args| {
-            let output = fixture_git(dir).args(args).output().expect("git runs");
-            if output.status.success() {
-                Ok(String::from_utf8_lossy(&output.stdout).into_owned())
-            } else {
-                Err(GitFailure {
-                    code: output.status.code(),
-                    message: String::from_utf8_lossy(&output.stderr).trim().to_string(),
-                })
-            }
+        observe_with(dir, || {
+            url_with(&|args| {
+                let output = fixture_git(dir).args(args).output().expect("git runs");
+                if output.status.success() {
+                    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+                } else {
+                    Err(GitError::Exited {
+                        code: output.status.code(),
+                        stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+                    })
+                }
+            })
         })
     }
 
@@ -715,18 +791,8 @@ mod tests {
                 .into_iter()
                 .map(|(key, value)| (key.to_string(), value)),
         );
-        let git = UserGit::new(SYSTEM_GIT, env);
-        let run = |args: &[&str]| {
-            let output = read_command(&git, &ours, args).output().expect("git runs");
-            if output.status.success() {
-                Ok(String::from_utf8_lossy(&output.stdout).into_owned())
-            } else {
-                Err(GitFailure {
-                    code: output.status.code(),
-                    message: String::from_utf8_lossy(&output.stderr).trim().to_string(),
-                })
-            }
-        };
+        let git = super::super::project_runner(UserGit::new(SYSTEM_GIT, env));
+        let run = runner(&git, &ours);
         assert_eq!(
             inspect(&run).unwrap().url(),
             Some(Some("https://example.com/shared.git".to_string()))
@@ -835,7 +901,7 @@ mod tests {
         let reads = std::cell::Cell::new(0);
 
         let run = fake(&["origin"], None, &reads);
-        record_inspected(&state, "project-1", inspect(&run).as_ref());
+        record_inspected(&state, "project-1", inspect(&run).as_ref().ok());
         assert_eq!(stored_url(&state).as_deref(), Some("u-origin"));
 
         // A read that could not be made changes nothing.
@@ -844,7 +910,7 @@ mod tests {
 
         // A repository that has lost its remote has the URL cleared.
         let run = fake(&[], None, &reads);
-        record_inspected(&state, "project-1", inspect(&run).as_ref());
+        record_inspected(&state, "project-1", inspect(&run).as_ref().ok());
         assert_eq!(stored_url(&state), None);
     }
 
@@ -852,22 +918,13 @@ mod tests {
     #[test]
     fn a_stopped_read_has_no_exit_status() {
         let repo = repo_with("git-remote-timeout", &[(b"a.txt", b"ours\n")]);
-        let git = UserGit::new(SYSTEM_GIT, isolated_git_env());
         // An alias standing in for a `git` that is slow to finish.
-        let mut command = read_command(&git, &repo, &["-c", "alias.nap=!sleep 1", "nap"]);
-        let failure = run::run_checked(
-            &mut command,
-            Limits::deadline(Duration::from_millis(100)),
-            None,
-        )
-        .map_err(GitFailure::from)
-        .expect_err("it is stopped");
-        assert_eq!(failure.code, None);
-        assert!(
-            failure.message.contains("did not finish within"),
-            "{}",
-            failure.message
-        );
+        let failure = crate::project_git::test_git()
+            .with_limits(Limits::deadline(Duration::from_millis(100)))
+            .read(&repo, ["-c", "alias.nap=!sleep 1", "nap"])
+            .expect_err("it is stopped");
+        assert_eq!(failure.code(), None);
+        assert_eq!(failure.to_string(), "git did not finish within 100ms");
     }
 
     #[test]

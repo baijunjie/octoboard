@@ -28,14 +28,15 @@
 //! and unable to write back to the index of the repository it reads and fail an agent's `git add`
 //! on the lock it would hold.
 //!
-//! Every command also gets `--no-pager`, `-c core.fsmonitor=false` (a configured monitor is a
-//! program `git` would run on a read) and `-c core.quotePath=false` (a patch's headers name a path
-//! by its bytes, apart from the few characters `git` always escapes, whatever the user
-//! configured), alongside the `-c` the base contributes — all of them before the subcommand, which
-//! is where a `-c` has to stand. A diff-family command (`diff*`, `log`, `show`) gets
-//! `--no-ext-diff --no-textconv --no-color` right after its name: an external diff or a textconv
-//! filter is a configured program that would both run and rewrite the bytes the reply claims to
-//! carry. A `grep` gets the last two of those (`--no-textconv --no-color`), the only ones it takes.
+//! Every command also gets `-c core.quotePath=false` (a patch's headers name a path by its bytes,
+//! apart from the few characters `git` always escapes, whatever the user configured), alongside
+//! the base's `--no-pager` and the read guard's `-c core.fsmonitor=false -c
+//! diff.autoRefreshIndex=false` (a configured monitor is a program `git` would run on a read) —
+//! all of them before the subcommand, which is where a `-c` has to stand. A diff-family command
+//! (`diff*`, `log`, `show`) gets `--no-ext-diff --no-textconv --no-color` right after its name: an
+//! external diff or a textconv filter is a configured program that would both run and rewrite the
+//! bytes the reply claims to carry. A `grep` gets the last two of those (`--no-textconv
+//! --no-color`), the only ones it takes.
 //! Clean and smudge filters are left alone — they define what a file's content is in the
 //! repository, which is not a presentation choice. Output is read as bytes, never as text.
 
@@ -116,13 +117,7 @@ const GREP_SAFETY: &[&str] = &["--no-textconv", "--no-color"];
 /// The fixed part of every isolated command: the leading options and variables the module
 /// header describes. The ceiling depends on the home directory, and is set on its own.
 const ISOLATED: Policy = Policy::new(
-    &[
-        "--no-pager",
-        "-c",
-        "core.fsmonitor=false",
-        "-c",
-        "core.quotePath=false",
-    ],
+    &["-c", "core.quotePath=false"],
     &[
         ("GIT_LITERAL_PATHSPECS", "1"),
         ("GIT_NO_REPLACE_OBJECTS", "1"),
@@ -315,13 +310,13 @@ pub(crate) mod tests {
         AtomicBool::new(false)
     }
 
-    /// The leading options every isolated command gets, the index guard's `-c` included.
+    /// The leading options every isolated command gets, the read guard's `-c` included.
     const LEADING: [&str; 7] = [
         "--no-pager",
         "-c",
-        "core.fsmonitor=false",
-        "-c",
         "core.quotePath=false",
+        "-c",
+        "core.fsmonitor=false",
         "-c",
         "diff.autoRefreshIndex=false",
     ];
