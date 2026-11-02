@@ -148,6 +148,25 @@ it("fixes the agent when renaming a default account, so no other agent's default
   expect(request).toHaveBeenCalledWith({ type: "set_default_account_name", agent: "claude", name: "Main" });
 });
 
+const denied = () => new DaemonRequestError("denied", "store_io_failed", { detail: "Permission denied (os error 13)" });
+
+it("gives a denied rename of a default account the data folder remedy", async () => {
+  onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
+  render(undefined, () => Promise.reject(denied()), new Map(), null, true);
+  type("Name", "Main");
+  await submit();
+  expect(errorAlerts.getSnapshot().map((alert) => alert.recovery)).toEqual(["appDataAccess"]);
+});
+
+it("leaves a denied edit of an account the remedy of the failure itself", async () => {
+  onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
+  render(work, () => Promise.reject(denied()));
+  type("Name", "Other");
+  await submit();
+  // The edit holds a configuration directory the person chose, so it keeps the remedy that may choose another one.
+  expect(errorAlerts.getSnapshot().map((alert) => alert.recovery)).toEqual([undefined]);
+});
+
 it("prefills and submits the first free directory across disk entries and registered accounts", async () => {
   const request = vi.fn(() => Promise.resolve());
   render(undefined, request, new Map(), null, false, {

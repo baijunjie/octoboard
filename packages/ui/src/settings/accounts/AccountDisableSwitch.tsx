@@ -6,7 +6,7 @@ import type { Agent } from "../../protocol";
 import { useDaemon } from "../../store";
 import { SettingSwitch } from "../SettingRow";
 import { useAccountDisabled } from "./useAccountDisabled";
-import { alertFailure } from "../../components/alerts/raiseError";
+import { alertAppDataFailure } from "../../components/alerts/raiseError";
 
 /** An account's Disable switch (see "Turning an account off" in `docs/product/agent-accounts.md`), for the default
  * account (`account` null) as for the accounts the user owns. On turns the account off for new work: automatic
@@ -30,7 +30,7 @@ export function AccountDisableSwitch({ agent, account, name, label = "settings.a
     if (asking.current) return;
     asking.current = true;
     void request({ type: "set_account_disabled", agent, account, disabled: disable })
-      .catch(alertFailure({ title: t(disable ? "settings.accounts.disableFailedTitle" : "settings.accounts.enableFailedTitle") }))
+      .catch(alertAppDataFailure(t(disable ? "settings.accounts.disableFailedTitle" : "settings.accounts.enableFailedTitle")))
       .finally(() => { asking.current = false; });
   };
   return (

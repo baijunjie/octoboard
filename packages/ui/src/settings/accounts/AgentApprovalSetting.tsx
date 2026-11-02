@@ -10,7 +10,8 @@ import { Message, useT } from "../../i18n/react";
 import type { Agent, ApprovalReviewer, ClaudeApprovalMode } from "../../protocol";
 import { useDaemon, useDaemonStore } from "../../store";
 import { SettingRow } from "../SettingRow";
-import { alertFailure } from "../../components/alerts/raiseError";
+import { alertAppDataFailure } from "../../components/alerts/raiseError";
+import { appDataRecovery } from "../../errors/errorRecovery";
 
 /** The choices an agent has for approving permission requests, in the order its selector lists them after "Follow
  * account configuration", each with the message that words it. The one place that says which agents have a choice
@@ -61,7 +62,7 @@ function ApprovalSelect<T extends string>({ label, value, choices, save, confirm
     }
     setBusy(true);
     void save(picked === "inherit" ? null : picked)
-      .catch(alertFailure({ title: t("settings.accounts.approval.saveFailedTitle") }))
+      .catch(alertAppDataFailure(t("settings.accounts.approval.saveFailedTitle")))
       .finally(() => setBusy(false));
   };
   // The trigger must stay focusable while the popover returns keyboard focus after selection.
@@ -84,6 +85,7 @@ function ApprovalSelect<T extends string>({ label, value, choices, save, confirm
           confirmLabel={confirming.confirmLabel}
           destructive
           errorTitle={t("settings.accounts.approval.saveFailedTitle")}
+          errorRecovery={appDataRecovery}
           onConfirm={async () => {
             await save(confirming.value);
             setConfirming(undefined);

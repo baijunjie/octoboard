@@ -5,7 +5,7 @@ import { orderedAccounts } from "../../accounts/accountOrder";
 import { useT } from "../../i18n/react";
 import type { Account, Agent } from "../../protocol";
 import { useDaemon, useDaemonStore } from "../../store";
-import { raiseError } from "../../components/alerts/raiseError";
+import { alertAppDataFailure } from "../../components/alerts/raiseError";
 
 /** An optimistic order survives the reply arriving before the settings broadcast. A changed account set or a newer
  * saved order supersedes it; only one write per agent may be in flight. */
@@ -37,7 +37,7 @@ export function useAccountOrder(agent: Agent, accounts: Account[]) {
     setPending(change);
     void request({ type: "reorder_accounts", agent, accounts: next }).catch((err) => {
       setPending((held) => held === change ? undefined : held);
-      raiseError(err, { title: t("settings.accounts.reorderAccountsFailedTitle") });
+      alertAppDataFailure(t("settings.accounts.reorderAccountsFailedTitle"))(err);
     }).finally(() => {
       writing.current = false;
       setBusy(false);

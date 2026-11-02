@@ -10,6 +10,7 @@ import { TitledControl } from "../components/hint/TitledControl";
 import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
+import { appDataRecovery } from "../errors/errorRecovery";
 import { abbreviateHome } from "../format/pathDisplay";
 import { useDaemon, useDaemonStore } from "../store";
 import { SettingRow } from "./SettingRow";
@@ -70,6 +71,7 @@ export function TrustedFoldersSection(): React.ReactElement {
         <ConfirmDialog
           title={t("settings.trusted.removeTitle")}
           errorTitle={t("settings.trusted.removeFailedTitle")}
+          errorRecovery={appDataRecovery}
           subject={<Message id="settings.trusted.removeSubject" params={{ path: <InlineReference monospace wrap>{abbreviateHome(removing, home)}</InlineReference> }} />}
           message={t("settings.trusted.removeMessage")}
           confirmLabel={t("common.remove")}

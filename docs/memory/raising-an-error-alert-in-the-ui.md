@@ -43,10 +43,28 @@ bug and asks the user to file an Issue, however ordinary the cause. So raise suc
 already says what to do.
 
 The same explicit `recovery` is how a call site gives a daemon failure a better remedy than its code's group has. It
-replaces the group's remedy for whatever the call raises (an operating-system signature can still win over it), so where
+replaces the group's remedy for whatever the call raises (an operating-system signature still wins over it, except over
+the few remedies `classifyError` returns ahead of the signature, such as `fileRead`), so where
 it fits only some codes, pass it only when the error's code is one of them, choosing it in one function in
 `packages/ui/src/errors/errorRecovery.ts` that every route raising that kind of failure calls, never in a code set of
 the call site's own: `hostPathRecovery` is that function for a project file or folder that is gone, used by the
 host-path actions, and `pathLinkRecovery`, which builds on it, is the one for either step of a terminal path link click,
 so reuse them there. A remedy that depends on why the daemon refused rather than on which action asked is not passed
 here at all: it goes by the code's `cause` in `classifyError`, so that every route raising the code gets it.
+
+## A failed write to the application's own data takes its remedy from `appDataRecovery`
+
+Applies wherever code in `packages/ui` raises the alert for a request that writes only the application's own data — a
+setting, an agent's or account's row, an order, an approval, a trusted folder removed. Through the ordinary routes, a
+denied access or a full disk in the failure (an operating-system signature) gets the generic access remedy, which tells
+the user to choose another folder when they chose none. So derive the remedy with `appDataRecovery(error)`
+(`packages/ui/src/errors/errorRecovery.ts`):
+
+- a request's catch handler: `alertAppDataFailure(title)` (`packages/ui/src/components/alerts/raiseError.tsx`) in place
+  of `alertFailure`;
+- a dialog action: `errorRecovery={appDataRecovery}` on `ConfirmDialog`, or `appDataRecovery` as the third argument of
+  `useDialogAction`. A catch inside the action does not do it: `useDialogAction` raises the alert itself, so every
+  confirm path of a control needs the prop even when its direct path already uses `alertAppDataFailure`.
+
+Keep the ordinary route where the action also writes to a folder the user chose, as adding or editing an account does
+with its configuration folder: there choosing another folder is the remedy.

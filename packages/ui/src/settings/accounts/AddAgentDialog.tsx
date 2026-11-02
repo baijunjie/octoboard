@@ -7,6 +7,7 @@ import { ExternalLink } from "../../components/text/ExternalLink";
 import { FadeOverflow } from "../../components/text/FadeOverflow";
 import { StatusBadge } from "../../components/status/StatusBadge";
 import { Dialog, useDialogAction, useRefocusIfLost } from "../../components/dialog/Dialog";
+import { appDataRecovery } from "../../errors/errorRecovery";
 import { useT } from "../../i18n/react";
 import type { Agent } from "../../protocol";
 import { useDaemon, useDaemonStore } from "../../store";
@@ -20,7 +21,7 @@ export function AddAgentDialog({ onClose }: { onClose: () => void }): React.Reac
   const { request } = useDaemon();
   const added = useDaemonStore((s) => s.settings.added_agents);
   const availability = useDaemonStore((s) => s.agentAvailability);
-  const { busy, run } = useDialogAction(undefined, t("settings.accounts.addAgentFailedTitle"));
+  const { busy, run } = useDialogAction(undefined, t("settings.accounts.addAgentFailedTitle"), appDataRecovery);
   const [pending, setPending] = useState<Agent>();
   const closeRef = useRef<HTMLButtonElement>(null);
   // An agent just added takes its button with it, and focus with that.

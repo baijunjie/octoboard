@@ -89,6 +89,10 @@ export const en = {
   "error.recovery.access": "Check the folder’s file permissions and that its disk is writable. Grant {appName} access in system privacy settings if needed, or choose another accessible folder.",
   // For a failure with no operation left to retry and no folder to choose again (a session that could not be brought back up).
   "error.recovery.accessNoRetry": "Check the folder’s file permissions and that its disk is writable. Grant {appName} access in system privacy settings if needed.",
+  // For a failed write to the application's own data (a setting), where there is no folder to choose again. "Data folder" is
+  // the term other error messages already use for where the application keeps its data.
+  "error.recovery.appDataAccess": "Check that {appName}’s data folder is writable and its disk is available. Grant {appName} access in system privacy settings if needed, then retry.",
+  "error.recovery.appDataDiskSpace": "Free space on the disk holding {appName}’s data folder, then retry.",
   "error.recovery.connection": "Check the network and daemon connection. Use {retry} on the connection banner when available, then retry the operation.",
   "error.recovery.path": "Select an existing, accessible folder or file using {browse}, or correct the path in the dialog, then retry.",
   "error.recovery.hostPathGone": "It may have been moved, renamed or deleted. If it was moved or renamed, find it in the project’s files and try again from there.",

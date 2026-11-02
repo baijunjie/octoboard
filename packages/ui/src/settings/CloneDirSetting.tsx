@@ -12,7 +12,7 @@ import { isImeKey } from "../input/imeKey";
 import { abbreviateHome } from "../format/pathDisplay";
 import { useDaemon, useDaemonStore } from "../store";
 import { SettingRow } from "./SettingRow";
-import { alertFailure } from "../components/alerts/raiseError";
+import { alertAppDataFailure } from "../components/alerts/raiseError";
 
 /** The directory a `git` association clones into when none is named (see `Settings.default_clone_dir`
  * in protocol.ts). The text is sent when the field loses focus, other than to its directory picker,
@@ -47,7 +47,7 @@ export function CloneDirSetting(): React.ReactElement {
       return;
     }
     void request({ type: "update_settings", default_clone_dir: typed })
-      .catch(alertFailure({ title: t("settings.saveFailedTitle") }))
+      .catch(alertAppDataFailure(t("settings.saveFailedTitle")))
       .finally(() => setDraft(latest.current));
   };
 

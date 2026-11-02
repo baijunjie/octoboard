@@ -2,6 +2,7 @@ import React, { useEffect, useId, useRef, useState } from "react";
 
 import { FailureAlert } from "../../components/alerts/FailureAlert";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../../components/announce/StatusAnnouncer";
+import { appDataRecovery } from "../../errors/errorRecovery";
 import { errorPresentation, type ErrorPresentation } from "../../errors/errorPresentation";
 import { AGENT_DEFAULT_CONFIG_DIR, AGENT_LABEL, defaultAccountName, listedAgents } from "../../agents/agents";
 import { agentIconSetupOptions } from "../../components/icons/AgentIcon";
@@ -55,7 +56,7 @@ export function AccountDialog({
   const [directoryFailure, setDirectoryFailure] = useState<{ message: ErrorPresentation; attempt: number }>();
   const [listingAttempt, setListingAttempt] = useState(0);
   const [listingPending, setListingPending] = useState(true);
-  const { busy, run } = useDialogAction(undefined, t(editing || renameDefault ? "settings.accounts.dialog.saveFailedTitle" : "settings.accounts.dialog.addFailedTitle"));
+  const { busy, run } = useDialogAction(undefined, t(editing || renameDefault ? "settings.accounts.dialog.saveFailedTitle" : "settings.accounts.dialog.addFailedTitle"), renameDefault ? appDataRecovery : undefined);
   const { shown, attempt } = useSubmitValidation();
   const directoryField = useRef<HTMLDivElement>(null);
   const directoryFailureId = useId();

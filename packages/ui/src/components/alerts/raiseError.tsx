@@ -1,6 +1,7 @@
 import { InlineReference } from "../../i18n/InlineReference";
 import { t } from "../../i18n/language";
 import { Message } from "../../i18n/react";
+import { appDataRecovery } from "../../errors/errorRecovery";
 import { sessionDisplayTitle } from "../../sessions/sessionLabel";
 import { errorToast, type AlertOptions, type State, type ToastRequest } from "../../store";
 import { errorAlertParts } from "./errorAlertParts";
@@ -51,4 +52,10 @@ export function raiseError(error: unknown, alert: AlertOptions & { session?: und
  * `request(body).catch(alertFailure({ title: t("…") }))`. */
 export function alertFailure(alert: AlertOptions & { session?: undefined }): (error: unknown) => void {
   return (error) => raiseError(error, alert);
+}
+
+/** `alertFailure` for a failed write to the application's own data (a setting, the order of the agents or accounts): a denied access or a full disk is
+ * worded for the folder holding that data, not for a folder to choose (see `appDataRecovery`). */
+export function alertAppDataFailure(title: string): (error: unknown) => void {
+  return (error) => raiseError(error, { title, recovery: appDataRecovery(error) });
 }

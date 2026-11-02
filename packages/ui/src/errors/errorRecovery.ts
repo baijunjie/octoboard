@@ -14,7 +14,7 @@ export type ErrorRecovery =
   | "pathLinkAmbiguous" | "pathLinkLaunchable" | "pathLinkNotPrivate"
   | "fileBusy" | "codexConfig" | "sqliteHome" | "symlink" | "notRestored" | "notRestoredAutomatic"
   | "accountNotShareable" | "accountSharing" | "accountBusy" | "accountChanging" | "sharingStop" | "ownerChanging" | "ownerMoved"
-  | "diskSpaceNoRetry" | "accessNoRetry"
+  | "diskSpaceNoRetry" | "accessNoRetry" | "appDataAccess" | "appDataDiskSpace"
   | "none";
 
 const OS_RECOVERY: Record<string, ErrorRecovery> = {
@@ -119,8 +119,9 @@ export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorCl
     return { kind: "actionable", recovery: "submitRetry" };
   }
   // A file that could not be read keeps its own remedy over the one an operating-system signature names: the
-  // signature's access and disk-space remedies are about writing, which reading a file never needed.
-  if (explicit === "issueAddress" || explicit === "openExternal" || explicit === "fileRead") return { kind: "actionable", recovery: explicit };
+  // signature's access and disk-space remedies are about writing, which reading a file never needed. The two remedies
+  // for the application's own data (`appDataRecovery`) are outputs of that signature, so it cannot override them.
+  if (explicit === "issueAddress" || explicit === "openExternal" || explicit === "fileRead" || explicit === "appDataAccess" || explicit === "appDataDiskSpace") return { kind: "actionable", recovery: explicit };
   if (isNotRestored(error)) return { kind: "actionable", recovery: "notRestored" };
   // A denied read keeps its own remedy over the access remedy its operating-system signature names, which is about
   // writing and choosing another folder.
@@ -176,6 +177,14 @@ export function retryCanHelp(error: unknown): boolean {
  * which keeps its own. */
 export function hostPathRecovery(error: unknown): ErrorRecovery | undefined {
   return error instanceof DaemonRequestError && codeRecord(error.code)?.hostPathGone ? "hostPathGone" : undefined;
+}
+
+/** The remedy for a failed write to the application's own data (a setting, the order of the agents): what an
+ * operating-system signature asks for there (access, disk space) is about the folder holding the application's data, not
+ * a folder the person chose or the project's. Undefined for any other failure, which keeps its own. */
+export function appDataRecovery(error: unknown): ErrorRecovery | undefined {
+  const recovery = environmentRecovery(error);
+  return recovery === "access" ? "appDataAccess" : recovery === "diskSpace" ? "appDataDiskSpace" : undefined;
 }
 
 /** The remedy for a failed Change model whose model or reasoning effort the agent does not offer: Change model is where

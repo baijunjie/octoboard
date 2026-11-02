@@ -6,7 +6,7 @@ import { LANGUAGE_NAMES, LANGUAGES, type Language } from "../i18n/languages";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import { useDaemon } from "../store";
 import { SettingRow } from "./SettingRow";
-import { alertFailure } from "../components/alerts/raiseError";
+import { alertAppDataFailure } from "../components/alerts/raiseError";
 
 const OPTIONS = LANGUAGES.map((language) => ({ value: language, label: LANGUAGE_NAMES[language], lang: language }));
 
@@ -19,7 +19,7 @@ export function LanguageSetting(): React.ReactElement {
   const { request } = useDaemon();
   const pick = (next: Language) => {
     setLanguage(next);
-    void request({ type: "update_settings", interface_language: next }).catch(alertFailure({ title: t("settings.saveFailedTitle") }));
+    void request({ type: "update_settings", interface_language: next }).catch(alertAppDataFailure(t("settings.saveFailedTitle")));
   };
   return (
     <SettingRow label={t("settings.language.label")} description={<Message id="settings.language.description" />}>

@@ -15,6 +15,7 @@ import { useHeightMotion } from "./useHeightMotion";
 import { useToastClearance } from "./useToastClearance";
 import { useTopLayerAtMount } from "./useTopLayerAtMount";
 import { raiseError } from "../alerts/raiseError";
+import type { ErrorRecovery } from "../../errors/errorRecovery";
 
 /** The busy state every dialog that talks to the daemon needs. Execution failures go to the
  * acknowledgement queue; what is wrong with a single field goes to
@@ -23,8 +24,9 @@ import { raiseError } from "../alerts/raiseError";
  * so the dialog stays open for another try. A dialog reused for successive subjects passes a
  * `resetKey` naming the current one: when it changes the busy state is cleared, and an action
  * still running for the previous subject no longer reports into it. A failure is titled
- * `errorTitle`, the plain name of what failed. */
-export function useDialogAction(resetKey: string | undefined, errorTitle: string): {
+ * `errorTitle`, the plain name of what failed; `errorRecovery` gives the remedy for a failure where the action knows a
+ * better one than its kind has (see `ToastRequest.recovery`). */
+export function useDialogAction(resetKey: string | undefined, errorTitle: string, errorRecovery?: (error: unknown) => ErrorRecovery | undefined): {
   busy: boolean;
   run: (action: () => Promise<void>) => Promise<void>;
 } {
@@ -43,7 +45,7 @@ export function useDialogAction(resetKey: string | undefined, errorTitle: string
     try {
       await action();
     } catch (err) {
-      if (!stale()) raiseError(err, { title: errorTitle, keepTitle: true });
+      if (!stale()) raiseError(err, { title: errorTitle, keepTitle: true, recovery: errorRecovery?.(err) });
     } finally {
       if (!stale()) setBusy(false);
     }

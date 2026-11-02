@@ -6,6 +6,8 @@ import { getInteractionModality } from "react-aria/private/interactions/useFocus
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "../../components/alerts/errorAlerts";
+import { ErrorAlertBody } from "../../components/dialog/ErrorAlertBody";
+import { DaemonRequestError } from "../../daemon-client";
 import { currentLanguage, setLanguage, t } from "../../i18n/language";
 import type { Console, Project, Session } from "../../protocol";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
@@ -88,6 +90,41 @@ it("keeps the stored value and reports a failed save", async () => {
   expect(errorAlerts.getSnapshot().map((alert) => alert.title)).toEqual(["Could not save the permission approval"]);
   while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
   expect(select.disabled).toBe(false);
+});
+
+/** The text the first queued error alert shows in its body, remedy included. */
+function queuedAlertText(): string {
+  const host = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(host);
+  act(() => root.render(<ErrorAlertBody alert={errorAlerts.getSnapshot()[0]} />));
+  const text = host.textContent ?? "";
+  act(() => root.unmount());
+  host.remove();
+  return text;
+}
+const deniedWrite = () => new DaemonRequestError("The account settings could not be saved", "store_io_failed", { detail: "Permission denied (os error 13)" });
+
+it("words a denied save of the permission approval for the application's data folder, not for another folder to choose", async () => {
+  const { container, change } = mount("Codex");
+  request.mockRejectedValueOnce(deniedWrite());
+  change(approvalOf(container), "auto_review");
+  await act(async () => {});
+  const text = queuedAlertText();
+  expect(text).toContain("data folder is writable");
+  expect(text).not.toContain("choose another accessible folder");
+  while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
+});
+
+it("words a denied save of Approve everything, made from its confirmation, for the application's data folder too", async () => {
+  const { container, change } = mount("Claude Code");
+  change(approvalOf(container), "bypass");
+  request.mockRejectedValueOnce(deniedWrite());
+  act(() => [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Approve everything")!.click());
+  await act(async () => {});
+  const text = queuedAlertText();
+  expect(text).toContain("data folder is writable");
+  expect(text).not.toContain("choose another accessible folder");
+  while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
 });
 
 it("keeps the trigger available while saving and prevents another option selection until answered", async () => {

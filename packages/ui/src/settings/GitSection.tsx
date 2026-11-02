@@ -13,7 +13,7 @@ import { CloneDirSetting } from "./CloneDirSetting";
 import { DaemonSwitchSetting } from "./DaemonSwitchSetting";
 import { SettingRow, SwitchSettingRow } from "./SettingRow";
 import { SettingsGroup } from "./SettingsGroup";
-import { alertFailure } from "../components/alerts/raiseError";
+import { alertAppDataFailure } from "../components/alerts/raiseError";
 
 /** The Git settings, in three groups: the repository (where clones go, whether branches are pulled), development (see
  * `Settings.git_workflow` in protocol.ts: where a project session develops, then how it merges and delivers finished
@@ -28,7 +28,7 @@ export function GitSection(): React.ReactElement {
   const handoff = useFocusHandoff(() => listRef.current?.querySelector("button")?.focus());
 
   const change = (changes: GitWorkflowSettingsChanges) =>
-    void request({ type: "update_settings", git_workflow: changes }).catch(alertFailure({ title: t("settings.saveFailedTitle") }));
+    void request({ type: "update_settings", git_workflow: changes }).catch(alertAppDataFailure(t("settings.saveFailedTitle")));
 
   return (
     <>

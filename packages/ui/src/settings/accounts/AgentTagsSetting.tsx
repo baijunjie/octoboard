@@ -1,7 +1,7 @@
 import React, { useRef, useState } from "react";
 
 import { AGENT_LABEL, listedAgents } from "../../agents/agents";
-import { alertFailure } from "../../components/alerts/raiseError";
+import { alertAppDataFailure } from "../../components/alerts/raiseError";
 import { TagsInput } from "../../components/form/TagsInput";
 import { tagVocabulary } from "../../components/form/tagVocabulary";
 import { useT } from "../../i18n/react";
@@ -60,7 +60,7 @@ export function AgentTagsSetting({ agent }: { agent: Agent }): React.ReactElemen
           setAsked(undefined);
           setExpected([]);
         }
-        alertFailure({ title: t("settings.accounts.tags.saveFailedTitle") })(error);
+        alertAppDataFailure(t("settings.accounts.tags.saveFailedTitle"))(error);
       },
     );
   };

@@ -1,6 +1,6 @@
 import React from "react";
 
-import { alertFailure } from "../components/alerts/raiseError";
+import { alertAppDataFailure } from "../components/alerts/raiseError";
 import { HelpTip } from "../components/hint/HelpTip";
 import { useT } from "../i18n/react";
 import { useDaemon, useDaemonStore } from "../store";
@@ -17,7 +17,7 @@ export function DaemonSwitchSetting({ field }: { field: BooleanField }): React.R
   const { label, description, help } = booleanSetting(field);
 
   const setEnabled = (value: boolean) =>
-    void request({ type: "update_settings", [field]: value }).catch(alertFailure({ title: t("settings.saveFailedTitle") }));
+    void request({ type: "update_settings", [field]: value }).catch(alertAppDataFailure(t("settings.saveFailedTitle")));
 
   return (
     <SwitchSettingRow

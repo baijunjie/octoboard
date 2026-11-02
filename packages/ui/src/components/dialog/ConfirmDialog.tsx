@@ -6,6 +6,7 @@ import { InlineReference } from "../../i18n/InlineReference";
 import { openingFocus } from "../focus/regionFocus";
 import type { AcknowledgementView } from "../alerts/errorAlerts";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
+import type { ErrorRecovery } from "../../errors/errorRecovery";
 import { Dialog, useDialogAction, useFocusLeavingWhenDisabled } from "./Dialog";
 import { dialogAround } from "./dialogElement";
 import { useTrimmedField } from "../form/useTrimmedField";
@@ -54,6 +55,9 @@ export interface ConfirmDialogProps {
   resetKey?: string;
   /** What the alert for a failure of `onConfirm` is titled: the plain name of what failed. */
   errorTitle: string;
+  /** The remedy its alert gives for a failure of `onConfirm`, where the action knows a better one than the failure's
+   * kind has (a write to the application's own data: `appDataRecovery`). */
+  errorRecovery?: (error: unknown) => ErrorRecovery | undefined;
   /** A failure that ends the question's purpose: the dialog turns into a failure modal that says it, and its
    * acknowledgement calls `onCancel` (see `Dialog`'s `failure`). */
   failure?: AcknowledgementView;
@@ -86,6 +90,7 @@ export function ConfirmDialog({
   topLayerAtMount,
   resetKey,
   errorTitle,
+  errorRecovery,
   failure,
   size,
   typeToConfirm,
@@ -94,7 +99,7 @@ export function ConfirmDialog({
 }: ConfirmDialogProps): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
-  const { busy, run } = useDialogAction(resetKey, errorTitle);
+  const { busy, run } = useDialogAction(resetKey, errorTitle, errorRecovery);
   const [typed, setTyped] = useState("");
   const typedField = useTrimmedField(typed, setTyped);
   const word = typeToConfirm?.toLocaleUpperCase(language);

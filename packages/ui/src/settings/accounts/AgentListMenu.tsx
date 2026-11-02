@@ -13,7 +13,8 @@ import type { Agent } from "../../protocol";
 import { sessionDisplayTitle } from "../../sessions/sessionLabel";
 import { useDaemon, useDaemonStoreEqual } from "../../store";
 import { agentUsage } from "./agentUsage";
-import { raiseError } from "../../components/alerts/raiseError";
+import { alertAppDataFailure } from "../../components/alerts/raiseError";
+import { appDataRecovery } from "../../errors/errorRecovery";
 
 /** The agents the strip lists, the tabs' elements and the means to reorder the agents. The strip shows the order a
  * move or a drop has just asked for at once, not once the daemon's `settings_updated` has come back: until that
@@ -60,7 +61,7 @@ export function useAgentList(added: Agent[] | null): {
     void request({ type: "reorder_agents", agents: order }).catch((err) => {
       setPending(undefined);
       setMoved(agent);
-      raiseError(err, { title: t("settings.accounts.reorderAgentsFailedTitle") });
+      alertAppDataFailure(t("settings.accounts.reorderAgentsFailedTitle"))(err);
     });
   };
   const move = (agent: Agent, by: -1 | 1) => reorder(movedAgent(agents, agent, agents.indexOf(agent) + by), agent);
@@ -143,6 +144,7 @@ export function RemoveAgentDialog({ agent, onRemoved, onCancel }: {
     <ConfirmDialog
       title={t("settings.accounts.removeAgent")}
       errorTitle={t("settings.accounts.removeAgentFailedTitle")}
+      errorRecovery={appDataRecovery}
       message={
         <>
           <p><Message id="settings.accounts.removeAgentMessage" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference> }} /></p>

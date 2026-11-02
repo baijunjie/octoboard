@@ -4,7 +4,7 @@ import { expect, it } from "vitest";
 import { DaemonRequestError } from "../daemon-client";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { errorPresentation } from "./errorPresentation";
-import { classifyError, modelChangeRecovery, pathLinkRecovery } from "./errorRecovery";
+import { appDataRecovery, classifyError, modelChangeRecovery, pathLinkRecovery } from "./errorRecovery";
 import { ActionableError } from "./actionableError";
 import { hasErrorRemedy } from "../components/alerts/errorPartPresence";
 
@@ -161,6 +161,39 @@ it.each([
 ])("gives a failed automatic switch whose cause is %s a remedy without the operation to retry", (_name, detail, recovery) => {
   const error = new DaemonRequestError("fallback", "account_switch_automatically_failed", { agent: "Claude Code", from: "A", account: "B", reason: detail, reason_code: "internal_error", detail });
   expect(classifyError(error)).toEqual({ kind: "actionable", recovery });
+});
+
+it.each([
+  ["a denied access", "Permission denied (os error 13)", "appDataAccess"],
+  ["a full disk", "No space left on device (os error 28)", "appDataDiskSpace"],
+])("words a failed write to the application's own data whose cause is %s for no folder to choose", (_name, detail, recovery) => {
+  const error = new DaemonRequestError(detail, "store_io_failed", { detail });
+  expect(appDataRecovery(error)).toBe(recovery);
+  expect(classifyError(error, appDataRecovery(error))).toEqual({ kind: "actionable", recovery });
+});
+
+it("lets an explicit remedy for the application's own data win over an operating-system signature", () => {
+  const denied = new DaemonRequestError("denied", "store_io_failed", { detail: "Permission denied (os error 13)" });
+  expect(classifyError(denied, "appDataDiskSpace")).toEqual({ kind: "actionable", recovery: "appDataDiskSpace" });
+  const full = Object.assign(new Error("x"), { code: "ENOSPC" });
+  expect(classifyError(full, "appDataAccess")).toEqual({ kind: "actionable", recovery: "appDataAccess" });
+});
+
+it("gives no remedy for the application's own data to a failure without an access or disk-space signature, which keeps its own", () => {
+  const coded = new DaemonRequestError("no", "invalid_launch_setting", { field: "model", value: "x", agent: "Codex" });
+  expect(appDataRecovery(coded)).toBeUndefined();
+  expect(classifyError(coded, appDataRecovery(coded))).toEqual(classifyError(coded));
+  const refused = Object.assign(new Error("x"), { code: "ECONNREFUSED" });
+  expect(appDataRecovery(refused)).toBeUndefined();
+  expect(classifyError(refused, appDataRecovery(refused))).toEqual({ kind: "actionable", recovery: "connection" });
+  expect(appDataRecovery(new Error("x"))).toBeUndefined();
+  expect(classifyError(new Error("x"), appDataRecovery(new Error("x")))).toEqual({ kind: "unexpected" });
+});
+
+it("keeps the folder remedy of a denied access where a folder is chosen", () => {
+  const detail = "Permission denied (os error 13)";
+  expect(classifyError(new DaemonRequestError(detail, "store_io_failed", { detail }))).toEqual({ kind: "actionable", recovery: "access" });
+  expect(classifyError(new DaemonRequestError("denied", "relocation_failed", { cause: "permission_denied" }))).toEqual({ kind: "actionable", recovery: "access" });
 });
 
 it("sends a launch setting the agent does not offer back to Change model when the change came from there, and leaves other failures alone", () => {
