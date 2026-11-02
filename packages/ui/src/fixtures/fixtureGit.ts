@@ -14,6 +14,26 @@ import { text } from "./builders";
 import { EMPTY_TREE, listedCommits, type FixtureGit } from "./changeFixtures";
 import type { FixtureError } from "./sampleFiles";
 
+/** The requests `createGitReplies` answers, which are the project pane's browse requests that read a repository (the
+ * file requests are `fixtureFiles.ts`'s). The list is checked both ways by the types: a request named here that has no
+ * `case` below, or a `case` for one not named here, does not compile. Naming them lets a caller tell the requests
+ * that read a repository from the rest. */
+export const GIT_REQUESTS = [
+  "get_project_source",
+  "list_project_changes",
+  "read_project_change",
+  "read_project_change_bodies",
+  "list_project_branches",
+  "compare_project_branches",
+  "read_project_comparison_change",
+  "read_project_comparison_change_bodies",
+  "list_project_commits",
+  "read_project_commit_change",
+  "read_project_commit_change_bodies",
+] as const;
+type GitRequest = Extract<RequestBody, { type: (typeof GIT_REQUESTS)[number] }>;
+const gitRequestTypes: ReadonlySet<string> = new Set(GIT_REQUESTS);
+
 /** How many lines a text holds: its newlines, and one more when the last line is unterminated. It
  * repeats `countLines` of `viewer/budgets.ts` on purpose: the fixture stands in for the daemon's
  * count and does not depend on a viewer render-budget helper. */
@@ -221,7 +241,9 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
   };
 
   /** The reply to a Git-mode request, or `undefined` where the request is not one of them. */
-  return (body: RequestBody): Event | Promise<Event> | undefined => {
+  return (request: RequestBody): Event | Promise<Event> | undefined => {
+    if (!gitRequestTypes.has(request.type)) return undefined;
+    const body = request as GitRequest;
     switch (body.type) {
       case "get_project_source": {
         // The project's folder is the `scope` below the root of the worktree holding it, as the daemon names it; a
@@ -394,8 +416,10 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
       case "read_project_change_bodies":
       case "read_project_commit_change_bodies":
         return readBodies(body);
-      default:
-        return undefined;
+      default: {
+        const unanswered: never = body;
+        throw new Error(`fixtureGit: ${(unanswered as RequestBody).type} is in GIT_REQUESTS and has no reply`);
+      }
     }
   };
 }

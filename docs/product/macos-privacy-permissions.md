@@ -8,8 +8,9 @@ nothing about why — and Octoboard cannot intercept a prompt one of its agents 
 (see "Permissions" in `docs/product/settings.md`) is therefore the place to grant them deliberately beforehand, and a
 paragraph above the rows says as much — shown only together with the rows, so not outside the macOS application, not
 when the read of the grants failed and not before the first read is in. A grant the user gave another application does
-not count for Octoboard; macOS ties a grant to one application. These two are the only macOS permissions Octoboard ever
-asks for.
+not count for Octoboard; macOS ties a grant to one application. These two are the only macOS permissions Octoboard
+itself asks for; the other consents a program in its terminals can raise are described in "Other consents programs
+ask for" below.
 
 One row per permission, naming it, what agents use it for and its current state. What the row offers follows that state:
 
@@ -75,3 +76,21 @@ saying that permissions can only be managed in the macOS application. Where a de
 grants fails, the section is instead a red alert titled that the permissions could not be read, saying that the system
 did not report which have been granted, which opens no error alert (see "Failures shown on the screen" in
 `docs/product/error-alerts.md`). Until the first read comes back the section shows neither line and nothing else either.
+
+## Other consents programs ask for
+
+The programs agents run in Octoboard's terminals can ask macOS for further consents, which macOS likewise attributes to
+Octoboard. The application is built so that macOS raises its own prompt for each of these, naming Octoboard, instead of
+refusing the request without asking:
+
+- controlling other applications (Apple Events, automation);
+- the camera and the microphone;
+- Bluetooth;
+- contacts, calendars, reminders and photos;
+- location;
+- files in the Documents and Downloads folders and on the Desktop, and files on removable and network volumes.
+
+The prompt's explanation is, for each, a neutral sentence saying that a program running in Octoboard would like the
+access named; it cannot name the program, which Octoboard does not know. Octoboard never raises these prompts
+itself, they have no row in Settings' Permissions section, and a grant or refusal is changed in System Settings' Privacy
+& Security alone. Whether a notarized release build raises these prompts as described has not been confirmed yet.

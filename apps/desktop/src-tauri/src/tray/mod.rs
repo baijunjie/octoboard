@@ -52,6 +52,8 @@ mod items;
 mod lines;
 mod menu_tracking;
 mod model;
+#[cfg(target_os = "macos")]
+mod openers;
 mod status_item;
 
 #[cfg(target_os = "macos")]

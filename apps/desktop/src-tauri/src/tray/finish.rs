@@ -5,10 +5,12 @@ use tauri::{AppHandle, Manager};
 
 use super::items::is_template;
 #[cfg(target_os = "macos")]
-use super::lines::{dress_quota_openers, dress_submenu, heading_row};
+use super::lines::{dress_submenu, heading_row};
 use super::model::TrayMenu;
 #[cfg(target_os = "macos")]
 use super::model::TraySubmenu;
+#[cfg(target_os = "macos")]
+use super::openers::dress_quota_openers;
 #[cfg(target_os = "macos")]
 use super::TrayState;
 

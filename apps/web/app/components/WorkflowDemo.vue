@@ -154,12 +154,7 @@ onBeforeUnmount(() => observer?.disconnect());
         >
           <span class="node-port" aria-hidden="true" />
           <span class="node-brand"
-          ><img
-            :src="`${config.app.baseURL}agents/${node.project.icon}.svg`"
-            alt=""
-            width="20"
-            height="20"
-          /><strong>{{ node.project.agent }}</strong
+          ><AgentMark :agent="node.project.icon" /><strong>{{ node.project.agent }}</strong
           ><span class="node-arrow" aria-hidden="true">↗</span></span
           >
           <span class="node-project" dir="auto">{{
@@ -415,8 +410,9 @@ onBeforeUnmount(() => observer?.disconnect());
   align-items: center;
   gap: 8px;
 }
-.node-brand img {
-  flex-shrink: 0;
+.node-brand .agent-mark {
+  width: 20px;
+  height: 20px;
 }
 .node-brand strong {
   font-size: 13px;
@@ -598,7 +594,7 @@ onBeforeUnmount(() => observer?.disconnect());
   .agent-node {
     padding: 12px 10px;
   }
-  .node-brand img {
+  .node-brand .agent-mark {
     width: 18px;
     height: 18px;
   }

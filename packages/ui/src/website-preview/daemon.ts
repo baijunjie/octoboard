@@ -1,25 +1,8 @@
 import { DaemonRequestError } from "../daemon-client";
-import { createFixtureDaemon } from "../fixtures/fixtureDaemon";
+import { BROWSE_REQUESTS, createFixtureDaemon } from "../fixtures/fixtureDaemon";
 import type { Fixture } from "../fixtures/fixture";
 import type { Daemon } from "../store";
 import { previewRepositories } from "./repositories";
-
-const browseRequests = new Set([
-  "get_project_source",
-  "list_project_dir",
-  "search_project_files",
-  "read_project_file",
-  "list_project_changes",
-  "read_project_change",
-  "read_project_change_bodies",
-  "list_project_branches",
-  "compare_project_branches",
-  "read_project_comparison_change",
-  "read_project_comparison_change_bodies",
-  "list_project_commits",
-  "read_project_commit_change",
-  "read_project_commit_change_bodies",
-]);
 
 /** The shared single-repository fixtures are reused behind a project router; app state and
  * terminals still belong to one shared daemon. Every request stays inside these in-memory fakes. */
@@ -42,7 +25,7 @@ export function createPreviewDaemon(scenario: Fixture): Daemon {
   return {
     ...daemon,
     request: async (body) => {
-      if (!browseRequests.has(body.type)) return daemon.request(body);
+      if (!BROWSE_REQUESTS.has(body.type)) return daemon.request(body);
       if (!("project" in body) || typeof body.project !== "string")
         throw new Error("Browse request needs a project");
       const repository = previewRepositories.get(body.project);

@@ -4,9 +4,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { localValue } from "../env.mjs";
-
-// `scripts/env.mjs` has no package of its own; its tests sit here so the verify tests' glob runs them.
+import { localValue } from "./env.mjs";
 
 const NAME = "OCTOBOARD_TEST_LOCAL_VALUE";
 

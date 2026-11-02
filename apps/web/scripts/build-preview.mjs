@@ -4,7 +4,13 @@ import { fileURLToPath } from "node:url";
 // Relative asset URLs keep this build usable beneath the website's configured deployment path.
 const result = spawnSync(
   "pnpm",
-  ["--filter", "@octoboard/ui", "build:preview"],
+  [
+    "--filter",
+    "@octoboard/ui",
+    "build:preview",
+    "--outDir",
+    fileURLToPath(new URL("../public/preview", import.meta.url)),
+  ],
   {
     cwd: fileURLToPath(new URL("../../../", import.meta.url)),
     stdio: "inherit",

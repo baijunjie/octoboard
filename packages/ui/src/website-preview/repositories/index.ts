@@ -1,5 +1,6 @@
 import {
   addition,
+  fullContextPatch,
   textChange,
   type FixtureGit,
 } from "../../fixtures/changeFixtures";
@@ -13,42 +14,6 @@ import { tablet } from "./tablet";
 import { pos } from "./pos";
 import { kitchen } from "./kitchen";
 import type { RepositoryExample } from "./types";
-
-/** Full-context patches keep the display fixture and its expandable whole-file bodies identical.
- * The LCS preserves unchanged lines instead of showing the entire file as a replacement. */
-function patch(path: string, before: string, after: string): string {
-  const old = before.slice(0, -1).split("\n");
-  const next = after.slice(0, -1).split("\n");
-  const lengths = Array.from({ length: old.length + 1 }, () =>
-    Array<number>(next.length + 1).fill(0),
-  );
-  for (let i = old.length - 1; i >= 0; i--)
-    for (let j = next.length - 1; j >= 0; j--)
-      lengths[i][j] =
-        old[i] === next[j]
-          ? lengths[i + 1][j + 1] + 1
-          : Math.max(lengths[i + 1][j], lengths[i][j + 1]);
-  const lines = [
-    `diff --git a/${path} b/${path}`,
-    `--- a/${path}`,
-    `+++ b/${path}`,
-    `@@ -1,${old.length} +1,${next.length} @@`,
-  ];
-  let i = 0,
-    j = 0;
-  while (i < old.length || j < next.length) {
-    if (i < old.length && j < next.length && old[i] === next[j]) {
-      lines.push(` ${old[i++]}`);
-      j++;
-    } else if (
-      i < old.length &&
-      (j === next.length || lengths[i + 1][j] >= lengths[i][j + 1])
-    )
-      lines.push(`-${old[i++]}`);
-    else lines.push(`+${next[j++]}`);
-  }
-  return lines.join("\n") + "\n";
-}
 
 export interface PreviewRepository {
   project: string;
@@ -104,7 +69,7 @@ function repository(
         {
           old: before,
           new: example.files[path],
-          patch: patch(path, before, example.files[path]),
+          patch: fullContextPatch(path, before, example.files[path]),
         },
       ),
     ),

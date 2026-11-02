@@ -3,7 +3,7 @@
 The Node scripts of `@octoboard/desktop` that build the sidecar and the app, install it locally, produce the signed
 release and publish it for the in-app updates. They run from `apps/desktop/` through its `package.json` scripts (and the
 root `install:macos`); the shared pieces are in `bundle.mjs`. Credentials come from the gitignored repo-root
-`.env.secret` (template `.env.secret.example`), read by `scripts/env.mjs`; a variable already in the environment wins.
+`.env.secret` (template `.env.secret.example`), read by `scripts/lib/env.mjs`; a variable already in the environment wins.
 
 ## External interfaces
 
@@ -22,11 +22,18 @@ root `install:macos`); the shared pieces are in `bundle.mjs`. Credentials come f
   while Octoboard runs, refuses to replace a symlink or another application, stages the copy on the destination volume
   and keeps the previous bundle for rollback if the replacement fails.
 - `release.mjs` (`pnpm release`) — the universal, signed and notarized release build (below).
+- `sign-update.mjs` (`pnpm sign-update`) — signs the update archive `pnpm release --no-sign-update` left with the update
+  key and checks that a fresh `.sig` came out (below).
 - `publish-release.mjs` (`pnpm publish-release`) — publishes what `pnpm release` built (below).
 - `release-manifest.mjs` — what publishing decides without GitHub (which manifests a version goes to, asset names and
   addresses, version ordering, the manifest itself); tested by `release-manifest.test.mjs` through `pnpm test`.
-- `bundle.mjs` — shared by the build scripts: paths, `tauriBuild`, `withoutAppleVariables`, `withoutUpdaterArtifacts`,
-  the bundle lookup and the checks on a built `.app` (`assertLayeredIcon`, `assertProducedSince`, `appVersion`).
+- `bundle.mjs` — shared by the build scripts: paths, `tauriBuild`, `withoutAppleVariables`, `withoutUpdateKey`, the
+  bundle lookup and the checks on a built `.app` (`assertLayeredIcon`, `assertProducedSince`, `appVersion`,
+  `verifySignature`, `signatureReport`).
+- `update-archive.mjs` — the update archive's lifecycle: `createUpdateArchive` packs the `.app` with the system `tar`
+  without xattrs and refuses entries other than files, directories and symlinks (a hard link breaks the updater's
+  unpack); `signUpdateArchive` signs it with `tauri signer sign`; `removeUpdateArchives` clears earlier builds'.
+  Tested by `update-archive.test.mjs`.
 - `actool/actool` — a shim for Xcode's `actool` put first on `PATH` by `tauriBuild`: the Node-hosted Tauri CLI starts
   `actool` with stdin closed, which crashes it, and the shim runs it with stdin on `/dev/null`. Temporary, to be removed
   once the upstream fix ships.
@@ -39,7 +46,8 @@ Building the layered app icon needs Xcode 26's `actool` as the selected develope
 
 `pnpm release` runs `tauri build --target universal-apple-darwin --locked` (which runs `build-daemon.mjs` and builds the
 UI first, through `beforeBuildCommand`), producing one universal `.app` and `.dmg` under
-`target/universal-apple-darwin/release/bundle`, then verifies the result. It adds the two Rust targets with
+`target/universal-apple-darwin/release/bundle`, then makes the update archive from the `.app` and signs it (below), and
+verifies the result. It adds the two Rust targets with
 `rustup target add` first (doing nothing when present); a `Cargo.lock` that no longer matches the manifests fails the
 first compile instead of being rewritten. The script checks the environment before spending the build, in three modes:
 
@@ -57,9 +65,14 @@ from Apple's: it signs `Octoboard.app.tar.gz`, the archive the in-app update dow
 signature against `plugins.updater.pubkey` in `src-tauri/tauri.conf.json` before it installs anything. The key pair
 comes from `pnpm --filter @octoboard/desktop tauri signer generate -w <path>` (an empty password is allowed); the public
 half is the file's `.pub`. Never commit the private key and keep a backup: with the key lost, no installed copy can ever
-be updated again, and with it leaked, anyone can ship an update to every one of them. The build first deletes the update
-archives an earlier build left (their names carry no version), then the script checks that the archive and its `.sig`
-exist next to the `.app`.
+be updated again, and with it leaked, anyone can ship an update to every one of them. So `tauri build` never holds it:
+`createUpdaterArtifacts` is off in `tauri.conf.json` (it would make the build sign the archive and fail without the key)
+and the scripts drop the key variables from the build's environment, so a build script that reads the environment cannot
+get the key. After the build `release.mjs` packs the `.app` into `Octoboard.app.tar.gz` itself and signs that with
+`tauri signer sign`, as the one step that reads the key. `pnpm release --no-sign-update` stops after packing, for a
+caller that signs in a step of its own with `pnpm sign-update` (the release workflow does) and so does not need the key
+until then. The script first deletes the update archives an earlier build left (their names carry no version), then
+checks that the archive and, unless signing was left out, its `.sig` exist next to the `.app`.
 
 Verification after the build: the `.app` has the layered icon and the nested `octoboardd` sidecar's signature is
 reported; for a signed build, `codesign --verify --deep --strict` and Gatekeeper's verdict on the `.app`, then the
@@ -103,9 +116,13 @@ stays available. The workflow:
    set, and that `Cargo.lock` matches the manifests (`cargo metadata --locked`), which the `--locked` build would
    otherwise find only after the checks.
 2. `checks` runs `quality.yml`; then `release` builds, signs and notarizes with
-   `pnpm --filter @octoboard/desktop release` and publishes with `publish-release --notes-file`, using the workflow's
-   own token for `gh`. The signing certificate and the Developer ID G2 intermediate go into a keychain that exists for
-   that run only, and the API key is written to a temporary file.
+   `pnpm --filter @octoboard/desktop release --no-sign-update`, signs the update archive in a step of its own
+   (`sign-update`), the only step given the update key (no build step has it in its environment; code planted for
+   later steps of the same runner could still read it), and publishes with `publish-release --notes-file`, the only one
+   given the workflow's own token (for `gh`; checkouts keep no credential in `.git/config`). The signing certificate and
+   the Developer ID G2 intermediate go into a keychain that exists for that run only, and the API key is written to a
+   temporary file; both are removed right after the build. `validate` learns whether the secrets are set from boolean
+   expressions, without their values reaching a step.
 3. The whole workflow is in one concurrency group, so releases run one at a time. GitHub keeps one pending run, so a
    third tag pushed while one runs replaces the waiting one, which must then be re-run.
 

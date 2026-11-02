@@ -1,4 +1,4 @@
-import { matchLanguage } from "../../../../packages/ui/src/i18n/matchLanguage";
+import { matchLanguage } from "@octoboard/ui/match-language";
 
 const COOKIE_KEY = "octoboard_i18n_redirected";
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;

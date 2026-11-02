@@ -3,7 +3,7 @@
 import { copyFileSync, existsSync, mkdtempSync, rmSync, statSync, utimesSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { gitWith } from "../git.mjs";
+import { gitWith } from "../lib/git.mjs";
 
 // The tree of the working copy at `root` as it is now, uncommitted and untracked (not ignored) files
 // included, taken through a scratch copy of the index so the real one is left alone. Returns null when

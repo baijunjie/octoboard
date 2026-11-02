@@ -8,9 +8,9 @@
 //! `confirm_quit` (`exit.rs`), so the user is asked first about the sessions a restart ends.
 //!
 //! On macOS the installer replaces the `.app` in place while the application keeps running; the new
-//! version takes effect on the next launch. The sidecar is spawned once at startup
-//! (`sidecar.rs`), so until then the old UI stays paired with the old daemon, which is why nothing
-//! here ever restarts the application by itself.
+//! version takes effect on the next launch. The sidecar starts from the bundle at launch and is not
+//! relaunched once an update is installed, so the old UI stays paired with the old daemon until
+//! then, which is why nothing here ever restarts the application by itself.
 //!
 //! Each channel is one manifest on a fixed-tag release of the public repository (see "Where
 //! updates come from" in `docs/product/in-app-updates.md`). The endpoint is set per check from the
@@ -22,7 +22,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tauri::ipc::Channel;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
 /// The public repository's address, from `config/app.json` (`build.rs`).
@@ -190,6 +190,11 @@ impl UpdaterState {
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
         self.0.lock().unwrap_or_else(|e| e.into_inner())
     }
+}
+
+/// Whether an update is installed and waits for the restart that applies it.
+pub fn is_installed(app: &AppHandle) -> bool {
+    app.state::<UpdaterState>().lock().phase == Phase::Installed
 }
 
 /// Puts the phase back to idle when an operation ends without having set the phase it ends in,

@@ -4,7 +4,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpat
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { parseUpdates, verifyPush } from "../pre-push.mjs";
+import { parseUpdates, verifyPush } from "./pre-push.mjs";
 
 const zero = "0".repeat(40);
 function fixture(run) {
@@ -141,8 +141,8 @@ test("installed hook dispatch resolves the current worktree and passes the pushe
     const bin = path.join(root, "bin");
     mkdirSync(bin);
     const marker = path.join(root, "dispatch");
-    mkdirSync(path.join(root, "scripts"));
-    for (const script of ["pre-push.mjs", "format-staged.mjs"]) writeFileSync(path.join(root, "scripts", script), "");
+    mkdirSync(path.join(root, "scripts/hooks"), { recursive: true });
+    for (const script of ["pre-push.mjs", "format-staged.mjs"]) writeFileSync(path.join(root, "scripts/hooks", script), "");
     const node = path.join(bin, "node");
     writeFileSync(node, '#!/bin/sh\nprintf "%s\\n" "$@" > "$MARKER"\ncat >> "$MARKER"\nexit "${REFUSE:-0}"\n');
     chmodSync(node, 0o755);
@@ -153,16 +153,16 @@ test("installed hook dispatch resolves the current worktree and passes the pushe
       cwd, input: inputText, encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, MARKER: marker, ...extra },
     });
     assert.equal(invoke(["destination", "push-url"]).status, 0);
-    assert.equal(readFileSync(marker, "utf8"), `${realpathSync(root)}/scripts/pre-push.mjs\ndestination\npush-url\n${input}`);
+    assert.equal(readFileSync(marker, "utf8"), `${realpathSync(root)}/scripts/hooks/pre-push.mjs\ndestination\npush-url\n${input}`);
     assert.equal(invoke(["destination", "push-url"], { REFUSE: "1" }).status, 1);
     const linked = path.join(root, "linked");
     assert.notEqual(git("worktree", "add", "--detach", linked, head), null);
-    mkdirSync(path.join(linked, "scripts"));
-    writeFileSync(path.join(linked, "scripts/pre-push.mjs"), "");
+    mkdirSync(path.join(linked, "scripts/hooks"), { recursive: true });
+    writeFileSync(path.join(linked, "scripts/hooks/pre-push.mjs"), "");
     assert.equal(invoke(["destination", "push-url"], {}, linked, update(head, base, "refs/tags/v1")).status, 0);
-    assert.match(readFileSync(marker, "utf8"), /linked\/scripts\/pre-push.mjs/);
+    assert.match(readFileSync(marker, "utf8"), /linked\/scripts\/hooks\/pre-push.mjs/);
     assert.equal(invoke(["pre-commit"]).status, 0);
-    assert.match(readFileSync(marker, "utf8"), /scripts\/format-staged.mjs/);
+    assert.match(readFileSync(marker, "utf8"), /scripts\/hooks\/format-staged.mjs/);
     // hook.sh dispatches only pre-commit and pre-push; any other hook name passes without running anything,
     // even outside a work tree.
     rmSync(marker);
@@ -181,7 +181,7 @@ test("installed hook dispatch resolves the current worktree and passes the pushe
   });
 });
 
-test("installer installs pre-commit and pre-push, refuses external hooks, configured hook paths and old flags before writing, and migrates", () => {
+test("installer installs pre-commit and pre-push, refuses external hooks, configured hook paths and arguments before writing", () => {
   fixture(({ root, git }) => {
     mkdirSync(path.join(root, ".githooks"));
     for (const name of ["install.sh", "hook.sh"]) {
@@ -197,11 +197,11 @@ test("installer installs pre-commit and pre-push, refuses external hooks, config
     git("config", "core.hooksPath", "external-hooks");
     assert.equal(invoke().status, 1);
     git("config", "--unset", "core.hooksPath");
-    for (const flag of ["--pr-only", "--branches-only", "main"]) {
+    for (const flag of ["--pr-only", "main"]) {
       const old = invoke([flag]);
       assert.equal(old.status, 1);
       assert.match(old.stderr, /takes no arguments/);
-      for (const name of ["pre-commit", "pre-push", "reference-transaction"]) assert.equal(existsSync(path.join(hooks, name)), false, flag);
+      for (const name of ["pre-commit", "pre-push"]) assert.equal(existsSync(path.join(hooks, name)), false, flag);
     }
     // A core.hooksPath injected for one process tree does not count.
     const injected = invoke([], { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.hooksPath", GIT_CONFIG_VALUE_0: "external-hooks" });
@@ -209,30 +209,7 @@ test("installer installs pre-commit and pre-push, refuses external hooks, config
     for (const name of ["pre-commit", "pre-push"]) {
       assert.match(readFileSync(path.join(hooks, name), "utf8"), /^# octoboard repository hook entry/m);
     }
-    assert.equal(existsSync(path.join(hooks, "reference-transaction")), false);
 
-    // The earlier revert-gate entry point is overwritten; its reference-transaction hook and config go.
-    for (const name of ["pre-commit", "pre-push", "reference-transaction"]) {
-      writeFileSync(path.join(hooks, name), "#!/bin/sh\n# revert-gate hook entry\n");
-    }
-    git("config", "--add", "revert-gate.branch", "main");
-    git("config", "--add", "revert-gate.branch", "other");
-    const migrated = invoke();
-    assert.equal(migrated.status, 0, migrated.stderr);
-    assert.match(migrated.stdout, /Removed the reference-transaction hook/);
-    assert.match(migrated.stdout, /Unset the revert-gate\.branch/);
-    for (const name of ["pre-commit", "pre-push"]) {
-      assert.match(readFileSync(path.join(hooks, name), "utf8"), /octoboard repository hook entry/);
-    }
-    assert.equal(existsSync(path.join(hooks, "reference-transaction")), false);
-    assert.equal(git("config", "--get-all", "revert-gate.branch"), null);
-
-    // A foreign reference-transaction hook is left alone, with a note.
-    writeFileSync(path.join(hooks, "reference-transaction"), "#!/bin/sh\n# mine\n");
-    const foreign = invoke();
-    assert.equal(foreign.status, 0);
-    assert.match(foreign.stderr, /left alone/);
-    assert.equal(readFileSync(path.join(hooks, "reference-transaction"), "utf8"), "#!/bin/sh\n# mine\n");
     assert.equal(invoke().status, 0);
   });
 });
@@ -323,8 +300,12 @@ test("the hook skips a stage whose script this checkout lacks, with a warning, a
       const skipped = run(name, name === "pre-push" ? pushed : "");
       assert.equal(skipped.status, 0, name);
       assert.match(skipped.stderr, new RegExp(`${script} is missing`));
-      mkdirSync(path.join(root, "scripts"), { recursive: true });
+      // A branch cut before the scripts moved keeps them at the top of `scripts/`; the hook still runs them.
+      mkdirSync(path.join(root, "scripts/hooks"), { recursive: true });
       writeFileSync(path.join(root, "scripts", script), "");
+      assert.equal(run(name, name === "pre-push" ? pushed : "").status, 1, name);
+      rmSync(path.join(root, "scripts", script));
+      writeFileSync(path.join(root, "scripts/hooks", script), "");
       assert.equal(run(name, name === "pre-push" ? pushed : "").status, 1, name);
     }
   });

@@ -5,7 +5,7 @@
 //! `rebuild_query`, `budget_spent_detail`) so the rules can be tested without a process. A daemon
 //! that keeps dying must not be restarted forever: at most `MAX_RESTARTS` relaunches in any
 //! `RESTART_WINDOW`, after which the window is told, through the same `daemon-exited` event as any
-//! daemon that ended for good, and the user restarts the application or reports the issue.
+//! daemon that ended for good, and the user restarts the application or reports the issue. The same goes once an update is installed.
 
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
@@ -13,10 +13,12 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
 
 use crate::diagnostics::diagnostic;
+use crate::menu::APP_NAME;
 use crate::sidecar::{
     daemon_params, give_up_on_daemon, mark_daemon_down, start_attempt, wait_for, DaemonAddress,
     DaemonState, DAEMON_PARAMS,
 };
+use crate::updater;
 use crate::MAIN_WINDOW_LABEL;
 
 /// How many times the daemon is relaunched within `RESTART_WINDOW` before it is left alone.
@@ -76,8 +78,29 @@ pub fn restart_backoff(recent: usize) -> Duration {
 /// What the window is told once the daemon is no longer restarted. `ended` says how it ended.
 pub fn budget_spent_detail(ended: &str, restarts: usize) -> String {
     format!(
-        "{ended}. It was restarted {restarts} times in the last ten minutes and is not restarted again."
+        "{ended}. It was restarted {restarts} times in the last {} minutes and is not restarted again.",
+        RESTART_WINDOW.as_secs() / 60
     )
+}
+
+/// Why the daemon is left alone instead of relaunched while an update is installed and waits for its
+/// restart: the installer has replaced the bundle under the running shell, so a relaunch would pair
+/// the new daemon with the old UI.
+pub fn update_installed_detail(ended: &str) -> String {
+    format!(
+        "{ended}. An update is installed and is not applied until {APP_NAME} restarts; the daemon is not restarted before then."
+    )
+}
+
+/// Gives up on the daemon, and says so, when an update is installed; whether it did.
+fn give_up_if_updated(app: &AppHandle, ended: &str) -> bool {
+    if !updater::is_installed(app) {
+        return false;
+    }
+    let detail = update_installed_detail(ended);
+    diagnostic!("giving up on the daemon: {detail}");
+    give_up_on_daemon(app, detail);
+    true
 }
 
 /// The window's query once it is pointed at a restarted daemon: `daemon_params` in place of what
@@ -122,6 +145,9 @@ fn run(app: &AppHandle, mut ended: String) {
     let state = app.state::<DaemonState>();
     let stopping = || state.stopping.load(Ordering::SeqCst);
     while !stopping() {
+        if give_up_if_updated(app, &ended) {
+            return;
+        }
         let taken = state
             .restarts
             .lock()
@@ -138,11 +164,15 @@ fn run(app: &AppHandle, mut ended: String) {
         };
         let backoff = restart_backoff(recent);
         diagnostic!(
-            "restarting the daemon in {} s ({} relaunches in the last ten minutes before this one)",
+            "restarting the daemon in {} s ({} relaunches within the restart window before this one)",
             backoff.as_secs(),
             recent
         );
         if wait_for(backoff, stopping) {
+            return;
+        }
+        // An update may have been installed while waiting.
+        if give_up_if_updated(app, &ended) {
             return;
         }
         match start_attempt(app) {
@@ -239,10 +269,18 @@ mod tests {
     }
 
     #[test]
+    fn the_installed_update_detail_names_the_restart() {
+        let ended = "The daemon exited unexpectedly with exit code 1";
+        let detail = update_installed_detail(ended);
+        assert!(detail.starts_with(ended));
+        assert!(detail.contains("update is installed"));
+    }
+
+    #[test]
     fn the_detail_says_how_often_the_daemon_was_restarted() {
         assert_eq!(
             budget_spent_detail("The daemon exited with exit code 1", 3),
-            "The daemon exited with exit code 1. It was restarted 3 times in the last ten minutes and is not restarted again."
+            "The daemon exited with exit code 1. It was restarted 3 times in the last 10 minutes and is not restarted again."
         );
     }
 }

@@ -134,10 +134,11 @@ From top to bottom:
      windows" in `docs/product/account-quotas.md` ("5h", "Session"), "N% remaining · resets in <countdown>" ("82%
      remaining · resets in 1h 57m", "resets now" once the time has passed, no countdown for a window with no reset time)
      right-aligned in the secondary text colour, and a bar of what remains directly below, on a translucent grey track.
-     The bar is orange for Claude Code and blue for Codex, each one fixed colour whether the menu is light or dark, and
-     the text colour for Grok Build. The bars of an account whose quota is used up, in this row and in the meter row
-     below, are instead a neutral grey, the one the rail's quota panel draws such bars in, for the menu's current
-     appearance (the menu's secondary text colour when that grey cannot be read). A row whose text needs more room than
+     The bar, in this row and in the meter row below, is in its agent's colour, the one the rail's quota panel draws
+     that agent's bars in (see "How an account's quota is shown" in `docs/product/account-quotas.md`), for the menu's
+     current appearance, light or dark (the menu's text colour when that colour cannot be read). The bars of an
+     account whose quota is used up are instead a neutral grey, the one the rail's quota panel draws such bars in, for
+     the menu's current appearance (the menu's secondary text colour when that grey cannot be read). A row whose text needs more room than
      the submenu's usual width widens the submenu rather than being cut short. A row is read by assistive technology
      once, as one phrase ("5h 82% remaining · resets in 1h 57m"), by its menu item alone: neither the name, the detail
      nor the bar is read on its own;

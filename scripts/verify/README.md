@@ -1,8 +1,9 @@
 # Verification (`pnpm verify`)
 
-Read-only checks for the packages a change affects, run by the pre-push hook (`scripts/pre-push.mjs`), by hand, and in
-CI. Nothing here rewrites files: formatting belongs to the pre-commit hook. The entry point is `scripts/verify.mjs`;
-this directory holds its parts and their tests (`*.test.mjs`, run as the `verify` package's tests).
+Read-only checks for the packages a change affects, run by the pre-push hook (`scripts/hooks/pre-push.mjs`), by hand,
+and in CI. Nothing here rewrites files: formatting belongs to the pre-commit hook. The entry point is
+`scripts/verify.mjs`; this directory holds its parts and their tests; every `*.test.mjs` under `scripts/` (this
+directory, `hooks/`, `lib/`) runs as the `verify` package's tests.
 
 ## How it works
 
@@ -58,13 +59,15 @@ this directory holds its parts and their tests (`*.test.mjs`, run as the `verify
 - A new package or a new input: add or extend a rule in `RULES`; a rule's `consumers` decide which steps run.
 - A new check: a step in `steps.mjs`; keep `quick.mjs` consistent (its tests fail when a UI test reads files or a crate
   has crate-wide tests that its lists do not name).
-- A script that other packages import is named in the matching rule (`scripts/git.mjs`, `scripts/env.mjs`, `lock.mjs`).
+- A script that other packages import is named in the matching rule (`scripts/lib/git.mjs`, `scripts/lib/env.mjs`,
+  `lock.mjs`).
 
 ## External interfaces
 
 - `pnpm verify` with `--dry-run`, `--base <ref>`, `--head <commit>`, `--full`, `--release`, `--quick`, `--fresh`.
 - `scope.mjs`: `RULES`, `planScope`, `matchingRules`. `steps.mjs`: `checkSteps`. `quick.mjs`: `quickSteps`.
-- `changes.mjs`: `chooseBase`, `resolveBase`, `resolveLocalTargetBase`, `resolveRemoteTargetBase`, `changedFiles`,
-  `requirePushedTree`.
+- `changes.mjs`: `chooseBase`, `resolveBase`, `resolveLocalTargetBase`, `remoteTargetBase` (the one
+  merge-base-with-the-remote-target function, also used by the pre-push hook), `resolveRemoteTargetBase`,
+  `changedFiles`, `requirePushedTree`.
 - `lock.mjs`: `acquireSlot`; `stamp.mjs`: `readStamp`, `recordPass`; `rerun.mjs`: the failed-file record; `tree.mjs`:
   `workingTree`.

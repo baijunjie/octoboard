@@ -11,9 +11,8 @@ export default defineConfig(async (environment) => {
   return mergeConfig(shared, {
     base: "./",
     build: {
-      outDir: fileURLToPath(
-        new URL("../../apps/web/public/preview", import.meta.url),
-      ),
+      // The website's build passes `--outDir` to put the result where it serves it from.
+      outDir: "dist-preview",
       emptyOutDir: true,
       rollupOptions: {
         input: {

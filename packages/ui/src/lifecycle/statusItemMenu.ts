@@ -1,5 +1,5 @@
 import type { Translate } from "../i18n/catalog";
-import type { StatusItemEntry, StatusItemMenu, StatusItemSection } from "../platform";
+import type { StatusItemEntry, StatusItemMenu, StatusItemSection, StatusItemSubmenuDraft } from "../platform";
 import type { Console, Project, Session } from "../protocol";
 import { remainingPercentAt } from "../accounts/quotaFormat";
 import { accountInUse, accountQuotaLabel, sessionQuotaBarOf } from "../quota/sessionQuota";
@@ -21,7 +21,7 @@ export const MAX_SESSION_LABEL_COLUMNS = 60;
 
 /** The menu before its pictures are drawn: lines name them by key (`statusItemIconKeys.ts`), and
  * `withIcons` (`statusItemIcons.ts`) draws the keys in use. */
-export type StatusItemMenuDraft = Omit<StatusItemMenu, "icons">;
+export type StatusItemMenuDraft = Omit<StatusItemMenu, "icons" | "submenus"> & { submenus: StatusItemSubmenuDraft[] };
 
 export interface StatusItemMenuSource {
   consoles: Console[];

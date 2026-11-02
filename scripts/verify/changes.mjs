@@ -58,18 +58,37 @@ export function resolveLocalTargetBase(git) {
   return commit ? { commit, via: `local branch ${target}` } : null;
 }
 
-// Where the current branch forked from the remote's target, as a new branch is measured at push: the merge base
-// of HEAD and the live tip of the branch's `targetBranch`, else of the remote's HEAD.
+export const OBJECT_ID = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i;
+
+// Where `head` forked from the remote's target, as a new branch is measured at push: the merge base of `head`
+// and the live tip of the branch's `targetBranch` (an explicit setting of `branch`), else of the remote's HEAD.
+// `remote` is a remote name or a URL. The tip is asked of the remote itself and fetched by its ref name when
+// missing, so no remote-tracking ref has to be current. Returns `{ commit, via }`, or `{ reason, noTarget }` when
+// no base can be established.
+export function remoteTargetBase(git, { branch, remote, head }) {
+  const target = branch && git("config", "--get", `branch.${branch}.targetBranch`);
+  const ref = target ? `refs/heads/${target}` : "HEAD";
+  const advertised = git("ls-remote", "--", remote, ref);
+  const sha = advertised?.split(/\r?\n/).map((line) => line.split(/\s+/)).find((fields) => fields[1] === ref)?.[0];
+  if (!sha || !OBJECT_ID.test(sha) || /^0+$/.test(sha)) return { reason: `cannot fetch ${remote} ${ref}`, noTarget: true };
+  const readTip = () => git("rev-parse", "--verify", `${sha}^{commit}`);
+  let tip = readTip();
+  if (!tip) {
+    // By name, as not every server serves a fetch by object ID; if the branch was rewritten since it was
+    // advertised, the advertised commit may still be missing, which counts as not fetched.
+    git("fetch", "--no-tags", "--no-write-fetch-head", "--", remote, ref);
+    tip = readTip();
+    if (!tip) return { reason: `cannot fetch ${remote} ${ref}`, noTarget: true };
+  }
+  const commit = git("merge-base", head, tip);
+  return commit && OBJECT_ID.test(commit) ? { commit, via: `${remote} ${ref}` } : { reason: `no common commit with ${remote} ${ref}`, noTarget: true };
+}
+
+// `remoteTargetBase` for the checked-out branch and the repository's own remote.
 export function resolveRemoteTargetBase(git) {
   const remote = remoteName(git);
   if (!remote) return { reason: "no remote to measure a new branch from", noTarget: true };
-  const branch = currentBranch(git);
-  const target = branch && git("config", "--get", `branch.${branch}.targetBranch`);
-  const ref = target ? `refs/heads/${target}` : "HEAD";
-  if (git("fetch", "--no-tags", remote, ref) == null) return { reason: `cannot fetch ${remote} ${ref}`, noTarget: true };
-  const tip = git("rev-parse", "--verify", "FETCH_HEAD^{commit}");
-  const commit = tip && git("merge-base", "HEAD", tip);
-  return commit ? { commit, via: `${remote} ${ref}` } : { reason: `no common commit with ${remote} ${ref}`, noTarget: true };
+  return remoteTargetBase(git, { branch: currentBranch(git), remote, head: "HEAD" });
 }
 
 // The base a run measures from. `--base` is taken as given. A quick run precedes a local merge, so a branch

@@ -3,6 +3,12 @@
   "private": true,
   "description": "Octoboard UI: a HeroUI React application that talks to octoboardd over WebSocket only, runs in a plain browser, and reaches native capabilities only through a platform adapter.",
   "type": "module",
+  "exports": {
+    "./agent-marks": "./src/components/icons/agentMarks.ts",
+    "./languages": "./src/i18n/languages.ts",
+    "./match-language": "./src/i18n/matchLanguage.ts",
+    "./preview-messages": "./src/website-preview/messages.ts"
+  },
   "scripts": {
     "dev": "vite",
     "gallery": "vite --port 5175 --open /gallery.html",

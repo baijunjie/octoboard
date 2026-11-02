@@ -11,11 +11,9 @@ use crate::menu::APP_NAME;
 /// and Quit labels, whether the icon should show its attention dot, and its selected-account quota.
 /// Text, opaque session ids and the pictures beside the lines — the UI decides what is listed and
 /// how it reads, the same way it decides the Dock badge's count. The pictures are drawn by the UI,
-/// which already has every agent's mark and status glyph, so a new agent needs nothing here for
-/// its pictures: `icons` holds each distinct one once, as a base64 PNG under a key the lines name,
-/// at twice the size they show
-/// at. Only a quota bar's colour is the shell's, and an agent it does not know gets the text colour
-/// (`AgentKind::Other`).
+/// which already has every agent's mark, status glyph and bar colour, so a new agent needs nothing
+/// here: `icons` holds each distinct picture once, as a base64 PNG under a key the lines name, at
+/// twice the size they show at, and a quota bar's colour is sent as sRGB bytes.
 #[derive(Deserialize)]
 pub struct TrayMenu {
     pub(super) sections: Vec<TraySection>,
@@ -82,18 +80,6 @@ pub(super) struct TrayItem {
     pub(super) session: Option<String>,
 }
 
-/// The agent a window belongs to, which decides the colour of its bar; the UI's `Agent`.
-#[derive(Clone, Copy, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum AgentKind {
-    Claude,
-    Codex,
-    Grok,
-    /// An agent added to the UI before the shell knows its colour.
-    #[serde(other)]
-    Other,
-}
-
 /// One window of a two-layer meter: its name and detail, and how much of its bar is filled (0 to 1).
 #[derive(Clone, Deserialize)]
 pub struct MeterLayer {
@@ -103,8 +89,8 @@ pub struct MeterLayer {
 }
 
 /// What a submenu holds, none of it choosable: an account's header (with when its reading was
-/// taken), a quota window's row with the bar the shell draws (`fraction` of it filled, in the colour
-/// of `agent`, or in `used_up_colour` when the account's quota is `used_up`), the 5-hour and weekly
+/// taken), a quota window's row with the bar the shell draws (`fraction` of it filled, in
+/// `fill_colour`, or in `used_up_colour` when the account's quota is `used_up`), the 5-hour and weekly
 /// windows as one two-layer meter, a note, and the rules between accounts. `label` is a line's whole
 /// phrase (for a header, when it says more than `title`): its menu item's title, which is what
 /// assistive technology reads.
@@ -124,7 +110,9 @@ pub enum SubmenuItem {
         detail: String,
         label: String,
         fraction: f64,
-        agent: AgentKind,
+        /// The bar's colour, as sRGB bytes from the UI stylesheet.
+        #[serde(default)]
+        fill_colour: Option<[u8; 3]>,
         #[serde(default)]
         used_up: bool,
         /// The bar's colour when `used_up`, as sRGB bytes from the UI stylesheet.
@@ -135,7 +123,9 @@ pub enum SubmenuItem {
         session: MeterLayer,
         weekly: MeterLayer,
         label: String,
-        agent: AgentKind,
+        /// The bar's colour, as sRGB bytes from the UI stylesheet.
+        #[serde(default)]
+        fill_colour: Option<[u8; 3]>,
         #[serde(default)]
         used_up: bool,
         /// The bars' colour when `used_up`, as sRGB bytes from the UI stylesheet.
@@ -199,12 +189,12 @@ pub(super) mod fixtures {
                 {"kind": "header", "title": "Default · Plus", "detail": "Updated 1 minute ago",
                  "label": "Default · Plus · updated 1 minute ago"},
                 {"kind": "window", "name": "5-hour", "detail": "82% remaining · resets in 1h",
-                 "label": "5-hour 82% remaining · resets in 1h", "fraction": 0.82, "agent": "codex"},
+                 "label": "5-hour 82% remaining · resets in 1h", "fraction": 0.82, "fill_colour": [61, 123, 245]},
                 {"kind": "meter",
                  "session": {"name": "5-hour", "detail": "82% remaining · resets in 1h", "fraction": 0.82},
                  "weekly": {"name": "Weekly", "detail": "40% remaining · resets in 2d", "fraction": 0.4},
                  "label": "5-hour 82% remaining · resets in 1h, Weekly 40% remaining · resets in 2d",
-                 "agent": "codex"},
+                 "fill_colour": [61, 123, 245]},
                 {"kind": "separator"},
                 {"kind": "header", "title": "Work"},
                 {"kind": "note", "text": "Quota unavailable"}
@@ -305,7 +295,7 @@ mod tests {
         let window = |used_up: Option<bool>| {
             let mut value = serde_json::json!({
                 "kind": "window", "name": "5h", "detail": "0% remaining", "label": "5h 0% remaining",
-                "fraction": 0.0, "agent": "claude"
+                "fraction": 0.0, "fill_colour": [212, 99, 58]
             });
             if let Some(used_up) = used_up {
                 value["used_up"] = serde_json::json!(used_up);
@@ -329,11 +319,12 @@ mod tests {
             window(None),
             SubmenuItem::Window {
                 used_up_colour: None,
+                fill_colour: Some([212, 99, 58]),
                 ..
             }
         ));
         let meter: SubmenuItem = serde_json::from_value(serde_json::json!({
-            "kind": "meter", "label": "x", "agent": "codex", "used_up": true,
+            "kind": "meter", "label": "x", "fill_colour": [4, 5, 6], "used_up": true,
             "used_up_colour": [1, 2, 3],
             "session": {"name": "5h", "detail": "d", "fraction": 0.0},
             "weekly": {"name": "Weekly", "detail": "d", "fraction": 0.5}
@@ -344,6 +335,7 @@ mod tests {
             SubmenuItem::Meter {
                 used_up: true,
                 used_up_colour: Some([1, 2, 3]),
+                fill_colour: Some([4, 5, 6]),
                 ..
             }
         ));

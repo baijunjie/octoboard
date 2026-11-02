@@ -74,18 +74,21 @@ reloaded onto the new daemon with no notice of its own (until then it has lost i
 "Losing the daemon connection" below), and a window closed into the background stays there. The daemon's end has
 interrupted every session as any daemon end does, and each resumes with a click (see the list above).
 While the daemon is down there is nothing to keep running, so a close or quit meanwhile behaves as with no daemon (see
-"Closing the window" and "Quitting" below). Nothing is started again once a quit or a restart is under way, and
-there is no button to start the daemon by hand.
+"Closing the window" and "Quitting" below). Nothing is started again once a quit or a restart is under way, nor once
+an in-app update is installed and waits for the restart that applies it, including one installed while a relaunch was
+pending: the installed update has already replaced the application, so a relaunch would pair the new version's daemon
+with the running window of the old one. There is no button to start the daemon by hand.
 
-When the daemon is not started again — those 3 relaunches in the last 10 minutes are spent, or it ended with exit
-status 0, as on a requested shutdown or `SIGTERM` — the application says so in an error alert titled "The daemon exited
-unexpectedly", which says that the daemon runs the user's sessions and terminals, that Octoboard cannot work without
+When the daemon is not started again — those 3 relaunches in the last 10 minutes are spent, an update is installed
+and waits for its restart, or it ended with exit status 0, as on a requested shutdown or `SIGTERM` — the application
+says so in an error alert titled "The daemon exited unexpectedly", which says that the daemon runs the user's sessions and terminals, that Octoboard cannot work without
 it, and asks the user to restart Octoboard; it does not silently keep showing a stale session list. The alert treats it
 as an unexpected failure, offering **Report issue**, with the detail behind **Error details** rather than in its
 sentence (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`): how the daemon ended (its exit
 status, or a signal, or why the last relaunch failed) and, when the relaunches are spent, that it was restarted that
-many times in the last ten minutes and is not restarted again. A daemon stopped by the application's own quit or
-restart raises no alert (see "Quitting" below).
+many times in the last 10 minutes and is not restarted again, or, when an update is installed, that the update is not
+applied until Octoboard restarts and the daemon is not restarted before then. A daemon stopped by the application's own
+quit or restart raises no alert (see "Quitting" below).
 
 **The window appears already themed.** It is created hidden and shown only once the UI has applied the chosen appearance
 (see "Light, dark and follow the system" in `docs/product/appearance.md`), so a launch never flashes the operating

@@ -67,7 +67,7 @@ test("UI changes are traced by their source and test files", () => {
 test("UI changes that imports do not show run the full suite", () => {
   for (const file of [
     "packages/ui/vite.config.ts", "packages/ui/src/test/setup.ts", "packages/ui/src/test/failedFilesReporter.ts", "packages/ui/package.json",
-    "packages/ui/tsconfig.json", "packages/ui/src/data.txt", "pnpm-lock.yaml", "config/app.json", "LICENSE", "apps/web/site.config.ts",
+    "packages/ui/tsconfig.json", "packages/ui/src/data.txt", "pnpm-lock.yaml", "config/app.json", "LICENSE",
     "apps/desktop/src-tauri/Info.plist", "unknown/file.txt",
   ]) {
     assert.equal(uiTests(["packages/ui/src/a/X.tsx", file]).mode, "full", file);
@@ -94,7 +94,7 @@ test("narrowed test steps are heavy, last and never stamped; a fallback keeps th
   const related = narrowed.filter((step) => /related/.test(step.label));
   assert.ok(related.every((step) => step.heavy && step.stamp === false));
   assert.deepEqual(related[0].cmd, ["pnpm", "--filter", "@octoboard/ui", "exec", "vitest", "related", "--run", "src/a/X.tsx", ...UI_DISK_TESTS]);
-  assert.deepEqual(related[1].cmd, ["node", "scripts/test-rust.mjs", "--", "coordinator::", "layering_tests::", "protocol::", "records::history::"]);
+  assert.deepEqual(related[1].cmd, ["node", "scripts/cargo.mjs", "test", "--", "coordinator::", "layering_tests::", "protocol::", "records::history::"]);
   assert.ok(narrowed.filter((step) => !/related/.test(step.label)).every((step) => step.stamp !== false));
   const fallback = quick(["packages/ui/vite.config.ts"]);
   const ui = fallback.steps.find((step) => step.label === "ui tests");

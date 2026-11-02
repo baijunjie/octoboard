@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import {
   ALL_PACKAGES, DAEMON_READS_UI, DESKTOP_CONTRACT, MENU_KEYS_FILE, matchingRules, planScope, RULES, SWEEP_SHARED, UI_READS_ELSEWHERE,
-  UI_READS_NATIVE, VERIFY_READS_UI, WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, WIRE_PROTOCOL,
+  UI_READS_NATIVE, VERIFY_READS_UI, WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, WIRE_PROTOCOL,
 } from "./scope.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -19,7 +19,9 @@ const RUST = ["daemon", "native"];
 // and the packages and builds it selects.
 const CASES = [
   ["scripts/verify/scope.mjs", ["verify"]],
+  ["scripts/hooks/pre-push.mjs", ["verify"]],
   ["scripts/pre-push.mjs", ["verify"]],
+  ["scripts/lib/env.test.mjs", ["verify"]],
   ["packages/ui/src/App.tsx", ["ui"]],
   ["apps/web/app/app.vue", ["web"]],
   ["apps/web/package.json", ["web"]],
@@ -39,12 +41,12 @@ const CASES = [
   ["pnpm-workspace.yaml", JS],
   ["patches/a.patch", JS],
   ["eslint.config.mjs", JS],
+  ["packages/ui/eslint.layers.mjs", JS],
   ["package.json", ALL_PACKAGES],
-  ["scripts/env.mjs", ["verify", "ui", "desktop"], ["ui"]],
-  ["scripts/env.d.mts", ["verify", "ui", "desktop"]],
-  ["scripts/git.mjs", ["verify", "desktop"]],
-  ["scripts/test-rust.mjs", ["verify", "daemon", "native"]],
-  ["scripts/clippy-rust.mjs", ["verify", "daemon", "native"]],
+  ["scripts/lib/env.mjs", ["verify", "ui", "desktop"], ["ui"]],
+  ["scripts/lib/env.d.mts", ["verify", "ui", "desktop"]],
+  ["scripts/lib/git.mjs", ["verify", "ui", "desktop"], ["ui"]],
+  ["scripts/cargo.mjs", ["verify", "daemon", "native"]],
   [".githooks/hook.sh", ["verify"]],
   [".gitignore", ["verify"]],
   ["config/app.json", ALL_PACKAGES, ["ui"]],
@@ -67,14 +69,14 @@ const CASES = [
   ["packages/ui/src/i18n/languages.ts", ["verify", "ui", "web", "daemon"]],
   ["apps/desktop/src-tauri/Info.plist", ["verify", "ui", "native"]],
   ["LICENSE", ["verify", "ui"]],
-  ["apps/web/site.config.ts", ["verify", "ui", "web"]],
+  ["apps/web/site.config.ts", ["web"]],
   ["packages/ui/src/test/failedFilesReporter.ts", ["verify", "ui"]],
   ["apps/daemon/src/adapter/codex/claude_compatibility.md", ["daemon"]],
   ["packages/ui/vite.config.ts", ["ui"], ["ui"]],
   ["packages/ui/index.html", ["ui"], ["ui"]],
   ["packages/ui/scripts/generate-licenses.mjs", ["ui"], ["ui"]],
   ["packages/ui/tsconfig.app.json", ["ui"], ["ui"]],
-  ["packages/ui/package.json", ["ui"], ["ui"]],
+  ["packages/ui/package.json", ["verify", "ui", "web"], ["ui"]],
   // Unknown inputs select everything; Markdown no rule claims is read by nothing.
   ["something/new.txt", ALL_PACKAGES],
   ["apps/web/app/README.md", []],
@@ -122,12 +124,12 @@ test("the menu keys select the shell only when the caller reports a change to th
 });
 
 test("every file named in a relation list selects verify, so these tests run when it changes", () => {
-  const lists = [WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, DESKTOP_CONTRACT, SWEEP_SHARED, WIRE_PROTOCOL, DAEMON_READS_UI, UI_READS_NATIVE, UI_READS_ELSEWHERE, VERIFY_READS_UI];
+  const lists = [WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, DESKTOP_CONTRACT, SWEEP_SHARED, WIRE_PROTOCOL, DAEMON_READS_UI, UI_READS_NATIVE, UI_READS_ELSEWHERE, VERIFY_READS_UI];
   for (const file of lists.flat()) assert.ok(planScope([file]).packages.includes("verify"), file);
 });
 
 test("every path the relations name still exists", () => {
-  for (const file of [MENU_KEYS_FILE, ...[WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, DESKTOP_CONTRACT, SWEEP_SHARED, WIRE_PROTOCOL, DAEMON_READS_UI, UI_READS_NATIVE, UI_READS_ELSEWHERE, VERIFY_READS_UI].flat()]) {
+  for (const file of [MENU_KEYS_FILE, ...[WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, DESKTOP_CONTRACT, SWEEP_SHARED, WIRE_PROTOCOL, DAEMON_READS_UI, UI_READS_NATIVE, UI_READS_ELSEWHERE, VERIFY_READS_UI].flat()]) {
     assert.ok(existsSync(path.join(root, file)), file);
   }
 });
@@ -166,10 +168,16 @@ test("cross-package file reads are all named by a rule", () => {
 // `WEB_IMPORTS_FROM_UI` is kept by hand: this finds what `apps/web` imports from `packages/ui/src`,
 // and what that imports in turn, so a new import fails here instead of going unnoticed.
 test("everything apps/web imports from the UI package is counted as a cross-package relation", () => {
+  const exported = JSON.parse(readFileSync(path.join(root, "packages/ui/package.json"), "utf8")).exports;
+  // A `@octoboard/ui/<name>` import resolves through the UI package's `exports` map.
+  const webTarget = (specifier) => {
+    if (!specifier.startsWith("@octoboard/ui/")) return specifier;
+    return path.join(root, "packages/ui", exported[`./${specifier.slice("@octoboard/ui/".length)}`]);
+  };
   const seen = new Set();
   const visit = (file) => {
-    for (const match of readFileSync(file, "utf8").matchAll(/(?:from|import)\s*\(?\s*["'](\.[^"']*)["']/g)) {
-      const base = path.resolve(path.dirname(file), match[1]);
+    for (const match of readFileSync(file, "utf8").matchAll(/(?:from|import)\s*\(?\s*["']([.@][^"']*)["']/g)) {
+      const base = path.resolve(path.dirname(file), webTarget(match[1]));
       const resolved = [".ts", ".tsx", ""].map((ext) => base + ext).find((candidate) => existsSync(candidate) && statSync(candidate).isFile());
       if (resolved && resolved.includes(`${path.sep}packages${path.sep}ui${path.sep}src${path.sep}`) && !seen.has(resolved)) {
         seen.add(resolved);

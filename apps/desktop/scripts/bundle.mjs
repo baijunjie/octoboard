@@ -1,7 +1,7 @@
 // What the desktop build scripts share around `tauri build`: where things are, running it and the environment it
-// gets, and finding and checking what it produced.
-import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, rmSync, statSync } from "node:fs";
+// gets, and finding and checking what it produced. The update archive made from the `.app` is `update-archive.mjs`.
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -16,7 +16,7 @@ export const UNIVERSAL_TARGET = "universal-apple-darwin";
 // The architectures a universal build is made of, each a Rust target the build compiles for.
 export const UNIVERSAL_ARCHITECTURES = ["aarch64-apple-darwin", "x86_64-apple-darwin"];
 export const universalBundleDir = path.join(repoRoot, "target", UNIVERSAL_TARGET, "release", "bundle");
-const tauriBin = path.join(appDir, "node_modules", ".bin", "tauri");
+export const tauriBin = path.join(appDir, "node_modules", ".bin", "tauri");
 
 // Runs `tauri build` with `args` in the app directory and `env` as its environment, plus
 // `scripts/actool/` first on the PATH: under the Node-hosted CLI the bundler starts `actool` with
@@ -27,17 +27,11 @@ export function tauriBuild(args, env) {
   execFileSync(tauriBin, ["build", ...args], { cwd: appDir, env: buildEnv, stdio: "inherit" });
 }
 
-// `bundle.createUpdaterArtifacts` in `tauri.conf.json` makes `tauri build` sign an update archive and fail
-// without the update signing key, which only a release has (`release.mjs`). A build for local checks or local
-// installation neither needs the key nor should sign anything with it, so it turns the archive off and drops the
-// key variables. The archive goes off through `--config`: the CLI only writes `TAURI_CONFIG` for the app's own
-// build and never reads it, so setting that variable does nothing. It goes first, ahead of a `--` that hands the
-// rest to cargo. Returns the `[args, env]` pair `tauriBuild` takes.
-export function withoutUpdaterArtifacts(args, env) {
-  const kept = Object.fromEntries(
-    Object.entries(env).filter(([name]) => !name.startsWith("TAURI_SIGNING_PRIVATE_KEY")),
-  );
-  return [["--config", JSON.stringify({ bundle: { createUpdaterArtifacts: false } }), ...args], kept];
+// `env` without the update signing key variables, for a build that must never hold the key. `tauri.conf.json` turns
+// `bundle.createUpdaterArtifacts` off, so `tauri build` makes no update archive and signs nothing with the key; this
+// keeps the key out of the environment of the build's own scripts and dependencies too. `tauriBuild` takes the result.
+export function withoutUpdateKey(env) {
+  return Object.fromEntries(Object.entries(env).filter(([name]) => !name.startsWith("TAURI_SIGNING_PRIVATE_KEY")));
 }
 
 // `env` without any `APPLE_*` variable, for a build that must never be notarized, or Developer ID-signed unless the
@@ -57,24 +51,29 @@ export function assertProducedSince(bundle, startedAt) {
 }
 
 // The value of `key` in the `.app`'s `Info.plist`.
+// It throws when the key is absent; PlistBuddy's complaint is captured in the error, not printed.
 export function infoPlistValue(app, key) {
   return execFileSync("/usr/libexec/PlistBuddy", ["-c", `Print :${key}`, path.join(app, "Contents", "Info.plist")], {
     encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
   }).trim();
+}
+
+// Throws unless `codesign` accepts the `.app`'s signature, all nested code included.
+export function verifySignature(app) {
+  execFileSync("codesign", ["--verify", "--deep", "--strict", app], { stdio: "inherit" });
+}
+
+// The `spawnSync` result of `codesign -dv --verbose=4` on `app`, whose report (the `Authority=` lines among them) is
+// on `stderr`, success or not. It exits non-zero for a bundle with no signature at all, which callers may expect, so
+// it is not thrown on; each reads `error`, `signal` and `status` as it needs.
+export function signatureReport(app) {
+  return spawnSync("codesign", ["-dv", "--verbose=4", app], { encoding: "utf8" });
 }
 
 // The version the `.app` says it is (`CFBundleShortVersionString`), which is what the build was made from.
 export function appVersion(app) {
   return infoPlistValue(app, "CFBundleShortVersionString");
-}
-
-// Removes the update archives and signatures of earlier builds from `dir`. Their names carry no version, and an
-// unsigned build makes none, so one left over would be taken for the new build's.
-export function removeUpdateArchives(dir) {
-  if (!existsSync(dir)) return;
-  for (const name of readdirSync(dir)) {
-    if (name.includes(".app.tar.gz")) rmSync(path.join(dir, name), { force: true });
-  }
 }
 
 // The bundler adds the layered icon only when Xcode 26's `actool` compiles it, and otherwise still
@@ -86,11 +85,7 @@ export function assertLayeredIcon(app) {
     missing.push("Contents/Resources/Assets.car");
   }
   try {
-    execFileSync(
-      "/usr/libexec/PlistBuddy",
-      ["-c", "Print :CFBundleIconName", path.join(app, "Contents", "Info.plist")],
-      { stdio: "ignore" },
-    );
+    infoPlistValue(app, "CFBundleIconName");
   } catch {
     missing.push("CFBundleIconName in Contents/Info.plist");
   }

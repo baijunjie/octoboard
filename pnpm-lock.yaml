@@ -55,6 +55,9 @@ importers:
       '@nuxtjs/sitemap':
         specifier: ^8.6.2
         version: 8.6.2(12f5e5418b5d8702bd18c7ede7b954ec)
+      '@octoboard/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       nuxt:
         specifier: ^4.6.0
         version: 4.6.0(@babel/plugin-syntax-jsx@7.29.7(@babel/core@7.29.7))(@babel/plugin-syntax-typescript@7.29.7(@babel/core@7.29.7))(@oxc-project/types@0.152.0)(@types/node@22.20.5)(@vue/compiler-sfc@3.5.43)(acorn@8.19.0)(confbox@0.2.4)(db0@0.3.4)(dotenv@17.4.2)(esbuild@0.28.2)(eslint@10.12.0(jiti@2.7.0))(giget@3.3.1)(ioredis@5.11.1)(lightningcss@1.33.0)(mlly@1.8.2)(optionator@0.9.4)(oxc-parser@0.141.0)(rolldown@1.2.12)(rollup-plugin-visualizer@7.1.1(rolldown@1.2.12)(rollup@4.64.2))(rollup@4.64.2)(srvx@1.0.5)(terser@5.51.2)(typescript@5.9.3)(vite@8.3.2(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.1))(vue-tsc@3.3.12(typescript@5.9.3))(yaml@2.9.1)

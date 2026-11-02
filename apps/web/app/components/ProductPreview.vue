@@ -2,7 +2,7 @@
 import {
   PREVIEW_MESSAGE,
   readPreviewMessage,
-} from "../../../../packages/ui/src/website-preview/messages";
+} from "@octoboard/ui/preview-messages";
 import { localeByCode } from "../../seo/site-seo";
 const { t } = useSiteCopy();
 const { locale } = useI18n();
@@ -15,41 +15,30 @@ const scenarios = [
 const selected = ref("overview");
 const host = ref<HTMLElement | null>(null);
 const frame = ref<HTMLIFrameElement | null>(null);
-const width = ref(1280);
-const visible = ref(false);
-const ready = ref(false);
-const failed = ref(false);
 const frameFocused = ref(false);
 // Pointer focus survives leaving the preview; only keyboard use keeps focused content unfaded.
 const keyboardInteraction = ref(false);
-const compact = computed(() => width.value <= 800);
-const scale = computed(() =>
-  compact.value ? 1 : Math.min(1, width.value / 1440),
-);
 const source = computed(() => {
   const { language } = localeByCode(locale.value);
   return `${config.app.baseURL}preview/website-preview.html?scene=${selected.value}&lang=${language}`;
 });
-let readinessTimer: ReturnType<typeof setTimeout> | undefined;
-const attempt = ref(0);
-function stopWaiting() {
-  clearTimeout(readinessTimer);
-}
-watch([visible, source, attempt], () => {
-  stopWaiting();
-  ready.value = false;
-  failed.value = false;
-  if (visible.value)
-    readinessTimer = setTimeout(() => {
-      failed.value = true;
-    }, 20000);
-});
+const { width, visible, ready, failed, attempt, markReady, markFailed, retry } =
+  usePreviewFrame({
+    host,
+    frame,
+    source,
+    rootMargin: "300px",
+    initialSize: { width: 1280, height: 0 },
+    onMessage: receive,
+  });
+const compact = computed(() => width.value <= 800);
+const scale = computed(() =>
+  compact.value ? 1 : Math.min(1, width.value / 1440),
+);
 function chooseScenario(scene: string) {
-  if (selected.value === scene && failed.value) attempt.value++;
+  if (selected.value === scene && failed.value) retry();
   selected.value = scene;
 }
-let observer: IntersectionObserver | undefined;
-let dimensions: ResizeObserver | undefined;
 let focusTimer: ReturnType<typeof setTimeout> | undefined;
 function syncFrameFocus() {
   clearTimeout(focusTimer);
@@ -103,13 +92,8 @@ function startFling(initial: number) {
   };
   flingFrame = requestAnimationFrame(step);
 }
-function receive(event: MessageEvent) {
-  if (
-    event.source !== frame.value?.contentWindow ||
-    event.origin !== window.location.origin
-  )
-    return;
-  const message = readPreviewMessage(event.data);
+function receive(data: unknown) {
+  const message = readPreviewMessage(data);
   if (!message) return;
   if (message.type === PREVIEW_MESSAGE.interaction) {
     keyboardInteraction.value = message.modality === "keyboard";
@@ -122,31 +106,12 @@ function receive(event: MessageEvent) {
       window.scrollBy({ top: message.deltaY, behavior: "instant" });
     else if (message.velocity !== undefined) startFling(message.velocity);
   } else if (message.type === PREVIEW_MESSAGE.ready) {
-    stopWaiting();
-    ready.value = true;
-    failed.value = false;
+    markReady();
   } else {
-    stopWaiting();
-    failed.value = true;
+    markFailed();
   }
 }
 onMounted(() => {
-  if (!host.value) return;
-  dimensions = new ResizeObserver(([entry]) => {
-    if (entry) width.value = entry.contentRect.width;
-  });
-  dimensions.observe(host.value);
-  observer = new IntersectionObserver(
-    ([entry]) => {
-      if (entry?.isIntersecting) {
-        visible.value = true;
-        observer?.disconnect();
-      }
-    },
-    { rootMargin: "300px" },
-  );
-  observer.observe(host.value);
-  window.addEventListener("message", receive);
   window.addEventListener("wheel", stopFling, { passive: true });
   window.addEventListener("touchstart", stopFling, { passive: true });
   window.addEventListener("blur", syncFrameFocus);
@@ -156,10 +121,6 @@ onMounted(() => {
   document.addEventListener("pointerdown", notePointer, true);
 });
 onBeforeUnmount(() => {
-  stopWaiting();
-  dimensions?.disconnect();
-  observer?.disconnect();
-  window.removeEventListener("message", receive);
   window.removeEventListener("wheel", stopFling);
   window.removeEventListener("touchstart", stopFling);
   stopFling();

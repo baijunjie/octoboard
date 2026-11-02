@@ -26,6 +26,10 @@
 #[cfg(target_os = "macos")]
 use std::sync::OnceLock;
 
+#[cfg(target_os = "macos")]
+use crate::system_settings::{
+    open_system_settings, ACCESSIBILITY_PANE_URL, SCREEN_RECORDING_PANE_URL,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]
@@ -174,31 +178,14 @@ pub fn macos_request_permission(_kind: PermissionKind) -> bool {
 /// refusal, which macOS never prompts a second time for; for Accessibility it is the only way the
 /// permission is ever granted at all.
 ///
-/// Goes through `NSWorkspace`, not `tauri-plugin-shell`: that plugin's `open` only accepts
-/// `http:`, `https:`, `mailto:` and `tel:` addresses and would reject this scheme. Fails with a
-/// message when the address cannot be built or the system declines to open it.
+/// Fails with a message when the system declines to open the pane.
 #[cfg(target_os = "macos")]
 #[tauri::command]
 pub fn macos_open_privacy_settings(kind: PermissionKind) -> Result<(), String> {
-    use objc2_app_kit::NSWorkspace;
-    use objc2_foundation::{NSString, NSURL};
-
-    let url = match kind {
-        PermissionKind::ScreenRecording => {
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
-        }
-        PermissionKind::Accessibility => {
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
-        }
-    };
-    let Some(parsed) = NSURL::URLWithString(&NSString::from_str(url)) else {
-        return Err(format!("not a valid address: {url}"));
-    };
-    if NSWorkspace::sharedWorkspace().openURL(&parsed) {
-        Ok(())
-    } else {
-        Err(format!("the system did not open {url}"))
-    }
+    open_system_settings(match kind {
+        PermissionKind::ScreenRecording => SCREEN_RECORDING_PANE_URL,
+        PermissionKind::Accessibility => ACCESSIBILITY_PANE_URL,
+    })
 }
 
 #[cfg(not(target_os = "macos"))]

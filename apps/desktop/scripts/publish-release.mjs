@@ -20,7 +20,7 @@ import { copyFileSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSyn
 import os from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { gitChecked } from "../../../scripts/git.mjs";
+import { gitChecked } from "../../../scripts/lib/git.mjs";
 import { appDir, appVersion, findBundle, repoRoot, universalBundleDir as bundleDir } from "./bundle.mjs";
 import {
   archiveName,

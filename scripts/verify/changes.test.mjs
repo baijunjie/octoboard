@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { changedFiles, chooseBase, requirePushedTree, resolveBase, resolveLocalTargetBase, resolveRemoteTargetBase } from "./changes.mjs";
+import { changedFiles, chooseBase, requirePushedTree, resolveBase, resolveLocalTargetBase, remoteTargetBase, resolveRemoteTargetBase } from "./changes.mjs";
 import { workingTree } from "./tree.mjs";
 
 function repository(run) {
@@ -103,6 +103,34 @@ test("a branch with no upstream is measured from its merge base with the remote'
       assert.match(resolveRemoteTargetBase(git).reason, /cannot fetch origin refs\/heads\/missing/);
       git("remote", "remove", "origin");
       assert.match(resolveRemoteTargetBase(git).reason, /no remote/);
+    } finally {
+      rmSync(remote, { recursive: true, force: true });
+    }
+  });
+});
+
+test("the remote target base honours the named branch's targetBranch, a URL remote and a moved target tip", () => {
+  repository((root, git) => {
+    const remote = mkdtempSync(path.join(os.tmpdir(), "changes-remote-"));
+    try {
+      git("clone", "-q", "--bare", ".", remote);
+      const forked = git("rev-parse", "HEAD");
+      git("branch", "release", forked);
+      git("push", "-q", remote, "release");
+      git("switch", "-q", "-c", "topic");
+      const head = commit(root, git, "b.txt", "b");
+      // No target configured: the remote's HEAD. The remote may be a URL, and `branch` need not be checked out.
+      assert.deepEqual(remoteTargetBase(git, { branch: "topic", remote, head }), { commit: forked, via: `${remote} HEAD` });
+      // The target's tip moves on after the fork: the base is still the fork point.
+      git("switch", "-q", "main");
+      commit(root, git, "c.txt", "c");
+      git("push", "-q", remote, "main");
+      git("config", "branch.topic.targetBranch", "release");
+      assert.deepEqual(remoteTargetBase(git, { branch: "topic", remote, head }), { commit: forked, via: `${remote} refs/heads/release` });
+      git("config", "branch.topic.targetBranch", "main");
+      assert.equal(remoteTargetBase(git, { branch: "topic", remote, head }).commit, forked);
+      git("config", "branch.topic.targetBranch", "missing");
+      assert.match(remoteTargetBase(git, { branch: "topic", remote, head }).reason, /cannot fetch .* refs\/heads\/missing/);
     } finally {
       rmSync(remote, { recursive: true, force: true });
     }

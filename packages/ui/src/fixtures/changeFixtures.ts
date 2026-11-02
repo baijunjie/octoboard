@@ -188,6 +188,43 @@ function removalOf(path: string, content: string): string[] {
   ];
 }
 
+/** The patch of a change shown whole, every line of the file in context, for a display fixture whose expandable whole-file
+ * bodies must stay identical to it. A longest common subsequence keeps the unchanged lines as context instead of showing
+ * the entire file as a replacement. Both texts end with a newline. */
+export function fullContextPatch(path: string, before: string, after: string): string {
+  const old = before.slice(0, -1).split("\n");
+  const next = after.slice(0, -1).split("\n");
+  const lengths = Array.from({ length: old.length + 1 }, () =>
+    Array<number>(next.length + 1).fill(0),
+  );
+  for (let i = old.length - 1; i >= 0; i--)
+    for (let j = next.length - 1; j >= 0; j--)
+      lengths[i][j] =
+        old[i] === next[j]
+          ? lengths[i + 1][j + 1] + 1
+          : Math.max(lengths[i + 1][j], lengths[i][j + 1]);
+  const lines = [
+    `diff --git a/${path} b/${path}`,
+    `--- a/${path}`,
+    `+++ b/${path}`,
+    `@@ -1,${old.length} +1,${next.length} @@`,
+  ];
+  let i = 0,
+    j = 0;
+  while (i < old.length || j < next.length) {
+    if (i < old.length && j < next.length && old[i] === next[j]) {
+      lines.push(` ${old[i++]}`);
+      j++;
+    } else if (
+      i < old.length &&
+      (j === next.length || lengths[i + 1][j] >= lengths[i][j + 1])
+    )
+      lines.push(`-${old[i++]}`);
+    else lines.push(`+${next[j++]}`);
+  }
+  return lines.join("\n") + "\n";
+}
+
 /** A change of a text file: the patch shows its content, so the reply counts both sides from
  * `versions` and a request for the bodies answers with them. */
 export function textChange(group: TwoSided, path: string, from: ContentSource, to: ContentSource, versions: Versions, expand?: Expansion): FixtureChange {

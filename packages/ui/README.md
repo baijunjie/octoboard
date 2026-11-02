@@ -21,8 +21,8 @@ scripts from this directory.
 - `pnpm test:app` — application tests, excluding the gallery, fixtures, website preview and WKWebView benchmark tests.
 - `pnpm build` — generates third-party license data, runs `typecheck:app` and the i18n catalog check (`vitest run
   src/i18n`), then writes `dist/` with relative asset paths.
-- `pnpm build:preview` — builds the website demonstration into `apps/web/public/preview/` with
-  `vite.preview.config.ts`.
+- `pnpm build:preview` — builds the website demonstration into `dist-preview/` with `vite.preview.config.ts`
+  (the site's `build-preview` passes `--outDir` to write into `apps/web/public/preview/`).
 - `pnpm bench:wkwebview` — a latency benchmark of the production bundle in the system WKWebView (macOS only); see
   [`scripts/wkbench/README.md`](scripts/wkbench/README.md).
 

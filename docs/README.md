@@ -99,7 +99,7 @@ Where to start, by question:
   shown, and redeeming one from the rail's panel or the account details dialog.
 - [Folder trust](product/folder-trust.md) — the agents' trust confirmations, the trust permission and trusted folders.
 - [macOS privacy permissions](product/macos-privacy-permissions.md) — the Screen Recording and Accessibility
-  permissions agents in terminals can need.
+  permissions agents in terminals can need, and the other macOS consents programs in Octoboard's terminals can ask for.
 
 ### Projects, consoles and git
 

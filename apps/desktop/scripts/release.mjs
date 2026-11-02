@@ -1,34 +1,43 @@
 #!/usr/bin/env node
 // Builds the distributable macOS bundle, universal (both Mac architectures): `tauri build --target
 // universal-apple-darwin`, whose own `beforeBuildCommand` (see `tauri.conf.json`) builds the daemon
-// sidecar and the frontend first, then produces the `.app` and, per `bundle.targets`, the `.dmg` around it. Signing and notarization are driven by the
-// `APPLE_*` environment variables the bundled Tauri CLI itself reads — this script does not pass
-// credentials to it directly — but the CLI's own failure mode for a half-configured environment is
-// to either skip signing silently or fail deep inside a bundling step, neither of which says what
-// to set. So this script checks the environment itself first, with one actionable message, before
-// spending the minutes a full build takes. The credentials come from the gitignored `.env.secret`
-// (see `.env.secret.example`), loaded below, or from the environment it is started in.
+// sidecar and the frontend first, then produces the `.app` and, per `bundle.targets`, the `.dmg` around it.
+// Signing and notarization are driven by the `APPLE_*` environment variables the bundled Tauri CLI itself reads — this
+// script does not pass credentials to it directly — but the CLI's own failure mode for a half-configured environment is
+// to either skip signing silently or fail deep inside a bundling step, neither of which says what to set. So this
+// script checks the environment itself first, with one actionable message, before spending the minutes a full build
+// takes. The credentials come from the gitignored `.env.secret` (see `.env.secret.example`), loaded below, or from the
+// environment it is started in.
 //
-// A signed build also signs the update archive the application's in-app updates download, with the update key
-// (`TAURI_SIGNING_PRIVATE_KEY`, see `.env.secret.example`), which has nothing to do with Apple's signing: it is
-// required then and the archive and its signature are verified below. `publish-release.mjs` publishes the result.
+// A signed build also makes the update archive the application's in-app updates download and signs it with the update
+// key (`TAURI_SIGNING_PRIVATE_KEY`, see `.env.secret.example`), which has nothing to do with Apple's signing: it is
+// required then and the archive and its signature are verified below. `tauri build` never holds that key: the
+// archive is packed and signed after it (`update-archive.mjs`), so that the build scripts and dependencies it runs
+// find no key in their environment. `--no-sign-update` stops after the archive, for a caller that signs it in a
+// step of its own with `sign-update.mjs`. `publish-release.mjs` publishes the result.
 //
 // It also *verifies* the result rather than trusting that signing/notarization happened just
 // because the right variables were set: see `verify()` below.
 import { execFileSync } from "node:child_process";
 import path from "node:path";
-import { loadEnv } from "../../../scripts/env.mjs";
+import { parseArgs } from "node:util";
+import { loadEnv } from "../../../scripts/lib/env.mjs";
 import {
   appDir,
+  appVersion,
   assertLayeredIcon,
   findBundle,
-  removeUpdateArchives,
   tauriBuild,
   UNIVERSAL_ARCHITECTURES,
   UNIVERSAL_TARGET,
   universalBundleDir as bundleDir,
-  withoutUpdaterArtifacts,
+  verifySignature,
+  withoutUpdateKey,
 } from "./bundle.mjs";
+import { createUpdateArchive, removeUpdateArchives, signUpdateArchive } from "./update-archive.mjs";
+
+const { values: options } = parseArgs({ options: { "no-sign-update": { type: "boolean", default: false } } });
+const signUpdate = !options["no-sign-update"];
 
 // Read only `.env.secret`: a `VITE_` entry in `.env.local` would reach the bundle `tauri build` makes.
 // The variables are then in the Tauri CLI's inherited environment.
@@ -99,10 +108,10 @@ if (!signingIdentity) {
   mode = "notarized";
 }
 
-// `tauri.conf.json` has the build make the update archive, which it cannot sign without the key. An unsigned
-// build is for checking only and is never published, so it makes no archive and needs no key. An empty value counts
-// as unset, as the loader treats it (see `APPLE_ID` above); the value is a path to the key file or the key itself.
-if (mode !== "unsigned" && !process.env.TAURI_SIGNING_PRIVATE_KEY) {
+// An unsigned build is for checking only and is never published, so it makes no update archive and needs no key. An
+// empty value counts as unset, as the loader treats it (see `APPLE_ID` above); the value is a path to the key file or
+// the key itself. Refused here, before the build, though the key is first used after it.
+if (mode !== "unsigned" && signUpdate && !process.env.TAURI_SIGNING_PRIVATE_KEY) {
   throw new Error(
     "A signed release signs the update archive with the update key, and TAURI_SIGNING_PRIVATE_KEY is not set. " +
       "Set it to the path of the key file (the one `pnpm tauri signer generate` wrote) in .env.secret, and " +
@@ -134,12 +143,13 @@ try {
 // this one makes none (an unsigned build) or fails before writing it.
 removeUpdateArchives(path.join(bundleDir, "macos"));
 
-if (mode === "unsigned") {
-  tauriBuild(...withoutUpdaterArtifacts(TARGET, process.env));
-} else {
-  // The CLI prompts for a password when the variable is absent, and a key made with an empty password needs the
-  // empty one: set but empty, which the CLI counts as given (unlike the loader, see above).
-  tauriBuild(TARGET, { ...process.env, TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ?? "" });
+// `tauri.conf.json` has the build make no update archive; it is made after the build, so the key stays out of the
+// build's environment.
+tauriBuild(TARGET, withoutUpdateKey(process.env));
+if (mode !== "unsigned") {
+  const app = findBundle(path.join(bundleDir, "macos"), ".app");
+  const archive = createUpdateArchive(app);
+  if (signUpdate) signUpdateArchive(archive, appVersion(app));
 }
 
 verify();
@@ -157,7 +167,7 @@ function verify() {
     // lacks either cannot be published.
     const macosDir = path.join(bundleDir, "macos");
     console.log(`found update archive: ${findBundle(macosDir, ".app.tar.gz")}`);
-    console.log(`found update signature: ${findBundle(macosDir, ".app.tar.gz.sig")}`);
+    if (signUpdate) console.log(`found update signature: ${findBundle(macosDir, ".app.tar.gz.sig")}`);
   }
 
   // `tauri build` signs the nested `octoboardd` sidecar itself, with the same identity and
@@ -175,7 +185,7 @@ function verify() {
   }
 
   console.log("verifying the app bundle's signature:");
-  execFileSync("codesign", ["--verify", "--deep", "--strict", app], { stdio: "inherit" });
+  verifySignature(app);
   // Both `spctl` verdicts here are on files this machine just built, which carry no quarantine
   // attribute, so they show the signature and notarization are accepted but prove little about a
   // download. A real Gatekeeper test needs a copy that was quarantined on its way (another machine, a

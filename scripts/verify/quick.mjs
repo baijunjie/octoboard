@@ -129,7 +129,7 @@ export function rustChanges(files) {
 }
 
 // The Rust test run for `files`: `{ mode: "skip" }`, `{ mode: "full", why }` or `{ mode: "related", args }` with
-// the arguments for `scripts/test-rust.mjs`. The whole workspace is built and run together, as the full
+// the arguments for `scripts/cargo.mjs test`. The whole workspace is built and run together, as the full
 // suite does, so the crates share one feature set. One crate alone runs with `-p`: after a workspace
 // build that reuses every dependency (only the desktop crate itself is rebuilt, as its build script
 // reruns when the selection changes). Module filters of a crate come with its `CRATE_WIDE_TESTS`. A crate
@@ -171,7 +171,7 @@ export function quickSteps(scope, files, exists) {
       label: "ui related tests", stamp: false, heavy: true,
       cmd: ["pnpm", "--filter", "@octoboard/ui", "exec", "vitest", "related", "--run", ...related],
     })),
-    ...replace("rust tests", rust, ({ args }) => ({ label: "rust related tests", stamp: false, heavy: true, cmd: ["node", "scripts/test-rust.mjs", ...args] })),
+    ...replace("rust tests", rust, ({ args }) => ({ label: "rust related tests", stamp: false, heavy: true, cmd: ["node", "scripts/cargo.mjs", "test", ...args] })),
   ];
   const kept = normal.filter((step) => !BUILDS_AND_SUITES.has(step.label) || tests.includes(step));
   const light = kept.filter((step) => !step.heavy);

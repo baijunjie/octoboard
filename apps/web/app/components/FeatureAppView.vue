@@ -2,7 +2,7 @@
 import {
   FEATURE_MESSAGE,
   readFeatureMessage,
-} from "../../../../packages/ui/src/website-preview/messages";
+} from "@octoboard/ui/preview-messages";
 import { localeByCode } from "../../seo/site-seo";
 const props = defineProps<{ feature: string }>();
 const { locale } = useI18n();
@@ -10,45 +10,23 @@ const { t } = useSiteCopy();
 const config = useRuntimeConfig();
 const host = ref<HTMLElement | null>(null);
 const frame = ref<HTMLIFrameElement | null>(null);
-const visible = ref(false);
-const ready = ref(false);
-const failed = ref(false);
-const width = ref(320);
-const height = ref(240);
+const source = computed(() => `${config.app.baseURL}preview/feature-preview.html?feature=${props.feature}&lang=${localeByCode(locale.value).language}`);
+function receive(data: unknown) {
+  const message = readFeatureMessage(data);
+  if (message?.type === FEATURE_MESSAGE.ready && message.feature === props.feature) markReady();
+  if (message?.type === FEATURE_MESSAGE.error) markFailed();
+}
+const { width, height, visible, ready, failed, markReady, markFailed } = usePreviewFrame({
+  host,
+  frame,
+  source,
+  rootMargin: "240px",
+  initialSize: { width: 320, height: 240 },
+  onMessage: receive,
+});
 const canvasWidth = computed(() => width.value < 350 ? 320 : 400);
 const canvasHeight = computed(() => width.value < 350 ? 300 : 260);
 const scale = computed(() => Math.min(1, width.value / canvasWidth.value, height.value / canvasHeight.value));
-const source = computed(() => `${config.app.baseURL}preview/feature-preview.html?feature=${props.feature}&lang=${localeByCode(locale.value).language}`);
-let observer: IntersectionObserver | undefined;
-let dimensions: ResizeObserver | undefined;
-let timer: ReturnType<typeof setTimeout> | undefined;
-function receive(event: MessageEvent) {
-  if (event.source !== frame.value?.contentWindow || event.origin !== window.location.origin) return;
-  const message = readFeatureMessage(event.data);
-  if (message?.type === FEATURE_MESSAGE.ready && message.feature === props.feature) {
-    clearTimeout(timer);
-    ready.value = true;
-  }
-  if (message?.type === FEATURE_MESSAGE.error) failed.value = true;
-}
-watch(source, () => { ready.value = false; failed.value = false; });
-watch([visible, source], () => {
-  clearTimeout(timer);
-  if (visible.value) timer = setTimeout(() => { if (!ready.value) failed.value = true; }, 20000);
-});
-onMounted(() => {
-  if (!host.value) return;
-  dimensions = new ResizeObserver(([entry]) => {
-    if (entry) { width.value = entry.contentRect.width; height.value = entry.contentRect.height; }
-  });
-  dimensions.observe(host.value);
-  observer = new IntersectionObserver(([entry]) => {
-    if (entry?.isIntersecting) { visible.value = true; observer?.disconnect(); }
-  }, { rootMargin: "240px" });
-  observer.observe(host.value);
-  window.addEventListener("message", receive);
-});
-onBeforeUnmount(() => { observer?.disconnect(); dimensions?.disconnect(); clearTimeout(timer); window.removeEventListener("message", receive); });
 </script>
 
 <template>

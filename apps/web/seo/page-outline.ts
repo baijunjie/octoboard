@@ -56,7 +56,7 @@ export const plannedPlatforms = [
 ] as const;
 
 // Names shown beside the mascot. They are product names, not translated labels.
-// icon is the file in public/agents/, without the extension.
+// icon is the agent's key in `AGENT_MARKS` (`@octoboard/ui/agent-marks`).
 export const heroAgents = [
   { name: "Claude Code", icon: "claude" },
   { name: "Codex", icon: "codex" },

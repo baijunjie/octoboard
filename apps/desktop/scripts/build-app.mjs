@@ -7,16 +7,16 @@
 //
 // It then *asserts* the outcome instead of trusting the stripping: a bundle that carries a
 // Developer ID authority fails the script.
-import { spawnSync } from "node:child_process";
 import path from "node:path";
 import {
   assertLayeredIcon,
   assertProducedSince,
   bundleDir,
   findBundle,
+  signatureReport,
   tauriBuild,
   withoutAppleVariables,
-  withoutUpdaterArtifacts,
+  withoutUpdateKey,
 } from "./bundle.mjs";
 
 // Arguments that move the output away from `target/release/bundle` (or produce none) are refused up
@@ -35,8 +35,8 @@ if (relocating) {
 }
 
 const startedAt = Date.now();
-// The update signing key goes too, with the update archive that needs it (`withoutUpdaterArtifacts`).
-tauriBuild(...withoutUpdaterArtifacts(args, withoutAppleVariables(process.env)));
+// The update signing key goes too: a local verification build never holds it.
+tauriBuild(args, withoutUpdateKey(withoutAppleVariables(process.env)));
 
 const app = findBundle(path.join(bundleDir, "macos"), ".app");
 assertProducedSince(app, startedAt);
@@ -46,7 +46,7 @@ try {
 } catch (error) {
   console.warn(`warning: ${error.message}`);
 }
-assertNoDeveloperId(app, spawnSync("codesign", ["-dv", "--verbose=4", app], { encoding: "utf8" }));
+assertNoDeveloperId(app, signatureReport(app));
 console.log(`${app} carries no Developer ID authority and is for local verification only.`);
 
 // `codesign -dv` reports on stderr, and exits non-zero for a bundle with no signature at all, which

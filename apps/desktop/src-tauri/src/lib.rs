@@ -1,34 +1,10 @@
-//! The desktop application's Rust-side shell: launch `octoboardd` as a sidecar and hand the window
-//! the port and key it printed (`sidecar.rs`), start it again when it dies (`recovery.rs`), the
-//! shell's own log file (`diagnostics.rs`), the native menu bar (`menu.rs`), the window's
-//! remembered size and position (`window_state.rs`), the exit-confirmation flow (`exit.rs`),
-//! running in the background once the window is closed (`background.rs`) behind a menu bar icon
-//! (`tray/`), the macOS privacy permissions the agents in its terminals can need
-//! (`permissions.rs`), the system's save and open dialogs for the configuration document
-//! (`configuration_file.rs`), looking for, downloading and installing a new version (`updater.rs`),
-//! and the webview's content rule list that keeps report pages off the web (`page_isolation.rs`,
-//! macOS). Everything after the window loads talks to the daemon over WebSocket only, per the
-//! architectural rule in "Why the daemon is split out" in `docs/architecture.md` — no Tauri IPC
-//! command carries daemon traffic, so this process reads the sidecar's stdout itself and bakes the
-//! port and key into the window's URL as `?port=` and `?key=` query parameters *before* creating
-//! the window (which opens once the daemon has started, from a background thread), instead of
-//! exposing an `invoke`-able command for it.
+//! The desktop application's Rust-side shell: it launches `octoboardd` as a sidecar, hands the
+//! window the daemon's port and key as `?port=` and `?key=` query parameters before the window is
+//! created, brings the daemon back when it dies, and offers the UI the few native capabilities it
+//! cannot have itself. No IPC command carries daemon traffic: the UI talks to the daemon over
+//! WebSocket (see "Why the daemon is split out" in `docs/architecture.md`).
 //!
-//! The IPC commands this crate does expose carry no daemon traffic either:
-//! `frontend_exit_heartbeat` and `confirm_quit` (both in `exit.rs`), `bring_to_front` and
-//! `set_run_in_background` (a single boolean, the Settings switch; both in `background.rs`) are
-//! bare signals, `set_menu_labels` (in `menu.rs`) is the UI's menu text, and `set_tray_menu` (in
-//! `tray/`) is the text of the menu bar icon's menu, with the opaque ids of the sessions it
-//! lists, which `tray-session-chosen` hands back, its quota submenus, and the pictures beside its
-//! lines, drawn by the UI; `tray-menu-opened` tells the UI the menu is opening. That is display
-//! material the UI words and draws from the sessions and quotas it already shows, as it does the
-//! Dock badge's count; the shell never asks the daemon anything. The three in
-//! `permissions.rs` ask the system instead: a read of this process's own privacy grants, the one
-//! prompt that asks the user for one, and a System Settings deep link. The two in
-//! `configuration_file.rs` raise the system's save and open dialogs for the configuration document
-//! and write or read the file the user picked; the page names no path of its own. The two in
-//! `updater.rs` carry a channel's name in and a version, its notes and the download's progress
-//! out.
+//! The modules, the IPC surface and where new code goes are in `docs/structure/desktop.md`.
 
 mod background;
 mod configuration_file;
@@ -41,6 +17,7 @@ mod page_isolation;
 mod permissions;
 mod recovery;
 mod sidecar;
+mod system_settings;
 mod tray;
 mod updater;
 mod window_state;
@@ -283,18 +260,14 @@ fn open_main_window(
         ),
         None => daemon_query.clone(),
     };
-    let url = if cfg!(debug_assertions) {
-        format!("http://localhost:5174/?{query}")
-    } else {
-        format!("index.html?{query}")
-    };
+    let url = WebviewUrl::App(format!("index.html?{query}").into());
     // Decided before the window exists, from the saved frame and the displays connected now, so the
     // window is placed while it is still hidden and is never seen moving into place.
     let (displays, main_display) = window_state::displays(app);
     let initial =
         window_state::initial_window(window_state::load(app).as_ref(), &displays, main_display);
 
-    let builder = WebviewWindowBuilder::new(app, MAIN_WINDOW_LABEL, WebviewUrl::App(url.into()))
+    let builder = WebviewWindowBuilder::new(app, MAIN_WINDOW_LABEL, url)
         .title(menu::APP_NAME)
         .inner_size(initial.size.0, initial.size.1)
         // 48 (the left rail) + 280 (sidebar) + 520 (the terminal pane's own floor) + 320 (the
@@ -360,9 +333,8 @@ fn open_main_window(
     window_state::track(&window, &initial);
 
     // `WebviewWindow::show` dispatches onto the window's own event loop internally, so calling it
-    // from this background thread rather than the main one is safe; a plain `thread::sleep` here
-    // needs neither `tauri::async_runtime` nor a direct `tokio` dependency, unlike the sidecar's
-    // own async wait in `sidecar.rs`, which already had to be async to read the child's stdout.
+    // from this background thread rather than the main one is safe, so a plain `thread::sleep`
+    // here needs neither `tauri::async_runtime` nor a direct `tokio` dependency.
     let safety_net_window = window.clone();
     let safety_net_app = app.clone();
     thread::spawn(move || {

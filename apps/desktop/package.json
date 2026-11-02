@@ -11,6 +11,7 @@
     "build:app": "node scripts/build-app.mjs",
     "install:macos": "node scripts/install-app.mjs",
     "release": "node scripts/release.mjs",
+    "sign-update": "node scripts/sign-update.mjs",
     "publish-release": "node scripts/publish-release.mjs",
     "test": "node --test scripts/*.test.mjs"
   },

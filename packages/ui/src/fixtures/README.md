@@ -9,13 +9,24 @@ It is excluded from the production type check and from release verification, and
 
 - `fixtureDaemon.ts` implements the store's `Daemon` interface: it answers each request from a `Fixture` (`fixture.ts`)
   and broadcasts the events the real daemon would, including the intermediate states of operations (a session switching
-  account, a model change in flight). It answers a request only if some scenario sends it.
+  account, a model change in flight). It answers a request only if some scenario sends it. It holds no replies of its
+  own: `createFixtureContext` (`fixtureContext.ts`) builds what the domain modules share (the scenario, the store, `fail`,
+  the refusals more than one needs), and each module answers the requests of one domain, as a `Handlers` table that
+  `mergeHandlers` joins (a request answered by two modules throws): `fixtureSessions.ts` (sessions),
+  `fixtureConsoles.ts`, `fixtureAccounts.ts` (accounts, and the refusals a session gets on one), `fixtureSettings.ts`,
+  `fixtureProjects.ts` (projects and their shell terminals), `fixtureFiles.ts` (a project's files, folder listings, path
+  links) and `fixtureProcesses.ts` (the process ledger). A request no module answers is acknowledged. A new reply goes
+  into the module of its domain, not into `fixtureDaemon.ts`. `BROWSE_REQUESTS` is the set of requests that read a
+  project's folder (`GIT_REQUESTS` of `fixtureGit.ts` and `FILE_REQUESTS` of `fixtureFiles.ts`, each typed against the
+  replies it has), which the website preview routes to the repository a project belongs to; a new browse request is
+  routed correctly once it is in one of those two lists.
 - `changeFixtures.ts` is the vocabulary of repository fixtures: one factory per kind of change, whose parameters carry
   exactly what the real reply for that kind needs, so an unanswerable change cannot be written. Where a reply cannot be
   filled faithfully the fixture daemon refuses it with `FixtureUnfillableError` (`banner.ts`'s `refuseUnfillable`)
-  rather than sending the field unset. `fixtureGit.ts` answers Git mode from them; `sampleGit.ts`, `sampleFiles.ts` and
-  `viewerImages.ts` are the sample repository and files; `invariants.ts` holds rules over a whole repository that no
-  single change shows (`objectIdCheck`), checked by a test.
+  rather than sending the field unset. `fullContextPatch` builds the whole-file patch of a display fixture.
+  `fixtureGit.ts` answers Git mode from them; `sampleGit.ts`, `sampleFiles.ts` and `viewerImages.ts` are the sample
+  repository and files; `invariants.ts` holds rules over a whole repository that no single change shows
+  (`objectIdCheck`), checked by a test.
 - `fakeTerminal.ts` answers terminal sockets in the page (output, mouse, full screen, shell, exited, refused).
   `builders.ts` builds protocol records and `snapshotState` builds a store state. `interact.ts` is the step driver
   (`ui.press`, `ui.t`, `ui.chord`, ...) that names controls as a user does, in the language the window is in.

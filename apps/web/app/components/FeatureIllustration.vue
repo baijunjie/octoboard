@@ -5,7 +5,7 @@ const { locale } = useI18n();
 const appViews = ["managedAccounts", "usageMonitor", "sessionStatus", "existingWorkflow", "reviewChanges"];
 const ids = ["A", "B", "C"];
 const brands = ["Claude Code", "Codex", "Grok Build"];
-const agents = ["claude", "codex", "grok"];
+const agents = ["claude", "codex", "grok"] as const;
 const quota = [62, 35, 0];
 const account = (id: string) => t("featureVisualAccount", { id: `\u2068${id}\u2069` });
 const project = (id: string) => t("featureVisualProject", { id: `\u2068${id}\u2069` });
@@ -18,7 +18,7 @@ const percent = (value: number) => new Intl.NumberFormat(locale.value, { style: 
     <FeatureAppView v-if="appViews.includes(feature)" :feature="feature" />
 
     <div v-else-if="feature === 'switchAccount'" class="switch-scene">
-      <div class="provider-heading"><FeatureAgentMark agent="claude" /><b>Claude Code</b><span class="chip">{{ t('featureVisualContext') }}</span></div>
+      <div class="provider-heading"><AgentMark agent="claude" /><b>Claude Code</b><span class="chip">{{ t('featureVisualContext') }}</span></div>
       <div class="switch-track">
         <div class="account-tile visual-node"><FeatureGlyph name="account" /><b>{{ account('A') }}</b><span class="small-meter"><i style="width: 56%" /></span></div>
         <FeatureGlyph name="arrow-right" class="flow-arrow" :size="20" />
@@ -73,14 +73,14 @@ const percent = (value: number) => new Intl.NumberFormat(locale.value, { style: 
     </div>
 
     <div v-else-if="feature === 'agentHandoff'" class="handoff-scene">
-      <div class="handoff-agents"><div class="agent-card visual-node"><FeatureAgentMark agent="claude" /><b>Claude Code</b><span class="agent-card-rule" /></div><div class="handoff-packet"><FeatureGlyph name="arrow-right" class="flow-arrow" :size="20" /><span class="packet-sheet"><FeatureGlyph name="file" :size="25" /></span><FeatureGlyph name="arrow-right" class="flow-arrow" :size="20" /></div><div class="agent-card visual-node is-accent"><FeatureAgentMark agent="codex" /><b>Codex</b><span class="agent-card-rule" /></div></div>
+      <div class="handoff-agents"><div class="agent-card visual-node"><AgentMark agent="claude" /><b>Claude Code</b><span class="agent-card-rule" /></div><div class="handoff-packet"><FeatureGlyph name="arrow-right" class="flow-arrow" :size="20" /><span class="packet-sheet"><FeatureGlyph name="file" :size="25" /></span><FeatureGlyph name="arrow-right" class="flow-arrow" :size="20" /></div><div class="agent-card visual-node is-accent"><AgentMark agent="codex" /><b>Codex</b><span class="agent-card-rule" /></div></div>
       <div class="brief-strip"><FeatureGlyph name="file" :size="16" /><span>{{ t('handoffExampleBrief') }}</span><FeatureGlyph name="check" :size="14" /></div>
     </div>
 
     <div v-else-if="feature === 'teamCoordination'" class="network-scene">
       <div class="network-head"><span class="network-direction">{{ t('featureVisualAssign') }}<FeatureGlyph name="arrow-down" class="vertical-arrow" :size="13" /></span><div class="network-root visual-node is-accent"><FeatureGlyph name="coordinator" :size="17" /><b>{{ t('demoCoordinator') }}</b></div><span class="network-direction"><FeatureGlyph name="arrow-up" class="vertical-arrow" :size="13" />{{ t('featureVisualReport') }}</span></div>
       <div class="network-trunk" /><div class="network-branches" />
-      <div class="network-leaves"><div v-for="(brand, index) in brands" :key="brand" class="network-leaf visual-node"><FeatureAgentMark :agent="agents[index]!" /><b>{{ brand }}</b><span class="work-label">{{ t(['featureVisualImplementation', 'featureVisualChecks', 'featureVisualDocumentation'][index]!) }}</span><code>{{ ['order.ts', 'order.test.ts', 'README.md'][index] }}</code></div></div>
+      <div class="network-leaves"><div v-for="(brand, index) in brands" :key="brand" class="network-leaf visual-node"><AgentMark :agent="agents[index]!" /><b>{{ brand }}</b><span class="work-label">{{ t(['featureVisualImplementation', 'featureVisualChecks', 'featureVisualDocumentation'][index]!) }}</span><code>{{ ['order.ts', 'order.test.ts', 'README.md'][index] }}</code></div></div>
     </div>
 
     <div v-else-if="feature === 'projectCoordination'" class="dependencies-scene">
@@ -92,7 +92,7 @@ const percent = (value: number) => new Intl.NumberFormat(locale.value, { style: 
     <div v-else-if="feature === 'directParticipation'" class="participation-scene">
       <div class="participation-actor visual-node"><FeatureGlyph name="coordinator" :size="18" /><b>{{ t('demoCoordinator') }}</b></div>
       <div class="participation-route"><span>{{ t('featureVisualReport') }}</span><FeatureGlyph name="arrow-both" class="two-way-arrow" :size="22" /></div>
-      <div class="participation-project visual-node is-accent"><FeatureAgentMark agent="codex" /><b>{{ project('A') }}</b><span class="executor-rule" /><span class="executor-file"><FeatureGlyph name="file" :size="13" /><code>order.ts</code></span><FeatureGlyph name="working" class="working-mark" :size="10" /></div>
+      <div class="participation-project visual-node is-accent"><AgentMark agent="codex" /><b>{{ project('A') }}</b><span class="executor-rule" /><span class="executor-file"><FeatureGlyph name="file" :size="13" /><code>order.ts</code></span><FeatureGlyph name="working" class="working-mark" :size="10" /></div>
       <div class="participation-actor visual-node"><FeatureGlyph name="account" :size="18" /><b>{{ t('demoYou') }}</b></div>
       <div class="participation-route direct-route"><span>{{ t('featureVisualDirect') }}</span><FeatureGlyph name="arrow-right" class="flow-arrow" :size="20" /></div>
     </div>
@@ -194,7 +194,7 @@ const percent = (value: number) => new Intl.NumberFormat(locale.value, { style: 
 .handoff-scene { display: grid; gap: 24px; }
 .handoff-agents { display: grid; grid-template-columns: minmax(0, 1fr) 63px minmax(0, 1fr); align-items: center; gap: 8px; }
 .agent-card { display: grid; justify-items: center; gap: 12px; padding: 17px 5px 13px; text-align: center; }
-.agent-card .feature-agent-mark { width: 28px; height: 28px; }
+.agent-card .agent-mark { width: 28px; height: 28px; }
 .agent-card-rule { width: 26px; height: 2px; background: #705954; border-radius: 3px; }
 .handoff-packet { display: flex; align-items: center; gap: 3px; }
 .handoff-packet .flow-arrow { flex: 1; min-width: 8px; }
@@ -264,7 +264,7 @@ const percent = (value: number) => new Intl.NumberFormat(locale.value, { style: 
   .network-leaves { grid-template-columns: minmax(0, 1fr); gap: 6px; padding-inline-start: 12px; margin-inline-start: 10px; border-inline-start: 1px solid #806153; }
   .network-leaf { position: relative; grid-template-columns: 20px minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto auto; gap: 1px 8px; padding: 6px 8px; text-align: start; justify-items: start; }
   .network-leaf::before { content: ''; position: absolute; inset-inline-start: -13px; top: 50%; width: 12px; height: 1px; background: #806153; }
-  .network-leaf .feature-agent-mark { grid-row: 1 / 3; align-self: center; width: 18px; height: 18px; }
+  .network-leaf .agent-mark { grid-row: 1 / 3; align-self: center; width: 18px; height: 18px; }
   .network-leaf > b { grid-column: 2; grid-row: 1 / 3; align-self: center; }
   .network-leaf .work-label { grid-column: 3; grid-row: 1; overflow-wrap: normal; hyphens: auto; }
   .network-leaf code { grid-column: 3; grid-row: 2; }

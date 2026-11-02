@@ -8,7 +8,7 @@ import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { git, run } from "./git.mjs";
+import { git, run } from "./lib/git.mjs";
 import { changedFiles, chooseBase, requirePushedTree } from "./verify/changes.mjs";
 import { acquireSlot, describeWait } from "./verify/lock.mjs";
 import { clearFailure, failedFiles, narrowedFiles, readFailure, recordFailure, REPORT_ENV } from "./verify/rerun.mjs";

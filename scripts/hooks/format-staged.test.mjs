@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { createFormatter, formatStaged } from "../format-staged.mjs";
+import { createFormatter, formatStaged } from "./format-staged.mjs";
 
 async function repository(run) {
   const cwd = mkdtempSync(path.join(os.tmpdir(), "staged-"));
@@ -117,7 +117,7 @@ test("a partial commit's temporary index is refused, while the repository's own 
 // Real commits, so git's own GIT_INDEX_FILE reaches the git processes the script spawns.
 test("as a pre-commit hook, a partial commit is refused and `commit -a` commits the formatted file", async () => {
   await repository(async ({ cwd, git, write }) => {
-    const script = fileURLToPath(new URL("../format-staged.mjs", import.meta.url));
+    const script = fileURLToPath(new URL("./format-staged.mjs", import.meta.url));
     writeFileSync(path.join(cwd, ".git", "hooks", "pre-commit"), `#!/bin/sh\nexec node "${script}"\n`, { mode: 0o755 });
     git("config", "user.email", "test@example.com");
     git("config", "user.name", "test");

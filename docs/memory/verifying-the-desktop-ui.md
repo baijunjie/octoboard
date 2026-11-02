@@ -104,8 +104,8 @@ catalog's (`textDirection` in `packages/ui/src/i18n/languages.ts`), so `ar` stil
 ## A fixture daemon answers as fully as the real one, or the gallery shows a state no daemon sends
 
 Applies whenever a daemon reply gains a field the UI draws from, and whenever a gallery scenario still shows the old
-behaviour after a fix. The fixture daemon (`packages/ui/src/fixtures/fixtureDaemon.ts`, and `fixtureGit.ts` for a
-project's Git mode) answers every scenario from what that scenario's fixture happens to hold, so a field the fixture
+behaviour after a fix. The fixture daemon (one module per domain under `packages/ui/src/fixtures/`, merged by
+`createFixtureDaemon` in `fixtureDaemon.ts`, with `fixtureGit.ts` for a project's Git mode) answers every scenario from what that scenario's fixture happens to hold, so a field the fixture
 cannot supply goes out as the real daemon's "not known" value and the UI draws the fallback for it. A complete fix can
 therefore leave every scenario showing what it showed before, with nothing in the type checker or the unit tests to say
 which side is wrong: the viewer's bar for the lines past a diff's last hunk went on claiming more might follow because

@@ -127,7 +127,9 @@ it was announced is never announced.
 download is checked against the release's signature before anything is installed; one that does not verify is not
 installed and the install fails. A download may take up to **30 minutes** before it fails. The new version replaces the
 application in place while Octoboard keeps running; the running application, its daemon and every session carry on
-unchanged until Octoboard next starts. The notice and Settings then say it takes effect after a restart.
+unchanged until Octoboard next starts. The notice and Settings then say it takes effect after a restart. Until then a
+daemon that ends unexpectedly is not started again; the window says so and asks for the restart (see "Starting up" in
+`docs/product/application-lifecycle.md`).
 
 The restart is suggested, never forced: **Restart now** applies it at once, and quitting Octoboard in any ordinary way
 and starting it again later applies it just the same.

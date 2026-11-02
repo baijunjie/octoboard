@@ -14,10 +14,12 @@ Paths in this doc that do not start with `packages/` or `apps/` are relative to 
 
 | Path | Role |
 |---|---|
-| `index.html`, `src/main.tsx` | The window's entry: startup (platform, daemon location, connection, theme, native window reveal, global error handlers) |
+| `index.html`, `src/main.tsx` | The window's entry: startup (platform, daemon location, connection, native window reveal, global error handlers), mounting `App` under `AppRoot` |
+| `package.json` `exports` | The files `apps/web/` imports by package name: `./agent-marks`, `./languages`, `./match-language`, `./preview-messages`; nothing else of the package is importable from outside |
+| `eslint.layers.mjs` | The import-layering blocks (see "Dependency direction"), spread into the root `eslint.config.mjs` |
 | `vite.config.ts`, `typography.mjs`, `tsconfig.json`, `tsconfig.app.json` | Vite and Vitest configuration; `tsconfig.app.json` is the production type check, which leaves out tests, `src/gallery/`, `src/fixtures/` and `src/website-preview/` |
 | `gallery.html`, `gallery-frame.html` | Entries of the gallery |
-| `website-preview.html`, `feature-preview.html`, `vite.preview.config.ts` | Entries and build of the website preview and the feature views (`pnpm build:preview` writes into `apps/web/public/preview/`) |
+| `website-preview.html`, `feature-preview.html`, `vite.preview.config.ts` | Entries and build of the website preview and the feature views (`pnpm build:preview` writes into `dist-preview/`; the site's `build-preview` passes `--outDir`) |
 | `packages/ui/scripts/gallery-sweep.mjs` | `pnpm gallery:sweep`: loads gallery scenarios in a headless browser and fails on any gallery failure; `gallery-chip-geometry.mjs` and `gallery-report-focus.mjs` are standalone Playwright checks run by hand |
 | `packages/ui/scripts/generate-licenses.mjs` | `pnpm licenses:generate`, the first step of `pnpm build`: writes the gitignored `src/about/licenses.generated.json` |
 | [`packages/ui/scripts/wkbench/`](../../packages/ui/scripts/wkbench/README.md) | `pnpm bench:wkwebview`, the latency benchmark in the system WKWebView (a developer tool with its own usage guide) |
@@ -28,7 +30,8 @@ Paths in this doc that do not start with `packages/` or `apps/` are relative to 
 ### Root files
 
 `App.tsx` (the screen: window chrome, content panel, toasts, connection banner and dialog layer composed from the hooks
-in `app/`), `StartupScreen.tsx`, `ErrorBoundary.tsx`, `WelcomeScreen.tsx`; `daemon.ts` (locating the daemon from the
+in `app/`), `AppRoot.tsx` (the provider tree around `App` — platform, language, error boundary, theme, daemon, native
+sync hooks, updates — shared by `main.tsx`, the gallery frame and the website preview), `StartupScreen.tsx`, `ErrorBoundary.tsx`, `WelcomeScreen.tsx`; `daemon.ts` (locating the daemon from the
 page's address), `daemon-client.ts` (the WebSocket client: request correlation, reconnect, event dispatch);
 `protocol.ts` (hand-written TypeScript mirror of the wire protocol) checked against `protocol.generated.ts` (written by
 the daemon's `protocol::bindings` test) by `protocol.contract.ts`; `appConfig.ts` (facts from `config/app.json`);
@@ -91,18 +94,18 @@ the daemon's `protocol::bindings` test) by `protocol.contract.ts`; `appConfig.ts
 
 ### Dev-only and website-facing
 
-- [`src/fixtures/`](../../packages/ui/src/fixtures/README.md) — the fixtures runtime (fixture daemon, fake terminal,
+- [`src/fixtures/`](../../packages/ui/src/fixtures/README.md) — the fixtures runtime (fixture daemon with its per-domain reply modules, fake terminal,
   builders, step driver, sample data) shared by the gallery, the website preview and the application tests.
 - [`src/gallery/`](../../packages/ui/src/gallery/README.md) — the UI state gallery: pages, the `Scenario` type and the
   scenarios under `fixtures/`; its README also holds the conventions for writing scenarios and how to sweep the gallery.
 - `src/website-preview/` — the fixture-backed build the website embeds: the real `App` over a preview daemon, scenes,
   simulated agent terminals, `features/` focused views, and `messages.ts`, the `postMessage` contract with the embedding
-  page that `apps/web/` imports too.
+  page that `apps/web/` imports too (through the `./preview-messages` export).
 
 ## Dependency direction
 
-`no-restricted-imports` blocks in the root `eslint.config.mjs` enforce it (`pnpm lint`; tests and test-support files are
-exempt). A layer imports only the directories and root files its block names, so the exact allowed set is in the config;
+`no-restricted-imports` blocks in `eslint.layers.mjs`, spread into the root `eslint.config.mjs`, enforce it (`pnpm lint`;
+tests and test-support files are exempt). A layer imports only the directories and root files its block names, so the exact allowed set is in the config;
 the shape is:
 
 - Each pure layer imports only layers beneath it: `platform/` (and `protocol`) and `preferences/` import nothing else
@@ -170,4 +173,5 @@ New code uses these rather than a second implementation. None is enforced by a c
 | The tags offered to a tag field (projects and agents) | `tagVocabulary` (`src/components/form/tagVocabulary.ts`) with `TagsInput` |
 | Platform capabilities (native menu, updater, clipboard, permissions) | the `PlatformAdapter` through `src/platform/` |
 | Read the store | the barrel `src/store/index.ts` (`useDaemon`, `useDaemonStore`, `useDaemonStoreEqual`, session hooks); below `src/` the barrel is the only store import allowed |
+| The provider tree around `App` in a new host of the app | `AppRoot` (`src/AppRoot.tsx`), as `main.tsx`, the gallery frame and the website preview use it |
 | Data for the gallery, the website preview and application tests | `src/fixtures/` (builders, `snapshotState`, `createFixtureDaemon`), never gallery scenarios |

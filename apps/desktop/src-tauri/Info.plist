@@ -25,5 +25,40 @@
     <string>zh-Hans</string>
     <string>zh-Hant</string>
   </array>
+  <!-- Purpose strings for the consents the programs agents run in Octoboard's terminals can ask
+       for, which macOS attributes to Octoboard; the strings stay neutral because Octoboard cannot
+       know which program asks. The matching entitlements, without which the hardened runtime
+       refuses these requests without a prompt, are in `Entitlements.plist`; the folder and
+       volume consents and Bluetooth need none. -->
+  <key>NSAppleEventsUsageDescription</key>
+  <string>A program running in Octoboard would like to control other applications.</string>
+  <key>NSCameraUsageDescription</key>
+  <string>A program running in Octoboard would like to use the camera.</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>A program running in Octoboard would like to use the microphone.</string>
+  <key>NSBluetoothAlwaysUsageDescription</key>
+  <string>A program running in Octoboard would like to use Bluetooth.</string>
+  <key>NSContactsUsageDescription</key>
+  <string>A program running in Octoboard would like to access your contacts.</string>
+  <key>NSCalendarsUsageDescription</key>
+  <string>A program running in Octoboard would like to access your calendars.</string>
+  <key>NSRemindersUsageDescription</key>
+  <string>A program running in Octoboard would like to access your reminders.</string>
+  <key>NSPhotoLibraryUsageDescription</key>
+  <string>A program running in Octoboard would like to access your photos.</string>
+  <key>NSLocationWhenInUseUsageDescription</key>
+  <string>A program running in Octoboard would like to access your location.</string>
+  <key>NSLocationUsageDescription</key>
+  <string>A program running in Octoboard would like to access your location.</string>
+  <key>NSDocumentsFolderUsageDescription</key>
+  <string>A program running in Octoboard would like to access files in your Documents folder.</string>
+  <key>NSDownloadsFolderUsageDescription</key>
+  <string>A program running in Octoboard would like to access files in your Downloads folder.</string>
+  <key>NSDesktopFolderUsageDescription</key>
+  <string>A program running in Octoboard would like to access files on your Desktop.</string>
+  <key>NSRemovableVolumesUsageDescription</key>
+  <string>A program running in Octoboard would like to access files on a removable volume.</string>
+  <key>NSNetworkVolumesUsageDescription</key>
+  <string>A program running in Octoboard would like to access files on a network volume.</string>
 </dict>
 </plist>

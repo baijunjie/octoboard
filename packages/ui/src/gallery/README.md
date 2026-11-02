@@ -18,8 +18,8 @@ which resets the dev app's `octoboard.*` preferences (hence port 5175 for `pnpm 
   real. The frame alone, sized by the browser window, is `gallery-frame.html?scenario=<id>&theme=…&lang=…` with `held=1`
   and `chrome=1` as needed, and, for a file-viewer scenario, `markdown=tailwind|github|newsprint|latex` (it stands over
   the scenario's own `preferences.markdownStyle`).
-- `frame.tsx` follows `main.tsx` (the same platform, language, error boundary and theme providers) over a fixture daemon
-  in place of the WebSocket one, and leaves out what only a native shell does. `prepare.ts` sets the app's stored
+- `frame.tsx` renders the real `App` under `AppRoot` (`src/AppRoot.tsx`, the provider tree `main.tsx` and the website
+  preview share) over a fixture daemon in place of the WebSocket one, and leaves out what only a native shell does. `prepare.ts` sets the app's stored
   preferences from the URL and the scenario before the app's modules load, so nothing the frame imports earlier may read
   a stored preference at load (the same holds for `fixtures/index.ts` and `updaterFixture.ts`).
 - A `Scenario` (`scenario.ts`, extending `Fixture` in `packages/ui/src/fixtures/fixture.ts`) is a starting `state`,

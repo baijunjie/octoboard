@@ -16,7 +16,7 @@ import { randomUUID } from "node:crypto";
 import { linkSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { localValue } from "../env.mjs";
+import { localValue } from "../lib/env.mjs";
 
 const GIB = 1024 ** 3;
 // A slot directory is made before its owner file is written; one without an owner for this long is orphaned.

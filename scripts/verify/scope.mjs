@@ -8,11 +8,14 @@
 // `daemon` and `native` are the two Rust crates, which the Rust steps always check together (one
 // `cargo test --workspace`, one feature set), so selecting either selects both Rust steps.
 
-// What `apps/web` imports from `packages/ui/src` outside the preview inputs below: `i18n/matchLanguage.ts`,
-// `i18n/languages.ts` and what they import.
+// What `apps/web` imports from `@octoboard/ui` outside the preview inputs below: the modules its `exports` map
+// names (`i18n/matchLanguage.ts`, `i18n/languages.ts`, `components/icons/agentMarks.ts`) and what they import
+// (`protocol.ts`, for the `Agent` type).
 export const WEB_IMPORTS_FROM_UI = [
   "packages/ui/src/i18n/matchLanguage.ts",
   "packages/ui/src/i18n/languages.ts",
+  "packages/ui/src/components/icons/agentMarks.ts",
+  "packages/ui/src/protocol.ts",
 ];
 
 // The inputs of the preview build `apps/web` takes from `packages/ui`.
@@ -22,6 +25,9 @@ export const WEB_PREVIEW_INPUTS = [
   "packages/ui/src/website-preview/",
   "packages/ui/src/fixtures/",
 ];
+
+// The manifest whose `exports` map is how the website resolves `@octoboard/ui`.
+export const WEB_RESOLVES_UI = ["packages/ui/package.json"];
 
 // The UI side of the desktop contract: the Tauri bridge, the window URL's parameters, the native
 // menu labels (their `menu.*` message keys are `MENU_KEYS_FILE`) and the status item icons.
@@ -52,8 +58,8 @@ export const WIRE_PROTOCOL = ["apps/daemon/PROTOCOL.md", "apps/daemon/src/protoc
 export const DAEMON_READS_UI = ["packages/ui/src/i18n/languages.ts"];
 // A UI test (`bundleLocalizations.test.ts`) compares the bundle's languages with the shell's `Info.plist`.
 export const UI_READS_NATIVE = ["apps/desktop/src-tauri/Info.plist"];
-// A UI test (`appConfig.test.ts`) holds `config/app.json` to the license and the default website address.
-export const UI_READS_ELSEWHERE = ["LICENSE", "apps/web/site.config.ts"];
+// A UI test (`appConfig.test.ts`) holds `config/app.json` to the license.
+export const UI_READS_ELSEWHERE = ["LICENSE"];
 // A verify test (`rerun.test.mjs`) reads the reporter that shares `REPORT_ENV` with `rerun.mjs`.
 export const VERIFY_READS_UI = ["packages/ui/src/test/failedFilesReporter.ts"];
 
@@ -66,7 +72,7 @@ const RUST_PACKAGES = ["daemon", "native"];
 const notMarkdown = (prefix) => new RegExp(`^${prefix.replaceAll("/", "\\/")}(?!.*\\.md$)`);
 
 export const RULES = [
-  { match: ["scripts/verify/", "scripts/verify.mjs", "scripts/format-staged.mjs", "scripts/pre-push.mjs"], consumers: ["verify"], why: "the verification command, the hook scripts and their tests" },
+  { match: ["scripts/verify/", "scripts/verify.mjs", "scripts/hooks/", "scripts/lib/", "scripts/format-staged.mjs", "scripts/pre-push.mjs"], consumers: ["verify"], why: "the verification command, the hook scripts, the shared script libraries and their tests (the two top-level hook paths are forwarding stubs for older installed hooks)" },
   { match: [notMarkdown("packages/ui/")], consumers: ["ui"], why: "the UI package" },
   { match: [notMarkdown("apps/web/")], consumers: ["web"], why: "the website" },
   { match: [notMarkdown("apps/daemon/")], consumers: ["daemon"], why: "the daemon crate" },
@@ -76,11 +82,11 @@ export const RULES = [
 
   // Cargo features unify across workspace members, so a manifest of either crate changes how both build.
   { match: ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "rustfmt.toml", ".cargo/", /\/Cargo\.toml$/], consumers: RUST_PACKAGES, why: "the Cargo workspace, its feature set and toolchain are shared by both crates" },
-  { match: ["pnpm-lock.yaml", "pnpm-workspace.yaml", "patches/", "eslint.config.mjs"], consumers: JS_PACKAGES, why: "dependency versions and the lint rules apply to every JavaScript package" },
+  { match: ["pnpm-lock.yaml", "pnpm-workspace.yaml", "patches/", "eslint.config.mjs", "packages/ui/eslint.layers.mjs"], consumers: JS_PACKAGES, why: "dependency versions and the lint rules apply to every JavaScript package; the UI's layering blocks are spread into the root lint configuration" },
   { match: ["package.json"], consumers: ALL_PACKAGES, why: "holds the scripts of every package, including `test:rust`, and the shared dev dependencies" },
-  { match: ["scripts/git.mjs"], consumers: ["verify", "desktop"], why: "imported by `scripts/verify.mjs`, `scripts/pre-push.mjs` and `scripts/verify/tree.mjs`, and by the desktop release publishing script" },
-  { match: ["scripts/env.mjs", "scripts/env.d.mts"], consumers: ["verify", "ui", "desktop"], why: "imported by `scripts/verify/lock.mjs`, `packages/ui/vite.config.ts` (its declaration types that import) and the desktop release scripts" },
-  { match: ["scripts/test-rust.mjs", "scripts/clippy-rust.mjs"], consumers: ["verify", ...RUST_PACKAGES], why: "the commands the Rust check steps run, linted with the scripts" },
+  { match: ["scripts/lib/git.mjs"], consumers: ["verify", "ui", "desktop"], why: "imported by `scripts/verify.mjs`, `scripts/hooks/*.mjs`, `scripts/verify/tree.mjs` and `scripts/lib/env.mjs` (so by the UI's `vite.config.ts` too), and by the desktop release publishing script" },
+  { match: ["scripts/lib/env.mjs", "scripts/lib/env.d.mts"], consumers: ["verify", "ui", "desktop"], why: "imported by `scripts/verify/lock.mjs`, `packages/ui/vite.config.ts` (its declaration types that import) and the desktop release scripts" },
+  { match: ["scripts/cargo.mjs"], consumers: ["verify", ...RUST_PACKAGES], why: "the command the Rust check steps run (and the Linux CI job), linted with the scripts" },
   { match: [".githooks/"], consumers: ["verify"], why: "the hook entry point is exercised by the pre-push tests; nothing else reads it" },
   { match: [".gitignore"], consumers: ["verify"], why: "decides which files the working-tree snapshot (`tree.mjs`) counts; no other check reads it" },
   { match: ["config/"], consumers: ALL_PACKAGES, builds: ["ui"], why: "`config/app.json` is the product identity every package reads, and `vite.config.ts` bakes it into the UI build" },
@@ -89,7 +95,7 @@ export const RULES = [
   { match: ["docs/", ".claude/", ".agents/", ".codex/", "assets/branding/", ".github/", "CLAUDE.md", "AGENTS.md"], consumers: [], why: "documentation, agent files, brand assets and CI definitions are read by no local check" },
 
   // Cross-package reads. Each also selects `verify`, whose tests check that the paths named here exist.
-  { match: [...WEB_IMPORTS_FROM_UI, ...WEB_PREVIEW_INPUTS], consumers: ["verify", "ui", "web"], why: "the website imports these modules, or builds its preview from them" },
+  { match: [...WEB_IMPORTS_FROM_UI, ...WEB_PREVIEW_INPUTS, ...WEB_RESOLVES_UI], consumers: ["verify", "ui", "web"], why: "the website imports these modules, builds its preview from them, or resolves the package through its `exports` map" },
   { match: WIRE_PROTOCOL, consumers: ["verify", "ui", "daemon", "native"], why: "the wire protocol is kept in step across the daemon, the UI and the desktop shell: the UI's types are checked against the generated ones, the daemon writes those from its own, and a UI test (`daemonCodes.test.ts`) reads the daemon's code registry from `protocol/codes.rs`" },
   { match: DESKTOP_CONTRACT, consumers: ["verify", "ui", "native"], why: "the UI side of the contract with the desktop shell" },
   { match: SWEEP_SHARED, consumers: ["verify", "ui"], why: "the UI's gallery sweep, which its tests run, imports it" },
@@ -101,7 +107,7 @@ export const RULES = [
 
   // The UI build runs only for changes to what it reads besides `src/`. The gallery and benchmark
   // scripts and pages are not among them, and the website's preview build has no step of its own.
-  { match: ["packages/ui/vite.config.ts", "packages/ui/index.html", "packages/ui/typography.mjs", "packages/ui/scripts/generate-licenses.mjs", "packages/ui/package.json", "packages/ui/tsconfig.json", "packages/ui/tsconfig.app.json", "Cargo.lock", "pnpm-lock.yaml", "scripts/env.mjs"], consumers: [], builds: ["ui"], why: "the inputs of `pnpm build` of the UI: the bundler configuration, the page, and the lock files and manifests the license generator reads" },
+  { match: ["packages/ui/vite.config.ts", "packages/ui/index.html", "packages/ui/typography.mjs", "packages/ui/scripts/generate-licenses.mjs", "packages/ui/package.json", "packages/ui/tsconfig.json", "packages/ui/tsconfig.app.json", "Cargo.lock", "pnpm-lock.yaml", "scripts/lib/env.mjs", "scripts/lib/git.mjs"], consumers: [], builds: ["ui"], why: "the inputs of `pnpm build` of the UI: the bundler configuration, the page, and the lock files and manifests the license generator reads" },
 ];
 
 const matches = (matcher, file) => matcher instanceof RegExp ? matcher.test(file) : matcher.endsWith("/") ? file.startsWith(matcher) : file === matcher;

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { LANGUAGES } from "../../../packages/ui/src/i18n/languages.ts";
+import { LANGUAGES } from "@octoboard/ui/languages";
 import { featureGroups, homeFeatures } from "../seo/page-outline.ts";
 import { readLocaleMessages, renderAgentFiles } from "../seo/agent-documents.ts";
 import {

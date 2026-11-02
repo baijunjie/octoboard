@@ -15,12 +15,13 @@ const UNRESOLVED = "rgb(1, 2, 4)";
  * native menu follows the appearance the app sets, which `prefers-color-scheme` reports). `appearance` holds for a token HeroUI
  * defines per appearance (`--accent-soft-foreground`); a `--tint-*` is declared once on `:root` and
  * computed there, so it follows the page's theme whatever is asked. The answer is kept per theme,
- * appearance and expression, so a caller may ask on every frame. `undefined` where the page cannot
+ * appearance, class and expression, so a caller may ask on every frame. `probeClass` is a class the colour is
+ * resolved under, for a variable a class defines (`--meter-fill` under `quota-meter--claude`). `undefined` where the page cannot
  * resolve it: an expression that does not parse or names a variable that is not defined, no
  * stylesheet, no canvas. */
-export function resolveCssColour(expression: string, appearance?: Appearance): string | undefined {
+export function resolveCssColour(expression: string, appearance?: Appearance, probeClass?: string): string | undefined {
   const root = document.documentElement;
-  const key = `${root.className}|${root.dataset.theme ?? ""}|${appearance ?? ""}|${expression}`;
+  const key = `${root.className}|${root.dataset.theme ?? ""}|${appearance ?? ""}|${probeClass ?? ""}|${expression}`;
   if (resolved.has(key)) return resolved.get(key);
   // A colour that does not resolve falls back to the inherited one, so the host's is one nothing resolves to.
   const host = document.createElement("div");
@@ -31,6 +32,7 @@ export function resolveCssColour(expression: string, appearance?: Appearance): s
   }
   const probe = document.createElement("span");
   probe.style.color = expression;
+  if (probeClass) probe.className = probeClass;
   host.appendChild(probe);
   root.appendChild(host);
   const computed = getComputedStyle(probe).color;

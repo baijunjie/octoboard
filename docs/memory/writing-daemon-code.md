@@ -169,15 +169,18 @@ blocking filesystem or process work in a handler on `tokio::task::spawn_blocking
 ## On macOS, reach the system through APIs that need no consent, never through Apple Events
 
 Applies to host integrations in the daemon and in the desktop shell: moving to the Trash, revealing or opening
-something in Finder, driving Terminal or any other app. The app is signed with the hardened runtime
-(`apps/desktop/src-tauri/tauri.conf.json`), and the daemon is its sidecar signed the same way, with no Apple Events
-entitlement and no `NSAppleEventsUsageDescription` in `apps/desktop/src-tauri/Info.plist`. So anything that sends
-Apple Events — `osascript`, AppleScript, Scripting Bridge — fails or waits on an Automation prompt in the shipped app.
+something in Finder, driving Terminal or any other app. The shipped app carries the Apple Events entitlement and
+`NSAppleEventsUsageDescription` only so that programs agents run in its terminals can ask for Automation consent (see
+"Other consents programs ask for" in `docs/product/macos-privacy-permissions.md`), and macOS attributes whatever the
+daemon (its sidecar) or the shell sends to Octoboard too. So anything that sends Apple Events — `osascript`,
+AppleScript, Scripting Bridge — raises an Automation prompt naming Octoboard in the middle of an ordinary action,
+worded for a program in a terminal, and fails if the user refuses; the only prompt Octoboard itself raises is the one
+the user asks for from Settings' Permissions section.
 
 Development hides this: a daemon started from a terminal has the consent asked of, and usually already granted to,
-that terminal, so the call works there. Check what a crate does on macOS before adopting it, since some default to
-Finder through `osascript` (the `trash` crate's default `DeleteMethod::Finder`), and pick the consent-free path
-instead: a Foundation API such as `NSFileManager`, or `/usr/bin/open`.
+that terminal, so the call works there without a prompt. Check what a crate does on macOS before adopting it, since
+some default to Finder through `osascript` (the `trash` crate's default `DeleteMethod::Finder`), and pick the
+consent-free path instead: a Foundation API such as `NSFileManager`, or `/usr/bin/open`.
 
 ## Lint both Rust crates and their tests with warnings denied
 

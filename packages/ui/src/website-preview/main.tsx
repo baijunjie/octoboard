@@ -61,12 +61,8 @@ async function start(): Promise<void> {
     { default: React },
     { createRoot },
     { App },
-    { ErrorBoundary },
-    { LanguageProvider },
-    { PlatformProvider },
+    { AppRoot },
     { PageDocumentTransform },
-    { DaemonProvider },
-    { ThemeProvider },
     { createPreviewDaemon },
     { createUi },
     { setInteractionModality },
@@ -74,12 +70,8 @@ async function start(): Promise<void> {
     import("react"),
     import("react-dom/client"),
     import("../App"),
-    import("../ErrorBoundary"),
-    import("../i18n/react"),
-    import("../platform/react"),
+    import("../AppRoot"),
     import("../report/pageDocumentTransform"),
-    import("../store"),
-    import("../preferences/theme"),
     import("./daemon"),
     import("../fixtures/interact"),
     import("react-aria"),
@@ -90,24 +82,14 @@ async function start(): Promise<void> {
   const daemon = createPreviewDaemon(scenario);
   createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
-      <PlatformProvider value={{ kind: "browser" }}>
-        <LanguageProvider>
-          <ErrorBoundary>
-            <ThemeProvider>
-              {!embedded && (
-                <div className="website-preview-label groove-b">{copy.demo}</div>
-              )}
-              <div className="website-preview-app">
-                <PageDocumentTransform value={reportDocument}>
-                  <DaemonProvider value={daemon}>
-                    <App />
-                  </DaemonProvider>
-                </PageDocumentTransform>
-              </div>
-            </ThemeProvider>
-          </ErrorBoundary>
-        </LanguageProvider>
-      </PlatformProvider>
+      <AppRoot platform={{ kind: "browser" }} daemon={daemon} nativeSync={false}>
+        {!embedded && <div className="website-preview-label groove-b">{copy.demo}</div>}
+        <div className="website-preview-app">
+          <PageDocumentTransform value={reportDocument}>
+            <App />
+          </PageDocumentTransform>
+        </div>
+      </AppRoot>
     </React.StrictMode>,
   );
   const ui = createUi(document, language, daemon);

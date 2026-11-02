@@ -14,12 +14,12 @@
 // `localValue` is the one reader that looks beyond this checkout: the gitignored `.env.local` exists only in
 // the main working tree, and a linked worktree's run of an opt-in machine setting must see it. Only callers
 // that name such a setting use it; `loadEnv` never leaves this checkout.
-import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { gitWith } from "./git.mjs";
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 export function loadEnv(...names) {
   const fromFiles = {};
@@ -49,9 +49,9 @@ function fileValue(root, name) {
 
 // The main working tree is the first entry of the worktree list; a bare repository has none.
 function mainWorkingTree(root) {
-  const result = spawnSync("git", ["worktree", "list", "--porcelain"], { cwd: root, encoding: "utf8" });
-  if (result.status !== 0) return undefined;
-  const [first] = result.stdout.split(/\r?\n\r?\n/);
+  const list = gitWith({ cwd: root }, "worktree", "list", "--porcelain");
+  if (list === null) return undefined;
+  const [first] = list.split(/\r?\n\r?\n/);
   if (/^bare$/m.test(first)) return undefined;
   const line = /^worktree (.+)$/m.exec(first);
   return line ? path.resolve(line[1]) : undefined;

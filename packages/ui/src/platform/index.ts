@@ -221,18 +221,35 @@ export type StatusItemSubmenuItem =
    * there is one. `title` includes the quota status in words. `label`, when given, is the whole line as one
    * phrase, for assistive technology. */
   | { kind: "header"; title: string; detail?: string; label?: string }
-  /** A window's name and, right-aligned, its detail, with a bar of `fraction` (0 to 1) beneath in
-   * `agent`'s colour. `used_up` marks the window of an account whose quota is used up, whose bar is drawn
-   * in `used_up_colour` (sRGB bytes, from the UI stylesheet) instead. `label` is the whole line as one phrase,
-   * for assistive technology. */
-  | { kind: "window"; name: string; detail: string; label: string; fraction: number; agent: Agent; used_up?: boolean; used_up_colour?: [number, number, number] }
+  /** A window's name and, right-aligned, its detail, with a bar of `fraction` (0 to 1) beneath, drawn in
+   * `fill_colour`, the agent's bar colour from the UI stylesheet as sRGB bytes (the text colour when absent).
+   * `used_up` marks the window of an account whose quota is used up, whose bar is drawn in `used_up_colour`
+   * instead, the stylesheet's used-up grey in the same form (the secondary text colour when absent). `label` is the
+   * whole line as one phrase, for assistive technology. */
+  | (StatusItemWindow & StatusItemBarColours)
   /** The 5-hour window and the account-wide weekly one as one item: the 5-hour name and detail with
    * its bar of `session.fraction`, a thinner bar of `weekly.fraction` directly beneath, then the weekly name
-   * and detail in the secondary colour. `used_up` and `used_up_colour` are a window's, for both bars. `label` is
-   * both phrases as one, for assistive technology. */
-  | { kind: "meter"; session: { name: string; detail: string; fraction: number }; weekly: { name: string; detail: string; fraction: number }; label: string; agent: Agent; used_up?: boolean; used_up_colour?: [number, number, number] }
+   * and detail in the secondary colour. `used_up`, `fill_colour` and `used_up_colour` are a window's, for both
+   * bars. `label` is both phrases as one, for assistive technology. */
+  | (StatusItemMeter & StatusItemBarColours)
   | { kind: "note"; text: string }
   | { kind: "separator" };
+
+export type StatusItemWindow = { kind: "window"; name: string; detail: string; label: string; fraction: number; used_up?: boolean };
+export type StatusItemMeter = { kind: "meter"; session: { name: string; detail: string; fraction: number }; weekly: { name: string; detail: string; fraction: number }; label: string; used_up?: boolean };
+export interface StatusItemBarColours {
+  fill_colour?: [number, number, number];
+  used_up_colour?: [number, number, number];
+}
+
+/** A line of a submenu before its bars are coloured: a window or a meter names its `agent`, whose colour
+ * `withIcons` (`lifecycle/statusItemIcons.ts`) takes from the stylesheet; the agent itself is not sent. */
+export type StatusItemSubmenuDraftItem =
+  | Exclude<StatusItemSubmenuItem, { kind: "window" | "meter" }>
+  | ((StatusItemWindow | StatusItemMeter) & { agent: Agent });
+
+/** A submenu with its lines as drafted. */
+export type StatusItemSubmenuDraft = Omit<StatusItemSubmenu, "items"> & { items: StatusItemSubmenuDraftItem[] };
 
 export interface StatusItemCapability {
   /** Replaces the menu bar icon's menu, and with it whether the icon shows its attention dot. */

@@ -427,27 +427,32 @@ html {
    dark: the compact bar on `--control-fill` (a table cell, a select trigger; in dark also a popover and a menu, whose
    `--default` is the floating fill) Claude 3.55 / 3.01, Codex 3.65 / 3.10; the compact bar on HeroUI's own `--default`
    (a light popover or menu) Claude 3.77, Codex 3.88; the meters, on `--control-fill` itself (the rail panel, the
-   details) Claude 3.55 / 4.52, Codex 3.65 / 4.65. */
+   details) Claude 3.55 / 4.52, Codex 3.65 / 4.65. The per-agent colours are tokens declared per appearance, like
+   `--meter-used-up-fill` below, rather than descendant rules under `.dark`, so the menu bar icon's menu can read each
+   one back for its own bars in either appearance. */
+:root,
+.light,
+[data-theme="light"] {
+  --meter-claude-fill: #c2562f;
+  --meter-codex-fill: #2a6df0;
+}
+
+.dark,
+[data-theme="dark"] {
+  --meter-claude-fill: #ea835d;
+  --meter-codex-fill: #6ea0ff;
+}
+
 .quota-meter--claude {
-  --meter-fill: #c2562f;
+  --meter-fill: var(--meter-claude-fill);
 }
 
 .quota-meter--codex {
-  --meter-fill: #2a6df0;
+  --meter-fill: var(--meter-codex-fill);
 }
 
 .quota-meter--grok {
   --meter-fill: var(--default-foreground);
-}
-
-.dark .quota-meter--claude,
-[data-theme="dark"] .quota-meter--claude {
-  --meter-fill: #ea835d;
-}
-
-.dark .quota-meter--codex,
-[data-theme="dark"] .quota-meter--codex {
-  --meter-fill: #6ea0ff;
 }
 
 /* An account that is used up draws its bars in a neutral grey instead of the agent's colour, so it recedes beside the

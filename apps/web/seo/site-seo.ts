@@ -8,7 +8,7 @@ import {
   LANGUAGE_NAMES,
   textDirection,
   type Language,
-} from "../../../packages/ui/src/i18n/languages.ts";
+} from "@octoboard/ui/languages";
 
 export type SiteLocale = {
   code: string;

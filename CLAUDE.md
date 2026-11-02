@@ -177,7 +177,7 @@ the earlier steps do not run them separately (the related tests a step runs to c
   build, type checking, and tests never read. The full checks, builds and full test suites included, run only before
   pushing. Checks used specifically to establish a changed rule while implementing it remain appropriate; neither
   they nor the quick check replace push verification.
-- Before committing, the `pre-commit` hook runs `scripts/format-staged.mjs` (the same as `pnpm format:staged`):
+- Before committing, the `pre-commit` hook runs `scripts/hooks/format-staged.mjs` (the same as `pnpm format:staged`):
   format only staged supported source files, preserving unstaged edits. A partial commit (`git commit <paths>`) is
   refused; stage the files and commit without paths. A checkout without the script (a branch older than the hook)
   gets a warning and the stage is skipped; a missing `node_modules` fails it with a hint to run `pnpm install`. Do not
@@ -185,11 +185,11 @@ the earlier steps do not run them separately (the related tests a step runs to c
   branch, installs the hooks (`.githooks/auto-install.sh`); after hook changes have landed in the main branch, run
   it there again to refresh them (`pnpm hooks:install` does the same explicitly; run it on the main branch, since it installs the
   checkout's own `hook.sh`).
-- Before pushing, the `pre-push` hook runs the checks through `scripts/pre-push.mjs` and
+- Before pushing, the `pre-push` hook runs the checks through `scripts/hooks/pre-push.mjs` and
   `pnpm verify`. It measures from each actual destination's advertised remote commit to the exact pushed commit,
   including all unpushed local changes; a newly created branch is measured from its merge base with the live remote
   target branch (or remote HEAD), falling back to all checks when no baseline can be established. Tag pushes are not
-  verified here, since release CI verifies the tag, and a checkout without `scripts/pre-push.mjs` skips this stage
+  verified here, since release CI verifies the tag, and a checkout without `scripts/hooks/pre-push.mjs` skips this stage
   with a warning. It selects all affected consumers without adding unrelated packages merely because several
   packages changed: shared inputs select their consumers, and an unknown input selects the full set. Rust changes
   always run the Rust checks of both crates together. Checks are read-only and require the pushed commit in a clean

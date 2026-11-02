@@ -9,7 +9,7 @@ import type { Plugin } from "vite";
 import { configDefaults, defineConfig } from "vitest/config";
 
 import appConfig from "../../config/app.json" with { type: "json" };
-import { loadEnv } from "../../scripts/env.mjs";
+import { loadEnv } from "../../scripts/lib/env.mjs";
 
 import { REPORT_ENV } from "./src/test/failedFilesReporter.ts";
 

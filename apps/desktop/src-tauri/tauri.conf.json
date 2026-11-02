@@ -26,7 +26,7 @@
   },
   "bundle": {
     "active": true,
-    "createUpdaterArtifacts": true,
+    "createUpdaterArtifacts": false,
     "targets": ["app", "dmg"],
     "icon": [
       "icons/32x32.png",
@@ -39,6 +39,7 @@
     "macOS": {
       "minimumSystemVersion": "11.0",
       "hardenedRuntime": true,
+      "entitlements": "Entitlements.plist",
       "dmg": {
         "background": "images/dmg-background-pixel.png",
         "windowSize": { "width": 806, "height": 488 },

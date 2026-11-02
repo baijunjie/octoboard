@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync } from "node:fs";
 import path from "node:path";
-import { loadEnv, localValue } from "../../../scripts/env.mjs";
+import { loadEnv, localValue } from "../../../scripts/lib/env.mjs";
 import {
   appDir,
   assertLayeredIcon,
@@ -10,9 +10,11 @@ import {
   bundleDir,
   findBundle,
   infoPlistValue,
+  signatureReport,
   tauriBuild,
+  verifySignature,
   withoutAppleVariables,
-  withoutUpdaterArtifacts,
+  withoutUpdateKey,
 } from "./bundle.mjs";
 
 if (process.platform !== "darwin") throw new Error("install:macos requires macOS.");
@@ -33,7 +35,8 @@ const identities = execFileSync("security", ["find-identity", "-v", "-p", "codes
 if (!identities.includes(`"${identity}"`)) throw new Error(`No valid signing identity found: ${identity}`);
 
 // Local installation must never inherit notarization credentials, including from the calling shell.
-const [args, env] = withoutUpdaterArtifacts(["--bundles", "app"], withoutAppleVariables(process.env));
+const args = ["--bundles", "app"];
+const env = withoutUpdateKey(withoutAppleVariables(process.env));
 env.APPLE_SIGNING_IDENTITY = identity;
 const config = JSON.parse(readFileSync(path.join(appDir, "src-tauri", "tauri.conf.json"), "utf8"));
 const startedAt = Date.now();
@@ -92,9 +95,9 @@ function isSymlink(file) {
 }
 
 function verify(bundle) {
-  execFileSync("codesign", ["--verify", "--deep", "--strict", bundle], { stdio: "inherit" });
+  verifySignature(bundle);
   // codesign writes its display report to stderr even on success.
-  const report = spawnSync("codesign", ["-dv", "--verbose=4", bundle], { encoding: "utf8" });
+  const report = signatureReport(bundle);
   if (report.error) throw report.error;
   if (report.status !== 0 || !report.stderr.split(/\r?\n/).includes(`Authority=${identity}`)) {
     throw new Error(`The bundle does not carry the configured signing identity: ${bundle}\n${report.stderr}`);

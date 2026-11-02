@@ -82,12 +82,7 @@ useSeoMeta({
           <span class="eyebrow">{{ t("workspaceAgentLabel") }}</span>
           <div>
             <span v-for="agent in heroAgents" :key="agent.icon"
-            ><img
-              :src="`${config.app.baseURL}agents/${agent.icon}.svg`"
-              alt=""
-              width="24"
-              height="24"
-            />{{ agent.name }}</span
+            ><AgentMark :agent="agent.icon" />{{ agent.name }}</span
             >
           </div>
         </div>

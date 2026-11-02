@@ -1,11 +1,10 @@
 // The page one scenario renders in, loaded in an iframe by the gallery shell (`shell.tsx`). It
-// follows `main.tsx` — the real `App` under the same platform, language, error boundary and theme
-// providers, over a fixture daemon in place of the WebSocket one. It leaves out what `main.tsx`
-// does for a native shell (`NativeMenuLabelsSync`, `NativeWindowThemeSync`, revealing the window):
-// the browser platform has no native menu or window. It leaves out `BackgroundRunSync` too: a
-// scenario that offers `backgroundRun` gets one whose `set` does nothing (`galleryPlatform`), so
-// there is no shell to push the choice to. Its stored preferences are set from the URL before the
-// app loads (`prepareStorage`).
+// renders the real `App` under the app's provider tree (`AppRoot`), over a fixture daemon in place
+// of the WebSocket one. It passes `nativeSync={false}` to `AppRoot` and does not reveal the window:
+// the browser platform has no native menu or window. It leaves out `BackgroundRunSync` too: a scenario that offers
+// `backgroundRun` gets one whose `set` does nothing (`galleryPlatform`), so there is no shell to
+// push the choice to. Its stored preferences are set from the URL before the app loads
+// (`prepareStorage`).
 import React, { useEffect } from "react";
 import ReactDOM from "react-dom/client";
 
@@ -43,20 +42,14 @@ const heldModifier = (params.get("held") ?? (scenario?.held ? "1" : "0")) === "1
 // everything this file imports statically, `./fixtures`, every scenario file and whatever those import included: none
 // of it may read a stored preference at module load, or the scenario opens in the previous one's language (English
 // under `lang=zh-Hans`, say).
-const [{ App }, { Toasts }, { ErrorAlerts }, { ErrorBoundary }, { LanguageProvider }, { selectPlatform }, { PlatformProvider }, startup, store, { ThemeProvider }, { UpdatesProvider, useUpdates }] =
-  await Promise.all([
-    import("../App"),
-    import("../shell/Toasts"),
-    import("../shell/ErrorAlerts"),
-    import("../ErrorBoundary"),
-    import("../i18n/react"),
-    import("../platform"),
-    import("../platform/react"),
-    import("../StartupScreen"),
-    import("../store"),
-    import("../preferences/theme"),
-    import("../updates/UpdatesProvider"),
-  ]);
+const [{ App }, { AppRoot }, { Toasts }, { selectPlatform }, startup, { useUpdates }] = await Promise.all([
+  import("../App"),
+  import("../AppRoot"),
+  import("../shell/Toasts"),
+  import("../platform"),
+  import("../StartupScreen"),
+  import("../updates/UpdatesProvider"),
+]);
 // After react-aria's own listeners are registered, as in `main.tsx` (see `focusGuard.ts`).
 await import("../input/focusGuard");
 await import("../style.css");
@@ -206,33 +199,19 @@ function CheckedOnOpen(): null {
   return null;
 }
 
-// Around the screens and the error boundary, as `main.tsx` has it, so the update notice and the Settings rows find
-// the store. No automatic check follows on its own, which would move a settled view 30 seconds on: a scenario that
-// wants one says `checked`.
-function withUpdates(content: React.ReactElement): React.ReactElement {
-  return (
-    <UpdatesProvider firstCheckDelayMs={null}>
-      {scenario?.updater?.checked && <CheckedOnOpen />}
-      {content}
-    </UpdatesProvider>
-  );
-}
-
+// No automatic update check follows on its own, which would move a settled view 30 seconds on
+// (`firstCheckDelayMs={null}`): a scenario that wants one says `checked`.
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <PlatformProvider value={galleryPlatform()}>
-      <LanguageProvider>
-        {withUpdates(
-          // Outside the boundary, as in `main.tsx`, so the crash page's report finds the records to remove the names of; none for a startup scenario.
-          <store.DaemonProvider value={daemon}>
-            <ErrorBoundary>
-              <ThemeProvider>{screen()}</ThemeProvider>
-            </ErrorBoundary>
-          </store.DaemonProvider>,
-        )}
-        <ErrorAlerts daemon={daemon} />
-      </LanguageProvider>
-    </PlatformProvider>
+    <AppRoot
+      platform={galleryPlatform()}
+      daemon={daemon}
+      nativeSync={false}
+      firstCheckDelayMs={null}
+      insideUpdates={scenario?.updater?.checked && <CheckedOnOpen />}
+    >
+      {screen()}
+    </AppRoot>
   </React.StrictMode>,
 );
 

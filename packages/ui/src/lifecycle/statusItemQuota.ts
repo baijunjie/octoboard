@@ -3,7 +3,7 @@ import { AGENT_SHORT_NAME, defaultAccountName, listedAgents } from "../agents/ag
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { Language } from "../i18n/languages";
-import type { StatusItemSubmenu, StatusItemSubmenuItem } from "../platform";
+import type { StatusItemSubmenuDraft, StatusItemSubmenuDraftItem } from "../platform";
 import { joinPhrases } from "../i18n/joinPhrases";
 import type { Account, AccountQuota, Agent, AgentAvailability, Console, QuotaWindow, Settings } from "../protocol";
 import { exhaustedQuotaWindow, isNotLoggedIn, orderedQuotaWindows, planLabel, quotaResetsIn, quotaWindowLabel, remainingPercentAt, twoLayerWindows, usageBarWindows, type QuotaNaming } from "../accounts/quotaFormat";
@@ -62,7 +62,7 @@ function windowParts(t: Translate, source: StatusItemQuotaSource, naming: QuotaN
 /** One account's lines: its header with the plan (and, with windows to show, how long ago they were read, at its right),
  * then per window a row (the shell draws its bar), or a single note when there is nothing current to show.
  * The 5-hour window and the account-wide weekly one are one two-layer item, as in Settings. */
-function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent, { account, disabled }: QuotaRow): StatusItemSubmenuItem[] {
+function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent, { account, disabled }: QuotaRow): StatusItemSubmenuDraftItem[] {
   const name = account ? isolate(account.name) : defaultAccountName(t, source.defaultAccountNames, agent);
   const quota = accountQuotaOf(source.accountQuotas, agent, account?.id ?? null);
   const planned = quota?.plan ? t("statusItem.quota.account", { account: name, plan: planLabel(quota.plan) }) : name;
@@ -81,7 +81,7 @@ function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent,
   // The header says when the windows were read, at its right, even when the latest read failed; a native menu has
   // no popover for the reason, so the out-of-date note only says that the last read failed.
   const justNow = isJustNow(quota.fetched_at, source.now);
-  const lines: StatusItemSubmenuItem[] = [{
+  const lines: StatusItemSubmenuDraftItem[] = [{
     kind: "header",
     title: statusTitle,
     detail: justNow ? t("quota.updatedNow") : t("quota.updated", { age }),
@@ -118,10 +118,10 @@ function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent,
  * is listed and marked "Disabled". Nothing for an agent that is not added, not available or not yet determined, or
  * whose accounts are all turned off: unlike the rail's panel, which lists an undetermined agent, a submenu
  * without readings to fill it would be empty. */
-export function buildQuotaSubmenus(t: Translate, source: StatusItemQuotaSource, currentConsole?: Console, inUse?: { agent: Agent; account: string | null }): StatusItemSubmenu[] {
+export function buildQuotaSubmenus(t: Translate, source: StatusItemQuotaSource, currentConsole?: Console, inUse?: { agent: Agent; account: string | null }): StatusItemSubmenuDraft[] {
   const available = listedAgents(source.addedAgents).filter((agent) => source.agentAvailability.get(agent)?.availability === "available");
-  return listedQuotaAccounts(available, source, inUse).flatMap(({ agent, rows }): StatusItemSubmenu[] => {
-    const items = rows.flatMap((row, index): StatusItemSubmenuItem[] => [
+  return listedQuotaAccounts(available, source, inUse).flatMap(({ agent, rows }): StatusItemSubmenuDraft[] => {
+    const items = rows.flatMap((row, index): StatusItemSubmenuDraftItem[] => [
       ...(index > 0 ? [{ kind: "separator" as const }] : []),
       ...accountLines(t, source, agent, row),
     ]);

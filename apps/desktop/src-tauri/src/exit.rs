@@ -257,11 +257,10 @@ pub fn install_application_should_terminate_override(app: &AppHandle) {
             types.as_ptr(),
         );
         if !added.as_bool() {
-            // A future tao that implements this selector itself would land here instead of
-            // panicking: an app that fails to launch is worse for the end user than one where Dock
-            // Quit and a system-initiated logout/restart/shutdown simply bypass the confirmation
-            // and behave as they did before this override existed (Cmd+Q and the app menu are
-            // unaffected either way, since they go through `on_menu_event` instead).
+            // A tao that implements this selector itself lands here instead of panicking: an app
+            // that fails to launch is worse for the end user than one where Dock Quit and a
+            // system-initiated logout/restart/shutdown bypass the confirmation (Cmd+Q and the app
+            // menu are unaffected either way, since they go through `on_menu_event` instead).
             diagnostic!(
                 "applicationShouldTerminate: is already implemented on tao's delegate \
                  — Dock Quit and a system-initiated logout/restart/shutdown will bypass the exit \
@@ -275,12 +274,11 @@ pub fn install_application_should_terminate_override(app: &AppHandle) {
 ///
 /// Wrapped in `catch_unwind` purely as a backstop, not because any panic is expected to reach it:
 /// `should_let_quit_through`'s only lock site survives a poisoned `ExitState` mutex rather than
-/// panicking (see its `unwrap_or_else` there), so there is no longer a reachable panic on this
-/// path. But letting some other, truly unrelated panic unwind out of this function would unwind
-/// across the Objective-C message-send that invoked it as this selector's `IMP` — undefined
-/// behaviour beyond this function's own `extern "C-unwind"` boundary, which only guarantees a
-/// well-defined unwind up to here. `TerminateNow` is the safe fallback if that ever happens: the
-/// one answer that cannot trap the user.
+/// panicking (see its `unwrap_or_else` there). But letting some other, truly unrelated panic unwind
+/// out of this function would unwind across the Objective-C message-send that invoked it as this
+/// selector's `IMP` — undefined behaviour beyond this function's own `extern "C-unwind"` boundary,
+/// which only guarantees a well-defined unwind up to here. `TerminateNow` is the safe fallback if
+/// that ever happens: the one answer that cannot trap the user.
 #[cfg(target_os = "macos")]
 unsafe extern "C-unwind" fn application_should_terminate(
     _this: &objc2::runtime::AnyObject,

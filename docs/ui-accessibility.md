@@ -59,8 +59,8 @@ modal body's text colour, below, is the one exception).
 | Secondary text | The project's `--app-muted`, HeroUI's `--muted` missing 4.5:1 on a selected sidebar row |
 | Help, the project's purple for help and hints | A project token (`--help`), HeroUI having none, with its soft fill, text and edge derived like the others |
 
-Native colours that cannot read CSS — the menu bar icon's status colours — are generated from the same values rather
-than written down separately. The terminal's ANSI palette, syntax highlighting, agent brand colours and identity
+Native colours that cannot read CSS — the menu bar icon's status colours, and the agent colours of its quota bars — are
+generated from or read back from the same values rather than written down separately. The terminal's ANSI palette, syntax highlighting, agent brand colours and identity
 colours (avatars, session dots) are not semantic and keep their own palettes.
 
 Secondary text is a choice made where the text is written, never a default inherited from a container. A modal's body
@@ -164,7 +164,8 @@ warning-coloured "Limit reached" badge on its name line says why in words, and i
 (`.quota-meter--used-up` in `packages/ui/src/style.css`), fainter than the agent colours. Settings' accounts table marks
 such an account alike, the name muted and the grey bar followed by the same badge in its Usage cell. The menu bar icon's
 quota submenus draw such an account's bars in the same grey, `--meter-used-up-fill` read back for the menu's appearance,
-while the account's heading says "Limit reached" in words. A veil over the row is not used for that state: it would take
+while the account's heading says "Limit reached" in words; every other account's bars take its agent's `--meter-fill`,
+read back the same way. A veil over the row is not used for that state: it would take
 its text below AA.
 
 A disabled account is left out of that panel and of the menu bar icon's quota submenus, except the one the selected
@@ -1906,14 +1907,15 @@ the hues cannot reach: react-aria's Arabic names give violet and fuchsia one nam
 to green-cyan, cyan and cyan-blue (teal and cyan collide in light, teal and sky in dark). `sessions/sessionColours.test.ts`
 lists them and fails on any other.
 
-A usage bar — the compact one in front of an account option and in the accounts table, and the meters of the rail
-panel, the account details and the usage-reset confirmation — carries its meaning in words, so its colours are decorative in the same way. The compact bar is hidden
+A usage bar — the compact one in front of an account option and in the accounts table, the meters of the rail
+panel, the account details and the usage-reset confirmation, and the bars of the menu bar icon's quota submenus — carries its meaning in words, so its colours are decorative in the same way. The compact bar is hidden
 from assistive technology, and the option's description or the cell's hidden text states the remaining usage; a meter
 states it in its own accessible name and value, while its drawn headline is hidden. Its track is `--default`, which
 inside `.control-fills` (Settings, the dialogs, the rail panel) is `--control-fill`; in dark the compact bar's
 `.quota-bar-track` is a step lighter than its `--default`, so it can be seen on a dark popover. The
-track is not held to 3:1 against its surface. The fill's agent colour is kept at 3:1 or better against every track it is
-drawn on at full opacity, in both appearances, though nothing requires it: a bar's state never rests on its colour
+track is not held to 3:1 against its surface. The fill's agent colour is kept at 3:1 or better against every track the UI draws it
+on at full opacity, in both appearances, though nothing requires it (the menu bar icon's native track,
+`tertiaryLabelColor` over the menu material, is not measured): a bar's state never rests on its colour
 alone. The grey of a used-up account is not: it is meant to recede, a step fainter than the agent colours, and its badge
 says why.
 

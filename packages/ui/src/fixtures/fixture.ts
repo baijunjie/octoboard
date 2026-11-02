@@ -52,8 +52,9 @@ export interface NoticeToastFixture {
 export type AccountTrashAnswer = AccountTrashOutcome | FixtureError | "pending";
 
 /** The daemon's process ledger as a scenario sets it, for the Processes panel and the archive
- * confirmation's stop options (`fixtureDaemon.ts` answers `list_processes`, `list_all_processes` (the rail's counts of
- * every project's), `stop_processes`, `keep_processes` and the processes of `inspect_session_branches` from it).
+ * confirmation's stop options (`fixtureProcesses.ts` answers `list_processes`, `list_all_processes` (the rail's counts
+ * of every project's), `stop_processes`, `keep_processes` and the processes of `inspect_session_branches` from it, the
+ * last in `fixtureSessions.ts`).
  * Stopping a tree, a project process included, takes it out of the list the panel reads; keeping a session's tree
  * makes it a kept project process, which stays listed, and archiving a session ends its trees but the ones kept. */
 export interface ProcessesFixture {
