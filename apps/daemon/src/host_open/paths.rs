@@ -16,6 +16,7 @@ const OPEN_BOUNDS: Bounds = Bounds {
     stdout_limit: 16 * 1024,
     stderr_limit: 16 * 1024,
     reach: Reach::ProcessGroup,
+    term_grace: Duration::ZERO,
 };
 
 pub fn open(directory: &Path) -> Result<(), anyhow::Error> {

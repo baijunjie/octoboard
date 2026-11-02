@@ -133,9 +133,10 @@ Before the move, the removal also holds back the short reads Octoboard runs with
 reading the account's quota (see `docs/product/account-quota-readings.md`), starting its usage windows (see
 `docs/product/starting-usage-windows.md`) and listing its models (see "The models offered" in
 `docs/product/model-and-reasoning-effort.md`) — since one would create the directory again at its old path, and waits
-for those already running to end, without a time limit: starting a usage window can take up to a minute. A read held
-back meanwhile looks at the directory again once let through and, finding it gone, runs nothing: the quota reads as
-for an account whose directory does not exist, the usage window is not started, and the model list is empty with its
+for those already running to end, without a time limit: starting a usage window can take a little over a minute (its
+60 seconds, then the time it is given to exit; see "How a run of an agent's CLI is stopped" in
+`docs/product/account-quota-readings.md`). A read held back meanwhile looks at the directory again once let through
+and, finding it gone, runs nothing: the quota reads as for an account whose directory does not exist, the usage window is not started, and the model list is empty with its
 reason.
 
 ## When a removal is refused or fails

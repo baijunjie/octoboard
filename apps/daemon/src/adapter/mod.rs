@@ -558,6 +558,7 @@ pub mod tests {
                 stdout_limit: 64 * 1024,
                 stderr_limit: 64 * 1024,
                 reach: crate::processes::subprocess::Reach::ProcessGroup,
+                term_grace: std::time::Duration::ZERO,
             };
             match crate::processes::subprocess::run_bounded(
                 &mut command,

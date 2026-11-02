@@ -142,7 +142,9 @@ The levels follow the chosen model, and are each agent's own business rather tha
 
 While the answer for the agent and the account the dialog shows is outstanding, its pickers are locked and show what is
 stored, and the Model field says the list is being loaded — in the console dialog, both Model fields of the tab, Console
-sessions and Project sessions, each carry this note. Asking the agent is bounded at fifteen seconds.
+sessions and Project sessions, each carry this note. Asking the agent is bounded at fifteen seconds, after which an
+agent still running is stopped, which can take up to six seconds more (see "How a run of an agent's CLI is stopped" in
+`docs/product/account-quota-readings.md`).
 
 The agent cannot always be asked: its binary does not resolve on the user's login shell `PATH`, the shell environment
 could not be captured (see "The launch environment" in `docs/product/launching-agents.md`), the command failed or did

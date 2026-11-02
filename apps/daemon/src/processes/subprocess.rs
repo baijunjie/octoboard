@@ -47,6 +47,19 @@ pub(crate) const REAP_GRACE: Duration = Duration::from_millis(500);
 /// the chunking to line up with any particular boundary in the data.
 pub(crate) const PIPE_CHUNK_SIZE: usize = 8192;
 
+/// How long the stop of an agent CLI run leaves the CLI to exit after `SIGTERM` before it is
+/// killed. Just above the five seconds Claude Code's own shutdown allows itself before it forces
+/// an exit, so a CLI that is cleaning up is not cut short.
+const AGENT_TERM_GRACE: Duration = Duration::from_secs(6);
+
+/// The most a stop waits for its CLI after `SIGTERM` once the run is cancelled, which is how a
+/// daemon shutdown reaches the runs it can cancel. A restart of the daemon by the application
+/// gives it a bounded time to exit (see the "Restarting" section of
+/// `docs/product/application-lifecycle.md`) and then kills it, which would leave a CLI that
+/// ignores `SIGTERM` behind; this keeps the runs' waits within that. Longer than the two seconds
+/// Claude Code's own cleanup is allowed to take.
+const CANCEL_TERM_GRACE: Duration = Duration::from_secs(3);
+
 /// What a stop of a bounded run kills besides the command itself.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Reach {
@@ -63,6 +76,9 @@ pub enum Reach {
 struct Leader {
     child: Child,
     reach: Reach,
+    /// How long a stop leaves the child to exit after `SIGTERM` before the kill; see
+    /// [`Bounds::term_grace`].
+    term_grace: Duration,
     /// Names the child in the log of a session sweep.
     label: String,
 }
@@ -87,13 +103,36 @@ impl Leader {
         self.child.try_wait()
     }
 
-    /// Kills what the run reaches and waits for the child to be reaped: for a session, up to one
-    /// `REAP_GRACE` for the child to exit before the sweep, then, for either reach, up to another
-    /// for the reap. The steps every stop of [`run_bounded`] and [`run_exchange`] needs, together,
-    /// so none of them can apply only the first and leave the child running unreaped. Only for a
-    /// child not yet reaped by this run, whose pid and process group are still its own.
-    fn stop(&mut self) {
+    /// Ends what the run reaches and waits for the child to be reaped: first, when the run has a
+    /// `term_grace`, `SIGTERM` to the group and up to that long for the child to exit, so that an
+    /// agent CLI can finish what it is writing (Claude Code writes its `.claude.json` to a
+    /// temporary file and renames it into place, so a kill in between leaves the temporary file
+    /// behind).
+    /// Then the kill; for a session, up to one `REAP_GRACE` for the child to exit before the
+    /// sweep, then, for either reach, up to another for the reap. The steps every stop of
+    /// [`run_bounded`] and [`run_exchange`] needs, together, so none of them can apply only the
+    /// first and leave the child running unreaped. Only for a child not yet reaped by this run,
+    /// whose pid and process group are still its own.
+    ///
+    /// Once `cancel` is set, before the wait or during it, the wait for the child after `SIGTERM`
+    /// ends at most [`CANCEL_TERM_GRACE`] from then: a shutdown is not to wait out a grace that a
+    /// timeout began just before it.
+    fn stop(&mut self, cancel: &std::sync::atomic::AtomicBool) {
         let pid = self.pid();
+        if !self.term_grace.is_zero() {
+            leader::signal_group(pid, libc::SIGTERM);
+            let mut deadline = Instant::now() + self.term_grace;
+            let mut cancelled = false;
+            // A group member the leader outlives is killed below; `None`, where `waitid` cannot
+            // say, ends the wait for the kill to decide.
+            while leader::exited_unreaped(pid) == Some(false) && Instant::now() < deadline {
+                if !cancelled && cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                    cancelled = true;
+                    deadline = deadline.min(Instant::now() + CANCEL_TERM_GRACE);
+                }
+                thread::sleep(Duration::from_millis(20));
+            }
+        }
         leader::kill_group(pid);
         if self.reach == Reach::Session {
             // Swept once the child has exited, so that it can start nothing after the sweep; one
@@ -154,6 +193,7 @@ fn run_unbounded(
         stdout_limit: usize::MAX,
         stderr_limit: usize::MAX,
         reach: Reach::ProcessGroup,
+        term_grace: Duration::ZERO,
     };
     run_bounded_with(command, &bounds, &NEVER, input).map_err(BoundedFailure::into_error)
 }
@@ -171,6 +211,9 @@ pub struct Bounds {
     /// is read and thrown away rather than failing the run.
     pub stderr_limit: usize,
     pub reach: Reach,
+    /// How long a stop leaves the program to exit after `SIGTERM` to its group before the kill.
+    /// Zero kills at once, which is right for a program that has nothing of its own to finish.
+    pub term_grace: Duration,
 }
 
 /// How much of an agent CLI query's stderr [`Bounds::agent_query`] keeps for the failure that
@@ -180,18 +223,21 @@ const AGENT_STDERR_LIMIT: usize = 4096;
 impl Bounds {
     /// The bounds of a short query of an agent CLI: `timeout`, at most `stdout_limit` of output,
     /// the first `AGENT_STDERR_LIMIT` of its stderr, and a stop that reaches the CLI's whole
-    /// session ([`Reach::Session`]).
+    /// session ([`Reach::Session`]) and gives the CLI `AGENT_TERM_GRACE` to exit on `SIGTERM`
+    /// first.
     pub fn agent_query(timeout: Duration, stdout_limit: usize) -> Self {
         Self {
             timeout,
             stdout_limit,
             stderr_limit: AGENT_STDERR_LIMIT,
             reach: Reach::Session,
+            term_grace: AGENT_TERM_GRACE,
         }
     }
 }
 
-/// Why [`run_bounded`] did not produce an output. Each case has killed what the run reaches first.
+/// Why [`run_bounded`] did not produce an output. Each case has stopped the run and killed what it
+/// reaches first.
 #[derive(Debug)]
 pub enum BoundedFailure {
     TimedOut(Duration),
@@ -325,6 +371,7 @@ fn spawn_bounded(
         leader: Leader {
             child,
             reach: bounds.reach,
+            term_grace: bounds.term_grace,
             label,
         },
         stdin,
@@ -408,13 +455,13 @@ fn run_bounded_with(
                 // child left behind gets `EPIPE` and needs no signal.
                 Ok(BoundedChunk::Exceeded) => {
                     if exited.is_none() {
-                        leader.stop();
+                        leader.stop(cancel);
                     }
                     return Err(BoundedFailure::StdoutExceeded(bounds.stdout_limit));
                 }
                 Ok(BoundedChunk::Failed(err)) => {
                     if exited.is_none() {
-                        leader.stop();
+                        leader.stop(cancel);
                     }
                     return Err(BoundedFailure::Failed(
                         anyhow::Error::new(err).context("reading stdout from the subprocess"),
@@ -436,7 +483,7 @@ fn run_bounded_with(
                 Ok(Some(status)) => exited = Some((status, Instant::now())),
                 Ok(None) => {}
                 Err(err) => {
-                    leader.stop();
+                    leader.stop(cancel);
                     return Err(BoundedFailure::Failed(err.into()));
                 }
             },
@@ -465,17 +512,18 @@ fn run_bounded_with(
             Some(_) => continue,
         }
         if cancel.load(Ordering::Relaxed) {
-            leader.stop();
+            leader.stop(cancel);
             return Err(BoundedFailure::Cancelled);
         }
         if Instant::now() >= deadline {
-            leader.stop();
+            leader.stop(cancel);
             return Err(BoundedFailure::TimedOut(bounds.timeout));
         }
     }
 }
 
-/// Why [`run_exchange`] did not return a reply. Each case has killed what the run reaches first.
+/// Why [`run_exchange`] did not return a reply. Each case has stopped the run and killed what it
+/// reaches first.
 #[derive(Debug)]
 pub enum ExchangeFailure {
     TimedOut(Duration),
@@ -518,8 +566,9 @@ impl std::fmt::Display for ExchangeFailure {
 
 /// How long an agent CLI query's program is given to exit by itself after its reply, once its stdin
 /// is closed (see [`run_exchange_traced`]). The agents exit within a second or two of the end of
-/// their input; this leaves room for a login being written back.
-pub const AGENT_REPLY_GRACE: Duration = Duration::from_secs(5);
+/// their input; this leaves room for a login being written back. A program that has not exited
+/// by then is stopped, with `SIGTERM` before the kill as [`Bounds::term_grace`] says.
+pub const AGENT_REPLY_GRACE: Duration = Duration::from_secs(6);
 
 /// Runs an already-configured `command` as a conversation over lines: writes every line of
 /// `input` to its stdin, keeps stdin open, and reads stdout line by line until `is_reply` accepts
@@ -528,7 +577,8 @@ pub const AGENT_REPLY_GRACE: Duration = Duration::from_secs(5);
 /// cannot be used. Whatever else it prints is passed over, a line `is_reply` rejects included.
 ///
 /// Once the reply is in, the program is given [`AGENT_REPLY_GRACE`] to exit by itself, as
-/// [`run_exchange_traced`] says. Every other end kills what `bounds.reach` names. The same bounds
+/// [`run_exchange_traced`] says. Every other end stops the program as [`Bounds::term_grace`] says
+/// and kills what `bounds.reach` names. The same bounds
 /// apply as to [`run_bounded`]: `bounds.timeout` from the start, `bounds.stdout_limit` over
 /// everything printed (one byte more fails the run), and `bounds.stderr_limit` bytes of stderr
 /// kept, for the failure that reports it. Setting `cancel` ends the run within one
@@ -556,7 +606,7 @@ pub fn run_exchange(
 pub enum AfterReply {
     /// The program exited by itself, `after` the reply.
     Exited { after: Duration },
-    /// It had not exited, and was killed `after` the reply for `why`.
+    /// It had not exited, and was stopped `after` the reply for `why`.
     Killed { after: Duration, why: &'static str },
 }
 
@@ -620,8 +670,8 @@ fn await_exit(
 /// `cancel` still ending the wait. The program may still be finishing work begun for the request
 /// (Claude Code can be writing a rotated OAuth token to the keychain through a `security` child of
 /// its own session), which a kill at the reply could lose. Only a program that has not exited by
-/// then is killed. What it leaves in its group or session is swept as it is for any other end, and
-/// the reply is returned whichever way the program ended. A `reply_grace` of zero kills at the
+/// then is stopped. What it leaves in its group or session is swept as it is for any other end, and
+/// the reply is returned whichever way the program ended. A `reply_grace` of zero stops at the
 /// reply.
 pub fn run_exchange_traced(
     command: &mut Command,
@@ -698,7 +748,7 @@ pub fn run_exchange_traced(
         trace.after_reply = Some(await_exit(leader.pid(), &stdout_rx, until, cancel));
     }
     trace.elapsed = started.elapsed();
-    leader.stop();
+    leader.stop(cancel);
     match outcome {
         Err(ExchangeFailure::ClosedWithoutReply { .. }) => {
             let mut stderr = Vec::new();
@@ -801,6 +851,7 @@ mod tests {
             stdout_limit: 64 * 1024,
             stderr_limit: 1024,
             reach: Reach::ProcessGroup,
+            term_grace: Duration::ZERO,
         };
         let short = Bounds {
             timeout: Duration::from_millis(300),
@@ -841,6 +892,7 @@ mod tests {
             stdout_limit: 1024,
             stderr_limit: 1024,
             reach: Reach::ProcessGroup,
+            term_grace: Duration::ZERO,
         };
         let (outcome, pid) = until_the_shell_ran(|| {
             let pid_file = ScratchFile::new("env-shell-leftover", "pid");
@@ -866,6 +918,7 @@ mod tests {
             stdout_limit: 1024,
             stderr_limit: 10,
             reach: Reach::ProcessGroup,
+            term_grace: Duration::ZERO,
         };
         let mut command = Command::new("/bin/sh");
         command.args(["-c", "printf 'out'; printf '0123456789abcdef' >&2"]);
@@ -1046,6 +1099,7 @@ mod tests {
             stdout_limit: 64 * 1024,
             stderr_limit: 1024,
             reach: Reach::ProcessGroup,
+            term_grace: Duration::ZERO,
         }
     }
 
@@ -1151,6 +1205,8 @@ mod tests {
     enum SessionEnd {
         Exits,
         TimesOut,
+        /// Times out with time to exit on `SIGTERM`, which the stand-in does.
+        TimesOutGraced,
         Cancelled,
         /// Replies and keeps running until it is killed.
         Replies,
@@ -1166,7 +1222,9 @@ mod tests {
         let pid_file = ScratchFile::new("session-run", "pid");
         let then = match end {
             SessionEnd::Exits => "exit 0",
-            SessionEnd::TimesOut | SessionEnd::Cancelled => "exec /bin/sleep 300",
+            SessionEnd::TimesOut | SessionEnd::TimesOutGraced | SessionEnd::Cancelled => {
+                "exec /bin/sleep 300"
+            }
             SessionEnd::Replies => "read line; echo \"reply $line\"; exec /bin/sleep 300",
             SessionEnd::RepliesThenExits => "read line; echo \"reply $line\"; cat >/dev/null",
         };
@@ -1177,12 +1235,16 @@ mod tests {
         ]);
         let bounds = Bounds {
             timeout: match end {
-                SessionEnd::TimesOut => Duration::from_millis(300),
+                SessionEnd::TimesOut | SessionEnd::TimesOutGraced => Duration::from_millis(300),
                 _ => PATIENCE,
             },
             stdout_limit: 64 * 1024,
             stderr_limit: 1024,
             reach: Reach::Session,
+            term_grace: match end {
+                SessionEnd::TimesOutGraced => PATIENCE,
+                _ => Duration::ZERO,
+            },
         };
         let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         if matches!(end, SessionEnd::Cancelled) {
@@ -1216,7 +1278,10 @@ mod tests {
                 let outcome = run_bounded(&mut command, &bounds, &cancel);
                 match (end, outcome) {
                     (SessionEnd::Exits, Ok(output)) => assert!(output.status.success()),
-                    (SessionEnd::TimesOut, Err(BoundedFailure::TimedOut(_)))
+                    (
+                        SessionEnd::TimesOut | SessionEnd::TimesOutGraced,
+                        Err(BoundedFailure::TimedOut(_)),
+                    )
                     | (SessionEnd::Cancelled, Err(BoundedFailure::Cancelled)) => {}
                     (_, other) => panic!("{end:?} ended as {other:?}"),
                 }
@@ -1225,11 +1290,160 @@ mod tests {
         read_pid_file(&pid_file)
     }
 
+    /// The bounds of a stand-in agent CLI that is stopped after 300 ms and given `term_grace` to
+    /// exit on `SIGTERM`.
+    fn terminable_bounds(term_grace: Duration) -> Bounds {
+        Bounds {
+            timeout: Duration::from_millis(300),
+            stdout_limit: 1024,
+            stderr_limit: 1024,
+            reach: Reach::Session,
+            term_grace,
+        }
+    }
+
+    /// A stand-in that, on `SIGTERM`, writes `marker` and exits, and otherwise runs `then`: the
+    /// marker is there only if the program was asked to exit, which a kill never does.
+    fn term_marking_script(marker: &Path, then: &str) -> String {
+        format!(
+            "trap \"echo termed > '{}'; exit 0\" TERM; {then}",
+            marker.display()
+        )
+    }
+
+    #[test]
+    fn a_timed_out_run_is_asked_to_exit_before_it_is_killed() {
+        let marker = ScratchFile::new("term-handled", "marker");
+        let script = term_marking_script(&marker, "while :; do /bin/sleep 0.05; done");
+        let started = Instant::now();
+        let (outcome, pid) =
+            until_the_shell_ran(|| bounded_run_of(&script, terminable_bounds(PATIENCE), None));
+        assert!(matches!(outcome, Err(BoundedFailure::TimedOut(_))));
+        assert!(
+            marker.exists(),
+            "the program was killed without being asked to exit"
+        );
+        assert!(started.elapsed() < PATIENCE, "the grace was waited out");
+        assert_gone_by(pid, Instant::now() + PATIENCE);
+    }
+
+    #[test]
+    fn a_run_that_ignores_sigterm_is_killed_once_the_grace_has_passed() {
+        let grace = Duration::from_millis(600);
+        let started = Instant::now();
+        let (outcome, pid) = until_the_shell_ran(|| {
+            bounded_run_of(
+                "trap '' TERM; while :; do /bin/sleep 0.05; done",
+                terminable_bounds(grace),
+                None,
+            )
+        });
+        assert!(matches!(outcome, Err(BoundedFailure::TimedOut(_))));
+        assert!(
+            started.elapsed() >= Duration::from_millis(300) + grace,
+            "killed before the grace passed: {:?}",
+            started.elapsed()
+        );
+        assert_gone_by(pid, Instant::now() + PATIENCE);
+    }
+
+    #[test]
+    fn a_cancelled_run_is_asked_to_exit_before_it_is_killed() {
+        let marker = ScratchFile::new("term-handled-cancel", "marker");
+        let script = term_marking_script(&marker, "while :; do /bin/sleep 0.05; done");
+        let bounds = Bounds {
+            timeout: PATIENCE,
+            ..terminable_bounds(PATIENCE)
+        };
+        let (outcome, pid) = until_the_shell_ran(|| {
+            bounded_run_of(&script, bounds, Some(Duration::from_millis(300)))
+        });
+        assert!(matches!(outcome, Err(BoundedFailure::Cancelled)));
+        assert!(
+            marker.exists(),
+            "the program was killed without being asked to exit"
+        );
+        assert_gone_by(pid, Instant::now() + PATIENCE);
+    }
+
+    #[test]
+    fn a_stop_in_progress_waits_no_longer_than_the_cancel_cap_once_cancelled() {
+        // Times out at 300 ms with a grace far longer than `PATIENCE`, and is cancelled while it
+        // waits out that grace: well after the shell started, so the timeout has fired first.
+        let bounds = terminable_bounds(Duration::from_secs(120));
+        let started = Instant::now();
+        let (outcome, pid) = until_the_shell_ran(|| {
+            let cancel = Arc::new(AtomicBool::new(false));
+            let flag = cancel.clone();
+            let pid_file = ScratchFile::new("cancel-cap", "pid");
+            let pid_path = pid_file.to_path_buf();
+            thread::spawn(move || {
+                let deadline = Instant::now() + PATIENCE;
+                while !pid_path.exists() && Instant::now() < deadline {
+                    thread::sleep(Duration::from_millis(20));
+                }
+                thread::sleep(Duration::from_millis(1500));
+                flag.store(true, Ordering::Relaxed);
+            });
+            let mut command = Command::new("/bin/sh");
+            command.args([
+                "-c",
+                &format!(
+                    "trap '' TERM; echo $$ > '{}'; while :; do /bin/sleep 0.05; done",
+                    pid_file.display()
+                ),
+            ]);
+            let outcome = run_bounded(&mut command, &bounds, &cancel);
+            Some((outcome, read_pid_file(&pid_file)?))
+        });
+        assert!(matches!(outcome, Err(BoundedFailure::TimedOut(_))));
+        let waited = started.elapsed();
+        assert!(
+            waited >= CANCEL_TERM_GRACE && waited < PATIENCE,
+            "{waited:?}"
+        );
+        assert_gone_by(pid, Instant::now() + PATIENCE);
+    }
+
+    #[test]
+    fn a_program_still_running_after_the_reply_grace_is_asked_to_exit_before_it_is_killed() {
+        let marker = ScratchFile::new("term-handled-reply", "marker");
+        let script = term_marking_script(
+            &marker,
+            "read a; echo \"reply $a\"; while :; do /bin/sleep 0.05; done",
+        );
+        let bounds = Bounds {
+            timeout: PATIENCE,
+            ..terminable_bounds(PATIENCE)
+        };
+        let mut trace = ExchangeTrace::default();
+        let started = Instant::now();
+        let (outcome, pid) = until_the_shell_ran(|| {
+            exchange_graced_by(
+                &script,
+                &["x"],
+                bounds,
+                &AtomicBool::new(false),
+                Duration::from_millis(200),
+                &mut trace,
+            )
+        });
+        assert_eq!(outcome.expect("the reply survives the stop"), "reply x");
+        assert!(matches!(trace.after_reply, Some(AfterReply::Killed { .. })));
+        assert!(started.elapsed() < PATIENCE, "the grace was waited out");
+        assert!(
+            marker.exists(),
+            "the program was killed without being asked to exit"
+        );
+        assert_gone_by(pid, Instant::now() + PATIENCE);
+    }
+
     #[test]
     fn a_run_that_reaches_the_session_leaves_no_helper_behind_however_it_ends() {
         for end in [
             SessionEnd::Exits,
             SessionEnd::TimesOut,
+            SessionEnd::TimesOutGraced,
             SessionEnd::Cancelled,
             SessionEnd::Replies,
             SessionEnd::RepliesThenExits,

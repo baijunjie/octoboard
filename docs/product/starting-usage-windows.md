@@ -54,10 +54,11 @@ its lowest reasoning effort:
 
 The reply is not read: a kick has done its work when the CLI ends with success, and one that writes more than 64 KiB to
 its standard output is stopped and fails; its error output is limited by nothing, and only its first 4 KiB are kept for
-the log. It is stopped after **60 seconds**, and when the daemon shuts down; whichever way it ends, the helper processes
-it started are ended with it. None is started once shutdown has begun. A kick runs in the background, so the reading
-that called for it is shown at once and the reading after the kick follows when it ends. That reading is skipped when
-the daemon is shutting down, or when the account was removed or pointed at another directory meanwhile; when the
+the log. It is stopped after **60 seconds**, and when the daemon shuts down, by asking it to exit before it is killed
+(see "How a run of an agent's CLI is stopped" in `docs/product/account-quota-readings.md`); whichever way it ends, the
+helper processes it started are ended with it. None is started once shutdown has begun. A kick runs in the background,
+so the reading that called for it is shown at once and the reading after the kick follows when it ends. That reading
+is skipped when the daemon is shutting down, or when the account was removed or pointed at another directory meanwhile; when the
 account's login ended meanwhile, the login's own reading stands in for it (see "When quotas are read" in
 `docs/product/account-quota-readings.md`). Should the reading after a kick show another window that calls for a kick, the
 account is kicked again.

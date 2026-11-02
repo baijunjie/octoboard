@@ -251,7 +251,7 @@ pub(super) fn probe(
         // A program that exits by itself after its reply is the normal end of a reading.
         Ok(_) => {
             if let Some(AfterReply::Killed { after, why }) = &exchange.after_reply {
-                trace.stopped = Some(format!("killed {after:?} after its reply: {why}"));
+                trace.stopped = Some(format!("stopped {after:?} after its reply: {why}"));
             }
         }
     }
@@ -1652,9 +1652,9 @@ mod tests {
             &mut trace,
         );
         assert!(reading.is_ok(), "{reading:?}");
-        let stopped = trace.stopped.expect("the program was killed");
+        let stopped = trace.stopped.expect("the program was stopped");
         assert!(
-            stopped.starts_with("killed ")
+            stopped.starts_with("stopped ")
                 && stopped.ends_with(" after its reply: it did not exit in time"),
             "{stopped}"
         );

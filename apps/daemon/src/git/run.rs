@@ -182,6 +182,7 @@ pub fn run(
         stdout_limit: limits.stdout,
         stderr_limit: limits.stderr,
         reach: Reach::ProcessGroup,
+        term_grace: Duration::ZERO,
     };
     subprocess::run_bounded(command, &bounds, cancel.unwrap_or(&NEVER))
 }

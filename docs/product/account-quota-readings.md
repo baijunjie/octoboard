@@ -2,7 +2,8 @@
 
 How Octoboard reads the account quotas described in `docs/product/account-quotas.md`, for the accounts its "Which
 accounts have a quota" section names: how a quota is read, the sign-in email a reading carries, when readings are
-taken, what a reading leaves behind and what the daemon's log records of readings.
+taken, what a reading leaves behind, how a run of an agent's CLI is stopped and what the daemon's log records of
+readings.
 
 ## How a quota is read
 
@@ -128,16 +129,16 @@ turn waiting after the usage limit stopped it while automatic switching is on (s
 
 Each reading starts one process of the agent; none is started once shutdown has begun, and no conversation is started (a
 kick does make a request; see "What a kick leaves behind" in `docs/product/starting-usage-windows.md`). Once the agent
-has replied, its standard input is closed and it is given up to **5 seconds** to exit by itself, since it may still be
+has replied, its standard input is closed and it is given up to **6 seconds** to exit by itself, since it may still be
 finishing work begun for the request — Claude Code can be writing a refreshed sign-in back to the Keychain then, which
 ending it at once could lose. The wait never runs past the reading's 60 seconds, its output still counts towards the
-8 MiB, and it ends at once when the daemon begins shutting down. A process still running when the wait ends is ended,
-and the reply it gave is read all the same. A process that gives no reply in time, writes too much, or is running when
-the daemon shuts down is ended at once. However it ends, the helper processes it started are ended with it. Where the
-CLI allows it without changing which sign-in is used, the reading leaves out the user's MCP servers, plugins and hooks:
-Claude Code's MCP servers are not started, and Codex's plugins, apps and hooks are turned off for the reading. Claude
-Code still loads the user's settings, since they can decide which credentials are used, and Grok Build offers no way to
-leave anything out.
+8 MiB, and it ends at once when the daemon begins shutting down. A process still running when the wait ends is stopped
+(see "How a run of an agent's CLI is stopped" below), and the reply it gave is read all the same. A process that gives
+no reply in time, writes too much, or is running when the daemon shuts down is stopped too. However it ends, the helper
+processes it started are ended with it. Where the CLI allows it without changing which sign-in is used, the reading
+leaves out the user's MCP servers, plugins and hooks: Claude Code's MCP servers are not started, and Codex's plugins,
+apps and hooks are turned off for the reading. Claude Code still loads the user's settings, since they can decide which
+credentials are used, and Grok Build offers no way to leave anything out.
 
 Some writes into the account's directory cannot be avoided:
 
@@ -145,6 +146,24 @@ Some writes into the account's directory cannot be avoided:
   registration is cleared by a later start of Claude Code.
 - **Codex** writes its model cache, its log databases and a temporary directory it clears on its next start.
 - **Grok Build** writes its model cache, its session search index and its log.
+
+## How a run of an agent's CLI is stopped
+
+A reading's agent, and every other short run of an agent's CLI that Octoboard makes with no terminal — starting a usage
+window (see `docs/product/starting-usage-windows.md`), redeeming a usage limit reset (see
+`docs/product/usage-limit-resets.md`), listing an agent's models (see "The models offered" in
+`docs/product/model-and-reasoning-effort.md`), checking with `claude auth status` whether a Claude Code login succeeded,
+and `codex unarchive` — is stopped the same way when Octoboard ends it: on its timeout, when it writes too much, when it
+fails, when it does not exit after its reply, or when the daemon shuts down.
+
+- **It is asked to exit first**: `SIGTERM` goes to its process group, so that the CLI can finish what it is writing.
+  Claude Code, for one, saves its `.claude.json` by writing a temporary file and renaming it into place, and one killed
+  in between leaves the temporary file behind.
+- **It is killed if it is still running 6 seconds later**, and its helper processes with it.
+- **During a shutdown the wait is shorter**: once the daemon has begun shutting down, a run it stops for that reason —
+  a reading, a usage window being started or a reset being redeemed — is killed at most **3 seconds** after being asked
+  to exit, and one of these that was already being stopped when the shutdown began is killed at most 3 seconds after
+  it began. The other runs are not stopped by a shutdown, and keep the full 6 seconds whenever they are stopped.
 
 ## What the daemon's log records of readings
 
