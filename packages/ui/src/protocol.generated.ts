@@ -2639,7 +2639,8 @@ export type Request = {
   project_id: string,
 }) | {
   "type": "list_all_processes"
-} | {
+}
+  | {
   "type": "stop_processes",
   ids: Array<string>,
 }
@@ -3326,7 +3327,8 @@ export type RequestBody = {
   project_id: string,
 }) | {
   "type": "list_all_processes"
-} | {
+}
+| {
   "type": "stop_processes",
   ids: Array<string>,
 }
