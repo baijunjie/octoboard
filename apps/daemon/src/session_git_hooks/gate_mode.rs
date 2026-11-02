@@ -6,16 +6,18 @@
 //!
 //! Anything but an answer to run the gate with lets the update or push through, silently: the
 //! daemon not running or not answering in time, a reply it cannot read, and the daemon saying to
-//! skip (a console session, another repository, the switch turned off). The gate only ever gets
-//! in the way of an update when it has judged that update; a daemon that is down is no reason to
-//! stop the user's git.
+//! skip (a console session, another repository, the switch turned off). A daemon that answers with
+//! an error status is let through with a line on stderr saying so, since that is a mismatch or a
+//! fault to be looked into, not a daemon being down. The gate only ever gets in the way of an
+//! update when it has judged that update; a daemon that is down is no reason to stop the user's
+//! git.
 //!
 //! The gate's own `git` calls run in the hook's environment, as the gate expects (see
 //! [`crate::revert_gate`]), so this process does not setsid, change directory or touch any
 //! variable.
 
 use std::ffi::OsStr;
-use std::io::{Cursor, Read};
+use std::io::{Cursor, Read, Write};
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::time::Duration;
@@ -64,13 +66,25 @@ pub(crate) fn inputs_for(
         git_dir: git_dir.map(|dir| wire_path::encode(dir.as_bytes())),
     };
     let body = serde_json::to_vec(&request).ok()?;
-    let reply = crate::loopback::post(
+    let reply = match crate::loopback::post(
         port,
         key,
         &format!("/revert-gate/{session}"),
         &body,
         TIMEOUT,
-    )
-    .ok()?;
+    ) {
+        Ok(reply) => reply,
+        Err(err) => {
+            // A daemon that answered with an error is not one that is down: the update is still
+            // let through, but not without saying that the gate did not look at it.
+            if crate::loopback::error_status(&err).is_some() {
+                let _ = writeln!(
+                    std::io::stderr(),
+                    "octoboard: the revert gate did not check this update: {err}"
+                );
+            }
+            return None;
+        }
+    };
     serde_json::from_slice::<Option<GateInputs>>(&reply).ok()?
 }

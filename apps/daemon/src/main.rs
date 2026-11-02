@@ -37,7 +37,6 @@ mod project_trash;
 mod protocol;
 mod records;
 mod revert_gate;
-mod rfc3339;
 mod server;
 mod session;
 mod session_git_hooks;
@@ -47,6 +46,7 @@ mod store;
 mod terminal;
 #[cfg(test)]
 mod test_support;
+mod time;
 mod titles;
 mod trash_safety;
 mod wire_path;
@@ -185,7 +185,12 @@ async fn run_daemon(parent_pid: Option<u32>, log_file: log_file::LogFile) -> Res
     println!("octoboardd listening on 127.0.0.1:{port} with key {key}");
     use std::io::Write;
     std::io::stdout().flush().ok();
-    write_port_file(port)?;
+    // A convenience for a developer attaching to a daemon started by hand, not something the
+    // daemon depends on. The port alone is in this file: the key is not.
+    let port_file = port_file_path();
+    if let Err(err) = std::fs::write(&port_file, port.to_string()) {
+        tracing::warn!(%err, path = %port_file.display(), "writing the port file failed");
+    }
 
     if let Some(parent_pid) = parent_pid {
         spawn_parent_watch(state.clone(), parent_pid);
@@ -224,7 +229,7 @@ async fn run_daemon(parent_pid: Option<u32>, log_file: log_file::LogFile) -> Res
     }
 
     stop_all_processes(&state).await;
-    remove_port_file();
+    remove_port_file(&port_file, port);
     Ok(())
 }
 
@@ -281,26 +286,30 @@ fn clear_run_dir() {
     }
 }
 
-/// The port and key are on stdout for the application. The port alone is in this file, for a
-/// developer attaching to a daemon started by hand, who reads the key from the startup line: the
-/// key is not in this file.
-fn write_port_file(port: u16) -> Result<()> {
-    std::fs::write(port_file_path(), port.to_string())
-        .with_context(|| format!("writing {}", port_file_path().display()))?;
-    Ok(())
-}
-
-/// Removed on the way out, so nothing points at a port this daemon no longer holds.
-fn remove_port_file() {
-    if let Err(err) = std::fs::remove_file(port_file_path()) {
+/// Removed on the way out, so nothing points at a port this daemon no longer holds. A file that
+/// names another port is another daemon's and stays.
+fn remove_port_file(path: &std::path::Path, port: u16) {
+    match std::fs::read_to_string(path) {
+        Ok(content) if content.trim() == port.to_string() => {}
+        Ok(_) => return,
+        Err(err) => {
+            if err.kind() != std::io::ErrorKind::NotFound {
+                tracing::warn!(%err, "reading the port file failed");
+            }
+            return;
+        }
+    }
+    if let Err(err) = std::fs::remove_file(path) {
         if err.kind() != std::io::ErrorKind::NotFound {
             tracing::warn!(%err, "removing the port file failed");
         }
     }
 }
 
+/// In the data directory, which is the user's own, so that daemons of different users or data
+/// directories never share it.
 fn port_file_path() -> std::path::PathBuf {
-    std::env::temp_dir().join("octoboardd.port")
+    paths::data_dir().join("octoboardd.port")
 }
 
 #[cfg(test)]
@@ -401,5 +410,20 @@ mod tests {
                 state.await_shutdown().await;
             });
         std::fs::write(&done, "reached").expect("the marker was written");
+    }
+
+    #[test]
+    fn the_port_file_holds_the_port_and_is_removed_only_by_the_daemon_that_wrote_it() {
+        let dir = ScratchDir::new("port-file");
+        let path = dir.join("octoboardd.port");
+        std::fs::write(&path, "4021").expect("the port file was written");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "4021");
+
+        super::remove_port_file(&path, 4022);
+        assert!(path.exists(), "another daemon's port file was removed");
+        super::remove_port_file(&path, 4021);
+        assert!(!path.exists());
+        // Already gone: nothing to do, and no panic.
+        super::remove_port_file(&path, 4021);
     }
 }

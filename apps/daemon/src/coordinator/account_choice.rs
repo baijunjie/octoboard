@@ -10,10 +10,10 @@ use anyhow::Result;
 use crate::accounts::quotas;
 use crate::adapter;
 use crate::protocol::{
-    error_code, now_millis, Account, Agent, Availability, CodedError, Console, Project,
-    ProjectAccount,
+    error_code, Account, Agent, Availability, CodedError, Console, Project, ProjectAccount,
 };
 use crate::state::AppState;
+use crate::time::now_millis;
 
 /// Whether `agent` is not known to be missing; while availability is still undetermined it is kept.
 pub(crate) fn agent_is_available(state: &Arc<AppState>, agent: Agent) -> bool {

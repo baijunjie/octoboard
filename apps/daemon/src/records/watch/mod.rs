@@ -1,8 +1,8 @@
 //! The mechanism behind watching an agent's own session record for something its hooks never
-//! report: `crate::records::transcript` (Claude Code's transcript, a declined prompt or an
-//! interrupted turn) and `crate::records::rollout` (Codex's rollout file, a turn that ended in an
-//! error). Each of those owns what a line means, when a watch is armed and what a finding does;
-//! this owns reading the file and the poll loop around it.
+//! report: [`claude_transcript`] (Claude Code's transcript, a declined prompt or an interrupted
+//! turn) and [`codex_rollout`] (Codex's rollout file, a turn that ended in an error). Each of those
+//! owns what a line means, when a watch is armed and what a finding does; this owns reading the
+//! file and the poll loop around it.
 //!
 //! A record is append-only JSONL that the agent flushes per line, and belongs to the agent, which
 //! rewrites its format on upgrades. So every line is judged on its own, and one that is not UTF-8,
@@ -16,6 +16,9 @@
 //!
 //! [`scan_lines`] is the pure half: a path, an offset and a line check in, what was found among the
 //! lines added since and where to read from next out. [`spawn`] is what calls it on a timer.
+
+pub(crate) mod claude_transcript;
+pub(crate) mod codex_rollout;
 
 use std::io;
 use std::path::{Path, PathBuf};

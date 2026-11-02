@@ -6,9 +6,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::protocol::now_millis;
 use crate::session::LiveSession;
 use crate::state::AppState;
+use crate::time::now_millis;
 
 /// How often a session's process is polled for having exited. The agent's own exit (the user
 /// typing `/exit`, a crash) has no other signal: `SessionEnd` hooks are not reliable for this,

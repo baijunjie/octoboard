@@ -2,7 +2,7 @@
 //! reported during it, and what closing it amounts to.
 
 use super::AppState;
-use crate::protocol::now_millis;
+use crate::time::now_millis;
 
 /// How long an open turn must have been quiet before a clock-attributed turn end may be read as
 /// belonging to it. Grok's `idle_prompt` backstop fires about 60 s after a turn ends and carries no
@@ -177,7 +177,7 @@ impl AppState {
     }
 
     /// A watch saw the session back at its prompt with no hook, its turn left open
-    /// (`crate::records::transcript::back_at_prompt`).
+    /// (`crate::records::watch::claude_transcript::back_at_prompt`).
     pub fn note_turn_end(&self, id: &str) {
         self.turns
             .lock()

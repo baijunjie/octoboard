@@ -17,14 +17,14 @@ use crate::branch_origin::{ref_created, repo_key, RefReport};
 use crate::git::repo_files::repository_of;
 use crate::git_workflow::GitWorkflowSettingsChanges;
 use crate::protocol::{
-    now_millis, Agent, Console, OrchestrationRole, Origin, Project, ProjectSource, Role, Session,
-    SessionStatus,
+    Agent, Console, OrchestrationRole, Origin, Project, ProjectSource, Role, Session, SessionStatus,
 };
 use crate::state::AppState;
 use crate::store::{BranchOrigin, LOCAL_HOST_ID};
 use crate::test_support::{
     app_state, fixture_git, git, repo_with, ScratchDir, ScratchFile, PATIENCE, SYSTEM_GIT, TEST_KEY,
 };
+use crate::time::now_millis;
 
 /// The dispatchers every test here runs git with, written once per test binary under a fixed
 /// name, as a fresh executable per test would pay macOS's first-exec cost each time. Their report

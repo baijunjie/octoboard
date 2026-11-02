@@ -93,6 +93,18 @@ impl std::fmt::Display for HeldFragment {
 
 impl std::error::Error for HeldFragment {}
 
+/// The refusal of a write into a session whose output has been archived: gone for good, so unlike
+/// [`blocked`] it is never retried.
+pub(super) fn archived_refusal() -> ptyio::PartialWrite {
+    ptyio::PartialWrite {
+        written: 0,
+        error: io::Error::new(
+            io::ErrorKind::BrokenPipe,
+            "the session output has been archived",
+        ),
+    }
+}
+
 pub(super) fn blocked(message: &str) -> ptyio::PartialWrite {
     ptyio::PartialWrite {
         written: 0,
@@ -148,13 +160,7 @@ impl LiveSession {
             return Ok(InputRoute::Direct);
         }
         if self.is_frozen() {
-            return Err(ptyio::PartialWrite {
-                written: 0,
-                error: io::Error::new(
-                    io::ErrorKind::BrokenPipe,
-                    "the session output has been archived",
-                ),
-            });
+            return Err(archived_refusal());
         }
         if data.is_empty() {
             return Ok(InputRoute::Buffered);

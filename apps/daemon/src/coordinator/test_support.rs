@@ -283,6 +283,7 @@ pub(super) fn binding_fixture(
         .store
         .insert_project(&Project {
             id: "project-2".to_string(),
+            path: format!("{}-2", project_1.path),
             ..project_1
         })
         .unwrap();

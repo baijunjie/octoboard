@@ -20,10 +20,11 @@ use super::kick::{kick, KICK_TIMEOUT};
 use super::probe::{config_dir_missing, failed, probe, PROBE_TIMEOUT};
 use super::{retain_locked, window_id, AccountQuotas, Claim, Entry, Inner, Key, WindowId};
 use crate::protocol::{
-    now_millis, quota_unavailable_code as code, AccountQuota, Agent, Availability, Event,
-    QuotaUnavailable, QuotaWindowKind,
+    quota_unavailable_code as code, AccountQuota, Agent, Availability, Event, QuotaUnavailable,
+    QuotaWindowKind,
 };
 use crate::state::AppState;
+use crate::time::now_millis;
 
 /// How old an account's last attempt must be before it is read again.
 pub(super) const POLL_INTERVAL: Duration = Duration::from_secs(5 * 60);

@@ -1,20 +1,89 @@
 //! The schema text, its version, and what opening an existing database file does with each version.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use rusqlite::Connection;
 
 /// The schema version a database is created at, recorded in SQLite's `user_version`. A database
-/// at any other version is not opened as it stands; see [`settle_existing_file`].
+/// at another version is not opened as it stands; see [`settle_existing_file`].
 ///
-/// `SCHEMA` only ever runs on an empty file, so an existing database at an unchanged version keeps
-/// its old shape and fails at query time — while every test, starting from a fresh file, still
-/// passes. No build has been released yet: the schema is edited in place and stays at version 1,
-/// with no upgrade steps, and a database an earlier development build created is moved aside by
-/// hand. From the first release on, every change to `SCHEMA` raises this by one and adds the step
-/// from the previous version, with a test that opens a database at it.
-pub(super) const SCHEMA_VERSION: i64 = 1;
+/// `SCHEMA` only ever runs on an empty file, so an existing database keeps the shape it was
+/// created with and fails at query time unless it is brought up to date. Every change to `SCHEMA`
+/// therefore raises this by one and appends the step from the previous version to [`MIGRATIONS`];
+/// the schema of every past version stays as `schema/v{N}.sql` and is listed in the test-only
+/// `PAST_SCHEMAS`, for the test that migrates a database built from each and compares the result
+/// with a fresh one.
+pub(super) const SCHEMA_VERSION: i64 = 2;
+
+/// The `application_id` of an Octoboard database, "OCTB" in ASCII, written into the file's header
+/// when it is created, so that a SQLite file of another program is told apart from one of ours.
+/// Databases of version 1 were created before it existed and carry 0; the first migration stamps
+/// them.
+pub(super) const APPLICATION_ID: i64 = 0x4F43_5442;
+
+/// The first schema version whose files carry [`APPLICATION_ID`].
+const APPLICATION_ID_SINCE: i64 = 2;
+
+/// The steps that bring a database up to [`SCHEMA_VERSION`]: `MIGRATIONS[n - 1]` takes a database
+/// at version `n` to version `n + 1`. Each is a batch of SQL that runs in the one transaction of
+/// the whole migration, with foreign keys off, and leaves exactly the shape `SCHEMA` creates (a
+/// test compares the two). A step that rebuilds a table renames the old one aside and creates the
+/// new one under its final name: a table renamed into place is stored with its name quoted in
+/// `sqlite_master`, which no longer matches `SCHEMA`.
+pub(super) const MIGRATIONS: &[&str] = &[MIGRATE_V1_TO_V2];
+
+/// Version 1 to 2: a project's path is unique within its console, the child-table lookups have
+/// indexes, and the `branch_origins` columns the code reads as present are `NOT NULL`.
+const MIGRATE_V1_TO_V2: &str = r#"
+-- Two projects at one path of one console become one: the oldest (lowest rowid) stays, and the
+-- sessions of the others move to it before the others go. Nothing else refers to a project.
+UPDATE sessions SET project_id = (
+    SELECT kept.id FROM projects AS dup JOIN projects AS kept
+        ON kept.console_id = dup.console_id AND kept.path = dup.path
+    WHERE dup.id = sessions.project_id
+    ORDER BY kept.rowid LIMIT 1)
+WHERE project_id IN (
+    SELECT dup.id FROM projects AS dup WHERE EXISTS (
+        SELECT 1 FROM projects AS older
+        WHERE older.console_id = dup.console_id AND older.path = dup.path
+          AND older.rowid < dup.rowid));
+DELETE FROM projects WHERE EXISTS (
+    SELECT 1 FROM projects AS older
+    WHERE older.console_id = projects.console_id AND older.path = projects.path
+      AND older.rowid < projects.rowid);
+CREATE UNIQUE INDEX projects_console_path_unique
+    ON projects (console_id, path);
+CREATE INDEX sessions_console_id ON sessions (console_id);
+CREATE INDEX sessions_project_id ON sessions (project_id);
+CREATE INDEX sessions_bound_to ON sessions (bound_to);
+CREATE INDEX sessions_agent_session_id ON sessions (agent_session_id);
+CREATE INDEX pages_session_id ON pages (session_id);
+CREATE INDEX kept_messages_session_id ON kept_messages (session_id);
+-- A row missing one of the columns made `BranchOrigin` fail the whole read of its repository, so
+-- it is not carried over.
+ALTER TABLE branch_origins RENAME TO branch_origins_v1;
+CREATE TABLE branch_origins (
+    repository     TEXT NOT NULL,
+    branch         TEXT NOT NULL,
+    created_at     INTEGER NOT NULL,
+    birth_commit   TEXT NOT NULL,
+    birth_time     INTEGER NOT NULL,
+    responsible_session_id TEXT NOT NULL,
+    responsible_since      INTEGER NOT NULL,
+    responsible_title      TEXT NOT NULL,
+    target_branch          TEXT,
+    PRIMARY KEY (repository, branch)
+);
+INSERT INTO branch_origins
+    SELECT repository, branch, created_at, birth_commit, birth_time, responsible_session_id,
+           responsible_since, responsible_title, target_branch
+    FROM branch_origins_v1
+    WHERE birth_commit IS NOT NULL AND birth_time IS NOT NULL
+      AND responsible_session_id IS NOT NULL AND responsible_since IS NOT NULL
+      AND responsible_title IS NOT NULL;
+DROP TABLE branch_origins_v1;
+"#;
 
 /// Every table, index and trigger of the current schema.
 pub(super) const SCHEMA: &str = r#"
@@ -133,6 +202,12 @@ CREATE TABLE projects (
     delivery            TEXT,
     revert_gate         INTEGER
 );
+-- A path is one project of its console. `coordinator` checks this before it adds a project,
+-- by what the path is on the file system; the index is the backstop for two requests racing
+-- past that check, and compares the stored text. Its leading column also serves the lookup
+-- of a console's projects.
+CREATE UNIQUE INDEX projects_console_path_unique
+    ON projects (console_id, path);
 CREATE TABLE sessions (
     id               TEXT PRIMARY KEY,
     agent            TEXT NOT NULL,
@@ -201,6 +276,11 @@ CREATE TABLE sessions (
     started_at       INTEGER NOT NULL,
     ended_at         INTEGER
 );
+-- The lookups by the columns that other rows and the daemon's queries hold sessions by.
+CREATE INDEX sessions_console_id ON sessions (console_id);
+CREATE INDEX sessions_project_id ON sessions (project_id);
+CREATE INDEX sessions_bound_to ON sessions (bound_to);
+CREATE INDEX sessions_agent_session_id ON sessions (agent_session_id);
 CREATE TRIGGER protect_locked_session_delete
 BEFORE DELETE ON sessions WHEN OLD.locked = 1
 BEGIN SELECT RAISE(ABORT, 'locked sessions cannot be deleted'); END;
@@ -221,6 +301,7 @@ CREATE TABLE pages (
     anchor_message_id TEXT,
     created_at        INTEGER NOT NULL
 );
+CREATE INDEX pages_session_id ON pages (session_id);
 -- Messages for a session that was interrupted (shared information, and the reports and
 -- notices for an owner), held to be written into it once it is resumed
 -- (`Store::add_kept_message`), oldest first by `id`. Deleting the session takes its rows.
@@ -229,6 +310,7 @@ CREATE TABLE kept_messages (
     session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
     text       TEXT NOT NULL
 );
+CREATE INDEX kept_messages_session_id ON kept_messages (session_id);
 -- The session working on a branch, keyed on the branch because one session works on
 -- many and a branch has one responsible session. It starts as the session whose own git
 -- reported creating the branch and moves only by a handover. No `REFERENCES` on
@@ -248,11 +330,11 @@ CREATE TABLE branch_origins (
     repository     TEXT NOT NULL,
     branch         TEXT NOT NULL,
     created_at     INTEGER NOT NULL,
-    birth_commit   TEXT,
-    birth_time     INTEGER,
-    responsible_session_id TEXT,
-    responsible_since      INTEGER,
-    responsible_title      TEXT,
+    birth_commit   TEXT NOT NULL,
+    birth_time     INTEGER NOT NULL,
+    responsible_session_id TEXT NOT NULL,
+    responsible_since      INTEGER NOT NULL,
+    responsible_title      TEXT NOT NULL,
     target_branch          TEXT,
     PRIMARY KEY (repository, branch)
 );
@@ -302,34 +384,34 @@ pub(super) fn user_version(conn: &Connection) -> Result<i64> {
     Ok(conn.pragma_query_value(None, "user_version", |row| row.get(0))?)
 }
 
+/// The `application_id` in the header of the file at `conn`; 0 for a file never given one.
+fn application_id(conn: &Connection) -> Result<i64> {
+    Ok(conn.pragma_query_value(None, "application_id", |row| row.get(0))?)
+}
+
 /// Decides what `Store::open` does with a database file that already exists, before it opens it
 /// for use:
 ///
-/// - at [`SCHEMA_VERSION`], or holding no tables at all (an empty file, which `open` initializes):
-///   left as it is;
-/// - at an older version, which today is only 0, a database from before versions were recorded:
-///   moved aside, so `open` starts a fresh one. The old file is renamed rather than deleted, so a
-///   user who needs what was in it still has it on disk; see "Files Octoboard owns" in
+/// - holding no tables at all (an empty file, which `open` initializes): left as it is;
+/// - with an `application_id` that is not [`APPLICATION_ID`] (0 counts as ours only for the
+///   versions before the id existed): refused and left in place, since it is not an Octoboard
+///   database and must not be moved, migrated or written to. This is judged before the version,
+///   so a foreign file is never taken for a newer Octoboard one;
+/// - at a negative version or one newer than [`SCHEMA_VERSION`]: refused and left in place. This
+///   build cannot read it, and the user may still have a build that does, so the file is not moved
+///   aside for them; the message says how to do that by hand;
+/// - at [`SCHEMA_VERSION`]: left as it is;
+/// - at version 0, a database from before versions were recorded: moved aside, so `open` starts a
+///   fresh one. The old file is renamed rather than deleted, so a user who needs what was in it
+///   still has it on disk; see "The database's schema version" in
 ///   `docs/product/application-lifecycle.md`;
-/// - at a newer version: refused and left in place. This build cannot read it, and the user may
-///   still have a build that does, so the file is not moved aside for them; the message says how
-///   to do that by hand.
+/// - at any version in between: copied aside as a backup, then brought up to date by
+///   [`MIGRATIONS`] in one transaction, which a failure rolls back, leaving the file as it was.
 pub(super) fn settle_existing_file(path: &Path) -> Result<()> {
-    {
+    let version = {
         let conn = Connection::open(path).with_context(|| format!("opening {}", path.display()))?;
         let version = user_version(&conn)
             .with_context(|| format!("reading the schema version of {}", path.display()))?;
-        if version == SCHEMA_VERSION {
-            return Ok(());
-        }
-        if version > SCHEMA_VERSION {
-            anyhow::bail!(
-                "the database at {} is at schema version {version}, which this build does not read \
-                 (it reads version {SCHEMA_VERSION}); rename that file to move it aside (nothing \
-                 is deleted) and this build starts a fresh database in its place",
-                path.display()
-            );
-        }
         let tables: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'",
@@ -338,19 +420,49 @@ pub(super) fn settle_existing_file(path: &Path) -> Result<()> {
             )
             .with_context(|| format!("listing the tables of {}", path.display()))?;
         if tables == 0 {
+            // An empty file is initialized by `Store::open` only at version 0; at any other
+            // version it would be left without a schema.
+            if version != 0 {
+                anyhow::bail!(
+                    "the database at {} has no tables but is stamped with schema version \
+                     {version}; rename that file to move it aside (nothing is deleted) and this \
+                     build starts a fresh database in its place",
+                    path.display()
+                );
+            }
             return Ok(());
         }
-    }
+        let id = application_id(&conn)
+            .with_context(|| format!("reading the application id of {}", path.display()))?;
+        if id != APPLICATION_ID && !(id == 0 && version < APPLICATION_ID_SINCE) {
+            anyhow::bail!(
+                "the file at {} is not an Octoboard database (its application id is {id}); it is \
+                 left as it is, so choose another data folder or move that file away",
+                path.display()
+            );
+        }
+        version
+    };
 
+    match version {
+        0 => move_aside(path),
+        1..SCHEMA_VERSION => migrate(path, version),
+        SCHEMA_VERSION => Ok(()),
+        _ => anyhow::bail!(
+            "the database at {} is at schema version {version}, which this build does not read \
+             (it reads version {SCHEMA_VERSION}); rename that file to move it aside (nothing \
+             is deleted) and this build starts a fresh database in its place",
+            path.display()
+        ),
+    }
+}
+
+/// Renames the outdated database at `path`, so `Store::open` starts a fresh one in its place.
+fn move_aside(path: &Path) -> Result<()> {
     let moved_aside = path.with_file_name(format!(
         "{}.superseded-{}",
-        path.file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("octoboard.db"),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs(),
+        file_name(path),
+        crate::time::now_secs(),
     ));
     std::fs::rename(path, &moved_aside).with_context(|| {
         format!(
@@ -366,6 +478,137 @@ pub(super) fn settle_existing_file(path: &Path) -> Result<()> {
          starting a fresh one in its place"
     );
     Ok(())
+}
+
+/// Brings the database at `path`, at schema version `version`, up to [`SCHEMA_VERSION`]: backs
+/// the file up first, with no connection open on it, then runs the pending [`MIGRATIONS`] and
+/// the stamping in one transaction. Foreign keys are off for it, as a rebuilt table needs, and
+/// the rows still have to satisfy them when it ends. A step that fails rolls the transaction back,
+/// leaving the file as it was, and the error names the backup. A backup already identical to the
+/// file is reused, so retrying after a failure does not pile up copies.
+fn migrate(path: &Path, version: i64) -> Result<()> {
+    let backup = match identical_backup(path, version)
+        .with_context(|| format!("looking for an earlier backup of {}", path.display()))?
+    {
+        Some(existing) => existing,
+        None => {
+            let backup = backup_path(path, version);
+            write_backup(path, &backup).with_context(|| {
+                format!(
+                    "backing up the database {} to {} before migrating it",
+                    path.display(),
+                    backup.display()
+                )
+            })?;
+            backup
+        }
+    };
+    run_migrations(path, version).with_context(|| {
+        format!(
+            "migrating the database at {} from schema version {version} to {SCHEMA_VERSION} failed \
+             and left it as it was; a copy from before is at {}",
+            path.display(),
+            backup.display()
+        )
+    })?;
+    tracing::info!(
+        database = %path.display(),
+        backup = %backup.display(),
+        from = version,
+        to = SCHEMA_VERSION,
+        "migrated the database to the current schema version"
+    );
+    Ok(())
+}
+
+fn run_migrations(path: &Path, version: i64) -> Result<()> {
+    let mut conn = Connection::open(path).with_context(|| format!("opening {}", path.display()))?;
+    // The pragma has no effect inside a transaction.
+    conn.pragma_update(None, "foreign_keys", "OFF")?;
+    let tx = conn.transaction()?;
+    for migration in &MIGRATIONS[usize::try_from(version - 1)?..] {
+        tx.execute_batch(migration)?;
+    }
+    let violations: i64 =
+        tx.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| {
+            row.get(0)
+        })?;
+    if violations > 0 {
+        anyhow::bail!("{violations} rows refer to a row that does not exist");
+    }
+    tx.pragma_update(None, "application_id", APPLICATION_ID)?;
+    tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
+    tx.commit()?;
+    // `foreign_keys` stays off: the connection is dropped on return, and `Store::open` opens a
+    // fresh one with it on.
+    Ok(())
+}
+
+/// The existing backup of the database at `path`, at schema version `version`, whose content is
+/// the file's current content: `<name>.pre-v<version>` or one of its timestamped siblings.
+fn identical_backup(path: &Path, version: i64) -> Result<Option<PathBuf>> {
+    let name = format!("{}.pre-v{version}", file_name(path));
+    let size = path.metadata()?.len();
+    let current = std::fs::read(path)?;
+    for entry in path.parent().unwrap_or_else(|| Path::new(".")).read_dir()? {
+        let candidate = entry?.path();
+        let candidate_name = candidate.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        // A `.partial` file is a copy that may never have finished, whatever its bytes.
+        let is_backup = !candidate_name.ends_with(".partial")
+            && (candidate_name == name
+                || candidate_name
+                    .strip_prefix(&name)
+                    .is_some_and(|rest| rest.starts_with('-')));
+        if is_backup
+            && candidate.metadata().is_ok_and(|m| m.len() == size)
+            && std::fs::read(&candidate).is_ok_and(|bytes| bytes == current)
+        {
+            return Ok(Some(candidate));
+        }
+    }
+    Ok(None)
+}
+
+/// Copies `path` to `backup` so that `backup` is either absent or complete: the copy is written
+/// and synced under a `.partial` name, then renamed into place.
+fn write_backup(path: &Path, backup: &Path) -> Result<()> {
+    let partial = backup.with_file_name(format!("{}.partial", file_name(backup)));
+    match std::fs::remove_file(&partial) {
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error.into()),
+        _ => {}
+    }
+    std::fs::copy(path, &partial)?;
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&partial)?
+        .sync_all()?;
+    std::fs::rename(&partial, backup)?;
+    Ok(())
+}
+
+/// Where the backup of the database at `path`, at schema version `version`, goes: next to it as
+/// `<name>.pre-v<version>`, with the time added when an earlier backup already has that name, so
+/// no backup is overwritten.
+fn backup_path(path: &Path, version: i64) -> PathBuf {
+    let name = format!("{}.pre-v{version}", file_name(path));
+    let mut candidate = path.with_file_name(&name);
+    let mut attempt = 0;
+    while candidate.exists() {
+        attempt += 1;
+        let suffix = if attempt == 1 {
+            crate::time::now_secs().to_string()
+        } else {
+            format!("{}-{attempt}", crate::time::now_secs())
+        };
+        candidate = path.with_file_name(format!("{name}-{suffix}"));
+    }
+    candidate
+}
+
+fn file_name(path: &Path) -> &str {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("octoboard.db")
 }
 
 #[cfg(test)]
@@ -468,6 +711,22 @@ mod tests {
         assert!(moved_aside(&path).is_empty());
     }
 
+    /// A file with no tables but a version stamped on it is refused rather than opened without a
+    /// schema.
+    #[test]
+    fn an_empty_file_with_a_version_is_refused() {
+        let path = temp_db("empty-stamped");
+        {
+            let conn = Connection::open(&path).expect("empty database");
+            conn.pragma_update(None, "user_version", SCHEMA_VERSION + 1)
+                .expect("version");
+        }
+
+        let error = Store::open(&path).err().expect("refused");
+        assert!(error.to_string().contains("has no tables"), "{error:#}");
+        assert!(path.exists());
+    }
+
     /// A database at a schema version this build does not read is refused and left where it is,
     /// with the way to move it aside by hand.
     #[test]
@@ -477,6 +736,8 @@ mod tests {
             let conn = Connection::open(&path).expect("database");
             conn.execute_batch("CREATE TABLE consoles (id TEXT PRIMARY KEY);")
                 .expect("schema");
+            conn.pragma_update(None, "application_id", APPLICATION_ID)
+                .expect("application id");
             conn.pragma_update(None, "user_version", SCHEMA_VERSION + 1)
                 .expect("version");
         }
@@ -488,5 +749,303 @@ mod tests {
         assert!(message.contains("nothing is deleted"), "{message}");
         assert!(path.exists());
         assert!(moved_aside(&path).is_empty());
+    }
+
+    /// The schema of version 1, as it was before the first migration.
+    const V1_SCHEMA: &str = include_str!("schema/v1.sql");
+
+    /// The schema of every version before the current one: `PAST_SCHEMAS[n - 1]` is version `n`.
+    const PAST_SCHEMAS: [&str; (SCHEMA_VERSION - 1) as usize] = [V1_SCHEMA];
+
+    /// The files next to `path` that are backups from before a migration.
+    fn backups(path: &Path) -> Vec<PathBuf> {
+        path.parent()
+            .unwrap()
+            .read_dir()
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|file| {
+                file.file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .starts_with("octoboard.db.pre-v")
+            })
+            .collect()
+    }
+
+    /// A version 1 database with representative rows: two consoles, a project with three copies at
+    /// one path (`kept` is inserted first, so it is the oldest, though its id sorts last), a
+    /// session on each copy, a project at the same path of the other console, a branch record,
+    /// and one missing a column.
+    fn write_v1_database(path: &Path) {
+        let conn = Connection::open(path).expect("v1 database");
+        conn.execute_batch(V1_SCHEMA).expect("v1 schema");
+        conn.execute_batch(
+            "INSERT INTO consoles (id, name, workdir, default_agent, created_at)
+                 VALUES ('console-1', 'One', '/w/1', 'claude', 0),
+                        ('console-2', 'Two', '/w/2', 'claude', 0);
+             INSERT INTO projects (id, console_id, host_id, name, path, source) VALUES
+                 ('kept', 'console-1', 'local', 'A', '/p/a', 'local'),
+                 ('dup-1', 'console-1', 'local', 'A', '/p/a', 'local'),
+                 ('dup-2', 'console-1', 'local', 'A', '/p/a', 'local'),
+                 ('single', 'console-1', 'local', 'B', '/p/b', 'local'),
+                 ('other', 'console-2', 'local', 'A', '/p/a', 'local');
+             INSERT INTO sessions (id, agent, console_id, project_id, host_id, role, origin, title,
+                                   status, orchestration_role, started_at, locked) VALUES
+                 ('s-kept', 'claude', 'console-1', 'kept', 'local', 'project', 'user', 't', 'idle', 'coordinator', 0, 0),
+                 ('s-dup-1', 'claude', 'console-1', 'dup-1', 'local', 'project', 'user', 't', 'idle', 'coordinator', 0, 1),
+                 ('s-dup-2', 'claude', 'console-1', 'dup-2', 'local', 'project', 'user', 't', 'idle', 'coordinator', 0, 0),
+                 ('s-single', 'claude', 'console-1', 'single', 'local', 'project', 'user', 't', 'idle', 'coordinator', 0, 0),
+                 ('s-other', 'claude', 'console-2', 'other', 'local', 'project', 'user', 't', 'idle', 'coordinator', 0, 0),
+                 ('s-console', 'claude', 'console-1', NULL, 'local', 'console', 'user', 't', 'idle', 'coordinator', 0, 0);
+             INSERT INTO pages (id, session_id, html, created_at) VALUES ('page-1', 's-dup-2', '', 0);
+             INSERT INTO kept_messages (session_id, text) VALUES ('s-dup-1', 'hello');
+             INSERT INTO branch_origins VALUES
+                 ('/r/.git', 'whole', 1, 'abc', 1, 's-dup-1', 1, 'T', NULL),
+                 ('/r/.git', 'broken', 1, NULL, 1, 's-dup-1', 1, 'T', NULL);",
+        )
+        .expect("v1 rows");
+        conn.pragma_update(None, "user_version", 1)
+            .expect("version");
+    }
+
+    /// The `sqlite_master` entries of the database at `path`, with each statement's whitespace
+    /// made uniform.
+    fn master(path: &Path) -> Vec<(String, String, String, Option<String>)> {
+        let conn = Connection::open(path).expect("database");
+        let mut stmt = conn
+            .prepare("SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, name")
+            .unwrap();
+        let rows = stmt
+            .query_map([], |row| {
+                let sql: Option<String> = row.get(3)?;
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    sql.map(|sql| sql.split_whitespace().collect::<Vec<_>>().join(" ")),
+                ))
+            })
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap();
+        rows
+    }
+
+    /// Every migration is one step from a version to the next, so there is one fewer than there
+    /// are versions.
+    #[test]
+    fn there_is_one_migration_for_each_version_but_the_first() {
+        assert_eq!(MIGRATIONS.len() as i64, SCHEMA_VERSION - 1);
+    }
+
+    /// A new database carries Octoboard's application id.
+    #[test]
+    fn a_new_database_carries_the_application_id() {
+        let path = temp_db("fresh-application-id");
+        let store = Store::open(&path).expect("store");
+        assert_eq!(application_id(&store.lock()).unwrap(), APPLICATION_ID);
+    }
+
+    /// A version 1 database is backed up untouched, brought to the current version with its data
+    /// (the sessions of duplicate projects moved to the oldest copy), and left with exactly the
+    /// shape a new database has.
+    #[test]
+    fn a_version_1_database_is_migrated_to_the_shape_of_a_new_one() {
+        let path = temp_db("migrate-v1");
+        write_v1_database(&path);
+        let original = std::fs::read(&path).unwrap();
+
+        let store = Store::open(&path).expect("migrated");
+        assert_eq!(user_version(&store.lock()).unwrap(), SCHEMA_VERSION);
+        assert_eq!(application_id(&store.lock()).unwrap(), APPLICATION_ID);
+
+        let backups = backups(&path);
+        assert_eq!(backups.len(), 1);
+        assert_eq!(
+            backups[0].file_name().unwrap().to_string_lossy(),
+            "octoboard.db.pre-v1"
+        );
+        assert_eq!(std::fs::read(&backups[0]).unwrap(), original);
+        assert!(moved_aside(&path).is_empty());
+
+        let project_ids = |console: &str| {
+            let mut ids = store
+                .list_projects()
+                .unwrap()
+                .into_iter()
+                .filter(|project| project.console_id == console)
+                .map(|project| project.id)
+                .collect::<Vec<_>>();
+            ids.sort();
+            ids
+        };
+        assert_eq!(project_ids("console-1"), ["kept", "single"]);
+        assert_eq!(project_ids("console-2"), ["other"]);
+        let project_of = |session: &str| store.get_session(session).unwrap().unwrap().project_id;
+        for session in ["s-kept", "s-dup-1", "s-dup-2"] {
+            assert_eq!(project_of(session).as_deref(), Some("kept"), "{session}");
+        }
+        assert_eq!(project_of("s-single").as_deref(), Some("single"));
+        assert_eq!(project_of("s-other").as_deref(), Some("other"));
+        assert_eq!(project_of("s-console"), None);
+        assert!(store.get_session("s-dup-1").unwrap().unwrap().locked);
+        assert_eq!(store.list_pages("s-dup-2").unwrap().len(), 1);
+        assert_eq!(store.kept_messages("s-dup-1").unwrap().len(), 1);
+        let origins = store.branch_origins("/r/.git").unwrap();
+        assert_eq!(origins.len(), 1);
+        assert_eq!(origins[0].branch, "whole");
+
+        let fresh = temp_db("migrate-v1-fresh");
+        drop(Store::open(&fresh).expect("fresh"));
+        assert_eq!(master(&path), master(&fresh));
+    }
+
+    /// An empty database at every past version, once migrated, has exactly the shape a new one has.
+    #[test]
+    fn every_past_schema_migrates_to_the_shape_of_a_new_database() {
+        let fresh = temp_db("past-fresh");
+        drop(Store::open(&fresh).expect("fresh"));
+        for (index, schema) in PAST_SCHEMAS.iter().enumerate() {
+            let version = index as i64 + 1;
+            let path = temp_db(&format!("past-v{version}"));
+            {
+                let conn = Connection::open(&path).expect("past database");
+                conn.execute_batch(schema).expect("past schema");
+                conn.pragma_update(None, "user_version", version)
+                    .expect("version");
+            }
+            drop(Store::open(&path).unwrap_or_else(|e| panic!("v{version}: {e:#}")));
+            assert_eq!(master(&path), master(&fresh), "v{version}");
+        }
+    }
+
+    /// A second project at a path its console already has is refused by the store, not applied.
+    #[test]
+    fn a_second_project_at_one_path_of_a_console_is_refused() {
+        let path = temp_db("project-path-unique");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        store.insert_project(&project(false)).expect("project");
+        let mut twin = project(false);
+        twin.id = "project-2".to_string();
+        let error = store.insert_project(&twin).expect_err("refused");
+        assert!(error.to_string().contains("/tmp/project-1"), "{error}");
+        assert_eq!(store.list_projects().unwrap().len(), 1);
+    }
+
+    /// A migration that fails leaves the database as it was, and the error names the backup.
+    #[test]
+    fn a_failed_migration_leaves_the_database_as_it_was() {
+        let path = temp_db("migrate-fails");
+        write_v1_database(&path);
+        {
+            // A session whose project is gone.
+            let conn = Connection::open(&path).unwrap();
+            conn.pragma_update(None, "foreign_keys", "OFF").unwrap();
+            conn.execute_batch(
+                "INSERT INTO sessions (id, agent, console_id, project_id, host_id, role, origin,
+                                       title, status, orchestration_role, started_at)
+                 VALUES ('orphan', 'claude', 'console-1', 'gone', 'local', 'project', 'user', 't',
+                         'idle', 'coordinator', 0);",
+            )
+            .unwrap();
+        }
+        let original = std::fs::read(&path).unwrap();
+
+        let error = Store::open(&path).err().expect("refused");
+        let message = format!("{error:#}");
+        assert!(message.contains("octoboard.db.pre-v1"), "{message}");
+        assert!(
+            message.contains("refer to a row that does not exist"),
+            "{message}"
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), original);
+        assert_eq!(user_version(&Connection::open(&path).unwrap()).unwrap(), 1);
+        assert_eq!(
+            std::fs::read(path.with_file_name("octoboard.db.pre-v1")).unwrap(),
+            original
+        );
+    }
+
+    /// Opening again after a failed migration reuses the backup the first try took.
+    #[test]
+    fn retrying_a_failed_migration_does_not_take_another_backup() {
+        let path = temp_db("migrate-retry");
+        write_v1_database(&path);
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.pragma_update(None, "foreign_keys", "OFF").unwrap();
+            conn.execute_batch(
+                "INSERT INTO sessions (id, agent, console_id, project_id, host_id, role, origin,
+                                       title, status, orchestration_role, started_at)
+                 VALUES ('orphan', 'claude', 'console-1', 'gone', 'local', 'project', 'user', 't',
+                         'idle', 'coordinator', 0);",
+            )
+            .unwrap();
+        }
+
+        for _ in 0..3 {
+            assert!(Store::open(&path).is_err());
+        }
+        assert_eq!(backups(&path).len(), 1);
+    }
+
+    /// A migrated database reopens as it is, with no further backup.
+    #[test]
+    fn reopening_a_migrated_database_takes_no_backup() {
+        let path = temp_db("migrate-reopen");
+        write_v1_database(&path);
+        drop(Store::open(&path).expect("migrated"));
+
+        let store = Store::open(&path).expect("reopened");
+        assert_eq!(user_version(&store.lock()).unwrap(), SCHEMA_VERSION);
+        assert_eq!(backups(&path).len(), 1);
+    }
+
+    /// A backup that already exists is not overwritten by the next one.
+    #[test]
+    fn an_earlier_backup_is_not_overwritten() {
+        let path = temp_db("backup-names");
+        write_v1_database(&path);
+        let earlier = path.with_file_name("octoboard.db.pre-v1");
+        std::fs::write(&earlier, b"earlier").unwrap();
+
+        drop(Store::open(&path).expect("migrated"));
+        assert_eq!(std::fs::read(&earlier).unwrap(), b"earlier");
+        assert_eq!(backups(&path).len(), 2);
+    }
+
+    /// A file that has tables and another program's application id is refused and left alone,
+    /// at any version, and so is a current-version file without the id.
+    #[test]
+    fn a_database_of_another_program_is_refused_and_left_alone() {
+        for (name, version, id) in [
+            ("foreign-v0", 0, 0x1234_i64),
+            ("foreign-v1", 1, 0x1234),
+            ("foreign-current", SCHEMA_VERSION, 0x1234),
+            ("no-id-current", SCHEMA_VERSION, 0),
+        ] {
+            let path = temp_db(name);
+            {
+                let conn = Connection::open(&path).expect("database");
+                conn.execute_batch("CREATE TABLE things (id TEXT PRIMARY KEY);")
+                    .expect("schema");
+                conn.pragma_update(None, "user_version", version).unwrap();
+                conn.pragma_update(None, "application_id", id).unwrap();
+            }
+            let original = std::fs::read(&path).unwrap();
+
+            let error = Store::open(&path).err().expect("refused");
+            assert!(
+                format!("{error:#}").contains("is not an Octoboard database"),
+                "{name}: {error:#}"
+            );
+            assert_eq!(std::fs::read(&path).unwrap(), original, "{name}");
+            assert!(backups(&path).is_empty(), "{name}");
+            assert!(moved_aside(&path).is_empty(), "{name}");
+        }
     }
 }

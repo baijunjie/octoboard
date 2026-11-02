@@ -16,11 +16,10 @@ use anyhow::{Context, Result};
 use portable_pty::CommandBuilder;
 
 use crate::git::isolated::IsolatedGit;
-use crate::protocol::{
-    error_code, now_millis, CodedError, Event, ShellTerminal, ShellTerminalState,
-};
+use crate::protocol::{error_code, CodedError, Event, ShellTerminal, ShellTerminalState};
 use crate::state::AppState;
 use crate::terminal::pty::{self, NewPty, PtyCore, PtyOwner};
+use crate::time::now_millis;
 
 /// How often a running shell is looked at for having exited and for whether it is busy. Neither
 /// has a signal of its own: the daemon waits on nothing a shell's exit closes, and a program

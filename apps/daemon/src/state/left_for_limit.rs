@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use super::AppState;
-use crate::protocol::now_millis;
+use crate::time::now_millis;
 
 /// milliseconds since the epoch.
 pub(super) type AccountLeft = (Option<String>, i64);

@@ -230,11 +230,13 @@ mod tests {
                     body,
                     PATIENCE,
                 )
-                .expect("answered")
             };
-            assert!(post("s", br#"{"window":200000}"#).is_empty());
+            assert!(post("s", br#"{"window":200000}"#)
+                .expect("answered")
+                .is_empty());
             for body in [&b"{}"[..], br#"{"window":0}"#, b"200000"] {
-                post("t", body);
+                let err = post("t", body).expect_err("an unusable report is refused");
+                assert_eq!(crate::loopback::error_status(&err), Some(400));
             }
             let host = format!("Host: 127.0.0.1:{port}");
             assert_eq!(

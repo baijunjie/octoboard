@@ -1,6 +1,6 @@
 //! The projects table, and the directories the user has trusted for every project under them.
 
-use super::Result;
+use super::{Result, StoreError};
 use rusqlite::{params, OptionalExtension, Row};
 
 use super::rows::{column_slot, enum_from_row, enum_from_row_opt, enum_to_text, launch_from_row};
@@ -17,9 +17,13 @@ const PROJECT_COLUMNS: &str = "id, console_id, host_id, name, path, default_agen
                                rebase_before_merge, delivery, revert_gate, squash_before_delivery";
 
 impl Store {
+    /// Inserts the project. A second project at a path its console already has trips the unique
+    /// index on `(console_id, path)` and fails with an error naming the path; `coordinator`
+    /// refuses it before it gets here, so this only fires for two requests racing past that check.
     pub fn insert_project(&self, project: &Project) -> Result<()> {
-        self.lock().execute(
-            "INSERT INTO projects (id, console_id, host_id, name, path, default_agent, source,
+        self.lock()
+            .execute(
+                "INSERT INTO projects (id, console_id, host_id, name, path, default_agent, source,
                                    remote_url, claude_account_id, codex_account_id,
                                    grok_account_id, claude_account_default,
                                    codex_account_default, grok_account_default,
@@ -30,38 +34,50 @@ impl Store {
                                    revert_gate, squash_before_delivery)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
                      ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29)",
-            params![
-                project.id,
-                project.console_id,
-                project.host_id,
-                project.name,
-                project.path,
-                project.default_agent.as_ref().map(enum_to_text),
-                enum_to_text(&project.source),
-                project.remote_url,
-                project.accounts.claude.account_id(),
-                project.accounts.codex.account_id(),
-                project.accounts.grok.account_id(),
-                project.accounts.claude == ProjectAccount::Default,
-                project.accounts.codex == ProjectAccount::Default,
-                project.accounts.grok == ProjectAccount::Default,
-                project.launch.claude.model,
-                project.launch.claude.effort,
-                project.launch.codex.model,
-                project.launch.codex.effort,
-                project.launch.grok.model,
-                project.launch.grok.effort,
-                project.trust_consent,
-                project.pinned,
-                tags_to_text(&project.tags),
-                project.description,
-                project.git_workflow.development.as_ref().map(enum_to_text),
-                project.git_workflow.rebase_before_merge,
-                project.git_workflow.delivery.as_ref().map(enum_to_text),
-                project.git_workflow.revert_gate,
-                project.git_workflow.squash_before_delivery,
-            ],
-        )?;
+                params![
+                    project.id,
+                    project.console_id,
+                    project.host_id,
+                    project.name,
+                    project.path,
+                    project.default_agent.as_ref().map(enum_to_text),
+                    enum_to_text(&project.source),
+                    project.remote_url,
+                    project.accounts.claude.account_id(),
+                    project.accounts.codex.account_id(),
+                    project.accounts.grok.account_id(),
+                    project.accounts.claude == ProjectAccount::Default,
+                    project.accounts.codex == ProjectAccount::Default,
+                    project.accounts.grok == ProjectAccount::Default,
+                    project.launch.claude.model,
+                    project.launch.claude.effort,
+                    project.launch.codex.model,
+                    project.launch.codex.effort,
+                    project.launch.grok.model,
+                    project.launch.grok.effort,
+                    project.trust_consent,
+                    project.pinned,
+                    tags_to_text(&project.tags),
+                    project.description,
+                    project.git_workflow.development.as_ref().map(enum_to_text),
+                    project.git_workflow.rebase_before_merge,
+                    project.git_workflow.delivery.as_ref().map(enum_to_text),
+                    project.git_workflow.revert_gate,
+                    project.git_workflow.squash_before_delivery,
+                ],
+            )
+            .map_err(|err| match err {
+                rusqlite::Error::SqliteFailure(failure, _)
+                    if failure.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE =>
+                {
+                    StoreError::from(anyhow::anyhow!(
+                        "console {} already has a project at {}",
+                        project.console_id,
+                        project.path
+                    ))
+                }
+                err => err.into(),
+            })?;
         Ok(())
     }
 

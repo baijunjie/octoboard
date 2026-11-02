@@ -14,10 +14,10 @@ So such a path holds to four conditions: the id must match the agent's real id s
 never be cut out of a reported path; the path is built from a records directory the daemon resolved itself and that
 id, a reported path counting only when it lies inside that directory; only an entry at the agent's exact layout depth
 is taken, since a name one level higher can be a whole directory's (a Claude project directory is named like
-`-Users-me-work`); and no directory between the records directory and the entry may be a link. In
-`apps/daemon/src/records/mod.rs`, `record_paths` (a session's records across every account) and `conversation_files_in`
-(one conversation's files in one account directory) do all four; any code that finds an agent's record by its id goes
-through them, extending them if they fall short, never a finder of its own.
+`-Users-me-work`); and no directory between the records directory and the entry may be a link. `record_paths` (a
+session's records across every account, in `apps/daemon/src/records/locate.rs`) and `conversation_files_in` (one
+conversation's files in one account directory, in `apps/daemon/src/records/removal.rs`) do all four; any code that
+finds an agent's record by its id goes through them, extending them if they fall short, never a finder of its own.
 
 ## Opening a path taken from text an agent could have written can run code
 

@@ -10,12 +10,13 @@ use uuid::Uuid;
 
 use crate::env_shell;
 use crate::protocol::{
-    nested_params, notice_code, now_millis, Agent, CodedError, Console, Notice, OrchestrationRole,
-    Origin, Project, Role, Session, SessionStatus, TerminalAppearance,
+    nested_params, notice_code, Agent, CodedError, Console, Notice, OrchestrationRole, Origin,
+    Project, Role, Session, SessionStatus, TerminalAppearance,
 };
 use crate::session::term;
 use crate::state::AppState;
 use crate::store::LOCAL_HOST_ID;
+use crate::time::now_millis;
 
 use super::account_choice::{
     automatic_open_choice, refuse_if_account_not_signed_in, refuse_if_account_quota_exhausted,

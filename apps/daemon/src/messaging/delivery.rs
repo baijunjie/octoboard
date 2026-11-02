@@ -11,10 +11,11 @@ use anyhow::Result;
 
 use crate::messaging::outbox::{Drain, Ticket};
 use crate::messaging::texts::{is_waiting_notice, waiting_notice_session};
-use crate::protocol::{error_code, now_millis, CodedError, Session, SessionStatus};
+use crate::protocol::{error_code, CodedError, Session, SessionStatus};
 use crate::session::term;
 use crate::state::AppState;
-use crate::{mcp, rfc3339};
+use crate::time::now_millis;
+use crate::{mcp, time};
 
 /// What became of a message handed to [`write_message`], or to a delivery that keeps a message for
 /// a session with no process.
@@ -372,7 +373,7 @@ pub(crate) fn write_to_owner(
             let line = format!(
                 "Kept for you while you were interrupted; it dates from {}. What it says of the \
                  session may no longer hold, so check the session with `{}` before acting on it.",
-                rfc3339::readable_utc_minute(now_millis()),
+                time::readable_utc_minute(now_millis()),
                 mcp::qualified_tool_name(owner.agent, "get_session"),
             );
             if let Some(row) = state.keep_message_if_not_running(&owner.id, &kept(&line))? {

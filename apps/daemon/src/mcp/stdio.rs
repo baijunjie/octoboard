@@ -265,12 +265,25 @@ async fn forward_until(
     }
 }
 
-/// What the model is told when a forwarded call failed before the daemon answered. A call that ran
-/// out of time is not one the daemon could not be reached for: a read or write timeout surfaces as
-/// `TimedOut` or, on the platforms where it is the socket's own error, `WouldBlock`.
+/// What the model is told when a forwarded call failed before the daemon answered, or was answered
+/// with an error status (a wrong key or an unreadable request, or a fault in the daemon; not a
+/// tool's own refusal, which is an answer). A call that ran out of time is not one the daemon could
+/// not be reached for: a read or write timeout surfaces as `TimedOut` or, on the platforms where it
+/// is the socket's own error, `WouldBlock`. An empty or status-less response is one the daemon may
+/// have acted on before it broke off.
 fn failure_message(session: &str, err: &std::io::Error) -> String {
     use std::io::ErrorKind;
+    if let Some(status) = crate::loopback::error_status(err) {
+        return format!(
+            "Octoboard {} the call for session {session} (HTTP {status}).",
+            crate::loopback::status_verb(status)
+        );
+    }
     match err.kind() {
+        ErrorKind::InvalidData => format!(
+            "Octoboard answered with something unreadable for session {session}; the call may \
+             have run."
+        ),
         ErrorKind::TimedOut | ErrorKind::WouldBlock => format!(
             "Octoboard did not answer for session {session} within {} seconds. The call may still \
              finish in Octoboard: check what it was to do before calling again.",
@@ -378,6 +391,76 @@ mod tests {
         }
         let refused = failure_message("s-1", &Error::from(ErrorKind::ConnectionRefused));
         assert!(refused.contains("could not be reached for session s-1"));
+    }
+
+    /// What forwarding a call fails with when a daemon answers it with `response` and hangs up.
+    async fn forward_failure(response: &'static [u8]) -> std::io::Error {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            let (mut daemon_side, _) = listener.accept().await.unwrap();
+            let mut request = vec![0u8; 1024];
+            daemon_side.read(&mut request).await.unwrap();
+            daemon_side.write_all(response).await.unwrap();
+            // Hang up cleanly: closing with the request's body unread would reset the connection
+            // under the answer.
+            daemon_side.shutdown().await.unwrap();
+            let mut rest = Vec::new();
+            daemon_side.read_to_end(&mut rest).await.ok();
+        });
+        let forwarded = forward_until(
+            port,
+            Arc::new("k".to_string()),
+            "/mcp/token".to_string(),
+            b"{}".to_vec(),
+            std::future::pending(),
+        )
+        .await;
+        let Forwarded::Answered(Err(err)) = forwarded else {
+            panic!("the answer is an error");
+        };
+        err
+    }
+
+    /// A daemon that answers with a refusal (401 for a wrong key) is not an unreadable answer and
+    /// not an unreachable daemon: the model is told the call was refused, with the status.
+    #[tokio::test]
+    async fn a_refused_call_is_reported_as_refused_not_as_unreadable() {
+        let err = forward_failure(
+            b"HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\nmissing or wrong key",
+        )
+        .await;
+        let message = failure_message("s-1", &err);
+        assert!(message.contains("refused the call"), "{message}");
+        assert!(message.contains("401"), "{message}");
+    }
+
+    /// A daemon that fails while handling the call did not refuse it: the model is told the call
+    /// failed, with the status.
+    #[tokio::test]
+    async fn a_failed_call_is_reported_as_failed_not_as_refused() {
+        let err =
+            forward_failure(b"HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\n\r\n")
+                .await;
+        let message = failure_message("s-1", &err);
+        assert!(message.contains("failed the call"), "{message}");
+        assert!(message.contains("500"), "{message}");
+        assert!(!message.contains("refused"), "{message}");
+    }
+
+    /// A response that breaks off before it says anything is no unreachable daemon: it was
+    /// reached, and may have acted on the call.
+    #[tokio::test]
+    async fn an_empty_response_is_reported_as_unreadable_not_as_unreachable() {
+        let message = failure_message("s-1", &forward_failure(b"").await);
+        assert!(
+            message.contains("something unreadable for session s-1"),
+            "{message}"
+        );
+        assert!(message.contains("may have run"), "{message}");
+        assert!(!message.contains("could not be reached"), "{message}");
     }
 
     fn server(role: Role, worker: bool) -> OctoboardMcp {

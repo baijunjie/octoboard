@@ -171,29 +171,29 @@ mod tests {
     use std::path::Path;
 
     use super::*;
-    use crate::protocol::{Agent, Console, OrchestrationRole, Origin, Role, Session};
-    use crate::test_support::{idle_stand_in, ScratchDir, ScratchFile, StandIn};
+    use crate::protocol::{Agent, Console, Role, Session};
+    use crate::test_support::{bare_session, idle_stand_in, ScratchDir, ScratchFile, StandIn};
 
     /// Two failed turns of one Codex 0.160.0 session whose account was at its usage limit, taken
     /// verbatim: each is `task_started`, `token_count`, then `task_complete` with an `error`
     /// object.
-    const FAILED_TURNS: &str = include_str!("../../testdata/rollout_failed_turns.jsonl");
+    const FAILED_TURNS: &str = include_str!("../../../testdata/rollout_failed_turns.jsonl");
     const FAILED_TURN: &str = "01a127d8-56fb-7442-b291-53bde00f15fe";
     const SECOND_FAILED_TURN: &str = "01a127d8-feef-7872-9890-c06ccd669d7d";
 
     /// The near-miss: a successful turn's records, from a Codex 0.160.0 session, whose
     /// `task_complete` carries `last_agent_message` and no `error` key.
-    const COMPLETED: &str = include_str!("../../testdata/rollout_completed_turn.jsonl");
+    const COMPLETED: &str = include_str!("../../../testdata/rollout_completed_turn.jsonl");
     const COMPLETED_TURN: &str = "01a1009e-6e43-73d3-a46f-5bc648f49a7a";
 
     /// A manual `/compact` turn, from a Codex 0.160.0 session: `task_complete` has a null
     /// `last_agent_message` like a failed turn's, but no `error` key and no
     /// `time_to_first_token_ms`.
-    const COMPACT: &str = include_str!("../../testdata/rollout_compact_turn.jsonl");
+    const COMPACT: &str = include_str!("../../../testdata/rollout_compact_turn.jsonl");
     const COMPACT_TURN: &str = "01a1009f-e588-7f21-b87f-47a002c43820";
 
     /// The other near-miss: the failed capture cut off after `token_count`, a turn still running.
-    const RUNNING: &str = include_str!("../../testdata/rollout_running_turn.jsonl");
+    const RUNNING: &str = include_str!("../../../testdata/rollout_running_turn.jsonl");
 
     /// The first `lines` lines of `text`.
     fn first_lines(text: &str, lines: usize) -> &str {
@@ -299,39 +299,10 @@ mod tests {
 
     fn codex_session(id: &str, status: SessionStatus) -> Session {
         Session {
-            id: id.to_string(),
             agent: Agent::Codex,
-            agent_session_id: None,
-            console_id: "console-1".to_string(),
-            project_id: None,
-            host_id: crate::store::LOCAL_HOST_ID.to_string(),
-            role: Role::Project,
-            origin: Origin::User,
-            title: "Session".to_string(),
             status,
-            terminal_title: None,
-            record_titles: Default::default(),
-            background_tasks: Vec::new(),
-            switching_account: false,
-            paused: false,
-            prompt_on_launch: false,
-            default_effort: None,
-            orchestration_role: OrchestrationRole::Coordinator,
-            context: None,
-            observed_model: None,
-            observed_effort: None,
-            model: None,
-            effort: None,
             has_conversation: true,
-            bound_to: None,
-            colour: None,
-            ordinal: None,
-            account_id: None,
-            config_dir: None,
-            pinned: false,
-            locked: false,
-            started_at: 0,
-            ended_at: None,
+            ..bare_session(id, Role::Project)
         }
     }
 
@@ -390,7 +361,7 @@ mod tests {
         async fn went_idle(&self, patience: Duration) -> bool {
             let state = self.state.clone();
             tokio::task::spawn_blocking(move || {
-                crate::session::trust::wait_for(patience, || {
+                crate::session::wait::wait_for(patience, || {
                     state
                         .store
                         .get_session("s")

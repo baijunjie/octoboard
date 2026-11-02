@@ -96,11 +96,11 @@ runs it, or explicitly agrees to it, on an account they choose.
 
 ## A probe that goes through the daemon runs against the user's live Octoboard data unless its `HOME` is a throwaway one
 
-The daemon derives its data directory, its database and its single-instance lock from `$HOME`, and writes its port file
-to `$TMPDIR`. So a probe that does not need a logged-in agent — the protocol, the terminal socket, the window's
-connection — runs the daemon, or a copy of the app, with a throwaway `HOME` and `TMPDIR`: the user's board is untouched
-and it runs alongside their own Octoboard. For a session that draws real output there without a model turn, open a
-Codex session: with no login under that `HOME` it stops at its sign-in screen.
+The daemon derives its data directory — its database, its single-instance lock and its port file — from `$HOME`, and has
+no other setting that moves it. So a probe that does not need a logged-in agent — the protocol, the terminal socket, the
+window's connection — runs the daemon, or a copy of the app, with a throwaway `HOME`: the user's board is untouched and
+it runs alongside their own Octoboard. For a session that draws real output there without a model turn, open a Codex
+session: with no login under that `HOME` it stops at its sign-in screen.
 
 **Drive it from a client of its own on the control WebSocket, and build no application for it.** The daemon on its own,
 plus a small client on the control WebSocket (the "`GET /ws/control` — management and status" section of
@@ -141,10 +141,10 @@ Everything else a launched agent has to see belongs in that same rc file, for th
 without it the throwaway `HOME`'s login shell finds no agent executable at all — and a config-directory variable such
 as `CODEX_HOME` or `GROK_HOME` pointing at the run's own throwaway configuration.
 
-A probe that needs a logged-in agent whose login cannot be brought into the throwaway `HOME` has to run on the real
-one. Expect it to create consoles and sessions in the user's real board. Until the first release a schema edit stays
-at the same schema version, so a probed build that changes the schema opens the user's live database as it stands:
-its queries fail against the old shape, or it writes rows the user's own build does not expect. So copy that database
+A probe that needs a logged-in agent whose login cannot be brought into the throwaway `HOME` has to run on the real one.
+Expect it to create consoles and sessions in the user's real board. A probed build at a newer schema version migrates
+the user's live database to that version on start, and the user's own build then refuses to open it as a version it does
+not read; a probed build writes rows the user's own build may not expect even at the same version. So copy that database
 aside first whenever the change being probed touches the schema, put it back during cleanup, and plan the cleanup as
 part of the probe rather than after the fact.
 

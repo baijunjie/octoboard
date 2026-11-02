@@ -138,13 +138,16 @@ impl Store {
         // Every entry already held: pick among all rather than refuse, since the badge is a
         // convenience, not a uniqueness guarantee the user was ever promised.
         let colour = assign_console_session_colour(&held, uuid::Uuid::new_v4().as_u128() as usize);
-        let (ordinal, console_name): (i64, String) = conn.query_row(
-            "UPDATE consoles SET next_console_session_ordinal = next_console_session_ordinal + 1
-             WHERE id = ?1
-             RETURNING next_console_session_ordinal - 1, name",
-            params![session.console_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )?;
+        let (ordinal, console_name): (i64, String) = conn
+            .query_row(
+                "UPDATE consoles SET next_console_session_ordinal = next_console_session_ordinal + 1
+                 WHERE id = ?1
+                 RETURNING next_console_session_ordinal - 1, name",
+                params![session.console_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()?
+            .ok_or_else(|| CodedError::unknown_console(&session.console_id))?;
         session.colour = Some(colour);
         session.ordinal = Some(ordinal);
         session.title = title.unwrap_or(console_name);
@@ -190,7 +193,7 @@ impl Store {
     /// Runs `update`, one `UPDATE` of session `id`'s row, and returns the row as it then stands
     /// when the statement matched it, `None` when it did not. Both run under one take of the lock,
     /// so the record returned is the one the write produced.
-    fn update_session_row(
+    pub(super) fn update_session_row(
         &self,
         id: &str,
         update: &str,
@@ -596,8 +599,8 @@ impl Store {
         status: SessionStatus,
         abnormal: Option<bool>,
     ) -> Result<Option<Session>> {
-        let conn = self.lock();
-        let moved = conn.execute(
+        self.update_session_row(
+            id,
             "UPDATE sessions SET status = ?3,
                                  last_turn_abnormal = CASE WHEN ?5 IS NOT NULL THEN ?5
                                                            WHEN ?3 = ?4 THEN last_turn_abnormal
@@ -610,18 +613,7 @@ impl Store {
                 enum_to_text(&SessionStatus::Idle),
                 abnormal,
             ],
-        )?;
-        if moved == 0 {
-            return Ok(None);
-        }
-        let session = conn
-            .query_row(
-                &format!("SELECT {SESSION_COLUMNS} FROM sessions WHERE id = ?1"),
-                params![id],
-                read_session,
-            )
-            .optional()?;
-        Ok(session)
+        )
     }
 
     /// Changes a launch attempt's status and end time together, only while its expected status
@@ -633,21 +625,11 @@ impl Store {
         status: SessionStatus,
         ended_at: Option<i64>,
     ) -> Result<Option<Session>> {
-        let conn = self.lock();
-        let moved = conn.execute(
+        self.update_session_row(
+            id,
             "UPDATE sessions SET status = ?3, ended_at = ?4 WHERE id = ?1 AND status = ?2",
             params![id, enum_to_text(&expected), enum_to_text(&status), ended_at],
-        )?;
-        if moved == 0 {
-            return Ok(None);
-        }
-        Ok(conn
-            .query_row(
-                &format!("SELECT {SESSION_COLUMNS} FROM sessions WHERE id = ?1"),
-                params![id],
-                read_session,
-            )
-            .optional()?)
+        )
     }
 
     /// Records the account a session runs under and its directory, together and by nothing else:
@@ -659,21 +641,11 @@ impl Store {
         account_id: Option<&str>,
         config_dir: Option<&str>,
     ) -> Result<Option<Session>> {
-        let conn = self.lock();
-        let changed = conn.execute(
+        self.update_session_row(
+            id,
             "UPDATE sessions SET account_id = ?2, config_dir = ?3 WHERE id = ?1",
             params![id, account_id, config_dir],
-        )?;
-        if changed == 0 {
-            return Ok(None);
-        }
-        Ok(conn
-            .query_row(
-                &format!("SELECT {SESSION_COLUMNS} FROM sessions WHERE id = ?1"),
-                params![id],
-                read_session,
-            )
-            .optional()?)
+        )
     }
 
     pub fn set_session_pinned(&self, id: &str, pinned: bool) -> Result<()> {
@@ -723,7 +695,7 @@ impl Store {
                 observed_boundary = COALESCE(?7, observed_boundary),
                 observed_model = CASE WHEN ?7 IS NULL THEN observed_model ELSE NULL END,
                 observed_effort = CASE WHEN ?7 IS NULL THEN observed_effort ELSE NULL END
-             WHERE id = ?1 AND (?6 = 0 OR status != 'archived')",
+             WHERE id = ?1 AND (?6 = 0 OR status != ?8)",
             params![
                 id,
                 model.as_ref().and_then(|value| value.as_deref()),
@@ -732,6 +704,7 @@ impl Store {
                 effort.is_some(),
                 unless_archived,
                 boundary,
+                enum_to_text(&SessionStatus::Archived),
             ],
         )? > 0)
     }
@@ -889,7 +862,7 @@ impl Store {
             ),
             params![
                 enum_to_text(&SessionStatus::Interrupted),
-                crate::protocol::now_millis(),
+                crate::time::now_millis(),
                 enum_to_text(&SessionStatus::Archived),
             ],
         )?;
@@ -1666,6 +1639,21 @@ mod tests {
                 .colour,
             None
         );
+    }
+
+    /// A console session opened in a console that is gone is refused as `unknown_console`, not
+    /// reported as an internal failure.
+    #[test]
+    fn a_console_session_in_a_missing_console_is_an_unknown_console() {
+        let path = temp_db("console-session-no-console");
+        let store = Store::open(&path).expect("store");
+
+        let refused: anyhow::Error = store
+            .insert_console_session(console_session("session-0"), None)
+            .expect_err("no such console")
+            .into();
+        assert_eq!(error_parts(&refused).0, error_code::UNKNOWN_CONSOLE);
+        assert_eq!(error_parts(&refused).2, "unknown console console-1");
     }
 
     /// The ordinal is one past the highest ever handed out in this console, kept on the console

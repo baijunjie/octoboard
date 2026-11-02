@@ -38,7 +38,7 @@ use std::time::{Duration, Instant};
 use anyhow::{anyhow, Result};
 
 use crate::protocol::{error_code, Agent, CodedError, Session, SessionStatus};
-use crate::session::trust::{wait_for, wait_quiet};
+use crate::session::wait::{wait_for, wait_quiet};
 use crate::session::LiveSession;
 use crate::state::{AppState, ClaimKind, WriteHold};
 

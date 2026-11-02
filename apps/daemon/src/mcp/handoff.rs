@@ -518,7 +518,7 @@ mod tests {
                 })
                 .unwrap();
         }
-        let soon = crate::protocol::now_millis() + 60_000;
+        let soon = crate::time::now_millis() + 60_000;
         let weekly = |used: f64, resets_at: i64| crate::protocol::QuotaWindow {
             kind: crate::protocol::QuotaWindowKind::Weekly,
             label: None,
@@ -624,7 +624,7 @@ mod tests {
             kind: crate::protocol::QuotaWindowKind::Session,
             label: None,
             used_percent: 100.0,
-            resets_at: Some(crate::protocol::now_millis() + resets_in),
+            resets_at: Some(crate::time::now_millis() + resets_in),
             window_minutes: None,
         };
         for (id, resets_in) in [("codex-work", 7_200_000), ("sooner", 3_600_000)] {

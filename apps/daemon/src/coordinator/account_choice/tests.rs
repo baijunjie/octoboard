@@ -8,11 +8,12 @@ use crate::coordinator::test_support::{
     code_of, console, console_workdir, open_request, pins, project_of, shell_env, state_for_opening,
 };
 use crate::protocol::{
-    error_code, now_millis, Account, Agent, Availability, CodedError, Origin, Project,
-    ProjectAccount, SessionStatus,
+    error_code, Account, Agent, Availability, CodedError, Origin, Project, ProjectAccount,
+    SessionStatus,
 };
 use crate::state::AppState;
 use crate::test_support::{console_with_project_and_accounts, project_session};
+use crate::time::now_millis;
 use std::path::Path;
 use std::sync::Arc;
 

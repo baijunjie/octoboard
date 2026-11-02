@@ -1,11 +1,12 @@
 use super::*;
 use crate::protocol::{
-    now_millis, Account, AccountQuota, Event, OrchestrationRole, QuotaWindow, QuotaWindowKind,
+    Account, AccountQuota, Event, OrchestrationRole, QuotaWindow, QuotaWindowKind,
 };
 use crate::test_support::{
     app_state, console, insert_project, output_containing, running, stand_in_launch, Launched,
     ScratchDir, StandIn,
 };
+use crate::time::now_millis;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
@@ -1620,7 +1621,7 @@ async fn a_process_that_ended_by_itself_before_the_stop_is_not_the_switchs_to_re
         // Runs after the running check and before the stop: the agent exits on its own.
         worker.terminate();
         assert!(
-            crate::session::trust::wait_for(crate::test_support::PATIENCE, || {
+            crate::session::wait::wait_for(crate::test_support::PATIENCE, || {
                 state.live_session("w").is_none()
             }),
             "the exit was recorded"

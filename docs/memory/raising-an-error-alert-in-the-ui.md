@@ -82,7 +82,7 @@ reports the same denied access or full disk in its own words and codes ("attempt
 (`store_io_failed` is only a `reason_code` nested in trust notices, never a request's error). A remedy keyed to the text
 one expects, and fixtures modelled on that text, pass every test and never fire in the app.
 
-So reproduce the failure with a real daemon first (`cargo run -p octoboardd` with `HOME` and `TMPDIR` set to throwaway
-directories: it keeps its data under `$HOME/.octoboard` and its port file under `$TMPDIR`), with the data folder made
-read-only for denied access, or placed on a small volume for a full disk (on macOS, a disk image made and mounted with
-`hdiutil`). Design the remedy from the code, params and `detail` it sends, and give the fixtures exactly those.
+So reproduce the failure with a real daemon first (`cargo run -p octoboardd` with `HOME` set to a throwaway directory:
+it keeps its data and its port file under `$HOME/.octoboard`), with the data folder made read-only for denied access, or
+placed on a small volume for a full disk (on macOS, a disk image made and mounted with `hdiutil`). Design the remedy
+from the code, params and `detail` it sends, and give the fixtures exactly those.

@@ -7,8 +7,8 @@ use std::sync::Arc;
 use crate::hooks::{self, BackgroundTasksChange};
 use crate::messaging::reporting;
 use crate::protocol::{Agent, SessionStatus};
-use crate::records::rollout;
-use crate::records::transcript;
+use crate::records::watch::claude_transcript;
+use crate::records::watch::codex_rollout;
 use crate::state::{AppState, TurnClose};
 
 /// Applies a session's queued hook events one after another until none is left. Applying one is
@@ -262,9 +262,9 @@ fn apply_status(
 /// Starts watching the agent's own session record for what its hooks will not report after this
 /// event, which reported `status` and found the agent at `previous` (read for Claude Code and Grok
 /// Build alone). Claude Code reports neither a declined prompt nor an interrupted turn, so its
-/// transcript is watched (`crate::records::transcript` says when); a Codex turn that ends in an
-/// error fires nothing after its `UserPromptSubmit`, so its rollout is; a Grok turn cancelled
-/// before its first token fires nothing at all, so its terminal title is watched from its
+/// transcript is watched (`crate::records::watch::claude_transcript` says when); a Codex turn that
+/// ends in an error fires nothing after its `UserPromptSubmit`, so its rollout is; a Grok turn
+/// cancelled before its first token fires nothing at all, so its terminal title is watched from its
 /// `UserPromptSubmit`, and again from each event that brings it back from waiting on the user
 /// (`crate::titles::interrupt`). Each watch is spawned, not awaited: it is expected to far outlive
 /// this response, which the adapters' few-second hook timeout would not allow.
@@ -281,7 +281,7 @@ fn arm_record_watches(
         .get("transcript_path")
         .and_then(serde_json::Value::as_str);
     match agent {
-        Agent::Claude => transcript::watch_after_hook(
+        Agent::Claude => claude_transcript::watch_after_hook(
             state,
             session_id,
             event,
@@ -289,7 +289,7 @@ fn arm_record_watches(
             status,
             transcript_path,
         ),
-        Agent::Codex if event == "UserPromptSubmit" => rollout::watch_for_failure(
+        Agent::Codex if event == "UserPromptSubmit" => codex_rollout::watch_for_failure(
             state,
             session_id,
             transcript_path,

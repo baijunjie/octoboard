@@ -16,9 +16,10 @@ use tokio::task::JoinHandle;
 use crate::branch_cleanup;
 use crate::coordinator;
 use crate::hostfs::trash::TrashFailure;
-use crate::protocol::{now_millis, Session, SessionStatus};
+use crate::protocol::{Session, SessionStatus};
 use crate::records::{self, Locator, Resumability};
 use crate::state::AppState;
+use crate::time::now_millis;
 
 /// How often the task wakes to see whether a scan is due. It is short against the scan period
 /// because the clock that counts is the wall clock: a timer of the whole period does not advance

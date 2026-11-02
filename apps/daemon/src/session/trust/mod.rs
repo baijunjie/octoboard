@@ -118,6 +118,7 @@ use crate::paths;
 use crate::protocol::{
     error_code, notice_code, trust_reason, Agent, CodedError, Event, Notice, Project, Role, Session,
 };
+use crate::session::wait::QUIET;
 use crate::session::LiveSession;
 use crate::state::AppState;
 
@@ -132,7 +133,6 @@ pub use carry::CarriedTrust;
 use carry::*;
 use place::*;
 use press::*;
-pub(crate) use press::{wait_for, wait_quiet};
 pub use screen::TrustState;
 use screen::*;
 

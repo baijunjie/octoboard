@@ -98,7 +98,7 @@ associating a parent directory that holds a few hundred repositories fills it an
 the slowest item. Such a task usually also waits on `env_shell::cached_snapshot()`'s single lock, held for a whole
 login-shell fork while the cache is cold, so the threads past the first few are not even doing work in parallel.
 
-So run the items through `blocking_pass::each_blocking` (`apps/daemon/src/blocking_pass.rs`) instead, which starts
+So run the items through `blocking_pass::each_blocking` (`apps/daemon/src/blocking_pass/mod.rs`) instead, which starts
 the next item as soon as any one finishes, and give each item a deadline of its own, so one that stalls holds a single
 place rather than the pass. A pass that needs another shape (a semaphore, the directory looks in `hostfs::place`) is
 held to the same `blocking_pass::BLOCKING_WIDTH` rather than a figure of its own.

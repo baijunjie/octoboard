@@ -9,7 +9,8 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 
 use super::AppState;
-use crate::protocol::{now_millis, Event, GitActivity, GitStatus};
+use crate::protocol::{Event, GitActivity, GitStatus};
+use crate::time::now_millis;
 
 fn blank_git_status(project_id: &str) -> GitStatus {
     GitStatus {

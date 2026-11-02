@@ -1,11 +1,12 @@
 use std::path::{Path, PathBuf};
 
 use super::*;
-use crate::protocol::{Console, OrchestrationRole, Origin, ProjectSource, SessionStatus};
+use crate::protocol::{Console, OrchestrationRole, ProjectSource, SessionStatus};
 use crate::session::spawn_reader_thread;
+use crate::session::wait::wait_for;
 use crate::state::WriteHold;
 use crate::store::LOCAL_HOST_ID;
-use crate::test_support::{watched_live_session, ScratchDir, StandIn, PATIENCE};
+use crate::test_support::{bare_session, watched_live_session, ScratchDir, StandIn, PATIENCE};
 
 // What Claude Code 2.1.289 actually printed, captured from a real PTY in a directory it had
 // never seen; only the directory's name and the account's plan were replaced. The screen as
@@ -503,39 +504,9 @@ fn project(consent: bool) -> Project {
 
 fn session(id: &str, agent: Agent, role: Role, project_id: Option<&str>) -> Session {
     Session {
-        id: id.to_string(),
         agent,
-        agent_session_id: None,
-        console_id: "console-1".to_string(),
         project_id: project_id.map(str::to_string),
-        host_id: LOCAL_HOST_ID.to_string(),
-        role,
-        origin: Origin::User,
-        title: "Session".to_string(),
-        status: SessionStatus::Idle,
-        terminal_title: None,
-        record_titles: Default::default(),
-        background_tasks: Vec::new(),
-        switching_account: false,
-        paused: false,
-        prompt_on_launch: false,
-        default_effort: None,
-        orchestration_role: OrchestrationRole::Coordinator,
-        context: None,
-        observed_model: None,
-        observed_effort: None,
-        model: None,
-        effort: None,
-        has_conversation: false,
-        bound_to: None,
-        colour: None,
-        ordinal: None,
-        account_id: None,
-        config_dir: None,
-        pinned: false,
-        locked: false,
-        started_at: 0,
-        ended_at: None,
+        ..bare_session(id, role)
     }
 }
 

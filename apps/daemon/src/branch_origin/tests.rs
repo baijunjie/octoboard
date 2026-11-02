@@ -7,9 +7,9 @@ mod target_branch;
 use super::*;
 use crate::browse::compare;
 use crate::git::isolated::IsolatedGit;
-use crate::protocol::now_millis;
 use crate::session_git_hooks::fixture::{project, succeeds, Fixture};
 use crate::test_support::{git, isolated_git_env, ScratchDir, PATIENCE, SYSTEM_GIT};
+use crate::time::now_millis;
 
 impl Fixture {
     fn env(&self) -> IsolatedGit {

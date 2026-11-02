@@ -1,11 +1,12 @@
 //! The accounts table: the agent accounts the user added, their enabled and sharing state.
 
 use super::{Result, StoreError};
-use rusqlite::{params, OptionalExtension, Row};
+use rusqlite::{params, Connection, OptionalExtension, Row};
 
 use super::rows::{enum_from_row, enum_to_text};
 use super::Store;
-use crate::protocol::{error_code, now_millis, Account, CodedError};
+use crate::protocol::{error_code, Account, CodedError};
+use crate::time::now_millis;
 
 /// What turning an account's sharing on recorded when it started; see
 /// [`Store::account_sharing_start`].
@@ -190,33 +191,39 @@ impl Store {
 
     /// Every account of every agent, oldest first.
     pub fn list_accounts(&self) -> Result<Vec<Account>> {
-        let conn = self.lock();
-        let mut stmt =
-            conn.prepare("SELECT id, agent, name, config_dir, share_default_config, share_default_config_incomplete, disabled FROM accounts ORDER BY created_at")?;
-        let rows = stmt
-            .query_map([], read_account)?
-            .collect::<rusqlite::Result<Vec<_>>>()?;
-        Ok(rows)
+        read_accounts(&self.lock())
     }
 
     /// Removes the account, after clearing it from every console and project that refers to it —
     /// which puts each console back on its agent's default account and each project back to
-    /// inheriting its console's — in the same locked step, so no reader ever sees one still
+    /// inheriting its console's — in the same locked transaction, so no reader ever sees one still
     /// pointing at an id the `accounts` table no longer has. A project that pins the default
     /// account refers to no id, so it is left alone.
     pub fn delete_account(&self, id: &str) -> Result<()> {
-        let conn = self.lock();
+        let mut conn = self.lock();
+        let tx = conn.transaction()?;
         for column in ["claude_account_id", "codex_account_id", "grok_account_id"] {
             for table in ["consoles", "projects"] {
-                conn.execute(
+                tx.execute(
                     &format!("UPDATE {table} SET {column} = NULL WHERE {column} = ?1"),
                     params![id],
                 )?;
             }
         }
-        conn.execute("DELETE FROM accounts WHERE id = ?1", params![id])?;
+        tx.execute("DELETE FROM accounts WHERE id = ?1", params![id])?;
+        tx.commit()?;
         Ok(())
     }
+}
+
+/// Every account of every agent, oldest first.
+pub(super) fn read_accounts(conn: &Connection) -> Result<Vec<Account>> {
+    let mut stmt =
+        conn.prepare("SELECT id, agent, name, config_dir, share_default_config, share_default_config_incomplete, disabled FROM accounts ORDER BY created_at")?;
+    let rows = stmt
+        .query_map([], read_account)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
 }
 
 /// Turns the `accounts_agent_name_unique` index tripping into the protocol's own
@@ -358,6 +365,35 @@ mod tests {
         }
         let untouched = store.get_console("console-3").unwrap().unwrap();
         assert_eq!(untouched.accounts.claude.as_deref(), Some("claude-other"));
+    }
+
+    /// A removal that fails part-way leaves the references it had already cleared as they were.
+    #[test]
+    fn a_failed_account_removal_leaves_the_references_in_place() {
+        let path = temp_db("delete-account-fails");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_account(&account(
+                "claude-acct",
+                Agent::Claude,
+                "/home/u/.claude-alt",
+            ))
+            .expect("account");
+        store
+            .insert_console(&console(Some("claude-acct"), None, None))
+            .expect("insert");
+        store
+            .lock()
+            .execute_batch(
+                "CREATE TRIGGER refuse_account_delete BEFORE DELETE ON accounts
+                 BEGIN SELECT RAISE(ABORT, 'refused'); END;",
+            )
+            .expect("trigger");
+
+        store.delete_account("claude-acct").expect_err("refused");
+        let kept = store.get_console("console-1").unwrap().unwrap();
+        assert_eq!(kept.accounts.claude.as_deref(), Some("claude-acct"));
+        assert!(store.get_account("claude-acct").unwrap().is_some());
     }
 
     /// An account's name and directory round-trip, and `update_account` can change either

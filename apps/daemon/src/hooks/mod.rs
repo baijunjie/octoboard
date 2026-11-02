@@ -27,7 +27,7 @@
 //!   the two are injected as asynchronous hooks, so they arrive in either order; that is why no
 //!   status is read from the pre-event. A turn that ends in an error fires neither `Stop` nor
 //!   `Interrupt`: only its `UserPromptSubmit`, with nothing after it, so that ending is read from
-//!   Codex's rollout file instead (see `crate::records::rollout`).
+//!   Codex's rollout file instead (see `crate::records::watch::codex_rollout`).
 //!
 //! Two gaps are accepted rather than worked around, both settled during validation: a turn that
 //! ends with a plain-text question to the user is indistinguishable from a finished turn on every
@@ -39,8 +39,8 @@
 //! prompt or its `AskUserQuestion` is silent in exactly the same way. Neither is left as a gap: a
 //! working session would read as working until its next `UserPromptSubmit`, and a waiting one would
 //! keep its raised hand with nothing to lower it, so both are recovered outside this mapping, from
-//! the agent's own transcript; see `crate::records::transcript`. Codex's turn that ends in an error
-//! is recovered the same way, from its rollout file.
+//! the agent's own transcript; see `crate::records::watch::claude_transcript`. Codex's turn that
+//! ends in an error is recovered the same way, from its rollout file.
 //!
 //! For the payload fields behind these decisions — what each event carries, what it can be
 //! correlated on, and what never fires — see `docs/agent-cli-reference.md`.
@@ -406,7 +406,7 @@ pub fn turn_cancelled(agent: Agent, event: &str) -> bool {
         Agent::Grok => event == "StopCancelled",
         // Claude Code emits nothing at all when the user interrupts. The turn stays open until the
         // next `UserPromptSubmit` re-arms it, which is stale rather than wrong; the status is
-        // recovered from the transcript instead (`crate::records::transcript`).
+        // recovered from the transcript instead (`crate::records::watch::claude_transcript`).
         Agent::Claude => false,
     }
 }
@@ -429,7 +429,7 @@ pub enum TurnOutcome {
 /// session resumed after its last turn was cut short comes back paused. A Grok `Stop` at teardown
 /// (`reason: "shutdown"`) and its `idle_prompt` backstop, which also fires after an ordinary
 /// `Stop`, say nothing of how a turn ended. Claude Code's interrupt and declined prompts fire no
-/// event; those are recovered from its transcript (`crate::records::transcript`).
+/// event; those are recovered from its transcript (`crate::records::watch::claude_transcript`).
 pub fn turn_outcome(agent: Agent, event: &str, payload: &Value) -> Option<TurnOutcome> {
     match (agent, event) {
         (Agent::Claude, "StopFailure") => Some(TurnOutcome::Abnormal),

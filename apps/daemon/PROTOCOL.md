@@ -7,7 +7,8 @@ here.
 
 The daemon binds to `127.0.0.1` on an ephemeral port and generates a key for this launch (see "Who may connect"). It
 prints `octoboardd listening on 127.0.0.1:<port> with key <key>` on stdout as its first line, the key being 64
-lower-case hex characters, and writes the port alone to `$TMPDIR/octoboardd.port`; the key is not in that file. It lives
+lower-case hex characters, and writes the port alone to `octoboardd.port` in its data directory
+(`~/.octoboard/octoboardd.port`; a failed write is only logged); the key is not in that file. It lives
 in the daemon's memory and in the files of the sessions the daemon starts (see "Who may connect"). The application
 reads the stdout line.
 
@@ -2719,7 +2720,9 @@ effective `revert_gate` setting off (read at every request, so turning it off re
 the first remote in byte order; empty for a repository with none; only a reftable repository, which has no such files,
 asks `git`), and the other two are the repository's recorded target branches and fork points, leaving out, where the
 repository keeps reflog files, a record whose branch has been deleted and made again since. Answers `400` for a body
-that does not parse. The hook lets the git command through whenever it gets anything else.
+that does not parse. The hook lets the git command through whenever it gets anything else; on a non-2xx answer it also
+prints one line on stderr saying the gate did not check the update, because the daemon refused (4xx) or failed (any
+other status) the call.
 
 ## `POST /context-window/:session` — a Claude Code session reporting its context window
 

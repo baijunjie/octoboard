@@ -11,8 +11,9 @@ use serde_json::{json, Map, Value};
 use uuid::Uuid;
 
 use crate::coordinator::pages::announce_deleted;
-use crate::protocol::{now_millis, Event, Page, Session};
+use crate::protocol::{Event, Page, Session};
 use crate::state::AppState;
+use crate::time::now_millis;
 
 use super::args::{optional_string, required_str};
 

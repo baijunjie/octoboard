@@ -12,7 +12,7 @@ use super::survey::*;
 use crate::branch_origin::bound::bound_in;
 use crate::git::repo_files::repository_of;
 use crate::protocol::{
-    error_code, now_millis, Agent, Event, OrchestrationRole, Origin, RequestBody, Role, Session,
+    error_code, Agent, Event, OrchestrationRole, Origin, RequestBody, Role, Session,
     SessionBranchCause, SessionBranchItem, SessionBranchKind, SessionBranchState,
     SessionBranchTarget, SessionStatus,
 };
@@ -22,6 +22,7 @@ use crate::test_support::{
     app_state, branch_made_by, console, fixture_git, git, host_tools, insert_project, repo_with,
     running, ScratchDir, PATIENCE,
 };
+use crate::time::now_millis;
 use crate::wire_path;
 
 /// A project session `id` of [`insert_project`]'s project, in `status`.

@@ -164,7 +164,7 @@ impl RecoveryState {
             token: Arc::new(()),
             input_writes,
             turn_ends,
-            since: crate::protocol::now_millis(),
+            since: crate::time::now_millis(),
             seq,
             verified: None,
             hold_until: None,
@@ -322,7 +322,7 @@ async fn recover_after_refresh(
             wait.session.agent == agent
                 && started_at > wait.since
                 && wait.hold_until.is_none_or(|until| {
-                    until <= crate::protocol::now_millis() || wait.session.account_id == account
+                    until <= crate::time::now_millis() || wait.session.account_id == account
                 })
         })
         .cloned()
@@ -651,7 +651,7 @@ fn hold_deadline(state: &Arc<AppState>, session: &Session) -> Result<Option<i64>
     if !readable {
         return Ok(None);
     }
-    let now = crate::protocol::now_millis();
+    let now = crate::time::now_millis();
     Ok(state
         .account_quotas
         .exhausted(session.agent, account, config_dir.as_deref(), now)
@@ -665,7 +665,7 @@ fn hold_deadline(state: &Arc<AppState>, session: &Session) -> Result<Option<i64>
 /// depend on itself.
 fn schedule_end_hold(state: &Arc<AppState>, id: &str, token: Arc<()>, until: i64) {
     let (state, id) = (state.clone(), id.to_string());
-    let delay = Duration::from_millis((until - crate::protocol::now_millis()).max(0) as u64);
+    let delay = Duration::from_millis((until - crate::time::now_millis()).max(0) as u64);
     tokio::spawn(async move {
         tokio::time::sleep(delay).await;
         end_hold(&state, &id, &token, until).await;
@@ -699,7 +699,7 @@ async fn end_hold(state: &Arc<AppState>, id: &str, token: &Arc<()>, until: i64) 
         return;
     };
     // Held no longer, but not to be held again.
-    trigger.hold_until = Some(crate::protocol::now_millis());
+    trigger.hold_until = Some(crate::time::now_millis());
     let Some((snapshot, launch)) = recovery_env(state) else {
         park(state, &trigger.session.id.clone(), trigger);
         return;

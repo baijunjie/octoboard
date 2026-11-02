@@ -29,7 +29,7 @@ In the desktop form the daemon is started as part of the application. Whoever st
 only, on a port the operating system assigns, makes a new key for this launch (see "Who can reach the daemon" below),
 and prints both on its standard output as its first line, `octoboardd listening on 127.0.0.1:<port> with key <key>`:
 the application reads the port and the key from there, and neither is ever fixed or guessed. The daemon also writes the
-port, without the key, to a file in the temporary directory, for a developer attaching to a daemon started by hand, who
+port, without the key, to a file in its data directory, for a developer attaching to a daemon started by hand, who
 takes the key from that startup line (see "Files Octoboard owns" below). Neither fits the server form: nothing off the
 server can reach loopback, and a port that changes on every start cannot be bookmarked or written into a tunnel
 command; the address the daemon listens on there does not exist yet.
@@ -374,16 +374,17 @@ nothing that the form will need and does not have yet claimed to exist.
 ## Files Octoboard owns
 
 Everything Octoboard writes for itself lives under `~/.octoboard` — on the machine the daemon runs on, which in the
-server form is the server — with two exceptions, the window's state and the port file, described after the table:
+server form is the server — with one exception, the window's state, described after the table:
 
 | Path | Contents |
 |---|---|
-| `~/.octoboard/octoboard.db` | Consoles, projects, session records, the report panel pages every session pushed, each project's trust permission and the trusted folders (see "The trust permission" in `docs/product/folder-trust.md`), and the settings the daemon keeps for every client (see "Git" and "General" in `docs/product/settings.md`). The database records the version of its schema, and the daemon decides what to do with the file when it opens it, on every start: **a database at the version this build reads** is used as it is; **a file with no tables in it** is given the current schema in place; **a database at an older schema version** (this build reads version 1, and has no upgrade from an older one, so the only older state is a database written before versions were recorded) is moved aside: the daemon renames it, beside itself, to `octoboard.db.superseded-<Unix time in seconds>`, logs a warning naming both files, and starts a fresh database at the usual path. Nothing in a database moved aside is read back into the new one: the user re-enters their consoles, projects and accounts by hand, and the old file stays on disk, never deleted. **A database at a newer version** is refused and left untouched, and so is **a file that is not a SQLite database**: the daemon fails to start, with a reason that names the file (for a database at a version this build does not read, its version and that renaming the named file moves it aside, which deletes nothing and has this build start a fresh database), shown as described in "Starting up" above. |
+| `~/.octoboard/octoboard.db` | Consoles, projects, session records, the report panel pages every session pushed, each project's trust permission and the trusted folders (see "The trust permission" in `docs/product/folder-trust.md`), and the settings the daemon keeps for every client (see "Git" and "General" in `docs/product/settings.md`). What the daemon does with an existing file when it starts is under "The database's schema version" below. |
 | `~/.octoboard/consoles/<console id>/` | A console's working directory, where its console sessions run, including the console session instruction file Octoboard writes there, `AGENTS.md`, and `CLAUDE.md`, a link to it (see "The console session's instruction file" in `docs/product/launching-agents.md`). Removed when the console is deleted. |
 | `~/.octoboard/run/<session id>/` | Per-session scratch space for what a launch injects. Removed when the session's process is gone, and cleared wholesale on daemon start. |
 | `~/.octoboard/output/<session id>` | The saved terminal preview shown for an interrupted session (see "Interrupted and archived sessions" in `docs/product/session-terminal.md` for its capture rules and limits). Written when the process ends, including when the daemon stops it on its way out, but not when the daemon itself goes down on an internal failure. Starting a new process discards it. Removed with the session's record; on daemon start, any left for a session that no longer exists is removed. |
 | `~/.octoboard/handoff/<session id>.md` | The handoff package a session read when it took over another session's place (see "The handoff package" in `docs/product/handing-off-sessions.md`), named for the receiving session. Removed with that session's record; on daemon start, any left for a session that no longer exists, and any half-written one, is removed. |
 | `~/.octoboard/daemon.lock` | Enforces one daemon per data directory. |
+| `~/.octoboard/octoboardd.port` | The port the daemon listens on, alone, never the daemon's key, for a developer attaching to a daemon started by hand (see "Starting up"). Only the daemon that holds `daemon.lock` writes it; one that cannot write it logs a warning and starts all the same. Removed when the daemon stops, unless the file names another port by then, but not when the daemon goes down on an internal failure. |
 | `~/.octoboard/logs/daemon.log` | The daemon's log, at the level of information and above, the panics of any of its threads included. Only the daemon that holds `daemon.lock` writes it, so a second daemon refused at start leaves it alone. An entry that would take the file past **5 MiB** first rotates it: `daemon.log` becomes `daemon.log.1`, the one before that `daemon.log.2`, then `daemon.log.3`, and the oldest beyond that is dropped. |
 | `~/.octoboard/logs/desktop.log` | The macOS application's own log: each attempt to start the daemon or start it again and how it went, and the failures the application meets itself, each line with a UTC timestamp. A file larger than **1 MiB** when the application first writes to it in a launch is moved to `desktop.log.1`, replacing the one there. |
 | `~/.octoboard/process-ledger.json` | The launch identities, attributed processes and user keeps used for background-process cleanup across daemon restarts (see "Automatic stopping and its boundaries" in `docs/product/background-processes.md`). It records the boot ID of the system it was written in (on Linux), and records from before the system last started are ignored. An unreadable file is moved aside as `process-ledger.json.unreadable`; processes identified only by their launch tag are kept rather than stopped without knowing the user's choices. A file whose boot ID cannot be compared with the running system's (it records none, written before boot IDs were recorded, on a system that has one, or the daemon cannot read the system's) is treated as unreadable but not moved aside. |
@@ -393,11 +394,43 @@ The macOS application keeps the window's size, position and maximized state in
 launches" in `docs/product/window-size-and-position.md`). It belongs to the application's window rather than to the
 daemon, so it is not under `~/.octoboard`. Deleting it makes the next launch open the window as a first launch does.
 
-The daemon writes the port it listens on to `octoboardd.port` in the temporary directory, for a developer attaching to
-a daemon started by hand (see "Starting up"), and removes it on its way out. The file holds the port alone, never the
-daemon's key. On macOS that directory is the user's own
-`$TMPDIR`; on Linux, where `TMPDIR` is usually unset, it is the shared `/tmp`, so two daemons on one server — each a
-different owner's, each single-user — would write the same file.
-
 What Octoboard writes inside a project's repository, and what it writes into the user's own agent configuration, is
 in "What Octoboard never modifies" in `docs/product/launching-agents.md`.
+
+### The database's schema version
+
+The database records the version of its schema — this build's is **2** — and, from version 2 on, a mark in the file's
+header (its SQLite application ID, `0x4F435442`, "OCTB") that identifies it as Octoboard's. On every start, before
+using an existing `~/.octoboard/octoboard.db`, the daemon decides what to do with it:
+
+- **A file with no tables in it** and no version is given the current schema in place.
+- **A file that is not Octoboard's** — a SQLite database carrying another program's mark, or carrying none at version 2
+  or later — is refused and left as it is, whatever version it records: the daemon fails to start, with a reason that
+  names the file and says it is not an Octoboard database. A file that is not a SQLite database at all is refused and
+  left as it is too, with a reason that names the file.
+- **A database at the version this build reads** is used as it is.
+- **A database written before versions were recorded** (version 0) is moved aside: the daemon renames it, beside
+  itself, to `octoboard.db.superseded-<Unix time in seconds>`, logs a warning naming both files, and starts a fresh
+  database at the usual path. Nothing in a database moved aside is read back into the new one: the user re-enters their
+  consoles, projects and accounts by hand, and the old file stays on disk, never deleted.
+- **A database at an older version** (version 1) is backed up, then upgraded in place:
+  - The backup is a copy beside it, `octoboard.db.pre-v<its version>`. No earlier backup is overwritten: when that name
+    is taken, the copy's name has the Unix time in seconds added, `octoboard.db.pre-v<its version>-<time>` (and a
+    counter after it, should that be taken too). When an earlier backup of that version already holds exactly the
+    file's current content, it serves as the backup and no new copy is made, so starting again after a failed upgrade
+    does not pile up copies. A backup is either complete or absent: it is written as `<its name>.partial` and renamed
+    once it is on disk, and a `.partial` file is never taken for a backup. Backups stay on disk, never deleted. A
+    backup that cannot be made stops the start, with the database untouched.
+  - The upgrade is all or nothing: if any part of it fails, the database is left exactly as it was, and the daemon fails
+    to start, with a reason that names the database, the versions it was being taken from and to, and the backup.
+- **A database at a newer version than this build reads, or at a negative one**, and **a file with no tables that
+  records a version** are refused and left untouched: the daemon fails to start, with a reason that names the file, its
+  version, and that renaming the named file moves it aside, which deletes nothing and has this build start a fresh
+  database.
+
+A start that fails over the database is shown as described in "Starting up" above.
+
+**What the upgrade from version 1 changes.** From version 2 a console has at most one project recorded at a given path.
+Where a version-1 database holds several projects of one console recorded at exactly the same path, they become one:
+the one added first is kept as it is, the sessions of the others move to it, and the others are removed; what was set on
+them — their name, pin, tags, trust permission and every other project setting — is not carried over.

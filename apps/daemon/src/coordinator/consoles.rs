@@ -9,10 +9,10 @@ use uuid::Uuid;
 use crate::agents::launch_settings::{self, normalized_launches, trimmed_or_none, LaunchCheck};
 use crate::mcp;
 use crate::protocol::{
-    error_code, now_millis, Agent, CodedError, Console, Event, Launch, LaunchChange, PerAgent,
-    Present, Project,
+    error_code, Agent, CodedError, Console, Event, Launch, LaunchChange, PerAgent, Present, Project,
 };
 use crate::state::AppState;
+use crate::time::now_millis;
 
 use super::account_choice::checked_account_reference;
 use super::lifecycle::{ensure_unlocked, session_ids_where};

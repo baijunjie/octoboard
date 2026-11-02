@@ -36,7 +36,7 @@ not carry it, so the UI needs both. Either:
 - run `OCTOBOARD_DAEMON_PORT=<port> pnpm dev` and open `http://localhost:5174/?key=<key>` (or set `VITE_DAEMON_KEY`),
   which reaches the daemon through a same-origin `/ws` proxy (`vite.config.ts`).
 
-The key is only on that line: the daemon does not write it anywhere (`$TMPDIR/octoboardd.port` holds the port alone), so
+The key is only on that line: the daemon does not write it anywhere (`~/.octoboard/octoboardd.port` holds the port alone), so
 a `VITE_DAEMON_KEY` kept in the repo-root `.env.local` (gitignored; template: `.env.local.example`) goes stale at every
 daemon restart. The page never sends its address as a referrer (`index.html`), so the key in it stays between the page
 and the daemon.

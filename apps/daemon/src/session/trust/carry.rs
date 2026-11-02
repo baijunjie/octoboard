@@ -2,6 +2,7 @@
 //! unchanged, under the store's lock file and by replacing the file, as Grok itself writes it.
 
 use super::*;
+use crate::session::wait::{wait_for, POLL};
 
 /// How long Grok has to write its trust entry once its confirmation was pressed, and how long the
 /// user's store may stay locked by another writer.

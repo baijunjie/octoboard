@@ -6,10 +6,11 @@ use std::time::{Duration, Instant};
 
 use crate::accounts::quotas::tests::{key, quota_of, window, NOW};
 use crate::protocol::{
-    now_millis, quota_unavailable_code as code, AccountQuota, Agent, Availability, Event,
-    QuotaUnavailable, QuotaWindow, QuotaWindowKind,
+    quota_unavailable_code as code, AccountQuota, Agent, Availability, Event, QuotaUnavailable,
+    QuotaWindow, QuotaWindowKind,
 };
 use crate::state::AppState;
+use crate::time::now_millis;
 
 #[test]
 fn the_wait_before_another_attempt_doubles_with_failures_up_to_a_cap() {

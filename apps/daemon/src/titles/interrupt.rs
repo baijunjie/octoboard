@@ -4,11 +4,12 @@
 //! **Claude Code.** Esc pressed before the model has shown anything — while the request waits for
 //! its response, or the model is still thinking — fires no hook, and on 2.1.310 writes nothing to
 //! the transcript either: the prompt entry written at submit stays the last user entry, and Claude
-//! Code puts the prompt's text back in its input box. So `crate::records::transcript`'s interrupt
-//! watch never sees it, and the session would read `Working` until its next prompt. What does
-//! change is the terminal title: Claude Code starts it with a turning half-filled circle (`◐`, `◑`)
-//! while a turn runs and with `✳` when it is back at its prompt, and the glyph turns to `✳` within
-//! a tenth of a second of the Esc. See `docs/agent-cli-reference.md`, section "## Claude Code".
+//! Code puts the prompt's text back in its input box. So the interrupt watch of
+//! `crate::records::watch::claude_transcript` never sees it, and the session would read `Working`
+//! until its next prompt. What does change is the terminal title: Claude Code starts it with a
+//! turning half-filled circle (`◐`, `◑`) while a turn runs and with `✳` when it is back at its
+//! prompt, and the glyph turns to `✳` within a tenth of a second of the Esc. See
+//! `docs/agent-cli-reference.md`, section "## Claude Code".
 //!
 //! **Grok Build.** Ctrl-C pressed before the first token arrives fires no hook either (1.0.70,
 //! against a stand-in inference server): no `StopCancelled`, no `Stop`, and the prompt goes back
@@ -45,7 +46,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::protocol::{Agent, SessionStatus};
-use crate::records::transcript;
+use crate::records::watch::claude_transcript;
 use crate::state::AppState;
 use crate::titles::activity::TitleActivity;
 
@@ -121,7 +122,7 @@ pub fn watch(state: &Arc<AppState>, session_id: &str, generation: u64) {
             // ending as usual or a prompt waiting on the user, is left where the hook put it.
             match agent {
                 Agent::Grok => cancelled_before_output(&state, &session_id, generation),
-                _ => transcript::back_at_prompt(
+                _ => claude_transcript::back_at_prompt(
                     &state,
                     &session_id,
                     generation,
@@ -138,9 +139,9 @@ pub fn watch(state: &Arc<AppState>, session_id: &str, generation: u64) {
 /// closes its turn as cancelled, while watch `generation` is still current and the session still
 /// reads `Working`.
 fn cancelled_before_output(state: &Arc<AppState>, session_id: &str, generation: u64) {
-    // One step under the watch's bookkeeping, for the reason `transcript::back_at_prompt` gives;
-    // the turn is closed in the same step, so a prompt landing just after cannot have its own turn
-    // closed instead.
+    // One step under the watch's bookkeeping, for the reason `claude_transcript::back_at_prompt`
+    // gives; the turn is closed in the same step, so a prompt landing just after cannot have its
+    // own turn closed instead.
     let moved = state.while_record_watch_current(session_id, generation, || {
         let moved = state.report_paused_if(session_id, SessionStatus::Working);
         if matches!(moved, Ok(true)) {

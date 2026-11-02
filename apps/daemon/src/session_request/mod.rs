@@ -69,10 +69,11 @@ use crate::mcp::qualified_tool_name;
 use crate::messaging::delivery::{self, WhenBlocked};
 use crate::messaging::texts;
 use crate::protocol::{
-    error_code, now_millis, Agent, CodedError, Event, Role, Session, SessionRequestAction,
+    error_code, Agent, CodedError, Event, Role, Session, SessionRequestAction,
     SessionRequestEnding, SessionStatus,
 };
 use crate::state::AppState;
+use crate::time::now_millis;
 
 pub(crate) use change::{
     ask_to_change, run_to_the_end, run_unasked, Change, Edits, Perform, Performed,

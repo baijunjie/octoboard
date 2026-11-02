@@ -2,10 +2,9 @@
 
 use super::*;
 use crate::protocol::{
-    Account, Agent, Console, OrchestrationRole, Origin, PerAgent, Project, ProjectAccount,
-    ProjectSource, Role, Session, SessionStatus,
+    Account, Agent, Console, PerAgent, Project, ProjectAccount, ProjectSource, Role, Session,
 };
-use crate::test_support::ScratchFile;
+use crate::test_support::{bare_session, ScratchFile};
 
 pub(super) fn temp_db(name: &str) -> ScratchFile {
     ScratchFile::new(&format!("store-{name}"), "octoboard.db")
@@ -45,39 +44,9 @@ pub(super) fn account(id: &str, agent: Agent, config_dir: &str) -> Account {
 
 pub(super) fn session(config_dir: Option<&str>) -> Session {
     Session {
-        id: "session-1".to_string(),
-        agent: Agent::Claude,
-        agent_session_id: None,
-        console_id: "console-1".to_string(),
-        project_id: None,
-        host_id: LOCAL_HOST_ID.to_string(),
-        role: Role::Console,
-        origin: Origin::User,
         title: "Hub".to_string(),
-        status: SessionStatus::Idle,
-        terminal_title: None,
-        record_titles: Default::default(),
-        background_tasks: Vec::new(),
-        switching_account: false,
-        paused: false,
-        prompt_on_launch: false,
-        default_effort: None,
-        orchestration_role: OrchestrationRole::Coordinator,
-        context: None,
-        observed_model: None,
-        observed_effort: None,
-        model: None,
-        effort: None,
-        has_conversation: false,
-        bound_to: None,
-        colour: None,
-        ordinal: None,
-        account_id: None,
         config_dir: config_dir.map(str::to_string),
-        pinned: false,
-        locked: false,
-        started_at: 0,
-        ended_at: None,
+        ..bare_session("session-1", Role::Console)
     }
 }
 

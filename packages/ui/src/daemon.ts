@@ -6,7 +6,7 @@
 //      the window it opens, with no Tauri IPC call involved at all;
 //   2. `VITE_DAEMON_PORT`, a dev-time constant for running `vite dev` straight against a daemon
 //      started by hand (read the printed `octoboardd listening on 127.0.0.1:<port> with key <key>`
-//      line, or `$TMPDIR/octoboardd.port` for the port, and pass it as an env var);
+//      line, or `~/.octoboard/octoboardd.port` for the port, and pass it as an env var);
 //   3. the page's own origin, for a UI the daemon itself serves (or the dev server proxies to one,
 //      see `vite.config.ts`). Not in the Tauri shell: its page origin is the shell's asset
 //      handler, never the daemon, so a missing `?port=` there is a failure to report. Not on a

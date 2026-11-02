@@ -899,7 +899,7 @@ async fn a_projects_git_status_is_given_as_last_read() {
 
     // The age counts on the wall clock: the monotonic clock stands still while the machine
     // sleeps, so a check made an hour ago must read as an hour whatever the `Instant` says.
-    state.set_git_check_wall_time_for_test("project-1", crate::protocol::now_millis() - 3_600_000);
+    state.set_git_check_wall_time_for_test("project-1", crate::time::now_millis() - 3_600_000);
     let owned = call(&state, "of-a", "get_project", &Map::new())
         .await
         .unwrap();
@@ -1126,7 +1126,7 @@ async fn every_role_reads_the_same_things_with_ownership_relative_to_itself() {
 /// carry is the caller's own, while an id reaches either.
 #[tokio::test]
 async fn a_project_name_in_the_callers_console_wins_for_the_archive() {
-    let (state, _dir) = shared_console_state("tool-surface-archive-precedence");
+    let (state, dir) = shared_console_state("tool-surface-archive-precedence");
     for (id, console, archived) in [
         ("own-twin", "console-1", "archived-own"),
         ("foreign-twin", "console-2", "archived-foreign"),
@@ -1137,6 +1137,7 @@ async fn a_project_name_in_the_callers_console_wins_for_the_archive() {
                 id: id.to_string(),
                 console_id: console.to_string(),
                 name: "twin".to_string(),
+                path: dir.join(id).to_string_lossy().into_owned(),
                 ..state.store.get_project("project-1").unwrap().unwrap()
             })
             .unwrap();
@@ -1167,13 +1168,14 @@ async fn a_project_name_in_the_callers_console_wins_for_the_archive() {
 /// either of them.
 #[tokio::test]
 async fn an_ambiguous_project_name_is_refused_for_the_archive() {
-    let (state, _dir) = shared_console_state("tool-surface-ambiguous-archive");
+    let (state, dir) = shared_console_state("tool-surface-ambiguous-archive");
     for id in ["twin-1", "twin-2"] {
         state
             .store
             .insert_project(&Project {
                 id: id.to_string(),
                 name: "twin".to_string(),
+                path: dir.join(id).to_string_lossy().into_owned(),
                 ..state.store.get_project("project-2").unwrap().unwrap()
             })
             .unwrap();

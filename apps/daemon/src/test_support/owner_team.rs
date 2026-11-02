@@ -6,42 +6,16 @@ use std::sync::Arc;
 
 use crate::protocol::{Agent, OrchestrationRole, Origin, Role, Session, SessionStatus};
 use crate::state::AppState;
+use crate::test_support::bare_session;
 
 pub(crate) fn project_session(title: &str) -> Session {
     Session {
-        id: "session-7".to_string(),
-        agent: Agent::Claude,
-        agent_session_id: None,
-        console_id: "console-1".to_string(),
-        project_id: None,
-        host_id: "local".to_string(),
-        role: Role::Project,
         origin: Origin::Console,
         title: title.to_string(),
-        status: SessionStatus::Idle,
-        terminal_title: None,
-        record_titles: Default::default(),
-        background_tasks: Vec::new(),
-        switching_account: false,
-        paused: false,
-        prompt_on_launch: false,
-        default_effort: None,
         orchestration_role: OrchestrationRole::Worker,
-        context: None,
-        observed_model: None,
-        observed_effort: None,
-        model: None,
-        effort: None,
         has_conversation: true,
         bound_to: Some("console-session-1".to_string()),
-        colour: None,
-        ordinal: None,
-        account_id: None,
-        config_dir: None,
-        pinned: false,
-        locked: false,
-        started_at: 0,
-        ended_at: None,
+        ..bare_session("session-7", Role::Project)
     }
 }
 

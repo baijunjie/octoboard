@@ -90,11 +90,7 @@ pub(super) fn backup_path(entry: &Path, stamp: &str) -> PathBuf {
 
 /// A stamp for the backups an operation makes now.
 pub(super) fn new_stamp() -> String {
-    let seconds = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_secs() as i64)
-        .unwrap_or(0);
-    crate::rfc3339::compact_utc_stamp(seconds)
+    crate::time::compact_utc_stamp(crate::time::now_secs())
 }
 
 /// Renames `from` to `to`, copying it ([`copy_path`]) and removing it only then when the two are

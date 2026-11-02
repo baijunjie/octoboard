@@ -45,7 +45,7 @@ use std::sync::Mutex;
 use anyhow::Context;
 use rusqlite::Connection;
 
-use schema::{settle_existing_file, user_version, SCHEMA, SCHEMA_VERSION};
+use schema::{settle_existing_file, user_version, APPLICATION_ID, SCHEMA, SCHEMA_VERSION};
 
 pub use accounts::SharingStart;
 pub use agents::ReorderOutcome;
@@ -83,6 +83,7 @@ impl Store {
         if user_version(&conn)? == 0 {
             let tx = conn.unchecked_transaction()?;
             tx.execute_batch(SCHEMA)?;
+            tx.pragma_update(None, "application_id", APPLICATION_ID)?;
             tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
             tx.commit()?;
         }

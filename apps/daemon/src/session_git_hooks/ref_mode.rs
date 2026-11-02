@@ -14,7 +14,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use crate::branch_origin::{CreatedRef, RefReport};
-use crate::protocol::now_millis;
+use crate::time::now_millis;
 use crate::wire_path;
 
 /// Hard deadline for the round trip, the same as the agent hook forwarder's.

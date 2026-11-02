@@ -38,7 +38,7 @@ const LAYERS: &[(&str, &[&str])] = &[
             "blocking_pass",
             "interface_language",
             "loopback",
-            "rfc3339",
+            "time",
             "wire_path",
         ],
     ),

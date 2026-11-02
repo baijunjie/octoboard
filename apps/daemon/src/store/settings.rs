@@ -2,10 +2,14 @@
 //! modes, Git workflow and clone directory.
 
 use super::Result;
+use rusqlite::types::FromSql;
 use rusqlite::{params, Connection};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 
+use super::accounts::read_accounts;
 use super::agents::{read_account_order, read_added_agents};
-use super::rows::{enum_from_row, enum_from_row_opt, enum_to_text};
+use super::rows::{enum_from_row, enum_from_text, enum_to_text};
 use super::{Store, SETTINGS_ID};
 use crate::git_workflow::{GitWorkflowSettings, GitWorkflowSettingsChanges};
 use crate::protocol::{Agent, ApprovalReviewer, ClaudeApprovalMode, Settings};
@@ -23,32 +27,37 @@ impl Store {
         Ok(())
     }
 
+    /// Every setting, read under one take of the lock, so a write on another task cannot land
+    /// between two of the reads and leave one record mixing old and new values.
     pub fn get_settings(&self) -> Result<Settings> {
-        let account_order = read_account_order(&self.lock())?;
+        let conn = self.lock();
         Ok(Settings {
-            auto_pull_repositories: self.auto_pull_repositories()?,
-            auto_delete_unresumable_archives: self.auto_delete_unresumable_archives()?,
-            auto_approve_session_requests: self.auto_approve_session_requests()?,
-            auto_approve_resume_requests: self.auto_approve_resume_requests()?,
-            auto_approve_account_switches: self.auto_approve_account_switches()?,
-            auto_approve_handoffs: self.auto_approve_handoffs()?,
-            ask_questions_as_choices: self.ask_questions_as_choices()?,
-            interface_language: self.interface_language()?,
-            auto_select_account: self.auto_select_account()?,
-            auto_switch_on_usage_limit: self.auto_switch_on_usage_limit()?,
-            sidebar_order_by_status: self.sidebar_order_by_status()?,
-            auto_start_quota_windows: self.auto_start_quota_windows()?,
-            default_clone_dir: self.default_clone_dir()?,
-            accounts: self.list_accounts()?,
-            account_order,
-            added_agents: self.added_agents()?,
-            codex_approval_reviewer: self.codex_approval_reviewer()?,
-            claude_approval_mode: self.claude_approval_mode()?,
-            claude_compatibility: self.claude_compatibility()?,
-            agent_tags: self.agent_tags()?,
-            default_account_names: self.default_account_names()?,
-            disabled_default_accounts: self.disabled_default_accounts()?,
-            git_workflow: self.git_workflow_settings()?,
+            auto_pull_repositories: read_setting(&conn, "auto_pull_repositories")?,
+            auto_delete_unresumable_archives: read_setting(
+                &conn,
+                "auto_delete_unresumable_archives",
+            )?,
+            auto_approve_session_requests: read_setting(&conn, "auto_approve_session_requests")?,
+            auto_approve_resume_requests: read_setting(&conn, "auto_approve_resume_requests")?,
+            auto_approve_account_switches: read_setting(&conn, "auto_approve_account_switches")?,
+            auto_approve_handoffs: read_setting(&conn, "auto_approve_handoffs")?,
+            ask_questions_as_choices: read_setting(&conn, "ask_questions_as_choices")?,
+            interface_language: read_setting(&conn, "interface_language")?,
+            auto_select_account: read_setting(&conn, "auto_select_account")?,
+            auto_switch_on_usage_limit: read_setting(&conn, "auto_switch_on_usage_limit")?,
+            sidebar_order_by_status: read_setting(&conn, "sidebar_order_by_status")?,
+            auto_start_quota_windows: read_setting(&conn, "auto_start_quota_windows")?,
+            default_clone_dir: clone_dir_or_built_in(read_setting(&conn, "default_clone_dir")?),
+            accounts: read_accounts(&conn)?,
+            account_order: read_account_order(&conn)?,
+            added_agents: read_added_agents(&conn)?,
+            codex_approval_reviewer: read_enum_setting(&conn, "codex_approval_reviewer")?,
+            claude_approval_mode: read_enum_setting(&conn, "claude_approval_mode")?,
+            claude_compatibility: read_claude_compatibility(&conn)?,
+            agent_tags: read_agent_tags(&conn)?,
+            default_account_names: read_default_account_names(&conn)?,
+            disabled_default_accounts: read_disabled_default_accounts(&conn)?,
+            git_workflow: read_git_workflow_settings(&conn)?,
         })
     }
 
@@ -81,19 +90,7 @@ impl Store {
 
     /// The effective setting for every agent that has one, by wire name.
     pub fn claude_compatibility(&self) -> Result<std::collections::BTreeMap<String, bool>> {
-        let conn = self.lock();
-        let choices = read_claude_compatibility_choices(&conn)?;
-        let added = read_added_agents(&conn)?;
-        Ok(Agent::ALL
-            .into_iter()
-            .filter(|agent| agent.has_claude_compatibility())
-            .map(|agent| {
-                (
-                    agent.wire_name().to_string(),
-                    effective_claude_compatibility(agent, &choices, added.as_deref()),
-                )
-            })
-            .collect())
+        read_claude_compatibility(&self.lock())
     }
 
     /// Records the user's choice of `enabled` for `agent`'s Claude compatibility. The read and the
@@ -104,13 +101,7 @@ impl Store {
         if choices.insert(agent.wire_name().to_string(), enabled) == Some(enabled) {
             return Ok(false);
         }
-        conn.execute(
-            "UPDATE settings SET claude_compatibility = ?2 WHERE id = ?1",
-            params![
-                SETTINGS_ID,
-                serde_json::to_string(&choices).expect("a map of booleans serializes to JSON")
-            ],
-        )?;
+        write_json_setting(&conn, "claude_compatibility", Some(&choices))?;
         Ok(true)
     }
 
@@ -134,13 +125,7 @@ impl Store {
         if !changed {
             return Ok(false);
         }
-        let stored = (!all.is_empty()).then(|| {
-            serde_json::to_string(&all).expect("a map of string lists serializes to JSON")
-        });
-        conn.execute(
-            "UPDATE settings SET agent_tags = ?2 WHERE id = ?1",
-            params![SETTINGS_ID, stored],
-        )?;
+        write_json_setting(&conn, "agent_tags", (!all.is_empty()).then_some(&all))?;
         Ok(true)
     }
 
@@ -163,11 +148,10 @@ impl Store {
         if !changed {
             return Ok(false);
         }
-        let stored = (!agents.is_empty())
-            .then(|| serde_json::to_string(&agents).expect("a set of strings serializes to JSON"));
-        conn.execute(
-            "UPDATE settings SET disabled_default_accounts = ?2 WHERE id = ?1",
-            params![SETTINGS_ID, stored],
+        write_json_setting(
+            &conn,
+            "disabled_default_accounts",
+            (!agents.is_empty()).then_some(&agents),
         )?;
         Ok(true)
     }
@@ -217,21 +201,16 @@ impl Store {
         if names == before {
             return Ok(false);
         }
-        let stored = (!names.is_empty())
-            .then(|| serde_json::to_string(&names).expect("a map of strings serializes to JSON"));
-        conn.execute(
-            "UPDATE settings SET default_account_names = ?2 WHERE id = ?1",
-            params![SETTINGS_ID, stored],
+        write_json_setting(
+            &conn,
+            "default_account_names",
+            (!names.is_empty()).then_some(&names),
         )?;
         Ok(true)
     }
 
     pub fn codex_approval_reviewer(&self) -> Result<Option<ApprovalReviewer>> {
-        Ok(self.lock().query_row(
-            "SELECT codex_approval_reviewer FROM settings WHERE id = ?1",
-            params![SETTINGS_ID],
-            |row| enum_from_row_opt(row, 0),
-        )?)
+        read_enum_setting(&self.lock(), "codex_approval_reviewer")
     }
 
     pub fn set_codex_approval_reviewer(&self, reviewer: Option<ApprovalReviewer>) -> Result<()> {
@@ -243,11 +222,7 @@ impl Store {
     }
 
     pub fn claude_approval_mode(&self) -> Result<Option<ClaudeApprovalMode>> {
-        Ok(self.lock().query_row(
-            "SELECT claude_approval_mode FROM settings WHERE id = ?1",
-            params![SETTINGS_ID],
-            |row| enum_from_row_opt(row, 0),
-        )?)
+        read_enum_setting(&self.lock(), "claude_approval_mode")
     }
 
     pub fn set_claude_approval_mode(&self, mode: Option<ClaudeApprovalMode>) -> Result<()> {
@@ -303,11 +278,7 @@ impl Store {
     /// The tag of the language the user last picked for the interface, as a client reported it;
     /// `None` until one has.
     pub fn interface_language(&self) -> Result<Option<String>> {
-        Ok(self.lock().query_row(
-            "SELECT interface_language FROM settings WHERE id = ?1",
-            params![SETTINGS_ID],
-            |row| row.get(0),
-        )?)
+        read_setting(&self.lock(), "interface_language")
     }
 
     /// Stores an already-validated tag. Whether the setting actually changed.
@@ -323,27 +294,17 @@ impl Store {
     /// The directory a clone lands in when none is named: the stored one, else `~/Projects`
     /// expanded, which is as absolute and lexically normalised as the home it expands from.
     pub fn default_clone_dir(&self) -> Result<String> {
-        let stored: Option<String> = self.lock().query_row(
-            "SELECT default_clone_dir FROM settings WHERE id = ?1",
-            params![SETTINGS_ID],
-            |row| row.get(0),
-        )?;
-        Ok(stored.unwrap_or_else(|| {
-            crate::hostfs::expand(BUILT_IN_CLONE_DIR)
-                .to_string_lossy()
-                .into_owned()
-        }))
+        Ok(clone_dir_or_built_in(read_setting(
+            &self.lock(),
+            "default_clone_dir",
+        )?))
     }
 
     /// Stores the already-normalised directory, or `None` to go back to the built-in default.
     /// Whether the setting actually changed.
     pub fn set_default_clone_dir(&self, value: Option<&str>) -> Result<bool> {
         let conn = self.lock();
-        let current: Option<String> = conn.query_row(
-            "SELECT default_clone_dir FROM settings WHERE id = ?1",
-            params![SETTINGS_ID],
-            |row| row.get(0),
-        )?;
+        let current: Option<String> = read_setting(&conn, "default_clone_dir")?;
         if current.as_deref() == value {
             return Ok(false);
         }
@@ -363,9 +324,7 @@ macro_rules! bool_settings {
         impl Store {
             $(
                 pub fn $get(&self) -> Result<bool> {
-                    self.read_bool_setting(concat!(
-                        "SELECT ", stringify!($get), " FROM settings WHERE id = ?1"
-                    ))
+                    read_setting(&self.lock(), stringify!($get))
                 }
 
                 /// Whether the setting actually changed.
@@ -398,14 +357,6 @@ bool_settings! {
 }
 
 impl Store {
-    /// The switch `sql` selects from the settings row, the statement `bool_settings!` builds for
-    /// its column.
-    fn read_bool_setting(&self, sql: &'static str) -> Result<bool> {
-        Ok(self
-            .lock()
-            .query_row(sql, params![SETTINGS_ID], |row| row.get(0))?)
-    }
-
     /// Runs `sql`, the statement `bool_settings!` builds to write a column only when it differs
     /// from `value`. Whether it did.
     fn write_bool_setting(&self, sql: &'static str, value: bool) -> Result<bool> {
@@ -431,18 +382,74 @@ fn read_git_workflow_settings(conn: &Connection) -> Result<GitWorkflowSettings> 
     )?)
 }
 
+/// The value of the settings row's `column`.
+fn read_setting<T: FromSql>(conn: &Connection, column: &str) -> Result<T> {
+    Ok(conn.query_row(
+        &format!("SELECT {column} FROM settings WHERE id = ?1"),
+        params![SETTINGS_ID],
+        |row| row.get(0),
+    )?)
+}
+
+/// The enum stored as text in the settings row's `column`; `None` while it is NULL.
+fn read_enum_setting<T: DeserializeOwned>(conn: &Connection, column: &str) -> Result<Option<T>> {
+    let text: Option<String> = read_setting(conn, column)?;
+    Ok(text.map(|text| enum_from_text(&text)).transpose()?)
+}
+
+/// The value of a settings column that holds JSON, `None` while it is NULL. A value that does not
+/// parse as `T` reads as `None` too, with a warning: the daemon is the only writer, so this can
+/// only mean a hand-edited database, or one written by a later version.
+pub(super) fn read_json_setting_opt<T: DeserializeOwned>(
+    conn: &Connection,
+    column: &str,
+) -> Result<Option<T>> {
+    let text: Option<String> = read_setting(conn, column)?;
+    Ok(text.and_then(|text| match serde_json::from_str(&text) {
+        Ok(value) => Some(value),
+        Err(err) => {
+            tracing::warn!(%err, column, "a settings value is not the JSON it should be; reading it as unset");
+            None
+        }
+    }))
+}
+
+/// [`read_json_setting_opt`], with `T`'s default for a value that is NULL or malformed.
+pub(super) fn read_json_setting<T: DeserializeOwned + Default>(
+    conn: &Connection,
+    column: &str,
+) -> Result<T> {
+    Ok(read_json_setting_opt(conn, column)?.unwrap_or_default())
+}
+
+/// Stores `value` as JSON in the settings column `column`; `None` stores NULL.
+pub(super) fn write_json_setting<T: Serialize>(
+    conn: &Connection,
+    column: &str,
+    value: Option<&T>,
+) -> Result<()> {
+    let text = value.map(serde_json::to_string).transpose()?;
+    conn.execute(
+        &format!("UPDATE settings SET {column} = ?2 WHERE id = ?1"),
+        params![SETTINGS_ID, text],
+    )?;
+    Ok(())
+}
+
+/// The directory a clone lands in: `stored`, else `~/Projects` expanded.
+fn clone_dir_or_built_in(stored: Option<String>) -> String {
+    stored.unwrap_or_else(|| {
+        crate::hostfs::expand(BUILT_IN_CLONE_DIR)
+            .to_string_lossy()
+            .into_owned()
+    })
+}
+
 /// The stored default account names; a value that is not a JSON object of strings reads as none.
 fn read_default_account_names(
     conn: &Connection,
 ) -> Result<std::collections::BTreeMap<String, String>> {
-    let text: Option<String> = conn.query_row(
-        "SELECT default_account_names FROM settings WHERE id = ?1",
-        params![SETTINGS_ID],
-        |row| row.get(0),
-    )?;
-    Ok(text
-        .and_then(|text| serde_json::from_str(&text).ok())
-        .unwrap_or_default())
+    read_json_setting(conn, "default_account_names")
 }
 
 /// The stored Claude compatibility choices; a value that is not a JSON object of booleans reads as
@@ -450,26 +457,30 @@ fn read_default_account_names(
 fn read_claude_compatibility_choices(
     conn: &Connection,
 ) -> Result<std::collections::BTreeMap<String, bool>> {
-    let text: Option<String> = conn.query_row(
-        "SELECT claude_compatibility FROM settings WHERE id = ?1",
-        params![SETTINGS_ID],
-        |row| row.get(0),
-    )?;
-    Ok(text
-        .and_then(|text| serde_json::from_str(&text).ok())
-        .unwrap_or_default())
+    read_json_setting(conn, "claude_compatibility")
 }
 
 /// The stored agent tags; a value that is not a JSON object of string lists reads as none.
 fn read_agent_tags(conn: &Connection) -> Result<std::collections::BTreeMap<String, Vec<String>>> {
-    let text: Option<String> = conn.query_row(
-        "SELECT agent_tags FROM settings WHERE id = ?1",
-        params![SETTINGS_ID],
-        |row| row.get(0),
-    )?;
-    Ok(text
-        .and_then(|text| serde_json::from_str(&text).ok())
-        .unwrap_or_default())
+    read_json_setting(conn, "agent_tags")
+}
+
+/// The effective Claude compatibility setting of every agent that has one, by wire name.
+fn read_claude_compatibility(
+    conn: &Connection,
+) -> Result<std::collections::BTreeMap<String, bool>> {
+    let choices = read_claude_compatibility_choices(conn)?;
+    let added = read_added_agents(conn)?;
+    Ok(Agent::ALL
+        .into_iter()
+        .filter(|agent| agent.has_claude_compatibility())
+        .map(|agent| {
+            (
+                agent.wire_name().to_string(),
+                effective_claude_compatibility(agent, &choices, added.as_deref()),
+            )
+        })
+        .collect())
 }
 
 /// The Claude compatibility setting in effect for `agent` given the user's `choices` and the
@@ -494,14 +505,7 @@ fn effective_claude_compatibility(
 /// The stored agents whose default account is disabled; a value that is not a JSON array of strings
 /// reads as none.
 fn read_disabled_default_accounts(conn: &Connection) -> Result<std::collections::BTreeSet<String>> {
-    let text: Option<String> = conn.query_row(
-        "SELECT disabled_default_accounts FROM settings WHERE id = ?1",
-        params![SETTINGS_ID],
-        |row| row.get(0),
-    )?;
-    Ok(text
-        .and_then(|text| serde_json::from_str(&text).ok())
-        .unwrap_or_default())
+    read_json_setting(conn, "disabled_default_accounts")
 }
 
 #[cfg(test)]

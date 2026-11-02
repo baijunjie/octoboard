@@ -6,13 +6,14 @@ use crate::mcp::test_support::{
     shared_console_state, wait_for_request, with_status, RepoState,
 };
 use crate::protocol::{
-    now_millis, Account, AccountQuota, Agent, AgentAvailability, Availability, Event, Project,
-    ProjectAccount, ProjectSource, QuotaWindow, QuotaWindowKind, Role, Session, SessionStatus,
+    Account, AccountQuota, Agent, AgentAvailability, Availability, Event, Project, ProjectAccount,
+    ProjectSource, QuotaWindow, QuotaWindowKind, Role, Session, SessionStatus,
 };
 use crate::session_request;
 use crate::state::AppState;
 use crate::store::LOCAL_HOST_ID;
 use crate::test_support::{running, ScratchDir};
+use crate::time::now_millis;
 use anyhow::bail;
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
@@ -1533,7 +1534,7 @@ async fn new_session_returns_the_account_automatic_selection_picked() {
                 kind: QuotaWindowKind::Weekly,
                 label: None,
                 used_percent,
-                resets_at: Some(crate::protocol::now_millis() + 86_400_000),
+                resets_at: Some(crate::time::now_millis() + 86_400_000),
                 window_minutes: None,
             }],
             unavailable: None,
@@ -1593,7 +1594,7 @@ async fn new_session_with_no_usable_account_is_refused_on_the_soonest_one() {
                 kind: QuotaWindowKind::Session,
                 label: None,
                 used_percent: 100.0,
-                resets_at: Some(crate::protocol::now_millis() + resets_in),
+                resets_at: Some(crate::time::now_millis() + resets_in),
                 window_minutes: None,
             }],
             unavailable: None,

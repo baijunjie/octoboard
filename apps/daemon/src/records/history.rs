@@ -19,7 +19,7 @@ use crate::protocol::{Account, Agent, HistoryMessage, HistorySpeaker, Session};
 use crate::records::conversation::{for_each_line, line_entries, Entry};
 use crate::records::{history_branch, Branch, Hints, Locator};
 use crate::state::AppState;
-use crate::{handoff, rfc3339};
+use crate::{handoff, time};
 
 /// How the messages Octoboard writes into a session begin, by what wrote them. The notices are
 /// worded at several places and all begin alike.
@@ -122,7 +122,7 @@ fn read(
         let at = line
             .get("timestamp")
             .and_then(Value::as_str)
-            .and_then(rfc3339::parse_rfc3339_millis);
+            .and_then(time::parse_rfc3339_millis);
         if agent == Agent::Codex && commentary(line) {
             return;
         }

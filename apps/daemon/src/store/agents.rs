@@ -5,7 +5,8 @@ use super::Result;
 use rusqlite::{params, Connection};
 
 use super::rows::enum_to_text;
-use super::{Store, SETTINGS_ID};
+use super::settings::{read_json_setting, read_json_setting_opt, write_json_setting};
+use super::Store;
 use crate::protocol::{error_code, Agent, CodedError};
 
 /// What `Store::reorder_added_agents` did.
@@ -121,10 +122,7 @@ impl Store {
             return Ok(false);
         }
         orders.insert(agent.wire_name().to_string(), order.to_vec());
-        conn.execute(
-            "UPDATE settings SET account_order = ?2 WHERE id = ?1",
-            params![SETTINGS_ID, serde_json::to_string(&orders)?],
-        )?;
+        write_json_setting(&conn, "account_order", Some(&orders))?;
         Ok(true)
     }
 
@@ -144,46 +142,19 @@ impl Store {
     }
 }
 
-fn added_agents_to_text(agents: &[Agent]) -> String {
-    serde_json::to_string(agents).expect("a list of agents serializes to JSON")
-}
-
 pub(super) fn read_account_order(
     conn: &Connection,
 ) -> Result<std::collections::BTreeMap<String, Vec<Option<String>>>> {
-    let text: Option<String> = conn.query_row(
-        "SELECT account_order FROM settings WHERE id = ?1",
-        params![SETTINGS_ID],
-        |row| row.get(0),
-    )?;
-    Ok(text
-        .and_then(|text| serde_json::from_str(&text).ok())
-        .unwrap_or_default())
+    read_json_setting(conn, "account_order")
 }
 
-/// A malformed value reads as an undecided list, with a warning, so the next fill replaces it. The
-/// daemon is the only writer, so this can only mean a hand-edited database, or one written by a later version.
+/// A malformed value reads as an undecided list, so the next fill replaces it.
 pub(super) fn read_added_agents(conn: &Connection) -> Result<Option<Vec<Agent>>> {
-    let text: Option<String> = conn.query_row(
-        "SELECT added_agents FROM settings WHERE id = ?1",
-        params![SETTINGS_ID],
-        |row| row.get(0),
-    )?;
-    Ok(text.and_then(|text| match serde_json::from_str(&text) {
-        Ok(agents) => Some(agents),
-        Err(err) => {
-            tracing::warn!(%err, "the added agents are not a JSON array of agents; reading the list as undecided");
-            None
-        }
-    }))
+    read_json_setting_opt(conn, "added_agents")
 }
 
 fn write_added_agents(conn: &Connection, agents: &[Agent]) -> Result<()> {
-    conn.execute(
-        "UPDATE settings SET added_agents = ?2 WHERE id = ?1",
-        params![SETTINGS_ID, added_agents_to_text(agents)],
-    )?;
-    Ok(())
+    write_json_setting(conn, "added_agents", Some(&agents))
 }
 
 #[cfg(test)]

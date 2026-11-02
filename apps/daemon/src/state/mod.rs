@@ -118,11 +118,12 @@ pub struct AppState {
     #[cfg(test)]
     pub(crate) model_change_stop_timeout: Mutex<Option<std::time::Duration>>,
     /// The generation each session's record watch (`crate::records::watch`, run for Claude Code by
-    /// `crate::records::transcript` and for Codex by `crate::records::rollout`) is currently on.
-    /// Starting a watch records a fresh value here; the watch keeps polling only while its own
-    /// value is still the one recorded, which is what lets a newer watch for the same session
-    /// retire an older one rather than race it. The counter it is drawn from is global, not
-    /// per-session, because uniqueness is all that is asked of it.
+    /// `crate::records::watch::claude_transcript` and for Codex by
+    /// `crate::records::watch::codex_rollout`) is currently on. Starting a watch records a fresh
+    /// value here; the watch keeps polling only while its own value is still the one recorded,
+    /// which is what lets a newer watch for the same session retire an older one rather than race
+    /// it. The counter it is drawn from is global, not per-session, because uniqueness is all that
+    /// is asked of it.
     record_watch_generations: Mutex<HashMap<String, u64>>,
     next_record_watch_generation: std::sync::atomic::AtomicU64,
     /// How far into its record file each session's carried-offset watches have read

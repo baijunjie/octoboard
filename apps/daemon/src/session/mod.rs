@@ -15,6 +15,7 @@ pub(crate) mod interrupt;
 mod swap;
 pub(crate) mod term;
 pub(crate) mod trust;
+pub(crate) mod wait;
 
 use draft::Draft;
 use std::io;
@@ -392,7 +393,7 @@ impl LiveSession {
     pub(crate) fn write_terminal_reply(&self, data: &[u8]) -> Result<(), ptyio::PartialWrite> {
         let input = self.pty.lock_input();
         if self.pty.is_frozen() {
-            return Err(swap::blocked("the session output has been archived"));
+            return Err(swap::archived_refusal());
         }
         self.pty.write_locked(&input, data)
     }
@@ -412,13 +413,7 @@ impl LiveSession {
             return Err(swap::blocked("an input replacement is in progress"));
         }
         if self.pty.is_frozen() {
-            return Err(ptyio::PartialWrite {
-                written: 0,
-                error: io::Error::new(
-                    io::ErrorKind::BrokenPipe,
-                    "the session output has been archived",
-                ),
-            });
+            return Err(swap::archived_refusal());
         }
         if !is_terminal_protocol(data) {
             self.input_writes.fetch_add(1, Ordering::AcqRel);
@@ -440,13 +435,7 @@ impl LiveSession {
     ) -> Result<(), ptyio::PartialWrite> {
         let input = self.pty.lock_input();
         if self.pty.is_frozen() {
-            return Err(ptyio::PartialWrite {
-                written: 0,
-                error: io::Error::new(
-                    io::ErrorKind::BrokenPipe,
-                    "the session output has been archived",
-                ),
-            });
+            return Err(swap::archived_refusal());
         }
         if self.input_swap_active() {
             return Err(swap::blocked("an input replacement holds the composer"));
@@ -519,13 +508,7 @@ impl LiveSession {
     ) -> Result<bool, ptyio::PartialWrite> {
         let input = self.pty.lock_input();
         if self.pty.is_frozen() {
-            return Err(ptyio::PartialWrite {
-                written: 0,
-                error: io::Error::new(
-                    io::ErrorKind::BrokenPipe,
-                    "the session output has been archived",
-                ),
-            });
+            return Err(swap::archived_refusal());
         }
         if self.input_swap_active()
             || self.input_writes.load(Ordering::Acquire) != expected

@@ -34,7 +34,7 @@ their dispatch is `src/cli/mod.rs`, and their code is `src/cli/` (`hook`, `statu
 
 ## Directory map
 
-`src/` has one directory per domain, plus a few helpers at its root: `blocking_pass.rs` (the width of a pass of blocking
+`src/` has one directory per domain, plus a few helpers at its root: `blocking_pass/` (the width of a pass of blocking
 per-entity work, `each_blocking`, and, in `blocking_pass/stalled.rs`, `StalledPasses`, the blocking work that outran its
 deadline and whose thread is still running), `git_workflow.rs` (git workflow settings and `effective`, the one function
 that combines application and project values), `host_tools.rs` (`HostTools`, the seam tests substitute stand-ins
@@ -42,9 +42,10 @@ behind), `instance_lock.rs` (one daemon per data directory), `interface_language
 offered in, mirroring the UI's `i18n/languages.ts`), `log_file.rs` (the rotated `daemon.log`), `loopback.rs` (the
 std-only HTTP client to the daemon's own loopback address that the CLI modes, the git hook modes and the MCP stdio
 bridge call the running daemon with), `paths.rs` (where Octoboard keeps its files under the data directory),
-`project_trash.rs` and `trash_safety.rs` (which folders may be moved to the Trash), `rfc3339.rs` (timestamps) and
-`wire_path.rs` (`RelPath`, the canonical wire form of a path or branch name). Test-only files (`tests.rs`, `*_tests.rs`,
-`test_support*`, and the `layering_tests/` directory) sit beside the code they test, and `apps/daemon/testdata/` holds
+`project_trash.rs` and `trash_safety.rs` (which folders may be moved to the Trash), `time.rs` (the clock, `now_millis`
+and `now_secs`, and the RFC 3339, compact and readable timestamps) and `wire_path.rs` (`RelPath`, the canonical wire
+form of a path or branch name). Test-only files (`tests.rs`, `*_tests.rs`, `test_support/` and `store/test_support.rs`,
+and the `layering_tests/` directory) sit beside the code they test, and `apps/daemon/testdata/` holds
 the captured agent screens and records tests replay.
 
 ### Wire and server
@@ -79,7 +80,9 @@ the captured agent screens and records tests replay.
 
 ### Storage and state
 
-- `src/store/` — the coordinator's SQLite `Store`: `schema.rs`, `rows.rs`, one file per table family, and `failure.rs`,
+- `src/store/` — the coordinator's SQLite `Store`: `schema.rs` (the current schema, the `MIGRATIONS` that bring an older
+  database up to it, and the checks on a file before it is opened; `schema/v{N}.sql` keeps each past version's schema
+  for the migration tests), `rows.rs`, one file per table family, and `failure.rs`,
   the store's own `Result` and `StoreError`, which codes the SQLite failures to read or write Octoboard's database the
   user can fix (read-only data folder, full disk, a file that cannot be opened or read) as `store_write_failed`.
 - `src/state/` — `AppState` (`mod.rs`) with one file per concern of live state (running sessions, claims, status,
@@ -119,7 +122,8 @@ the captured agent screens and records tests replay.
 - `src/terminal/` — PTY processes and what clients see of them (`pty.rs`, `ptyio.rs`, `ringbuf.rs`, snapshots, titles,
   reply routing, `shell/` project shell terminals).
 - `src/session/` — one running agent process (`LiveSession`), input and message-write gates, `term/` launch, `draft.rs`,
-  `swap.rs`, `input_box.rs`, `dialogs.rs`, `trust/` folder-trust confirmations, `interrupt/`.
+  `swap.rs`, `input_box.rs`, `dialogs.rs`, `trust/` folder-trust confirmations, `interrupt/`, `wait.rs` (polling a
+  condition, `wait_for`, and waiting for a session's output to go quiet, `wait_quiet`).
 - `src/titles/` — the title a session shows, from the agent's records, the terminal title and the first prompt.
 - [`src/processes/ledger/`](../../apps/daemon/src/processes/ledger/README.md) — attributing, listing, stopping, keeping
   and carrying over the processes an agent launch started.
@@ -129,8 +133,13 @@ the captured agent screens and records tests replay.
 ### Agent records, hooks, adapters and MCP
 
 - `src/hooks/` — reading an agent hook payload, the per-session ordered queue of events, applying an event.
-- `src/records/` — an agent's own on-disk session records: finding them, the one collector that persists what they show,
-  conversation and history reading, record watches; every pass over a record goes through `line_file.rs`.
+- `src/records/` — an agent's own on-disk session records; `mod.rs` is the index. `locate.rs` finds them (the hook's
+  hint, the account directories walked, `record_paths` for every record of a session), `codex_rollout_files.rs` holds
+  Codex's rollout file-name and segment-chain rules, `removal.rs` says which paths a deletion removes, `resumability.rs`
+  judges whether a conversation can be resumed; then the one collector that persists what the records show,
+  conversation and history reading, and `watch/` (the poll mechanism in `mod.rs`, `claude_transcript.rs` the Claude Code
+  rejection and interrupt watch, `codex_rollout.rs` the Codex failed-turn watch); every pass over a record goes through
+  `line_file.rs`.
 - `src/adapter/` — one adapter per agent CLI behind a single interface (`claude/`, `codex/`, `grok/`); `mod.rs` holds
   the shared launch/resume flow, `hooks.rs` the hook URL, command and script, and `account_cli.rs` the account
   directories and commands (`codex/claude_mcp.rs` is Codex's use of Claude Code's MCP servers). Other per-agent
@@ -174,7 +183,7 @@ the rest of its type is read as production code, which can only add an edge, nev
 
 | Layer | Modules |
 |---|---|
-| foundation | `blocking_pass`, `interface_language`, `loopback`, `rfc3339`, `wire_path` |
+| foundation | `blocking_pass`, `interface_language`, `loopback`, `time`, `wire_path` |
 | wire | `protocol` |
 | host | `env_shell`, `git`, `host_open`, `hostfs`, `instance_lock`, `log_file`, `paths`, `processes` |
 | storage | `git_workflow`, `store` |
@@ -220,8 +229,11 @@ the rest of its type is read as production code, which can only add an edge, nev
   (the only place a `Code` is made); the UI needs its record and wording in the same change.
 - A new MCP tool: the catalogue in `src/mcp/mod.rs` and its dispatch under `src/mcp/exec/` or a tool file; it calls the
   coordinator or reporting function the control socket uses rather than reimplementing it.
-- A new table or column: `src/store/schema.rs` and the file of its table family; a plain boolean application setting is
-  one line of the `bool_settings!` table in `src/store/settings.rs`.
+- A new table or column: raise `SCHEMA_VERSION` in `src/store/schema.rs`, append the step from the previous version to
+  `MIGRATIONS`, keep the previous schema as `src/store/schema/v{N}.sql` (the migration tests build a database from every
+  past one), and edit the file of its table family. A database at an older version is backed up as
+  `octoboard.db.pre-v{N}` and migrated; `PRAGMA application_id` marks Octoboard's databases. A plain boolean application
+  setting is one line of the `bool_settings!` table in `src/store/settings.rs`.
 - Store code returns the store's `Result` (`src/store/failure.rs`), and a rusqlite error must reach `?` as itself:
   wrapping it into `anyhow` first (`.context()`, `anyhow::Error::from`) skips the classification. A caller outside the
   store that returns a store result as `anyhow` unwraps it with `Ok(store.x()?)`. The classification is in the store
@@ -231,8 +243,9 @@ the rest of its type is read as production code, which can only add an edge, nev
   record.
 - Anything specific to one agent CLI belongs in `src/adapter/<agent>/` or where `src/agents/layout.rs` names; code that
   works for any agent reads the descriptor's fields.
-- Tests sit beside the code they test (`tests.rs`, `*_tests.rs`); fixtures built on repositories use helpers from
-  `test_support`.
+- Tests sit beside the code they test (`tests.rs`, `*_tests.rs`); shared fixtures come from `src/test_support/`
+  (`mod.rs` re-exports `scratch.rs`, `app.rs`, `stand_in.rs`, `processes.rs`, `git.rs` for repositories, `sessions.rs`
+  and `owner_team.rs`).
 
 ## Shared entry points
 
@@ -261,7 +274,9 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Drop a live session | `coordinator::exit_watch::unregister_live`, which runs `AppState::remove_live` and `after_live_removed` around withdrawing the session's request |
 | Re-read projects when a session's git moves refs | `project_git::ref_moves::moved` |
 | Cap a pass of blocking per-entity work | `blocking_pass::each_blocking` |
-| Call the running daemon from another process (CLI modes, git hook modes, the MCP stdio bridge) | `src/loopback.rs` (`post`, `connect`, `exchange`) |
+| Call the running daemon from another process (CLI modes, git hook modes, the MCP stdio bridge) | `src/loopback.rs` (`post`, `connect`, `exchange`; a non-2xx answer is an error whose status `error_status` gives) |
+| Read the clock; format a timestamp | `src/time.rs` (`now_millis`, `now_secs`, the RFC 3339, compact and readable stamps) |
+| Poll a condition, or wait for a session's output to go quiet | `src/session/wait.rs` (`wait_for`, `wait_quiet`) |
 | Resolve the user's shell environment and binaries | `src/env_shell/` (`resolve_binary`) |
 | Name a failure or notice on the wire | `Code` in `src/protocol/codes.rs`; failure to `error` reply through `src/protocol/errors.rs` |
 

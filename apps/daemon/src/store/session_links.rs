@@ -5,9 +5,8 @@ use super::Result;
 use rusqlite::{params, OptionalExtension};
 
 use super::rows::enum_to_text;
-use super::sessions::{read_session, SESSION_COLUMNS};
 use super::Store;
-use crate::protocol::{OrchestrationRole, Role, Session};
+use crate::protocol::{OrchestrationRole, Role, Session, SessionStatus};
 
 impl Store {
     /// Binds the project session `id`, currently bound to `from` (`None` for unbound), to `owner`,
@@ -30,8 +29,8 @@ impl Store {
         childless: bool,
         owe_notice: bool,
     ) -> Result<Option<Session>> {
-        let conn = self.lock();
-        let changed = conn.execute(
+        self.update_session_row(
+            id,
             "UPDATE sessions SET bound_to = ?3, orchestration_role = ?4,
                     owner_notice_pending = owner_notice_pending + ?8,
                     owner_notice_note = NULL
@@ -50,17 +49,7 @@ impl Store {
                 childless,
                 owe_notice
             ],
-        )?;
-        if changed == 0 {
-            return Ok(None);
-        }
-        Ok(conn
-            .query_row(
-                &format!("SELECT {SESSION_COLUMNS} FROM sessions WHERE id = ?1"),
-                params![id],
-                read_session,
-            )
-            .optional()?)
+        )
     }
 
     /// How many sessions are bound to `owner`, in any status, counted in the store.
@@ -86,8 +75,8 @@ impl Store {
         owe_notice: bool,
         note: Option<&str>,
     ) -> Result<Option<Session>> {
-        let conn = self.lock();
-        let changed = conn.execute(
+        self.update_session_row(
+            id,
             "UPDATE sessions SET bound_to = NULL, orchestration_role = ?6,
                     owner_notice_pending = owner_notice_pending + ?4,
                     owner_notice_note = CASE WHEN ?4 THEN ?5 END
@@ -100,17 +89,7 @@ impl Store {
                 note,
                 enum_to_text(&OrchestrationRole::Coordinator)
             ],
-        )?;
-        if changed == 0 {
-            return Ok(None);
-        }
-        Ok(conn
-            .query_row(
-                &format!("SELECT {SESSION_COLUMNS} FROM sessions WHERE id = ?1"),
-                params![id],
-                read_session,
-            )
-            .optional()?)
+        )
     }
 
     /// Moves the sessions bound to `from` to `to`, and, with `coordinator_of`, binds `to`, an
@@ -168,23 +147,24 @@ impl Store {
     /// it refused for that reason; an unknown session changes nothing and is not refused, as
     /// [`Self::set_session_locked`] does.
     pub fn set_session_locked_unless_archived(&self, id: &str) -> Result<bool> {
+        let archived_status = enum_to_text(&SessionStatus::Archived);
         let conn = self.lock();
         let changed = conn.execute(
-            "UPDATE sessions SET locked = 1 WHERE id = ?1 AND status != 'archived'",
-            params![id],
+            "UPDATE sessions SET locked = 1 WHERE id = ?1 AND status != ?2",
+            params![id, archived_status],
         )?;
         if changed != 0 {
             return Ok(true);
         }
-        let archived = conn
+        let is_archived = conn
             .query_row(
-                "SELECT 1 FROM sessions WHERE id = ?1 AND status = 'archived'",
-                params![id],
+                "SELECT 1 FROM sessions WHERE id = ?1 AND status = ?2",
+                params![id, archived_status],
                 |_| Ok(()),
             )
             .optional()?
             .is_some();
-        Ok(!archived)
+        Ok(!is_archived)
     }
 
     /// Records that session `id` is owed a notice of a change of its owner: it was not running to

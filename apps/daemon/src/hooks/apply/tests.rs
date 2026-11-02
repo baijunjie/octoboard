@@ -546,7 +546,7 @@ async fn only_the_next_turns_own_interrupt_ends_it() {
         !reaches_within(
             &state,
             SessionStatus::Idle,
-            crate::records::transcript::TEST_TIMEOUT
+            crate::records::watch::claude_transcript::TEST_TIMEOUT
         )
         .await,
         "the next turn must keep working"
@@ -942,7 +942,7 @@ fn session_in_turn(
 
 /// The process ending as its exit watcher records it, cutting the turn short.
 fn end_process(state: &Arc<AppState>) {
-    exit_at(state, crate::protocol::now_millis());
+    exit_at(state, crate::time::now_millis());
     assert!(state.last_turn_abnormal("s"), "the end cut the turn short");
 }
 

@@ -11,8 +11,9 @@ use std::time::Duration;
 use super::poll::{refresh_with, Scope, ShellSource, Trigger};
 use super::reset_credit::{consume, Failure};
 use super::{AccountQuotas, Key};
-use crate::protocol::{error_code, now_millis, Agent, CodedError, ResetCreditOutcome};
+use crate::protocol::{error_code, Agent, CodedError, ResetCreditOutcome};
 use crate::state::AppState;
+use crate::time::now_millis;
 
 /// Holds an account's place among the uses of a reset credit, released on drop.
 struct Resetting {

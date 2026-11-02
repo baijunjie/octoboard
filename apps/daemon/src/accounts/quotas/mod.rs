@@ -70,12 +70,12 @@ use std::time::Instant;
 
 use tokio::sync::Semaphore;
 
-#[cfg(test)]
-use crate::protocol::now_millis;
 use crate::protocol::{
     quota_unavailable_code as code, AccountQuota, Agent, Event, QuotaWindow, QuotaWindowKind,
 };
 use crate::state::AppState;
+#[cfg(test)]
+use crate::time::now_millis;
 use judgement::{exhausted_in, is_account_state, is_failure};
 pub use judgement::{preferred_signal, AccountSignal, Exhausted};
 #[cfg(test)]

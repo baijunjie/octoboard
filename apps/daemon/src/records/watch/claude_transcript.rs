@@ -58,10 +58,11 @@ use std::time::Duration;
 use serde_json::Value;
 
 use crate::hooks;
-use crate::protocol::{now_millis, SessionStatus};
+use crate::protocol::SessionStatus;
 use crate::records::watch::{self, Owed, Start, Watch};
-use crate::rfc3339::parse_rfc3339_millis;
 use crate::state::AppState;
+use crate::time::now_millis;
+use crate::time::parse_rfc3339_millis;
 
 /// The start of the `tool_result` text Claude Code gives a rejected tool call.
 const REJECTED_TOOL_USE_PREFIX: &str = "The user doesn't want to proceed with this tool use";
@@ -405,31 +406,33 @@ pub(crate) const TEST_TIMEOUT: Duration =
 mod tests {
 
     use super::*;
-    use crate::protocol::{Agent, Console, OrchestrationRole, Origin, Role, Session};
+    use crate::protocol::{Agent, Console, Role, Session};
     use crate::test_support::{
-        captured_interrupt, fresh_interrupt, idle_stand_in, within, ScratchDir, ScratchFile,
-        StandIn,
+        bare_session, captured_interrupt, fresh_interrupt, idle_stand_in, within, ScratchDir,
+        ScratchFile, StandIn,
     };
 
     /// A real rejection record, trimmed to the two lines that carry the markers, captured from a
     /// permission-prompt decline on Claude Code 2.1.274; a capture of the same decline on 2.1.286
     /// was byte-for-byte the same shape, only the ids differing.
-    const REJECTION: &str = include_str!("../../testdata/transcript_rejection.jsonl");
+    const REJECTION: &str = include_str!("../../../testdata/transcript_rejection.jsonl");
 
     /// A normal completed tool call's `tool_result`, from the same capture, `is_error` absent: the
     /// ordinary case a rejection must not be confused with.
-    const COMPLETED_TOOL_RESULT: &str = include_str!("../../testdata/transcript_tool_result.jsonl");
+    const COMPLETED_TOOL_RESULT: &str =
+        include_str!("../../../testdata/transcript_tool_result.jsonl");
 
     /// The same two records, from an `AskUserQuestion` cancelled with Esc on Claude Code 2.1.286 —
     /// field for field identical to a declined permission prompt's, down to `toolDenialKind`.
-    const QUESTION_DECLINE: &str = include_str!("../../testdata/transcript_question_decline.jsonl");
+    const QUESTION_DECLINE: &str =
+        include_str!("../../../testdata/transcript_question_decline.jsonl");
 
     /// The question list's own `4. Chat about this` exit, from the same capture: a `tool_result`
     /// that starts with the same rejected-tool-use prefix but continues differently, with no
     /// interrupt line following it — the shape the prefix match deliberately over-catches, see the
     /// module doc.
     const QUESTION_CHAT_EXIT: &str =
-        include_str!("../../testdata/transcript_question_chat_exit.jsonl");
+        include_str!("../../../testdata/transcript_question_chat_exit.jsonl");
 
     fn rejected(content: &str) -> bool {
         content.lines().any(is_rejection_line)
@@ -579,39 +582,9 @@ mod tests {
 
     fn waiting_session(id: &str) -> Session {
         Session {
-            id: id.to_string(),
-            agent: Agent::Claude,
-            agent_session_id: None,
-            console_id: "console-1".to_string(),
-            project_id: None,
-            host_id: crate::store::LOCAL_HOST_ID.to_string(),
-            role: Role::Project,
-            origin: Origin::User,
-            title: "Session".to_string(),
             status: SessionStatus::WaitingUser,
-            terminal_title: None,
-            record_titles: Default::default(),
-            background_tasks: Vec::new(),
-            switching_account: false,
-            paused: false,
-            prompt_on_launch: false,
-            default_effort: None,
-            orchestration_role: OrchestrationRole::Coordinator,
-            context: None,
-            observed_model: None,
-            observed_effort: None,
-            model: None,
-            effort: None,
             has_conversation: true,
-            bound_to: None,
-            colour: None,
-            ordinal: None,
-            account_id: None,
-            config_dir: None,
-            pinned: false,
-            locked: false,
-            started_at: 0,
-            ended_at: None,
+            ..bare_session(id, Role::Project)
         }
     }
 

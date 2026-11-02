@@ -1,6 +1,23 @@
-//! Reading the timestamps the agents write, and writing the compact UTC stamp the daemon names
-//! backups with and the readable one it dates a message kept for a session with. The daemon has no
-//! date library and needs nothing else of one.
+//! The daemon's clock and its timestamps: the current time in seconds and milliseconds, the
+//! RFC 3339 timestamps the agents write (read back), the compact UTC stamp the daemon names backups
+//! with and the readable one it dates a message kept for a session with. The daemon has no date
+//! library and needs nothing else of one.
+
+/// Milliseconds since the epoch now; 0 when the clock reads before it.
+pub fn now_millis() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+/// Seconds since the epoch now; 0 when the clock reads before it.
+pub fn now_secs() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs() as i64)
+        .unwrap_or(0)
+}
 
 /// Milliseconds since the epoch of an RFC 3339 timestamp (`2026-10-24T11:59:59.899528+00:00`),
 /// the form Claude Code and Grok Build write.

@@ -22,7 +22,7 @@ use crate::session_git_hooks::fixture::{
 };
 use crate::session_git_hooks::gate_inputs::{inputs, GateRequest};
 use crate::session_git_hooks::{interpreter, render, write_dir, Rendering, BUILT_IN_HOOKS};
-use crate::test_support::{fixture_git, git, ScratchDir, TEST_KEY};
+use crate::test_support::{fixture_git, git, ScratchDir, PATIENCE, TEST_KEY};
 use crate::wire_path;
 
 // -- the gate-hook process --------------------------------------------------------
@@ -319,6 +319,24 @@ fn the_hook_side_takes_only_an_answer_as_a_reason_to_run_the_gate() {
     set_revert_gate(&fixture, false);
     assert_eq!(ask(daemon.port, "a"), None);
     assert_eq!(ask(closed_port(), "a"), None, "no daemon is no answer");
+    assert_eq!(
+        crate::session_git_hooks::gate_mode::inputs_for(daemon.port, "wrong", "a", &repo, None),
+        None,
+        "a refusal is no answer either, whatever the daemon's body says"
+    );
+}
+
+#[test]
+fn a_refused_call_reaches_the_hook_side_as_a_refusal_not_as_an_answer() {
+    let (fixture, _) = project_with_remote();
+    let daemon = Daemon::start(&fixture.state);
+    let post = |key: &str, body: &[u8]| {
+        crate::loopback::post(daemon.port, key, "/revert-gate/a", body, PATIENCE)
+    };
+    let err = post("wrong", b"{}").expect_err("the key is wrong");
+    assert_eq!(crate::loopback::error_status(&err), Some(401));
+    let err = post(TEST_KEY, b"not json").expect_err("the request is unreadable");
+    assert_eq!(crate::loopback::error_status(&err), Some(400));
 }
 
 // -- the dispatchers, against the stand-in ----------------------------------

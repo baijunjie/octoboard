@@ -6,9 +6,10 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use super::AppState;
-use crate::protocol::{now_millis, CodedError, Event, Session};
+use crate::protocol::{CodedError, Event, Session};
 use crate::session::LiveSession;
 use crate::store::Store;
+use crate::time::now_millis;
 
 /// What a delete of a session came to.
 pub enum Deletion {

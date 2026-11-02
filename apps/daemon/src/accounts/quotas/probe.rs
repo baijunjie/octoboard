@@ -40,7 +40,7 @@ use crate::protocol::{
     quota_unavailable_code as code, Agent, QuotaUnavailable, QuotaWindow, QuotaWindowKind,
     ResetCredit, ResetCredits,
 };
-use crate::rfc3339::parse_rfc3339_millis;
+use crate::time::parse_rfc3339_millis;
 
 /// How long a probe may take. The CLIs answer in one to three seconds on an idle machine, but a
 /// Claude Code start has been measured at 17 seconds under heavy load (several test suites running

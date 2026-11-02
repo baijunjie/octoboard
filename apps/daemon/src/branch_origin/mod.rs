@@ -428,7 +428,7 @@ pub fn hand_over(
         from,
         to,
         &recorded_title(to_title),
-        crate::protocol::now_millis(),
+        crate::time::now_millis(),
     )?)
 }
 

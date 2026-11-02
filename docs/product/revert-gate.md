@@ -211,8 +211,10 @@ changing them" in `docs/product/git-workflow-settings.md`.
 ## When it cannot decide
 
 The gate fails open. Git goes through, saying nothing, whenever the daemon cannot be reached, does not answer within
-about a second and a half, or answers with anything else; and it goes through when the gate's own check fails, with a
-line saying the check failed and the update was allowed. A failing hook fails every reference update git makes, so the
+about a second and a half, or gives an answer the gate cannot read. When the daemon answers the gate's call with an
+error status, git still goes through, with one line on its error output saying that the revert gate did not check this
+update because the daemon refused the call (a 4xx status) or failed it (any other error status), with the HTTP status.
+And it goes through when the gate's own check fails, with a line saying the check failed and the update was allowed. A failing hook fails every reference update git makes, so the
 gate refuses only an update it has judged; an error of its own, or a daemon that is down, is no reason to stop the
 user's git.
 

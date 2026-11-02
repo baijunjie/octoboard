@@ -4,8 +4,7 @@
 
 use super::*;
 
-/// How long the session's output has to stay silent before an Enter, and after it.
-pub(super) const QUIET: Duration = Duration::from_millis(100);
+use crate::session::wait::{wait_for, wait_quiet, QUIET};
 
 /// How long to let the agent finish drawing and start reading its input before the first key.
 pub(super) const SETTLE: Duration = Duration::from_millis(300);
@@ -17,7 +16,6 @@ pub(super) const DISMISS_TIMEOUT: Duration = Duration::from_secs(3);
 
 /// How long Grok's press waits for its hook and the carry the hook makes.
 pub(super) const CARRY_WAIT: Duration = Duration::from_secs(12);
-pub(super) const POLL: Duration = Duration::from_millis(25);
 
 /// The keys. Down is the sequence a terminal sends for the arrow key; Enter is `\r`, as the
 /// terminal sends it; `y` is Grok's own key for "Yes, proceed".
@@ -252,21 +250,6 @@ pub(super) fn not_dismissed(agent: Agent) -> anyhow::Error {
     )
 }
 
-/// Waits until the session has printed nothing for [`QUIET`], or `timeout` passes.
-pub(crate) fn wait_quiet(live: &LiveSession, timeout: Duration) -> bool {
-    let deadline = Instant::now() + timeout;
-    loop {
-        let before = live.output_total();
-        std::thread::sleep(QUIET);
-        if live.output_total() == before {
-            return true;
-        }
-        if Instant::now() >= deadline {
-            return false;
-        }
-    }
-}
-
 /// Writes the keys unless anyone else has written into the session's input since `writes` was read;
 /// the check and the write are one step.
 pub(super) fn write(live: &LiveSession, writes: u64, keys: &[u8]) -> Result<()> {
@@ -290,19 +273,5 @@ pub(super) fn write(live: &LiveSession, writes: u64, keys: &[u8]) -> Result<()> 
                 &[("detail", &detail)],
             ))
         }
-    }
-}
-
-/// Polls `done` until it holds or `timeout` passes.
-pub(crate) fn wait_for(timeout: Duration, mut done: impl FnMut() -> bool) -> bool {
-    let deadline = Instant::now() + timeout;
-    loop {
-        if done() {
-            return true;
-        }
-        if Instant::now() >= deadline {
-            return false;
-        }
-        std::thread::sleep(POLL);
     }
 }

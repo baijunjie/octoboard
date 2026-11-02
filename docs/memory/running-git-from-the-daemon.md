@@ -97,7 +97,7 @@ refresh the index. Against a freshly built repository the read writes nothing wh
 over that fixture passes with the guard removed as well, and proves nothing about the guard. The fixture has to produce
 the stale state, and the test needs a positive control beside it — the same read with the guard off, asserted to write.
 `apps/daemon/src/project_git/header.rs`'s `reading_the_branch_header_leaves_the_repository_untouched`, with the control
-that follows it, is the worked pair. Build both halves from `apps/daemon/src/test_support/mod.rs` —
+that follows it, is the worked pair. Build both halves from `apps/daemon/src/test_support/git.rs` —
 `move_modification_time_back` for the stale stat and `git_dir_state` for the before-and-after comparison — rather than a
 copy of your own.
 

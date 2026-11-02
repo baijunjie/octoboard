@@ -302,11 +302,14 @@ interrupted session, branch origin (the session responsible for a branch) and ap
 are in `apps/daemon/src/store/`; what is worth knowing is the reasoning behind a few fields.
 
 The database carries a schema version (`PRAGMA user_version`, `SCHEMA_VERSION` in `store/schema.rs`), and a new database gets the
-whole current schema at once. A file at the current version is used as is, and a file with no tables is initialized in
-place. The current version is 1 and has no upgrade steps, since no build has been released: a file with tables and no
-version (the only older state) is moved aside as `<name>.superseded-<unix seconds>` (never deleted, with a warning
-logged) while a fresh database starts. A file of a newer version, or one that is not SQLite, is refused and left
-untouched. Once a version is released, a schema change from it adds a step from version N to N+1.
+whole current schema at once, stamped with Octoboard's `PRAGMA application_id`. A file at the current version is used
+as is, and a file with no tables is initialized in place. An older file is copied aside as `<name>.pre-v<N>` and
+brought up to date by the steps in `MIGRATIONS`, one per version, all in one transaction, so a failure leaves it as it
+was. A file with tables and no version (from before versions were recorded) is moved aside as
+`<name>.superseded-<unix seconds>` (never deleted, with a warning logged) while a fresh database starts. A file of a
+newer version, one marked as another application's, or one that is not SQLite, is refused and left untouched. Every
+schema change raises the version and adds the step from the previous one, whose schema is kept for the migration
+tests.
 
 - `Session.id` is Octoboard's own and `agent_session_id` the agent's. They are separate because some agents cannot
   pre-allocate an id.
