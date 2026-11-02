@@ -80,6 +80,7 @@ it("reports the setting this machine has now as the scenario's own state has it"
     expect(settings.current_auto_approve_account_switches, id).toBe(machine!.auto_approve_account_switches ?? false);
     expect(settings.current_auto_approve_handoffs, id).toBe(machine!.auto_approve_handoffs ?? false);
     expect(settings.current_git_workflow, id).toEqual(machine!.git_workflow);
+    expect(settings.current_agent_tags, id).toEqual(machine!.agent_tags ?? {});
     // The values in effect on this machine, not its explicit choices alone.
     expect(settings.current_claude_compatibility, id).toEqual(effectiveClaudeCompatibility(machine!.claude_compatibility ?? {}, machine!.added_agents));
   }

@@ -14,6 +14,7 @@ import React, { memo, useEffect, useId, useLayoutEffect, useRef, useState } from
 import { useShallow } from "zustand/react/shallow";
 
 import { noAgentState } from "../agents/agents";
+import { tagVocabulary } from "../components/form/tagVocabulary";
 import { ActionMenu } from "../components/menus/ActionMenu";
 import { TopStatusMarker } from "../components/status/TopStatusMarker";
 import { SessionAgentIcon } from "../components/icons/SessionAgentIcon";
@@ -34,7 +35,7 @@ import type { PaneWidth } from "../layout/paneWidth";
 import { COLUMN_EASE_CLASS, columnSpan, isDockEasing, usePaneDockMotion, type DockPhase } from "../layout/paneDockMotion";
 import type { PanePeek } from "../layout/usePaneToggles";
 import { onReducedMotion, prefersReducedMotion } from "../components/motion/reducedMotion";
-import { effectiveTags, matchesFilter, tagVocabulary } from "../sessions/projectFiltering";
+import { effectiveTags, matchesFilter } from "../sessions/projectFiltering";
 import type { Console, Project, Session } from "../protocol";
 import { sessionDisplayTitle, sessionRowName, statusLabel } from "../sessions/sessionLabel";
 import { sessionModelLabel } from "../sessions/sessionModel";
@@ -498,7 +499,7 @@ function ConsoleBody({
   // The tags to pick from are the ones the console's projects carry now; a picked tag none of them
   // carries any more is dropped here, so it neither filters nor shows, yet it stays in the stored
   // selection, which every change to the filter is applied to.
-  const vocabulary = tagVocabulary(projects);
+  const vocabulary = tagVocabulary(projects.map((p) => p.tags));
   const filter = { keyword: stored.keyword, tags: effectiveTags(stored.tags, vocabulary) };
   const rankOf = new Map(projects.map((p, i) => [p.id, ranks[i]]));
   const ordered = sortProjectsByRank(

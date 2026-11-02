@@ -764,6 +764,10 @@ export interface Settings {
    * every account of the agent. It carries the value the daemon has in effect (the user's choice, else a default that
    * follows the agent and the added agents); an agent without an entry is read as on, only as a fallback. */
   claude_compatibility: Partial<Record<Agent, boolean>>;
+  /** The tags the user put on each agent, which tell a session choosing an agent what it is good for; they apply to every
+   * account of the agent. An agent without tags has no entry. An agent removed from `added_agents` keeps its entry, so its
+   * tags are back when it is added again: only the added agents' are offered and shown. */
+  agent_tags: Partial<Record<Agent, string[]>>;
   /** The name the user gave an agent's default account, by agent; an agent without an entry shows the client's own
    * word for it. */
   default_account_names: Partial<Record<Agent, string>>;
@@ -831,6 +835,8 @@ export interface DocumentSettings {
   git_workflow: GitWorkflowSettings;
   /** An agent the file does not list is left as it is. */
   claude_compatibility: Partial<Record<Agent, boolean>>;
+  /** An agent the file does not list keeps its tags. */
+  agent_tags: Partial<Record<Agent, string[]>>;
   /** The keyboard shortcuts the exporting client changed, by command id: added by the client to the
    * document it saves, never by the daemon, which only carries them through. Absent in a file
    * without them; applying then leaves the client's shortcuts as they are. */
@@ -1026,6 +1032,9 @@ export interface InspectedSettings {
   claude_compatibility: Partial<Record<Agent, boolean>>;
   /** This machine's values. */
   current_claude_compatibility: Partial<Record<Agent, boolean>>;
+  agent_tags: Partial<Record<Agent, string[]>>;
+  /** This machine's values. */
+  current_agent_tags: Partial<Record<Agent, string[]>>;
 }
 
 /** An `error` reply's `code`, `params` and `message`, for something an import could not do. */
@@ -1637,7 +1646,7 @@ export type RequestBody =
   /** Each settable field is optional: absent means leave it as it is. Answered with `ack`;
    * broadcasts `settings_updated` only when something actually changed (the trusted-folders
    * pattern). */
-  | { type: "update_settings"; auto_pull_repositories?: boolean; auto_delete_unresumable_archives?: boolean; auto_approve_session_requests?: boolean; auto_approve_resume_requests?: boolean; auto_approve_account_switches?: boolean; auto_approve_handoffs?: boolean; ask_questions_as_choices?: boolean; interface_language?: string; auto_select_account?: boolean; auto_switch_on_usage_limit?: boolean; sidebar_order_by_status?: boolean; auto_start_quota_windows?: boolean; default_clone_dir?: string; git_workflow?: GitWorkflowSettingsChanges; claude_compatibility?: Partial<Record<Agent, boolean>> }
+  | { type: "update_settings"; auto_pull_repositories?: boolean; auto_delete_unresumable_archives?: boolean; auto_approve_session_requests?: boolean; auto_approve_resume_requests?: boolean; auto_approve_account_switches?: boolean; auto_approve_handoffs?: boolean; ask_questions_as_choices?: boolean; interface_language?: string; auto_select_account?: boolean; auto_switch_on_usage_limit?: boolean; sidebar_order_by_status?: boolean; auto_start_quota_windows?: boolean; default_clone_dir?: string; git_workflow?: GitWorkflowSettingsChanges; claude_compatibility?: Partial<Record<Agent, boolean>>; agent_tags?: Partial<Record<Agent, string[]>> }
   /** Answered with `ack` at once; each reading that finishes arrives as `account_quotas_updated`.
    * Re-reads the quotas of the accounts it selects whose last attempt is older than the polling
    * interval, and also those whose last attempt is over 30 seconds old and which hold no windows

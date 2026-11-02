@@ -116,6 +116,18 @@ pub(super) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
             }
         }
     }
+    // A removed agent keeps its tags in the store, but a session is not shown them; every agent's
+    // are shown while the added list is undecided.
+    let mut agent_tags = Map::new();
+    for (name, tags) in state.store.agent_tags()? {
+        let shown = match Agent::from_wire_name(&name) {
+            Some(agent) => state.store.agent_is_added(agent)?,
+            None => false,
+        };
+        if shown {
+            agent_tags.insert(name, json!(tags));
+        }
+    }
     Ok(json!({
         "auto_pull_repositories": state.store.auto_pull_repositories()?,
         "auto_delete_unresumable_archives": state.store.auto_delete_unresumable_archives()?,
@@ -124,6 +136,7 @@ pub(super) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
         "default_clone_dir": state.store.default_clone_dir()?,
         "git_workflow": state.store.git_workflow_settings()?,
         "claude_compatibility": state.store.claude_compatibility()?,
+        "agent_tags": agent_tags,
         "accounts": listed,
         "trusted_directories": state.store.trusted_directories()?,
     }))
@@ -162,6 +175,7 @@ pub(super) fn update_settings(
             default_clone_dir: raw_text(arguments, "default_clone_dir")?,
             git_workflow: git_workflow_argument(arguments)?,
             claude_compatibility: claude_compatibility_argument(arguments)?,
+            agent_tags: agent_tags_argument(arguments)?,
         },
     )?;
     get_settings(state)
@@ -261,6 +275,32 @@ fn claude_compatibility_argument(
                 "`claude_compatibility.{}` must be true or false",
                 agent.wire_name()
             ),
+        })
+        .collect()
+}
+
+/// The `agent_tags` argument: agent wire name to its list of tags, for the agents it is given.
+/// The settings update normalises the tags as a project's are.
+fn agent_tags_argument(
+    arguments: &Map<String, Value>,
+) -> Result<std::collections::BTreeMap<String, Vec<String>>> {
+    per_agent(arguments, "agent_tags")?
+        .into_iter()
+        .map(|(agent, value)| {
+            let tags = value
+                .as_array()
+                .and_then(|tags| {
+                    tags.iter()
+                        .map(|tag| tag.as_str().map(str::to_string))
+                        .collect::<Option<Vec<_>>>()
+                })
+                .ok_or_else(|| {
+                    anyhow!(
+                        "`agent_tags.{}` must be a list of strings",
+                        agent.wire_name()
+                    )
+                })?;
+            Ok((agent.wire_name().to_string(), tags))
         })
         .collect()
 }

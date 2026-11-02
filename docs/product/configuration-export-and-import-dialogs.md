@@ -184,17 +184,19 @@ refused.
 
 ### Application settings in the review
 
-One card, with a line for each of the document's switches naming the setting with a badge for what applying would
-change from what is set now: **Turns on**, with what then follows in that setting's own words (see "The application
-settings an export carries" in `docs/product/configuration-export-and-import.md`); **Turns off**; or **No change**. One
-more line covers all five application-wide git workflow settings, named **Git workflow**, badged **Set to the file's**
-when they differ from the current ones and **No change** when they do not. A document that carries a Claude
-compatibility choice for an agent that has the setting adds one line for them all, named **Claude compatibility**,
-badged **Set to the file's** when applying would change the value of an agent this machine reports and **No change**
-when it would not; a document with no such choice has no line. A document that carries keyboard shortcuts adds a line
-for them, badged **Set to the file's**, with how many of the file's shortcuts differ from the defaults — counting only
-those that can be used here — and that they apply to this device or browser only; **Back to defaults**, with that it
-applies to this device or browser only; or **No change**, when the file's are the ones this device already has.
+One card, with a line for each of the document's switches naming the setting with a badge for what applying would change
+from what is set now: **Turns on**, with what then follows in that setting's own words (see "The application settings an
+export carries" in `docs/product/configuration-export-and-import.md`); **Turns off**; or **No change**. One more line
+covers all five application-wide git workflow settings, named **Git workflow**, badged **Set to the file's** when they
+differ from the current ones and **No change** when they do not. A document that carries a Claude compatibility choice
+for an agent that has the setting adds one line for them all, named **Claude compatibility**, badged **Set to the
+file's** when applying would change the value of an agent this machine reports and **No change** when it would not; a
+document with no such choice has no line. A document that carries tags for an agent this build knows adds one line for
+them all, named **Agent tags**, badged **Set to the file's** when applying would change an agent's tags here and **No
+change** when it would not; a document with none has no line. A document that carries keyboard shortcuts adds a line for
+them, badged **Set to the file's**, with how many of the file's shortcuts differ from the defaults — counting only those
+that can be used here — and that they apply to this device or browser only; **Back to defaults**, with that it applies
+to this device or browser only; or **No change**, when the file's are the ones this device already has.
 
 Whether the settings are applied is the **Application settings** checkbox of What to import; the card has no choice of
 its own.
@@ -278,9 +280,9 @@ accounts are logged in as any other (see `docs/product/logging-accounts-in.md`).
 When the application settings could not be applied, a red compact alert titled that the application settings could not
 be imported, saying so with the reason, its remedy and **Details** (see "Failures shown on the screen" in
 `docs/product/error-alerts.md`), and nothing else. When they were applied, a card headed **Application settings
-applied**, with a line for each setting applied, badged **On** or **Off**; one line for the git workflow settings, badged
-**Matches the file**; one line for Claude compatibility, when the document carried a
-choice for an agent that has the setting, badged **Matches the file**; and, when this device applied the file's keyboard
-shortcuts, a line for them badged with how many changes from the defaults its shortcuts now have, or **Defaults**, with
-how many of the file's shortcuts could not be used here and were left out said under it, when any were. This tab has no
-totals.
+applied**, with a line for each setting applied, badged **On** or **Off**; one line for the git workflow settings,
+badged **Matches the file**; one line for Claude compatibility, when the document carried a choice for an agent that has
+the setting, badged **Matches the file**; one line for agent tags, when the document carried tags for an agent this
+build knows, badged **Matches the file**; and, when this device applied the file's keyboard shortcuts, a line for them
+badged with how many changes from the defaults its shortcuts now have, or **Defaults**, with how many of the file's
+shortcuts could not be used here and were left out said under it, when any were. This tab has no totals.

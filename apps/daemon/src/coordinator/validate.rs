@@ -57,8 +57,9 @@ pub(crate) fn absolute_path(text: &str) -> Result<PathBuf> {
     Ok(hostfs::lexically_normalise(&path))
 }
 
-/// A project's tags as stored: each trimmed, the empty ones dropped, and a later tag dropped when
-/// an earlier one matches it ignoring case (the first spelling wins). The order is the user's.
+/// A project's or an agent's tags as stored: each trimmed, the empty ones dropped, and a later tag
+/// dropped when an earlier one matches it ignoring case (the first spelling wins). The order is the
+/// user's.
 pub(super) fn normalise_tags(tags: Vec<String>) -> Vec<String> {
     let mut seen = HashSet::new();
     tags.into_iter()

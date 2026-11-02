@@ -412,7 +412,9 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                       sessions load Claude Code's instructions (CLAUDE.md and rules), skills, \
                       agents, commands, MCP servers, hooks and permissions; until the user \
                       chooses, Grok Build is on and Codex is on while Claude Code is an added \
-                      agent), the `accounts` (each agent also has a default account, listed with \
+                      agent), `agent_tags` (the tags the user put on each added agent, by agent, which \
+                      say what it is good for; an agent without tags, and a removed agent, has no \
+                      entry), the `accounts` (each agent also has a default account, listed with \
                       the id `default`; `disabled` marks one the user turned off for new \
                       sessions), and the `trusted_directories`. Accounts and \
                       trusted directories are read-only here.",
@@ -475,6 +477,23 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                         "properties": {
                             "codex": { "type": "boolean" },
                             "grok": { "type": "boolean" },
+                        },
+                        "additionalProperties": false,
+                    },
+                    "agent_tags": {
+                        "type": "object",
+                        "description": "Per agent (`claude`, `codex`, `grok`), the tags the \
+                                        user puts on it to say what it is good for, which a \
+                                        session choosing an agent can read. The list replaces \
+                                        the agent's tags; an empty list clears them; an agent \
+                                        left out is left as it is. A tag is short free text: it \
+                                        is trimmed, an empty one is dropped, and one matching \
+                                        another ignoring case is dropped, keeping the first \
+                                        spelling.",
+                        "properties": {
+                            "claude": { "type": "array", "items": { "type": "string" } },
+                            "codex": { "type": "array", "items": { "type": "string" } },
+                            "grok": { "type": "array", "items": { "type": "string" } },
                         },
                         "additionalProperties": false,
                     },

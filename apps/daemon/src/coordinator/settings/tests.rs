@@ -333,6 +333,87 @@ async fn claude_compatibility_is_set_per_agent_and_refused_for_claude_code() {
     assert!(state.store.claude_compatibility_of(Agent::Grok).unwrap());
 }
 
+/// Agent tags are normalised as a project's are, replace the agent's list, broadcast only a
+/// change, are refused for an unknown agent without applying any of the request, and are kept
+/// when the agent is removed from the added agents.
+#[tokio::test]
+async fn agent_tags_are_normalised_replaced_and_kept_when_the_agent_is_removed() {
+    let (state, _dir) = crate::test_support::app_state("coordinator-agent-tags");
+    let set = |changes: &[(&str, &[&str])]| {
+        update_settings(
+            &state,
+            SettingsChanges {
+                agent_tags: changes
+                    .iter()
+                    .map(|(name, tags)| {
+                        (
+                            name.to_string(),
+                            tags.iter().map(|tag| tag.to_string()).collect(),
+                        )
+                    })
+                    .collect(),
+                ..SettingsChanges::default()
+            },
+        )
+    };
+    let tags_of = |agent: &str| state.store.agent_tags().unwrap().remove(agent);
+
+    let mut events = state.subscribe();
+    set(&[("codex", &["  Review ", "", "review", "UI", "ui", "tests"])]).unwrap();
+    assert!(matches!(
+        events.try_recv(),
+        Ok(Event::SettingsUpdated { settings })
+            if settings.agent_tags
+                == [(
+                    "codex".to_string(),
+                    vec!["Review".to_string(), "UI".to_string(), "tests".to_string()],
+                )]
+                .into()
+    ));
+    // The same tags after normalising are no change.
+    set(&[("codex", &["Review", " review", "UI", "tests"])]).unwrap();
+    assert!(events.try_recv().is_err(), "no change, no broadcast");
+    assert_eq!(tags_of("codex").unwrap(), ["Review", "UI", "tests"]);
+
+    // An agent left out is left alone; the other agents are set independently.
+    set(&[("claude", &["planning"])]).unwrap();
+    assert_eq!(tags_of("codex").unwrap(), ["Review", "UI", "tests"]);
+    assert_eq!(tags_of("claude").unwrap(), ["planning"]);
+
+    // A name that is no agent refuses the whole request.
+    assert!(set(&[("claude", &["other"]), ("nobody", &["x"])]).is_err());
+    assert_eq!(tags_of("claude").unwrap(), ["planning"]);
+
+    // Removing the agent keeps its tags; clearing is an empty (or blank-only) list.
+    state
+        .store
+        .set_added_agents_if_undecided(&[Agent::Claude, Agent::Codex])
+        .unwrap();
+    state.store.remove_added_agent(Agent::Codex).unwrap();
+    assert_eq!(tags_of("codex").unwrap(), ["Review", "UI", "tests"]);
+    set(&[("codex", &[" "])]).unwrap();
+    assert_eq!(tags_of("codex"), None);
+}
+
+/// The control request carries agent tags and answers a refusal for an unknown agent.
+#[tokio::test]
+async fn the_update_settings_request_sets_agent_tags() {
+    let (state, _dir) = crate::test_support::app_state("request-agent-tags");
+    let body: RequestBody = serde_json::from_value(serde_json::json!({
+        "type": "update_settings",
+        "agent_tags": { "grok": ["Research", "research"] },
+    }))
+    .unwrap();
+    handle(&state, None, body).await.unwrap();
+    assert_eq!(state.store.agent_tags().unwrap()["grok"], ["Research"]);
+    let body: RequestBody = serde_json::from_value(serde_json::json!({
+        "type": "update_settings",
+        "agent_tags": { "nobody": ["x"] },
+    }))
+    .unwrap();
+    assert!(handle(&state, None, body).await.is_err());
+}
+
 /// `update_settings` changes the git workflow settings item by item, broadcasts
 /// `settings_updated` with them only when one actually changed, and refuses an unknown
 /// delivery at parsing.

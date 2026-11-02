@@ -29,6 +29,13 @@ impl Store {
         read_added_agents(&self.lock())
     }
 
+    /// Whether `agent` is on the added list; while the list is undecided every agent is.
+    pub fn agent_is_added(&self, agent: Agent) -> Result<bool> {
+        Ok(self
+            .added_agents()?
+            .is_none_or(|added| added.contains(&agent)))
+    }
+
     /// Stores the list only while it is still undecided (unset, or unreadable), so a list the user
     /// has since edited is never overwritten. Whether it was stored. The read and the write are
     /// one step under the store's lock.

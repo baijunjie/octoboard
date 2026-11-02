@@ -12,7 +12,7 @@ use crate::protocol::{Agent, ApprovalReviewer, ClaudeApprovalMode, Event, Sessio
 use crate::state::{broadcast_settings, AppState};
 use crate::store::Store;
 
-use super::validate::absolute_path;
+use super::validate::{absolute_path, normalise_tags};
 
 /// Where one agent's launch override is kept: one setting for the agent, applied to a session of
 /// any of its accounts. Codex's approval reviewer and Claude Code's approval mode are handled
@@ -82,6 +82,9 @@ pub struct SettingsChanges {
     /// By agent wire name; an agent left out is left alone. Refused for Claude Code, which has no
     /// such setting, and for a name that is no agent.
     pub claude_compatibility: std::collections::BTreeMap<String, bool>,
+    /// By agent wire name, replacing that agent's tags, which are normalised as a project's are;
+    /// an agent left out is left alone. Refused for a name that is no agent.
+    pub agent_tags: std::collections::BTreeMap<String, Vec<String>>,
 }
 
 /// Applies `changes`: absent means "leave it alone", as in `update_project`. Broadcasts
@@ -103,6 +106,7 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
         default_clone_dir,
         git_workflow,
         claude_compatibility,
+        agent_tags,
     } = changes;
     if let Some(tag) = &interface_language {
         if !crate::interface_language::is_offered(tag) {
@@ -116,6 +120,13 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
             _ => Err(anyhow::anyhow!(
                 "`{name}` has no Claude compatibility setting; it applies to codex and grok"
             )),
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let agent_tags = agent_tags
+        .into_iter()
+        .map(|(name, tags)| match Agent::from_wire_name(&name) {
+            Some(agent) => Ok((agent, normalise_tags(tags))),
+            None => Err(anyhow::anyhow!("`{name}` is not an agent")),
         })
         .collect::<Result<Vec<_>>>()?;
     // Checked before anything is written, so a refused directory leaves the other field unapplied
@@ -176,6 +187,9 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
     }
     for (agent, enabled) in claude_compatibility {
         changed |= state.store.set_claude_compatibility(agent, enabled)?;
+    }
+    for (agent, tags) in agent_tags {
+        changed |= state.store.set_agent_tags(agent, tags)?;
     }
     changed |= state.store.change_git_workflow_settings(&git_workflow)?;
     if !changed {

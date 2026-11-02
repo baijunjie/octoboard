@@ -13,7 +13,7 @@ import { MarkLineBox } from "../components/status/MarkLineBox";
  * for a select, a text field, a group of buttons or a value whose width varies (a URL). `help` is a
  * help tip that ends the name's line (see "Explanations in help tips" in
  * `docs/product/labels-and-tooltips.md`). `below` is what the row has to say under itself across
- * its whole width (a progress bar), inside its divider. */
+ * its whole width (a progress bar, a full-width field such as a tags input), inside its divider. */
 export function SettingRow({
   label,
   help,

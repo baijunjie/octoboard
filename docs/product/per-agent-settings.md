@@ -1,9 +1,42 @@
 # Per-agent settings
 
 Settings that apply to every account of one agent, the default account included, rather than to a single account:
-how Claude Code and Codex handle permission requests, and whether Codex and Grok Build load Claude Code's configuration.
-Each is set in the agent's tab of Settings' **Agent accounts** section, in a row above the agent's accounts table (see
-"The accounts table" in `docs/product/agent-accounts.md`).
+the agent's tags, how Claude Code and Codex handle permission requests, and whether Codex and Grok Build load Claude
+Code's configuration. Each is set in the agent's tab of Settings' **Agent accounts** section, in a row above the agent's
+accounts table (see "The accounts table" in `docs/product/agent-accounts.md`).
+
+## Agent tags
+
+The user can put tags on each agent — Claude Code, Codex and Grok Build: short free-form labels saying what the agent
+is good for, such as "review" or "ui". They are **one list per agent**, applied to every account of that agent, the
+default account included, not to an account or a model. They are information for agents; Octoboard itself selects
+nothing by them. A tag follows the rules of a project's tag (see "Project tags" in `docs/product/project-tags.md`):
+there is no list of tags to manage, a tag is typed the first time it is used, and each tag is trimmed, an empty one is
+dropped and one matching another of the agent's tags ignoring case is dropped, the first spelling staying.
+
+They are set in the agent's tab, in the **Tags** row, the tab's top row in every agent's tab: above Permission approval
+for Claude Code and Codex, and above Claude compatibility for Grok Build. The row holds its name, a line saying that it
+applies to every account of the agent and, under them across the row's full width, the same Tags field as a project's
+(see "Editing a project" in `docs/product/projects.md`), its picked tags looking and behaving as there (see "Picked
+tags" in `docs/product/project-tags.md`). The field has no visible label of its own; its accessible name is "Tags for"
+and the agent. Its empty text input says whether the agent has no tags or no additional tag is being entered. The tags
+offered are the distinct tags the added agents carry (every agent's while the list of added agents is undecided; see
+"Added agents" in `docs/product/agent-accounts.md`), tags differing only in case counting as one, so a tag used on one
+agent is offered for the others; a typed tag matching an offered one takes its spelling.
+
+Each change is saved as it is made, as the agent's whole list; the field stays usable meanwhile. While a save is
+unanswered the field shows the list last asked for, so changes made in quick succession build on one another. Once the
+saves are answered it shows the stored tags, and a list another window or a console session set meanwhile is shown then
+and built on by the next change. A failed save is shown in an error alert titled "Could not save the tags", and once no
+later change is still being saved the field goes back to the stored tags.
+
+The tags are kept by the daemon with the other application settings, so every window shows the same ones, and a change
+reaches them at once; they survive a restart. **Removing an agent keeps its tags**, which come back when it is added
+again (see "Reordering and removing an agent" in `docs/product/agent-accounts.md`); a removed agent's tags are neither
+offered for the other agents nor shown to sessions. Like Claude compatibility, a console session may read and change
+them (see "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`), and a
+configuration export that includes the application settings carries them (see "The application settings an export
+carries" in `docs/product/configuration-export-and-import.md`).
 
 ## Approval modes
 

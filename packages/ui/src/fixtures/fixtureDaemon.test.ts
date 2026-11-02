@@ -1221,6 +1221,26 @@ describe("the fixture daemon's permission approval", () => {
   });
 });
 
+describe("the fixture daemon's agent tags", () => {
+  it("sets an agent's tags normalised as the daemon does, clears them with an empty list and refuses an unknown agent", async () => {
+    const daemon = createFixtureDaemon({ state: snapshotState({ settings: { ...DEFAULT_SETTINGS, added_agents: ["claude", "codex"], default_clone_dir: "/Users/dev/Projects", accounts: [] } }) });
+    await daemon.request({ type: "update_settings", agent_tags: { codex: [" Review ", "", "review", "tests"] } });
+    expect(daemon.store.getState().settings.agent_tags).toEqual({ codex: ["Review", "tests"] });
+    await expect(daemon.request({ type: "update_settings", agent_tags: { claude: ["ui"], nobody: ["x"] } as never })).rejects.toMatchObject({ code: "internal_error" });
+    expect(daemon.store.getState().settings.agent_tags).toEqual({ codex: ["Review", "tests"] });
+    await daemon.request({ type: "update_settings", agent_tags: { codex: [] } });
+    expect(daemon.store.getState().settings.agent_tags).toEqual({});
+  });
+  it("refuses a save of agent tags staged to fail and keeps the stored tags, while other settings still save", async () => {
+    const error = { code: "store_io_failed", params: { detail: "Permission denied" }, message: "Permission denied" };
+    const daemon = createFixtureDaemon({ state: snapshotState({ settings: { ...DEFAULT_SETTINGS, added_agents: ["claude", "codex"], default_clone_dir: "/Users/dev/Projects", accounts: [], agent_tags: { codex: ["review"] } } }), agentTagsError: error });
+    await expect(daemon.request({ type: "update_settings", agent_tags: { codex: ["review", "tests"] } })).rejects.toMatchObject(error);
+    expect(daemon.store.getState().settings.agent_tags).toEqual({ codex: ["review"] });
+    await daemon.request({ type: "update_settings", auto_pull_repositories: true });
+    expect(daemon.store.getState().settings.auto_pull_repositories).toBe(true);
+  });
+});
+
 describe("the fixture daemon's Claude compatibility", () => {
   const settings = (added_agents: Agent[], claude_compatibility?: Partial<Record<Agent, boolean>>) => ({ ...DEFAULT_SETTINGS, added_agents, default_clone_dir: "/Users/dev/Projects", accounts: [], ...(claude_compatibility && { claude_compatibility }) });
   const daemonOf = (added: Agent[], choices?: Partial<Record<Agent, boolean>>) => createFixtureDaemon({ state: snapshotState({ settings: settings(added, choices) }) });

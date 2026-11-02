@@ -154,7 +154,7 @@ not stored at all and are in no document either (see "How a quota is read" in `d
 
 ### The application settings an export carries
 
-Thirteen, each under its own key, all in every document that has application settings. The import review notes each
+Fourteen, each under its own key, all in every document that has application settings. The import review notes each
 of the eleven switches. A settings key the daemon does not know, such as `reply_in_interface_language`, is ignored.
 The language the daemon holds for the user is not carried either (see "The language the daemon holds" in
 `docs/product/language.md`): applying the document's settings leaves it as the importing daemon holds it.
@@ -203,6 +203,11 @@ The language the daemon holds for the user is not carried either (see "The langu
   was made carries `{}`. Applying the document's settings records each choice it carries as the importing machine's own,
   agent by agent, and leaves an agent it does not carry as it is; an agent the document names that has no such setting
   here, Claude Code or one this build does not know, is skipped rather than refused.
+- **Agent tags** (see "Agent tags" in `docs/product/per-agent-settings.md`), under `agent_tags`, an object keyed by
+  agent (`claude`, `codex`, `grok`) holding each agent's tags as a list. It carries every agent that has tags, a removed
+  agent's included; an agent without tags is absent, and an export where no agent has tags carries `{}`. Applying the
+  document's settings replaces the tags of each agent it lists with the document's, normalised as the Tags row's are,
+  and leaves an agent it does not list as it is; an agent this build does not know is skipped rather than refused.
 
 **The keyboard shortcuts of the exporting client** travel with these, under `keyboard_shortcuts`. They are not the
 daemon's: each client keeps its own (see "Where the shortcuts are kept" in `docs/product/keyboard-shortcuts.md`), so

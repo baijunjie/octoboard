@@ -283,6 +283,8 @@ CREATE TABLE settings (
     -- NULL until the user makes a choice for an agent's Claude compatibility; see
     -- `Store::claude_compatibility_choices`.
     claude_compatibility   TEXT,
+    -- NULL until the user puts a tag on an agent; see `Store::agent_tags`.
+    agent_tags             TEXT,
     development         TEXT NOT NULL DEFAULT 'worktree',
     squash_before_delivery INTEGER NOT NULL DEFAULT 0,
     rebase_before_merge INTEGER NOT NULL DEFAULT 1,

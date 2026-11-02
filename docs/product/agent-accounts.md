@@ -123,7 +123,8 @@ the sessions item says that the sessions use it ("3 sessions use it"). While the
 followed by a colon and their names, each set apart as a chip ("1 console has it as its default agent: Main", "1 session
 uses it: Fix build"), and beyond five only the item without names is given. Its confirm button, **Remove**, is styled as
 destructive. Once the agent is removed its tab goes, keyboard focus goes back to the selected section's tab in Settings'
-list of sections, and the accounts of the agent stay stored untouched. The consoles, projects and sessions that use it
+list of sections, and the accounts of the agent stay stored untouched, as do its tags (see "Agent tags" in
+`docs/product/per-agent-settings.md`). The consoles, projects and sessions that use it
 keep their setting, and its sessions go on running.
 
 ## With no agent added
@@ -174,8 +175,9 @@ are shown" in `docs/product/settings.md`.
 
 ## The accounts table
 
-Each agent's tab panel holds, for Claude Code and Codex, the agent's **Permission approval** row (see "Approval modes"
-in `docs/product/per-agent-settings.md`), then, for Codex and Grok Build, the agent's **Claude compatibility** row (see
+Each agent's tab panel holds the agent's **Tags** row (see "Agent tags" in `docs/product/per-agent-settings.md`), then,
+for Claude Code and Codex, the agent's **Permission approval** row (see "Approval modes" in
+`docs/product/per-agent-settings.md`), then, for Codex and Grok Build, the agent's **Claude compatibility** row (see
 "Claude compatibility" in `docs/product/per-agent-settings.md`), then one table of the agent's accounts, named for the
 agent ("Claude Code accounts"): a row per account, in the saved order (see "Reordering accounts" below). Its columns:
 

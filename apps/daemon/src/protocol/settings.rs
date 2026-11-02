@@ -111,6 +111,12 @@ pub struct Settings {
     /// is an added agent. Read when a session starts, resumes or switches account.
     #[cfg_attr(test, ts(type = "Partial<Record<Agent, boolean>>"))]
     pub claude_compatibility: std::collections::BTreeMap<String, bool>,
+    /// The tags the user put on each agent (by wire name), which tell a session choosing an agent
+    /// what it is good for. Application-wide, and they apply to every account of the agent. An
+    /// agent without tags has no entry. An agent removed from `added_agents` keeps its entry, so
+    /// its tags are back when it is added again; a client offers and shows only the added agents'.
+    #[cfg_attr(test, ts(type = "Partial<Record<Agent, Array<string>>>"))]
+    pub agent_tags: std::collections::BTreeMap<String, Vec<String>>,
     /// The name the user gave an agent's default account, by agent; an agent without an entry shows
     /// the client's own word for it. Not an account row and not carried by an export.
     #[cfg_attr(test, ts(type = "Partial<Record<Agent, string>>"))]
@@ -147,6 +153,7 @@ impl Default for Settings {
             codex_approval_reviewer: None,
             claude_approval_mode: None,
             claude_compatibility: std::collections::BTreeMap::new(),
+            agent_tags: std::collections::BTreeMap::new(),
             default_account_names: Default::default(),
             disabled_default_accounts: Default::default(),
             git_workflow: Default::default(),

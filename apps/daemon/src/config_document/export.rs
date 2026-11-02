@@ -136,6 +136,10 @@ pub struct DocumentSettings {
     /// list is left as it is.
     #[cfg_attr(test, ts(type = "Partial<Record<Agent, boolean>>"))]
     pub claude_compatibility: std::collections::BTreeMap<String, bool>,
+    /// The tags the user put on each agent (by wire name), for the agents that have any, removed
+    /// agents' included. An agent the document does not list is left as it is on import.
+    #[cfg_attr(test, ts(type = "Partial<Record<Agent, Array<string>>>"))]
+    pub agent_tags: std::collections::BTreeMap<String, Vec<String>>,
     /// The keyboard shortcuts the exporting client has changed, by command id, which only the client
     /// reads and writes: the client adds them to a full export it saves (an empty object when it has
     /// none changed, which on import means every shortcut at its default) and applies them from an
@@ -350,6 +354,7 @@ pub fn build(store: &Store, selection: &Selection) -> Result<ConfigurationDocume
             ask_questions_as_choices: store.ask_questions_as_choices()?,
             git_workflow: store.git_workflow_settings()?,
             claude_compatibility: store.claude_compatibility_choices()?,
+            agent_tags: store.agent_tags()?,
             keyboard_shortcuts: None,
         })
     } else {
@@ -745,6 +750,7 @@ mod tests {
                 ask_questions_as_choices: true,
                 git_workflow: GitWorkflowSettings::default(),
                 claude_compatibility: std::collections::BTreeMap::new(),
+                agent_tags: std::collections::BTreeMap::new(),
                 keyboard_shortcuts: None,
             })
         );

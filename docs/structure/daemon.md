@@ -237,6 +237,8 @@ New code uses these rather than a second implementation. None is enforced by a c
 | An account's directory | `adapter::account_dir` (the pinned directory, else the agent's default) |
 | Where an agent keeps its files; Codex's app-server handshake | `src/agents/layout.rs`; `src/agents/codex_app_server.rs` |
 | Look up a known record or fail with its `unknown_*` error | `Store::require_project`, `require_console`, `require_account`, `require_session` |
+| Whether an agent is on the added list (every agent is while the list is undecided) | `Store::agent_is_added` (`src/store/agents.rs`) |
+| Clean a project's or an agent's tag list before storing it | `normalise_tags` (`src/coordinator/validate.rs`) |
 | Word what became of a delivery | `Delivery::note` (`src/messaging/delivery.rs`) |
 | Word a notice to an owner, or a session's role after its parent changed | `src/messaging/owner_notices.rs` (`tell_owner_*`, `role_after_owner_change`, `duties_under_new_parent`) |
 | Share the steps of the two handover tools | `Parties` and friends in `src/mcp/handover.rs` |

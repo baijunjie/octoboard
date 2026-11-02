@@ -155,10 +155,10 @@ fn used_up_quota(
 }
 
 /// Whether a new session of `agent` would get past the agent's own refusals as things stand
-/// ([`refuse_if_agent_unavailable`], [`refuse_unless_agent_added`]). For a caller choosing a
-/// default it can fall back from, rather than a refusal.
+/// ([`refuse_if_agent_unavailable`], [`refuse_unless_agent_added`]). For a caller that skips such
+/// an agent or falls back from it, rather than refusing.
 pub(crate) fn agent_can_open(state: &Arc<AppState>, agent: Agent) -> Result<bool> {
-    Ok(agent_is_available(state, agent) && agent_is_added(state, agent)?)
+    Ok(agent_is_available(state, agent) && state.store.agent_is_added(agent)?)
 }
 
 /// Whether a new session of `agent` could run on `account_id` (`None` the default account) as
@@ -433,7 +433,7 @@ fn duration_label(millis: i64) -> String {
 /// nothing. Only a session being opened is checked, so a live session of an agent removed since
 /// keeps running, and resuming, restarting or reopening an existing session never comes here.
 pub(super) fn refuse_unless_agent_added(state: &Arc<AppState>, agent: Agent) -> Result<()> {
-    if agent_is_added(state, agent)? {
+    if state.store.agent_is_added(agent)? {
         return Ok(());
     }
     Err(CodedError::raised(
@@ -444,14 +444,6 @@ pub(super) fn refuse_unless_agent_added(state: &Arc<AppState>, agent: Agent) -> 
         ),
         &[("agent", agent.label())],
     ))
-}
-
-/// Whether `agent` is on the added list; while the list is undecided every agent is.
-fn agent_is_added(state: &Arc<AppState>, agent: Agent) -> Result<bool> {
-    Ok(state
-        .store
-        .added_agents()?
-        .is_none_or(|added| added.contains(&agent)))
 }
 
 /// The agent a session is of: an explicit choice wins over the project's default, then the

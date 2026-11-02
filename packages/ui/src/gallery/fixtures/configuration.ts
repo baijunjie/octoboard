@@ -140,6 +140,7 @@ function documentSettings(carried: Partial<DocumentSettings> = {}): DocumentSett
     ask_questions_as_choices: false,
     git_workflow: DEFAULT_GIT_WORKFLOW,
     claude_compatibility: {},
+    agent_tags: {},
     ...carried,
   };
 }
@@ -168,13 +169,14 @@ type SettingKey = (typeof SETTING_KEYS)[number];
 
 /** An inspection's settings of a document whose every setting is the one this machine already has (the settings a fresh
  * installation starts with, and this machine's Claude compatibility) except what `carried` sets; the document carries no
- * Claude compatibility choice, so that line is not shown. */
+ * Claude compatibility choice and no agent tags, so those lines are not shown. */
 function inspectedSettings(carried: Partial<InspectedSettings> = {}): InspectedSettings {
   const entries = (name: (key: SettingKey) => string) => SETTING_KEYS.map((key) => [name(key), DEFAULT_SETTINGS[key]]);
   return {
     ...documentSettings(Object.fromEntries(entries((key) => key))),
     ...(Object.fromEntries(entries((key) => `current_${key}`)) as { [K in SettingKey as `current_${K}`]: DocumentSettings[K] }),
     current_claude_compatibility: THIS_CLAUDE_COMPATIBILITY,
+    current_agent_tags: {},
     ...carried,
   };
 }
@@ -829,7 +831,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, review of the application settings",
-    description: "Application settings ticked in the What to import group: the Application settings tab appears beside Consoles and projects (with a warning glyph) and is the one open. It holds one card, with no checkbox of its own. Lines that turn a setting on carry a muted consequence line (the automatic-switch line, \"Automatically switch accounts at the usage limit\", says a session that stops at its account's usage limit is then switched to another account with usage left and carries on), lines that turn one off do not (their \"Turns off\" badge is neutral, not accented), Git workflow and Claude compatibility read \"Set to the file's\" (the file turns Codex's off), and keyboard shortcuts read \"Set to the file's\" with a note that 3 of the file's shortcuts differ from the defaults and apply to this device or browser only. Lines the device already has read No change in the same card; shortcuts that are all defaults read \"Back to defaults\", with a consequence line that they apply to this device or browser only.",
+    description: "Application settings ticked in the What to import group: the Application settings tab appears beside Consoles and projects (with a warning glyph) and is the one open. It holds one card, with no checkbox of its own. Lines that turn a setting on carry a muted consequence line (the automatic-switch line, \"Automatically switch accounts at the usage limit\", says a session that stops at its account's usage limit is then switched to another account with usage left and carries on), lines that turn one off do not (their \"Turns off\" badge is neutral, not accented), Git workflow, Claude compatibility and Agent tags read \"Set to the file's\" (the file turns Codex's compatibility off and gives Codex a tag), and keyboard shortcuts read \"Set to the file's\" with a note that 3 of the file's shortcuts differ from the defaults and apply to this device or browser only. Lines the device already has read No change in the same card; shortcuts that are all defaults read \"Back to defaults\", with a consequence line that they apply to this device or browser only.",
     state,
     configuration: reviewing({ file: SHORTCUTS_FILE }),
     steps: [
@@ -1117,7 +1119,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import result, the application settings applied",
-    description: "The Application settings tab holds the \"Application settings applied\" card, whose badges read On, Off, \"Matches the file\" (git workflow and Claude compatibility, in that order) and \"3 changes from the defaults\", the last with a muted line saying 2 shortcuts could not be applied. The Consoles and projects tab keeps its warning glyph. Shortcuts back to their defaults read Defaults, without that muted line.",
+    description: "The Application settings tab holds the \"Application settings applied\" card, whose badges read On, Off, \"Matches the file\" (git workflow, Claude compatibility and agent tags, in that order) and \"3 changes from the defaults\", the last with a muted line saying 2 shortcuts could not be applied. The Consoles and projects tab keeps its warning glyph. Shortcuts back to their defaults read Defaults, without that muted line.",
     state,
     configuration: reviewing({ file: SHORTCUTS_FILE }),
     steps: [

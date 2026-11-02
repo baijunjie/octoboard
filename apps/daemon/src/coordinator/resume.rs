@@ -19,7 +19,7 @@ use crate::records;
 use crate::session::term;
 use crate::state::AppState;
 
-use super::account_choice::{account_dir, agent_is_available};
+use super::account_choice::{account_dir, agent_can_open};
 use super::launch::{checked_launch_overrides, relaunch_session_with, LaunchEdit};
 use super::lifecycle::trash_agent_records_with;
 
@@ -157,13 +157,12 @@ pub(crate) async fn locate_conversation(
     if let Some(holder) = state.store.session_by_agent_session_id(&id, None)? {
         return Ok(held_conversation(&holder, project));
     }
-    // An undecided list offers every agent, as `refuse_unless_agent_added` does.
-    let added = state.store.added_agents()?;
-    let agents: Vec<Agent> = Agent::ALL
-        .into_iter()
-        .filter(|agent| agent_is_available(state, *agent))
-        .filter(|agent| added.as_ref().is_none_or(|list| list.contains(agent)))
-        .collect();
+    let mut agents = Vec::new();
+    for agent in Agent::ALL {
+        if agent_can_open(state, agent)? {
+            agents.push(agent);
+        }
+    }
     let accounts = state.store.list_accounts()?;
     Ok(tokio::task::spawn_blocking(move || {
         find_conversation_to_resume(&agents, &accounts, &id, env_shell::launch_snapshot)

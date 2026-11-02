@@ -944,6 +944,11 @@ export type DocumentSettings = {
    */
   claude_compatibility: Partial<Record<Agent, boolean>>,
   /**
+   * The tags the user put on each agent (by wire name), for the agents that have any, removed
+   * agents' included. An agent the document does not list is left as it is on import.
+   */
+  agent_tags: Partial<Record<Agent, Array<string>>>,
+  /**
    * The keyboard shortcuts the exporting client has changed, by command id, which only the client
    * reads and writes: the client adds them to a full export it saves (an empty object when it has
    * none changed, which on import means every shortcut at its default) and applies them from an
@@ -1830,6 +1835,8 @@ export type InspectedSettings = {
   current_git_workflow: GitWorkflowSettings,
   claude_compatibility: Partial<Record<Agent, boolean>>,
   current_claude_compatibility: Partial<Record<Agent, boolean>>,
+  agent_tags: Partial<Record<Agent, Array<string>>>,
+  current_agent_tags: Partial<Record<Agent, Array<string>>>,
 };
 
 /**
@@ -2743,6 +2750,13 @@ export type Request = {
    * name is refused.
    */
   claude_compatibility?: Partial<Record<Agent, boolean>>,
+  /**
+   * Per agent, by wire name: its tags, replacing the ones it has, normalised as a project's
+   * are (trimmed, empty ones dropped, case-insensitive duplicates dropped keeping the first
+   * spelling); an empty list clears them. An agent left out is left alone; an unknown name
+   * is refused.
+   */
+  agent_tags?: Partial<Record<Agent, Array<string>>>,
 }
   | {
   "type": "create_account",
@@ -3421,6 +3435,13 @@ export type RequestBody = {
    * name is refused.
    */
   claude_compatibility?: Partial<Record<Agent, boolean>>,
+  /**
+   * Per agent, by wire name: its tags, replacing the ones it has, normalised as a project's
+   * are (trimmed, empty ones dropped, case-insensitive duplicates dropped keeping the first
+   * spelling); an empty list clears them. An agent left out is left alone; an unknown name
+   * is refused.
+   */
+  agent_tags?: Partial<Record<Agent, Array<string>>>,
 }
 | {
   "type": "create_account",
@@ -3990,6 +4011,13 @@ export type Settings = {
    * is an added agent. Read when a session starts, resumes or switches account.
    */
   claude_compatibility: Partial<Record<Agent, boolean>>,
+  /**
+   * The tags the user put on each agent (by wire name), which tell a session choosing an agent
+   * what it is good for. Application-wide, and they apply to every account of the agent. An
+   * agent without tags has no entry. An agent removed from `added_agents` keeps its entry, so
+   * its tags are back when it is added again; a client offers and shows only the added agents'.
+   */
+  agent_tags: Partial<Record<Agent, Array<string>>>,
   /**
    * The name the user gave an agent's default account, by agent; an agent without an entry shows
    * the client's own word for it. Not an account row and not carried by an export.

@@ -786,6 +786,7 @@ async fn handle_inner(
             default_clone_dir,
             git_workflow,
             claude_compatibility,
+            agent_tags,
         } => {
             update_settings(
                 state,
@@ -805,6 +806,7 @@ async fn handle_inner(
                     default_clone_dir,
                     git_workflow: git_workflow.unwrap_or_default(),
                     claude_compatibility: claude_compatibility.unwrap_or_default(),
+                    agent_tags: agent_tags.unwrap_or_default(),
                 },
             )?;
             Ok(None)

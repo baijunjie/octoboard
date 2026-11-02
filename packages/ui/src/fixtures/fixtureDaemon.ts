@@ -870,6 +870,12 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
             const message = `\`${unsupported}\` has no Claude compatibility setting; it applies to codex and grok`;
             return fail({ code: "internal_error", params: { detail: message }, message });
           }
+          const unknownAgent = Object.keys(body.agent_tags ?? {}).find((name) => !ALL_AGENTS.includes(name as Agent));
+          if (unknownAgent !== undefined) {
+            const message = `\`${unknownAgent}\` is not an agent`;
+            return fail({ code: "internal_error", params: { detail: message }, message });
+          }
+          if (body.agent_tags !== undefined && scenario.agentTagsError) return fail(scenario.agentTagsError);
           const current = store.getState();
           let cloneDir = current.settings.default_clone_dir;
           if (body.default_clone_dir !== undefined) {
@@ -881,7 +887,14 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
             }
           }
           if (body.claude_compatibility !== undefined) claudeCompatibilityChoices = { ...claudeCompatibilityChoices, ...body.claude_compatibility };
-          store.setState({ settings: { ...current.settings, auto_pull_repositories: body.auto_pull_repositories ?? current.settings.auto_pull_repositories, auto_delete_unresumable_archives: body.auto_delete_unresumable_archives ?? current.settings.auto_delete_unresumable_archives, ...(body.auto_approve_session_requests !== undefined && { auto_approve_session_requests: body.auto_approve_session_requests }), ...(body.auto_approve_resume_requests !== undefined && { auto_approve_resume_requests: body.auto_approve_resume_requests }), ...(body.auto_approve_account_switches !== undefined && { auto_approve_account_switches: body.auto_approve_account_switches }), ...(body.auto_approve_handoffs !== undefined && { auto_approve_handoffs: body.auto_approve_handoffs }), ...(body.ask_questions_as_choices !== undefined && { ask_questions_as_choices: body.ask_questions_as_choices }), ...(body.interface_language !== undefined && { interface_language: body.interface_language }), ...(body.auto_select_account !== undefined && { auto_select_account: body.auto_select_account }), ...(body.auto_switch_on_usage_limit !== undefined && { auto_switch_on_usage_limit: body.auto_switch_on_usage_limit }), ...(body.sidebar_order_by_status !== undefined && { sidebar_order_by_status: body.sidebar_order_by_status }), ...(body.auto_start_quota_windows !== undefined && { auto_start_quota_windows: body.auto_start_quota_windows }), ...(body.git_workflow !== undefined && { git_workflow: { ...current.settings.git_workflow, ...body.git_workflow } }), default_clone_dir: cloneDir } });
+          // Normalised as the daemon does: trimmed, empty ones dropped, case-insensitive repeats dropped keeping the first spelling.
+          const agentTags = { ...current.settings.agent_tags };
+          for (const [agent, tags] of Object.entries(body.agent_tags ?? {}) as [Agent, string[]][]) {
+            const kept = normalizeTags(tags);
+            if (kept.length > 0) agentTags[agent] = kept;
+            else delete agentTags[agent];
+          }
+          store.setState({ settings: { ...current.settings, agent_tags: agentTags, auto_pull_repositories: body.auto_pull_repositories ?? current.settings.auto_pull_repositories, auto_delete_unresumable_archives: body.auto_delete_unresumable_archives ?? current.settings.auto_delete_unresumable_archives, ...(body.auto_approve_session_requests !== undefined && { auto_approve_session_requests: body.auto_approve_session_requests }), ...(body.auto_approve_resume_requests !== undefined && { auto_approve_resume_requests: body.auto_approve_resume_requests }), ...(body.auto_approve_account_switches !== undefined && { auto_approve_account_switches: body.auto_approve_account_switches }), ...(body.auto_approve_handoffs !== undefined && { auto_approve_handoffs: body.auto_approve_handoffs }), ...(body.ask_questions_as_choices !== undefined && { ask_questions_as_choices: body.ask_questions_as_choices }), ...(body.interface_language !== undefined && { interface_language: body.interface_language }), ...(body.auto_select_account !== undefined && { auto_select_account: body.auto_select_account }), ...(body.auto_switch_on_usage_limit !== undefined && { auto_switch_on_usage_limit: body.auto_switch_on_usage_limit }), ...(body.sidebar_order_by_status !== undefined && { sidebar_order_by_status: body.sidebar_order_by_status }), ...(body.auto_start_quota_windows !== undefined && { auto_start_quota_windows: body.auto_start_quota_windows }), ...(body.git_workflow !== undefined && { git_workflow: { ...current.settings.git_workflow, ...body.git_workflow } }), default_clone_dir: cloneDir } });
           return { type: "ack", id: null };
         }
         case "set_codex_approval_reviewer": {

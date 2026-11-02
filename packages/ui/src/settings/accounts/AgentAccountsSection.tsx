@@ -26,6 +26,7 @@ import { AccountsTable, AccountTableRow, rowActionsTrigger } from "./AccountsTab
 import { AddAgentDialog } from "./AddAgentDialog";
 import { AgentApprovalSetting } from "./AgentApprovalSetting";
 import { AgentClaudeCompatibilitySetting } from "./AgentClaudeCompatibilitySetting";
+import { AgentTagsSetting } from "./AgentTagsSetting";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { RemoveAccountDialog } from "./RemoveAccountDialog";
 import { AgentTabActions, AgentTabMenu, RemoveAgentDialog, useAgentList } from "./AgentListMenu";
@@ -83,20 +84,22 @@ function IconAction({ label, icon: Icon, onPress, buttonRef }: { label: string; 
   );
 }
 
-/** Every added agent's accounts, with one tab for each in the order of the list (the first agent's open). A tab holds
- * the agent's Permission approval row (not for Grok), which applies to all its accounts, and a table with the agent's
- * accounts in their saved order, each a row (name, plan and email, usage, status, the Disable switch) with an actions
- * menu whose first entries open the account's details and its settings, each in a modal. The section also has the
- * means to add, edit and remove the accounts the user owns, to rename the default account, and to add, remove and
- * reorder the agents (see `docs/product/agent-accounts.md`, and `docs/product/removing-accounts.md` for removal); a
- * new account starts on the agent of the tab in view. The three switches, one that picks a new session's account by
- * the weekly quota resetting soonest, one that switches a session stopped at its account's usage limit to another
- * account, and one that starts a usage window that has not begun counting, sit above that list, once: all apply to
- * every agent, including when none is added. While the daemon
- * has not decided the list every agent is shown, and the agents cannot be removed or reordered yet. The default account
- * is not a record: it is the state of pinning nothing, so it is shown from the agent's availability and can be renamed
- * but not edited or removed. Opening the section asks the daemon to refresh the quotas that are due, those of every
- * agent and not only of the tab in view. */
+/** Every added agent's accounts, with one tab for each in the order of the list (the first agent's
+ * open). A tab holds the agent's Tags row and its Permission approval row (not for Grok), which
+ * apply to all its accounts, and a table with the agent's accounts in their saved order, each a row
+ * (name, plan and email, usage, status, the Disable switch) with an actions menu whose first
+ * entries open the account's details and its settings, each in a modal. The section also has the
+ * means to add, edit and remove the accounts the user owns, to rename the default account, and to
+ * add, remove and reorder the agents (see `docs/product/agent-accounts.md`, and
+ * `docs/product/removing-accounts.md` for removal); a new account starts on the agent of the tab in
+ * view. The three switches, one that picks a new session's account by the weekly quota resetting
+ * soonest, one that switches a session stopped at its account's usage limit to another account, and
+ * one that starts a usage window that has not begun counting, sit above that list, once: all apply
+ * to every agent, including when none is added. While the daemon has not decided the list every
+ * agent is shown, and the agents cannot be removed or reordered yet. The default account is not a
+ * record: it is the state of pinning nothing, so it is shown from the agent's availability and can
+ * be renamed but not edited or removed. Opening the section asks the daemon to refresh the quotas
+ * that are due, those of every agent and not only of the tab in view. */
 export function AgentAccountsSection(): React.ReactElement {
   const t = useT();
   const { request, store } = useDaemon();
@@ -336,9 +339,9 @@ export function AgentAccountsSection(): React.ReactElement {
   );
 }
 
-/** One agent's tab panel: its Permission approval row (not for Grok) and its Claude compatibility row (Codex and Grok
- * only), each of which applies to every account of the agent, and the table of the agent's accounts in their saved
- * order. */
+/** One agent's tab panel: its Tags row, its Permission approval row (not for Grok) and its Claude
+ * compatibility row (Codex and Grok only), each of which applies to every account of the agent, and
+ * the table of the agent's accounts in their saved order. */
 function AgentAccountsPanel(props: AgentAccountsPanelProps): React.ReactElement {
   const order = useAccountOrder(props.agent, props.owned);
   return (
@@ -393,6 +396,7 @@ function AgentAccountsPanelContent({ agent, onEdit, onRemove, onRenameDefault, o
   };
   return (
     <>
+      <AgentTagsSetting agent={agent} />
       <AgentApprovalSetting agent={agent} />
       <AgentClaudeCompatibilitySetting agent={agent} />
       <AccountsTable agent={agent}>

@@ -6,16 +6,18 @@ or manage: the first time a tag is used, the user types it in a project's settin
 `docs/product/projects.md`), and once that project is saved it is offered for other projects of the same console. The
 tags offered are simply the distinct ones the console's projects carry, so a tag no project carries any more is gone
 from the choices. A project can carry as many tags as the user likes. A tag is trimmed, an empty one is dropped, and one
-that matches another of the project's tags ignoring case is dropped, the first spelling staying.
+that matches another of the project's tags ignoring case is dropped, the first spelling staying. Case is compared the
+same way on every machine, whatever its language settings, here as in the tags offered and the sidebar's filter. Agents carry tags under
+the same rules (see "Agent tags" in `docs/product/per-agent-settings.md`).
 
 The optional Tags field's empty text input distinguishes a project with no tags from one with no additional tag being
 entered. Leaving that input empty adds nothing and keeps any tags already picked.
 
 ## Picked tags
 
-A tag the user has picked and can remove, in a project's Tags field, looks and behaves as follows. The sidebar's
-Projects heading uses the same tag appearance in a read-only form; its layout and interactions are described in
-"Filtering the project list" in `docs/product/sidebar.md`.
+A tag the user has picked and can remove, in a project's or an agent's Tags field, looks and behaves as follows. The
+sidebar's Projects heading uses the same tag appearance in a read-only form; its layout and interactions are described
+in "Filtering the project list" in `docs/product/sidebar.md`.
 
 - It is filled with a light accent tint and has accent-coloured text.
 - Its label is always one line. A label too long for its space fades out at its cut end and, while the mouse pointer is

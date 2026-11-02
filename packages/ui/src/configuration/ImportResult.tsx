@@ -10,7 +10,7 @@ import { Message, useT } from "../i18n/react";
 import type { Event, ImportChoiceKind } from "../protocol";
 import { BOOLEAN_SETTINGS } from "./booleanSettings";
 import { useFailureNode } from "./failureText";
-import { accountsOutcomeOf, hasClaudeCompatibilityChoices, outcomeOf } from "./importPlan";
+import { accountsOutcomeOf, hasAgentTags, hasClaudeCompatibilityChoices, outcomeOf } from "./importPlan";
 import { AgentList, CARD_CLASS, CARD_HEADER_CLASS, SettingLine } from "./importParts";
 import { RegionTabs, type Region, type RegionPanel } from "./RegionTabs";
 import { ResultCard, ResultRow, ResultRows } from "./ResultCards";
@@ -180,6 +180,7 @@ export function ImportResult({
             })}
             <SettingLine label={t("configuration.import.gitWorkflow")} badge={t("configuration.import.result.badge.matches")} />
             {hasClaudeCompatibilityChoices(applied.claude_compatibility) && <SettingLine label={t("configuration.import.claudeCompatibility")} badge={t("configuration.import.result.badge.matches")} />}
+            {hasAgentTags(applied.agent_tags) && <SettingLine label={t("configuration.import.agentTags")} badge={t("configuration.import.result.badge.matches")} />}
             {shortcuts && (
               <SettingLine
                 label={t("settings.section.shortcuts")}

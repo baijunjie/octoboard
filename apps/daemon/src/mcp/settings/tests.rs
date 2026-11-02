@@ -684,6 +684,81 @@ async fn settings_are_listed_without_directories_and_five_of_them_are_writable()
     assert!(message.contains("not an absolute path"), "{message}");
 }
 
+/// A console session reads agent tags and replaces an agent's, with the project-tag rules; a
+/// removed agent's tags are no longer shown to it, and a bad argument is refused without changing
+/// anything.
+#[tokio::test]
+async fn agent_tags_are_read_and_changed_through_the_tools() {
+    let (state, _dir) = settings_state("agent-tags");
+    let read = call(&state, "a", "get_settings", &Map::new())
+        .await
+        .unwrap();
+    assert_eq!(read["agent_tags"], json!({}));
+
+    let updated = call(
+        &state,
+        "a",
+        "update_settings",
+        &arguments(json!({ "agent_tags": {
+            "codex": [" Review ", "review", "", "tests"],
+            "grok": ["research"],
+        } })),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        updated["agent_tags"],
+        json!({ "codex": ["Review", "tests"], "grok": ["research"] })
+    );
+    assert_eq!(
+        state.store.agent_tags().unwrap()["codex"],
+        ["Review", "tests"]
+    );
+
+    // An agent left out is left alone, and an empty list clears the agent's tags.
+    let cleared = call(
+        &state,
+        "a",
+        "update_settings",
+        &arguments(json!({ "agent_tags": { "grok": [] } })),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        cleared["agent_tags"],
+        json!({ "codex": ["Review", "tests"] })
+    );
+
+    // Removing the agent hides its tags from the session; the store keeps them.
+    state
+        .store
+        .set_added_agents_if_undecided(&[Agent::Claude, Agent::Codex])
+        .unwrap();
+    state.store.remove_added_agent(Agent::Codex).unwrap();
+    let read = call(&state, "a", "get_settings", &Map::new())
+        .await
+        .unwrap();
+    assert_eq!(read["agent_tags"], json!({}));
+    assert_eq!(
+        state.store.agent_tags().unwrap()["codex"],
+        ["Review", "tests"]
+    );
+
+    for (bad, expected) in [
+        (json!({ "codex": "review" }), "list of strings"),
+        (json!({ "codex": [1] }), "list of strings"),
+        (json!({ "nobody": ["x"] }), "nobody"),
+        (json!("review"), "object keyed by agent"),
+    ] {
+        let message = refused(&state, "a", "update_settings", json!({ "agent_tags": bad })).await;
+        assert!(message.contains(expected), "{message}");
+    }
+    assert_eq!(
+        state.store.agent_tags().unwrap()["codex"],
+        ["Review", "tests"]
+    );
+}
+
 /// `get_project` with `refresh` checks the project's git status before answering.
 #[tokio::test]
 async fn get_project_can_refresh_the_git_status_first() {

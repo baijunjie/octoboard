@@ -24,13 +24,18 @@ const DISABLED_CLASS =
   "pointer-events-none cursor-not-allowed after:pointer-events-none after:absolute after:inset-0 after:rounded-field after:bg-surface/55";
 
 /** A labelled field for a list of free-form tags, in HeroUI's variant for a field on a surface,
- * since it is always in a dialog. The tags picked sit inside the field's box, each removable, ahead
- * of the text input, and wrap onto more lines as they grow, so the suggestions list, which opens
- * below the whole box, never covers them. The field is a combo box: it offers the tags in use
- * (`suggestions`) that are not picked yet, and what is typed and then confirmed with Enter, or by
- * leaving the field, becomes a tag of its own, so a tag that exists nowhere yet is made by typing
- * it. Backspace in the empty input removes the last tag. A tag matching one already there, ignoring
- * case, is not added twice, and one matching a suggestion takes that suggestion's spelling.
+ * since it sits on a surface: in a dialog or on a settings page. The tags picked sit inside the
+ * field's box, each removable, ahead of the text input, and wrap onto more lines as they grow, so
+ * the suggestions list, which opens below the whole box, never covers them. The field is a combo
+ * box: it offers the tags in use (`suggestions`) that are not picked yet, and what is typed and
+ * then confirmed with Enter, or by leaving the field, becomes a tag of its own, so a tag that
+ * exists nowhere yet is made by typing it. Backspace in the empty input removes the last tag. A tag
+ * matching one already there, ignoring case, is not added twice, and one matching a suggestion
+ * takes that suggestion's spelling.
+ *
+ * `label` is the field's visible name; with `hideLabel` it is only its accessible name, for a field
+ * a row of settings already names. `pickedLabel` names the group of picked tags, and defaults to a
+ * project's.
  *
  * Built from the combo box rather than HeroUI's multiple-selection `Autocomplete`, whose trigger is
  * not a text input: a tag that is not among the suggestions could not be created by typing it. */
@@ -42,6 +47,8 @@ export function TagsInput({
   placeholder,
   description,
   isDisabled,
+  hideLabel,
+  pickedLabel,
 }: {
   label: string;
   value: string[];
@@ -50,6 +57,8 @@ export function TagsInput({
   placeholder?: string;
   description?: string;
   isDisabled?: boolean;
+  hideLabel?: boolean;
+  pickedLabel?: string;
 }): React.ReactElement {
   const t = useT();
   const [input, setInput] = useState("");
@@ -57,7 +66,7 @@ export function TagsInput({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const has = (tags: string[], tag: string) =>
-    tags.some((x) => x.toLocaleLowerCase() === tag.toLocaleLowerCase());
+    tags.some((x) => x.toLowerCase() === tag.toLowerCase());
   const add = (raw: string) => {
     // The field is cleared even for a duplicate: the tag already there shows in the box.
     setInput("");
@@ -66,9 +75,9 @@ export function TagsInput({
     onChange([...value, suggestions.find((s) => has([s], typed)) ?? typed]);
   };
 
-  const needle = input.trim().toLocaleLowerCase();
+  const needle = input.trim().toLowerCase();
   const offered = suggestions.filter(
-    (s) => !has(value, s) && s.toLocaleLowerCase().includes(needle),
+    (s) => !has(value, s) && s.toLowerCase().includes(needle),
   );
 
   return (
@@ -86,7 +95,7 @@ export function TagsInput({
       onSelectionChange={(key) => key !== null && add(String(key))}
       items={offered.map((tag) => ({ id: tag }))}
     >
-      <Label>{label}</Label>
+      <Label className={hideLabel ? "sr-only" : undefined}>{label}</Label>
       {/* The box is drawn here, as HeroUI's secondary field, for the tags and the input together; the
           input inside it has no frame of its own. The suggestions trigger is the group's last child, the
           one HeroUI positions at the end edge, hence the end padding. HeroUI's input-group styles are not
@@ -105,7 +114,7 @@ export function TagsInput({
             mounted, and every removal hands focus to the input: the focused tag is unmounted by it, and
             a dialog whose focus falls to <body> loses Escape and Tab. */}
         <TagGroup
-          aria-label={t("dialog.project.tagsPicked")}
+          aria-label={pickedLabel ?? t("dialog.project.tagsPicked")}
           size="sm"
           className="contents"
           disabledKeys={isDisabled ? value : undefined}

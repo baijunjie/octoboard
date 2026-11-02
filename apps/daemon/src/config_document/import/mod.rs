@@ -185,6 +185,10 @@ pub struct InspectedSettings {
     pub claude_compatibility: BTreeMap<String, bool>,
     #[cfg_attr(test, ts(type = "Partial<Record<Agent, boolean>>"))]
     pub current_claude_compatibility: BTreeMap<String, bool>,
+    #[cfg_attr(test, ts(type = "Partial<Record<Agent, Array<string>>>"))]
+    pub agent_tags: BTreeMap<String, Vec<String>>,
+    #[cfg_attr(test, ts(type = "Partial<Record<Agent, Array<string>>>"))]
+    pub current_agent_tags: BTreeMap<String, Vec<String>>,
 }
 
 #[cfg_attr(test, derive(ts_rs::TS))]
@@ -477,6 +481,16 @@ fn known_claude_compatibility(
         .map(|(name, enabled)| (name.clone(), *enabled))
 }
 
+/// The entries of an exported `agent_tags` object that name an agent this build knows; a document
+/// from a build that knows more agents lists keys this one skips.
+fn known_agent_tags(
+    tags: &BTreeMap<String, Vec<String>>,
+) -> impl Iterator<Item = (String, Vec<String>)> + '_ {
+    tags.iter()
+        .filter(|(name, _)| Agent::from_wire_name(name).is_some())
+        .map(|(name, tags)| (name.clone(), tags.clone()))
+}
+
 fn text(path: PathBuf) -> String {
     path.to_string_lossy().into_owned()
 }
@@ -587,6 +601,8 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
             claude_compatibility: known_claude_compatibility(&settings.claude_compatibility)
                 .collect(),
             current_claude_compatibility: state.store.claude_compatibility()?,
+            agent_tags: known_agent_tags(&settings.agent_tags).collect(),
+            current_agent_tags: state.store.agent_tags()?,
         }),
         None => None,
     };
@@ -846,6 +862,7 @@ pub async fn apply(
             // that knows more agents still applies the rest of its settings.
             claude_compatibility: known_claude_compatibility(&settings.claude_compatibility)
                 .collect(),
+            agent_tags: known_agent_tags(&settings.agent_tags).collect(),
         };
         match coordinator::settings::update_settings(state, changes) {
             Ok(()) => settings_applied = Some(settings),
@@ -1088,6 +1105,7 @@ mod tests {
             "ask_questions_as_choices": true,
             "git_workflow": GitWorkflowSettings::default(),
             "claude_compatibility": {},
+            "agent_tags": {},
         });
         document
     }
@@ -1970,6 +1988,7 @@ mod tests {
                 ask_questions_as_choices: true,
                 git_workflow: GitWorkflowSettings::default(),
                 claude_compatibility: BTreeMap::new(),
+                agent_tags: BTreeMap::new(),
                 keyboard_shortcuts: None,
             })
         );
@@ -2169,6 +2188,70 @@ mod tests {
         assert!(!target.store.claude_compatibility_of(Agent::Codex).unwrap());
         // The document makes no choice for Grok Build, so the target's stays.
         assert!(!target.store.claude_compatibility_of(Agent::Grok).unwrap());
+    }
+
+    /// The tags of every agent travel in a full export, removed agents' included, and an import
+    /// replaces the tags of each agent the document lists and leaves the others; a key for an
+    /// agent this build does not know is skipped.
+    #[tokio::test]
+    async fn agent_tags_round_trip_in_a_full_export() {
+        let (source, source_dir) = app_state("import-agent-tags-source");
+        source
+            .store
+            .set_agent_tags(
+                Agent::Codex,
+                vec!["review".to_string(), "tests".to_string()],
+            )
+            .unwrap();
+        source
+            .store
+            .insert_console(&crate::test_support::console(&source_dir))
+            .unwrap();
+        let full = serde_json::to_value(
+            crate::config_document::export::build(&source.store, &export::Selection::full(true))
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            full["settings"]["agent_tags"],
+            serde_json::json!({ "codex": ["review", "tests"] })
+        );
+
+        let (target, _target_dir) = app_state("import-agent-tags-target");
+        target
+            .store
+            .set_agent_tags(Agent::Codex, vec!["old".to_string()])
+            .unwrap();
+        target
+            .store
+            .set_agent_tags(Agent::Grok, vec!["research".to_string()])
+            .unwrap();
+        let settings = inspect(&target, &full).await.unwrap().settings.unwrap();
+        assert_eq!(settings.agent_tags["codex"], ["review", "tests"]);
+        assert_eq!(settings.current_agent_tags["codex"], ["old"]);
+
+        // Without settings applied, nothing changes.
+        apply(&target, &full, Vec::new(), false, None, true)
+            .await
+            .unwrap();
+        assert_eq!(target.store.agent_tags().unwrap()["codex"], ["old"]);
+        apply(&target, &full, Vec::new(), true, None, true)
+            .await
+            .unwrap();
+        let tags = target.store.agent_tags().unwrap();
+        assert_eq!(tags["codex"], ["review", "tests"]);
+        assert_eq!(tags["grok"], ["research"]);
+
+        // A key for an unknown agent.
+        let mut newer = full.clone();
+        newer["settings"]["agent_tags"] =
+            serde_json::json!({ "codex": ["x"], "someone_new": ["y"] });
+        apply(&target, &newer, Vec::new(), true, None, true)
+            .await
+            .unwrap();
+        let tags = target.store.agent_tags().unwrap();
+        assert_eq!(tags["codex"], ["x"]);
+        assert!(!tags.contains_key("someone_new"));
     }
 
     /// The interface language is a client's report, not part of the document: an export does not

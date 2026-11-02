@@ -2,17 +2,19 @@
 
 > Goal: a session choosing an agent for a piece of work sees each agent's tags and can choose by them.
 > Completion criteria:
-> - A session can read every added agent's tags.
+> - A session can read every added agent's tags, together with its accounts, in one `list_agents` call.
 > - Set up a Claude Code project coordinator, with Codex tagged for reviews and a Codex account that can open a
 >   session. Asked to have a change reviewed in a separate session, the coordinator reads the tags and starts the
 >   review session on Codex without being told to.
 
 ## Technical design
 
-- [ ] Every added agent's tags in what sessions read when choosing an agent. Where is open; see the overview.
+- [ ] `get_account_quotas` renamed `list_agents`, grouped by agent, each with its tags and accounts (see the overview).
 - [ ] The project coordinator's role description: a kind of work another agent handles better is judged by the agents'
       tags.
 - [ ] The coordinator's `new_session` description points to the tags when it mentions naming another agent.
+- [ ] A console session's `new_session` and every session's `request_session` may name an agent whose tags fit the
+      work, not only when the user asked.
 
 ## Notes for the developer
 

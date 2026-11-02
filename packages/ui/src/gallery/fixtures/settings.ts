@@ -103,6 +103,15 @@ const quotaState: Scenario["state"] = {
   ],
 };
 
+/** Every agent added, the three of them carrying tags: what an agent's Tags row shows, and the others' tags it offers. */
+const taggedState: Scenario["state"] = {
+  ...quotaState,
+  settings: {
+    ...quotaState.settings!,
+    agent_tags: { claude: ["frontend", "backend"], codex: ["review", "tests"], grok: ["research"] },
+  },
+};
+
 /** Claude Code's accounts in every state a person meets (`USED_UP_MIX`), the default account being the usable one.
  * Client is left out; Codex and Grok stay as they were. */
 const usedUpMixState: Scenario["state"] = {
@@ -729,7 +738,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Claude Code tab",
-    description: "Claude Code's tab. Account rows have drag grips in a separate unlabelled first column, including Default; the Account header aligns with the names, and their menus offer Move earlier and Move later. Drag a grip to save a new order, or use the menu actions with a keyboard; Escape cancels a drag. The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, each with its own small ⋮ button at its end and the strip ending in two icon buttons, Add agent and Add account. Under it, one Permission approval row for the whole agent: its label with a help button, \"Applies to every Claude Code account\" under it and the selector at the end, on Automatic; there is no Claude compatibility row, which only the other agents' tabs have. Then one table lists the agent's accounts, Work, Default and Client in the saved order, under the headers Account, Usage, Status and Disable (with a small \"?\") and an unlabelled last column holding only the account's ⋮ menu. Each row has the name with its plan badge; a two-layer usage bar like the one the account pickers show, the session window's over the weekly one, with no numbers and, unlike the pickers' bars, no hairline edge (Work has reached its limit, so its bar is empty and grey, also where use went past 100%, followed in the same cell by a warning-coloured \"Limit reached\" badge, while its name stays muted with no badge beside it, unlike the rail's usage panel; the default account and Client have neither); a soft success \"Logged in\" badge in the Status cell after it; and the Disable switch, off. Client has no reading yet, so it has no plan or badge and its Usage cell says it is being read. Above the tab strip, the account-selection switch is followed directly by the \"Start usage windows automatically\" switch, both off, each description starting with \"Once this is on\"; the usage-window one is a single short sentence on what the switch does and its usage cost, with a small muted \"?\" at the end of its label. Remove Work or Client: the row fades out while sliding to the right while the remaining rows slide into place. \"Codex uninstalled\" among the \"Live changes\" buttons is the machine finding Codex missing while the strip is shown: its tab gains the warning mark and the tooltip that says why, widening in place while the tab after it slides along; \"Codex installed\" takes the mark away again. With reduced motion the strip changes at once. Choose 560px to see the narrow layout: below about 640px the Permission approval row stays within the section, and the table is wider than the section, so it scrolls sideways, its columns keeping their widths, the later columns cut at the edge and the ⋮ column pinned at the end with a hairline at its start while there is more beside it; the tab strip, the two switches above it and the tab buttons fit the width, and the scroller is a focusable region while it overflows.",
+    description: "Claude Code's tab. Account rows have drag grips in a separate unlabelled first column, including Default; the Account header aligns with the names, and their menus offer Move earlier and Move later. Drag a grip to save a new order, or use the menu actions with a keyboard; Escape cancels a drag. The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, each with its own small ⋮ button at its end and the strip ending in two icon buttons, Add agent and Add account. Under it, the Tags row comes first: its label, \"Applies to every Claude Code account\" under it and the tag field below, empty here, showing the \"No tags\" placeholder and the suggestions button at its end. Then one Permission approval row for the whole agent: its label with a help button, \"Applies to every Claude Code account\" under it and the selector at the end, on Automatic; there is no Claude compatibility row, which only the other agents' tabs have. Then one table lists the agent's accounts, Work, Default and Client in the saved order, under the headers Account, Usage, Status and Disable (with a small \"?\") and an unlabelled last column holding only the account's ⋮ menu. Each row has the name with its plan badge; a two-layer usage bar like the one the account pickers show, the session window's over the weekly one, with no numbers and, unlike the pickers' bars, no hairline edge (Work has reached its limit, so its bar is empty and grey, also where use went past 100%, followed in the same cell by a warning-coloured \"Limit reached\" badge, while its name stays muted with no badge beside it, unlike the rail's usage panel; the default account and Client have neither); a soft success \"Logged in\" badge in the Status cell after it; and the Disable switch, off. Client has no reading yet, so it has no plan or badge and its Usage cell says it is being read. Above the tab strip, the account-selection switch is followed directly by the \"Start usage windows automatically\" switch, both off, each description starting with \"Once this is on\"; the usage-window one is a single short sentence on what the switch does and its usage cost, with a small muted \"?\" at the end of its label. Remove Work or Client: the row fades out while sliding to the right while the remaining rows slide into place. \"Codex uninstalled\" among the \"Live changes\" buttons is the machine finding Codex missing while the strip is shown: its tab gains the warning mark and the tooltip that says why, widening in place while the tab after it slides along; \"Codex installed\" takes the mark away again. With reduced motion the strip changes at once. Choose 560px to see the narrow layout: below about 640px the Permission approval row stays within the section, and the table is wider than the section, so it scrolls sideways, its columns keeping their widths, the later columns cut at the edge and the ⋮ column pinned at the end with a hairline at its start while there is more beside it; the tab strip, the two switches above it and the tab buttons fit the width, and the scroller is a focusable region while it overflows.",
     state: { ...quotaState, settings: { ...quotaState.settings!, account_order: { claude: ["a-work", null, "a-long"], codex: ["a-codex-auto", "a-codex", "a-codex-user", null] } } },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -913,12 +922,25 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Codex tab",
-    description: "Codex's tab has its own Permission approval row, \"Applies to every Codex account\", on Automatic review, the reviewers' wording. Right under it comes the Claude compatibility row, with its \"?\" after the name, the same \"Applies to every Codex account\" line and its switch at the end, on (its default while Claude Code is an added agent), before the accounts table. Codex has no model-specific window: each Usage cell is the two-layer bar, the 5h window over the weekly one. Automation has no plan, so no plan badge, and its 5h window, read as spent 16 minutes ago, reset a minute ago: its top layer is full; Production, further down, is nearly spent: both layers are almost empty.",
+    description: "Codex's tab has the same empty Tags row at the top, then its own Permission approval row, \"Applies to every Codex account\", on Automatic review, the reviewers' wording. Right under it comes the Claude compatibility row, with its \"?\" after the name, the same \"Applies to every Codex account\" line and its switch at the end, on (its default while Claude Code is an added agent), before the accounts table. Codex has no model-specific window: each Usage cell is the two-layer bar, the 5h window over the weekly one. Automation has no plan, so no plan badge, and its 5h window, read as spent 16 minutes ago, reset a minute ago: its top layer is full; Production, further down, is nearly spent: both layers are almost empty.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
       (ui) => ui.press(AGENT_LABEL.codex),
+    ],
+  },
+  {
+    id: "settings-accounts-agent-tags",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, an agent's tags and the suggestions",
+    description: "Codex's tab with its Tags row at the top, above Permission approval: the label Tags, \"Applies to every Codex account\" under it and the field below holding the tags review and tests as removable chips ahead of the input, with the suggestions button at its end. The suggestions list is open under the field and offers the tags the other added agents carry (frontend, backend and research), not the two already picked. Pick one or type a new tag and press Enter to save it at once; remove a chip to save the shorter list. The other tabs show the same row with their own tags, or the \"No tags\" placeholder when they have none.",
+    state: taggedState,
+    steps: [
+      ...openAccounts,
+      (ui) => ui.press(AGENT_LABEL.codex),
+      (ui) => ui.press(ui.t("dialog.project.tagsSuggestions")),
     ],
   },
   {
@@ -939,7 +961,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Grok Build tab",
-    description: "Grok Build has no permission approval choice, so its tab has no Permission approval row: the tab strip is followed by the Claude compatibility row alone, \"Applies to every Grok Build account\" under its name and its switch at the end, on (its default), and directly under it the table, with its one default account, a single weekly layer in its Usage cell and the columns Account, Usage, Status and Disable.",
+    description: "Grok Build has no permission approval choice, so its tab has no Permission approval row: the tab strip is followed by the empty Tags row, then the Claude compatibility row, \"Applies to every Grok Build account\" under its name and its switch at the end, on (its default), and directly under it the table, with its one default account, a single weekly layer in its Usage cell and the columns Account, Usage, Status and Disable.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -1357,6 +1379,21 @@ export const settingsScenarios: Scenario[] = [
       (ui) => ui.press(AGENT_LABEL.codex),
       (ui) => ui.press(ui.t("settings.accounts.approval.label", { agent: AGENT_LABEL.codex })),
       (ui) => ui.press(ui.t("settings.accounts.approval.auto")),
+    ],
+  },
+  {
+    id: "settings-accounts-agent-tags-error",
+    group: GROUP,
+    category: "exceptional",
+    title: "Agent tags could not be saved",
+    description: "A tag was picked from the suggestions on Codex's tab and the save was refused: an error alert titled \"Could not save the tags\" says only \"Access was denied.\" with the permissions remedy, and the raw text is in the Error details disclosure, closed here. Behind it the Tags row shows the stored tags again, review and tests, without the tag that was picked.",
+    state: taggedState,
+    agentTagsError: { code: "store_io_failed", params: { detail: "Permission denied (os error 13)" }, message: "The settings could not be saved: Permission denied (os error 13)" },
+    steps: [
+      ...openAccounts,
+      (ui) => ui.press(AGENT_LABEL.codex),
+      (ui) => ui.press(ui.t("dialog.project.tagsSuggestions")),
+      (ui) => ui.press("frontend"),
     ],
   },
   {

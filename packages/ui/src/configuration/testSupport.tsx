@@ -30,6 +30,7 @@ export function documentSettings(carried: Partial<DocumentSettings> = {}): Docum
     ask_questions_as_choices: false,
     git_workflow: DEFAULT_GIT_WORKFLOW,
     claude_compatibility: {},
+    agent_tags: {},
     ...carried,
   };
 }

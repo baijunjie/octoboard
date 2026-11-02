@@ -45,6 +45,7 @@ impl Store {
             codex_approval_reviewer: self.codex_approval_reviewer()?,
             claude_approval_mode: self.claude_approval_mode()?,
             claude_compatibility: self.claude_compatibility()?,
+            agent_tags: self.agent_tags()?,
             default_account_names: self.default_account_names()?,
             disabled_default_accounts: self.disabled_default_accounts()?,
             git_workflow: self.git_workflow_settings()?,
@@ -109,6 +110,36 @@ impl Store {
                 SETTINGS_ID,
                 serde_json::to_string(&choices).expect("a map of booleans serializes to JSON")
             ],
+        )?;
+        Ok(true)
+    }
+
+    /// The tags the user put on each agent, by wire name, for the agents that have any. A value
+    /// that is not a JSON object of string lists reads as none.
+    pub fn agent_tags(&self) -> Result<std::collections::BTreeMap<String, Vec<String>>> {
+        read_agent_tags(&self.lock())
+    }
+
+    /// Replaces `agent`'s tags with `tags`, which the caller has normalised; an empty list clears
+    /// them. The read and the write are one step under the store's lock. Whether the stored tags
+    /// changed.
+    pub fn set_agent_tags(&self, agent: Agent, tags: Vec<String>) -> Result<bool> {
+        let conn = self.lock();
+        let mut all = read_agent_tags(&conn)?;
+        let changed = if tags.is_empty() {
+            all.remove(agent.wire_name()).is_some()
+        } else {
+            all.insert(agent.wire_name().to_string(), tags.clone()) != Some(tags)
+        };
+        if !changed {
+            return Ok(false);
+        }
+        let stored = (!all.is_empty()).then(|| {
+            serde_json::to_string(&all).expect("a map of string lists serializes to JSON")
+        });
+        conn.execute(
+            "UPDATE settings SET agent_tags = ?2 WHERE id = ?1",
+            params![SETTINGS_ID, stored],
         )?;
         Ok(true)
     }
@@ -422,6 +453,18 @@ fn read_claude_compatibility_choices(
         .unwrap_or_default())
 }
 
+/// The stored agent tags; a value that is not a JSON object of string lists reads as none.
+fn read_agent_tags(conn: &Connection) -> Result<std::collections::BTreeMap<String, Vec<String>>> {
+    let text: Option<String> = conn.query_row(
+        "SELECT agent_tags FROM settings WHERE id = ?1",
+        params![SETTINGS_ID],
+        |row| row.get(0),
+    )?;
+    Ok(text
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default())
+}
+
 /// The Claude compatibility setting in effect for `agent` given the user's `choices` and the
 /// added agents (`None` while undecided, which counts as Claude Code not being among them).
 fn effective_claude_compatibility(
@@ -508,6 +551,65 @@ mod tests {
         assert!(on(&store, Agent::Codex));
         assert!(store.set_claude_compatibility(Agent::Grok, false).unwrap());
         assert!(!on(&store, Agent::Grok));
+    }
+
+    /// The tags of an agent round-trip per agent, an empty list clears them and a repeat write
+    /// changes nothing, and they outlive the agent's removal from the added agents.
+    #[test]
+    fn agent_tags_round_trip_per_agent_and_outlive_the_agents_removal() {
+        let path = temp_db("agent-tags");
+        let store = Store::open(&path).expect("store");
+        let tags = |names: &[&str]| names.iter().map(|tag| tag.to_string()).collect::<Vec<_>>();
+        assert!(store.agent_tags().unwrap().is_empty());
+
+        assert!(store
+            .set_agent_tags(Agent::Codex, tags(&["review", "tests"]))
+            .unwrap());
+        assert!(!store
+            .set_agent_tags(Agent::Codex, tags(&["review", "tests"]))
+            .unwrap());
+        assert!(store
+            .set_agent_tags(Agent::Codex, tags(&["tests", "review"]))
+            .unwrap());
+        assert!(store.set_agent_tags(Agent::Claude, tags(&["ui"])).unwrap());
+        assert_eq!(
+            store.get_settings().unwrap().agent_tags,
+            [
+                ("claude".to_string(), tags(&["ui"])),
+                ("codex".to_string(), tags(&["tests", "review"])),
+            ]
+            .into()
+        );
+
+        store
+            .set_added_agents_if_undecided(&[Agent::Claude, Agent::Codex])
+            .unwrap();
+        store.remove_added_agent(Agent::Codex).unwrap();
+        drop(store);
+        let store = Store::open(&path).unwrap();
+        assert_eq!(
+            store.agent_tags().unwrap()["codex"],
+            tags(&["tests", "review"])
+        );
+        store.add_added_agent(Agent::Codex).unwrap();
+        assert_eq!(
+            store.agent_tags().unwrap()["codex"],
+            tags(&["tests", "review"])
+        );
+
+        assert!(store.set_agent_tags(Agent::Codex, Vec::new()).unwrap());
+        assert!(!store.set_agent_tags(Agent::Codex, Vec::new()).unwrap());
+        assert!(store.set_agent_tags(Agent::Claude, Vec::new()).unwrap());
+        assert!(store.agent_tags().unwrap().is_empty());
+        let stored: Option<String> = store
+            .lock()
+            .query_row(
+                "SELECT agent_tags FROM settings WHERE id = ?1",
+                params![SETTINGS_ID],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(stored, None);
     }
 
     /// The approval settings read as unset until chosen, and round-trip.

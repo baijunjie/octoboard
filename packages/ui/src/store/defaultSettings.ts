@@ -22,6 +22,7 @@ export const DEFAULT_SETTINGS: Settings = {
   codex_approval_reviewer: null,
   claude_approval_mode: null,
   claude_compatibility: {},
+  agent_tags: {},
   default_account_names: {},
   disabled_default_accounts: [],
   git_workflow: DEFAULT_GIT_WORKFLOW,

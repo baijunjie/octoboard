@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Project } from "../protocol";
-import { effectiveTags, matchesFilter, tagVocabulary, withoutTags, withTag } from "./projectFiltering";
+import { effectiveTags, matchesFilter, withoutTags, withTag } from "./projectFiltering";
 import { FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
 
 const project = (name: string, tags: string[]): Project => ({
@@ -17,16 +17,6 @@ const project = (name: string, tags: string[]): Project => ({
   accounts: { claude: { kind: "inherit" }, codex: { kind: "inherit" }, grok: { kind: "inherit" } },
   launch: { claude: { model: null, effort: null }, codex: { model: null, effort: null }, grok: { model: null, effort: null } },
   git_workflow: FOLLOWING_GIT_WORKFLOW, default_agent: null, remote_url: null, description: null,
-});
-
-describe("tagVocabulary", () => {
-  it.each([
-    { projects: [], expected: [] },
-    { projects: [project("a", ["web", "api"]), project("b", ["api", "ops"])], expected: ["api", "ops", "web"] },
-    { projects: [project("a", ["Web"]), project("b", ["web"])], expected: ["Web"] },
-  ])("lists the distinct tags in order: $expected", ({ projects, expected }) => {
-    expect(tagVocabulary(projects)).toEqual(expected);
-  });
 });
 
 describe("effectiveTags", () => {

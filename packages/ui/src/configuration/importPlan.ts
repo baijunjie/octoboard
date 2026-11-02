@@ -12,7 +12,9 @@ import type {
   InspectedProject,
   ProjectResolution,
 } from "../protocol";
+import { AGENT_LABEL } from "../agents/agents";
 import { hasClaudeCompatibility } from "../agents/claudeCompatibility";
+import { sameValue } from "../store/sameValue";
 import { overridesEqual, sanitizeOverrides, type Overrides } from "../shortcuts/store";
 import type { Region } from "./RegionTabs";
 
@@ -353,4 +355,16 @@ export function hasClaudeCompatibilityChoices(choices: Partial<Record<Agent, boo
  * does not report nothing is known to compare with. */
 export function claudeCompatibilityChanges(wanted: Partial<Record<Agent, boolean>>, current: Partial<Record<Agent, boolean>>): boolean {
   return (Object.entries(wanted) as [Agent, boolean][]).some(([agent, on]) => hasClaudeCompatibility(agent) && current[agent] !== undefined && current[agent] !== on);
+}
+
+/** Whether a document's agent tags say anything: an empty object is a machine where no agent has tags, and a key for
+ * an agent this build does not know counts for nothing. */
+export function hasAgentTags(tags: Partial<Record<Agent, string[]>>): boolean {
+  return Object.keys(tags).some((agent) => Object.hasOwn(AGENT_LABEL, agent));
+}
+
+/** Whether applying a document's agent tags `wanted` would change a list here: the tags of each agent the document
+ * lists replace that agent's, and an agent it does not list keeps its own. */
+export function agentTagsChange(wanted: Partial<Record<Agent, string[]>>, current: Partial<Record<Agent, string[]>>): boolean {
+  return (Object.entries(wanted) as [Agent, string[]][]).some(([agent, tags]) => !sameValue(tags, current[agent] ?? []));
 }

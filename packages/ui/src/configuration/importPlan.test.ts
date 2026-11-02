@@ -15,6 +15,7 @@ import {
   directoryProblem,
   documentShortcuts,
   hasAccountDirectoryProblem,
+  hasAgentTags,
   hasClaudeCompatibilityChoices,
   importedRegions,
   initialAccountReview,
@@ -168,6 +169,16 @@ describe("the keyboard shortcuts of a document", () => {
 
   it("count a swap and a chain whole", () => {
     expect(shortcutsReview({ lock: { code: "KeyP", primary: true, shift: true }, pin: { code: "KeyL", primary: true, shift: true } }, {})).toEqual({ count: 2, changes: true });
+  });
+});
+
+describe("agent tags in a document", () => {
+  it("count only for the agents this build knows", () => {
+    expect(hasAgentTags({})).toBe(false);
+    expect(hasAgentTags({ someone_new: ["x"] } as never)).toBe(false);
+    expect(hasAgentTags({ constructor: ["x"] } as never)).toBe(false);
+    expect(hasAgentTags({ codex: ["review"] })).toBe(true);
+    expect(hasAgentTags({ someone_new: ["x"], grok: ["research"] } as never)).toBe(true);
   });
 });
 

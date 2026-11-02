@@ -4,7 +4,7 @@ import type { PlainMessageKey } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
 import { BOOLEAN_SETTINGS } from "./booleanSettings";
 import { sameValue } from "../store";
-import { claudeCompatibilityChanges, hasClaudeCompatibilityChoices, type Inspection, type shortcutsReview } from "./importPlan";
+import { agentTagsChange, claudeCompatibilityChanges, hasAgentTags, hasClaudeCompatibilityChoices, type Inspection, type shortcutsReview } from "./importPlan";
 import { CARD_CLASS, SettingLine } from "./importParts";
 
 /** A boolean application setting: whether applying turns it on, off, or leaves it as it is. */
@@ -48,6 +48,11 @@ export function ImportSettings({
           claudeCompatibilityChanges(settings.claude_compatibility, settings.current_claude_compatibility)
             ? <SettingLine label={t("configuration.import.claudeCompatibility")} badge={t("configuration.import.settings.badge.changes")} tone="accent" />
             : <SettingLine label={t("configuration.import.claudeCompatibility")} badge={t("configuration.import.settings.badge.same")} />
+        )}
+        {hasAgentTags(settings.agent_tags) && (
+          agentTagsChange(settings.agent_tags, settings.current_agent_tags)
+            ? <SettingLine label={t("configuration.import.agentTags")} badge={t("configuration.import.settings.badge.changes")} tone="accent" />
+            : <SettingLine label={t("configuration.import.agentTags")} badge={t("configuration.import.settings.badge.same")} />
         )}
         {shortcuts && (
           !shortcuts.changes

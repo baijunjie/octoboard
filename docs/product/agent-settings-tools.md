@@ -197,18 +197,21 @@ working directory. Neither the avatar itself nor the console's console session i
 | `default_clone_dir` | The default clone directory (see "Default clone directory" in `docs/product/settings.md`). |
 | `git_workflow` | The application-wide git workflow settings, as `development`, `squash_before_delivery`, `rebase_before_merge`, `delivery` and `revert_gate` (see "The five settings" in `docs/product/git-workflow-settings.md`); `squash_before_delivery`, `rebase_before_merge` and `delivery` apply only while `development` is not `in_place`; `revert_gate` applies whatever `development` is. |
 | `claude_compatibility` | For each agent other than Claude Code, by its name (`codex`, `grok`), whether its sessions load Claude Code's configuration: the value in effect, the default included while the user has made no choice (see "Claude compatibility" in `docs/product/per-agent-settings.md`). |
+| `agent_tags` | For each added agent that has tags, by its name (`claude`, `codex`, `grok`), its tags as a list, in the user's order (see "Agent tags" in `docs/product/per-agent-settings.md`); every agent's while the list of added agents is undecided. An agent without tags, and a removed agent, has no entry. |
 | `accounts` | Every account, each with `id`, `agent`, `name`, `default` and `disabled`, which is true for an account the user turned off, so that no new session can be opened on it (see "Turning an account off" in `docs/product/agent-accounts.md`). Each agent's accounts come in the order automatic account selection takes them in: the user's order of that agent's accounts, then those that order does not name (see "Which account a session uses" in `docs/product/opening-sessions.md`). The default account is listed with the id `default` and, as its `name`, the name the user gave it, else `Default` (see "The default account" in `docs/product/agent-accounts.md`). An account's directory is never given. |
 | `trusted_directories` | The trusted folders (see "Trusted folders" in `docs/product/folder-trust.md`). Read-only. |
 
 `update_settings` takes `auto_pull_repositories`, `auto_delete_unresumable_archives`, `auto_select_account`,
-`sidebar_order_by_status`, `default_clone_dir`, `git_workflow` and `claude_compatibility`, under the rules of the same
-settings in Settings: the switches take `true` or `false`, a clone directory must be absolute or start with `~/`, and a
-blank one goes back to the built-in default. `git_workflow` is an object of any of the five git workflow settings, with
-the values `update_project`'s takes (`squash_before_delivery`, `rebase_before_merge` and `delivery` apply only while
-`development` is not `in_place`, and keep their values while it is); an item left out, or given as `null`, stays as it
-is. `claude_compatibility` is an object of `codex` and `grok`, each `true` or `false`; an agent left out stays as it is,
-and an agent given is recorded as the user's choice, which then holds whatever agents are added, as turning its switch
-in Settings does. A refused value leaves the others unapplied too. An `auto_approve_session_requests`,
+`sidebar_order_by_status`, `default_clone_dir`, `git_workflow`, `claude_compatibility` and `agent_tags`, under the rules
+of the same settings in Settings: the switches take `true` or `false`, a clone directory must be absolute or start with
+`~/`, and a blank one goes back to the built-in default. `git_workflow` is an object of any of the five git workflow
+settings, with the values `update_project`'s takes (`squash_before_delivery`, `rebase_before_merge` and `delivery` apply
+only while `development` is not `in_place`, and keep their values while it is); an item left out, or given as `null`,
+stays as it is. `claude_compatibility` is an object of `codex` and `grok`, each `true` or `false`; an agent left out
+stays as it is, and an agent given is recorded as the user's choice, which then holds whatever agents are added, as
+turning its switch in Settings does. `agent_tags` is an object keyed by agent (`claude`, `codex`, `grok`), each a list
+of tags that replaces that agent's tags, normalised as the Tags row's are; an empty list clears them, and an agent left
+out stays as it is. A refused value leaves the others unapplied too. An `auto_approve_session_requests`,
 `auto_approve_resume_requests`, `auto_approve_account_switches`, `auto_approve_handoffs`, `auto_start_quota_windows`,
 `auto_switch_on_usage_limit`, `ask_questions_as_choices` or `interface_language` argument is ignored — the setting stays
 as it is, `get_settings` never lists any of them, and the rest of the call applies as usual. Turning
@@ -241,4 +244,5 @@ application-wide, that holds a key other than the five git workflow settings, a 
 `branch` and `worktree`, or a `delivery` other than `ask`, `merge` and `pull_request`,
 so that a misspelt item is not taken for a change that changed nothing. So is a `claude_compatibility` object that
 names `claude`, which has no such setting, or anything that is not an agent, or holds a value other than `true` or
-`false`.
+`false`; and an `agent_tags` object that names anything that is not an agent, or holds a value other than a list of
+texts.

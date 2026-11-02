@@ -57,6 +57,7 @@ beforeEach(() => {
   settings.codex_approval_reviewer = null;
   settings.claude_approval_mode = null;
   settings.claude_compatibility = {};
+  settings.agent_tags = {};
   accountQuotas.length = 0;
   accountLogins.length = 0;
   accountSharing.clear();

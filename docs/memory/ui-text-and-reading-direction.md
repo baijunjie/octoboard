@@ -59,3 +59,13 @@ in from the start:
   from the first strong directional character of its whole subtree and write that out as an explicit `dir`, with no
   `dir` at all on a block that has none so that it inherits (`packages/ui/src/viewer/blockDirection.ts` does this for
   the Markdown document).
+
+## Fold case with `toLowerCase()` wherever the daemon folds the same text
+
+A case-insensitive comparison in `packages/ui` of text the daemon also compares ignoring case — project and agent
+tags, account names, anything the daemon deduplicates or matches with Rust's `to_lowercase()` — uses
+`toLowerCase()`, never `toLocaleLowerCase()`. Rust's folding ignores the locale, while `toLocaleLowerCase()` with no
+argument follows the host's: under a Turkish locale `I` folds to `ı`, so the UI and the daemon then disagree on which
+tags are duplicates or match a filter, and nothing shows it on any other locale. Keep the locale-aware forms for
+comparisons that are only about the user's own language, as the typed confirmation word in
+`packages/ui/src/components/dialog/ConfirmDialog.tsx` is.

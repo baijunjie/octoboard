@@ -21,29 +21,24 @@ them. Tags are information for the agent; Octoboard itself does not select anyth
   - The tags offered for an agent are the distinct tags the added agents carry.
   - A tag is trimmed, and an empty one is dropped.
   - A tag that matches another of the agent's tags ignoring case is dropped, and the first spelling stays.
-- **Tags are set in the agent's tab** of Settings' Agent accounts section, in a row above the accounts table like the
-  per-agent settings, with the same Tags field and tag appearance as a project's.
-- **Sessions read the tags when choosing an agent.** The project coordinator's role description tells it to weigh an
-  agent's tags when deciding whether another agent fits a piece of work better.
+- **Tags are set in the top row of the agent's tab** of Settings' Agent accounts section, above Permission approval
+  (or above Claude compatibility, or directly above the accounts table, where those rows are absent), so the row sits
+  in the same place in every tab, with the same Tags field and tag appearance as a project's. A change is saved as it
+  is made, like the other per-agent rows.
+- **A console session may read and change agent tags** through `get_settings` and `update_settings`, like Claude
+  compatibility: tags are information, they lift no permission and spend no quota.
+- **A configuration export that includes the application settings carries agent tags**, and an import applies them.
+- **Removing an agent keeps its tags**, which come back when it is added again, as its accounts do. A removed agent's
+  tags are neither offered for the others nor shown to sessions.
+- **Sessions read the tags when choosing an agent, in one call with the accounts.** `get_account_quotas` is renamed
+  `list_agents`: its answer is grouped by agent, each entry giving the agent, its tags and its accounts (with the same
+  account fields as before), keeping the `agent` and `refresh` arguments.
+- **The tags may lead a session to name an agent unasked.** The project coordinator's role description tells it to
+  weigh an agent's tags when deciding whether another agent fits a piece of work better. A console session's
+  `new_session` and every session's `request_session`, which today name an agent only when the user asked, may also
+  name one whose tags fit the work. `handoff_session` is out of scope.
 
 ## Milestones
 
-- [01 Storing and editing agent tags](01-storing-and-editing-agent-tags.md)
-- [02 Agent tags for sessions choosing an agent](02-agent-tags-for-sessions-choosing-an-agent.md) — needs 01
-
-## Open
-
-- Where sessions read the tags. There are three options:
-  - alongside the accounts `get_account_quotas` returns, which has no per-agent entry yet;
-  - in `get_settings`, which only console sessions read, so a project coordinator would still need one of the other
-    two;
-  - in a read tool of their own.
-- Whether a console session may read and change agent tags through `get_settings` and `update_settings`. Settings
-  that shape what sessions are told are kept from those tools today.
-- Whether the tools that today name an agent only when the user asked may point to the tags, letting the caller name
-  an agent unasked when its tags fit the work: a console session's `new_session`, and every session's
-  `request_session`. Also whether `handoff_session`, which always names its receiving agent, is in scope.
-- When a change to an agent's tags is saved: on change like the other per-agent rows, or with a save action. Also
-  where the Tags row sits among the per-agent rows.
-- Whether configuration export and import carry agent tags.
-- Whether removing an agent from the added list drops its tags, or keeps them for when it is added again.
+- 01 Storing and editing agent tags (closed)
+- [02 Agent tags for sessions choosing an agent](02-agent-tags-for-sessions-choosing-an-agent.md)

@@ -173,6 +173,7 @@ export function exportedDocument(
         ask_questions_as_choices: state.settings.ask_questions_as_choices,
         git_workflow: state.settings.git_workflow,
         claude_compatibility: { ...choices },
+        agent_tags: { ...state.settings.agent_tags },
       }
       : null,
     ...(regions.accounts && { accounts: exportedAccounts(state) }),

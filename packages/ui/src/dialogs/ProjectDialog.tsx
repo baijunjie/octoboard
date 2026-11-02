@@ -17,7 +17,6 @@ import { InlineReference } from "../i18n/InlineReference";
 import { changedGitWorkflowItems, FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
-import { tagVocabulary } from "../sessions/projectFiltering";
 import type { Agent, Project, ProjectAccount, ProjectSource } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { markDisabledPickable } from "./accountOptions";
@@ -29,6 +28,7 @@ import { GitWorkflowField } from "./GitWorkflowField";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
 import { OptionSelect, type Option } from "../components/form/OptionSelect";
 import { TagsInput } from "../components/form/TagsInput";
+import { tagVocabulary } from "../components/form/tagVocabulary";
 import { TextAreaInput } from "../components/form/TextAreaInput";
 import { TextInput } from "../components/form/TextInput";
 import { useDetectedAgent } from "./useDetectedAgent";
@@ -118,7 +118,7 @@ export function ProjectDialog({
   // The tags to offer are the ones this console's projects carry now; there is no registry of them.
   const projects = useDaemonStore((s) => s.projects);
   const knownTags = useMemo(
-    () => tagVocabulary([...projects.values()].filter((p) => p.console_id === consoleId)),
+    () => tagVocabulary([...projects.values()].filter((p) => p.console_id === consoleId).map((p) => p.tags)),
     [projects, consoleId],
   );
   const directoryBrowse = useDirectoryBrowse(path, setPath);

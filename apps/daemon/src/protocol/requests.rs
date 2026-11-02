@@ -712,6 +712,14 @@ pub enum RequestBody {
         #[cfg_attr(test, ts(optional))]
         #[cfg_attr(test, ts(type = "Partial<Record<Agent, boolean>>"))]
         claude_compatibility: Option<std::collections::BTreeMap<String, bool>>,
+        /// Per agent, by wire name: its tags, replacing the ones it has, normalised as a project's
+        /// are (trimmed, empty ones dropped, case-insensitive duplicates dropped keeping the first
+        /// spelling); an empty list clears them. An agent left out is left alone; an unknown name
+        /// is refused.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        #[cfg_attr(test, ts(type = "Partial<Record<Agent, Array<string>>>"))]
+        agent_tags: Option<std::collections::BTreeMap<String, Vec<String>>>,
     },
     /// Both fields are required: an account always has a name and a directory. Broadcasts
     /// `settings_updated`.
