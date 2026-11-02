@@ -134,7 +134,7 @@ export function ShortcutsSection(): React.ReactElement {
           <Button
             size="sm"
             variant="secondary"
-            className="shrink-0"
+            className="shrink-0 max-sm:self-end-safe"
             onPress={() => {
               // The button goes away with the change, so focus is handed to the list first.
               root.current?.querySelector<HTMLElement>("[data-shortcut-change]")?.focus();
@@ -205,7 +205,7 @@ function ShortcutRow({
         <span id={problemId} className="block px-1 text-xs wrap-break-word text-danger">{problem}</span>
       )}
     >
-      <div className="flex min-h-6 flex-wrap items-center gap-2">
+      <div className="flex min-h-6 flex-wrap items-center justify-end gap-2">
         {recording ? <span className="text-sm text-app-muted">{t("settings.shortcuts.recording")}</span> : <BindingKbd binding={binding} />}
         {command.rebindable ? (
           <>

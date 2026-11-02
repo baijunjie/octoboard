@@ -325,11 +325,15 @@ and …") with a button that takes them there, opening the target dialog when th
 for an action: remove a second entry that does the same thing, such as "Add agent" beside "Manage accounts" when
 both lead to the same account management view.
 
-**Button order follows the group's alignment.** A trailing-aligned group — a dialog's or a popover's footer, an
-Alert's buttons — puts the secondary buttons first and the primary at the trailing edge (Cancel, then Confirm). A
-start-aligned or centred group — an empty state's row, a status strip, a startup screen's row — puts the primary first
-and the secondary after it. Whatever the alignment, a group has at most one primary button, and a centred row holds at
-most two buttons: a third way out becomes a mark or goes.
+**Button order follows the group's alignment.** A trailing-aligned group — a dialog's or a popover's footer, an Alert's
+buttons — puts the secondary buttons first and the primary at the trailing edge (Cancel, then Confirm). A start-aligned
+or centred group — an empty state's row, a status strip, a startup screen's row — puts the primary first and the
+secondary after it. A settings row's controls, and a settings section's own buttons beside its introduction, are a
+trailing-aligned group; when they stack beneath the text at a narrow width they stay aligned to the trailing edge,
+keeping that order (falling back to the leading edge only where the group is wider than the row, so it overflows at its
+end rather than off its start), except that a field (a select, a text field, a path picker) fills the row's width with
+the buttons beside it. Whatever the alignment, a group has at most one primary button, and a centred row holds at most
+two buttons: a third way out becomes a mark or goes.
 
 Every button is HeroUI's `Button`. A native `<button>` is allowed only where a custom button is needed that HeroUI's
 cannot be, with the reason in a comment there. A hand-built `role="button"` element needs `tabIndex={0}` and its own
@@ -1577,15 +1581,18 @@ is decorative; the localized accessible description explains that the link opens
 open a new tab with `noopener noreferrer`; the desktop app uses its platform link adapter. An unavailable or failed
 opener produces the dedicated actionable error alert rather than navigating the desktop window.
 
-Ordinary prose links use the shared text appearance: the surrounding font size and line height, link colour and an
-underline. A control label mentioned within copy uses the shared chip appearance, without quotation marks. A chip that
-only names a separate control remains non-interactive; a chip is never itself a link. A footer may instead provide one
-external action using the shared button appearance, which applies HeroUI's secondary-button styles to the anchor; its
-reference in the body is a plain chip. A startup screen's Report issue takes the same appearance, in the empty state's
-row or under the no-address screen's instructions (see "A whole subject that failed"). Do not make both the reference
-and the separate control interactive. All appearances retain a visible keyboard focus ring, and a pending open keeps
-the label and icon visible while preventing repeated activation. Callers may not remove the icon or substitute
-arbitrary local colours, padding or typography.
+The appearance follows the context the link stands in, not a fixed list of places. A link inside prose, or one standing
+on its own where nothing beside it is a button (a settings row's View license, the About section's Website, GitHub
+repository and Issue tracker, an Add agent row's Install), uses the shared text appearance: the surrounding font size
+and line height, link colour and an underline. A link that stands beside buttons, or is an action of a place whose other
+actions are buttons — a footer's one external action, a settings row's link beside the row's button, a startup screen's
+Report issue in the empty state's row or under the no-address screen's instructions (see "A whole subject that failed")
+— uses the shared button appearance instead, which applies HeroUI's secondary-button styles to the anchor, at the size
+of those buttons. A control label mentioned within copy uses the shared chip appearance, without quotation marks. A chip
+that only names a separate control remains non-interactive; a chip is never itself a link, and a reference in the body
+to a separate external action is a plain chip. Do not make both the reference and the separate control interactive. All
+appearances retain a visible keyboard focus ring, and a pending open keeps the label and icon visible while preventing
+repeated activation. Callers may not remove the icon or substitute arbitrary local colours, padding or typography.
 
 Native menu items that open a browser use the same external-link indicator within their menu primitive. Links rendered
 from Markdown retain the document's text and title, with the external indicator added to outbound destinations and the

@@ -143,6 +143,7 @@ export function AgentApprovalSetting({ agent }: { agent: Agent }): React.ReactEl
   if (!hasApprovalChoice(agent)) return null;
   return (
     <SettingRow
+      fill
       label={t("settings.accounts.approval.heading")}
       help={
         <HelpTip label={t("settings.accounts.approval.helpLabel")}>

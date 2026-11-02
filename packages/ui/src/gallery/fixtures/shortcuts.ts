@@ -72,7 +72,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts, some changed",
     description:
-      "Toggle focus mode, Lock or unlock the session and New session show their own keys, each with a Reset button after Change that the unchanged rows lack, and Restore defaults sits at the end of the intro line. Choose 560px to see the narrow layout: below 640px each row stacks its keys and buttons under its name, and the intro line stacks Restore defaults under itself.",
+      "Toggle focus mode, Lock or unlock the session and New session show their own keys, each with a Reset button after Change that the unchanged rows lack, and Restore defaults sits at the end of the intro line. Choose 560px to see the narrow layout: below 640px each row stacks its keys and buttons under its name, aligned to the end edge, and the intro line stacks Restore defaults under itself, also at the end edge.",
     state,
     preferences: customisedPreferences(customised),
     steps: openSection,

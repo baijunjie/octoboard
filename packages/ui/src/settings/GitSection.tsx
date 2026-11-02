@@ -39,6 +39,7 @@ export function GitSection(): React.ReactElement {
       <SettingsGroup title={t("settings.git.group.development")}>
         <div ref={listRef} className="relative" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
           <SettingRow
+            fill
             motionKey="development"
             label={t("settings.gitWorkflow.development.label")}
             description={t(DEVELOPMENT_CHOICES.find(({ value }) => value === gitWorkflow.development)!.description)}
@@ -69,7 +70,7 @@ export function GitSection(): React.ReactElement {
                 isSelected={gitWorkflow.rebase_before_merge}
                 onChange={(value) => change({ rebase_before_merge: value })}
               />
-              <SettingRow motionKey="delivery" label={t("settings.gitWorkflow.delivery.label")} description={t("settings.gitWorkflow.delivery.description")}>
+              <SettingRow fill motionKey="delivery" label={t("settings.gitWorkflow.delivery.label")} description={t("settings.gitWorkflow.delivery.description")}>
                 <OptionSelect<GitDelivery>
                   inline
                   label={t("settings.gitWorkflow.delivery.label")}

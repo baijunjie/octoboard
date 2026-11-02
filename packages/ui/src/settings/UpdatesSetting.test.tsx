@@ -7,6 +7,7 @@ import { press } from "../components/alerts/detailsTestSupport";
 import { LanguageProvider } from "../i18n/react";
 import type { AvailableUpdate, PlatformAdapter, UpdaterCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";
+import { UpdaterError } from "../platform/updaterError";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import { updateChannel } from "../updates/updateChannel";
 import type { UpdateStore } from "../updates/updateStore";
@@ -46,7 +47,7 @@ function mount(platform: PlatformAdapter, { opened = true }: { opened?: boolean 
       ),
     );
   render(opened);
-  return { container, store: () => store!, open: () => render(true) };
+  return { container, store: () => store!, open: () => render(true), close: () => render(false) };
 }
 
 const FOUND: AvailableUpdate = { version: "0.2.0" };
@@ -259,4 +260,60 @@ it("speaks the result of a check that was already running when Settings opened",
   open();
   await act(async () => settle(undefined));
   expect(await spoken(container)).toContain("Version 0.1.0 is the latest on this channel.");
+});
+
+const notesLink = (container: HTMLElement) =>
+  Array.from(container.querySelectorAll<HTMLAnchorElement>("a[data-external-link]")).find((candidate) => candidate.textContent === "What is new");
+const releaseOf = (version: string) => `https://github.com/baijunjie/octoboard/releases/tag/v${version}`;
+
+it("links What is new to the GitHub release of the version the row is about, before the warning mark and the button", async () => {
+  let finish: () => void = () => {};
+  const check = vi.fn<UpdaterCapability["check"]>().mockRejectedValueOnce(new Error("offline")).mockResolvedValue(FOUND);
+  const { container } = mount({ kind: "tauri", updater: updaterOf(check, () => new Promise<void>((resolve) => (finish = resolve))) });
+  await act(async () => {});
+  expect(notesLink(container)!.href).toBe(releaseOf("0.1.0"));
+  await act(async () => button(container, "Check for updates")!.click());
+  const mark = failedMark(container)!;
+  expect(notesLink(container)!.compareDocumentPosition(mark) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(mark.compareDocumentPosition(button(container, "Check for updates")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  await act(async () => button(container, "Check for updates")!.click());
+  expect(notesLink(container)!.href).toBe(releaseOf("0.2.0"));
+  await act(async () => button(container, "Download and install")!.click());
+  expect(notesLink(container)!.href).toBe(releaseOf("0.2.0"));
+  await act(async () => finish());
+  expect(textOf(container)).toContain("Version 0.2.0 is installed.");
+  expect(notesLink(container)!.href).toBe(releaseOf("0.2.0"));
+});
+
+it("leaves What is new out while the running version is not known", async () => {
+  const { container } = mount({ kind: "tauri", updater: { ...updaterOf(async () => undefined), currentVersion: () => new Promise<string>(() => {}) } });
+  await act(async () => {});
+  expect(notesLink(container)).toBeUndefined();
+});
+
+it("leaves What is new out for an installed update whose version is not known, rather than pointing at the running one", async () => {
+  const { container } = mount({ kind: "tauri", updater: updaterOf(async () => { throw new UpdaterError("installed"); }) });
+  await act(async () => {});
+  await act(async () => button(container, "Check for updates")!.click());
+  expect(textOf(container)).toContain("An update is installed.");
+  expect(notesLink(container)).toBeUndefined();
+});
+
+it("moves focus held on What is new to the row's action when an installed update of no known version takes the link away", async () => {
+  const { container, store } = mount({ kind: "tauri", updater: updaterOf(async () => { throw new UpdaterError("installed"); }) });
+  await act(async () => {});
+  act(() => notesLink(container)!.focus());
+  await act(async () => void store().check("automatic"));
+  expect(notesLink(container)).toBeUndefined();
+  expect(document.activeElement).toBe(button(container, "Restart now"));
+});
+
+it("leaves focus to the dialog when the whole row goes while What is new holds it", async () => {
+  const { container, close } = mount({ kind: "tauri", updater: updaterOf(async () => undefined) });
+  await act(async () => {});
+  act(() => notesLink(container)!.focus());
+  const check = button(container, "Check for updates")!;
+  const focus = vi.spyOn(check, "focus");
+  await act(async () => close());
+  expect(focus).not.toHaveBeenCalled();
 });

@@ -2143,6 +2143,7 @@ export const zhHans: Translation<"other"> = {
   "settings.updates.version.installed": "版本 {installed} 已安装，将在 {appName} 重新启动后生效。",
   "settings.updates.version.installedUnknown": "更新已安装，将在 {appName} 重新启动后生效。",
   "settings.updates.check": "检查更新",
+  "settings.updates.notes": "更新内容",
   "settings.updates.install": "下载并安装",
   "settings.updates.restart": "立即重新启动",
   "settings.updates.channel.label": "更新渠道",

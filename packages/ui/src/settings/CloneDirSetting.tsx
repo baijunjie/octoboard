@@ -59,6 +59,7 @@ export function CloneDirSetting(): React.ReactElement {
   return (
     <>
       <SettingRow
+        fill
         label={t("settings.cloneDir.label")}
         description={<Message id="settings.cloneDir.description.gitUrl" />}
       >

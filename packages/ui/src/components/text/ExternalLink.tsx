@@ -14,7 +14,7 @@ export { ExternalLinkIcon } from "./ExternalLinkIcon";
 type Props = Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "onClick" | "onAuxClick" | "target" | "rel"> & {
   href: string;
   appearance?: "text" | "button";
-  /** The button appearance's size, `sm` beside the small buttons of an empty-state panel's row. */
+  /** The button appearance's size, `sm` beside small buttons. */
   size?: "sm";
   onOpen?: (href: string) => void | Promise<void>;
   isPending?: boolean;

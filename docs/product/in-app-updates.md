@@ -181,6 +181,18 @@ Beside it one button moves the update on: **Check for updates** until a newer ve
 spinner while a check runs; then **Download and install**, showing the spinner while a check or the download is under
 way; then **Restart now** once the update is installed.
 
+Before that button, a **What is new** link, drawn as a button, opens in the browser the GitHub release page of the
+version the row's sentence is about, `https://github.com/baijunjie/octoboard/releases/tag/v<version>` (see "Where
+updates come from" above): the newer version while one is available or downloading, the installed version once an
+update is installed, and otherwise the version running. There is no link while the version running is not yet known,
+nor for an installed update whose version is not known. Unlike the update notice's What is new (see "A newer version is
+available" above), it is there for any version the row names, not only an offered one with release notes. When the
+link goes away while it holds keyboard focus — the row turning to an installed update of unknown version — focus moves
+to the row's button.
+
+The row's controls are, in order: What is new, the warning mark described below when it is shown, and the row's
+button.
+
 **After a check that did not finish**, pressed here or automatic, while no newer version is known and nothing is under
 way, an amber warning mark stands in the row before **Check for updates**, named for the last update check; the row's
 sentence stays the version running. Its popover says that the last check for updates did not finish, that it is not

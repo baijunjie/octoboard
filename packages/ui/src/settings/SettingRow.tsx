@@ -7,11 +7,16 @@ import { MarkLineBox } from "../components/status/MarkLineBox";
  * at the end, with a thin divider under every row but the last (the copy of a row a list motion is
  * still removing does not count, so the divider goes as the row leaves). At phone widths a wide
  * control moves under the text instead, since beside it it squeezes the description to a few words
- * per line. Pass `compact` when the control is one small control of a bounded width — a switch, one
- * button, one badge, a link of a word or two, with a status mark beside it at most — so it stays
- * beside the text at every width, where under it it would leave a line almost empty. Leave it off
- * for a select, a text field, a group of buttons or a value whose width varies (a URL). `help` is a
- * help tip that ends the name's line (see "Explanations in help tips" in
+ * per line, end-aligned so it sits against the same edge the control has beside the text. Pass
+ * `compact` when the control is one small control of a bounded width — a switch, one button, one
+ * badge, a link of a word or two, with a status mark beside it at most — so it stays beside the
+ * text at every width, where under it it would leave a line almost empty. Leave it off for a
+ * select, a text field, a group of buttons or a value whose width varies (a URL). On a row without
+ * `compact`, pass `fill` when the control is an input (a select, a text field, a path picker with its Browse
+ * button): under the text it then spans the row and its one child grows to fill it, whatever width
+ * the child has beside the text; a child that holds buttons next to the input is a flex row whose
+ * input has `flex-1` and whose buttons keep their size. At `sm` and wider `fill` changes
+ * nothing. `help` is a help tip that ends the name's line (see "Explanations in help tips" in
  * `docs/product/labels-and-tooltips.md`). `below` is what the row has to say under itself across
  * its whole width (a progress bar, a full-width field such as a tags input), inside its divider. */
 export function SettingRow({
@@ -22,6 +27,7 @@ export function SettingRow({
   below,
   motionKey,
   compact = false,
+  fill = false,
 }: {
   label: React.ReactNode;
   help?: React.ReactNode;
@@ -30,6 +36,7 @@ export function SettingRow({
   below?: React.ReactNode;
   motionKey?: string;
   compact?: boolean;
+  fill?: boolean;
 }): React.ReactElement {
   return (
     <div data-list-motion={motionKey} className="flex flex-col gap-3 groove-b py-4 [&:not(:has(~:not([data-list-motion-exit])))]:border-b-0">
@@ -42,7 +49,7 @@ export function SettingRow({
           {description && <div className="text-sm text-app-muted">{description}</div>}
         </div>
         {/* A row whose controls all render nothing (`false`) draws no empty box taking the gap. */}
-        {React.Children.toArray(children).length > 0 && <div className="shrink-0">{children}</div>}
+        {React.Children.toArray(children).length > 0 && <div className={`shrink-0${compact ? "" : fill ? " max-sm:flex max-sm:w-full max-sm:*:min-w-0 max-sm:*:flex-1" : " max-sm:self-end-safe"}`}>{children}</div>}
       </div>
       {below}
     </div>

@@ -35,7 +35,12 @@ tab is scrolled into view when the dialog opens.
 
 A setting row whose control is one small control of a bounded width — a switch, a single button, a status badge or a
 short link, with a status mark beside it at most — keeps it beside its name and its line of text at every width. Below
-640 px any other control (a select, a text field, a group of buttons, a URL) goes under the name and the text instead.
+640 px any other control (a select, a text field, a group of controls, a URL) goes under the name and the text instead.
+There it sits at the row's trailing edge (the left edge under a right-to-left language), its controls keeping their
+order, unless it is wider than the row, when it starts from the leading edge instead. A field — a select, a text field,
+the default clone directory's path field with its **Browse** button — fills the row's width instead, any button beside
+it keeping its size. The same trailing edge holds the Keyboard shortcuts section's **Restore defaults** button, which
+below 640 px goes under the section's introduction.
 
 ## Moving between sections
 
@@ -451,9 +456,10 @@ cannot the section holds a line saying that exporting and importing configuratio
 The application itself, under its own heading in the section: its icon, its name and, in the macOS application, the
 version running ("Version …"). Then, one row each:
 
-- **Updates** and **Update channel**, in the macOS application only: where the application's updates stand, with the
-  button that moves them on, and the choice between the Stable and Beta channels (see "The Updates and Update channel
-  rows" in `docs/product/in-app-updates.md`).
+- **Updates** and **Update channel**, in the macOS application only: where the application's updates stand, with a
+  **What is new** link to the release notes of the version it names and the button that moves the update on, and the
+  choice between the Stable and Beta channels (see "The Updates and Update channel rows" in
+  `docs/product/in-app-updates.md`).
 - **Website**, **GitHub repository** and **Issue tracker**: external links, each shown as its address without the
   `https://` — `octoboard.dev`, `github.com/baijunjie/octoboard` and
   `github.com/baijunjie/octoboard/issues/new`.

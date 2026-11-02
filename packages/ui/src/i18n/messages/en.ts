@@ -2322,6 +2322,7 @@ export const en = {
   "settings.updates.version.installed": "Version {installed} is installed. It takes effect after {appName} restarts.",
   "settings.updates.version.installedUnknown": "An update is installed. It takes effect after {appName} restarts.",
   "settings.updates.check": "Check for updates",
+  "settings.updates.notes": "What is new",
   "settings.updates.install": "Download and install",
   "settings.updates.restart": "Restart now",
   "settings.updates.channel.label": "Update channel",

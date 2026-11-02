@@ -22,7 +22,7 @@ export function LanguageSetting(): React.ReactElement {
     void request({ type: "update_settings", interface_language: next }).catch(alertAppDataFailure(t("settings.saveFailedTitle")));
   };
   return (
-    <SettingRow label={t("settings.language.label")} description={<Message id="settings.language.description" />}>
+    <SettingRow fill label={t("settings.language.label")} description={<Message id="settings.language.description" />}>
       <OptionSelect
         inline
         label={t("settings.language.label")}
