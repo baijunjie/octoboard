@@ -143,8 +143,9 @@ export function ControlHint({
   children: React.ReactElement<{ "aria-label"?: string; "aria-describedby"?: string }>;
   /** Where the tooltip opens relative to the control; HeroUI's default is above it. `end` is the
    * reading direction's, so a control on a vertical strip at the window's start edge opens it
-   * toward the content under either direction. */
-  placement?: "end";
+   * toward the content under either direction. `bottom` keeps a header control's tooltip below
+   * the window chrome. */
+  placement?: "end" | "bottom";
   /** The tooltip opens on keyboard focus only, not on hover. */
   focusOnly?: boolean;
   /** Holds the tooltip back, closing it if open, while the control is showing what it says some other way,

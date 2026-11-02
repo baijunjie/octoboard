@@ -59,7 +59,7 @@ function FocusHeader({
     // card's border and padding add up to `--row-content-inset`), so the end padding matches that and
     // this header's trailing menus line up with the menu on a row or card. The start stays put.
     <div ref={ref} className="flex h-(--pane-header-height) shrink-0 items-center gap-1 groove-b ps-(--row-fill-inset) pe-(--pane-inset)">
-      <TitledControl title={t("sidebar.focus.exit")}>
+      <TitledControl title={t("sidebar.focus.exit")} placement="bottom">
         <Button
           isIconOnly
           size="sm"
