@@ -940,9 +940,6 @@ export const settingsScenarios: Scenario[] = [
     steps: [
       ...openAccounts,
       (ui) => ui.press(AGENT_LABEL.codex),
-      // A window too short for the row scrolls to what takes focus, and the scroll closes a list opened by then, so a
-      // tag is focused first to bring the row into view.
-      (ui) => ui.focusControl("review"),
       (ui) => ui.press(ui.t("dialog.project.tagsSuggestions")),
     ],
   },
@@ -1395,9 +1392,6 @@ export const settingsScenarios: Scenario[] = [
     steps: [
       ...openAccounts,
       (ui) => ui.press(AGENT_LABEL.codex),
-      // A window too short for the row scrolls to what takes focus, and the scroll closes a list opened by then, so a
-      // tag is focused first to bring the row into view.
-      (ui) => ui.focusControl("review"),
       (ui) => ui.press(ui.t("dialog.project.tagsSuggestions")),
       (ui) => ui.press("frontend"),
     ],
