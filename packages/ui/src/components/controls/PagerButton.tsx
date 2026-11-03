@@ -6,13 +6,13 @@ import { Button } from "./Button";
 import { ROW_ICON_BUTTON_CLASS } from "./RowControls";
 
 /** A previous / next icon button, the pair of a pager. The chevron mirrors with the interface
- * direction, since "previous" points to the start edge in either. */
+ * direction, since "previous" points to the start edge in either. A press leaves focus where it was,
+ * since the page changes under the pager; it still takes focus from the keyboard. */
 export function PagerButton({
   ref,
   label,
   direction,
   isDisabled,
-  preventFocusOnPress,
   onPress,
   onFocus,
   onBlur,
@@ -21,8 +21,6 @@ export function PagerButton({
   label: string;
   direction: "previous" | "next";
   isDisabled: boolean;
-  /** Whether a press leaves focus where it was, for a pager whose page changes under it. */
-  preventFocusOnPress?: boolean;
   onPress: () => void;
   onFocus?: () => void;
   onBlur?: (event: React.FocusEvent) => void;
@@ -37,7 +35,7 @@ export function PagerButton({
         variant="ghost"
         className={ROW_ICON_BUTTON_CLASS}
         aria-label={label}
-        preventFocusOnPress={preventFocusOnPress}
+        preventFocusOnPress
         isDisabled={isDisabled}
         onPress={onPress}
         onFocus={onFocus}

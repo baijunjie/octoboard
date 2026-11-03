@@ -8,7 +8,7 @@ import { handFocusOff } from "../components/focus/handFocusOff";
 import { HandOffOnUnmount } from "../components/focus/HandOffOnUnmount";
 import { handFocusToRegionStart } from "../components/focus/modalFocus";
 import { LocalizedTabListContainer } from "../components/tabs/LocalizedTabListContainer";
-import { TEXT_TAB_BASE_CLASS, TEXT_TAB_LIST_CLASS } from "../components/tabs/textTabClasses";
+import { TEXT_TAB_CLASS, TEXT_TAB_LIST_CLASS } from "../components/tabs/textTabClasses";
 import { TitledControl } from "../components/hint/TitledControl";
 import { ROW_ICON_BUTTON_CLASS } from "../components/controls/RowControls";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
@@ -150,9 +150,10 @@ export function ProjectBrowser({
             }
           >
             <LocalizedTabListContainer className="shrink-0 rounded-none bg-transparent">
-              <Tabs.List aria-label={t("browser.modes")} className={TEXT_TAB_LIST_CLASS}>
-                <Tabs.Tab id="files" className={`h-6 px-1.5 ${TEXT_TAB_BASE_CLASS}`}>{t("browser.mode.files")}<Tabs.Indicator /></Tabs.Tab>
-                <Tabs.Tab id="changes" className={`h-6 px-1.5 ${TEXT_TAB_BASE_CLASS}`}>{t("git.view.changes")}<Tabs.Indicator /></Tabs.Tab>
+              {/* Vertical padding of just the focus ring's room fits the tabs into the floating header's height. */}
+              <Tabs.List aria-label={t("browser.modes")} className={`${TEXT_TAB_LIST_CLASS} py-1`}>
+                <Tabs.Tab id="files" className={TEXT_TAB_CLASS}>{t("browser.mode.files")}<Tabs.Indicator /></Tabs.Tab>
+                <Tabs.Tab id="changes" className={TEXT_TAB_CLASS}>{t("git.view.changes")}<Tabs.Indicator /></Tabs.Tab>
               </Tabs.List>
             </LocalizedTabListContainer>
           </PanelHeader>

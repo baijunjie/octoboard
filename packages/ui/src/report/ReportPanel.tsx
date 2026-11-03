@@ -208,7 +208,6 @@ export function ReportPanel({
             <PagerButton
               label={t("report.previous")}
               direction="previous"
-              preventFocusOnPress
               isDisabled={displayIndex === 0}
               onPress={() => goTo(displayIndex - 1)}
             />
@@ -220,7 +219,6 @@ export function ReportPanel({
             <PagerButton
               label={t("report.next")}
               direction="next"
-              preventFocusOnPress
               isDisabled={displayIndex === sessionPages.length - 1}
               onPress={() => goTo(displayIndex + 1)}
             />

@@ -37,7 +37,7 @@ import { RemoveAgentDialog } from "./RemoveAgentDialog";
 import { useAgentList } from "./useAgentList";
 import { useAccountOrder } from "./useAccountOrder";
 import { DaemonSwitchSetting } from "../DaemonSwitchSetting";
-import { SettingsLead } from "../SettingsLead";
+import { LeadRows, SettingsLead } from "../SettingsLead";
 import { SettingsFocusContext, useSectionRefocus } from "../useSectionRefocus";
 
 /** The agent strip's height, the `p-1.5` clearance around its tabs and its 1px rule included. The strip is given
@@ -231,9 +231,11 @@ export function AgentAccountsSection(): React.ReactElement {
       <SettingsLead>
         <Message id="settings.accounts.description" params={PATH_VAR_PARAMS} />
       </SettingsLead>
-      <DaemonSwitchSetting field="auto_select_account" />
-      <DaemonSwitchSetting field="auto_switch_on_usage_limit" />
-      <DaemonSwitchSetting field="auto_start_quota_windows" />
+      <LeadRows ruledBelow>
+        <DaemonSwitchSetting field="auto_select_account" />
+        <DaemonSwitchSetting field="auto_switch_on_usage_limit" />
+        <DaemonSwitchSetting field="auto_start_quota_windows" />
+      </LeadRows>
       {selected === undefined ? (
         <EmptyPanel
           icon={Bot}
