@@ -61,9 +61,17 @@ hold state against.
   different times, each `Stop` listed exactly the ones still running, and the last listed none). A finished task
   is reported to the session as a `UserPromptSubmit` whose prompt is a `<task-notification>` carrying its
   `<task-id>`, followed by a `Stop` of its own. A subagent running in the background is listed the same way (see
-  "Subagent events"). `/clear` does not end a running background shell: the next `Stop`
-  after the `SessionStart` with source `clear` still listed it (measured through `-p --input-format stream-json`;
-  the interactive TUI is unmeasured).
+  "Subagent events"). Work that finishes during a turn is left out of that turn's `Stop` even when the model has not
+  been told yet, so an empty list does not mean nothing more will follow at once (measured from transcripts on
+  2.1.316: two subagents resumed with `SendMessage` handed back during one turn, and its `Stop` listed nothing). Their
+  `<task-notification>`s wait in Claude Code's queue — the transcript's `turn_duration` entry counts them as
+  `pendingBackgroundAgentCount` — and start a new turn about 20 ms after that `Stop`. A notification that arrives while
+  a turn is running is usually delivered inside it as a `queued_command` attachment, with no `UserPromptSubmit`, so a
+  task list kept from the hooks alone can hold work that has already finished and been reported; the `Stop`'s list is
+  the one to trust. A subagent resumed with `SendMessage` hands back twice: an `<agent-message>` prompt carrying its
+  final report, which can start a turn of its own, and then its `<task-notification>`. `/clear` does not end a running
+  background shell: the next `Stop` after the `SessionStart` with source `clear` still listed it (measured through
+  `-p --input-format stream-json`; the interactive TUI is unmeasured).
 - `StopFailure` — mutually exclusive with `Stop`: a turn that ends in an API error fires only `StopFailure`, so a
   mapping keyed on `Stop` alone leaves that session looking busy forever. It does not mean the session died; in the
   interactive TUI it stays alive at the prompt. It carries `error`, an optional `error_details` (the raw HTTP status

@@ -51,6 +51,9 @@ pub(super) struct TurnState {
     /// The id of the turn the session's latest event that names one belongs to
     /// (`hooks::turn_key`): while the agent is working, its current turn's.
     key: Option<String>,
+    /// How many turn starts of this session carried the agent telling itself that background work
+    /// finished (`hooks::is_task_notification`). Only ever moves on, like `ends`.
+    completion_notices: u64,
 }
 
 /// What closing a turn amounted to.
@@ -100,7 +103,20 @@ impl AppState {
         if let Some(credit) = credit {
             turn.credits.remove(credit);
         }
+        if prompt.is_some_and(crate::hooks::is_task_notification) {
+            turn.completion_notices += 1;
+        }
         turn.last_event_at = now_millis();
+    }
+
+    /// How many turns of this session have started with the agent telling itself that background
+    /// work finished; see [`TurnState::completion_notices`].
+    pub fn completion_notices(&self, id: &str) -> u64 {
+        self.turns
+            .lock()
+            .expect("turn lock poisoned")
+            .get(id)
+            .map_or(0, |turn| turn.completion_notices)
     }
 
     /// Whether a clock-attributed turn end would be consumed as an echo of an earlier ending rather

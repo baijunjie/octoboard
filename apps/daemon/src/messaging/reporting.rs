@@ -15,7 +15,8 @@
 //! encouraged and nothing is blocked; a session that stops without it has the turn's last assistant
 //! message read as its report instead, with the structured fields marked as Octoboard's guess. The
 //! conditions that qualify that synthesis are in the "Claude Code" and "Grok Build" sections of
-//! `docs/agent-cli-reference.md` and encoded in `crate::hooks`.
+//! `docs/agent-cli-reference.md` and encoded in `crate::hooks`, except the hold for a Claude Code
+//! turn the agent follows at once with a completion notice, which is a wait and so lives here.
 
 use std::sync::Arc;
 
@@ -30,7 +31,7 @@ use crate::messaging::delivery::{
 };
 use crate::messaging::naming::{one_line, session_labels};
 use crate::messaging::texts::REPORT_OPENING;
-use crate::protocol::{error_code, CodedError, Session, SessionStatus};
+use crate::protocol::{error_code, Agent, CodedError, Session, SessionStatus};
 use crate::session_tools::catalogue;
 use crate::state::{AppState, TurnClose};
 
@@ -357,6 +358,9 @@ fn archived_owner(owner: &Session) -> anyhow::Error {
 /// when the session reported nothing itself. What closing amounted to is returned, for the caller
 /// to decide what else the ending says about the session.
 ///
+/// A report owed for an ordinary Claude Code turn waits briefly, and is dropped when the agent goes
+/// straight on to a turn telling itself that background work finished: that turn is judged instead.
+///
 /// A report owed for a failed turn waits while the automatic account switch judges that turn, and
 /// is not sent when the switch moved the session to another account or resumed it on its own,
 /// which its owner is told of instead: the owner would otherwise act on a failure already dealt
@@ -375,6 +379,7 @@ pub fn close_turn_and_report(
         None
     };
     if close == TurnClose::OwesReport {
+        let notices = state.completion_notices(session_id);
         let state = state.clone();
         let session_id = session_id.to_string();
         tokio::spawn(async move {
@@ -384,6 +389,9 @@ pub fn close_turn_and_report(
                     return;
                 }
             }
+            if !turn.failed && held_for_a_completion_notice(&state, &session_id, notices).await {
+                return;
+            }
             // Delivery writes into the owner's PTY, which blocks, so it goes off the caller's path.
             let _ =
                 tokio::task::spawn_blocking(move || synthesise_report(&state, &session_id, turn))
@@ -391,6 +399,33 @@ pub fn close_turn_and_report(
         });
     }
     close
+}
+
+/// How long an owed report for an ordinary Claude Code turn waits for the agent to start another
+/// turn telling itself that background work finished. Claude Code starts that turn about 20 ms
+/// after the `Stop` (measured on 2.1.316); the rest is margin for a loaded machine, paid for by
+/// every such synthesised report reaching its owner this much later.
+const COMPLETION_NOTICE_SETTLE: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Whether the owed report for a Claude Code turn that just ended is to be dropped, because the
+/// agent went straight on to a turn telling itself that background work finished: work it was
+/// waiting on had ended during the turn, so the turn's end no longer lists it, but the session
+/// has not been told yet, and its work is not over. That turn is judged in its place. `notices` is
+/// [`AppState::completion_notices`] as the turn closed.
+async fn held_for_a_completion_notice(
+    state: &Arc<AppState>,
+    session_id: &str,
+    notices: u64,
+) -> bool {
+    let claude = matches!(
+        state.store.get_session(session_id),
+        Ok(Some(session)) if session.agent == Agent::Claude
+    );
+    if !claude {
+        return false;
+    }
+    tokio::time::sleep(COMPLETION_NOTICE_SETTLE).await;
+    state.completion_notices(session_id) != notices
 }
 
 /// Reports to the owner for a session that stopped without reporting for itself. The
@@ -1090,6 +1125,48 @@ mod tests {
         let heard = hub_heard_of(&hub, "summary-of-the-stayed-turn").await;
         assert!(heard.contains("summary-of-the-stayed-turn"), "{heard}");
         assert!(!heard.contains("summary-of-the-moved-turn"), "{heard}");
+    }
+
+    /// A Claude Code turn that ends while the subagents it waits on have just finished lists no
+    /// background work, but the agent goes straight on to a turn telling itself they finished: no
+    /// report is synthesised for the first turn, and that next turn, ending without a report and
+    /// with nothing left running, is reported on. A turn followed by no such notice is reported on
+    /// as before.
+    #[tokio::test]
+    async fn a_turn_followed_at_once_by_a_completion_notice_is_not_reported_on() {
+        let (state, _dir, hub) = team_state(
+            "reporting-completion-notice",
+            &[
+                ("waiting", "hub", false, SessionStatus::Working),
+                ("finished", "hub", false, SessionStatus::Working),
+            ],
+        );
+        let turn = |summary: &str| hooks::TurnEnd {
+            last_assistant_message: Some(summary.to_string()),
+            failed: false,
+            backstop: false,
+        };
+        let notice = "<task-notification>\n<task-id>a4648e64e631ca2b1</task-id>\n\
+                      <status>completed</status>\n</task-notification>";
+        for id in ["waiting", "finished"] {
+            state.turn_started(id, Some("Another Claude session sent a message"));
+        }
+
+        close_turn_and_report(&state, "waiting", turn("waiting-for-the-other-review"));
+        state.turn_started("waiting", Some(notice));
+        close_turn_and_report(&state, "finished", turn("nothing-left-running"));
+        let heard = hub_heard_of(&hub, "nothing-left-running").await;
+        assert!(heard.contains("nothing-left-running"), "{heard}");
+        // The first turn's hold began before the second's and has long run out; waiting it out
+        // once more leaves no delivery of it in flight when the hub is read.
+        tokio::time::sleep(COMPLETION_NOTICE_SETTLE).await;
+        let heard = hub_heard(&state, &hub).await;
+        assert!(!heard.contains("waiting-for-the-other-review"), "{heard}");
+
+        close_turn_and_report(&state, "waiting", turn("both-reviews-passed"));
+        let heard = hub_heard_of(&hub, "both-reviews-passed").await;
+        assert!(heard.contains("both-reviews-passed"), "{heard}");
+        assert!(!heard.contains("waiting-for-the-other-review"), "{heard}");
     }
 
     /// A claim that outlasts the wait leaves the report refused with the owner named, from the
