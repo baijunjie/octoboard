@@ -14,10 +14,16 @@ use crate::test_support::{
 };
 
 /// A stored session of console `console-1`: a project session of project `p1` when `project`, else
-/// a console session. `bound_to` is its parent, and `lead` says it keeps the coordinator role under
-/// it; a session with a parent and no `lead` is a worker.
-fn session(id: &str, project: bool, status: &str, bound_to: Option<&str>, lead: bool) -> Session {
-    let orchestration_role = if bound_to.is_none() || lead {
+/// a console session. `bound_to` is its parent, and `coordinator` says it keeps the coordinator
+/// role under it; a session with a parent and no `coordinator` is a worker.
+fn session(
+    id: &str,
+    project: bool,
+    status: &str,
+    bound_to: Option<&str>,
+    coordinator: bool,
+) -> Session {
+    let orchestration_role = if bound_to.is_none() || coordinator {
         OrchestrationRole::Coordinator
     } else {
         OrchestrationRole::Worker
@@ -296,11 +302,11 @@ async fn an_unbound_project_session_hands_its_branches_and_sessions_to_the_recei
     drop(original);
 }
 
-/// A lead session keeps its binding to the console session as a lead session, takes the sessions it
-/// started, and its owner is told.
+/// A bound coordinator keeps its binding to the console session as a bound coordinator, takes the
+/// sessions it started, and its owner is told.
 #[tokio::test]
-async fn a_lead_session_is_replaced_by_a_lead_session_of_the_same_console_session() {
-    let fixture = Fixture::new("lead");
+async fn a_bound_coordinator_is_replaced_by_a_bound_coordinator_of_the_same_console_session() {
+    let fixture = Fixture::new("coordinator");
     let hub = fixture.run(session("hub", false, "idle", None, false));
     fixture.run(session("original", true, "waiting_user", Some("hub"), true));
     fixture.run(session("worker", true, "idle", Some("original"), false));
@@ -404,13 +410,13 @@ async fn the_notice_of_a_handoff_is_kept_for_an_interrupted_owner() {
         .contains("Kept for you while you were interrupted"));
 }
 
-/// A console session has no branches and no project; the sessions it owns, its lead sessions
+/// A console session has no branches and no project; the sessions it owns, its bound coordinators
 /// among them, are the ones that move.
 #[tokio::test]
 async fn a_console_session_hands_the_sessions_it_owns_to_the_receiving_console_session() {
     let fixture = Fixture::new("console");
     fixture.run(session("original", false, "idle", None, false));
-    let lead = fixture.run(session("lead", true, "idle", Some("original"), true));
+    let coordinator = fixture.run(session("coordinator", true, "idle", Some("original"), true));
     fixture.run(session("bound", true, "idle", Some("original"), false));
 
     let receiving = fixture.handoff("original").await.unwrap();
@@ -425,17 +431,17 @@ async fn a_console_session_hands_the_sessions_it_owns_to_the_receiving_console_s
         (Role::Console, None, None)
     );
     assert!(stored.colour.is_some() && stored.ordinal.is_some());
-    for id in ["lead", "bound"] {
+    for id in ["coordinator", "bound"] {
         assert_eq!(
             fixture.stored(id).bound_to.as_deref(),
             Some(receiving.id.as_str())
         );
     }
     assert_eq!(
-        fixture.stored("lead").orchestration_role,
+        fixture.stored("coordinator").orchestration_role,
         OrchestrationRole::Coordinator
     );
-    let told = output_containing(&lead, "your parent session has changed");
+    let told = output_containing(&coordinator, "your parent session has changed");
     assert!(told.contains(&receiving.id), "{told}");
     assert_eq!(fixture.stored("original").status, SessionStatus::Archived);
 }

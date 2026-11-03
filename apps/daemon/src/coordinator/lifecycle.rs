@@ -30,7 +30,7 @@ pub(crate) use finished::{
 ///
 /// Archiving a session that has sessions bound to it — a console session, or a project session
 /// that started some — is a group operation along the binding, at both levels: a console
-/// session's bound sessions include its lead sessions, and theirs come along. It is decided by
+/// session's bound sessions include its bound coordinators, and theirs come along. It is decided by
 /// whether a process is running and not by status: refused, with nothing changed, while any
 /// session in the group has one (working, awaiting instructions or waiting for the user alike, at
 /// either level; the refusal counts and names them), and otherwise archiving every session in the
@@ -442,10 +442,10 @@ fn trash_agent_records_of(
 
 /// Deletes `session` if it is archived and says whether it did; the archived sessions bound to it
 /// go along, each with its own archived bound sessions, so an archived console session takes its
-/// archived lead sessions' archived sessions too. Deleting the owner first means a refusal, which
-/// only that first step can give, deletes nothing. It does not make the whole atomic: if a later
-/// step is skipped (a session being launched right now) or fails, the owner is already gone. That
-/// is left, because a bound session can only be mid-launch through a resume, which reopens the
+/// archived bound coordinators' archived sessions too. Deleting the owner first means a refusal,
+/// which only that first step can give, deletes nothing. It does not make the whole atomic: if a
+/// later step is skipped (a session being launched right now) or fails, the owner is already gone.
+/// That is left, because a bound session can only be mid-launch through a resume, which reopens the
 /// owner first, so the owner was no longer archived and the delete was refused. One that stopped
 /// being archived meanwhile is skipped. Each session deleted is added to `deleted`, also when a
 /// later step fails. The automatic cleanup meets none of the skips: it checks under the removal
@@ -468,8 +468,8 @@ pub(crate) fn delete_archived_group(
 
 /// Deletes every archived session of `project`, or every archived session bound to the console
 /// session `console_session_id`, or with neither every archived console session of `console` along
-/// with the archived sessions bound to them; an archived lead session in either of the last two
-/// takes its own archived sessions along. One that stopped being archived meanwhile (a resume
+/// with the archived sessions bound to them; an archived bound coordinator in either of the last
+/// two takes its own archived sessions along. One that stopped being archived meanwhile (a resume
 /// got there first) is skipped. Returns every session deleted.
 fn delete_archived_sessions(
     state: &Arc<AppState>,

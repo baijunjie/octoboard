@@ -29,7 +29,7 @@ const settings = {
 
 // The sessions of `project` are bound to one of three console sessions or to none, so the project's
 // focus mode has something to leave out; `hub1`'s focus mode has two projects of its own, a bound
-// session of another owner and an unbound one to leave out, and archived sessions of its own. `lead`
+// session of another owner and an unbound one to leave out, and archived sessions of its own. `coordinator`
 // is a session of `project` bound to `hub1` that has three sessions of its own, which the project's
 // focus mode summarizes by default or shows with hub-colored dots when included; `hub1`'s nests
 // them under it. Its archived child stays in project archives in both modes. `s-3`, unbound, has one of its own,
@@ -39,7 +39,7 @@ const settings = {
 // to it (`consoleFocusState` has them working), `hub4` is Done and `hub3` is delegating while `s-3d` works
 // (in `consoleFocusState`, `hub3` itself works and `s-3d` is idle with a watcher still running, which shows as
 // background work and outranks the Working of `hub3`).
-const lead = sessionOf("s-lead", console_.id, project.id, "Rework the result ranking", "idle", { bound_to: hub1.id, account_id: "a-work", terminal_title: "Compare ranking strategies", context: { tokens: 846_209 } });
+const coordinator = sessionOf("s-coordinator", console_.id, project.id, "Rework the result ranking", "idle", { bound_to: hub1.id, account_id: "a-work", terminal_title: "Compare ranking strategies", context: { tokens: 846_209 } });
 const sessions = [
   hub1,
   hub2,
@@ -50,13 +50,13 @@ const sessions = [
   sessionOf("s-2", console_.id, project.id, "Fix the rounding of partial results", "waiting_user", { bound_to: hub1.id }),
   sessionOf("s-3", console_.id, project.id, "Write the migration", "idle", { terminal_title: "Plan the database migration", started_at: minutesAgo(180), background_tasks: [{ id: "task-migration", type: "shell", description: "cargo watch -x check" }], context: { tokens: 0 } }),
   sessionOf("s-3a", console_.id, project.id, "Check the index sizes", "interrupted", { bound_to: "s-3" }),
-  lead,
-  sessionOf("s-lead-1", console_.id, project.id, "Chase the flaky test", "working", { bound_to: lead.id, started_at: minutesAgo(5) }),
-  sessionOf("s-lead-watch", console_.id, project.id, "Watch the ranking build", "idle", { bound_to: lead.id, started_at: minutesAgo(180), background_tasks: [{ id: "task-ranking", type: "shell", description: "pnpm build --watch" }] }),
-  sessionOf("s-lead-2", console_.id, project.id, "Measure the first paint", "waiting_user", { bound_to: lead.id }),
-  sessionOf("s-lead-archived-child", console_.id, project.id, "Archived work of the active lead", "archived", { bound_to: lead.id, ended_at: minutesAgo(70) }),
-  sessionOf("s-lead-archived", console_.id, project.id, "An archived lead session", "archived", { bound_to: hub1.id, ended_at: minutesAgo(90) }),
-  sessionOf("s-lead-archived-1", console_.id, project.id, "A session of the archived lead session", "archived", { bound_to: "s-lead-archived", ended_at: minutesAgo(80) }),
+  coordinator,
+  sessionOf("s-coordinator-1", console_.id, project.id, "Chase the flaky test", "working", { bound_to: coordinator.id, started_at: minutesAgo(5) }),
+  sessionOf("s-coordinator-watch", console_.id, project.id, "Watch the ranking build", "idle", { bound_to: coordinator.id, started_at: minutesAgo(180), background_tasks: [{ id: "task-ranking", type: "shell", description: "pnpm build --watch" }] }),
+  sessionOf("s-coordinator-2", console_.id, project.id, "Measure the first paint", "waiting_user", { bound_to: coordinator.id }),
+  sessionOf("s-coordinator-archived-child", console_.id, project.id, "Archived work of the active coordinator", "archived", { bound_to: coordinator.id, ended_at: minutesAgo(70) }),
+  sessionOf("s-coordinator-archived", console_.id, project.id, "An archived bound coordinator", "archived", { bound_to: hub1.id, ended_at: minutesAgo(90) }),
+  sessionOf("s-coordinator-archived-1", console_.id, project.id, "A session of the archived bound coordinator", "archived", { bound_to: "s-coordinator-archived", ended_at: minutesAgo(80) }),
   sessionOf("s-3b", console_.id, project.id, "Profile the slow query", "interrupted", { account_id: "a-work" }),
   sessionOf("s-3c", console_.id, project.id, "Rework the retry loop", "idle", { bound_to: hub2.id }),
   sessionOf("s-3d", console_.id, project.id, "Document the retry policy", "working", { bound_to: hub3.id, started_at: minutesAgo(5) }),
@@ -165,15 +165,15 @@ const scrollingFocusState = {
 // Archive-only views keep the preview boundary and heading counts visible together. The
 // ten-root boundary has no hidden children; the eleven-root overflow also has two hidden children.
 const previewHub = sessionOf("s-preview-hub", console_.id, undefined, "Hub", "idle", { colour: "teal" });
-const previewLead = sessionOf("s-preview-lead", console_.id, emptyProject.id, "Archived lead session", "archived", { bound_to: previewHub.id, ended_at: minutesAgo(8), context: { tokens: 200_704 } });
+const previewCoordinator = sessionOf("s-preview-coordinator", console_.id, emptyProject.id, "Archived bound coordinator", "archived", { bound_to: previewHub.id, ended_at: minutesAgo(8), context: { tokens: 200_704 } });
 function archivePreviewState(count: 10 | 11, includeUnused = false) {
   return snapshotState({
     consoles: [console_],
     projects: [emptyProject],
     sessions: [
       previewHub,
-      previewLead,
-      ...Array.from({ length: count === 11 ? 2 : 0 }, (_, i) => sessionOf(`s-preview-child-${i}`, console_.id, emptyProject.id, `Session ${i + 1} of the archived lead`, "archived", { bound_to: previewLead.id, agent: i === 1 ? "codex" : "claude", ended_at: minutesAgo(2 + i * 3) })),
+      previewCoordinator,
+      ...Array.from({ length: count === 11 ? 2 : 0 }, (_, i) => sessionOf(`s-preview-child-${i}`, console_.id, emptyProject.id, `Session ${i + 1} of the archived coordinator`, "archived", { bound_to: previewCoordinator.id, agent: i === 1 ? "codex" : "claude", ended_at: minutesAgo(2 + i * 3) })),
       ...Array.from({ length: count - 1 }, (_, i) => {
         const unused = includeUnused && i === 2;
         return sessionOf(`s-preview-${i}`, console_.id, emptyProject.id, unused ? "Unused archived draft" : (i === 0 ? "A completed search investigation with a long archived preview title" : i === 1 ? "A completed search investigation whose long archived title scrolls only when hovering the text" : `Bound archived session ${i + 1}`), "archived", { bound_to: unused ? undefined : previewHub.id, has_conversation: !unused, ended_at: i === 7 ? undefined : minutesAgo(10 + i * 5), ...(i === 0 ? { context: { tokens: 0 } } : {}) });
@@ -194,8 +194,8 @@ const projectArchivePreviewEleven = archivePreviewState(11, true);
 // The cards left out follow the project's setting.
 const observedLaunches: Record<string, Partial<Session>> = {
   "s-1": { observed_model: "claude-opus-5-5", observed_effort: "high" },
-  "s-lead-1": { agent: "codex", observed_model: "gpt-6.1-sol", observed_effort: "xhigh" },
-  "s-lead-watch": { agent: "codex", observed_model: "gpt-6.1-sol", default_effort: "medium" },
+  "s-coordinator-1": { agent: "codex", observed_model: "gpt-6.1-sol", observed_effort: "xhigh" },
+  "s-coordinator-watch": { agent: "codex", observed_model: "gpt-6.1-sol", default_effort: "medium" },
   "s-3d": { agent: "grok", observed_model: "grok-4.7", observed_effort: "high" },
   "s-3c": { observed_model: "claude-haiku-4-5-20251001", effort: null },
   "s-3a": { model: null, effort: null },
@@ -217,12 +217,12 @@ const combinedState = {
   sessions: new Map([...scrollingFocusState.sessions].map(([id, session]) => [id, {
     ...session,
     ...observedLaunches[id],
-    context: id === "s-1" ? contextOf(30) : id === lead.id ? contextOf(65) : id === "s-2" ? contextOf(90) : id === "s-lead-1" ? lead.context : session.context,
-    account_id: id === "s-2" ? "a-long" : id === "s-lead-2" ? "a-release" : id === "s-3b" ? "a-removed" : session.account_id,
+    context: id === "s-1" ? contextOf(30) : id === coordinator.id ? contextOf(65) : id === "s-2" ? contextOf(90) : id === "s-coordinator-1" ? coordinator.context : session.context,
+    account_id: id === "s-2" ? "a-long" : id === "s-coordinator-2" ? "a-release" : id === "s-3b" ? "a-removed" : session.account_id,
     config_dir: id === "s-3b" ? REMOVED_ACCOUNT_DIR : session.config_dir,
     terminal_title: id === "s-2"
       ? "Fix the rounding of partial search results and preserve precision across every supported currency"
-      : id === "s-lead-2"
+      : id === "s-coordinator-2"
         ? "Review search result first paint timing and verify long regional task titles and console binding marks remain readable"
         : session.terminal_title,
   }])),
@@ -233,13 +233,13 @@ const combinedState = {
 // agent's defaults, so the tooltip's model and effort both read Default.
 const removedAccountState = {
   ...state,
-  sessions: new Map([...state.sessions!].map(([id, session]) => [id, id === lead.id ? { ...session, account_id: "a-removed", config_dir: REMOVED_ACCOUNT_DIR, model: null, effort: null } : session])),
+  sessions: new Map([...state.sessions!].map(([id, session]) => [id, id === coordinator.id ? { ...session, account_id: "a-removed", config_dir: REMOVED_ACCOUNT_DIR, model: null, effort: null } : session])),
 };
 
 // The sidebar row of Rework the result ranking, which runs under Work, reports the model and effort it ran with.
 const observedModelState = {
   ...state,
-  sessions: new Map([...state.sessions!].map(([id, session]) => [id, id === lead.id ? { ...session, observed_model: "claude-opus-5-5", observed_effort: "high" } : session])),
+  sessions: new Map([...state.sessions!].map(([id, session]) => [id, id === coordinator.id ? { ...session, observed_model: "claude-opus-5-5", observed_effort: "high" } : session])),
 };
 
 // "Add idempotency keys" is a Claude session. A session's context size comes with a window only once its agent
@@ -278,8 +278,8 @@ const hierarchyState = {
           : id === "s-2" ? { ...session, terminal_title: "Review search result accuracy and verify long session row titles scroll only while hovering their text" }
             : session;
       // The badges led by a ring in each of its three tones, at about 30%, 65% and 90%, and the number-only
-      // badge of a size whose agent reported no window, beside the sizes `s-1` and `lead` carry.
-      const context = id === longHub.id ? contextOf(30) : id === hub1.id ? contextOf(65) : id === "s-lead-1" ? contextOf(90) : id === "s-2" ? lead.context : undefined;
+      // badge of a size whose agent reported no window, beside the sizes `s-1` and `coordinator` carry.
+      const context = id === longHub.id ? contextOf(30) : id === hub1.id ? contextOf(65) : id === "s-coordinator-1" ? contextOf(90) : id === "s-2" ? coordinator.context : undefined;
       return [id, context ? { ...row, context } : row] as const;
     }),
     // Locking also protects an unused session that would otherwise offer immediate deletion.
@@ -328,14 +328,14 @@ const consoleFocusState = {
 };
 
 // Search API's archive holds more than Hub's own: an archived session bound to Hub 2, next to the
-// unbound one and the archived child of a live lead that the workspace already has. Hub's own archived
+// unbound one and the archived child of a live coordinator that the workspace already has. Hub's own archived
 // sessions for the project, two of them with a context size, are what its heading menu previews.
 const projectArchiveInConsoleState = {
   ...consoleFocusState,
   sessions: new Map([
     ...[...consoleFocusState.sessions].map(([id, session]) => [
       id,
-      id === "s-lead-archived" ? { ...session, context: contextOf(65) }
+      id === "s-coordinator-archived" ? { ...session, context: contextOf(65) }
         : id === "s-scroll-archive-1" ? { ...session, context: { tokens: 12_345 } }
           : session,
     ] as const),
@@ -382,7 +382,7 @@ export const focusScenarios: Scenario[] = [
     state: runningInBackgroundState,
     sessionRecords: { "s-scroll-unused": "absent" },
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
-    description: "The switch beside the Sessions count starts off. Hover or focus it for its tooltip. The cards of project sessions bound to console sessions (Rework the result ranking and the working and waiting ones) join the list once it is on. Colored summary chips and gray count badges sit above archives. Scroll to confirm Sessions stays clear above the fade. At a 200px window height Archived pushes it away at the top, its preview listing Archived work of the active lead on its own, since its owner is not archived, while A session of the archived lead session stays in View all. Done, Awaiting instructions and interrupted cards show an Archive button beside the menu, the pinned Review search improvement 1 after its pin. Write the migration, selected, has none, as an unarchived session is bound under it and its build watcher is still running: its card reads Working in background with a pinging hollow green ring, unlike the filled accent dot of Optimize the query plan and the working cards that join once the switch is on, as does the glyph at the end of the top bar's breadcrumb, whose tooltip says the same. Scroll down to it: it sits below the Done reviews and the Awaiting instructions Draft the release notes, and above the newer working Optimize the query plan, followed by the interrupted Profile the slow query. The unused Draft the release notes has a Delete shortcut instead. Review the background agents (Dormant, orange zz, Zs rising from the bottom left to the top right and shrinking as they go, or a still large and small Z with reduced motion on) and Retry the failed benchmark (Paused, green circled pause sign) follow the pinned card and lead the rest, ahead of the Done ones; select either to see the same glyph at the end of the breadcrumb. Compare the selected card's and the project header's actions buttons at rest, with muted glyphs, then hover or open each menu for the subtle tint every actions button shares. Hover the header's new-session button for its platform modifier + N hint; set Modifier to Held to see the bolt and its modifier + Shift + N quick-create hint. The same keys open the dialog or create with defaults while this project is focused.",
+    description: "The switch beside the Sessions count starts off. Hover or focus it for its tooltip. The cards of project sessions bound to console sessions (Rework the result ranking and the working and waiting ones) join the list once it is on. Colored summary chips and gray count badges sit above archives. Scroll to confirm Sessions stays clear above the fade. At a 200px window height Archived pushes it away at the top, its preview listing Archived work of the active coordinator on its own, since its owner is not archived, while A session of the archived bound coordinator stays in View all. Done, Awaiting instructions and interrupted cards show an Archive button beside the menu, the pinned Review search improvement 1 after its pin. Write the migration, selected, has none, as an unarchived session is bound under it and its build watcher is still running: its card reads Working in background with a pinging hollow green ring, unlike the filled accent dot of Optimize the query plan and the working cards that join once the switch is on, as does the glyph at the end of the top bar's breadcrumb, whose tooltip says the same. Scroll down to it: it sits below the Done reviews and the Awaiting instructions Draft the release notes, and above the newer working Optimize the query plan, followed by the interrupted Profile the slow query. The unused Draft the release notes has a Delete shortcut instead. Review the background agents (Dormant, orange zz, Zs rising from the bottom left to the top right and shrinking as they go, or a still large and small Z with reduced motion on) and Retry the failed benchmark (Paused, green circled pause sign) follow the pinned card and lead the rest, ahead of the Done ones; select either to see the same glyph at the end of the breadcrumb. Compare the selected card's and the project header's actions buttons at rest, with muted glyphs, then hover or open each menu for the subtle tint every actions button shares. Hover the header's new-session button for its platform modifier + N hint; set Modifier to Held to see the bolt and its modifier + Shift + N quick-create hint. The same keys open the dialog or create with defaults while this project is focused.",
     steps: [
       (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: "Plan the database migration", name: "Write the migration" }))),
     ],
@@ -439,7 +439,7 @@ export const focusScenarios: Scenario[] = [
     state: projectArchiveInConsoleState,
     sessionRecords: unusedBoundRecords,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
-    description: "Search API's heading menu is open on View archive. The submenu lists only that project's archived sessions in Hub's archive: the archived lead session and the older, completed ones bound to Hub, with a localized relative archive time at the end of every row, including the archived lead session and older sessions with recorded context sizes. Archived work for Hub 2, Last week's spike (unbound) and Archived work of the active lead stay out, as does the archived lead's own child, which View all keeps. View all opens Hub's archive, the same as View all under the Archived list.",
+    description: "Search API's heading menu is open on View archive. The submenu lists only that project's archived sessions in Hub's archive: the archived bound coordinator and the older, completed ones bound to Hub, with a localized relative archive time at the end of every row, including the archived bound coordinator and older sessions with recorded context sizes. Archived work for Hub 2, Last week's spike (unbound) and Archived work of the active coordinator stay out, as does the archived coordinator's own child, which View all keeps. View all opens Hub's archive, the same as View all under the Archived list.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),
@@ -541,10 +541,10 @@ export const focusScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Archived row dates tooltip",
-    description: "The pointer rests on the relative archive time at the end of the Archived lead session row. The tooltip has two lines: Archived above Created, each with the full local date and time; the archive minute is later than the creation minute. The row's context size is hidden in favour of the time.",
+    description: "The pointer rests on the relative archive time at the end of the Archived bound coordinator row. The tooltip has two lines: Archived above Created, each with the full local date and time; the archive minute is later than the creation minute. The row's context size is hidden in favour of the time.",
     state: archivePreviewTen,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
-    steps: [(ui) => ui.hoverSessionDates(ui.session(previewLead.title), true)],
+    steps: [(ui) => ui.hoverSessionDates(ui.session(previewCoordinator.title), true)],
   },
   {
     id: "focus-console-session-long",
@@ -586,7 +586,7 @@ export const focusScenarios: Scenario[] = [
     state: projectArchivePreviewTen,
     sessionRecords: { "s-preview-2": "absent" },
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${emptyProject.id}`, projectFocusIncludeConsoleSessions: true },
-    description: "The headings count zero live sessions and ten archived parents, all shown without View all; the Show all project sessions switch is absent even when its saved preference is on. Compact archive rows end in a localized relative archive time, including the archived lead with its recorded context size and the session with zero context; hover a time to see both dates written out. Bound archived session 8 has no recorded archive time, so its row leaves the time out. Hover or focus Unused archived draft to see its Delete shortcut before the menu: it has no conversation, so it deletes and moves any native records to the Trash without confirmation, while used rows have only their menu, where Delete still asks. Delete the unused draft or reopen a row, then archive it again: the remaining rows slide into place.",
+    description: "The headings count zero live sessions and ten archived parents, all shown without View all; the Show all project sessions switch is absent even when its saved preference is on. Compact archive rows end in a localized relative archive time, including the archived coordinator with its recorded context size and the session with zero context; hover a time to see both dates written out. Bound archived session 8 has no recorded archive time, so its row leaves the time out. Hover or focus Unused archived draft to see its Delete shortcut before the menu: it has no conversation, so it deletes and moves any native records to the Trash without confirmation, while used rows have only their menu, where Delete still asks. Delete the unused draft or reopen a row, then archive it again: the remaining rows slide into place.",
   },
   {
     id: "focus-archived-session-menu",
@@ -596,7 +596,7 @@ export const focusScenarios: Scenario[] = [
     state: archivePreviewTen,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
     description: "The headings count zero live sessions and ten directly bound archived parents, all shown without View all. The menu offers Reopen, Copy session ID and a destructive Delete after a divider; there is no Hand off. Processes is a right-panel toggle rather than a session-menu entry. Copy session ID shows the ID beneath its label inside the same item, directly after Reopen. Used archived rows have no Delete shortcut, because deleting needs confirmation. Archived rows have no lock controls. Reopen selects the session and moves it from Archived to Sessions.",
-    steps: [(ui) => ui.press(ui.t("sidebar.session.actions", { title: previewLead.title }))],
+    steps: [(ui) => ui.press(ui.t("sidebar.session.actions", { title: previewCoordinator.title }))],
   },
   {
     id: "focus-project-archive-overflow",
@@ -606,7 +606,7 @@ export const focusScenarios: Scenario[] = [
     state: projectArchivePreviewEleven,
     sessionRecords: { "s-preview-2": "absent" },
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${emptyProject.id}` },
-    description: "The heading counts thirteen archived sessions: eleven parents and two hidden children. Ten parent rows precede View all, and the archived lead's children appear only in the full archive. Delete the unused draft to bring the eleventh parent into the preview; View all remains while archived children are hidden.",
+    description: "The heading counts thirteen archived sessions: eleven parents and two hidden children. Ten parent rows precede View all, and the archived coordinator's children appear only in the full archive. Delete the unused draft to bring the eleventh parent into the preview; View all remains while archived children are hidden.",
   },
   {
     id: "focus-console-archive-overflow",
@@ -615,7 +615,7 @@ export const focusScenarios: Scenario[] = [
     title: "Console archive preview, eleven parents with children",
     state: archivePreviewEleven,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
-    description: "The heading counts thirteen bound archived sessions, two of them hidden children. Only ten of the eleven parent rows appear before View all; the full archive keeps children under their archived lead.",
+    description: "The heading counts thirteen bound archived sessions, two of them hidden children. Only ten of the eleven parent rows appear before View all; the full archive keeps children under their archived coordinator.",
   },
   {
     id: "focus-project-empty",

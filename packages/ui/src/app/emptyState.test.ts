@@ -31,9 +31,9 @@ it.each([
 });
 
 it("project focus creates an unbound session even when another owner's team is live", () => {
-  const lead = { ...live, bound_to: owner.id };
-  const child = sessionOf("child", console.id, project.id, "Child", "working", { bound_to: lead.id });
-  expect(terminalEmptyState(true, console, { project }, [project], [archive, owner, lead, child], pending, null))
+  const coordinator = { ...live, bound_to: owner.id };
+  const child = sessionOf("child", console.id, project.id, "Child", "working", { bound_to: coordinator.id });
+  expect(terminalEmptyState(true, console, { project }, [project], [archive, owner, coordinator, child], pending, null))
     .toEqual({ kind: "new-session", project, binding: { kind: "unbound" } });
   expect(terminalEmptyState(true, console, { project }, [project], [live], pending, null)).toBeUndefined();
 });

@@ -158,7 +158,7 @@ fn page_title(html: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use crate::mcp::dispatch::call;
-    use crate::mcp::test_support::{arguments, lead_state, peer_state};
+    use crate::mcp::test_support::{arguments, bound_coordinator_state, peer_state};
     use crate::protocol::{Event, OrchestrationRole};
     use serde_json::{json, Map};
 
@@ -268,7 +268,7 @@ mod tests {
     /// of the three tools.
     #[tokio::test]
     async fn only_a_project_session_facing_the_user_has_the_page_tools() {
-        let (state, _dir) = lead_state("peer-project-pages");
+        let (state, _dir) = bound_coordinator_state("peer-project-pages");
         let page = |caller: &'static str, html: &'static str| {
             let state = state.clone();
             async move {
@@ -426,9 +426,14 @@ mod tests {
         assert!(events.try_recv().is_err(), "no page was announced");
 
         // A coordinator with a parent is bound too, and keeps its pages.
-        let (state, _dir) = lead_state("peer-push-lead");
-        let lead = state.session_record("starter").unwrap();
-        super::show_page(&state, &lead, &arguments(json!({ "html": "<p>x</p>" }))).unwrap();
+        let (state, _dir) = bound_coordinator_state("peer-push-coordinator");
+        let coordinator = state.session_record("starter").unwrap();
+        super::show_page(
+            &state,
+            &coordinator,
+            &arguments(json!({ "html": "<p>x</p>" })),
+        )
+        .unwrap();
         assert_eq!(state.store.list_pages("starter").unwrap().len(), 1);
     }
 
@@ -436,7 +441,7 @@ mod tests {
     /// no other: those of a coordinator with a parent and of an unbound session stay.
     #[test]
     fn the_start_sweep_withdraws_the_pages_left_on_bound_sessions() {
-        let (state, _dir) = lead_state("peer-sweep-pages");
+        let (state, _dir) = bound_coordinator_state("peer-sweep-pages");
         // `starter` is a coordinator with a parent, `mine` is bound to it, `other-project` is
         // unbound.
         for (id, session) in [

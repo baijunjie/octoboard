@@ -964,11 +964,11 @@ mod tests {
     async fn a_session_told_of_a_new_parent_or_a_release_is_told_its_role_word_for_word() {
         let (state, _dir, _hub) = team_state(
             "owner-notice-role-words",
-            &[("lead", "hub", true, SessionStatus::Interrupted)],
+            &[("coordinator", "hub", true, SessionStatus::Interrupted)],
         );
-        let lead = state.session_record("lead").unwrap();
+        let coordinator = state.session_record("coordinator").unwrap();
         assert_eq!(
-            owner_notice(&state, &lead).unwrap(),
+            owner_notice(&state, &coordinator).unwrap(),
             "Message from Octoboard: your parent session has changed while you were not running. \
              The console session `hub` (\"hub\") is your parent session from now on: take work \
              only from it, or from the user typing in this terminal, and report to it with \
@@ -978,7 +978,7 @@ mod tests {
         );
         let released = Session {
             bound_to: None,
-            ..lead
+            ..coordinator
         };
         let text = released_text(&released, None);
         assert!(

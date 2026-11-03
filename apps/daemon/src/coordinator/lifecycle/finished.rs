@@ -131,7 +131,7 @@ impl Unfinished {
 /// coordinator with different advice from the caller's direct sessions.
 fn unarchived_refusal(caller: Agent, caller_id: &str, unarchived: &[Session]) -> String {
     let archive_session = qualified_tool_name(caller, "archive_session");
-    let (direct, under_leads): (Vec<&Session>, Vec<&Session>) = unarchived
+    let (direct, under_coordinators): (Vec<&Session>, Vec<&Session>) = unarchived
         .iter()
         .partition(|session| session.bound_to.as_deref() == Some(caller_id));
     let mut advice = Vec::new();
@@ -142,22 +142,22 @@ fn unarchived_refusal(caller: Agent, caller_id: &str, unarchived: &[Session]) ->
             session_labels(direct)
         ));
     }
-    let mut leads: Vec<&str> = under_leads
+    let mut coordinators: Vec<&str> = under_coordinators
         .iter()
         .filter_map(|session| session.bound_to.as_deref())
         .collect();
-    leads.sort_unstable();
-    leads.dedup();
-    for lead in leads {
+    coordinators.sort_unstable();
+    coordinators.dedup();
+    for coordinator in coordinators {
         let named = session_labels(
-            under_leads
+            under_coordinators
                 .iter()
                 .copied()
-                .filter(|session| session.bound_to.as_deref() == Some(lead)),
+                .filter(|session| session.bound_to.as_deref() == Some(coordinator)),
         );
         advice.push(format!(
-            "{named} under the project coordinator `{lead}`: not yours to archive; wait for the \
-             coordinator to finish them (its `done` report archives it), or archive `{lead}` with \
+            "{named} under the project coordinator `{coordinator}`: not yours to archive; wait for the \
+             coordinator to finish them (its `done` report archives it), or archive `{coordinator}` with \
              `{archive_session}`, which takes along its sessions that have no process running and \
              is refused while any has one"
         ));

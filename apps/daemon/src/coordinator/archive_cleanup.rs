@@ -353,7 +353,7 @@ mod tests {
             }
         }
 
-        /// An archived console session of the account, which is what a lead session binds to.
+        /// An archived console session of the account, which is what a bound coordinator binds to.
         fn console_session(&self, id: &str) -> Session {
             Session {
                 role: Role::Console,
@@ -363,7 +363,7 @@ mod tests {
         }
 
         /// A coordinator under the console session `hub`.
-        fn lead(&self, id: &str, hub: &str) -> Session {
+        fn coordinator(&self, id: &str, hub: &str) -> Session {
             Session {
                 orchestration_role: OrchestrationRole::Coordinator,
                 ..self.session(id, Some(hub))
@@ -495,7 +495,7 @@ mod tests {
     }
 
     /// A group goes whole or not at all, and the sessions of every member go to the Trash. The
-    /// hubs are console sessions, as a lead session binds to one in practice.
+    /// hubs are console sessions, as a bound coordinator binds to one in practice.
     #[tokio::test]
     async fn the_cleanup_deletes_a_group_only_when_every_member_is_unresumable() {
         use SessionStatus::{Idle, Interrupted};
@@ -504,20 +504,20 @@ mod tests {
         let sessions = [
             // Wholly unresumable, over two levels.
             account.console_session("dead-hub"),
-            account.lead("dead-lead", "dead-hub"),
-            account.session("dead-leaf", Some("dead-lead")),
+            account.coordinator("dead-coordinator", "dead-hub"),
+            account.session("dead-leaf", Some("dead-coordinator")),
             // The only member that keeps a two-level group is the leaf: resumable, unknown, pinned.
             account.console_session("live-hub"),
-            account.lead("live-lead", "live-hub"),
-            account.session("live-leaf", Some("live-lead")),
+            account.coordinator("live-coordinator", "live-hub"),
+            account.session("live-leaf", Some("live-coordinator")),
             account.console_session("unk-hub"),
-            account.lead("unk-lead", "unk-hub"),
-            grok(account.session("unk-leaf", Some("unk-lead"))),
+            account.coordinator("unk-coordinator", "unk-hub"),
+            grok(account.session("unk-leaf", Some("unk-coordinator"))),
             account.console_session("pin-hub"),
-            account.lead("pin-lead", "pin-hub"),
+            account.coordinator("pin-coordinator", "pin-hub"),
             Session {
                 pinned: true,
-                ..account.session("pin-leaf", Some("pin-lead"))
+                ..account.session("pin-leaf", Some("pin-coordinator"))
             },
             // A resumable member keeps the owner and the unresumable member beside it.
             account.console_session("mixed-hub"),
@@ -536,11 +536,11 @@ mod tests {
                 account.session("open-member", Some("open-hub")),
             ),
             account.console_session("open2-hub"),
-            account.lead("open2-lead", "open2-hub"),
-            with(Idle, account.session("open2-leaf", Some("open2-lead"))),
-            // The owner is not archived: a lead session is the root of its own group.
+            account.coordinator("op2-coordinator", "open2-hub"),
+            with(Idle, account.session("open2-leaf", Some("op2-coordinator"))),
+            // The owner is not archived: a bound coordinator is the root of its own group.
             with(Idle, account.console_session("running-hub")),
-            account.lead("dead-root", "running-hub"),
+            account.coordinator("dead-root", "running-hub"),
             account.session("dead-root-leaf", Some("dead-root")),
             // And a bound session goes alone.
             account.session("dead-bound", Some("running-hub")),
@@ -548,8 +548,8 @@ mod tests {
         // Each session that would go leaves a folder only the Trash can take.
         let gone = [
             "dead-bound",
+            "dead-coordinator",
             "dead-hub",
-            "dead-lead",
             "dead-leaf",
             "dead-root",
             "dead-root-leaf",

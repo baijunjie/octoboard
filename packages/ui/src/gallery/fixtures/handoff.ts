@@ -8,15 +8,15 @@ const { console: console_, web, api, consoleSession: hub } = SAMPLE;
 
 // A project session that sits under the hub and takes the whole place along: it owns three sessions,
 // one of them archived, and is responsible for two branches, one of them checked out in a worktree.
-const lead = sessionOf("s-handoff-lead", console_.id, web.id, "Rework the result ranking", "idle", { bound_to: hub.id, started_at: minutesAgo(50) });
+const coordinator = sessionOf("s-handoff-coordinator", console_.id, web.id, "Rework the result ranking", "idle", { bound_to: hub.id, started_at: minutesAgo(50) });
 const owned = [
-  sessionOf("s-handoff-owned-1", console_.id, web.id, "Tidy the changelog", "waiting_user", { bound_to: lead.id, started_at: minutesAgo(40) }),
-  sessionOf("s-handoff-owned-2", console_.id, api.id, "Update the search fixtures", "idle", { bound_to: lead.id, started_at: minutesAgo(35) }),
-  sessionOf("s-handoff-owned-old", console_.id, web.id, "Earlier ranking experiment", "archived", { bound_to: lead.id, started_at: minutesAgo(120) }),
+  sessionOf("s-handoff-owned-1", console_.id, web.id, "Tidy the changelog", "waiting_user", { bound_to: coordinator.id, started_at: minutesAgo(40) }),
+  sessionOf("s-handoff-owned-2", console_.id, api.id, "Update the search fixtures", "idle", { bound_to: coordinator.id, started_at: minutesAgo(35) }),
+  sessionOf("s-handoff-owned-old", console_.id, web.id, "Earlier ranking experiment", "archived", { bound_to: coordinator.id, started_at: minutesAgo(120) }),
 ];
 // A project session bound to no one that owns none and is responsible for no branch: nothing moves.
 const bare = sessionOf("s-handoff-bare", console_.id, api.id, "Add idempotency keys", "waiting_user", { started_at: minutesAgo(30) });
-// What the hub owns besides the lead: a live session and an archived one.
+// What the hub owns besides the coordinator: a live session and an archived one.
 const sibling = sessionOf("s-handoff-sibling", console_.id, web.id, "Update the dependencies", "idle", { bound_to: hub.id, started_at: minutesAgo(45) });
 // A bound session the menu cannot hand off now, though it can still be unbound.
 const working = sessionOf("s-handoff-working", console_.id, web.id, "Fix the summary layout", "working", { bound_to: sibling.id, started_at: minutesAgo(20) });
@@ -41,7 +41,7 @@ const settings = {
 const state = snapshotState({
   consoles: [console_],
   projects: [web, api],
-  sessions: [hub, lead, ...owned, ...hubOwned, bare, working],
+  sessions: [hub, coordinator, ...owned, ...hubOwned, bare, working],
   settings,
 });
 
@@ -50,7 +50,7 @@ const received = sessionOf("s-handoff-received", console_.id, api.id, "Add idemp
 const receivedState = snapshotState({
   consoles: [console_],
   projects: [web, api],
-  sessions: [hub, lead, ...owned, ...hubOwned, bare, working, received],
+  sessions: [hub, coordinator, ...owned, ...hubOwned, bare, working, received],
   settings,
 });
 
@@ -60,7 +60,7 @@ const locked = sessionOf("s-handoff-locked", console_.id, api.id, "Review the ra
 const lockedState = snapshotState({
   consoles: [console_],
   projects: [web, api],
-  sessions: [hub, lead, ...owned, ...hubOwned, bare, working, locked],
+  sessions: [hub, coordinator, ...owned, ...hubOwned, bare, working, locked],
   settings,
 });
 
@@ -68,14 +68,14 @@ const lockedState = snapshotState({
 const startingState = snapshotState({
   consoles: [console_],
   projects: [web, api],
-  sessions: [hub, lead, ...owned, ...hubOwned, bare, working, starting],
+  sessions: [hub, coordinator, ...owned, ...hubOwned, bare, working, starting],
   settings,
 });
 
 // A bound session and its owner whose titles run to paragraphs, as a pasted brief does: the unbind confirmation
 // names each of them once, and the chips have to wrap inside the dialog.
-const longLead = sessionOf(
-  "s-unbind-long-lead",
+const longCoordinator = sessionOf(
+  "s-unbind-long-coordinator",
   console_.id,
   web.id,
   "Rework the result ranking so that exact title matches outrank fuzzy body matches and then re-tune the recency decay and add the per-project boost described in the planning notes and update every search fixture and snapshot that the new ordering changes",
@@ -87,7 +87,7 @@ const longHub = {
   title:
     "Release coordinator for the search overhaul that keeps the ranking and indexing and autocomplete work in step and hands the finished branches to review one at a time and reports anything that blocks the Friday cut",
 };
-const longTitleState = snapshotState({ consoles: [console_], projects: [web, api], sessions: [longHub, longLead], settings });
+const longTitleState = snapshotState({ consoles: [console_], projects: [web, api], sessions: [longHub, longCoordinator], settings });
 
 const GROUP = "Sidebar sessions";
 
@@ -103,9 +103,9 @@ const openUnbind = (title: string) => [
 // The dialog's confirming button, pressed once the dialog is up.
 const confirmHandoff = (title: string) => [...openHandoff(title), (ui: Ui) => ui.confirm()];
 
-const leadBranches = [
-  branchItemOf(web, lead, "feat/ranking-rework"),
-  worktreeItemOf(web, lead, "feat/ranking-weights", "/Users/dev/worktrees/website-ranking-weights"),
+const coordinatorBranches = [
+  branchItemOf(web, coordinator, "feat/ranking-rework"),
+  worktreeItemOf(web, coordinator, "feat/ranking-weights", "/Users/dev/worktrees/website-ranking-weights"),
 ];
 
 export const handoffScenarios: Scenario[] = [
@@ -116,7 +116,7 @@ export const handoffScenarios: Scenario[] = [
     title: "Menu of an idle project session, Hand off offered",
     description: "Three dividers separate Lock and Pin, Rename and Copy session ID, account and binding actions, and Archive, with no group headings. Copy session ID stays directly after Rename, with the ID in smaller muted monospace text beneath its label inside the same clickable item. Change model, with a chip icon, is enabled and leads that group, directly before Hand off. Hand off, which is enabled, has Unbind directly after it, before the divider and Archive; Unbind is offered because Hub owns the session. Unbind opens a confirmation first (see the Unbind session dialog); the session keeps its binding badge, the dot in Hub's colour, until that is confirmed.",
     state,
-    steps: [openMenu(lead.title)],
+    steps: [openMenu(coordinator.title)],
   },
   {
     id: "sidebar-session-menu-unbound",
@@ -161,8 +161,8 @@ export const handoffScenarios: Scenario[] = [
     title: "Hand off a project session with everything that moves",
     description: "All three lines of Moves to the new session: two branches, three sessions (archived ones counted) and the place under Hub. The Hand off to field opens on Codex, the first other agent, and offers its three accounts in one picker beside the agent. Model and effort follow the project.",
     state,
-    sessionBranches: leadBranches,
-    steps: openHandoff(lead.title),
+    sessionBranches: coordinatorBranches,
+    steps: openHandoff(coordinator.title),
   },
   {
     id: "dialog-handoff-console-session",
@@ -181,7 +181,7 @@ export const handoffScenarios: Scenario[] = [
     description: "Checking which branches it is responsible for… stands among the lines already known, the sessions and the place under Hub. The branch line joins them once the inspection answers.",
     state,
     sessionBranches: "pending",
-    steps: openHandoff(lead.title),
+    steps: openHandoff(coordinator.title),
   },
   {
     id: "dialog-handoff-branches-failed",
@@ -191,7 +191,7 @@ export const handoffScenarios: Scenario[] = [
     description: "A small danger mark sits right after the \"Moves to the new session\" heading; there is no Alert under the list. The sessions and the place under Hub are listed as usual, and the failure is not read as none, so there is no Nothing line.",
     state,
     sessionBranches: { code: "internal_error", params: { detail: "git could not be run" }, message: "git could not be run" },
-    steps: openHandoff(lead.title),
+    steps: openHandoff(coordinator.title),
   },
   {
     id: "dialog-handoff-branches-failed-details",
@@ -201,7 +201,7 @@ export const handoffScenarios: Scenario[] = [
     description: "The danger mark after the heading is hovered, and its popover says \"Could not check which branches it is responsible for.\", then the application's generic sentence about it, the daemon's raw message under that, and Try again.",
     state,
     sessionBranches: { code: "internal_error", params: { detail: "git could not be run" }, message: "git could not be run" },
-    steps: [...openHandoff(lead.title), (ui) => ui.hoverStatusMark(ui.t("dialog.handoff.movesBranchesFailed.mark"))],
+    steps: [...openHandoff(coordinator.title), (ui) => ui.hoverStatusMark(ui.t("dialog.handoff.movesBranchesFailed.mark"))],
   },
   {
     id: "dialog-handoff-no-agent",
@@ -219,7 +219,7 @@ export const handoffScenarios: Scenario[] = [
     title: "Unbind a session from its live owner",
     description: "A warning confirmation titled Unbind session, with the warning icon leading its header, then Cancel and the primary Unbind. Both titles here are paragraph-long, and each appears once, as a chip that wraps inside the dialog: one paragraph that runs on from the first sentence into the next (the session will no longer report to the owner; it will answer only to you; only the session itself can bind to an owner again, the app cannot do it for you), then a separate paragraph of consequences (the owner can no longer instruct it, archive it or give it to another owner, and archiving the owner will not archive it; the two can still send each other messages). All body text is in the foreground colour, none of it muted.",
     state: longTitleState,
-    steps: openUnbind(longLead.title),
+    steps: openUnbind(longCoordinator.title),
   },
   {
     id: "dialog-unbind-session-changing",
@@ -230,10 +230,10 @@ export const handoffScenarios: Scenario[] = [
     state,
     sessionReleaseError: {
       code: "session_changing",
-      params: { session: lead.id },
-      message: `\`${lead.id}\` is being started, resumed, handed off, switched to another account, having its branches transferred or having its owner changed, so its owner cannot change now: look again once that is done`,
+      params: { session: coordinator.id },
+      message: `\`${coordinator.id}\` is being started, resumed, handed off, switched to another account, having its branches transferred or having its owner changed, so its owner cannot change now: look again once that is done`,
     },
-    steps: [...openUnbind(lead.title), (ui) => ui.confirm()],
+    steps: [...openUnbind(coordinator.title), (ui) => ui.confirm()],
   },
   {
     id: "dialog-handoff-pending",

@@ -1,7 +1,7 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { AGENTS } from "../../agents/agents";
 import type { Scenario } from "../scenario";
-import { archiveProject as project, archivedLead, boundArchived, boundConsoleSession, console_, otherConsoleSession, otherOwnerArchived, unboundArchived, underArchivedLead } from "../../fixtures/archiveSessions";
+import { archiveProject as project, archivedCoordinator, boundArchived, boundConsoleSession, console_, otherConsoleSession, otherOwnerArchived, unboundArchived, underArchivedCoordinator } from "../../fixtures/archiveSessions";
 import { accountOf, branchItemOf, contextOf, minutesAgo, projectOf, sessionOf, snapshotState, worktreeItemOf } from "../../fixtures/builders";
 
 const GROUP = "Archive view";
@@ -31,29 +31,29 @@ const state = snapshotState({
   sessions: [sessionOf("s-live", console_.id, project.id, "Live session", "idle"), ...archived, ...consoleSessions],
 });
 
-const liveLead = sessionOf("s-live-lead", console_.id, project.id, "Active lead session", "idle", { bound_to: boundConsoleSession.id });
-const underLiveLead = sessionOf("s-under-live-lead", console_.id, project.id, "Archived child of active lead", "archived", { bound_to: liveLead.id, ended_at: minutesAgo(1) });
+const liveCoordinator = sessionOf("s-live-coordinator", console_.id, project.id, "Active bound coordinator", "idle", { bound_to: boundConsoleSession.id });
+const underLiveCoordinator = sessionOf("s-under-live-coordinator", console_.id, project.id, "Archived child of active coordinator", "archived", { bound_to: liveCoordinator.id, ended_at: minutesAgo(1) });
 
 const boundSessions = [
-  liveLead,
-  underLiveLead,
+  liveCoordinator,
+  underLiveCoordinator,
   boundConsoleSession,
   otherConsoleSession,
   otherOwnerArchived,
   unboundArchived,
   ...boundArchived,
-  archivedLead,
-  ...underArchivedLead,
+  archivedCoordinator,
+  ...underArchivedCoordinator,
 ];
 
-// The same sessions, the second of those under the archived lead session now a Codex session on an
+// The same sessions, the second of those under the archived bound coordinator now a Codex session on an
 // account that has since been removed and recorded no directory: its agent icon falls back to the
 // agent's own name.
 const deleteState = snapshotState({
   consoles: [console_],
   projects: [project],
   sessions: boundSessions.map((session) =>
-    session.id === underArchivedLead[1].id ? { ...session, agent: "codex" as const, account_id: "a-removed" } : session,
+    session.id === underArchivedCoordinator[1].id ? { ...session, agent: "codex" as const, account_id: "a-removed" } : session,
   ),
 });
 
@@ -125,22 +125,22 @@ const deleteBoundSessions: Scenario = {
   id: "archive-delete-bound-sessions",
   group: GROUP,
   category: "normal",
-  title: "Delete an archived lead session",
+  title: "Delete an archived bound coordinator",
   state: archiveState,
-  sessionRecords: Object.fromEntries([...archiveState.sessions.keys()].map((id) => [id, id === underArchivedLead[0].id ? "present" as const : "absent" as const])),
+  sessionRecords: Object.fromEntries([...archiveState.sessions.keys()].map((id) => [id, id === underArchivedCoordinator[0].id ? "present" as const : "absent" as const])),
   preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${boundConsoleSession.id}` },
   description: "A warning modal (warning icon in the header, the plain title Delete session) whose body opens with the sentence naming the session, then says the project's files are kept. Native files exist for a child, so the agent-records Trash option stays, unchecked, with a short note, under two plain options with closed Details: \"Also force-remove the worktrees and branches Git keeps (2)\" for an uncommitted worktree and an unmerged branch, and \"Also delete the locked worktrees (4)\", each unchecked. Under the options the plain line \"2 archived sessions under it are deleted with it\" heads the list of both archived children, with no consequence line yet. The confirming button reads \"Delete\" until an option is ticked.",
   sessionBranches: [
-    worktreeItemOf(boundProject, underArchivedLead[0], "feat/pagination", "/Users/dev/worktrees/search-api-pagination"),
-    branchItemOf(boundProject, archivedLead, "release/retry-policy"),
-    worktreeItemOf(boundProject, underArchivedLead[0], "feat/ranking", "/Users/dev/worktrees/search-api-ranking", "locked"),
-    worktreeItemOf(boundProject, underArchivedLead[1], "feat/synonyms", "/Users/dev/worktrees/search-api-synonyms", "locked", true),
-    worktreeItemOf(boundProject, underArchivedLead[1], null, "/Users/dev/worktrees/search-api-spike", "locked"),
-    worktreeItemOf(boundProject, archivedLead, null, "/Users/dev/worktrees/search-api-profiling", "locked", true),
+    worktreeItemOf(boundProject, underArchivedCoordinator[0], "feat/pagination", "/Users/dev/worktrees/search-api-pagination"),
+    branchItemOf(boundProject, archivedCoordinator, "release/retry-policy"),
+    worktreeItemOf(boundProject, underArchivedCoordinator[0], "feat/ranking", "/Users/dev/worktrees/search-api-ranking", "locked"),
+    worktreeItemOf(boundProject, underArchivedCoordinator[1], "feat/synonyms", "/Users/dev/worktrees/search-api-synonyms", "locked", true),
+    worktreeItemOf(boundProject, underArchivedCoordinator[1], null, "/Users/dev/worktrees/search-api-spike", "locked"),
+    worktreeItemOf(boundProject, archivedCoordinator, null, "/Users/dev/worktrees/search-api-profiling", "locked", true),
   ],
   steps: [
     (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
-    (ui) => ui.press((name) => name === ui.t("archive.delete", { title: archivedLead.title })),
+    (ui) => ui.press((name) => name === ui.t("archive.delete", { title: archivedCoordinator.title })),
   ],
 };
 
@@ -171,7 +171,7 @@ export const archiveScenarios: Scenario[] = [
     category: "normal",
     title: "Project archive menu, ten newest",
     state: longArchiveState,
-    description: "The menu lists the ten newest of thirteen archived rows, with their last active task titles, then View all; the three oldest are left to the full archive. Each item ends in a localized relative archive time, including sessions with a recorded context size; hovering the time writes out both dates (see the archived row's date tooltip in Focus mode). The archived child of the active lead is listed on its own, while the two children of the archived lead stay out. Long archived names fade at the menu edge and run as a marquee when their row is hovered.",
+    description: "The menu lists the ten newest of thirteen archived rows, with their last active task titles, then View all; the three oldest are left to the full archive. Each item ends in a localized relative archive time, including sessions with a recorded context size; hovering the time writes out both dates (see the archived row's date tooltip in Focus mode). The archived child of the active coordinator is listed on its own, while the two children of the archived coordinator stay out. Long archived names fade at the menu edge and run as a marquee when their row is hovered.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: boundProject.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),
@@ -183,12 +183,12 @@ export const archiveScenarios: Scenario[] = [
     category: "normal",
     title: "Project archive with live and archived owners",
     state: archiveState,
-    description: "The full archive shows each last active task title beside the original session name, the archived lead's children nested under it and the archived child of the active lead as a standalone row. A compact-size badge follows the agent name, hidden for a zero or absent size, and led by a small ring of the share used where the agent reported a window (the archived lead session, selected, on the selected row's background); hover a badge for its Context window card with the meter at 65% in warning; only dates sit on the right, archived above created. Each row is a button. Hover or Tab to it to compare its background and focus ring with the Reopen and Delete fills. The archived lead is the selected session. Pressing another row closes the archive and shows that session's history. Delete an entry or a nested child to watch the rows slide into place, then close the archive and reopen it through the project menu to review both transitions.",
+    description: "The full archive shows each last active task title beside the original session name, the archived coordinator's children nested under it and the archived child of the active coordinator as a standalone row. A compact-size badge follows the agent name, hidden for a zero or absent size, and led by a small ring of the share used where the agent reported a window (the archived bound coordinator, selected, on the selected row's background); hover a badge for its Context window card with the meter at 65% in warning; only dates sit on the right, archived above created. Each row is a button. Hover or Tab to it to compare its background and focus ring with the Reopen and Delete fills. The archived coordinator is the selected session. Pressing another row closes the archive and shows that session's history. Delete an entry or a nested child to watch the rows slide into place, then close the archive and reopen it through the project menu to review both transitions.",
     steps: [
-      // Selecting the archived lead from the menu, then opening the full archive, marks its row.
+      // Selecting the archived coordinator from the menu, then opening the full archive, marks its row.
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: boundProject.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),
-      (ui) => ui.press((name) => name.startsWith(archivedLead.title)),
+      (ui) => ui.press((name) => name.startsWith(archivedCoordinator.title)),
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: boundProject.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),
       (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
@@ -247,8 +247,8 @@ export const archiveScenarios: Scenario[] = [
     id: "archive-bound-sessions",
     group: GROUP,
     category: "normal",
-    title: "Bound archive with nested lead sessions",
-    description: "The full console-session archive retains the archived lead and its nested children. The archived child of the active project lead belongs to that project's archive.",
+    title: "Bound archive with nested bound coordinators",
+    description: "The full console-session archive retains the archived coordinator and its nested children. The archived child of the active project coordinator belongs to that project's archive.",
     state: archiveState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${boundConsoleSession.id}` },
     steps: [
@@ -259,7 +259,7 @@ export const archiveScenarios: Scenario[] = [
   {
     ...deleteBoundSessions,
     id: "archive-delete-bound-sessions-ticked",
-    title: "Delete an archived lead session, every option ticked",
+    title: "Delete an archived bound coordinator, every option ticked",
     description: "All three options are ticked and the two Details disclosures opened: the force-remove list (the uncommitted worktree and the unmerged branch), the locked worktrees in each wording, and the agent-records Trash option. The dialog scrolls, so look at its bottom: under the options the line \"2 archived sessions under it are deleted with it\" heads the list of both archived children first and, under it, a consequence line as plain text for each ticked option, among them that the agent's records of this session and of the sessions deleted with it are moved to the Trash. The confirming button reads \"Delete all\" because options are ticked. The opened lists sit on a light grey panel, and each worktree has a folder icon before its path and a branch icon on the line below, with both icon and text columns aligned. Wrapped paths stay indented to the text column, and detached HEAD notes start in that same column.",
     steps: [
       ...deleteBoundSessions.steps!,
@@ -277,10 +277,10 @@ export const archiveScenarios: Scenario[] = [
     state: archiveState,
     sessionRecords: Object.fromEntries([...archiveState.sessions.keys()].map((id) => [id, "absent" as const])),
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${boundConsoleSession.id}` },
-    description: "The used archived lead still requires confirmation: under the sentence naming it, the plain line \"2 archived sessions under it are deleted with it\" heads the list of its two archived children. No native files exist for any of them, so the Trash checkbox and hint are absent.",
+    description: "The used archived coordinator still requires confirmation: under the sentence naming it, the plain line \"2 archived sessions under it are deleted with it\" heads the list of its two archived children. No native files exist for any of them, so the Trash checkbox and hint are absent.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
-      (ui) => ui.press((name) => name === ui.t("archive.delete", { title: archivedLead.title })),
+      (ui) => ui.press((name) => name === ui.t("archive.delete", { title: archivedCoordinator.title })),
     ],
   },
   {
@@ -289,12 +289,12 @@ export const archiveScenarios: Scenario[] = [
     title: "Delete an archived session with none under it, options ticked",
     description: "Nothing is deleted along with the session, so there is no list and no heading: the consequence lines for the two ticked options (the force-remove option and the agent-records Trash option, Details closed) stand as plain text under the options.",
     sessionBranches: [
-      worktreeItemOf(boundProject, underArchivedLead[0], "feat/pagination", "/Users/dev/worktrees/search-api-pagination"),
-      branchItemOf(boundProject, underArchivedLead[0], "release/retry-policy"),
+      worktreeItemOf(boundProject, underArchivedCoordinator[0], "feat/pagination", "/Users/dev/worktrees/search-api-pagination"),
+      branchItemOf(boundProject, underArchivedCoordinator[0], "release/retry-policy"),
     ],
     steps: [
       (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
-      (ui) => ui.press((name) => name === ui.t("archive.delete", { title: underArchivedLead[0].title })),
+      (ui) => ui.press((name) => name === ui.t("archive.delete", { title: underArchivedCoordinator[0].title })),
       (ui) => ui.press(ui.t("dialog.sessionBranches.force", { count: 2 })),
       (ui) => ui.press(ui.t("dialog.deleteSession.trashRecords")),
     ],

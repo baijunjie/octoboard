@@ -164,7 +164,7 @@ pub(in crate::mcp) async fn archive_self(state: &Arc<AppState>, caller: &Session
 mod tests {
     use crate::mcp::dispatch::call;
     use crate::mcp::test_support::{
-        arguments, lead_state, peer_state, project_session, with_status, RepoState,
+        arguments, bound_coordinator_state, peer_state, project_session, with_status, RepoState,
     };
     use crate::protocol::{Agent, OrchestrationRole, Session, SessionStatus};
     use crate::session_tools::catalogue::qualified_tool_name;
@@ -187,12 +187,13 @@ mod tests {
     #[tokio::test]
     async fn a_session_with_an_unarchived_session_under_it_cannot_archive_itself() {
         let (peers, _peers_dir) = peer_state("archive-self-unarchived-peer");
-        let (leads, _leads_dir) = lead_state("archive-self-unarchived-lead");
+        let (coordinators, _coordinators_dir) =
+            bound_coordinator_state("archive-self-unarchived-coordinator");
         // `a` owns `of-a` and the project coordinator `starter`, which owns `mine`: the other two
         // are archived, so `mine` is what is named.
-        with_status(&leads, "of-a", SessionStatus::Archived);
-        with_status(&leads, "starter", SessionStatus::Archived);
-        for (state, caller) in [(&peers, "starter"), (&leads, "a")] {
+        with_status(&coordinators, "of-a", SessionStatus::Archived);
+        with_status(&coordinators, "starter", SessionStatus::Archived);
+        for (state, caller) in [(&peers, "starter"), (&coordinators, "a")] {
             for status in [SessionStatus::Idle, SessionStatus::Interrupted] {
                 with_status(state, "mine", status);
                 let message = archive_self_error(state, caller).await;
@@ -223,8 +224,8 @@ mod tests {
     /// reports to its console session and wraps up with `report`, so the call is refused in prose
     /// and changes nothing.
     #[tokio::test]
-    async fn a_lead_session_is_told_to_report_done_instead_of_archiving_itself() {
-        let (state, _dir) = lead_state("archive-self-lead");
+    async fn a_bound_coordinator_is_told_to_report_done_instead_of_archiving_itself() {
+        let (state, _dir) = bound_coordinator_state("archive-self-coordinator");
         // Archived, so that being bound is the only thing that could refuse it.
         with_status(&state, "mine", SessionStatus::Archived);
         let message = archive_self_error(&state, "starter").await;
@@ -324,7 +325,7 @@ mod tests {
             !String::from_utf8_lossy(&out.stdout).trim().is_empty()
         };
         fixture.branch("kept", "kid");
-        fixture.branch("gone", "lead-kid");
+        fixture.branch("gone", "coordinator-kid");
         let archived = call(
             &fixture.state,
             "a",
@@ -342,9 +343,9 @@ mod tests {
 
         let archived = call(
             &fixture.state,
-            "lead",
+            "coordinator",
             "archive_session",
-            &arguments(json!({ "session": "lead-kid" })),
+            &arguments(json!({ "session": "coordinator-kid" })),
         )
         .await
         .unwrap();
@@ -355,8 +356,8 @@ mod tests {
     /// `keep` on a project coordinator leaves its branches and those of the sessions under it,
     /// which are archived with it, and the note says which are not the caller's to name as `from`.
     #[tokio::test]
-    async fn keeping_the_branches_of_an_archived_lead_names_those_of_its_sessions() {
-        let fixture = RepoState::new("archive-keep-lead");
+    async fn keeping_the_branches_of_an_archived_coordinator_names_those_of_its_sessions() {
+        let fixture = RepoState::new("archive-keep-coordinator");
         for (id, owner) in [("mid", "a"), ("mid-kid", "mid"), ("mid-kid-2", "mid")] {
             fixture
                 .state

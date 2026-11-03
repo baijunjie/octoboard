@@ -21,7 +21,7 @@ import type { SidebarHandlers } from "./types";
  * The session a bound one reports to is its `under` when that is the project session listed right
  * above it, otherwise the console session it is bound to, read from the store here, so that a change
  * of another session never renders this row: a console session is drawn as the binding badge in its
- * colour, while a project session — a lead session, or any project session that started this
+ * colour, while a project session — a bound coordinator, or any project session that started this
  * one — is not, since the row is already listed under it; either way the row's own accessible name
  * names it, which is what carries the nesting to assistive technology. Memoised, with `selected` a
  * flag rather than the selected id, so a change of selection renders only the two rows it moves

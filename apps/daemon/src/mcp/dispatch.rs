@@ -170,7 +170,9 @@ async fn dispatch(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mcp::test_support::{arguments, lead_state, peer_state, shared_console_state};
+    use crate::mcp::test_support::{
+        arguments, bound_coordinator_state, peer_state, shared_console_state,
+    };
     use crate::protocol::{Agent, AgentAvailability, Availability};
     use crate::test_support::{output_containing, running};
     use serde_json::json;
@@ -249,8 +251,8 @@ mod tests {
     /// to it, and its `bind_to_session` is refused in prose; a session bound to it still has no
     /// `open_session`.
     #[tokio::test]
-    async fn a_lead_session_keeps_its_tools_and_its_sessions_still_cannot_start_any() {
-        let (state, _dir) = lead_state("lead-tools");
+    async fn a_bound_coordinator_keeps_its_tools_and_its_sessions_still_cannot_start_any() {
+        let (state, _dir) = bound_coordinator_state("coordinator-tools");
         state.set_agent_availability(vec![AgentAvailability {
             agent: Agent::Claude,
             availability: Availability::Unavailable,

@@ -479,14 +479,14 @@ mod tests {
             .insert_session(&session(None))
             .expect("console session");
         store
-            .insert_session(&project_session("lead", None))
-            .expect("lead");
+            .insert_session(&project_session("coordinator", None))
+            .expect("coordinator");
         store
-            .insert_session(&project_session("child", Some("lead")))
+            .insert_session(&project_session("child", Some("coordinator")))
             .expect("child");
         store
             .set_binding(
-                "lead",
+                "coordinator",
                 None,
                 "session-1",
                 OrchestrationRole::Coordinator,
@@ -494,10 +494,10 @@ mod tests {
                 false,
             )
             .expect("binding")
-            .expect("lead bound");
+            .expect("coordinator bound");
 
         assert!(store
-            .clear_binding("lead", "elsewhere", false, None)
+            .clear_binding("coordinator", "elsewhere", false, None)
             .unwrap()
             .is_none());
         assert!(store
@@ -505,7 +505,7 @@ mod tests {
             .unwrap()
             .is_none());
         let cleared = store
-            .clear_binding("lead", "session-1", true, Some("good luck"))
+            .clear_binding("coordinator", "session-1", true, Some("good luck"))
             .unwrap()
             .expect("cleared");
         assert_eq!(
@@ -513,16 +513,16 @@ mod tests {
             (None, OrchestrationRole::Coordinator)
         );
         // The mark lands with the change, and only with a change that landed.
-        assert_eq!(store.owner_notice_pending("lead").unwrap(), 1);
+        assert_eq!(store.owner_notice_pending("coordinator").unwrap(), 1);
         assert_eq!(store.owner_notice_pending("child").unwrap(), 0);
         // The parting note is kept with the mark, for the release that is still the latest change.
         assert_eq!(
-            store.owner_notice_note("lead").unwrap().as_deref(),
+            store.owner_notice_note("coordinator").unwrap().as_deref(),
             Some("good luck")
         );
         store
             .set_binding(
-                "lead",
+                "coordinator",
                 None,
                 "session-1",
                 OrchestrationRole::Worker,
@@ -531,23 +531,23 @@ mod tests {
             )
             .unwrap()
             .expect("bound again");
-        assert_eq!(store.owner_notice_pending("lead").unwrap(), 2);
-        assert_eq!(store.owner_notice_note("lead").unwrap(), None);
+        assert_eq!(store.owner_notice_pending("coordinator").unwrap(), 2);
+        assert_eq!(store.owner_notice_note("coordinator").unwrap(), None);
         // A release with nobody to be told keeps no note.
         assert!(store
-            .clear_binding("lead", "session-1", false, Some("dropped"))
+            .clear_binding("coordinator", "session-1", false, Some("dropped"))
             .unwrap()
             .is_some());
-        assert_eq!(store.owner_notice_note("lead").unwrap(), None);
+        assert_eq!(store.owner_notice_note("coordinator").unwrap(), None);
         assert!(store
-            .clear_binding("lead", "session-1", true, Some("good luck"))
+            .clear_binding("coordinator", "session-1", true, Some("good luck"))
             .unwrap()
             .is_none());
-        assert_eq!(store.owner_notice_pending("lead").unwrap(), 2);
+        assert_eq!(store.owner_notice_pending("coordinator").unwrap(), 2);
         // The note goes with the count that delivered it, and stays with a newer mark.
         store
             .set_binding(
-                "lead",
+                "coordinator",
                 None,
                 "session-1",
                 OrchestrationRole::Worker,
@@ -557,23 +557,25 @@ mod tests {
             .unwrap()
             .expect("bound once more");
         store
-            .clear_binding("lead", "session-1", true, Some("good luck"))
+            .clear_binding("coordinator", "session-1", true, Some("good luck"))
             .unwrap()
             .expect("released again");
-        store.clear_owner_notice("lead", 2).unwrap();
-        assert_eq!(store.owner_notice_pending("lead").unwrap(), 3);
-        assert!(store.owner_notice_note("lead").unwrap().is_some());
-        store.clear_owner_notice("lead", 3).unwrap();
-        assert_eq!(store.owner_notice_note("lead").unwrap(), None);
+        store.clear_owner_notice("coordinator", 2).unwrap();
+        assert_eq!(store.owner_notice_pending("coordinator").unwrap(), 3);
+        assert!(store.owner_notice_note("coordinator").unwrap().is_some());
+        store.clear_owner_notice("coordinator", 3).unwrap();
+        assert_eq!(store.owner_notice_note("coordinator").unwrap(), None);
         // A failed write to a running session marks the notice with the note, while unbound only.
-        store.mark_owner_notice_with_note("lead", "kept").unwrap();
+        store
+            .mark_owner_notice_with_note("coordinator", "kept")
+            .unwrap();
         assert_eq!(
-            store.owner_notice_note("lead").unwrap().as_deref(),
+            store.owner_notice_note("coordinator").unwrap().as_deref(),
             Some("kept")
         );
         store
             .set_binding(
-                "lead",
+                "coordinator",
                 None,
                 "session-1",
                 OrchestrationRole::Worker,
@@ -582,13 +584,15 @@ mod tests {
             )
             .unwrap()
             .expect("bound again");
-        store.mark_owner_notice_with_note("lead", "stale").unwrap();
-        assert_eq!(store.owner_notice_note("lead").unwrap(), None);
+        store
+            .mark_owner_notice_with_note("coordinator", "stale")
+            .unwrap();
+        assert_eq!(store.owner_notice_note("coordinator").unwrap(), None);
         let child = store.get_session("child").unwrap().unwrap();
-        assert_eq!(child.bound_to.as_deref(), Some("lead"));
+        assert_eq!(child.bound_to.as_deref(), Some("coordinator"));
         // A console session is never bound, so nothing to clear.
         assert!(store
-            .clear_binding("session-1", "lead", false, None)
+            .clear_binding("session-1", "coordinator", false, None)
             .unwrap()
             .is_none());
     }

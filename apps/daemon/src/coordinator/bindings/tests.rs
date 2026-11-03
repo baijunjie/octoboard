@@ -1,7 +1,7 @@
 use super::*;
 use crate::coordinator::handle;
 use crate::coordinator::test_support::{
-    binding_fixture, bound_session, console, lead_session, no_process_with_conversation,
+    binding_fixture, bound_coordinator, bound_session, console, no_process_with_conversation,
     relaunch_stand_in,
 };
 use crate::mcp;
@@ -116,11 +116,11 @@ fn binding_to_an_invalid_target_is_refused() {
     }
 }
 
-/// An unbound project session or a lead session of the new session's own project may own it.
+/// An unbound project session or a bound coordinator of the new session's own project may own it.
 /// One of another project, or one with the role of a worker, may not — among them a
-/// session bound to a lead session, which would make a third level.
+/// session bound to a bound coordinator, which would make a third level.
 #[test]
-fn a_project_session_binds_only_to_an_unbound_or_lead_session_of_its_own_project() {
+fn a_project_session_binds_only_to_an_unbound_or_bound_coordinator_of_its_own_project() {
     let (state, _dir) = crate::test_support::app_state("coordinator-resolve-bound-to-project");
     state
         .store
@@ -152,7 +152,7 @@ fn a_project_session_binds_only_to_an_unbound_or_lead_session_of_its_own_project
             })
             .unwrap();
     }
-    for (id, project, owner, lead) in [
+    for (id, project, owner, coordinator) in [
         ("starter", "project-1", None, false),
         ("elsewhere", "project-2", None, false),
         (
@@ -161,13 +161,13 @@ fn a_project_session_binds_only_to_an_unbound_or_lead_session_of_its_own_project
             Some("console-session-1"),
             false,
         ),
-        ("lead", "project-1", Some("console-session-1"), true),
-        ("of-lead", "project-1", Some("lead"), false),
+        ("coordinator", "project-1", Some("console-session-1"), true),
+        ("of-coordinator", "project-1", Some("coordinator"), false),
     ] {
         let mut session = bare_session(id, Role::Project);
         session.project_id = Some(project.to_string());
         session.bound_to = owner.map(str::to_string);
-        if owner.is_some() && !lead {
+        if owner.is_some() && !coordinator {
             session.orchestration_role = OrchestrationRole::Worker;
         }
         state.store.insert_session(&session).unwrap();
@@ -183,8 +183,11 @@ fn a_project_session_binds_only_to_an_unbound_or_lead_session_of_its_own_project
     };
 
     assert_eq!(resolve("starter").unwrap(), Some("starter".to_string()));
-    assert_eq!(resolve("lead").unwrap(), Some("lead".to_string()));
-    for target in ["elsewhere", "bound-starter", "of-lead"] {
+    assert_eq!(
+        resolve("coordinator").unwrap(),
+        Some("coordinator".to_string())
+    );
+    for target in ["elsewhere", "bound-starter", "of-coordinator"] {
         let err = resolve(target).expect_err(target);
         let coded = err.downcast_ref::<CodedError>().expect("a coded error");
         assert_eq!(coded.code, error_code::UNKNOWN_SESSION, "{target}");
@@ -192,7 +195,7 @@ fn a_project_session_binds_only_to_an_unbound_or_lead_session_of_its_own_project
 }
 
 /// An unbound project session binds itself to a running console session of its console and
-/// becomes a lead session keeping its own sessions, or, with none of its own, to a running
+/// becomes a bound coordinator keeping its own sessions, or, with none of its own, to a running
 /// project session of its project that can own sessions and becomes an ordinary bound one.
 /// Each refusal names its reason and changes nothing.
 #[tokio::test]
@@ -255,12 +258,15 @@ async fn a_session_binds_itself_only_where_orchestration_stays_two_levels_deep()
         (None, OrchestrationRole::Coordinator)
     );
 
-    let (lead, _) = bind_session(&state, "starter", "hub").unwrap();
+    let (coordinator, _) = bind_session(&state, "starter", "hub").unwrap();
     assert_eq!(
-        (lead.bound_to.as_deref(), lead.orchestration_role),
+        (
+            coordinator.bound_to.as_deref(),
+            coordinator.orchestration_role
+        ),
         (Some("hub"), OrchestrationRole::Coordinator)
     );
-    assert!(!lead.is_worker());
+    assert!(!coordinator.is_worker());
     let mine = state.store.get_session("mine").unwrap().unwrap();
     assert_eq!(mine.bound_to.as_deref(), Some("starter"));
 
@@ -274,10 +280,10 @@ async fn a_session_binds_itself_only_where_orchestration_stays_two_levels_deep()
     assert!(again.to_string().contains("already bound"), "{again}");
 }
 
-/// An owner hands a running session of its own to another running owner under the same rules:
-/// a lead session keeps being one under another console session, goes to a project session only
-/// once it has no sessions of its own, and then can own none. Each refusal names its reason
-/// and changes nothing.
+/// An owner hands a running session of its own to another running owner under the same rules: a
+/// bound coordinator keeps being one under another console session, goes to a project session only
+/// once it has no sessions of its own, and then can own none. Each refusal names its reason and
+/// changes nothing.
 #[tokio::test]
 async fn an_owner_transfers_a_session_only_where_orchestration_stays_two_levels_deep() {
     use SessionStatus::{Idle, Interrupted, Starting};
@@ -292,9 +298,9 @@ async fn an_owner_transfers_a_session_only_where_orchestration_stays_two_levels_
                 console_id: "console-2".to_string(),
                 ..console_session("foreign-hub", Idle)
             },
-            lead_session("lead", Idle, "hub"),
-            bound_session("child", Idle, "lead"),
-            lead_session("spare-lead", Idle, "hub"),
+            bound_coordinator("coordinator", Idle, "hub"),
+            bound_session("child", Idle, "coordinator"),
+            bound_coordinator("spare-coordinator", Idle, "hub"),
             bound_session("plain", Idle, "hub"),
             bound_session("no-process", Interrupted, "hub"),
             bound_session("starting", Starting, "hub"),
@@ -304,9 +310,9 @@ async fn an_owner_transfers_a_session_only_where_orchestration_stays_two_levels_
             "hub",
             "hub-2",
             "foreign-hub",
-            "lead",
+            "coordinator",
             "child",
-            "spare-lead",
+            "spare-coordinator",
             "plain",
             "peer",
         ],
@@ -315,7 +321,12 @@ async fn an_owner_transfers_a_session_only_where_orchestration_stays_two_levels_
     // A session being launched holds the launch claim, which refuses a binding change.
     let _claim = state.begin_launch("starting").unwrap();
     for (session, from, to, reason) in [
-        ("lead", "hub", "peer", "has sessions of its own (`child`)"),
+        (
+            "coordinator",
+            "hub",
+            "peer",
+            "has sessions of its own (`child`)",
+        ),
         ("plain", "hub", "child", "cannot own sessions"),
         ("plain", "hub", "foreign-hub", "another console"),
         ("plain", "hub", "sleeping-hub", "not running"),
@@ -336,35 +347,42 @@ async fn an_owner_transfers_a_session_only_where_orchestration_stays_two_levels_
     }
 
     // A session that becomes a bound one loses the report panel's tools, so its pages are
-    // withdrawn; a lead session keeps them.
-    for (page, session) in [("l-1", "lead"), ("sl-1", "spare-lead")] {
+    // withdrawn; a bound coordinator keeps them.
+    for (page, session) in [("l-1", "coordinator"), ("sl-1", "spare-coordinator")] {
         state
             .store
             .insert_page(&crate::test_support::test_page(page, session, 1))
             .unwrap();
     }
-    let (lead, ..) = transfer_session(&state, "lead", "hub", "hub-2").unwrap();
+    let (coordinator, ..) = transfer_session(&state, "coordinator", "hub", "hub-2").unwrap();
     assert_eq!(
-        (lead.bound_to.as_deref(), lead.orchestration_role),
+        (
+            coordinator.bound_to.as_deref(),
+            coordinator.orchestration_role
+        ),
         (Some("hub-2"), OrchestrationRole::Coordinator)
     );
-    assert_eq!(state.store.list_pages("lead").unwrap().len(), 1);
+    assert_eq!(state.store.list_pages("coordinator").unwrap().len(), 1);
     let child = state.store.get_session("child").unwrap().unwrap();
-    assert_eq!(child.bound_to.as_deref(), Some("lead"));
+    assert_eq!(child.bound_to.as_deref(), Some("coordinator"));
 
     let (plain, ..) = transfer_session(&state, "plain", "hub", "peer").unwrap();
     assert_eq!(
         (plain.bound_to.as_deref(), plain.orchestration_role),
         (Some("peer"), OrchestrationRole::Worker)
     );
-    let (spare, owner, _) = transfer_session(&state, "spare-lead", "hub", "peer").unwrap();
+    let (spare, owner, _) = transfer_session(&state, "spare-coordinator", "hub", "peer").unwrap();
     assert_eq!(
         (spare.bound_to.as_deref(), spare.orchestration_role),
         (Some("peer"), OrchestrationRole::Worker)
     );
     assert!(spare.is_worker());
     assert_eq!(owner.id, "peer");
-    assert!(state.store.list_pages("spare-lead").unwrap().is_empty());
+    assert!(state
+        .store
+        .list_pages("spare-coordinator")
+        .unwrap()
+        .is_empty());
 }
 
 /// Asserts `err` is the coded refusal `code`, naming `session` (and `owner`, when given).
@@ -452,7 +470,7 @@ async fn a_claimed_session_or_owner_is_not_bound_to_or_from() {
 }
 
 /// A bound session, running or not, is released to an ordinary unbound project session: a
-/// lead session keeps the sessions bound to it, and one the user releases needs no owner
+/// bound coordinator keeps the sessions bound to it, and one the user releases needs no owner
 /// named. Each refusal names its reason and changes nothing.
 #[tokio::test]
 async fn a_session_is_released_into_an_unbound_one_that_keeps_its_own_sessions() {
@@ -461,14 +479,14 @@ async fn a_session_is_released_into_an_unbound_one_that_keeps_its_own_sessions()
         "release",
         vec![
             console_session("hub", Idle),
-            lead_session("lead", Idle, "hub"),
-            bound_session("child", Idle, "lead"),
+            bound_coordinator("coordinator", Idle, "hub"),
+            bound_session("child", Idle, "coordinator"),
             bound_session("plain", Idle, "hub"),
             bound_session("no-process", Interrupted, "hub"),
             bound_session("by-user", Idle, "hub"),
             project_session("loner", Agent::Claude, Idle),
         ],
-        &["hub", "lead", "child", "plain", "by-user"],
+        &["hub", "coordinator", "child", "plain", "by-user"],
     );
 
     for (session, owner, code) in [
@@ -477,7 +495,7 @@ async fn a_session_is_released_into_an_unbound_one_that_keeps_its_own_sessions()
         ("loner", None, error_code::SESSION_NOT_BOUND),
         (
             "plain",
-            Some("lead"),
+            Some("coordinator"),
             error_code::SESSION_NOT_BOUND_TO_OWNER,
         ),
         ("child", Some("hub"), error_code::SESSION_NOT_BOUND_TO_OWNER),
@@ -492,16 +510,16 @@ async fn a_session_is_released_into_an_unbound_one_that_keeps_its_own_sessions()
         );
     }
 
-    let lead = release_session(&state, "lead", Some("hub"), None)
+    let coordinator = release_session(&state, "coordinator", Some("hub"), None)
         .unwrap()
         .session;
-    assert!(!lead.is_worker());
+    assert!(!coordinator.is_worker());
     assert_eq!(
-        (lead.bound_to, lead.orchestration_role),
+        (coordinator.bound_to, coordinator.orchestration_role),
         (None, OrchestrationRole::Coordinator)
     );
     let child = state.store.get_session("child").unwrap().unwrap();
-    assert_eq!(child.bound_to.as_deref(), Some("lead"));
+    assert_eq!(child.bound_to.as_deref(), Some("coordinator"));
 
     let plain = release_session(&state, "plain", Some("hub"), None)
         .unwrap()
@@ -877,27 +895,27 @@ async fn a_claimed_session_or_owner_is_not_released() {
 }
 
 /// Every launch of a session — opening, resuming, reopening, a switch of its account — tells it
-/// who it reports to through `owner_of`, and a lead session is told nobody: it gets an unbound
+/// who it reports to through `owner_of`, and a bound coordinator is told nobody: it gets an unbound
 /// project session's role description and tools, as at its first launch, while a session
-/// bound to it is told the lead session owns it.
+/// bound to it is told the bound coordinator owns it.
 #[test]
-fn a_lead_session_launches_as_an_unbound_project_session() {
-    let (state, _dir) = console_with_project_and_accounts("coordinator-lead-launch");
-    let lead = lead_session("lead", SessionStatus::Interrupted, "hub");
-    let of_lead = bound_session("of-lead", SessionStatus::Interrupted, "lead");
+fn a_bound_coordinator_launches_as_an_unbound_project_session() {
+    let (state, _dir) = console_with_project_and_accounts("coordinator-bound-launch");
+    let coordinator = bound_coordinator("coordinator", SessionStatus::Interrupted, "hub");
+    let of_coordinator = bound_session("of-coordinator", SessionStatus::Interrupted, "coordinator");
     for session in [
         console_session("hub", SessionStatus::Idle),
-        lead.clone(),
-        of_lead.clone(),
+        coordinator.clone(),
+        of_coordinator.clone(),
     ] {
         state.store.insert_session(&session).unwrap();
     }
 
-    assert_eq!(owner_of(&state, &lead).unwrap(), None);
+    assert_eq!(owner_of(&state, &coordinator).unwrap(), None);
     assert_eq!(
-        owner_of(&state, &of_lead).unwrap(),
+        owner_of(&state, &of_coordinator).unwrap(),
         Some(session_tools::Owner::Project {
-            session_id: "lead".to_string()
+            session_id: "coordinator".to_string()
         })
     );
 }

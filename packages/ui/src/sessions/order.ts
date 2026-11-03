@@ -112,7 +112,7 @@ export interface NestedSession {
 
 /** `ordered` nested, keeping the order it already has: every session that is not bound to another
  * of them stays where it is, with the sessions bound to it after it. A session whose owner is not
- * in the list (a lead session's console session, or an owner the list filtered out) is one of the
+ * in the list (a bound coordinator's console session, or an owner the list filtered out) is one of the
  * list's own, not nested. Orchestration is two levels deep, so nothing is nested under a nested
  * session; one that somehow is — a third level, or a binding leading back on itself — ends the
  * list on its own rather than being dropped from it, since a list that quietly loses a session
@@ -182,8 +182,8 @@ export function hasBoundSessions(sessions: Iterable<Session>, ownerId: string): 
   return false;
 }
 
-/** The archived sessions bound to `ownerId`, and those bound to an archived one of them (a lead
- * session's own sessions, two levels under a console session) — exactly what deleting an archived
+/** The archived sessions bound to `ownerId`, and those bound to an archived one of them (a bound
+ * coordinator's own sessions, two levels under a console session) — exactly what deleting an archived
  * owner takes with it. These are a third filter over the same session records the archive view
  * already serves for a project (`project_id`) and for a console's console sessions (`role`);
  * `ArchiveScope`'s `consoleSession` selects it. */
@@ -229,7 +229,7 @@ export function archiveNeedsConfirmation(sessions: Iterable<Session>, session: S
 
 /** The unarchived sessions bound to `ownerId` or to one bound to it. Every process in
  * this group ends on confirmation, regardless of how the session was opened or bound. An
- * archived lead still links its descendants to the owner. */
+ * archived coordinator still links its descendants to the owner. */
 export function boundSessionsArchivedWith(sessions: Session[], ownerId: string, delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>): Session[] {
   const direct = boundSessions(sessions, ownerId, delegating, queuedSwitches);
   const ids = new Set(direct.map((s) => s.id));
@@ -237,7 +237,7 @@ export function boundSessionsArchivedWith(sessions: Session[], ownerId: string, 
   return [...direct, ...nested.sort((a, b) => compareSessions(a, b, delegating, queuedSwitches))].filter((s) => s.status !== "archived");
 }
 
-/** The console session above `session`, which it reports to directly or through the lead session
+/** The console session above `session`, which it reports to directly or through the bound coordinator
  * that owns it. `lookup` resolves an owner's id as far as the caller knows the console's sessions;
  * `undefined` from it, as from this function, means none was found — an unbound session, one under
  * an unbound project session, or one whose owner the caller does not hold. The walk up carries a
@@ -257,7 +257,7 @@ export function consoleSessionAbove(session: Session, lookup: (id: string) => Se
 
 /** The sessions of a project that no console session is above: unbound ones, and the sessions bound
  * to one of those, which are listed under their owner rather than hidden behind a console session's
- * focus mode. A lead session (bound to a console session of `owners`) and the sessions bound to it
+ * focus mode. A bound coordinator (bound to a console session of `owners`) and the sessions bound to it
  * are left out together: a team goes where its owner goes, which is its console session's focus
  * mode. A project's focus mode lists only these among its live sessions; its archive is not
  * filtered this way. */
@@ -267,7 +267,7 @@ export function notUnderConsoleSession(sessions: Session[], owners: Map<string, 
 }
 
 /** The sessions a project's focus mode leaves out of its list: those of `sessions` (the project's)
- * that are not archived and have a console session above them — bound to it, or bound to a lead
+ * that are not archived and have a console session above them — bound to it, or bound to a coordinator
  * session that is, since a team is listed with its owner and so is counted with it — grouped by
  * that console session. `owners` holds the console's console sessions by id; each owner comes out
  * once, with its count, in the sidebar's order, and a session whose console session is not in it,
@@ -310,9 +310,9 @@ const liveInProject = (listed: Session[], project: Project) =>
   listed.filter((s) => s.project_id === project.id && s.status !== "archived");
 
 /** What a console session's focus mode lists: the console's projects that have a live session bound
- * to `consoleSessionId`, in the order of `sortProjects`, each with only those sessions — a lead
+ * to `consoleSessionId`, in the order of `sortProjects`, each with only those sessions — a coordinator
  * session among them carrying the sessions bound to it, nested under it, since the console session
- * sees the team but deals with the lead session alone. A team is in the lead session's own project,
+ * sees the team but deals with the bound coordinator alone. A team is in the bound coordinator's own project,
  * so it falls under the same project heading. */
 export function focusGroups(
   projects: Project[],

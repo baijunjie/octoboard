@@ -23,7 +23,7 @@
 //!   text passed on a later launch is silently ignored; Grok persists `--rules` into the session
 //!   record. The role text is therefore a function of the session's role, the owner it had at
 //!   launch and its agent alone, and names that owner: a later change of owner is told to the
-//!   session in prose and replaces what the text says (a lead session, bound only after it was
+//!   session in prose and replaces what the text says (a coordinator, bound only after it was
 //!   launched unbound, is launched as unbound every time). It is still passed on every launch,
 //!   because Claude Code re-renders its snapshot from whatever *that* launch passed after a
 //!   compaction.

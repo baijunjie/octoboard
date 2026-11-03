@@ -15,14 +15,14 @@ use crate::state::AppState;
 
 /// What a new session should be bound to: always `None` for a console session, which is never
 /// bound; for a project session, whatever `requested` names, which must be a console session of
-/// `console_id`, or a project session of the new session's own project that is unbound or a lead
-/// session, or the request is refused with `unknown_session` — a binding changes afterwards only
-/// at the session's or its owner's own request, so naming one that does not exist, or belongs to
-/// another console, must not be let through to be discovered later. A project session with the
-/// role of a worker is refused as an owner for the same reason, and this is where the depth
-/// limit is enforced, not only by which tools are offered: a session bound to a lead session would
-/// otherwise make a third level. A session still starting is refused too: its launch may fail, and
-/// a failed launch deletes the session whatever is bound to it.
+/// `console_id`, or a project session of the new session's own project that is unbound or a bound
+/// coordinator session, or the request is refused with `unknown_session` — a binding changes
+/// afterwards only at the session's or its owner's own request, so naming one that does not exist,
+/// or belongs to another console, must not be let through to be discovered later. A project session
+/// with the role of a worker is refused as an owner for the same reason, and this is where the
+/// depth limit is enforced, not only by which tools are offered: a session bound to a bound
+/// coordinator would otherwise make a third level. A session still starting is refused too: its
+/// launch may fail, and a failed launch deletes the session whatever is bound to it.
 pub(super) fn resolve_bound_to(
     state: &Arc<AppState>,
     console_id: &str,
@@ -59,9 +59,9 @@ pub(super) fn resolve_bound_to(
 /// rules every binding made after a session was opened keeps, whether the session binds itself
 /// ([`bind_session`]) or its owner hands it to another ([`transfer_session`]): an owner is a
 /// running console session of the session's console, or a running project session of its project
-/// that can own sessions (unbound, or a lead session); and a session bound to a project session
-/// owns none, so one that has sessions of its own, archived ones included since its owner can
-/// reopen them, can only be bound to a console session. Orchestration stays at most two levels
+/// that can own sessions (unbound, or a bound coordinator); and a session bound to a project
+/// session owns none, so one that has sessions of its own, archived ones included since its owner
+/// can reopen them, can only be bound to a console session. Orchestration stays at most two levels
 /// deep, and no binding can close a cycle.
 pub(crate) fn owner_refusal(
     state: &Arc<AppState>,
@@ -410,7 +410,7 @@ pub(super) async fn release_requested(state: &Arc<AppState>, id: String) -> Resu
 }
 
 /// Who `session` reports to, for the launch that tells it so: `None` for a session that launches
-/// with an unbound project session's role description and tools, which a lead session does on
+/// with an unbound project session's role description and tools, which a bound coordinator does on
 /// every launch, as at its first. An owner that is no longer on record reads as a console session:
 /// the text is the generic one, and a report to it fails on its own.
 pub(super) fn owner_of(
@@ -429,7 +429,7 @@ pub(super) fn owner_of(
 }
 
 /// How many owners up `session`'s bindings go: 0 for an unbound session, 1 for one bound to an
-/// owner that is itself unbound, 2 for one bound to a lead session.
+/// owner that is itself unbound, 2 for one bound to a bound coordinator.
 pub(super) fn binding_depth(state: &Arc<AppState>, session: &Session) -> Result<usize> {
     let Some(owner) = &session.bound_to else {
         return Ok(0);

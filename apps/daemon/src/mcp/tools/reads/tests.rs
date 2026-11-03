@@ -46,7 +46,7 @@ fn ids(listed: &Value) -> Vec<&str> {
 async fn sessions_are_filtered_by_kind_and_by_the_branch_they_are_responsible_for() {
     let fixture = RepoState::new("reads-kind-branch");
     let state = &fixture.state;
-    fixture.branch("lead-work", "lead");
+    fixture.branch("coordinator-work", "coordinator");
     fixture.branch("kid-work", "kid");
     let mut kid = state.session_record("kid").unwrap();
     kid.status = SessionStatus::Archived;
@@ -65,8 +65,8 @@ async fn sessions_are_filtered_by_kind_and_by_the_branch_they_are_responsible_fo
         .await
     };
     assert_eq!(
-        ids(&live(json!({ "branch": "lead-work" })).await.unwrap()),
-        ["lead"]
+        ids(&live(json!({ "branch": "coordinator-work" })).await.unwrap()),
+        ["coordinator"]
     );
     assert!(ids(&live(json!({ "branch": "kid-work" })).await.unwrap()).is_empty());
     let consoles = live(json!({ "kind": "console" })).await.unwrap();
@@ -77,7 +77,7 @@ async fn sessions_are_filtered_by_kind_and_by_the_branch_they_are_responsible_fo
         .iter()
         .all(|session| session["role"] == "console"));
     let projects = live(json!({ "kind": "project" })).await.unwrap();
-    assert!(ids(&projects).contains(&"lead"));
+    assert!(ids(&projects).contains(&"coordinator"));
     assert!(projects["sessions"]
         .as_array()
         .unwrap()
@@ -88,7 +88,9 @@ async fn sessions_are_filtered_by_kind_and_by_the_branch_they_are_responsible_fo
     assert_eq!(ids(&found), ["kid"]);
     assert_eq!(found["total"], 1);
     assert_eq!(found["sessions"][0]["branches"], json!(["kid-work"]));
-    let none = archived(json!({ "branch": "lead-work" })).await.unwrap();
+    let none = archived(json!({ "branch": "coordinator-work" }))
+        .await
+        .unwrap();
     assert!(ids(&none).is_empty());
     assert_eq!(none["total"], 0);
 
@@ -107,21 +109,21 @@ async fn sessions_are_filtered_by_kind_and_by_the_branch_they_are_responsible_fo
 async fn a_session_record_says_whether_it_is_paused_or_dormant() {
     let fixture = RepoState::new("reads-paused-dormant");
     let state = &fixture.state;
-    let live = running(state, "lead");
+    let live = running(state, "coordinator");
     let get = || async {
         call(
             state,
             "loose",
             "get_session",
-            &arguments(json!({ "session": "lead" })),
+            &arguments(json!({ "session": "coordinator" })),
         )
         .await
         .unwrap()
     };
 
-    with_status(state, "lead", SessionStatus::Idle);
+    with_status(state, "coordinator", SessionStatus::Idle);
     assert_eq!(get().await["paused"], false);
-    state.set_paused("lead", true);
+    state.set_paused("coordinator", true);
     let paused = get().await;
     assert_eq!(paused["status"], "idle");
     assert_eq!(paused["paused"], true);
@@ -133,14 +135,14 @@ async fn a_session_record_says_whether_it_is_paused_or_dormant() {
         .as_array()
         .unwrap()
         .iter()
-        .find(|session| session["session"] == "lead")
+        .find(|session| session["session"] == "coordinator")
         .unwrap();
     assert_eq!(entry["paused"], true);
 
-    with_status(state, "lead", SessionStatus::Working);
+    with_status(state, "coordinator", SessionStatus::Working);
     assert_eq!(get().await["paused"], false);
 
-    with_status(state, "lead", SessionStatus::Idle);
+    with_status(state, "coordinator", SessionStatus::Idle);
     crate::test_support::show_agents_view(&live);
     let dormant = get().await;
     assert_eq!(dormant["status"], "dormant");
@@ -168,7 +170,7 @@ async fn a_no_process_session_says_whether_it_can_be_resumed() {
         .await
     };
 
-    let running = get("lead").await.unwrap();
+    let running = get("coordinator").await.unwrap();
     assert!(running.get("resumable").is_none());
 
     let mut kid = state.session_record("kid").unwrap();
@@ -265,9 +267,14 @@ async fn every_caller_reads_the_account_model_pin_lock_and_branches_of_a_session
             .unwrap()
         }
     };
-    let listed = call(&fixture.state, "lead-kid", "list_sessions", &Map::new())
-        .await
-        .unwrap();
+    let listed = call(
+        &fixture.state,
+        "coordinator-kid",
+        "list_sessions",
+        &Map::new(),
+    )
+    .await
+    .unwrap();
     let in_list = |id: &str| {
         listed["sessions"]
             .as_array()
@@ -279,8 +286,8 @@ async fn every_caller_reads_the_account_model_pin_lock_and_branches_of_a_session
     };
     for (caller, record) in [
         ("a", get("a", "rich").await),
-        ("lead", get("lead", "rich").await),
-        ("lead-kid", in_list("rich")),
+        ("coordinator", get("coordinator", "rich").await),
+        ("coordinator-kid", in_list("rich")),
     ] {
         assert_eq!(record["account"], "claude-a", "{caller}");
         assert_eq!(record["account_name"], "Work account", "{caller}");
@@ -315,7 +322,7 @@ async fn every_caller_reads_the_account_model_pin_lock_and_branches_of_a_session
     assert_eq!(plain["branches"], json!([]));
 
     // A console session is responsible for no branch.
-    assert_eq!(get("lead", "b").await["branches"], json!([]));
+    assert_eq!(get("coordinator", "b").await["branches"], json!([]));
 }
 
 /// The default account is shown under the name the user gave it.
@@ -1422,7 +1429,7 @@ async fn every_session_lists_the_running_sessions_everywhere() {
 #[tokio::test]
 async fn get_session_without_a_session_reads_the_caller() {
     let fixture = RepoState::new("get-session-self");
-    for caller in ["a", "lead", "lead-kid"] {
+    for caller in ["a", "coordinator", "coordinator-kid"] {
         let record = call(&fixture.state, caller, "get_session", &Map::new())
             .await
             .unwrap();
@@ -1431,7 +1438,7 @@ async fn get_session_without_a_session_reads_the_caller() {
     // Naming another session is unchanged.
     let record = call(
         &fixture.state,
-        "lead",
+        "coordinator",
         "get_session",
         &arguments(json!({ "session": "kid" })),
     )
@@ -1454,7 +1461,7 @@ async fn a_session_record_carries_its_identity_launch_choices_and_owned_count() 
             model: Some(Some("opus".to_string())),
             effort: Some(None),
             orchestration_role: OrchestrationRole::Coordinator,
-            ..project_session("lead-two", "console-1", Some("a"))
+            ..project_session("coordinator-two", "console-1", Some("a"))
         })
         .unwrap();
     // One live and one archived session under it: both count.
@@ -1462,7 +1469,7 @@ async fn a_session_record_carries_its_identity_launch_choices_and_owned_count() 
         ("under-live", SessionStatus::Idle),
         ("under-archived", SessionStatus::Archived),
     ] {
-        let mut under = project_session(id, "console-1", Some("lead-two"));
+        let mut under = project_session(id, "console-1", Some("coordinator-two"));
         under.status = status;
         state.store.insert_session(&under).unwrap();
     }
@@ -1470,7 +1477,7 @@ async fn a_session_record_carries_its_identity_launch_choices_and_owned_count() 
         state,
         "a",
         "get_session",
-        &arguments(json!({ "session": "lead-two" })),
+        &arguments(json!({ "session": "coordinator-two" })),
     )
     .await
     .unwrap();
@@ -1485,6 +1492,7 @@ async fn a_session_record_carries_its_identity_launch_choices_and_owned_count() 
     // An explicit choice of the agent's own default is a `null`, not an absent key.
     assert!(record.get("effort").is_some_and(Value::is_null));
     assert_eq!(record["orchestration_role"], "coordinator");
+    // The removed legacy `lead` field, which must not come back.
     assert!(record.get("lead").is_none());
 
     // A session that inherits its launch settings has neither key, and owns nothing.
@@ -1634,11 +1642,11 @@ async fn list_projects_names_one_project_and_refreshes_its_git_status() {
 async fn a_session_record_says_whether_it_is_idle_after_its_report() {
     let fixture = RepoState::new("reads-idle-after-report");
     let state = &fixture.state;
-    let _live = running(state, "lead-kid");
+    let _live = running(state, "coordinator-kid");
     let get = |id: &'static str| async move {
         call(
             state,
-            "lead",
+            "coordinator",
             "get_session",
             &arguments(json!({ "session": id })),
         )
@@ -1646,18 +1654,22 @@ async fn a_session_record_says_whether_it_is_idle_after_its_report() {
         .unwrap()["idle_after_report"]
             .clone()
     };
-    with_status(state, "lead-kid", SessionStatus::Idle);
-    assert_eq!(get("lead-kid").await, false);
+    with_status(state, "coordinator-kid", SessionStatus::Idle);
+    assert_eq!(get("coordinator-kid").await, false);
 
     state
-        .note_report_accepted("lead-kid", false, state.turn_opened("lead-kid"))
+        .note_report_accepted(
+            "coordinator-kid",
+            false,
+            state.turn_opened("coordinator-kid"),
+        )
         .unwrap();
-    assert_eq!(get("lead-kid").await, true);
-    state.turn_started("lead-kid", Some("next"));
-    assert_eq!(get("lead-kid").await, false);
+    assert_eq!(get("coordinator-kid").await, true);
+    state.turn_started("coordinator-kid", Some("next"));
+    assert_eq!(get("coordinator-kid").await, false);
 
     state
-        .note_report_accepted("lead", false, state.turn_opened("lead"))
+        .note_report_accepted("coordinator", false, state.turn_opened("coordinator"))
         .unwrap();
-    assert_eq!(get("lead").await, false, "lead has no parent");
+    assert_eq!(get("coordinator").await, false, "coordinator has no parent");
 }

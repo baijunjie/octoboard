@@ -6,14 +6,14 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import {
-  archivedLead,
+  archivedCoordinator,
   boundArchived,
   boundConsoleSession,
   console_,
   otherConsoleSession,
   otherOwnerArchived,
   unboundArchived,
-  underArchivedLead,
+  underArchivedCoordinator,
 } from "../fixtures/archiveSessions";
 import { expectIndependentMarquees, stubMarquee } from "../components/motion/marqueeTestSupport";
 import { isolate } from "../i18n/isolate";
@@ -95,20 +95,20 @@ it("deletes all of a console session's archive by naming that console session", 
   );
 });
 
-it("lists the sessions archived under a lead session after it, inset, and names it for assistive technology", () => {
-  const { container } = renderArchiveView(undefined, undefined, [boundConsoleSession, archivedLead, ...underArchivedLead, ...boundArchived]);
+it("lists the sessions archived under a bound coordinator after it, inset, and names it for assistive technology", () => {
+  const { container } = renderArchiveView(undefined, undefined, [boundConsoleSession, archivedCoordinator, ...underArchivedCoordinator, ...boundArchived]);
   const rows = Array.from(container.querySelectorAll<HTMLElement>("ul > li:has(button)"));
-  // Newest first, except that the lead session's own sessions follow it rather than being ranked
+  // Newest first, except that the bound coordinator's own sessions follow it rather than being ranked
   // against the console session's.
   expect(rows.map((row) => [row.querySelector("[dir=auto]")?.textContent, row.className.includes("ms-[17px]")])).toEqual([
     [boundArchived[0].title, false],
-    [archivedLead.title, false],
-    [underArchivedLead[0].title, true],
-    [underArchivedLead[1].title, true],
+    [archivedCoordinator.title, false],
+    [underArchivedCoordinator[0].title, true],
+    [underArchivedCoordinator[1].title, true],
     [boundArchived[1].title, false],
     [boundArchived[2].title, false],
   ]);
-  expect(rows[2].querySelector("[role=button]")?.getAttribute("aria-label")).toContain(`Bound to ${isolate(archivedLead.title)}`);
+  expect(rows[2].querySelector("[role=button]")?.getAttribute("aria-label")).toContain(`Bound to ${isolate(archivedCoordinator.title)}`);
 });
 
 it("shows a row's account, model and effort beside its agent mark, which its accessible name ends with", () => {

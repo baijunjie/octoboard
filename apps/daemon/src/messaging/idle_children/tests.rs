@@ -86,18 +86,18 @@ fn a_coordinator_with_a_running_session_is_not_idle_after_its_report() {
     let (state, _dir, _hub) = team_state(
         "idle-after-coordinator",
         &[
-            ("lead", "hub", true, SessionStatus::Idle),
-            ("child", "lead", false, SessionStatus::Idle),
+            ("coordinator", "hub", true, SessionStatus::Idle),
+            ("child", "coordinator", false, SessionStatus::Idle),
         ],
     );
     state
-        .note_report_accepted("lead", false, state.turn_opened("lead"))
+        .note_report_accepted("coordinator", false, state.turn_opened("coordinator"))
         .unwrap();
-    let lead = state.session_record("lead").unwrap();
-    assert!(idle_after_report(&state, &lead).is_some());
+    let coordinator = state.session_record("coordinator").unwrap();
+    assert!(idle_after_report(&state, &coordinator).is_some());
     let child = crate::test_support::idle_stand_in("child");
     state.register_live(child.clone());
-    assert_eq!(idle_after_report(&state, &lead), None);
+    assert_eq!(idle_after_report(&state, &coordinator), None);
 }
 
 /// The owner is told once the session has been idle after its report for the whole delay without

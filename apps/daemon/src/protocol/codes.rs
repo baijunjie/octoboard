@@ -249,7 +249,7 @@ pub mod error_code {
     /// session that is not archived is refused once it has had a turn, is bound to an owner or has
     /// sessions bound to it.
     pub const SESSION_NOT_DELETABLE: Code = Code("session_not_deletable");
-    /// A session cannot be archived while a session under it (bound to it, or to a lead session
+    /// A session cannot be archived while a session under it (bound to it, or to a coordinator
     /// bound to it) has a process running, whatever its status. `params` names the `count` of
     /// those sessions and their `sessions`, by title, comma separated.
     pub const SESSION_HAS_RUNNING_SESSIONS: Code = Code("session_has_running_sessions");

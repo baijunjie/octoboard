@@ -6,9 +6,9 @@ use crate::test_support::{bare_session, console_session, project_session};
 /// session with the role of a worker, whatever a row says is bound to it.
 #[test]
 fn owned_counts_leave_out_owners_with_the_bound_role() {
-    let owned = |id: &str, owner: Option<&str>, lead: bool, status: SessionStatus| Session {
+    let owned = |id: &str, owner: Option<&str>, coordinator: bool, status: SessionStatus| Session {
         bound_to: owner.map(str::to_string),
-        orchestration_role: if owner.is_none() || lead {
+        orchestration_role: if owner.is_none() || coordinator {
             OrchestrationRole::Coordinator
         } else {
             OrchestrationRole::Worker
@@ -17,11 +17,11 @@ fn owned_counts_leave_out_owners_with_the_bound_role() {
     };
     let sessions = [
         console_session("console", SessionStatus::Idle),
-        owned("lead", Some("console"), true, SessionStatus::Idle),
+        owned("coordinator", Some("console"), true, SessionStatus::Idle),
         owned("bound", Some("console"), false, SessionStatus::Archived),
         owned(
-            "under-lead",
-            Some("lead"),
+            "under-coordinator",
+            Some("coordinator"),
             false,
             SessionStatus::Interrupted,
         ),
@@ -31,7 +31,7 @@ fn owned_counts_leave_out_owners_with_the_bound_role() {
     let counts = owned_counts(&sessions);
 
     assert_eq!(counts.get("console"), Some(&2));
-    assert_eq!(counts.get("lead"), Some(&1));
+    assert_eq!(counts.get("coordinator"), Some(&1));
     assert_eq!(counts.get("bound"), None);
     assert_eq!(counts.len(), 2);
 }
@@ -42,10 +42,10 @@ fn owned_counts_leave_out_owners_with_the_bound_role() {
 #[test]
 fn the_count_of_one_session_agrees_with_the_count_of_all() {
     let (state, dir) = crate::test_support::app_state("coordinator-owned-count-of");
-    let owned = |id: &str, owner: Option<&str>, lead: bool, status: SessionStatus| Session {
+    let owned = |id: &str, owner: Option<&str>, coordinator: bool, status: SessionStatus| Session {
         project_id: Some("p1".to_string()),
         bound_to: owner.map(str::to_string),
-        orchestration_role: if owner.is_none() || lead {
+        orchestration_role: if owner.is_none() || coordinator {
             OrchestrationRole::Coordinator
         } else {
             OrchestrationRole::Worker
@@ -59,11 +59,11 @@ fn the_count_of_one_session_agrees_with_the_count_of_all() {
     crate::test_support::insert_project(&state, &dir);
     for session in [
         console_session("console", SessionStatus::Idle),
-        owned("lead", Some("console"), true, SessionStatus::Idle),
+        owned("coordinator", Some("console"), true, SessionStatus::Idle),
         owned("bound", Some("console"), false, SessionStatus::Archived),
         owned(
-            "under-lead",
-            Some("lead"),
+            "under-coordinator",
+            Some("coordinator"),
             false,
             SessionStatus::Interrupted,
         ),
@@ -96,10 +96,10 @@ fn a_group_follows_the_bindings_two_levels_and_a_bound_role_owns_none() {
         },
         Session {
             bound_to: Some("hub".to_string()),
-            ..bare_session("lead", Role::Project)
+            ..bare_session("coordinator", Role::Project)
         },
         Session {
-            bound_to: Some("lead".to_string()),
+            bound_to: Some("coordinator".to_string()),
             orchestration_role: OrchestrationRole::Worker,
             ..bare_session("led", Role::Project)
         },
@@ -110,8 +110,11 @@ fn a_group_follows_the_bindings_two_levels_and_a_bound_role_owns_none() {
     };
     assert_eq!(
         ids(group_in(&sessions, &sessions[4])),
-        ["hub", "member", "lead", "led"]
+        ["hub", "member", "coordinator", "led"]
     );
     assert_eq!(ids(group_in(&sessions, &sessions[0])), ["member"]);
-    assert_eq!(ids(group_in(&sessions, &sessions[2])), ["lead", "led"]);
+    assert_eq!(
+        ids(group_in(&sessions, &sessions[2])),
+        ["coordinator", "led"]
+    );
 }

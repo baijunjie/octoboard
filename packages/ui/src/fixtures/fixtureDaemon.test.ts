@@ -23,13 +23,13 @@ import { DEFAULT_GIT_WORKFLOW, FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow
 describe("the fixture daemon's session archiving", () => {
   it("archives running and interrupted descendants and supports reopening", async () => {
     const owner = sessionOf("owner", "c", undefined, "Hub", "idle");
-    const lead = sessionOf("lead", "c", "p", "Lead", "interrupted", { bound_to: owner.id });
-    const child = sessionOf("child", "c", "p", "Child", "idle", { bound_to: lead.id });
-    const daemon = createFixtureDaemon({ state: snapshotState({ sessions: [owner, lead, child] }) });
+    const coordinator = sessionOf("coordinator", "c", "p", "Coordinator", "interrupted", { bound_to: owner.id });
+    const child = sessionOf("child", "c", "p", "Child", "idle", { bound_to: coordinator.id });
+    const daemon = createFixtureDaemon({ state: snapshotState({ sessions: [owner, coordinator, child] }) });
     await daemon.request({ type: "archive_session", session: owner.id });
-    for (const id of [owner.id, lead.id, child.id]) expect(daemon.store.getState().sessions.get(id)).toMatchObject({ status: "archived", ended_at: expect.any(Number) });
-    await daemon.request({ type: "resume_session", session: lead.id });
-    expect(daemon.store.getState().sessions.get(lead.id)?.status).toBe("idle");
+    for (const id of [owner.id, coordinator.id, child.id]) expect(daemon.store.getState().sessions.get(id)).toMatchObject({ status: "archived", ended_at: expect.any(Number) });
+    await daemon.request({ type: "resume_session", session: coordinator.id });
+    expect(daemon.store.getState().sessions.get(coordinator.id)?.status).toBe("idle");
     expect(daemon.store.getState().sessions.get(owner.id)?.status).toBe("idle");
     expect(daemon.store.getState().sessions.get(child.id)?.status).toBe("archived");
     await expect(daemon.request({ type: "archive_session", session: "missing" })).rejects.toMatchObject({ code: "unknown_session" });
@@ -106,33 +106,33 @@ describe("the fixture daemon's listings that the scenario refuses", () => {
 describe("the fixture daemon's session reopening", () => {
   it("restores an archived session and its archived owners while preserving its children", async () => {
     const owner = sessionOf("owner", "c", undefined, "Hub", "archived", { ended_at: 10 });
-    const lead = sessionOf("lead", "c", "p", "Lead", "archived", { bound_to: owner.id, ended_at: 20 });
-    const child = sessionOf("child", "c", "p", "Child", "archived", { bound_to: lead.id, ended_at: 30 });
-    const daemon = createFixtureDaemon({ state: snapshotState({ sessions: [owner, lead, child] }) });
-    await expect(daemon.request({ type: "resume_session", session: lead.id })).resolves.toEqual({ type: "ack", id: null });
-    expect(daemon.store.getState().sessions.get(lead.id)).toEqual({ ...lead, status: "idle", ended_at: null });
+    const coordinator = sessionOf("coordinator", "c", "p", "Coordinator", "archived", { bound_to: owner.id, ended_at: 20 });
+    const child = sessionOf("child", "c", "p", "Child", "archived", { bound_to: coordinator.id, ended_at: 30 });
+    const daemon = createFixtureDaemon({ state: snapshotState({ sessions: [owner, coordinator, child] }) });
+    await expect(daemon.request({ type: "resume_session", session: coordinator.id })).resolves.toEqual({ type: "ack", id: null });
+    expect(daemon.store.getState().sessions.get(coordinator.id)).toEqual({ ...coordinator, status: "idle", ended_at: null });
     expect(daemon.store.getState().sessions.get(owner.id)).toEqual({ ...owner, status: "idle", ended_at: null });
     expect(daemon.store.getState().sessions.get(child.id)).toEqual(child);
-    await expect(daemon.request({ type: "resume_session", session: lead.id })).rejects.toMatchObject({ code: "session_already_running" });
+    await expect(daemon.request({ type: "resume_session", session: coordinator.id })).rejects.toMatchObject({ code: "session_already_running" });
     await expect(daemon.request({ type: "resume_session", session: "missing" })).rejects.toMatchObject({ code: "unknown_session" });
   });
 });
 
 describe("the fixture daemon's session handoff", () => {
   const hub = sessionOf("hub", "c", undefined, "Hub", "idle", { colour: "pink", ordinal: 1 });
-  const lead = sessionOf("lead", "c", "p", "Lead", "idle", { bound_to: hub.id, pinned: true });
-  const child = sessionOf("child", "c", "p", "Child", "idle", { bound_to: lead.id });
-  const archivedChild = sessionOf("old", "c", "p", "Old", "archived", { bound_to: lead.id });
-  const state = snapshotState({ consoles: [consoleOf("c", "Main")], projects: [projectOf("p", "c", "Website")], sessions: [hub, lead, child, archivedChild] });
+  const coordinator = sessionOf("coordinator", "c", "p", "Coordinator", "idle", { bound_to: hub.id, pinned: true });
+  const child = sessionOf("child", "c", "p", "Child", "idle", { bound_to: coordinator.id });
+  const archivedChild = sessionOf("old", "c", "p", "Old", "archived", { bound_to: coordinator.id });
+  const state = snapshotState({ consoles: [consoleOf("c", "Main")], projects: [projectOf("p", "c", "Website")], sessions: [hub, coordinator, child, archivedChild] });
   const scenario = { state };
 
   it("starts the receiving session in the original's place and archives the original", async () => {
     const daemon = createFixtureDaemon(scenario);
-    const reply = await daemon.request({ type: "handoff_session", session: lead.id, agent: "codex" });
+    const reply = await daemon.request({ type: "handoff_session", session: coordinator.id, agent: "codex" });
     if (reply.type !== "session_opened") throw new Error("expected session_opened");
     const sessions = daemon.store.getState().sessions;
-    expect(reply.session).toMatchObject({ agent: "codex", project_id: "p", role: "project", title: "Lead", bound_to: hub.id, pinned: true, status: "working" });
-    expect(sessions.get(lead.id)).toMatchObject({ status: "archived", bound_to: hub.id });
+    expect(reply.session).toMatchObject({ agent: "codex", project_id: "p", role: "project", title: "Coordinator", bound_to: hub.id, pinned: true, status: "working" });
+    expect(sessions.get(coordinator.id)).toMatchObject({ status: "archived", bound_to: hub.id });
     expect(sessions.get(child.id)?.bound_to).toBe(reply.session.id);
     expect(sessions.get(archivedChild.id)?.bound_to).toBe(reply.session.id);
   });
@@ -146,8 +146,8 @@ describe("the fixture daemon's session handoff", () => {
 
   it("fails a branch inspection the scenario stages, and answers the others", async () => {
     const error = { code: "internal_error", params: { detail: "git could not be run" }, message: "git could not be run" };
-    await expect(createFixtureDaemon({ ...scenario, sessionBranches: error }).request({ type: "inspect_session_branches", sessions: [lead.id] })).rejects.toMatchObject({ code: "internal_error" });
-    await expect(createFixtureDaemon(scenario).request({ type: "inspect_session_branches", sessions: [lead.id] })).resolves.toMatchObject({ items: [] });
+    await expect(createFixtureDaemon({ ...scenario, sessionBranches: error }).request({ type: "inspect_session_branches", sessions: [coordinator.id] })).rejects.toMatchObject({ code: "internal_error" });
+    await expect(createFixtureDaemon(scenario).request({ type: "inspect_session_branches", sessions: [coordinator.id] })).resolves.toMatchObject({ items: [] });
   });
 
   it("counts an interrupted console session's colour as in use but not an archived one's", async () => {
@@ -163,16 +163,16 @@ describe("the fixture daemon's session handoff", () => {
     const working = sessionOf("working", "c", "p", "Working", "working");
     const archived = sessionOf("gone", "c", "p", "Gone", "archived");
     const locked = sessionOf("locked", "c", "p", "Locked", "idle", { locked: true });
-    const staged = { code: "session_working", params: { session: lead.id }, message: "mid-turn" };
-    const daemon = createFixtureDaemon({ ...scenario, state: snapshotState({ consoles: [consoleOf("c", "Main")], projects: [projectOf("p", "c", "Website")], sessions: [lead, working, archived, locked] }), sessionHandoffs: { [lead.id]: staged } });
-    await expect(daemon.request({ type: "handoff_session", session: lead.id, agent: "codex" })).rejects.toMatchObject({ code: "session_working" });
+    const staged = { code: "session_working", params: { session: coordinator.id }, message: "mid-turn" };
+    const daemon = createFixtureDaemon({ ...scenario, state: snapshotState({ consoles: [consoleOf("c", "Main")], projects: [projectOf("p", "c", "Website")], sessions: [coordinator, working, archived, locked] }), sessionHandoffs: { [coordinator.id]: staged } });
+    await expect(daemon.request({ type: "handoff_session", session: coordinator.id, agent: "codex" })).rejects.toMatchObject({ code: "session_working" });
     await expect(daemon.request({ type: "handoff_session", session: working.id, agent: "codex" })).rejects.toMatchObject({ code: "session_working" });
     await expect(daemon.request({ type: "handoff_session", session: archived.id, agent: "codex" })).rejects.toMatchObject({ code: "session_archived" });
     await expect(daemon.request({ type: "handoff_session", session: locked.id, agent: "codex" })).rejects.toMatchObject({ code: "session_locked" });
     await expect(daemon.request({ type: "handoff_session", session: "missing", agent: "codex" })).rejects.toMatchObject({ code: "unknown_session" });
     const plain = createFixtureDaemon(scenario);
-    await expect(plain.request({ type: "handoff_session", session: lead.id, agent: "claude" })).rejects.toMatchObject({ code: "handoff_to_same_agent", params: { agent: "Claude Code" } });
-    await expect(plain.request({ type: "handoff_session", session: lead.id, agent: "codex", account: "nobody" })).rejects.toMatchObject({ code: "unknown_account" });
+    await expect(plain.request({ type: "handoff_session", session: coordinator.id, agent: "claude" })).rejects.toMatchObject({ code: "handoff_to_same_agent", params: { agent: "Claude Code" } });
+    await expect(plain.request({ type: "handoff_session", session: coordinator.id, agent: "codex", account: "nobody" })).rejects.toMatchObject({ code: "unknown_account" });
   });
 });
 
@@ -220,15 +220,15 @@ describe("the fixture daemon's account order", () => {
 });
 
 describe("the fixture daemon's added agents", () => {
-  const lead = sessionOf("lead", "c", "p", "Lead", "idle");
-  const state = snapshotState({ consoles: [consoleOf("c", "Main")], projects: [projectOf("p", "c", "Website")], sessions: [lead] });
+  const coordinator = sessionOf("coordinator", "c", "p", "Coordinator", "idle");
+  const state = snapshotState({ consoles: [consoleOf("c", "Main")], projects: [projectOf("p", "c", "Website")], sessions: [coordinator] });
   const withAdded = (added: Agent[] | null) => createFixtureDaemon({ state: { ...state, settings: { ...state.settings!, added_agents: added } } });
   const open = (agent: Agent) => ({ type: "open_session", console_id: "c", project_id: "p", agent }) as const;
 
   it("refuses to open a session or hand one off to an agent that is not added", async () => {
     const daemon = withAdded(["claude"]);
     await expect(daemon.request(open("codex"))).rejects.toMatchObject({ code: "agent_not_added", params: { agent: "Codex" } });
-    await expect(daemon.request({ type: "handoff_session", session: lead.id, agent: "grok" })).rejects.toMatchObject({ code: "agent_not_added", params: { agent: "Grok Build" } });
+    await expect(daemon.request({ type: "handoff_session", session: coordinator.id, agent: "grok" })).rejects.toMatchObject({ code: "agent_not_added", params: { agent: "Grok Build" } });
     await expect(daemon.request(open("claude"))).resolves.toMatchObject({ type: "session_opened" });
   });
 
@@ -517,11 +517,11 @@ describe("the fixture daemon's session locks", () => {
 
   it("refuses archiving a locked grandchild atomically and allows it after unlocking", async () => {
     const owner = sessionOf("owner", "c", undefined, "Hub", "interrupted");
-    const lead = sessionOf("lead", "c", "p", "Lead", "interrupted", { bound_to: owner.id });
-    const child = sessionOf("child", "c", "p", "Child", "interrupted", { bound_to: lead.id, locked: true });
-    const daemon = createFixtureDaemon({ state: snapshotState({ sessions: [owner, lead, child] }) });
-    for (const id of [owner.id, lead.id, child.id]) await expect(daemon.request({ type: "archive_session", session: id })).rejects.toMatchObject({ code: "session_locked", params: { session: child.id } });
-    expect([...daemon.store.getState().sessions.values()]).toEqual([owner, lead, child]);
+    const coordinator = sessionOf("coordinator", "c", "p", "Coordinator", "interrupted", { bound_to: owner.id });
+    const child = sessionOf("child", "c", "p", "Child", "interrupted", { bound_to: coordinator.id, locked: true });
+    const daemon = createFixtureDaemon({ state: snapshotState({ sessions: [owner, coordinator, child] }) });
+    for (const id of [owner.id, coordinator.id, child.id]) await expect(daemon.request({ type: "archive_session", session: id })).rejects.toMatchObject({ code: "session_locked", params: { session: child.id } });
+    expect([...daemon.store.getState().sessions.values()]).toEqual([owner, coordinator, child]);
     await daemon.request({ type: "set_session_locked", session: child.id, locked: false });
     await daemon.request({ type: "archive_session", session: owner.id });
     expect([...daemon.store.getState().sessions.values()].every((session) => session.status === "archived")).toBe(true);
@@ -531,10 +531,10 @@ describe("the fixture daemon's session locks", () => {
     const console_ = consoleOf("c", "Main");
     const project = projectOf("p", console_.id, "Website");
     const owner = sessionOf("owner", console_.id, undefined, "Hub", "archived");
-    const lead = sessionOf("lead", console_.id, project.id, "Lead", "archived", { bound_to: owner.id });
-    const child = sessionOf("child", console_.id, project.id, "Child", "archived", { bound_to: lead.id, locked: true });
+    const coordinator = sessionOf("coordinator", console_.id, project.id, "Coordinator", "archived", { bound_to: owner.id });
+    const child = sessionOf("child", console_.id, project.id, "Child", "archived", { bound_to: coordinator.id, locked: true });
     const other = sessionOf("other", console_.id, project.id, "Other", "archived");
-    const daemon = createFixtureDaemon({ state: snapshotState({ consoles: [console_], projects: [project], sessions: [other, owner, lead, child] }) });
+    const daemon = createFixtureDaemon({ state: snapshotState({ consoles: [console_], projects: [project], sessions: [other, owner, coordinator, child] }) });
     const requests: ClientRequestBody[] = [
       { type: "delete_session", session: owner.id },
       { type: "delete_session", session: child.id },
@@ -546,7 +546,7 @@ describe("the fixture daemon's session locks", () => {
     ];
     for (const request of requests) {
       await expect(daemon.request(request)).rejects.toMatchObject({ code: "session_locked", params: { session: child.id } });
-      expect([...daemon.store.getState().sessions.values()]).toEqual([other, owner, lead, child]);
+      expect([...daemon.store.getState().sessions.values()]).toEqual([other, owner, coordinator, child]);
     }
     await daemon.request({ type: "set_session_locked", session: child.id, locked: false });
     await daemon.request({ type: "delete_archived_sessions", console: console_.id, project: project.id });
@@ -559,15 +559,15 @@ describe("the fixture daemon's deletion of archived sessions", () => {
   const project = projectOf("p-1", console_.id, "Search API");
   const other = projectOf("p-2", console_.id, "Website");
   const sessions = [
-    // An archived console session with an archived lead session under it, which has its own
+    // An archived console session with an archived bound coordinator under it, which has its own
     // archived session, and a live one that keeps its place in the project.
     sessionOf("hub", console_.id, undefined, "Hub", "archived"),
-    sessionOf("lead", console_.id, project.id, "Lead", "archived", { bound_to: "hub" }),
-    sessionOf("under-lead", console_.id, project.id, "Under the lead", "archived", { bound_to: "lead" }),
+    sessionOf("coordinator", console_.id, project.id, "Coordinator", "archived", { bound_to: "hub" }),
+    sessionOf("under-coordinator", console_.id, project.id, "Under the coordinator", "archived", { bound_to: "coordinator" }),
     sessionOf("bound-live", console_.id, project.id, "Bound and live", "idle", { bound_to: "hub" }),
-    // A live lead session's archived session goes only with its project, not with an owner above.
-    sessionOf("live-lead", console_.id, project.id, "Live lead", "idle", { bound_to: "hub" }),
-    sessionOf("under-live-lead", console_.id, project.id, "Under the live lead", "archived", { bound_to: "live-lead" }),
+    // A live bound coordinator's archived session goes only with its project, not with an owner above.
+    sessionOf("live-coordinator", console_.id, project.id, "Live coordinator", "idle", { bound_to: "hub" }),
+    sessionOf("under-live-coordinator", console_.id, project.id, "Under the live coordinator", "archived", { bound_to: "live-coordinator" }),
     sessionOf("elsewhere", console_.id, other.id, "In another project", "archived"),
     sessionOf("loose", console_.id, project.id, "Loose", "archived"),
   ];
@@ -580,15 +580,15 @@ describe("the fixture daemon's deletion of archived sessions", () => {
   };
 
   it("takes an archived owner's archived sessions with it, at both levels", async () => {
-    expect(await remaining({})).toEqual(["bound-live", "elsewhere", "live-lead", "loose", "under-live-lead"]);
+    expect(await remaining({})).toEqual(["bound-live", "elsewhere", "live-coordinator", "loose", "under-live-coordinator"]);
   });
 
   it("takes a project's archived sessions and no others", async () => {
-    expect(await remaining({ project: project.id })).toEqual(["bound-live", "elsewhere", "hub", "live-lead"]);
+    expect(await remaining({ project: project.id })).toEqual(["bound-live", "elsewhere", "hub", "live-coordinator"]);
   });
 
-  it("takes the archived sessions under a console session, and those under its archived lead sessions", async () => {
-    expect(await remaining({ console_session: "hub" })).toEqual(["bound-live", "elsewhere", "hub", "live-lead", "loose", "under-live-lead"]);
+  it("takes the archived sessions under a console session, and those under its archived bound coordinators", async () => {
+    expect(await remaining({ console_session: "hub" })).toEqual(["bound-live", "elsewhere", "hub", "live-coordinator", "loose", "under-live-coordinator"]);
   });
 });
 
@@ -710,21 +710,21 @@ describe("the fixture daemon's account directories", () => {
 
 describe("the fixture daemon's session release", () => {
   const hub = sessionOf("hub", "c", undefined, "Hub", "idle", { colour: "pink", ordinal: 1 });
-  const lead = sessionOf("lead", "c", "p", "Lead", "working", { bound_to: hub.id, pinned: true });
-  const child = sessionOf("child", "c", "p", "Child", "idle", { bound_to: lead.id });
+  const coordinator = sessionOf("coordinator", "c", "p", "Coordinator", "working", { bound_to: hub.id, pinned: true });
+  const child = sessionOf("child", "c", "p", "Child", "idle", { bound_to: coordinator.id });
   const archived = sessionOf("old", "c", "p", "Old", "archived", { bound_to: hub.id });
   const loner = sessionOf("loner", "c", "p", "Loner", "idle");
-  const state = snapshotState({ consoles: [consoleOf("c", "Main")], projects: [projectOf("p", "c", "Website")], sessions: [hub, lead, child, archived, loner] });
+  const state = snapshotState({ consoles: [consoleOf("c", "Main")], projects: [projectOf("p", "c", "Website")], sessions: [hub, coordinator, child, archived, loner] });
   const scenario = { state };
 
   it("unbinds the session in any state, leaving what it owns bound to it", async () => {
     const daemon = createFixtureDaemon(scenario);
-    await expect(daemon.request({ type: "release_session", session: lead.id })).resolves.toEqual({ type: "ack", id: null });
+    await expect(daemon.request({ type: "release_session", session: coordinator.id })).resolves.toEqual({ type: "ack", id: null });
     await expect(daemon.request({ type: "release_session", session: archived.id })).resolves.toEqual({ type: "ack", id: null });
     const { sessions } = daemon.store.getState();
-    expect(sessions.get(lead.id)).toMatchObject({ status: "working", pinned: true, bound_to: null });
+    expect(sessions.get(coordinator.id)).toMatchObject({ status: "working", pinned: true, bound_to: null });
     expect(sessions.get(archived.id)).toMatchObject({ status: "archived", bound_to: null });
-    expect(sessions.get(child.id)?.bound_to).toBe(lead.id);
+    expect(sessions.get(child.id)?.bound_to).toBe(coordinator.id);
   });
 
   it("refuses an unknown, a console and an unbound session", async () => {
@@ -736,17 +736,17 @@ describe("the fixture daemon's session release", () => {
   });
 
   it("leaves the session bound when the scenario stages a refusal", async () => {
-    const error = { code: "session_binding_changed", params: { session: lead.id }, message: "the binding changed while it was being released" };
+    const error = { code: "session_binding_changed", params: { session: coordinator.id }, message: "the binding changed while it was being released" };
     const daemon = createFixtureDaemon({ ...scenario, sessionReleaseError: error });
-    await expect(daemon.request({ type: "release_session", session: lead.id })).rejects.toMatchObject({ code: error.code, params: error.params });
-    expect(daemon.store.getState().sessions.get(lead.id)).toEqual(lead);
+    await expect(daemon.request({ type: "release_session", session: coordinator.id })).rejects.toMatchObject({ code: error.code, params: error.params });
+    expect(daemon.store.getState().sessions.get(coordinator.id)).toEqual(coordinator);
   });
 
   it("moves the session to another owner as a staged refusal fires", async () => {
-    const error = { code: "session_binding_changed", params: { session: lead.id }, message: "the binding changed while it was being released" };
+    const error = { code: "session_binding_changed", params: { session: coordinator.id }, message: "the binding changed while it was being released" };
     const daemon = createFixtureDaemon({ ...scenario, sessionReleaseError: error, sessionReleaseMovedTo: archived.id });
-    await expect(daemon.request({ type: "release_session", session: lead.id })).rejects.toMatchObject({ code: error.code });
-    expect(daemon.store.getState().sessions.get(lead.id)).toEqual({ ...lead, bound_to: archived.id });
+    await expect(daemon.request({ type: "release_session", session: coordinator.id })).rejects.toMatchObject({ code: error.code });
+    expect(daemon.store.getState().sessions.get(coordinator.id)).toEqual({ ...coordinator, bound_to: archived.id });
   });
 });
 
@@ -985,7 +985,7 @@ describe("the fixture daemon's bound branches and worktrees", () => {
 
 describe("the fixture daemon's native session records", () => {
   const unused = sessionOf("unused", "c", "p", "Unused", "idle", { has_conversation: false });
-  const owner = sessionOf("owner", "c", "p", "Used archived lead", "archived");
+  const owner = sessionOf("owner", "c", "p", "Used archived coordinator", "archived");
   const child = sessionOf("child", "c", "p", "Archived child", "archived", { bound_to: owner.id });
   const live = sessionOf("live", "c", "p", "Live child", "idle", { bound_to: owner.id });
   const scenario = { state: snapshotState({ sessions: [unused, owner, child, live] }) };
@@ -1026,7 +1026,7 @@ describe("the fixture daemon's native session records", () => {
     expect([...daemon.store.getState().sessions.keys()]).toEqual([owner.id, started.id]);
   });
 
-  it("takes archived children with a confirmed archived lead and preserves live children", async () => {
+  it("takes archived children with a confirmed archived coordinator and preserves live children", async () => {
     const daemon = createFixtureDaemon(scenario);
     await daemon.request({ type: "delete_session", session: owner.id });
     expect([...daemon.store.getState().sessions.keys()]).toEqual([unused.id, live.id]);

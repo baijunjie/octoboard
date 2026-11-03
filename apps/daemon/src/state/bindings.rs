@@ -22,8 +22,8 @@ fn bound_in<'a>(sessions: &'a [Session], owner: &Session) -> impl Iterator<Item 
 }
 
 /// `root` and every session below it along the bindings, in any status: the sessions bound to it,
-/// each followed by its own. Bindings are two levels deep at most (a console session, its lead
-/// sessions, what is bound to those), so the walk goes no further.
+/// each followed by its own. Bindings are two levels deep at most (a console session, its
+/// coordinator sessions, what is bound to those), so the walk goes no further.
 pub(crate) fn group_in<'a>(sessions: &'a [Session], root: &'a Session) -> Vec<&'a Session> {
     let mut group = vec![root];
     for bound in bound_in(sessions, root) {
@@ -78,7 +78,7 @@ pub(crate) fn bound_sessions(state: &Arc<AppState>, owner: &Session) -> Result<V
 }
 
 /// Every session below `owner` along the bindings, in any status, the deepest level first: the
-/// sessions bound to its lead sessions, then the sessions bound to it.
+/// sessions bound to its coordinators, then the sessions bound to it.
 pub(crate) fn team(state: &Arc<AppState>, owner: &Session) -> Result<Vec<Session>> {
     let sessions = state.store.list_sessions()?;
     let mut team = Vec::new();

@@ -80,11 +80,11 @@ describe("delegatingSessionIds", () => {
   it("marks every owner above a session working in the background, which reads as delegated over done", () => {
     const sessions = [
       at("hub", "idle"),
-      sessionOf("lead", "c", "p", "lead", "idle", { bound_to: "hub", has_conversation: true }),
-      sessionOf("worker", "c", "p", "worker", "idle", { bound_to: "lead", has_conversation: true, background_tasks: [{ id: "b" }] }),
+      sessionOf("coordinator", "c", "p", "coordinator", "idle", { bound_to: "hub", has_conversation: true }),
+      sessionOf("worker", "c", "p", "worker", "idle", { bound_to: "coordinator", has_conversation: true, background_tasks: [{ id: "b" }] }),
     ];
     const delegating = delegatingSessionIds(sessions);
-    expect(delegating).toEqual(new Set(["hub", "lead"]));
+    expect(delegating).toEqual(new Set(["hub", "coordinator"]));
     expect(sessionStatusKind(sessions[1], delegating)).toBe("delegated");
     expect(sessionStatusKind(sessions[2], delegating)).toBe("background");
   });
@@ -101,8 +101,8 @@ describe("delegatingSessionIds", () => {
   });
 
   it("marks every owner above a working session: a console session over an idle coordinator over a worker", () => {
-    const sessions = [at("hub", "idle"), at("lead", "idle", "hub"), at("worker", "working", "lead"), at("other", "idle")];
-    expect(delegatingSessionIds(sessions)).toEqual(new Set(["hub", "lead"]));
+    const sessions = [at("hub", "idle"), at("coordinator", "idle", "hub"), at("worker", "working", "coordinator"), at("other", "idle")];
+    expect(delegatingSessionIds(sessions)).toEqual(new Set(["hub", "coordinator"]));
   });
 
   it("marks an owner of any status, and leaves the status kind of a non-idle one alone", () => {

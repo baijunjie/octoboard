@@ -38,7 +38,7 @@ pub(crate) fn console() -> crate::protocol::Console {
 }
 
 /// A console session `hub` with a stand-in process, and the sessions given, each `(id, owner,
-/// lead, status)`, on record. The stand-in's output is pumped into its ring buffer, so what
+/// coordinator, status)`, on record. The stand-in's output is pumped into its ring buffer, so what
 /// reaches it can be read back.
 pub(crate) fn team_state(
     label: &str,
@@ -60,11 +60,11 @@ pub(crate) fn team_state(
     let live = crate::test_support::idle_stand_in("hub");
     state.register_live(live.clone());
     crate::session::spawn_reader_thread(live.clone(), 8 * 1024);
-    for (id, owner, lead, status) in sessions {
+    for (id, owner, coordinator, status) in sessions {
         let session = Session {
             id: id.to_string(),
             bound_to: Some(owner.to_string()),
-            orchestration_role: if *lead {
+            orchestration_role: if *coordinator {
                 OrchestrationRole::Coordinator
             } else {
                 OrchestrationRole::Worker

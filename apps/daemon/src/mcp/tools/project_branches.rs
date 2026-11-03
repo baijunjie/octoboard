@@ -172,10 +172,16 @@ mod tests {
             state.save_session(&session).unwrap();
         };
         set_status("kid", SessionStatus::Archived);
-        set_status("lead-kid", SessionStatus::Interrupted);
-        crate::test_support::branch_made_from(state, &fixture.repo, "live", "lead", Some("main"));
+        set_status("coordinator-kid", SessionStatus::Interrupted);
+        crate::test_support::branch_made_from(
+            state,
+            &fixture.repo,
+            "live",
+            "coordinator",
+            Some("main"),
+        );
         fixture.branch("archived", "kid");
-        fixture.branch("interrupted", "lead-kid");
+        fixture.branch("interrupted", "coordinator-kid");
         fixture.branch("gone", "vanished");
         git(&fixture.repo, &["branch", "unrecorded"]);
         let checkouts = ScratchDir::new("project-branches-checkouts");
@@ -185,7 +191,7 @@ mod tests {
             &["worktree", "add", "-q", side.to_str().unwrap(), "live"],
         );
 
-        for caller in ["a", "lead", "lead-kid"] {
+        for caller in ["a", "coordinator", "coordinator-kid"] {
             let listed = list_branches(&fixture, caller, json!({ "project": "repo" }))
                 .await
                 .unwrap();
@@ -210,7 +216,9 @@ mod tests {
                 "{caller}"
             );
         }
-        let listed = list_branches(&fixture, "lead", json!({})).await.unwrap();
+        let listed = list_branches(&fixture, "coordinator", json!({}))
+            .await
+            .unwrap();
         let live = branch_of(&listed, "live");
         assert_eq!(live["worktree"]["main"], false);
         assert_eq!(live["worktree"]["holds_project_directory"], false);
@@ -218,8 +226,8 @@ mod tests {
             .as_str()
             .unwrap()
             .ends_with("live-checkout"));
-        assert_eq!(live["origin"]["session"], "lead");
-        assert_eq!(live["origin"]["title"], "Work lead");
+        assert_eq!(live["origin"]["session"], "coordinator");
+        assert_eq!(live["origin"]["title"], "Work coordinator");
         assert_eq!(live["origin"]["session_state"], "live");
         assert_eq!(live["origin"]["target_branch"], "main");
         assert_eq!(live["origin"]["fork_point"].as_str().unwrap().len(), 40);
@@ -268,7 +276,7 @@ mod tests {
             repo,
             &["remote", "add", "origin", "https://example.invalid/r.git"],
         );
-        fixture.branch("other", "lead");
+        fixture.branch("other", "coordinator");
         let listed = |input: Value| list_branches(&fixture, "a", input);
 
         // Nothing on the remote: no upstream, no default branch, and the lookup was whole.

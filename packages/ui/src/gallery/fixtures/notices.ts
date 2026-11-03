@@ -75,7 +75,8 @@ const onAccount = (account: Account) => ({ account_id: account.id, config_dir: a
 
 // Sessions a request to reopen or resume names: an archived one that reports to an archived console session, an
 // interrupted one on Work, an archived one on Client, and a chain whose names have no break opportunity: the target and
-// its owner are project sessions of Search API, the owner a lead session that reports to an archived console session.
+// its owner are project sessions of Search API, the owner a bound coordinator that reports to an archived console
+// session.
 const archivedOwner = sessionOf("s-owner-archived", console_.id, undefined, "Release coordinator", "archived");
 const reopenTarget = sessionOf("s-reopen-target", console_.id, api.id, "Add idempotency keys", "archived", { bound_to: archivedOwner.id });
 const resumeTarget = sessionOf("s-resume-target", console_.id, web.id, "Port the importer to the new parser", "interrupted", onAccount(accounts[0]));

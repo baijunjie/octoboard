@@ -804,13 +804,13 @@ async fn settings_are_listed_without_directories_and_the_general_switches_are_wr
 #[tokio::test]
 async fn get_project_can_refresh_the_git_status_first() {
     let fixture = RepoState::new("get-project-refresh");
-    let plain = call(&fixture.state, "lead", "get_project", &Map::new())
+    let plain = call(&fixture.state, "coordinator", "get_project", &Map::new())
         .await
         .unwrap();
     assert!(plain.get("git_refresh").is_none());
     let refreshed = call(
         &fixture.state,
-        "lead",
+        "coordinator",
         "get_project",
         &arguments(json!({ "refresh": true })),
     )

@@ -169,8 +169,8 @@ pub(super) fn arguments(value: Value) -> Map<String, Value> {
     value.as_object().unwrap().clone()
 }
 
-/// `shared_console_state` plus a project, `repo`, in a real repository, and sessions in it:
-/// `kid` of the console session `a`, `lead` unbound, and `lead-kid` bound to `lead`.
+/// `shared_console_state` plus a project, `repo`, in a real repository, and sessions in it: `kid`
+/// of the console session `a`, `coordinator` unbound, and `coordinator-kid` bound to `coordinator`.
 pub(super) struct RepoState {
     pub state: Arc<AppState>,
     pub repo: ScratchDir,
@@ -193,8 +193,8 @@ impl RepoState {
             .unwrap();
         for (id, owner) in [
             ("kid", Some("a")),
-            ("lead", None),
-            ("lead-kid", Some("lead")),
+            ("coordinator", None),
+            ("coordinator-kid", Some("coordinator")),
         ] {
             state
                 .store
@@ -257,7 +257,7 @@ pub(super) fn peer_state(name: &str) -> (Arc<AppState>, ScratchDir) {
 
 /// `peer_state` with `starter` bound to the console session `a` as a coordinator with a parent,
 /// still owning `mine`.
-pub(super) fn lead_state(name: &str) -> (Arc<AppState>, ScratchDir) {
+pub(super) fn bound_coordinator_state(name: &str) -> (Arc<AppState>, ScratchDir) {
     let (state, dir) = peer_state(name);
     state
         .store

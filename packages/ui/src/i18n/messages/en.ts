@@ -1052,8 +1052,8 @@ export const en = {
   "sidebar.focus.newSessionIn": "New session in {name}",
   "sidebar.focus.newSessionInQuick": "New session in {name} with defaults",
   "sidebar.focus.noBoundSessions": "No bound sessions",
-  // "Under" rather than "bound to": the count covers a lead session's own sessions too, and those
-  // are bound to the lead session, not to the console session above it.
+  // "Under" rather than "bound to": the count covers a bound coordinator's own sessions too, and those
+  // are bound to the bound coordinator, not to the console session above it.
   "sidebar.focus.enterConsoleSession": {
     one: "Enter focus mode for {name}, {count} session under it",
     other: "Enter focus mode for {name}, {count} sessions under it",

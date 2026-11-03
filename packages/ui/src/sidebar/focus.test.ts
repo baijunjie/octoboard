@@ -10,14 +10,14 @@ const project = projectOf("p-1", main.id, "Search API");
 const hub = sessionOf("s-hub", main.id, undefined, "Hub", "idle", { colour: "teal" });
 const bound = sessionOf("s-bound", main.id, project.id, "Bound", "idle", { bound_to: hub.id });
 const unbound = sessionOf("s-unbound", main.id, project.id, "Unbound", "idle");
-// `bound` is a lead session once it has sessions of its own; `underLead` is one of them.
-const underLead = sessionOf("s-under-lead", main.id, project.id, "Under the lead session", "idle", { bound_to: bound.id });
+// `bound` is a bound coordinator once it has sessions of its own; `underCoordinator` is one of them.
+const underCoordinator = sessionOf("s-under-coordinator", main.id, project.id, "Under the bound coordinator", "idle", { bound_to: bound.id });
 const byId = <T extends { id: string }>(items: T[]) => new Map(items.map((item) => [item.id, item]));
 const projects = byId([project, projectOf("p-2", other.id, "Elsewhere")]);
-// An archived lead session, which the console session's archive reaches, unlike the archived
-// sessions of a lead session that is still live.
-const archivedLead = sessionOf("s-archived-lead", main.id, project.id, "Archived lead", "archived", { bound_to: hub.id });
-const sessions = byId([hub, bound, unbound, underLead, archivedLead, { ...hub, id: "s-archived-hub", status: "archived" as const }]);
+// An archived bound coordinator, which the console session's archive reaches, unlike the archived
+// sessions of a bound coordinator that is still live.
+const archivedCoordinator = sessionOf("s-archived-coordinator", main.id, project.id, "Archived coordinator", "archived", { bound_to: hub.id });
+const sessions = byId([hub, bound, unbound, underCoordinator, archivedCoordinator, { ...hub, id: "s-archived-hub", status: "archived" as const }]);
 
 const projectFocus: FocusTarget = { project };
 const hubFocus: FocusTarget = { consoleSession: hub };
@@ -44,21 +44,21 @@ describe("resolveFocus", () => {
 
 describe("belongsToFocus", () => {
   const archivedBound = { ...bound, status: "archived" as const };
-  const archivedBoundUnderLive = { ...underLead, status: "archived" as const };
-  const archivedUnderArchivedLead = sessionOf("s-archived-under-lead", main.id, project.id, "Archived under the lead", "archived", { bound_to: archivedLead.id });
+  const archivedBoundUnderLive = { ...underCoordinator, status: "archived" as const };
+  const archivedUnderArchivedCoordinator = sessionOf("s-archived-under-coordinator", main.id, project.id, "Archived under the coordinator", "archived", { bound_to: archivedCoordinator.id });
   it.each([
     ["a project", projectFocus, unbound, true],
     ["a project", projectFocus, bound, true],
     ["a project", projectFocus, archivedBound, true],
     ["a project", projectFocus, { ...bound, bound_to: unbound.id }, true],
-    ["a project", projectFocus, underLead, true],
-    ["a project", projectFocus, { ...underLead, status: "archived" as const }, true],
+    ["a project", projectFocus, underCoordinator, true],
+    ["a project", projectFocus, { ...underCoordinator, status: "archived" as const }, true],
     ["a project", projectFocus, hub, false],
     ["a console session", hubFocus, bound, true],
-    ["a console session", hubFocus, underLead, true],
+    ["a console session", hubFocus, underCoordinator, true],
     ["a console session", hubFocus, archivedBoundUnderLive, false],
-    ["a console session", hubFocus, archivedLead, true],
-    ["a console session", hubFocus, archivedUnderArchivedLead, true],
+    ["a console session", hubFocus, archivedCoordinator, true],
+    ["a console session", hubFocus, archivedUnderArchivedCoordinator, true],
     ["a console session", hubFocus, hub, true],
     ["a console session", hubFocus, unbound, false],
     ["a console session", hubFocus, { ...bound, bound_to: "s-other" }, false],
@@ -138,7 +138,7 @@ describe("focusAfterSelect", () => {
   });
 });
 
-it.each([bound, underLead])("project focus keeps its selected console-bound session ($id) through status and owner changes", (session) => {
+it.each([bound, underCoordinator])("project focus keeps its selected console-bound session ($id) through status and owner changes", (session) => {
   expect(belongsToFocus(projectFocus, session, sessions)).toBe(true);
   expect(focusAfterSelect(projectFocus, session, false, sessions)).toBe(projectFocus);
   const updated = { ...session, status: "working" as const };

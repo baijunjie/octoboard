@@ -50,7 +50,7 @@ it("hands focus on an archived session's owner link to its history when a projec
   stubWindow();
   // A project-session owner: no console session sits above the selection, so nothing above the history renders on
   // the deletion. Interrupted rather than archived, so the archive's preview lists the session under it.
-  const owner = sessionOf("s-lead", console_.id, project.id, "Release lead", "interrupted");
+  const owner = sessionOf("s-coordinator", console_.id, project.id, "Release coordinator", "interrupted");
   const archived = sessionOf("s-old", console_.id, project.id, "Old fix", "archived", { bound_to: owner.id });
   const daemon = fakeDaemon(snapshotState({ consoles: [console_], projects: [project], sessions: [owner, archived, live] }), (body) =>
     body.type === "read_session_history" ? { type: "session_history", id: null, messages: [{ speaker: "user", text: "Hello", turn: 1 }] } : { type: "ack", id: null });
@@ -59,7 +59,7 @@ it("hands focus on an archived session's owner link to its history when a projec
   await pressMenuItem("View archive");
   await pressMenuItem("Old fix");
   const link = document.querySelector<HTMLElement>("[data-region=terminal] header button");
-  expect(link?.textContent).toContain("Release lead");
+  expect(link?.textContent).toContain("Release coordinator");
   act(() => link!.focus());
 
   await deliver(daemon, { type: "session_deleted", session: owner.id });

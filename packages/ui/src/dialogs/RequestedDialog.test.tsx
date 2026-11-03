@@ -184,17 +184,17 @@ async function submitDialog(): Promise<void> {
 it("lists every bound descendant before archiving and refreshes the list while open", async () => {
   const hub = sessionOf("hub", console_.id, undefined, "Console", "idle", { role: "console" });
   const manual = sessionOf("manual", console_.id, project.id, "Manual session", "working", { bound_to: hub.id, origin: "user" });
-  const lead = sessionOf("lead", console_.id, project.id, "Lead session", "idle", { bound_to: hub.id });
-  const nested = sessionOf("nested", console_.id, project.id, "Nested session", "waiting_user", { bound_to: lead.id });
+  const coordinator = sessionOf("coordinator", console_.id, project.id, "Bound coordinator", "idle", { bound_to: hub.id });
+  const nested = sessionOf("nested", console_.id, project.id, "Nested session", "waiting_user", { bound_to: coordinator.id });
   const archived = sessionOf("archived", console_.id, project.id, "Archived session", "archived", { bound_to: hub.id });
   const elsewhere = sessionOf("elsewhere", console_.id, project.id, "Unbound session", "working");
   const onClose = vi.fn();
-  const { daemon } = mount({ kind: "archive-session", session: hub }, [hub, manual, lead, nested, archived, elsewhere], [], {
+  const { daemon } = mount({ kind: "archive-session", session: hub }, [hub, manual, coordinator, nested, archived, elsewhere], [], {
     onClose, request: async () => ({ type: "ack", id: null }),
   });
   const titles = () => [...document.querySelectorAll("[role=alertdialog] li")].map((row) => row.textContent);
   expect(titles()).toHaveLength(3);
-  for (const title of [manual.title, lead.title, nested.title]) expect(titles().some((text) => text?.includes(title))).toBe(true);
+  for (const title of [manual.title, coordinator.title, nested.title]) expect(titles().some((text) => text?.includes(title))).toBe(true);
   expect(sent(daemon, "archive_session")).toEqual([]);
   const late = sessionOf("late", console_.id, project.id, "New session", "starting", { bound_to: hub.id });
   act(() => daemon.store.setState({ sessions: new Map([...daemon.store.getState().sessions, [late.id, late]]) }));
@@ -323,8 +323,8 @@ it("labels archiving for deletion when only locked worktrees are ticked", async 
 });
 
 const hub = sessionOf("s-hub", console_.id, undefined, "Hub", "idle", { role: "console" });
-const lead = sessionOf("s-lead", console_.id, project.id, "Lead", "idle", { bound_to: hub.id });
-const bound = sessionOf("s-bound", console_.id, project.id, "Bound", "idle", { bound_to: lead.id });
+const coordinator = sessionOf("s-coordinator", console_.id, project.id, "Coordinator", "idle", { bound_to: hub.id });
+const bound = sessionOf("s-bound", console_.id, project.id, "Bound", "idle", { bound_to: coordinator.id });
 const unrelated = sessionOf("s-unrelated", console_.id, project.id, "Unrelated", "idle");
 const excluded = [
   { ...owner, id: "already", account_id: account.id, bound_to: hub.id },
@@ -353,26 +353,26 @@ it("switches only the selected session, and closes at once, unless another scope
 it("switches the session with every session bound under it, however deep, and not the ones that cannot switch", async () => {
   const onClose = vi.fn();
   const onSwitchAccounts = vi.fn();
-  const archivedLead = { ...lead, id: "s-archived-lead", status: "archived" as const, bound_to: hub.id };
-  const underArchived = { ...bound, id: "s-under-archived", bound_to: archivedLead.id };
-  mount({ kind: "switch-account", session: hub, account: account.id, accountName: account.name }, [hub, lead, bound, archivedLead, underArchived, unrelated, ...excluded], [account], { onClose, onSwitchAccounts });
+  const archivedCoordinator = { ...coordinator, id: "s-archived-coordinator", status: "archived" as const, bound_to: hub.id };
+  const underArchived = { ...bound, id: "s-under-archived", bound_to: archivedCoordinator.id };
+  mount({ kind: "switch-account", session: hub, account: account.id, accountName: account.name }, [hub, coordinator, bound, archivedCoordinator, underArchived, unrelated, ...excluded], [account], { onClose, onSwitchAccounts });
   expect(document.body.textContent).toContain("4 sessions can switch");
   await submitDialog();
   expect(onSwitchAccounts).toHaveBeenCalledOnce();
   const [ids, target] = onSwitchAccounts.mock.calls[0] as [string[], string, string];
-  expect([...ids].sort()).toEqual([bound.id, hub.id, lead.id, underArchived.id].sort());
+  expect([...ids].sort()).toEqual([bound.id, hub.id, coordinator.id, underArchived.id].sort());
   expect(target).toBe(account.id);
   expect(onClose).toHaveBeenCalledOnce();
 });
 
 it("switches every eligible session of the agent in the console when that scope is chosen", async () => {
   const onSwitchAccounts = vi.fn();
-  mount({ kind: "switch-account", session: lead, account: account.id, accountName: account.name }, [hub, lead, bound, unrelated, ...excluded], [account], { onSwitchAccounts });
+  mount({ kind: "switch-account", session: coordinator, account: account.id, accountName: account.name }, [hub, coordinator, bound, unrelated, ...excluded], [account], { onSwitchAccounts });
   expect(document.body.textContent).toContain("2 sessions can switch");
   chooseScope(/Every session in this console/);
   await submitDialog();
   const [ids] = onSwitchAccounts.mock.calls[0] as [string[]];
-  expect([...ids].sort()).toEqual([bound.id, hub.id, lead.id, unrelated.id].sort());
+  expect([...ids].sort()).toEqual([bound.id, hub.id, coordinator.id, unrelated.id].sort());
 });
 
 it.each(["claude", "codex", "grok"] as const)("deletes an unused %s session and its records without inspection or confirmation", async (agent) => {

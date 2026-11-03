@@ -216,7 +216,7 @@ export function ProjectFocusView({
 
 /** A console session's focus mode: the sidebar given over to the console session's own card, fixed
  * above the list, and to the projects that have a session bound to it and, within each, only those
- * sessions as cards — a lead session among them carrying its own sessions under it — with its
+ * sessions as cards — a bound coordinator among them carrying its own sessions under it — with its
  * archived bound sessions below. A session opened from here is bound to it, with no choice offered.
  * What has no meaning here is left out: a project's own focus mode (`projectMenu`'s `nested`
  * placement on the project headings here) and the project list's filter. */
@@ -414,7 +414,7 @@ function ConsoleSessionChip({
 }
 
 /** One project of a console session's focus mode: its name with its own new-session button and
- * actions, over the cards of the sessions bound to the console session, each lead session among
+ * actions, over the cards of the sessions bound to the console session, each bound coordinator among
  * them carrying its own sessions under it. Memoised, and reading its own sessions from the store
  * (the rows as `focusGroupRows` gives them, and for its "View archive" submenu the project's
  * sessions in the console session's archive, whose "View all" opens that archive),
@@ -492,7 +492,7 @@ const FocusProjectGroup = memo(function FocusProjectGroup({
 
 /** What a project's focus mode carries for the sessions it leaves out: a line saying how many are
  * under console sessions, over a chip for each console session, with how many of the project's
- * sessions are under it, leading to its own focus mode. A lead session's own sessions are counted
+ * sessions are under it, leading to its own focus mode. A bound coordinator's own sessions are counted
  * with it, as they are listed with it there. */
 function BoundElsewhere({
   handlers,

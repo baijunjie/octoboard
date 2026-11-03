@@ -3,7 +3,7 @@ use crate::coordinator::handle;
 use crate::coordinator::launch::LaunchEdit;
 use crate::coordinator::open::{open_session, OpenRequest};
 use crate::coordinator::test_support::{
-    archive_during_relaunch, bound_session, lead_session, shell_env, status_of, stub_shell,
+    archive_during_relaunch, bound_coordinator, bound_session, shell_env, status_of, stub_shell,
     temp_dir,
 };
 use crate::protocol::{
@@ -757,12 +757,11 @@ async fn a_reopen_unarchives_a_codex_rollout_under_the_sessions_own_account() {
     assert_still_archived_at_5(&state, "s");
 }
 
-/// Which owners a relaunch brings back first, topmost first: the archived owner a session
-/// without a process is bound to and, when that is an archived lead session, its archived console
-/// session above it. The walk stops at the first owner that is not archived — only
-/// interrupted, running or gone — and nothing is brought back for an unbound session, for one
-/// with a process, or for a console session, so reopening an owner reopens nothing bound
-/// to it.
+/// Which owners a relaunch brings back first, topmost first: the archived owner a session without a
+/// process is bound to and, when that is an archived bound coordinator, its archived console
+/// session above it. The walk stops at the first owner that is not archived — only interrupted,
+/// running or gone — and nothing is brought back for an unbound session, for one with a process, or
+/// for a console session, so reopening an owner reopens nothing bound to it.
 #[test]
 fn a_reopen_brings_back_the_archived_owners_above_it_topmost_first() {
     use SessionStatus::{Archived, Idle, Interrupted};
@@ -771,9 +770,9 @@ fn a_reopen_brings_back_the_archived_owners_above_it_topmost_first() {
         console_session("archived-hub", Archived),
         console_session("interrupted-hub", Interrupted),
         console_session("running-hub", Idle),
-        lead_session("archived-lead", Archived, "archived-hub"),
-        lead_session("interrupted-lead", Interrupted, "archived-hub"),
-        lead_session("lead-under-running-hub", Archived, "running-hub"),
+        bound_coordinator("archived-coordinator", Archived, "archived-hub"),
+        bound_coordinator("interrupted-coordinator", Interrupted, "archived-hub"),
+        bound_coordinator("coordinator-under-running-hub", Archived, "running-hub"),
     ] {
         state.store.insert_session(&session).unwrap();
     }
@@ -799,15 +798,20 @@ fn a_reopen_brings_back_the_archived_owners_above_it_topmost_first() {
         (
             "both levels archived",
             Archived,
-            Some("archived-lead"),
-            &["archived-hub", "archived-lead"],
+            Some("archived-coordinator"),
+            &["archived-hub", "archived-coordinator"],
         ),
-        ("lead interrupted", Archived, Some("interrupted-lead"), &[]),
         (
-            "lead's owner running",
+            "coordinator interrupted",
             Archived,
-            Some("lead-under-running-hub"),
-            &["lead-under-running-hub"],
+            Some("interrupted-coordinator"),
+            &[],
+        ),
+        (
+            "coordinator's owner running",
+            Archived,
+            Some("coordinator-under-running-hub"),
+            &["coordinator-under-running-hub"],
         ),
     ];
     for (name, status, owner, expected) in cases {
@@ -863,11 +867,11 @@ async fn a_reopen_fails_as_a_whole_when_its_topmost_owner_cannot_be_reopened() {
         console_session("hub", SessionStatus::Archived),
         Session {
             ended_at: Some(5),
-            ..lead_session("lead", SessionStatus::Archived, "hub")
+            ..bound_coordinator("coordinator", SessionStatus::Archived, "hub")
         },
         Session {
             ended_at: Some(5),
-            ..bound_session("worker", SessionStatus::Archived, "lead")
+            ..bound_session("worker", SessionStatus::Archived, "coordinator")
         },
     ] {
         state.store.insert_session(&session).unwrap();
@@ -879,7 +883,7 @@ async fn a_reopen_fails_as_a_whole_when_its_topmost_owner_cannot_be_reopened() {
 
     assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
     assert_eq!(status_of(&state, "hub"), Some(SessionStatus::Archived));
-    for id in ["lead", "worker"] {
+    for id in ["coordinator", "worker"] {
         let session = state.store.get_session(id).unwrap().unwrap();
         assert_eq!(
             (session.status, session.ended_at),
@@ -887,7 +891,7 @@ async fn a_reopen_fails_as_a_whole_when_its_topmost_owner_cannot_be_reopened() {
             "{id}"
         );
     }
-    assert!(["hub", "lead", "worker"]
+    assert!(["hub", "coordinator", "worker"]
         .iter()
         .all(|id| !state.has_process(id)));
 }

@@ -41,8 +41,8 @@ The console session's instructions and every project session's role description 
   leaving the notes and ending work, without creating or transferring sessions or continuing work in the background.
 - `open_session` is for a recipient the caller should keep directing and receiving reports from. `handoff_session`
   replaces an existing session the caller owns; it does not pass the caller's own work on to a peer. Only a session
-  launched with those tools — a console session, or a project session launched unbound, as every launch of a lead
-  session is — is given this rule; a project session launched bound to an owner is not, and its text names neither
+  launched with those tools — a console session, or a project session launched unbound, as every launch of a bound
+  coordinator is — is given this rule; a project session launched bound to an owner is not, and its text names neither
   tool.
 - Instructions to persist until completion, permission to act without approval and earlier permission to delegate
   do not override the user's intent to continue in another session, or to end. If the agent cannot distinguish a peer

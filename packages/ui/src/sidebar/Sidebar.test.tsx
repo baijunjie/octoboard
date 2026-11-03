@@ -25,12 +25,12 @@ const web = projectOf("p-web", main.id, "Website");
 const hub1 = sessionOf("s-hub-1", main.id, undefined, "Hub", "idle", { colour: "teal" });
 const hub2 = sessionOf("s-hub-2", main.id, undefined, "Hub 2", "idle", { colour: "pink" });
 const sessions = [hub1, hub2, sessionOf("web-bound", main.id, web.id, "Fix the layout", "idle", { bound_to: hub1.id })];
-// A lead session (bound to a console session, with sessions of its own), its two sessions and an
+// A bound coordinator (bound to a console session, with sessions of its own), its two sessions and an
 // unbound session beside it, to read the project list's three levels off.
-const lead = sessionOf("web-lead", main.id, web.id, "Rework the gallery", "idle", { bound_to: hub1.id });
+const coordinator = sessionOf("web-coordinator", main.id, web.id, "Rework the gallery", "idle", { bound_to: hub1.id });
 const team = [
-  sessionOf("web-team-1", main.id, web.id, "Chase the flaky test", "idle", { bound_to: lead.id }),
-  sessionOf("web-team-2", main.id, web.id, "Measure the first paint", "working", { bound_to: lead.id }),
+  sessionOf("web-team-1", main.id, web.id, "Chase the flaky test", "idle", { bound_to: coordinator.id }),
+  sessionOf("web-team-2", main.id, web.id, "Measure the first paint", "working", { bound_to: coordinator.id }),
 ];
 const unbound = sessionOf("web-unbound", main.id, web.id, "Tidy the changelog", "interrupted");
 const sidebarWidth = { width: 280, preferredWidth: 280, min: 280, max: 480, setWidth: () => {}, persist: () => {}, reset: () => {} };
@@ -235,9 +235,9 @@ it("shows the console it is given, and a hover alone commits nothing", () => {
 });
 
 it("lists a project session's own sessions under it, and the binding badge only for a console session's owner", () => {
-  const { container, root } = mountSidebar({ sessions: [hub1, hub2, lead, ...team, unbound] });
+  const { container, root } = mountSidebar({ sessions: [hub1, hub2, coordinator, ...team, unbound] });
   const rows = Array.from(container.querySelectorAll<HTMLElement>("[data-sessions] div[role=button]"));
-  // The lead session, which has work delegated to its team, is ranked against the unbound session as
+  // The bound coordinator, which has work delegated to its team, is ranked against the unbound session as
   // ever (delegated before interrupted) and its own sessions follow it, ranked among themselves (done
   // before working).
   expect(rows.map((row) => row.getAttribute("aria-label"))).toEqual([

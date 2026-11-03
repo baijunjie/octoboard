@@ -1,7 +1,7 @@
 use super::*;
 use crate::coordinator::handle;
 use crate::coordinator::test_support::{
-    bound_session, console, console_workdir_in, lead_session, pins, project_of, status_of,
+    bound_coordinator, bound_session, console, console_workdir_in, pins, project_of, status_of,
 };
 use crate::hostfs;
 use crate::protocol::{
@@ -1039,20 +1039,20 @@ async fn adding_a_project_stores_its_settings_and_refuses_a_mismatched_account()
     assert_eq!(stored.launch.grok.effort.as_deref(), Some("high"));
 }
 
-/// Removing a project that holds a running lead session and its running sessions stops them
-/// all, the lead session's own first, and leaves the console session it is bound to running.
+/// Removing a project that holds a running bound coordinator and its running sessions stops them
+/// all, the bound coordinator's own first, and leaves the console session it is bound to running.
 #[tokio::test]
-async fn removing_a_project_with_a_lead_session_leaves_its_console_session_alone() {
+async fn removing_a_project_with_a_bound_coordinator_leaves_its_console_session_alone() {
     use SessionStatus::{Idle, Working};
-    let (state, _dir) = console_with_project_and_accounts("coordinator-delete-project-lead");
+    let (state, _dir) = console_with_project_and_accounts("coordinator-delete-project-coordinator");
     for session in [
         console_session("hub", Idle),
-        lead_session("lead", Idle, "hub"),
-        bound_session("worker", Working, "lead"),
+        bound_coordinator("coordinator", Idle, "hub"),
+        bound_session("worker", Working, "coordinator"),
     ] {
         state.store.insert_session(&session).unwrap();
     }
-    let live: Vec<_> = ["hub", "lead", "worker"]
+    let live: Vec<_> = ["hub", "coordinator", "worker"]
         .into_iter()
         .map(|id| {
             let stand_in = idle_stand_in(id);

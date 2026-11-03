@@ -67,7 +67,7 @@ const accountsState = snapshotState({
   },
 });
 
-// Manually bound running sessions and a lead with its own child all join the archive confirmation.
+// Manually bound running sessions and a coordinator with its own child all join the archive confirmation.
 const cascadeHub = sessionOf("s-hub-4", console_.id, undefined, "Hub 4", "idle", { colour: "cyan", ordinal: 4 });
 const cascadeState = snapshotState({
   consoles: [console_],
@@ -545,7 +545,7 @@ const archiveConsoleSession: Scenario = {
   group: "Archive view",
   category: "normal",
   title: "Archive console session and its bound sessions",
-  description: "Under the message the dialog is in two sections with a groove between them, each a headed group. \"Archived with it (3)\" lists the running manually bound session, the waiting lead and its interrupted child. \"Worktrees and branches\" offers two plain options, unchecked, each a checkbox with its count in the label, a short note and a closed Details disclosure: \"Also force-remove the worktrees and branches Git keeps (5)\" and \"Also delete the locked worktree\"; no consequence line yet, as nothing is ticked. No section for processes, since none were started. The header carries a warning icon and the plain title Archive session, and the body's first sentence names the session. Confirming stops and archives all of them together. The confirming button reads \"Archive\" in the normal colour until a deletion option is ticked.",
+  description: "Under the message the dialog is in two sections with a groove between them, each a headed group. \"Archived with it (3)\" lists the running manually bound session, the waiting coordinator and its interrupted child. \"Worktrees and branches\" offers two plain options, unchecked, each a checkbox with its count in the label, a short note and a closed Details disclosure: \"Also force-remove the worktrees and branches Git keeps (5)\" and \"Also delete the locked worktree\"; no consequence line yet, as nothing is ticked. No section for processes, since none were started. The header carries a warning icon and the plain title Archive session, and the body's first sentence names the session. Confirming stops and archives all of them together. The confirming button reads \"Archive\" in the normal colour until a deletion option is ticked.",
   sessionBranches: [
     worktreeItemOf(web, hubSessions.web, "feat/changelog-tidy", "/Users/dev/worktrees/website-changelog-tidy"),
     worktreeItemOf(web, hubSessions.web, null, "/Users/dev/worktrees/website-changelog-scratch"),

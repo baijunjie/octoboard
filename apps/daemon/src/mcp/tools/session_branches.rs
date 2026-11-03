@@ -139,9 +139,9 @@ mod tests {
     async fn the_branches_of_a_session_are_read_with_their_worktrees() {
         let fixture = RepoState::new("session-branches");
         for branch in ["dirty", "clean", "bare"] {
-            fixture.branch(branch, "lead");
+            fixture.branch(branch, "coordinator");
         }
-        fixture.branch("kids", "lead-kid");
+        fixture.branch("kids", "coordinator-kid");
         let checkouts = ScratchDir::new("session-branches-checkouts");
         let (dirty, clean) = (
             checkouts.join("dirty-checkout"),
@@ -156,8 +156,8 @@ mod tests {
         std::fs::write(dirty.join("new.txt"), "unsaved").unwrap();
 
         // The caller's own, `session` left out: an unbound project session.
-        let own = read(&fixture, "lead", json!({})).await;
-        assert_eq!(own["session"], "lead");
+        let own = read(&fixture, "coordinator", json!({})).await;
+        assert_eq!(own["session"], "coordinator");
         assert_eq!(own["branches"].as_array().unwrap().len(), 3);
         assert_eq!(entry(&own, "dirty")["worktree_status"], "checked_out");
         assert!(entry(&own, "dirty")["worktree"]
@@ -174,9 +174,9 @@ mod tests {
 
         // Another session's, read by a console session, by its owner, and by a bound project
         // session that owns nobody.
-        for caller in ["a", "lead", "lead-kid"] {
-            let theirs = read(&fixture, caller, json!({ "session": "lead-kid" })).await;
-            assert_eq!(theirs["session"], "lead-kid", "{caller}");
+        for caller in ["a", "coordinator", "coordinator-kid"] {
+            let theirs = read(&fixture, caller, json!({ "session": "coordinator-kid" })).await;
+            assert_eq!(theirs["session"], "coordinator-kid", "{caller}");
             assert_eq!(theirs["branches"].as_array().unwrap().len(), 1, "{caller}");
             assert_eq!(
                 entry(&theirs, "kids")["worktree_status"],
@@ -185,14 +185,14 @@ mod tests {
             );
         }
         // A bound project session reads its own by default.
-        let kid = read(&fixture, "lead-kid", json!({})).await;
+        let kid = read(&fixture, "coordinator-kid", json!({})).await;
         assert_eq!(kid["branches"][0]["branch"], "kids");
 
         // A console session is responsible for no branch, and neither is a project session with
         // none.
         assert_eq!(read(&fixture, "a", json!({})).await["branches"], json!([]));
         for session in ["b", "kid"] {
-            let none = read(&fixture, "lead", json!({ "session": session })).await;
+            let none = read(&fixture, "coordinator", json!({ "session": session })).await;
             assert_eq!(none["branches"], json!([]), "{session}");
         }
 
@@ -215,9 +215,15 @@ mod tests {
     async fn a_branch_says_where_it_came_from_and_what_archiving_would_do() {
         let fixture = RepoState::new("session-branches-archive");
         let repo = &fixture.repo;
-        crate::test_support::branch_made_from(&fixture.state, repo, "feat", "lead", Some("main"));
+        crate::test_support::branch_made_from(
+            &fixture.state,
+            repo,
+            "feat",
+            "coordinator",
+            Some("main"),
+        );
         for branch in ["plain", "dirty", "tidy", "unmerged", "inmain"] {
-            fixture.branch(branch, "lead");
+            fixture.branch(branch, "coordinator");
         }
         let checkouts = ScratchDir::new("session-branches-archive-checkouts");
         let tidy = checkouts.join("tidy-checkout");
@@ -252,7 +258,7 @@ mod tests {
         git(repo, &["worktree", "remove", temporary.to_str().unwrap()]);
         git(repo, &["switch", "-q", "inmain"]);
 
-        let own = read(&fixture, "lead", json!({})).await;
+        let own = read(&fixture, "coordinator", json!({})).await;
         let feat = entry(&own, "feat");
         assert_eq!(feat["target_branch"], "main");
         assert_eq!(feat["fork_point"].as_str().unwrap().len(), 40);
@@ -296,7 +302,7 @@ mod tests {
     #[tokio::test]
     async fn a_worktree_whose_directory_is_gone_says_so() {
         let fixture = RepoState::new("session-branches-gone");
-        fixture.branch("lost", "lead");
+        fixture.branch("lost", "coordinator");
         let checkouts = ScratchDir::new("session-branches-gone-checkouts");
         let path = checkouts.join("lost-checkout");
         git(
@@ -305,7 +311,7 @@ mod tests {
         );
         std::fs::remove_dir_all(&path).unwrap();
 
-        let own = read(&fixture, "lead", json!({})).await;
+        let own = read(&fixture, "coordinator", json!({})).await;
         let lost = entry(&own, "lost");
         assert_eq!(lost["worktree_status"], "gone");
         assert!(lost["worktree"]
@@ -319,14 +325,14 @@ mod tests {
     #[tokio::test]
     async fn without_git_every_worktree_is_unknown() {
         let fixture = RepoState::new("session-branches-no-git");
-        fixture.branch("one", "lead");
-        fixture.branch("two", "lead");
+        fixture.branch("one", "coordinator");
+        fixture.branch("two", "coordinator");
         fixture.state.host_tools.replace(crate::host_tools::Tools {
             git: || Err(anyhow::anyhow!("git must not run")),
             ..crate::test_support::host_tools()
         });
 
-        let own = read(&fixture, "lead", json!({})).await;
+        let own = read(&fixture, "coordinator", json!({})).await;
         assert_eq!(own["branches"].as_array().unwrap().len(), 2);
         for name in ["one", "two"] {
             assert_eq!(entry(&own, name)["worktree_status"], "unknown");

@@ -684,7 +684,7 @@ mod tests {
         std::fs::write(repo.join("new.txt"), "fresh\n").unwrap();
         std::fs::write(repo.join("blob.bin"), b"\x00\x01\x02").unwrap();
 
-        for caller in ["a", "lead", "lead-kid"] {
+        for caller in ["a", "coordinator", "coordinator-kid"] {
             let listed = list(&fixture, caller, json!({ "project": "repo" }))
                 .await
                 .unwrap();
@@ -708,7 +708,7 @@ mod tests {
             assert_eq!(modified["lines_removed"], 1);
         }
         // A project session names no project to read its own.
-        let own = list(&fixture, "lead", json!({})).await.unwrap();
+        let own = list(&fixture, "coordinator", json!({})).await.unwrap();
         assert_eq!(own["project"], "repo");
         let err = list(&fixture, "a", json!({})).await.unwrap_err();
         assert!(err.to_string().contains("`project` is required"), "{err}");
@@ -726,7 +726,7 @@ mod tests {
         assert_eq!(unstaged["next_offset"], Value::Null);
         let staged = read(
             &fixture,
-            "lead",
+            "coordinator",
             json!({ "path": "staged.txt", "group": "staged" }),
         )
         .await
@@ -734,7 +734,7 @@ mod tests {
         assert!(staged["text"].as_str().unwrap().contains("+staged"));
         let untracked = read(
             &fixture,
-            "lead-kid",
+            "coordinator-kid",
             json!({ "path": "new.txt", "group": "untracked" }),
         )
         .await
@@ -890,7 +890,7 @@ mod tests {
         // The whole branch against the fork.
         let whole = read(
             &fixture,
-            "lead",
+            "coordinator",
             json!({
                 "project": "repo", "path": "a",
                 "commit": listed["branch_commit"], "parent": listed["merge_base"],
@@ -1154,13 +1154,19 @@ mod tests {
     async fn a_branch_without_a_base_is_compared_with_its_recorded_target() {
         let fixture = RepoState::new("project-changes-target");
         let repo = &fixture.repo;
-        crate::test_support::branch_made_from(&fixture.state, repo, "feat", "lead", Some("main"));
+        crate::test_support::branch_made_from(
+            &fixture.state,
+            repo,
+            "feat",
+            "coordinator",
+            Some("main"),
+        );
         git(repo, &["switch", "-q", "feat"]);
         std::fs::write(repo.join("d.txt"), "d\n").unwrap();
         git(repo, &["add", "d.txt"]);
         git(repo, &["commit", "-q", "-m", "add d"]);
         git(repo, &["switch", "-q", "main"]);
-        fixture.branch("plain", "lead");
+        fixture.branch("plain", "coordinator");
 
         let listed = list(
             &fixture,
@@ -1191,7 +1197,7 @@ mod tests {
             &fixture.state,
             repo,
             "orphaned",
-            "lead",
+            "coordinator",
             Some("vanished"),
         );
         let err = list(

@@ -768,9 +768,9 @@ fn stop_project_sessions(
     // A process still exiting when its rows are gone is tolerated by `watch_exit` and the hook paths.
     // The deepest level goes first: archiving an owner is refused while a session
     // bound to it still has a process, and all of them are in this project. So the
-    // sessions bound to a lead session go before it, and it, bound to a console
+    // sessions bound to a coordinator go before it, and it, bound to a console
     // session, before the unbound ones. A console session belongs to no project and
-    // is not in this loop; a lead session's binding to one is left as any bound
+    // is not in this loop; a bound coordinator's binding to one is left as any bound
     // session's is, and goes with its record.
     let mut in_this_project = Vec::new();
     for live in state.live_sessions() {

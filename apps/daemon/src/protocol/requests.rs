@@ -555,7 +555,7 @@ pub enum RequestBody {
         keep: Vec<SessionBranchTarget>,
     },
     /// Removes every archived session of `project`, or every archived session under
-    /// `console_session` (bound to it, or to an archived lead session bound to it), or, with
+    /// `console_session` (bound to it, or to an archived coordinator bound to it), or, with
     /// neither, every archived console session of `console`. Naming both is refused as
     /// unreadable.
     DeleteArchivedSessions {

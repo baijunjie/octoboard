@@ -98,7 +98,7 @@ it("keeps composed session choice labels raw while sentence display keeps each n
 
 describe("sessionRowName", () => {
   const session = sessionOf("s", "c", "p", "Work", "idle");
-  const lead = sessionOf("lead", "c", "p", "Lead", "idle");
+  const coordinator = sessionOf("coordinator", "c", "p", "Coordinator", "idle");
   const hub = sessionOf("hub", "c", undefined, "Hub", "idle", { role: "console" });
   const name = (owners: (typeof session | undefined)[]) => sessionRowName(t, "en", session, { accounts, defaultNames: {}, owners, modelLabel: "Opus 5.5 · high", status: "idle" });
   const base = sessionAriaLabel(t, "en", session, accounts, undefined, {}, "idle");
@@ -106,7 +106,7 @@ describe("sessionRowName", () => {
   it("names no owner, one owner or two, with the model line last", () => {
     expect(name([])).toBe(`${base}, Opus 5.5 · high`);
     expect(name([undefined, undefined])).toBe(name([]));
-    expect(name([lead])).toBe(`${base}, Bound to ${isolate("Lead")}, Opus 5.5 · high`);
-    expect(name([lead, hub])).toBe(`${base}, Bound to ${isolate("Lead")}, Bound to ${isolate("Hub")}, Opus 5.5 · high`);
+    expect(name([coordinator])).toBe(`${base}, Bound to ${isolate("Coordinator")}, Opus 5.5 · high`);
+    expect(name([coordinator, hub])).toBe(`${base}, Bound to ${isolate("Coordinator")}, Bound to ${isolate("Hub")}, Opus 5.5 · high`);
   });
 });

@@ -228,20 +228,20 @@ describe("boundArchivedSessions", () => {
 });
 
 describe("boundSessionsArchivedWith", () => {
-  it("includes running and interrupted descendants regardless of origin or an archived lead", () => {
+  it("includes running and interrupted descendants regardless of origin or an archived coordinator", () => {
     const sessions = [
-      session("lead", "interrupted", 1, false, "s-console"),
-      session("under-lead", "interrupted", 2, false, "lead"),
-      session("under-lead-live", "idle", 3, false, "lead"),
+      session("coordinator", "interrupted", 1, false, "s-console"),
+      session("under-coordinator", "interrupted", 2, false, "coordinator"),
+      session("under-coordinator-live", "idle", 3, false, "coordinator"),
       session("bound-live", "idle", 4, false, "s-console"),
       session("under-live", "interrupted", 5, false, "bound-live"),
-      session("archived-lead", "archived", 6, false, "s-console"),
-      { ...session("under-archived", "starting", 7, false, "archived-lead"), origin: "console" as const },
+      session("archived-coordinator", "archived", 6, false, "s-console"),
+      { ...session("under-archived", "starting", 7, false, "archived-coordinator"), origin: "console" as const },
       session("unbound", "working", 8),
       session("other-owner", "working", 9, false, "elsewhere"),
-      session("old-child", "archived", 10, false, "lead"),
+      session("old-child", "archived", 10, false, "coordinator"),
     ];
-    expect(boundSessionsArchivedWith(sessions, "s-console", NONE, NONE).map((s) => s.id)).toEqual(["bound-live", "lead", "under-archived", "under-lead-live", "under-live", "under-lead"]);
+    expect(boundSessionsArchivedWith(sessions, "s-console", NONE, NONE).map((s) => s.id)).toEqual(["bound-live", "coordinator", "under-archived", "under-coordinator-live", "under-live", "under-coordinator"]);
   });
 });
 
@@ -271,12 +271,12 @@ describe("archiveNeedsConfirmation", () => {
       session("child", "interrupted", 6, false, "owner"),
       session("owner-archived-child", "interrupted", 7),
       session("archived-child", "archived", 8, false, "owner-archived-child"),
-      session("lead", "idle", 9),
-      session("lead-archived-child", "archived", 10, false, "lead"),
-      session("lead-grandchild", "interrupted", 11, false, "lead-archived-child"),
+      session("coordinator", "idle", 9),
+      session("coordinator-archived-child", "archived", 10, false, "coordinator"),
+      session("coordinator-grandchild", "interrupted", 11, false, "coordinator-archived-child"),
     ];
     const needs = (id: string) => archiveNeedsConfirmation(sessions.values(), sessions.find((s) => s.id === id)!);
-    expect(["idle", "interrupted", "waiting", "working", "owner", "owner-archived-child", "lead"].map(needs)).toEqual([false, false, true, true, true, false, true]);
+    expect(["idle", "interrupted", "waiting", "working", "owner", "owner-archived-child", "coordinator"].map(needs)).toEqual([false, false, true, true, true, false, true]);
   });
 
   it("asks for an idle session with work left running in the background, which archiving ends", () => {
@@ -351,13 +351,13 @@ describe("sessionsInTreeOrder", () => {
 });
 
 describe("notUnderConsoleSession", () => {
-  it("keeps the sessions no console session is above, whatever their status, and drops a lead session with its team", () => {
+  it("keeps the sessions no console session is above, whatever their status, and drops a bound coordinator with its team", () => {
     const owners = new Map([["s-console", { ...session("s-console", "idle", 0), role: "console" as const }]]);
     const sessions = [
       session("unbound", "idle", 1),
       session("archived", "archived", 2),
-      session("lead", "idle", 3, false, "s-console"),
-      session("under-lead", "idle", 4, false, "lead"),
+      session("coordinator", "idle", 3, false, "s-console"),
+      session("under-coordinator", "idle", 4, false, "coordinator"),
       session("bound-to-project", "idle", 5, false, "unbound"),
     ];
     expect(notUnderConsoleSession(sessions, owners).map((s) => s.id)).toEqual(["unbound", "archived", "bound-to-project"]);
@@ -435,7 +435,7 @@ describe("boundElsewhere", () => {
   it.each([
     { name: "counts the live bound sessions, in total and per owner, naming each owner once in the sidebar's order", sessions: [session("a", "idle", 1, false, "hub-1"), session("b", "working", 2, false, "hub-2"), session("c", "idle", 3, false, "hub-1")], expected: { count: 3, owners: [["hub-2", 1], ["hub-1", 2]] } },
     { name: "leaves out unbound, archived, unknown-owner and archived-owner sessions", sessions: [session("a", "idle", 1), session("b", "archived", 2, false, "hub-1"), session("c", "idle", 3, false, "gone"), session("d", "idle", 4, false, "hub-old")], expected: undefined },
-    { name: "counts a lead session's own sessions with the console session above them", sessions: [session("lead", "idle", 1, false, "hub-1"), session("under-lead", "idle", 2, false, "lead"), session("under-unbound", "idle", 3, false, "unbound"), session("unbound", "idle", 4)], expected: { count: 2, owners: [["hub-1", 2]] } },
+    { name: "counts a bound coordinator's own sessions with the console session above them", sessions: [session("coordinator", "idle", 1, false, "hub-1"), session("under-coordinator", "idle", 2, false, "coordinator"), session("under-unbound", "idle", 3, false, "unbound"), session("unbound", "idle", 4)], expected: { count: 2, owners: [["hub-1", 2]] } },
   ])("$name", ({ sessions, expected }) => {
     const summary = boundElsewhere(sessions, owners, NONE, NONE);
     expect(summary && { count: summary.count, owners: summary.owners.map((o) => [o.owner.id, o.count]) }).toEqual(expected);
@@ -450,7 +450,7 @@ describe("boundElsewhere", () => {
 });
 
 describe("focusGroups", () => {
-  it("lists the projects with a live session bound to the console session, each with only those and a lead session's own sessions under it, in project order", () => {
+  it("lists the projects with a live session bound to the console session, each with only those and a bound coordinator's own sessions under it, in project order", () => {
     const in_ = (id: string, project: string, status: SessionStatus, bound_to?: string): Session => ({ ...session(id, status, 1, false, bound_to), project_id: project });
     const groups = focusGroups(
       [project("a", "alpha"), project("b", "beta"), project("c", "charlie"), project("d", "delta")],
@@ -617,28 +617,28 @@ describe("archivedDeletionScope", () => {
   const console_ = consoleOf("c-1", "Main");
   const project = projectOf("p-1", console_.id, "Search API");
   const hub = sessionOf("s-hub", console_.id, undefined, "Hub", "archived", { role: "console" });
-  const lead = sessionOf("s-lead", console_.id, project.id, "Lead", "archived", { bound_to: hub.id });
-  const worker = sessionOf("s-worker", console_.id, project.id, "Worker", "archived", { bound_to: lead.id });
+  const coordinator = sessionOf("s-coordinator", console_.id, project.id, "Coordinator", "archived", { bound_to: hub.id });
+  const worker = sessionOf("s-worker", console_.id, project.id, "Worker", "archived", { bound_to: coordinator.id });
   const live = sessionOf("s-live", console_.id, project.id, "Live", "idle", { bound_to: hub.id });
-  const all = [hub, lead, worker, live];
+  const all = [hub, coordinator, worker, live];
 
   it("takes a console's archived console sessions with the archived sessions bound under them", () => {
     const scope = archivedDeletionScope(all, { console: console_ });
     expect(scope.count).toBe(1);
     expect(scope.withThem).toBe(2);
-    expect(scope.targetIds.sort()).toEqual(["s-hub", "s-lead", "s-worker"]);
+    expect(scope.targetIds.sort()).toEqual(["s-coordinator", "s-hub", "s-worker"]);
   });
 
   it("takes a project's archived sessions, each with those bound under it, once", () => {
     const scope = archivedDeletionScope(all, { console: console_, project });
     expect(scope.count).toBe(2);
     expect(scope.withThem).toBe(0);
-    expect(scope.targetIds.sort()).toEqual(["s-lead", "s-worker"]);
+    expect(scope.targetIds.sort()).toEqual(["s-coordinator", "s-worker"]);
   });
 
   it("takes the archived sessions bound to a console session, and those bound to them", () => {
     const scope = archivedDeletionScope(all, { console: console_, consoleSession: hub });
     expect(scope.count).toBe(2);
-    expect(scope.targetIds.sort()).toEqual(["s-lead", "s-worker"]);
+    expect(scope.targetIds.sort()).toEqual(["s-coordinator", "s-worker"]);
   });
 });

@@ -46,9 +46,9 @@ export function resolveFocus(
 export function belongsToFocus(target: FocusTarget, session: Session, sessions: Map<string, Session>): boolean {
   if ("project" in target) return session.project_id === target.project.id;
   if (session.id === target.consoleSession.id) return true;
-  // A live session under it is a card of the view, a lead session's own sessions among them. Its
+  // A live session under it is a card of the view, a bound coordinator's own sessions among them. Its
   // archive reaches less far than that chain does (`boundArchivedSessions`): an archived session of
-  // a lead session that is still live is listed in its project's archive, not here, so selecting it
+  // a bound coordinator that is still live is listed in its project's archive, not here, so selecting it
   // leaves this focus mode rather than leaving nothing on screen for the selection.
   if (session.status !== "archived") {
     return consoleSessionAbove(session, (id) => sessions.get(id))?.id === target.consoleSession.id;

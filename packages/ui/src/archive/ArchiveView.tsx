@@ -38,12 +38,12 @@ export interface ArchiveViewState {
 
 /**
  * Every archived session of a project, every archived console session of a console, or the
- * archived sessions under a console session (bound to it, or to an archived lead session bound to
- * it, each of those inset under that lead session), newest first: the full archive the sidebar's
+ * archived sessions under a console session (bound to it, or to an archived bound coordinator bound to
+ * it, each of those inset under that bound coordinator), newest first: the full archive the sidebar's
  * menus and focus mode lead to ("The archive view" in docs/product/archive-view.md). It covers the
  * terminal while open, which stays mounted beneath it. The list is rendered a page at a time,
  * adding the next page as its end scrolls into view; a page is counted in rows, so a session inset
- * under a lead session is never shown before the lead session it is inset under. The records
+ * under a bound coordinator is never shown before the bound coordinator it is inset under. The records
  * themselves are all in the daemon's snapshot already.
  */
 export function ArchiveView({
@@ -67,7 +67,7 @@ export function ArchiveView({
 }: {
   console: Console;
   project?: Project;
-  /** The console session whose archived sessions this lists (bound to it, or to an archived lead
+  /** The console session whose archived sessions this lists (bound to it, or to an archived coordinator
    * session bound to it, inset under it), instead of a project's or the console's. Never set
    * together with `project`. */
   boundTo?: Session;
@@ -245,7 +245,7 @@ export function ArchiveView({
 
 /** One row of the list: selects the session (`onSelect`), and holds the Reopen and Delete actions,
  * whose presses must not also select it. Its accessible name is the session's own
- * (`sessionRowName`, which also says which lead session it was archived under, the inset alone
+ * (`sessionRowName`, which also says which bound coordinator it was archived under, the inset alone
  * being no words), then its model and effort, which the agent line shows only visually; the
  * account is already in the first part. Its context size and dates are its description. */
 function ArchiveRow({

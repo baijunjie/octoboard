@@ -95,23 +95,24 @@ it("leaves the current console as it is when another window creates one", async 
 const pressFocusShortcut = () => act(async () => void window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyF", key: "F", shiftKey: true, metaKey: IS_MAC, ctrlKey: !IS_MAC, bubbles: true, cancelable: true })));
 const inFocusMode = () => document.querySelector("[data-focus-exit]") !== null;
 
-// A console session, with a lead bound to it and a worker bound to the lead; and a session bound to neither.
+// A console session, with a coordinator bound to it and a worker bound to the coordinator; and a session bound to
+// neither.
 const captain = sessionOf("s-captain", main.id, undefined, "Release captain", "idle");
-const lead = sessionOf("s-lead", main.id, site.id, "Lead", "idle", { bound_to: captain.id });
-const worker = sessionOf("s-worker", main.id, site.id, "Worker", "idle", { bound_to: lead.id });
+const coordinator = sessionOf("s-coordinator", main.id, site.id, "Coordinator", "idle", { bound_to: captain.id });
+const worker = sessionOf("s-worker", main.id, site.id, "Worker", "idle", { bound_to: coordinator.id });
 const unrelated = sessionOf("s-unrelated", main.id, site.id, "Unrelated", "idle");
 const api = projectOf("p-api", main.id, "API");
 
 function mountTeam() {
   stubWindow();
-  const daemon = fakeDaemon(snapshotState({ consoles: [main], projects: [site, api], sessions: [captain, lead, worker, unrelated] }));
+  const daemon = fakeDaemon(snapshotState({ consoles: [main], projects: [site, api], sessions: [captain, coordinator, worker, unrelated] }));
   mountApp(daemon);
   return daemon;
 }
 
 it.each([
   ["its own binding", { ...worker, bound_to: null }],
-  ["its owner's binding", { ...lead, bound_to: null }],
+  ["its owner's binding", { ...coordinator, bound_to: null }],
 ])("leaves a console session's focus mode when %s takes the selection out of it", async (_, change) => {
   const daemon = mountTeam();
   await pressElement(row(captain.title));

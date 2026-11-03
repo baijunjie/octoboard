@@ -251,7 +251,7 @@ pub(super) fn status_of(state: &Arc<AppState>, id: &str) -> Option<SessionStatus
 
 /// A coordinator in `status` under the console session `owner`: bound to it after it was
 /// opened.
-pub(super) fn lead_session(id: &str, status: SessionStatus, owner: &str) -> Session {
+pub(super) fn bound_coordinator(id: &str, status: SessionStatus, owner: &str) -> Session {
     Session {
         orchestration_role: OrchestrationRole::Coordinator,
         ..bound_session(id, status, owner)

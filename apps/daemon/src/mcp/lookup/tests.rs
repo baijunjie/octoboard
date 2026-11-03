@@ -1,6 +1,8 @@
 use super::*;
 use crate::mcp::dispatch::call;
-use crate::mcp::test_support::{arguments, lead_state, peer_state, refused, shared_console_state};
+use crate::mcp::test_support::{
+    arguments, bound_coordinator_state, peer_state, refused, shared_console_state,
+};
 use crate::protocol::{error_code, Agent, CodedError, SessionStatus};
 use serde_json::json;
 
@@ -89,8 +91,8 @@ async fn writes_are_refused_for_sessions_the_caller_does_not_own() {
 /// and its own sessions as bound to a project session and not yours; acting on one of those is
 /// refused, naming the coordinator as its owner.
 #[tokio::test]
-async fn the_console_session_reads_a_lead_sessions_sessions_but_cannot_drive_them() {
-    let (state, _dir) = lead_state("lead-reads");
+async fn the_console_session_reads_a_bound_coordinators_sessions_but_cannot_drive_them() {
+    let (state, _dir) = bound_coordinator_state("coordinator-reads");
     for (target, owner, kind, yours) in [
         ("starter", "a", "console", true),
         ("mine", "starter", "project", false),

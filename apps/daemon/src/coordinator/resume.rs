@@ -272,14 +272,14 @@ pub(crate) fn resumable_agent_session_id(session: &Session) -> Option<String> {
 /// happens.
 ///
 /// A session bound to an archived owner (a console session, or a project session that started it)
-/// brings its archived owners back first, level by level from the topmost down — a session bound
-/// to an archived lead session brings back the lead session's archived console session, then the
-/// lead session — so what it reports reaches a process. The walk stops at the first owner that is
-/// not archived; one that is only interrupted is not relaunched. If an owner cannot be relaunched
-/// the whole resume fails with its reason: the owners already brought back stay reopened, and the
-/// rest, the session included, stay as they were. Reopening an owner reopens nothing bound to it,
-/// and no other session bound to the same owners is resumed: the group comes back one session at
-/// a time, from the one the user asked for.
+/// brings its archived owners back first, level by level from the topmost down — a session bound to
+/// an archived bound coordinator brings back the bound coordinator's archived console session, then
+/// the bound coordinator — so what it reports reaches a process. The walk stops at the first owner
+/// that is not archived; one that is only interrupted is not relaunched. If an owner cannot be
+/// relaunched the whole resume fails with its reason: the owners already brought back stay
+/// reopened, and the rest, the session included, stay as they were. Reopening an owner reopens
+/// nothing bound to it, and no other session bound to the same owners is resumed: the group comes
+/// back one session at a time, from the one the user asked for.
 ///
 /// Before anything is relaunched, the session and each owner about to be launched are checked for a
 /// conversation the agent can still resume ([`check_resumable`]). The session itself is refused

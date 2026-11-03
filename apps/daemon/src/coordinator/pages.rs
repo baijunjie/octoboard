@@ -53,7 +53,7 @@ pub(crate) fn announce_deleted(state: &Arc<AppState>, session_id: &str, deleted:
 /// that pushed it, a project session's included — history pages are read-only, and this is where
 /// that is actually enforced; a panel that disables its own submit button on a history page is
 /// only reflecting the rule, not the source of it. Refused too when the session that pushed it
-/// has the role of a worker and so has no tool to read the submission through; a lead session,
+/// has the role of a worker and so has no tool to read the submission through; a bound coordinator,
 /// though it reports to an owner too, keeps its pages.
 pub(super) async fn submit_page(
     state: &Arc<AppState>,

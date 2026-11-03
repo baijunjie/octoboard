@@ -45,12 +45,12 @@ const sessions = [
 ];
 const owners = new Map([hub1, hub2].map((s) => [s.id, s]));
 
-// A team in `web`: an unbound session with one of its own, and a lead session (bound to Hub) with
+// A team in `web`: an unbound session with one of its own, and a bound coordinator (bound to Hub) with
 // one of its own, which the project's focus mode leaves to Hub's and Hub's nests under it.
-const lead = sessionOf("web-lead", main.id, web.id, "Rework the gallery", "idle", { bound_to: hub1.id });
-const underLead = sessionOf("web-under-lead", main.id, web.id, "Chase the flaky test", "working", { bound_to: lead.id });
+const coordinator = sessionOf("web-coordinator", main.id, web.id, "Rework the gallery", "idle", { bound_to: hub1.id });
+const underCoordinator = sessionOf("web-under-coordinator", main.id, web.id, "Chase the flaky test", "working", { bound_to: coordinator.id });
 const underFree = sessionOf("web-under-free", main.id, web.id, "Measure the first paint", "idle", { bound_to: "web-free" });
-const withTeams = [...sessions, lead, underLead, underFree];
+const withTeams = [...sessions, coordinator, underCoordinator, underFree];
 
 /** `stored` is what the store holds of the console's sessions, which a console session's focus mode's
  * project groups read themselves. */
@@ -111,8 +111,8 @@ it("removing the last live console-bound session hides the switch, restores focu
   onTestFinished(() => projectFocusIncludeConsoleSessions.set(false));
   let archive!: () => void;
   function View({ handlers }: { handlers: SidebarHandlers }) {
-    const [bound, setBound] = useState(lead);
-    archive = () => setBound({ ...lead, status: "archived" });
+    const [bound, setBound] = useState(coordinator);
+    archive = () => setBound({ ...coordinator, status: "archived" });
     return <ProjectFocusView handlers={handlers} console={main} project={web} sessions={[bound]} owners={owners} />;
   }
   const { container } = mount((handlers) => <View handlers={handlers} />);
@@ -317,9 +317,9 @@ it("a project's View archive in a console session's focus mode previews only tha
   const other = sessionOf("other", main.id, web.id, "Bound to Hub 2", "archived", { bound_to: hub2.id, ended_at: 2 });
   const loose = sessionOf("loose", main.id, web.id, "Unbound", "archived", { ended_at: 3 });
   const elsewhere = sessionOf("elsewhere", main.id, api.id, "Bound here in another project", "archived", { bound_to: hub1.id, ended_at: 4 });
-  const lead = sessionOf("lead", main.id, web.id, "Archived lead", "archived", { bound_to: hub1.id, ended_at: 5 });
-  const underLead = sessionOf("under-lead", main.id, web.id, "Under the archived lead", "archived", { bound_to: lead.id, ended_at: 6 });
-  const stored = [...sessions, mine, other, loose, elsewhere, lead, underLead];
+  const coordinator = sessionOf("coordinator", main.id, web.id, "Archived coordinator", "archived", { bound_to: hub1.id, ended_at: 5 });
+  const underCoordinator = sessionOf("under-coordinator", main.id, web.id, "Under the archived coordinator", "archived", { bound_to: coordinator.id, ended_at: 6 });
+  const stored = [...sessions, mine, other, loose, elsewhere, coordinator, underCoordinator];
   const { container, handlers, unmount } = mount((h) => (
     <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web, api]} sessions={stored} />
   ), stored);
@@ -328,8 +328,8 @@ it("a project's View archive in a console session's focus mode previews only tha
   act(() => archive.click());
   const labels = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).map((el) => el.querySelector(".label")?.textContent ?? el.textContent);
   expect(labels).toContain(mine.title);
-  expect(labels).toContain(lead.title);
-  for (const left of [other, loose, elsewhere, underLead]) expect(labels).not.toContain(left.title);
+  expect(labels).toContain(coordinator.title);
+  for (const left of [other, loose, elsewhere, underCoordinator]) expect(labels).not.toContain(left.title);
   act(() => Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find((el) => el.textContent === "View all")!.click());
   expect(handlers.onOpenArchive).toHaveBeenCalledWith({ console: main.id, consoleSession: hub1.id });
   unmount();
@@ -432,7 +432,7 @@ it("a pinned session's pin button unpins it without selecting its card", () => {
   unmount();
 });
 
-it("a project's focus mode nests an unbound session's own sessions under it and leaves a lead session's team to its console session", () => {
+it("a project's focus mode nests an unbound session's own sessions under it and leaves a bound coordinator's team to its console session", () => {
   const { container, text, unmount } = mount((h) => (
     <ProjectFocusView handlers={h} console={main} project={web} sessions={withTeams.filter((s) => s.project_id === web.id)} owners={owners} />
   ));
@@ -444,13 +444,13 @@ it("a project's focus mode nests an unbound session's own sessions under it and 
     [isolate("Measure the first paint"), true],
   ]);
   expect(text()).toContain("Sessions (2)");
-  // The line and the chip count the lead session and the session under it.
+  // The line and the chip count the bound coordinator and the session under it.
   expect(text()).toContain("4 sessions in this project are under console sessions");
   expect(container.querySelector(`button[aria-label="Enter focus mode for ${isolate("Hub")}, 3 sessions under it"]`)).not.toBeNull();
   unmount();
 });
 
-it("a console session's focus mode nests a lead session's own sessions under it", () => {
+it("a console session's focus mode nests a bound coordinator's own sessions under it", () => {
   const { container, text, unmount } = mount((h) => (
     <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web, api]} sessions={withTeams} />
   ), withTeams);
@@ -497,7 +497,7 @@ it.each([false, true])("console focus keeps its empty nested list compact (proje
 
 it("combining project sessions replaces the console summary with cards carrying their root console colours", () => {
   onTestFinished(() => projectFocusIncludeConsoleSessions.set(false));
-  const archivedChild = { ...underLead, id: "archived-child", title: "An archived child of the live lead", status: "archived" as const };
+  const archivedChild = { ...underCoordinator, id: "archived-child", title: "An archived child of the live coordinator", status: "archived" as const };
   const { container, text, handlers } = mount((h) => (
     <ProjectFocusView handlers={h} console={main} project={web} sessions={[...withTeams.filter((s) => s.project_id === web.id), archivedChild]} owners={owners} />
   ));
@@ -510,22 +510,23 @@ it("combining project sessions replaces the console summary with cards carrying 
   expect(text()).not.toContain("sessions in this project are under console sessions");
   expect(text()).toContain("Sessions (6)");
   const card = (title: string) => Array.from(container.querySelectorAll<HTMLElement>('div[role="button"]')).find((row) => row.getAttribute("aria-label")?.startsWith(isolate(title)))!;
-  for (const session of [lead, underLead]) {
+  for (const session of [coordinator, underCoordinator]) {
     expect(card(session.title).querySelector(`[style*="--session-colour-light: ${sessionColourHex("teal", "light")}"]`)).not.toBeNull();
     expect(card(session.title).getAttribute("aria-label")).toContain(isolate(hub1.title));
   }
-  expect(card(underLead.title).getAttribute("aria-label")).toContain(isolate(lead.title));
-  expect(card(underLead.title).parentElement!.className).toContain("ms-[17px]");
+  expect(card(underCoordinator.title).getAttribute("aria-label")).toContain(isolate(coordinator.title));
+  expect(card(underCoordinator.title).parentElement!.className).toContain("ms-[17px]");
   // A nested card bound to a console session names that owner, and the model line comes last.
-  expect(card(underLead.title).getAttribute("aria-label")).toMatch(new RegExp(`${isolate(hub1.title)}[^]*, Default model$`));
-  // Under a lead session with a console session above it, the card names the lead first, then the console session.
-  expect(card(underLead.title).getAttribute("aria-label")).toMatch(new RegExp(`, Bound to ${isolate(lead.title)}, Bound to ${isolate(hub1.title)}, Default model$`));
+  expect(card(underCoordinator.title).getAttribute("aria-label")).toMatch(new RegExp(`${isolate(hub1.title)}[^]*, Default model$`));
+  // Under a bound coordinator with a console session above it, the card names the coordinator first, then the console
+  // session.
+  expect(card(underCoordinator.title).getAttribute("aria-label")).toMatch(new RegExp(`, Bound to ${isolate(coordinator.title)}, Bound to ${isolate(hub1.title)}, Default model$`));
   expect(card("Tidy the changelog").querySelector(".session-colour-dot")).toBeNull();
   expect(text()).toContain("An old bound spike");
-  // Its lead is not archived, so it is listed on its own, as the full archive lists it.
+  // Its coordinator is not archived, so it is listed on its own, as the full archive lists it.
   expect(text()).toContain(archivedChild.title);
-  act(() => card(underLead.title).click());
-  expect(handlers.onSelectSession).toHaveBeenCalledWith(underLead);
+  act(() => card(underCoordinator.title).click());
+  expect(handlers.onSelectSession).toHaveBeenCalledWith(underCoordinator);
   act(() => toggle.click());
   expect(text()).toContain("4 sessions in this project are under console sessions");
   expect(text()).toContain(archivedChild.title);

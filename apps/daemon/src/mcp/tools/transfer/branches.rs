@@ -297,9 +297,9 @@ mod tests {
 
     /// `shared_console_state` plus a project, `repo`, in a real repository, and sessions in it:
     /// `kid` and `other-kid` and an archived `old-kid` of the console session `a`, `busy-kid` of
-    /// `a` in the middle of a turn, `waiting-kid` waiting for the user, `codex-kid` of `a`, a
-    /// Codex session that is idle, `kid-of-b` of `b`, and `lead`, unbound, with `lead-kid` bound to
-    /// it.
+    /// `a` in the middle of a turn, `waiting-kid` waiting for the user, `codex-kid` of `a`, a Codex
+    /// session that is idle, `kid-of-b` of `b`, and `coordinator`, unbound, with `coordinator-kid`
+    /// bound to it.
     struct Fixture {
         state: Arc<AppState>,
         repo: ScratchDir,
@@ -326,8 +326,8 @@ mod tests {
             ("waiting-kid", Some("a"), SessionStatus::WaitingUser),
             ("codex-kid", Some("a"), SessionStatus::Idle),
             ("kid-of-b", Some("b"), SessionStatus::Idle),
-            ("lead", None, SessionStatus::Idle),
-            ("lead-kid", Some("lead"), SessionStatus::Idle),
+            ("coordinator", None, SessionStatus::Idle),
+            ("coordinator-kid", Some("coordinator"), SessionStatus::Idle),
         ] {
             state
                 .store
@@ -446,23 +446,29 @@ mod tests {
     #[tokio::test]
     async fn a_session_takes_a_branch_from_its_child_and_gives_one_to_it() {
         let fixture = fixture("transfer-self");
-        fixture.branch("kids", "lead-kid");
-        fixture.branch("mine", "lead");
-        let caller = running(&fixture.state, "lead");
-        let child = running(&fixture.state, "lead-kid");
+        fixture.branch("kids", "coordinator-kid");
+        fixture.branch("mine", "coordinator");
+        let caller = running(&fixture.state, "coordinator");
+        let child = running(&fixture.state, "coordinator-kid");
 
         fixture
-            .call("lead", json!({ "branches": ["kids"], "from": "lead-kid" }))
+            .call(
+                "coordinator",
+                json!({ "branches": ["kids"], "from": "coordinator-kid" }),
+            )
             .await
             .unwrap();
-        assert_eq!(fixture.responsible_for("kids"), "lead");
+        assert_eq!(fixture.responsible_for("kids"), "coordinator");
         output_containing(&child, "do not touch");
 
         fixture
-            .call("lead", json!({ "branches": ["mine"], "to": "lead-kid" }))
+            .call(
+                "coordinator",
+                json!({ "branches": ["mine"], "to": "coordinator-kid" }),
+            )
             .await
             .unwrap();
-        assert_eq!(fixture.responsible_for("mine"), "lead-kid");
+        assert_eq!(fixture.responsible_for("mine"), "coordinator-kid");
         output_containing(&child, "You are now the session responsible");
         assert!(!heard_after_marker(&fixture.state, &caller).contains("Message from Octoboard"));
     }
@@ -473,32 +479,35 @@ mod tests {
     async fn an_archived_session_gives_up_its_branches_but_takes_none() {
         let fixture = fixture("transfer-archived");
         fixture.branch("left", "old-kid");
-        fixture.branch("mine", "lead");
+        fixture.branch("mine", "coordinator");
         fixture
             .state
             .store
             .insert_session(&Session {
                 project_id: Some("repo".to_string()),
                 status: SessionStatus::Archived,
-                ..project_session("old-lead-kid", "console-1", Some("lead"))
+                ..project_session("old-coordinator-kid", "console-1", Some("coordinator"))
             })
             .unwrap();
-        fixture.branch("left-of-lead", "old-lead-kid");
+        fixture.branch("left-of-coordinator", "old-coordinator-kid");
 
         let result = fixture
             .call(
-                "lead",
-                json!({ "branches": ["left-of-lead"], "from": "old-lead-kid" }),
+                "coordinator",
+                json!({ "branches": ["left-of-coordinator"], "from": "old-coordinator-kid" }),
             )
             .await
             .unwrap();
-        assert_eq!(fixture.responsible_for("left-of-lead"), "lead");
+        assert_eq!(
+            fixture.responsible_for("left-of-coordinator"),
+            "coordinator"
+        );
         // The archived session has no process to be told in, and the result says so.
         let note = result["note"].as_str().unwrap();
         assert!(
             note.ends_with(
-                " Octoboard could not send the project session `old-lead-kid` (\"Work \
-                 old-lead-kid\") a message about the transfer: tell it yourself once it can take \
+                " Octoboard could not send the project session `old-coordinator-kid` (\"Work \
+                 old-coordinator-kid\") a message about the transfer: tell it yourself once it can take \
                  a message."
             ),
             "{note}"
@@ -506,13 +515,13 @@ mod tests {
 
         let err = fixture
             .call(
-                "lead",
-                json!({ "branches": ["mine"], "to": "old-lead-kid" }),
+                "coordinator",
+                json!({ "branches": ["mine"], "to": "old-coordinator-kid" }),
             )
             .await
             .expect_err("refused");
         assert!(err.to_string().contains("is archived"), "{err}");
-        assert_eq!(fixture.responsible_for("mine"), "lead");
+        assert_eq!(fixture.responsible_for("mine"), "coordinator");
     }
 
     /// Everything that is refused changes no record.
@@ -560,8 +569,8 @@ mod tests {
                 "`absent` is not a branch the project session `kid`",
             ),
             (
-                "lead",
-                json!({ "branches": ["kids"], "to": "lead-kid" }),
+                "coordinator",
+                json!({ "branches": ["kids"], "to": "coordinator-kid" }),
                 "`kids` is not a branch you are responsible for",
             ),
             // Sessions that are not the caller's.
@@ -577,8 +586,8 @@ mod tests {
             ),
             (
                 "a",
-                json!({ "branches": ["kids"], "from": "kid", "to": "lead-kid" }),
-                "bound to a project session, `lead`",
+                json!({ "branches": ["kids"], "from": "kid", "to": "coordinator-kid" }),
+                "bound to a project session, `coordinator`",
             ),
             // The shape of the call.
             (
@@ -587,8 +596,8 @@ mod tests {
                 "are the same session",
             ),
             (
-                "lead",
-                json!({ "branches": ["kids"], "to": "lead" }),
+                "coordinator",
+                json!({ "branches": ["kids"], "to": "coordinator" }),
                 "are the same session",
             ),
             (
@@ -652,7 +661,7 @@ mod tests {
             .insert_session(&Session {
                 project_id: Some("repo".to_string()),
                 status: SessionStatus::Working,
-                ..project_session("busy-lead", "console-1", None)
+                ..project_session("busy-coordinator", "console-1", None)
             })
             .unwrap();
         fixture
@@ -660,18 +669,22 @@ mod tests {
             .store
             .insert_session(&Session {
                 project_id: Some("repo".to_string()),
-                ..project_session("busy-lead-kid", "console-1", Some("busy-lead"))
+                ..project_session(
+                    "busy-coordinator-kid",
+                    "console-1",
+                    Some("busy-coordinator"),
+                )
             })
             .unwrap();
-        fixture.branch("mine", "busy-lead");
+        fixture.branch("mine", "busy-coordinator");
         fixture
             .call(
-                "busy-lead",
-                json!({ "branches": ["mine"], "to": "busy-lead-kid" }),
+                "busy-coordinator",
+                json!({ "branches": ["mine"], "to": "busy-coordinator-kid" }),
             )
             .await
             .unwrap();
-        assert_eq!(fixture.responsible_for("mine"), "busy-lead-kid");
+        assert_eq!(fixture.responsible_for("mine"), "busy-coordinator-kid");
     }
 
     /// A worktree with changes in it does not stop the move, and the result names the worktree and

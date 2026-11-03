@@ -31,16 +31,16 @@ export const unboundArchived = sessionOf("s-unbound-archived", console_.id, arch
   ended_at: minutesAgo(5),
 });
 
-// An archived lead session bound to `boundConsoleSession` with two archived sessions of its own:
-// a console session's archive reaches them, and lists them under their lead session.
-export const archivedLead = sessionOf("s-lead-archived", console_.id, archiveProject.id, "Release lead session", "archived", {
+// An archived bound coordinator bound to `boundConsoleSession` with two archived sessions of its own:
+// a console session's archive reaches them, and lists them under their bound coordinator.
+export const archivedCoordinator = sessionOf("s-coordinator-archived", console_.id, archiveProject.id, "Release bound coordinator", "archived", {
   bound_to: boundConsoleSession.id,
   context: contextOf(65),
   ended_at: minutesAgo(8),
 });
-export const underArchivedLead = Array.from({ length: 2 }, (_, i) =>
-  sessionOf(`s-under-lead${i}`, console_.id, archiveProject.id, `Session ${i} of the archived lead session`, "archived", {
-    bound_to: archivedLead.id,
+export const underArchivedCoordinator = Array.from({ length: 2 }, (_, i) =>
+  sessionOf(`s-under-coordinator${i}`, console_.id, archiveProject.id, `Session ${i} of the archived bound coordinator`, "archived", {
+    bound_to: archivedCoordinator.id,
     ended_at: minutesAgo(2 + i * 3),
   }),
 );

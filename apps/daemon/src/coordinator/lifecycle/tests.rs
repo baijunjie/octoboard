@@ -1,7 +1,7 @@
 use super::*;
 use crate::coordinator::handle;
 use crate::coordinator::test_support::{
-    bound_session, console, console_workdir_in, lead_session, status_of, wait_until,
+    bound_coordinator, bound_session, console, console_workdir_in, status_of, wait_until,
 };
 use crate::hostfs::trash::TrashFailure;
 use crate::protocol::{
@@ -200,13 +200,13 @@ async fn user_archive_ends_running_descendants_and_preserves_other_sessions() {
     let (state, _dir) = console_with_project_and_accounts("coordinator-user-archive-cascade");
     for session in [
         console_session("hub", Idle),
-        lead_session("lead", Working, "hub"),
+        bound_coordinator("coordinator", Working, "hub"),
         Session {
             origin: Origin::User,
             ..bound_session("manual", WaitingUser, "hub")
         },
-        bound_session("nested", Idle, "lead"),
-        bound_session("launching", Interrupted, "lead"),
+        bound_session("nested", Idle, "coordinator"),
+        bound_session("launching", Interrupted, "coordinator"),
         Session {
             ended_at: Some(5),
             ..bound_session("old", Archived, "hub")
@@ -217,14 +217,21 @@ async fn user_archive_ends_running_descendants_and_preserves_other_sessions() {
     ] {
         state.store.insert_session(&session).unwrap();
     }
-    let processes: Vec<_> = ["hub", "lead", "manual", "nested", "elsewhere", "unbound"]
-        .into_iter()
-        .map(|id| {
-            let live = idle_stand_in(id);
-            state.register_live(live.clone());
-            live
-        })
-        .collect();
+    let processes: Vec<_> = [
+        "hub",
+        "coordinator",
+        "manual",
+        "nested",
+        "elsewhere",
+        "unbound",
+    ]
+    .into_iter()
+    .map(|id| {
+        let live = idle_stand_in(id);
+        state.register_live(live.clone());
+        live
+    })
+    .collect();
     let launch = state.begin_launch("launching").unwrap();
 
     // Preflight includes descendants before ending any process.
@@ -237,7 +244,7 @@ async fn user_archive_ends_running_descendants_and_preserves_other_sessions() {
     };
     let err = handle(&state, None, request()).await.unwrap_err();
     assert_eq!(code_of(&err), error_code::SESSION_LOCKED);
-    for id in ["hub", "lead", "manual", "nested", "launching"] {
+    for id in ["hub", "coordinator", "manual", "nested", "launching"] {
         assert_ne!(status_of(&state, id), Some(Archived), "{id}");
     }
     state.store.set_session_locked("nested", false).unwrap();
@@ -251,8 +258,8 @@ async fn user_archive_ends_running_descendants_and_preserves_other_sessions() {
     }
     assert_eq!(archived.last().map(String::as_str), Some("hub"));
     let position = |id: &str| archived.iter().position(|session| session == id).unwrap();
-    assert!(position("nested") < position("lead"));
-    assert!(position("launching") < position("lead"));
+    assert!(position("nested") < position("coordinator"));
+    assert!(position("launching") < position("coordinator"));
     for process in &processes[..4] {
         wait_until(|| process.poll_exit()).await;
     }
@@ -260,7 +267,7 @@ async fn user_archive_ends_running_descendants_and_preserves_other_sessions() {
         assert!(!process.poll_exit(), "unrelated process was ended");
     }
 
-    for id in ["hub", "lead", "manual", "nested", "launching"] {
+    for id in ["hub", "coordinator", "manual", "nested", "launching"] {
         assert_eq!(status_of(&state, id), Some(Archived), "{id}");
     }
     for id in ["elsewhere", "unbound"] {
@@ -437,13 +444,13 @@ fn locked_sessions_refuse_archive_and_delete_cascades_without_partial_changes() 
     let (state, _dir) = console_with_project_and_accounts("coordinator-locked-cascades");
     for session in [
         console_session("hub", Interrupted),
-        lead_session("lead", Interrupted, "hub"),
-        bound_session("worker", Interrupted, "lead"),
+        bound_coordinator("coordinator", Interrupted, "hub"),
+        bound_session("worker", Interrupted, "coordinator"),
     ] {
         state.store.insert_session(&session).unwrap();
     }
     set_session_locked(&state, "worker", true).unwrap();
-    for id in ["worker", "lead", "hub"] {
+    for id in ["worker", "coordinator", "hub"] {
         assert_eq!(
             code_of(&archive_session(&state, id).unwrap_err()),
             error_code::SESSION_LOCKED
@@ -462,7 +469,7 @@ fn locked_sessions_refuse_archive_and_delete_cascades_without_partial_changes() 
         code_of(&delete_archived_sessions(&state, "console-1", None, None).unwrap_err()),
         error_code::SESSION_LOCKED
     );
-    for id in ["hub", "lead", "worker"] {
+    for id in ["hub", "coordinator", "worker"] {
         assert_eq!(status_of(&state, id), Some(Archived));
     }
     set_session_locked(&state, "worker", false).unwrap();
@@ -488,7 +495,7 @@ fn a_locked_unused_session_cannot_be_deleted() {
 }
 
 /// Deleting an archived console session takes the archived sessions bound to it, at both
-/// levels, and no others; an archived lead session takes its own archived sessions and leaves
+/// levels, and no others; an archived bound coordinator takes its own archived sessions and leaves
 /// its console session; one bound session on its own leaves the console session; a console
 /// session that is not archived is refused and takes nothing with it.
 #[tokio::test]
@@ -498,7 +505,7 @@ async fn deleting_an_archived_console_session_deletes_its_archived_bound_session
     for session in [
         console_session("hub", Archived),
         bound_session("a", Archived, "hub"),
-        lead_session("b", Archived, "hub"),
+        bound_coordinator("b", Archived, "hub"),
         bound_session("of-b", Archived, "b"),
         bound_session("still-here", Interrupted, "hub"),
         console_session("other-hub", Archived),
@@ -506,8 +513,8 @@ async fn deleting_an_archived_console_session_deletes_its_archived_bound_session
         project_session("unbound", Agent::Claude, Archived),
         console_session("live-hub", Idle),
         bound_session("d", Archived, "live-hub"),
-        lead_session("lead", Archived, "live-hub"),
-        bound_session("of-lead", Archived, "lead"),
+        bound_coordinator("coordinator", Archived, "live-hub"),
+        bound_session("of-coordinator", Archived, "coordinator"),
     ] {
         state.store.insert_session(&session).unwrap();
     }
@@ -517,21 +524,21 @@ async fn deleting_an_archived_console_session_deletes_its_archived_bound_session
         session_ids(&state),
         [
             "c",
+            "coordinator",
             "d",
-            "lead",
             "live-hub",
-            "of-lead",
+            "of-coordinator",
             "other-hub",
             "still-here",
             "unbound"
         ]
     );
 
-    delete_session(&state, "lead").unwrap();
+    delete_session(&state, "coordinator").unwrap();
     assert_eq!(
         session_ids(&state),
         ["c", "d", "live-hub", "other-hub", "still-here", "unbound"],
-        "the lead session takes its own and leaves its console session"
+        "the bound coordinator takes its own and leaves its console session"
     );
 
     delete_session(&state, "c").unwrap();
@@ -868,7 +875,7 @@ async fn deleting_a_session_that_is_not_archived_needs_it_to_be_unused() {
 /// Deleting every archived console session of a console takes their archived bound sessions
 /// too, at both levels; deleting a project's archived sessions takes the bound ones among them
 /// and leaves the console sessions; deleting a console session's archive takes its archived
-/// bound sessions, a lead session's own included, and nothing else, and a project together
+/// bound sessions, a bound coordinator's own included, and nothing else, and a project together
 /// with a console session is refused.
 #[tokio::test]
 async fn deleting_archived_sessions_in_bulk_follows_the_binding_for_console_sessions_only() {
@@ -878,8 +885,8 @@ async fn deleting_archived_sessions_in_bulk_follows_the_binding_for_console_sess
         for session in [
             console_session("hub", Archived),
             bound_session("a", Archived, "hub"),
-            lead_session("lead", Archived, "hub"),
-            bound_session("of-lead", Archived, "lead"),
+            bound_coordinator("coordinator", Archived, "hub"),
+            bound_session("of-coordinator", Archived, "coordinator"),
             project_session("unbound", Agent::Claude, Archived),
         ] {
             state.store.insert_session(&session).unwrap();
@@ -914,18 +921,18 @@ async fn deleting_archived_sessions_in_bulk_follows_the_binding_for_console_sess
     assert_eq!(session_ids(&state), ["hub", "unbound"]);
 }
 
-/// Archiving a console session reaches through its lead session to the lead session's own
-/// sessions: refused, naming it, while one of those has a process although the lead session
+/// Archiving a console session reaches through its bound coordinator to the bound coordinator's own
+/// sessions: refused, naming it, while one of those has a process although the bound coordinator
 /// itself has none, and otherwise archiving both levels.
 #[tokio::test]
-async fn archiving_a_console_session_covers_its_lead_sessions_own_sessions() {
+async fn archiving_a_console_session_covers_its_bound_coordinators_own_sessions() {
     use SessionStatus::{Archived, Idle, Interrupted, Working};
     let (state, _dir) = console_with_project_and_accounts("coordinator-archive-two-levels");
     for session in [
         console_session("hub", Idle),
-        lead_session("lead", Interrupted, "hub"),
-        bound_session("running", Working, "lead"),
-        bound_session("no-process", Interrupted, "lead"),
+        bound_coordinator("coordinator", Interrupted, "hub"),
+        bound_session("running", Working, "coordinator"),
+        bound_session("no-process", Interrupted, "coordinator"),
     ] {
         state.store.insert_session(&session).unwrap();
     }
@@ -939,7 +946,7 @@ async fn archiving_a_console_session_covers_its_lead_sessions_own_sessions() {
     assert!(coded.params["sessions"].contains("running"));
     for (id, status) in [
         ("hub", Idle),
-        ("lead", Interrupted),
+        ("coordinator", Interrupted),
         ("no-process", Interrupted),
     ] {
         assert_eq!(status_of(&state, id), Some(status), "{id}");
@@ -948,7 +955,7 @@ async fn archiving_a_console_session_covers_its_lead_sessions_own_sessions() {
     drop(running);
     state.store.delete_session("running").unwrap();
     archive_session(&state, "hub").unwrap();
-    for id in ["hub", "lead", "no-process"] {
+    for id in ["hub", "coordinator", "no-process"] {
         assert_eq!(status_of(&state, id), Some(Archived), "{id}");
     }
 }
@@ -963,8 +970,8 @@ async fn a_finished_sessions_own_archive_follows_its_rule() {
     let (state, _dir) = console_with_project_and_accounts("coordinator-archive-finished");
     for session in [
         console_session("hub", Idle),
-        lead_session("lead", Archived, "hub"),
-        bound_session("under-lead", Interrupted, "lead"),
+        bound_coordinator("coordinator", Archived, "hub"),
+        bound_session("under-coordinator", Interrupted, "coordinator"),
         bound_session("own", Archived, "hub"),
     ] {
         state.store.insert_session(&session).unwrap();
@@ -983,7 +990,7 @@ async fn a_finished_sessions_own_archive_follows_its_rule() {
     );
     assert!(
         text.contains(
-            "`under-lead` (\"under-lead\") under the project coordinator `lead`: not yours"
+            "`under-coordinator` (\"under-coordinator\") under the project coordinator `coordinator`: not yours"
         ),
         "{text}"
     );

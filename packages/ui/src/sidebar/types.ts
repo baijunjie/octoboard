@@ -5,7 +5,7 @@ import type { Console, ConsoleSessionColour, Project, Session } from "../protoco
 import type { SettingsSectionId } from "../settings/sections";
 
 /** Which archive the archive view lists: a project's archived sessions, the archived sessions
- * under a console session (bound to it, or to an archived lead session bound to it), or with
+ * under a console session (bound to it, or to an archived bound coordinator bound to it), or with
  * neither `project` nor `consoleSession` the console's archived console sessions. A discriminated
  * union rather than two optional fields, so `project` and `consoleSession` being mutually
  * exclusive is enforced by the type rather than left to prose: a value naming both does not
