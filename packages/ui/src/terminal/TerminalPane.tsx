@@ -12,18 +12,16 @@ import { useLatest } from "../components/hooks/useLatest";
 import { Message, useT } from "../i18n/react";
 import { hasNoProcess, isLive, type Session } from "../protocol";
 import { useDaemon } from "../store";
-import { useOctoboardTheme } from "../preferences/theme";
-import type { ViewedFile } from "../project-browser/files/TerminalFileViewer";
+import type { ViewedFile } from "../viewer/viewedFile";
 import type { TerminalController } from "./TerminalController";
 import { SessionHistoryView } from "./history/SessionHistoryView";
 import { TerminalEditMenu } from "./TerminalEditMenu";
+import { TerminalSurface } from "./TerminalSurface";
 import { TerminalCover } from "./TerminalCover";
-import { TerminalLinkTooltip } from "./TerminalLinkTooltip";
 import { TerminalNoticeBar } from "./TerminalNoticeBar";
 import { useTerminalController } from "./useTerminalController";
 import { useTerminalReconnect } from "./useTerminalReconnect";
 import type { HoveredTerminalLink } from "./links/terminalLinks";
-import { XTERM_THEMES } from "./xtermThemes";
 
 /** The longest the loading state covers a connected terminal still waiting for its first output. */
 const LOADING_LIMIT_MS = 10_000;
@@ -95,7 +93,6 @@ export function TerminalPane({
 }: TerminalPaneProps): React.ReactElement {
   const t = useT();
   const { terminalUrl, terminalReconnectDelay } = useDaemon();
-  const { resolved: colorTheme } = useOctoboardTheme();
   const containerRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const coverRef = useRef<HTMLDivElement>(null);
@@ -346,34 +343,20 @@ export function TerminalPane({
         : undefined;
 
   return (
-    // The background must match the active xterm theme's (`XTERM_THEMES`, read here rather than
-    // duplicated as a literal), so the padding around the terminal is not a different colour —
-    // a plain Tailwind class cannot do this since the colour now changes at runtime with the
-    // theme, not at build time.
-    //
     // `data-escape-scope`: one of the origins `usePaneToggles`'s capture-phase Escape listener
     // closes a drawer for — xterm.js holds keyboard focus here most of the time and would otherwise
     // swallow the key before that listener's own bubble-phase alternative ever saw it.
-    <div
+    <TerminalSurface
       ref={rootRef}
       data-escape-scope
       data-region="terminal"
       className="relative flex min-h-0 min-w-0 flex-1 flex-col"
-      style={{
-        "--terminal-background": XTERM_THEMES[colorTheme].background,
-        backgroundColor: "var(--terminal-background)",
-      } as React.CSSProperties}
+      containerRef={containerRef}
+      setLinkRef={setLinkRef}
+      padding="px-3 py-2"
+      inert={!session || isArchived || switching}
+      editMenu={session && !isArchived && <TerminalEditMenu key={session.id} sessionId={session.id} controllerRef={controllerRef} contextTargetRef={containerRef} />}
     >
-      {/* The padding sits on a wrapper, not on the element xterm is mounted in: the fit addon sizes
-          the terminal from that element's computed height and width, padding included, so padding
-          there gives it rows and columns that the overflow then clips. Isolation keeps xterm's
-          transparent link canvas below the pane's overlays so it cannot intercept their clicks. */}
-      <div inert={!session || isArchived || switching} className="isolate min-h-0 flex-1 px-3 py-2">
-        {/* xterm lays its cells out left to right whatever the page's direction. */}
-        <div dir="ltr" className="h-full overflow-hidden" ref={containerRef} />
-      </div>
-      {session && !isArchived && <TerminalEditMenu key={session.id} sessionId={session.id} controllerRef={controllerRef} contextTargetRef={containerRef} />}
-      <TerminalLinkTooltip setLinkRef={setLinkRef} />
       {session && isArchived && (
         // Under the cover, which a resume raises over it; inert meanwhile, so what is hidden is
         // out of reach too.
@@ -454,6 +437,6 @@ export function TerminalPane({
           />
         )}
       </div>
-    </div>
+    </TerminalSurface>
   );
 }

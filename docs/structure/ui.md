@@ -23,7 +23,7 @@ Paths in this doc that do not start with `packages/` or `apps/` are relative to 
 | `packages/ui/scripts/gallery-sweep.mjs` | `pnpm gallery:sweep`: loads gallery scenarios in a headless browser and fails on any gallery failure; `gallery-chip-geometry.mjs` and `gallery-report-focus.mjs` are standalone Playwright checks run by hand |
 | `packages/ui/scripts/generate-licenses.mjs` | `pnpm licenses:generate`, the first step of `pnpm build`: writes the gitignored `src/about/licenses.generated.json` |
 | [`packages/ui/scripts/wkbench/`](../../packages/ui/scripts/wkbench/README.md) | `pnpm bench:wkwebview`, the latency benchmark in the system WKWebView (a developer tool with its own usage guide) |
-| `src/test/` | Vitest setup and the reporter listing failed test files for `pnpm verify` |
+| `src/test/` | Vitest setup, the reporter listing failed test files for `pnpm verify`, and the shared test daemon (`testDaemon`) and its providers (`TestHost`) |
 
 ## Directory map of `src/`
 
@@ -31,7 +31,8 @@ Paths in this doc that do not start with `packages/` or `apps/` are relative to 
 
 `App.tsx` (the screen: window chrome, content panel, toasts, connection banner and dialog layer composed from the hooks
 in `app/`), `AppRoot.tsx` (the provider tree around `App` — platform, language, error boundary, theme, daemon, native
-sync hooks, updates — shared by `main.tsx`, the gallery frame and the website preview), `StartupScreen.tsx`, `ErrorBoundary.tsx`, `WelcomeScreen.tsx`; `daemon.ts` (locating the daemon from the
+sync hooks, updates — shared by `main.tsx`, the gallery frame and the website preview), `StartupScreen.tsx`,
+`ErrorBoundary.tsx`, `WelcomeScreen.tsx`; `daemon.ts` (locating the daemon from the
 page's address), `daemon-client.ts` (the WebSocket client: request correlation, reconnect, event dispatch);
 `protocol.ts` (hand-written TypeScript mirror of the wire protocol) checked against `protocol.generated.ts` (written by
 the daemon's `protocol::bindings` test) by `protocol.contract.ts`; `appConfig.ts` (facts from `config/app.json`);
@@ -52,6 +53,9 @@ the daemon's `protocol::bindings` test) by `protocol.contract.ts`; `appConfig.ts
 - `src/accounts/` — pure account rules (order, quota of an account, picker rules, quota formatting).
 - `src/errors/` — turning a failure into words: `codes.ts` (the one record per error code), daemon wording, the shared
   `ErrorPresentation`, recovery classification, issue-report address.
+- `src/browse/` — browse requests to the daemon: `budget.ts` (the window's shares of the daemon's bound of outstanding
+  browse requests, the shared slot names and the lanes every browse request goes through), the lane primitive
+  (`lane.ts`), and how a failed browse request is treated and worded (`failure.ts`).
 - `src/store/` — the Zustand store of the connection and the state derived from daemon events (state, reducer, actions,
   session requests, toasts, connection, React bindings, session-group hooks), re-exported by `index.ts`.
 
@@ -60,7 +64,7 @@ the daemon's `protocol::bindings` test) by `protocol.contract.ts`; `appConfig.ts
 - `src/components/` — shared building blocks by kind: `alerts/` (error alerts and the error queue), `dialog/` (the
   `Dialog` frame and toolkit), `form/`, `controls/`, `menus/`, `hint/` (the one component behind tooltips and floating
   popovers), `text/`, `status/`, `icons/`, `tabs/`, `motion/`, `scroll/`, `focus/`, `announce/`, `panel/`, `host/`,
-  `hooks/` (breakpoints, `createLauncher`).
+  `hooks/` (breakpoints, `createLauncher`, `retryableLazy`, polling, the latest-request hook).
 - `src/shell/` — the window chrome: `TitleBar`, `Rail` (with its quota and global-processes entries, `RailQuotaEntry` and `RailProcessesEntry`),
   `NotificationsBell`, `ContentPanel`, `Toasts`, `ConnectionBanner`, `Scrim`, `ErrorAlerts` (the error acknowledgement
   host).
@@ -77,18 +81,24 @@ the daemon's `protocol::bindings` test) by `protocol.contract.ts`; `appConfig.ts
   window theme, run in background, git status schedule, interface language report, `useSerialPush`.
 - `src/sidebar/` — one console's sessions and projects, focus modes, rows and menus, new-session controls.
 - `src/archive/` — archived sessions over the terminal area, with deletion.
-- `src/terminal/` — the xterm.js terminal: controller, pane, reconnect, path `links/`, project `shell/` terminals,
-  archived-session `history/`.
+- `src/terminal/` — the xterm.js terminal: controller and the surface it draws on, pane, reconnect, the reading of its
+  output as text, path `links/`, project `shell/` terminals (with their tabs), archived-session `history/`;
+  `xtermInternals.ts` holds the one place that reaches into xterm's private members.
 - `src/report/` — a session's report panel and its sandboxed page frame.
 - `src/panels/` — the right pane, a stack of inset panel cards, and the registry of panel kinds.
-- `src/project-browser/` — the Files panel's content: `files/` (tree, listings, search) and `git/` (changes, branch
-  comparison, commits).
-- `src/viewer/` — the read-only file viewer modal; `@pierre/diffs` is imported only inside it.
+- `src/project-browser/` — the Files panel's content: `files/` (tree, listings, search, and the linked-file viewer
+  `App` opens for a path a terminal names) and `git/` (changes, branch comparison, commits, following a session's
+  branch); at its root, the browser's per-project state (`browserState.ts` over saved preferences and window-lifetime
+  selections) and the list helpers the two modes share.
+- `src/viewer/` — the read-only file viewer modal (the shell at its root), and the app's Markdown and code rendering
+  library, which `terminal/history/` uses too: `markdown/` (documents, Mermaid, formulas, fenced code), `code/` (the
+  code and diff renderer and its budgets) and `find/` (the find bar); `@pierre/diffs` is imported only inside it.
 - `src/quota/` — plan quota wording, meters, reset credits.
 - `src/settings/` — the settings modal and its sections; `accounts/` the Agent accounts section.
 - `src/dialogs/` — the feature dialogs (console, project, session, request, handoff, account switch, model, trust,
   archive and removal choices), on the `components/dialog/` toolkit.
-- `src/process/` — the Processes panel and its data, and the polled global process count the rail shows.
+- `src/process/` — the Processes panel and its data, and the polled global process count the rail shows
+  (`processPolling.ts` holds the polling paces).
 - `src/configuration/` — configuration export and import dialogs, and the list of plain switch settings.
 - `src/about/`, `src/updates/` — the licenses dialog and its data; the UI side of self-update.
 
@@ -111,8 +121,9 @@ the shape is:
 - Each pure layer imports only layers beneath it: `platform/` (and `protocol`) and `preferences/` import nothing else
   below `src/`; `input/` only the `platform/` barrel; `i18n/` only `preferences/` and `appConfig`; `format/` only
   `i18n/`; `agents/` and `git/` only `i18n/` and `protocol`; `sessions/` adds `agents/`; `accounts/` adds `sessions/`
-  and `format/`; `errors/` adds `accounts/`, `appConfig` and `daemon-client`; `store/` imports `i18n/`, `errors/`,
-  `accounts/`, `sessions/`, `preferences/`, `git/`, `protocol`, `daemon` and `daemon-client`.
+  and `format/`; `errors/` adds `accounts/`, `appConfig` and `daemon-client`; `browse/` imports `i18n/`, `errors/`,
+  `format/`, `protocol` and `daemon-client`; `store/` imports `i18n/`, `errors/`, `accounts/`, `sessions/`,
+  `preferences/`, `git/`, `protocol`, `daemon` and `daemon-client`.
 - `components/` is the leaf layer: outside itself it imports only the pure layers, the `store/` barrel and the shared
   root files. `shortcuts/` imports `i18n/`, `preferences/`, `input/` and `components/`.
 - `viewer/`, `about/`, `updates/`, `layout/` and `quota/` import the leaf layer and the pure layers (`quota/` also
@@ -158,10 +169,16 @@ New code uses these rather than a second implementation. None is enforced by a c
 | What a daemon broadcast or failure shows as a toast | `broadcastToast` and `errorToast` in `src/store/toasts.ts` (used by the store and the fixture daemon) |
 | Wording and handling of an error code | one record per code in `src/errors/codes.ts` (`CODES`) |
 | A plain on/off application setting in Settings | `DaemonSwitchSetting` (`src/settings/DaemonSwitchSetting.tsx`) over the list in `src/configuration/booleanSettings.ts` |
-| An xterm terminal view | `useTerminalController` and `useTerminalReconnect`, with `TerminalCover` and `TerminalNoticeBar` (`src/terminal/`), shared by the session pane and shell terminals |
-| Poll the lists on screen | `useAutoRefresh` (`src/project-browser/autoRefresh.ts`); treat a failed browse request through `projectBrowseFailure` (`browseError.ts`) |
+| An xterm terminal view | `useTerminalController` and `useTerminalReconnect`, with `TerminalSurface`, `TerminalCover` and `TerminalNoticeBar` (`src/terminal/`), shared by the session pane and shell terminals |
+| The loading line of a panel | `LoadingState` (`src/components/panel/LoadingState.tsx`) |
+| A failure's status mark with its Try again | `RetryStatusMark` (`src/components/status/RetryStatusMark.tsx`) |
+| Read something again now and then: pace, a pause while the document is hidden with a catch-up on return, reads the caller sends itself | `usePoll` (`src/components/hooks/usePoll.ts`), on `startPolling`; the browser's lists poll at `AUTO_REFRESH_MS` (`src/project-browser/autoRefresh.ts`) |
+| Ask the daemon for what a view shows and keep only the latest answer, scoped to what it is for, with the failure sorted out and a resend on reconnect | `useLatestRequest` (`src/components/hooks/useLatestRequest.ts`), as the project browser's lists and readers do |
+| Send a browse request | through a lane or a slot in `src/browse/budget.ts` (`listingLane`, `listLane`, `documentImageLane`, `BROWSE_SLOTS`), whose shares `budget.test.ts` keeps within the daemon's bound; a new kind of request takes its share from them |
+| Treat a failed browse request | `browseFailure` and `projectBrowseFailure` (`src/browse/failure.ts`) |
 | Open a dialog from a control outside its window | `createLauncher` (`src/components/hooks/createLauncher.ts`) |
-| Poll a daemon answer that is shown or counted (process trees, the global process counts) | `usePolled` (`src/process/usePolled.ts`), under `useProcessTrees` and `useAllProcesses`, rather than a timer of its own |
+| Load a component lazily, with a way to load it again after a failed import | `retryableLazy` (`src/components/hooks/retryableLazy.ts`), not `React.lazy`, which keeps the rejection |
+| Poll a daemon answer that is shown or counted (process trees, the global process counts), publishing only a changed one | `usePolled` (`src/components/hooks/usePoll.ts`), under `useProcessTrees` and `useAllProcesses` at the paces in `src/process/processPolling.ts`, rather than a timer of its own |
 | A count in a small badge set in a row, or on a rail glyph | `CountBadge` (`src/components/status/CountBadge.tsx`) in a row; `CountedGlyph` (`src/shell/CountedGlyph.tsx`) on a rail glyph |
 | A rail entry's panel that opens status marks and Details popovers | tag them with `PopoverOwnerContext` (`src/components/hint/popoverOwner.ts`), ask about them through `nestedPopovers` (`src/shell/nestedPopover.ts`), and close the panel under another modal with `CloseWhenCovered` (`src/shell/`) |
 | Put a panel of the aside's owner (a project, or a console session) on screen | `showPanel` from `useProjectPanels` (`src/app/`); a jump from the global process list is `useProcessJump` |

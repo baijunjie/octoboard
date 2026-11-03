@@ -300,7 +300,7 @@ dismissal — and yielding to `defaultPrevented` depends on which listener was a
 Instead pass `Dialog`'s `keyboardDismissHeld` (`packages/ui/src/components/dialog/Dialog.tsx`) while the inner thing is
 open, which keeps both react-aria's modal and `useEscapeWhileTooltipOpen` from closing the dialog on Escape, and close
 the inner thing from a native `keydown` listener on the dialog element that calls `stopPropagation()`, so the React
-handlers the portal bubbles the key up to do not act on it as well — as `packages/ui/src/viewer/useFind.ts` does. With a
+handlers the portal bubbles the key up to do not act on it as well — as `packages/ui/src/viewer/find/useFind.ts` does. With a
 tooltip open, that press only dismisses the tooltip, as everywhere else.
 
 A tooltip anchored to an element that is not its trigger (`AnchoredHint` in

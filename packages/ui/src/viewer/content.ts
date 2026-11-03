@@ -5,8 +5,9 @@ import type { ReactNode } from "react";
 
 import type { HostPath } from "../components/host/useHostPathActions";
 import type { ErrorPresentation } from "../errors/errorPresentation";
+import type { PlainMessageKey } from "../i18n/catalog";
 import type { FileContent, LineStats, MessageParams } from "../protocol";
-import { joinedPatch, saysNothingChanged } from "./patch";
+import { joinedPatch, saysNothingChanged } from "./code/patch";
 import type { StatusKey } from "./statusMarks";
 
 /** Whether a file of this name is Markdown, by its extension. */
@@ -74,8 +75,9 @@ export interface ChangeBodies {
  * - `failed`: the read failed; `wording` says why in the application's own words, where it has words for
  *   it (absent for a failure classified unexpected, which the viewer then says as its generic sentence),
  *   `detail` is the raw text the failure carried (what the system said), `failure` is the coded failure
- *   behind `wording`, passed only where the wording sets names as chips (`hasCodeParams`), and asking again is
- *   fine. `changeBodiesFailure` builds it from a read's failure.
+ *   behind `wording`, passed only where the wording sets names as chips (`hasCodeParams`), `wordingKey` the
+ *   catalog key of the viewer's own sentence `wording` is, where it is one, and asking again is fine.
+ *   `changeBodiesFailure` builds it from a read's failure.
  * - `superseded`: the read was given up for a newer one, and nothing is said.
  */
 export class ChangeBodiesError extends Error {
@@ -84,6 +86,7 @@ export class ChangeBodiesError extends Error {
     readonly wording?: string,
     readonly detail?: string,
     readonly failure?: { code: string; params: MessageParams },
+    readonly wordingKey?: PlainMessageKey,
   ) {
     super(wording ?? reason);
   }
@@ -91,10 +94,18 @@ export class ChangeBodiesError extends Error {
 
 /** What a mark says of a failed read of a change's bodies: `message`, why in the application's own words, which only a
  * `ChangeBodiesError` that has words for it carries (any other failure's text is raw, so the caller says the generic
- * sentence instead), `detail`, the raw text its popover shows, and `failure`, the coded failure to set `message`'s
- * names as chips. */
-export function bodiesFailure(error: unknown): { message?: string; detail?: string; failure?: { code: string; params: MessageParams } } {
-  if (error instanceof ChangeBodiesError) return { message: error.wording, detail: error.detail, failure: error.failure };
+ * sentence instead), `messageKey`, the catalog key of the viewer's own sentence `message` is, where it is one (the
+ * wording is fixed in the language of the moment it failed, so the key, not the text, tells which sentence it is),
+ * `detail`, the raw text its popover shows, and `failure`, the coded failure to set `message`'s names as chips. */
+export interface BodiesFailure {
+  message?: string;
+  messageKey?: PlainMessageKey;
+  detail?: string;
+  failure?: { code: string; params: MessageParams };
+}
+
+export function bodiesFailure(error: unknown): BodiesFailure {
+  if (error instanceof ChangeBodiesError) return { message: error.wording, messageKey: error.wordingKey, detail: error.detail, failure: error.failure };
   return { detail: error instanceof Error ? error.message : String(error) };
 }
 

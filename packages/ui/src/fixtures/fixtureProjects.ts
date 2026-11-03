@@ -210,6 +210,7 @@ export function createProjectReplies({ scenario, store, fail, git, restored, sta
     },
     close_shell_terminal: (body) => {
       if (!store.getState().shellTerminals.has(body.shell_terminal)) return fail({ code: "unknown_shell_terminal", params: { shell_terminal: body.shell_terminal }, message: `unknown shell terminal ${body.shell_terminal}` });
+      if (scenario.shellTerminalClose === "pending") return new Promise<Event>(() => {});
       store.setState((state) => ({ shellTerminals: new Map([...state.shellTerminals].filter(([id]) => id !== body.shell_terminal)) }));
       return { type: "ack", id: null };
     },

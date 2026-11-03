@@ -6,11 +6,13 @@ import { afterEach, expect, it } from "vitest";
 import { DaemonRequestError } from "../daemon-client";
 import { isolate } from "../i18n/isolate";
 import type { BrowseEntry, ChangeGroup, Event, FileContent, RequestBody } from "../protocol";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { DaemonProvider, type Daemon } from "../store";
+import { testDaemon } from "../test/testDaemon";
 import { changeItem, type ChangeItem } from "./git/changes";
 import type { DirListing } from "./tree";
 import { useChangeList, type ChangeList } from "./git/useChangeList";
 import { useBranchComparison } from "./git/useBranchComparison";
+import { useCommitList } from "./git/useCommitList";
 import { useBranchList } from "./git/useBranchList";
 import { shortCommit } from "./git/shortCommit";
 import { useChangeReader, type ChangeOrigin, type ChangeReader } from "./git/useChangeReader";
@@ -30,21 +32,15 @@ const roots: Root[] = [];
 
 function controlledDaemon() {
   const pending: Pending[] = [];
-  const daemon: Daemon = {
-    store: createStateStore({ connectionState: "open", snapshotEpoch: 1 }),
+  const daemon = testDaemon({
+    state: { connectionState: "open", snapshotEpoch: 1 },
     request: (body) =>
       new Promise((resolve, reject) => {
         const request = { body, resolve, reject };
         pending.push(request);
         leftOver.push(request);
       }),
-    raiseError: () => {},
-    toastNotice: () => {},
-    onToast: () => () => {},
-    dismissTrustPrompt: () => {},
-    reconnect: () => {},
-    terminalUrl: () => "",
-  };
+  });
   return { daemon, pending };
 }
 
@@ -104,6 +100,9 @@ it("takes a directory's latest listing only, and drops what was held when the pr
   expect(pending.map((p) => "path" in p.body && p.body.path)).toEqual(["src"]);
 });
 
+/** What the daemon client rejects a pending request with when its connection closes. */
+const connectionClosed = () => new DaemonRequestError("The connection closed.", "connection_closed", {});
+
 const file = (path: string, text: string, version = "1"): Event => {
   const content: FileContent = { size: text.length, kind: "text", media_type: null, text, data: null };
   return { type: "project_file", id: null, project: "p", worktree: null, path, source: { kind: "live", root_id: "r", version }, file: content };
@@ -130,7 +129,7 @@ it("reads the file again after a reconnect, keeping what is shown through a lost
 
   // The connection drops with a read out: the body stays.
   act(() => hook.current().reload());
-  await act(async () => pending.splice(0)[0].reject(new Error("connection closed")));
+  await act(async () => pending.splice(0)[0].reject(connectionClosed()));
   expect(hook.current().subject?.content).toBe(shown);
 
   // The reconnect's snapshot reads it again; the same version keeps the very same content.
@@ -138,7 +137,7 @@ it("reads the file again after a reconnect, keeping what is shown through a lost
   expect(pending.map((p) => p.body.type)).toEqual(["read_project_file"]);
   await act(async () => pending.splice(0)[0].resolve(file("a.ts", "a")));
   expect(hook.current().subject?.content).toBe(shown);
-  expect(hook.current().shown).toEqual({ state: "file", version: "1" });
+  expect(hook.current().shown).toEqual({ state: "read", version: "1" });
 });
 
 /** Mounts `use` over arguments the test changes later, as a parent re-rendering with new props does. */
@@ -331,10 +330,25 @@ it("keeps a comparison's commits through a reconnect, and asks again only for on
   expect(compared(hook.current().comparison)).toEqual(["c-a", "a.txt"]);
 
   hook.set("b");
-  await act(async () => pending.splice(0)[0].reject(new Error("connection closed")));
+  await act(async () => pending.splice(0)[0].reject(connectionClosed()));
   expect(hook.current().comparison).toEqual({ state: "loading" });
   act(() => daemon.store.setState((state) => ({ snapshotEpoch: state.snapshotEpoch + 1 })));
   expect(pending.map((p) => p.body)).toMatchObject([{ type: "compare_project_branches", right: "b" }]);
+});
+
+it("sends a commit list lost with the connection again once the connection is back, and keeps one it was answered", async () => {
+  const { daemon, pending } = controlledDaemon();
+  const range = { branch: "topic", baseBranch: "main", base: "c0", tip: "c1" };
+  const hook = mount(daemon, () => useCommitList("p", range, true));
+  const reply = (): Event => ({ type: "project_commits", id: null, project: "p", base: "c0", tip: "c1", commits: [], complete: true, commits_complete: true });
+  await act(async () => pending.splice(0)[0].reject(connectionClosed()));
+  expect(hook.current().commits).toEqual({ state: "loading" });
+  act(() => daemon.store.setState((state) => ({ snapshotEpoch: state.snapshotEpoch + 1 })));
+  expect(pending.map((p) => p.body)).toMatchObject([{ type: "list_project_commits", base: "c0", tip: "c1" }]);
+  await act(async () => pending.splice(0)[0].resolve(reply()));
+  expect(hook.current().commits).toMatchObject({ state: "loaded", base: "c0", tip: "c1" });
+  act(() => daemon.store.setState((state) => ({ snapshotEpoch: state.snapshotEpoch + 1 })));
+  expect(pending).toEqual([]);
 });
 
 it("reads a compared change from the comparison's two commits, and never takes another pair's reply", async () => {

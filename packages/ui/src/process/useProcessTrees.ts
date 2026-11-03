@@ -5,7 +5,8 @@ import type { ErrorPresentation } from "../errors/errorPresentation";
 import { listProcesses, type ProcessTarget } from "./processes";
 import { SESSION_NOT_RUNNING, type ProcessTree } from "../protocol";
 import { useDaemon } from "../store";
-import { usePolled, type ProcessPolling } from "./usePolled";
+import { usePolled } from "../components/hooks/usePoll";
+import { pollPace, type ProcessPolling } from "./processPolling";
 
 /** The process trees of `target`, asked for now and then at the `polling` pace while the caller is
  * mounted, and not while the document is hidden; `undefined` until the first answer. A session that has no process
@@ -29,7 +30,7 @@ export function useProcessTrees(target: ProcessTarget | undefined, polling: Proc
       throw err;
     }
   }, [request]);
-  const { value, error, retry, revise } = usePolled(key, list, polling, { stopsOnFirstFailure: true });
+  const { value, error, retry, revise } = usePolled(key, list, pollPace(polling), { stopsOnFirstFailure: true });
   return {
     trees: value,
     error,

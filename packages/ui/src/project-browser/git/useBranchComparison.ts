@@ -1,13 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
+import { listLane } from "../../browse/budget";
+import { useLatestRequest } from "../../components/hooks/useLatestRequest";
 import type { ErrorPresentation } from "../../errors/errorPresentation";
-import { useCurrentLanguage, useT } from "../../i18n/react";
 import type { ComparisonEndpoint } from "../../protocol";
-import { useDaemon, useDaemonStore } from "../../store";
-import { projectBrowseFailure } from "../browseError";
+import { useDaemon } from "../../store";
 import { changeItems, type ChangeItem } from "./changes";
 import { gitMoment } from "./gitRequests";
-import { sendBrowseListRequest } from "../browseListRequests";
 
 /**
  * A comparison of two branches as the client holds it. Once loaded, `left` and `right` are the
@@ -44,70 +43,44 @@ export function useBranchComparison(
   right: string | undefined,
   active: boolean,
 ): { comparison: Comparison; refresh: () => Promise<void>; update: () => Promise<void> } {
-  const t = useT();
-  const language = useCurrentLanguage();
-  const { request, store } = useDaemon();
-  const snapshotEpoch = useDaemonStore((s) => s.snapshotEpoch);
+  const { request } = useDaemon();
+  // What is held is scoped to the branches it is of: a comparison of other branches is not this one's.
   const pair = left === undefined || right === undefined ? undefined : `${left}\0${leftKind}\0${right}`;
-  // What is held, with the branches it is of: a comparison of other branches is not this one's.
-  const [held, setHeld] = useState<{ pair: string | undefined; comparison: Comparison }>({ pair, comparison: { state: "loading" } });
-  const live = useRef({ alive: true, sequence: 0, pair, lost: false, sent: undefined as string | undefined });
-  useLayoutEffect(() => {
-    live.current.pair = pair;
+  const latest = useLatestRequest<Comparison>({
+    scope: pair,
+    initial: { state: "loading" },
+    project,
+    onReconnect: ({ lost }) => {
+      if (lost && pair !== undefined) void send(true);
+    },
   });
+  const sent = useRef<string | undefined>(undefined);
 
   const send = (background: boolean): Promise<void> => {
-    const s = live.current;
     if (left === undefined || right === undefined) return Promise.resolve();
-    const sequence = ++s.sequence;
-    const asked = s.pair;
-    s.sent = asked;
-    s.lost = false;
-    const current = () => s.alive && s.sequence === sequence && s.pair === asked;
-    const setComparison = (change: (comparison: Comparison) => Comparison) =>
-      setHeld((now) => ({ pair: asked, comparison: change(now.pair === asked ? now.comparison : { state: "loading" }) }));
-    setComparison((comparison) => (comparison.state === "loaded" || (comparison.state === "error" && background) ? comparison : { state: "loading" }));
+    sent.current = pair;
     const slot = `comparison:${project}`;
-    return sendBrowseListRequest(slot, () => (current() ? request({ type: "compare_project_branches", project, left, left_remote: leftKind === "remote" || undefined, left_empty: leftKind === "empty" || undefined, right, slot }) : undefined))
-      .then((reply) => {
-        if (!reply || !current() || reply.type !== "project_comparison" || reply.project !== project) return;
-        if (reply.left.branch !== left || reply.right.branch !== right) return;
+    return latest.send({
+      lane: listLane,
+      slot,
+      request: () =>
+        request({ type: "compare_project_branches", project, left, left_remote: leftKind === "remote" || undefined, left_empty: leftKind === "empty" || undefined, right, slot }),
+      pending: (comparison) => (comparison.state === "loaded" || (comparison.state === "error" && background) ? comparison : { state: "loading" }),
+      accept: (reply) => {
+        if (reply.type !== "project_comparison" || reply.project !== project || reply.left.branch !== left || reply.right.branch !== right) return undefined;
         const accepted = { left: reply.left, right: reply.right, base: reply.base, complete: reply.complete, receivedAt: gitMoment() };
-        setComparison(() => ({ state: "loaded", ...accepted, items: changeItems(reply.changes) }));
-      })
-      .catch((err: unknown) => {
-        if (!current()) return;
-        const failure = projectBrowseFailure(t, language, err, store.getState(), project);
-        if (failure.kind === "superseded") return;
-        if (failure.kind === "disconnected") {
-          // Left as it is; the reconnect asks again.
-          s.lost = true;
-          return;
-        }
-        const message = failure.kind === "failed" ? failure.message : t("git.error.changing");
-        setComparison(() => ({ state: "error", message }));
-      });
+        return () => ({ state: "loaded", ...accepted, items: changeItems(reply.changes) });
+      },
+      failed: (failure, _held, t) => ({ state: "error", message: failure.kind === "failed" ? failure.message : t("git.error.changing") }),
+    });
   };
 
   // Other branches are another comparison: nothing of the previous one stands.
   useEffect(() => {
-    if (active && pair !== undefined && live.current.sent !== pair) send(false);
+    if (active && pair !== undefined && sent.current !== pair) void send(false);
   }, [active, pair]);
 
-  const firstEpoch = useRef(snapshotEpoch);
-  useEffect(() => {
-    if (snapshotEpoch !== firstEpoch.current && live.current.lost && pair !== undefined) send(true);
-  }, [snapshotEpoch]);
-
-  useEffect(() => {
-    const s = live.current;
-    s.alive = true;
-    return () => {
-      s.alive = false;
-    };
-  }, []);
-
-  const comparison: Comparison = pair === undefined ? { state: "idle" } : held.pair === pair ? held.comparison : { state: "loading" };
+  const comparison: Comparison = pair === undefined ? { state: "idle" } : latest.value;
   return {
     comparison,
     refresh: () => (pair !== undefined ? send(false) : Promise.resolve()),

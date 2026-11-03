@@ -1,5 +1,5 @@
 import type { BrowseEntry } from "../../protocol";
-import { compareFilePaths, rowKey, treeEntries, type TreeModel, type TreeNode } from "../tree";
+import { childPath, compareFilePaths, parentPath, rowKey, treeEntries, type TreeModel, type TreeNode } from "../tree";
 
 export function resultDirectories(paths: readonly string[]): string[] {
   const directories = new Set<string>();
@@ -47,9 +47,8 @@ export function buildFileResults(
   const expanded = new Set(directories.filter((path) => !collapsed.has(path)).map(rowKey));
   const children = new Map<string, BrowseEntry[]>();
   for (const path of [...directories, ...sorted]) {
-    const slash = path.lastIndexOf("/");
-    const parent = slash === -1 ? "" : path.slice(0, slash);
-    const name = path.slice(slash + 1);
+    const parent = parentPath(path);
+    const name = parent === "" ? path : path.slice(parent.length + 1);
     const entries = children.get(parent) ?? [];
     entries.push(entry(name, directorySet.has(path) ? "directory" : "file", path));
     children.set(parent, entries);
@@ -57,7 +56,7 @@ export function buildFileResults(
   const files: string[] = [];
   const rows: string[] = [];
   const visit = (parent: string): TreeNode[] => treeEntries(children.get(parent) ?? []).map((item) => {
-    const path = parent ? `${parent}/${item.name}` : item.name;
+    const path = childPath(parent, item.name);
     rows.push(rowKey(path));
     if (item.kind === "directory") {
       return { type: "directory", key: rowKey(path), path, entry: item, children: collapsed.has(path) ? [] : visit(path) };

@@ -2,10 +2,11 @@ import { FileCheck, GitBranch, GitFork } from "lucide-react";
 import React, { useMemo, useState } from "react";
 
 import { CopyButton } from "../../components/controls/CopyButton";
-import { Button } from "../../components/controls/Button";
-import { errorDetails, failureParam, FailureBody } from "../../components/alerts/errorParts";
+import { errorDetails, failureParam } from "../../components/alerts/errorParts";
 import { CenteredEmptyPanel } from "../../components/panel/EmptyPanel";
+import { LoadingState } from "../../components/panel/LoadingState";
 import { FailureAlert } from "../../components/alerts/FailureAlert";
+import { RetryStatusMark } from "../../components/status/RetryStatusMark";
 import { StatusMark } from "../../components/status/StatusMark";
 import { PaneFailure } from "../../components/alerts/PaneFailure";
 import { ROW_ICON_BUTTON_CLASS } from "../../components/controls/RowControls";
@@ -28,9 +29,8 @@ import { ChangeList } from "./ChangeList";
 import type { ChangeViewState } from "./changeView";
 import type { ChangeItem, ChangeSection } from "./changes";
 import { branchGone, changesStatus, partsLoading, type ChangesFailure, type ChangesNotice } from "./changesStatus";
-import { GitLoading } from "./gitStates";
 import type { BranchList } from "./useBranchList";
-import type { CommittedState, UncommittedState } from "./useGitReview";
+import type { CommittedState, UncommittedState } from "./gitReviewState";
 import type { SourceState } from "./useProjectSource";
 
 /** What the Changes view shows and does: one branch's changes, uncommitted and committed, as one
@@ -104,7 +104,7 @@ function GitContent(props: { source: SourceState } & ChangesViewProps): React.Re
   const diagnostic = source.state === "loaded" ? source.source.git_error ?? undefined : undefined;
   const failure = useMemo(() => diagnostic === undefined ? undefined : new DaemonRequestError(diagnostic, "git_unavailable", { detail: diagnostic }), [diagnostic]);
   const painted = useHasPainted();
-  if (source.state === "loading") return <GitLoading label={t("git.loading")} />;
+  if (source.state === "loading") return <LoadingState label={t("git.loading")} />;
   if (source.state === "error") return <PaneFailure title={t("git.error.source")} message={source.message} announce={painted} onRetry={onRetry} />;
   const git = source.source.git;
   if (!git) {
@@ -208,20 +208,7 @@ function Notice({ notice, projectRoots, goneBranches }: { notice: ChangesNotice;
  * retry giving the same answer. `inHeader` is for the mark a section's heading carries, which the list's own walk
  * does not reach (see `StatusMark`). */
 function PartFailureMark({ label, line, message, inHeader = false, onRetry }: { label: string; line: ChangesFailure["line"] | "git.branch.branchesError"; message: ErrorPresentation; inHeader?: boolean; onRetry: () => void }): React.ReactElement {
-  const t = useT();
-  return (
-    <StatusMark
-      label={label}
-      inHeader={inHeader}
-      actions={retryCanHelp(message) ? (close) => (
-        <Button size="sm" variant="secondary" preventFocusOnPress onPress={() => { close(); onRetry(); }}>
-          {t("error.tryAgain")}
-        </Button>
-      ) : undefined}
-    >
-      <FailureBody error={message} summary={<Message id={line} params={{ message: failureParam(message) }} />} />
-    </StatusMark>
-  );
+  return <RetryStatusMark label={label} inHeader={inHeader} error={message} summary={<Message id={line} params={{ message: failureParam(message) }} />} onRetry={onRetry} />;
 }
 
 /** Where each failed part of the list is shown. With nothing to list and a part failed, the failure
@@ -390,7 +377,7 @@ function ChangesView({
         ) : (
           <>
             {nothingYet && (loading.uncommitted || loading.committed) ? (
-              <GitLoading label={t("git.loading")} />
+              <LoadingState label={t("git.loading")} />
             ) : panelFailures.length === 1 ? (
               <PaneFailure title={t(panelFailures[0].title)} message={panelFailures[0].message} announce={painted} onRetry={onRetry} />
             ) : panelFailures.length > 1 ? (

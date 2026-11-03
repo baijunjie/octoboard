@@ -2,6 +2,7 @@ import { ChevronDown, ChevronRight, Folder, FolderOpen, FolderSymlink } from "lu
 import React from "react";
 import { Button } from "react-aria-components";
 
+import { FADE_SIZE } from "../components/scroll/scrollFade";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { useT } from "../i18n/react";
 
@@ -9,6 +10,17 @@ import { useT } from "../i18n/react";
  * height, which is what lets the tree be virtualized and a row be scrolled into view from its
  * position alone. It includes `RowContent`'s `h-7` and the row's `my-0.5` margins. */
 export const ROW_HEIGHT = 32;
+
+/** Scrolls `list` the least that brings the row at `top` (its offset from the top of the list's
+ * content, which follows from the rows' one height) into view, clear of the fade at the list's
+ * edges as `scroll-padding` keeps the rows react-aria scrolls. `stickyTop` is the height of a
+ * heading pinned at the top, which the row must clear as well. */
+export function scrollRowIntoView(list: HTMLElement, top: number, { stickyTop = 0 }: { stickyTop?: number } = {}): void {
+  const above = top - stickyTop - FADE_SIZE;
+  const below = top + ROW_HEIGHT + FADE_SIZE;
+  if (above < list.scrollTop) list.scrollTop = above;
+  else if (below > list.scrollTop + list.clientHeight) list.scrollTop = below - list.clientHeight;
+}
 
 /** The control that opens or closes a row's children, kept separate from the row's icon. It is a bare
  * glyph with no tooltip or hover fill: the row's own hover tint marks it, and a press anywhere on the

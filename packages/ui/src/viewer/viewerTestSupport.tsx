@@ -5,8 +5,9 @@ import { forwardAlerts } from "../components/alerts/alertTestSupport";
 import { errorText } from "../errors/errorText";
 import { errorPresentation } from "../errors/errorPresentation";
 import type { PlatformAdapter } from "../platform";
-import { PlatformProvider } from "../platform/react";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import type { Daemon } from "../store";
+import { TestHost } from "../test/TestHost";
+import { testDaemon } from "../test/testDaemon";
 
 const NO_TOASTS = { notice: () => {}, error: () => {} };
 
@@ -26,26 +27,13 @@ export function ViewerHost({
   children: React.ReactNode;
 }): React.ReactElement {
   const daemon = React.useMemo<Daemon>(
-    () => ({
-      store: createStateStore(),
-      request: request ?? (() => Promise.reject(new Error("no daemon"))),
-      raiseError: (error) => toasts.error(errorText(errorPresentation(error))),
-      toastNotice: toasts.notice,
-      onToast: () => () => {},
-      dismissTrustPrompt: () => {},
-      reconnect: () => {},
-      terminalUrl: () => "",
-    }),
+    () => testDaemon({ request, raiseError: (error) => toasts.error(errorText(errorPresentation(error))), toastNotice: toasts.notice }),
     [toasts.error, toasts.notice, request],
   );
   // A layout effect, so it is installed before the children's passive effects (where an alert raised as they mount
   // would be missed otherwise) and is replaced when `toasts.error` changes.
   React.useLayoutEffect(() => forwardAlerts(toasts.error), [toasts.error]);
-  return (
-    <PlatformProvider value={{ kind: "browser", clipboard, links }}>
-      <DaemonProvider value={daemon}>{children}</DaemonProvider>
-    </PlatformProvider>
-  );
+  return <TestHost daemon={daemon} platform={{ kind: "browser", clipboard, links }}>{children}</TestHost>;
 }
 
 /** The accessible names of the status marks under `root`, in document order: a popover mark is a

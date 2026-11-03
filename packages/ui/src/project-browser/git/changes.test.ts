@@ -6,23 +6,23 @@ import {
   changeGroups,
   changeItem,
   changeItems,
-  changeNeighbours,
   changeTree,
   commitItems,
   commitKey,
   commitScope,
+  compareChanges,
   directoryKey,
   filterChanges,
-  rereadChange,
   sectionKey,
   sections,
   visibleChanges,
   visibleNodes,
-  type ChangeEvidence,
+  type ChangeItem,
   type ChangeNode,
-  type ShownChange,
 } from "./changes";
+import { neighboursIn, rereadFor, type Evidence, type Shown } from "../viewedItem";
 
+const changeNeighbours = (items: readonly ChangeItem[], current: ChangeItem) => neighboursIn(items, current, (a, b) => a.key === b.key, compareChanges);
 const index = (blob: string): ContentSource => ({ kind: "index", worktree: "w", blob });
 const at = (path: string, blob = "b1"): ChangeSide => ({ state: "present", path, kind: "file", source: index(blob) });
 const absent: ChangeSide = { state: "absent" };
@@ -110,8 +110,8 @@ it("moves from one section into the next, places a change the list lost where it
   expect(changeNeighbours(items, gone)).toMatchObject({ previous: { path: "src/a.ts", section: "unstaged" }, next: { section: "untracked" } });
 });
 
-const listed = (versions: string): ChangeEvidence => ({ state: "listed", versions });
-it.each<[string, ShownChange, ChangeEvidence, ChangeEvidence | undefined, boolean, boolean]>([
+const listed = (version: string): Evidence => ({ state: "listed", version });
+it.each<[string, Shown, Evidence, Evidence | undefined, boolean, boolean]>([
   ["the same versions listed again", { state: "read" }, listed("v1"), listed("v1"), true, false],
   ["other versions listed", { state: "read" }, listed("v2"), listed("v1"), true, true],
   ["the change gone from the list", { state: "read" }, { state: "gone" }, listed("v1"), true, true],
@@ -120,7 +120,7 @@ it.each<[string, ShownChange, ChangeEvidence, ChangeEvidence | undefined, boolea
   ["a change that kept moving, at no fresh list", { state: "error", changing: true }, listed("v1"), listed("v1"), false, false],
   ["a read still out", { state: "loading" }, listed("v2"), listed("v1"), true, false],
 ])("reads a change again on %s: %s", (_, shown, evidence, previous, fresh, reread) => {
-  expect(rereadChange(shown, evidence, previous, fresh)).toBe(reread);
+  expect(rereadFor(shown, evidence, previous, fresh, true)).toBe(reread);
 });
 
 it("finds a change in a list, gone from a complete one, unknown in a cut or refreshing one", () => {

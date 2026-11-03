@@ -40,6 +40,7 @@ export function viewerErrorText(t: Translate, language: Language, error: ErrorPr
 export function changeBodiesFailure(t: Translate, language: Language, error: ErrorPresentation, path: string, records: Parameters<typeof daemonMessage>[4]): ChangeBodiesError {
   const raw = rawFailureText(error);
   if (typeof error !== "string" && isUncataloguedFailure(error) && uncataloguedSummaryKey(error) === "error.unexpected.summary") return new ChangeBodiesError("failed", undefined, raw);
-  const coded = typeof error !== "string" && !viewerErrorKey(error, path) && hasCodeParams(error) ? error : undefined;
-  return new ChangeBodiesError("failed", viewerErrorText(t, language, error, path, records), raw, coded);
+  const key = viewerErrorKey(error, path);
+  const coded = typeof error !== "string" && !key && hasCodeParams(error) ? error : undefined;
+  return new ChangeBodiesError("failed", viewerErrorText(t, language, error, path, records), raw, coded, key);
 }

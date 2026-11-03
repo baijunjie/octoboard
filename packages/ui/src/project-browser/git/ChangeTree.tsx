@@ -9,7 +9,9 @@ import { useCurrentLanguage, useT } from "../../i18n/react";
 import type { ChangeLayout } from "./changeLayout";
 import { ChangeRowBody, changeRowText } from "./changeRow";
 import { changeGroups, sectionKey, type ChangeItem, type ChangeNode, type ChangeSection, type CommitRef } from "./changes";
-import { ChangeSectionHeading, ChangeSectionHeadingStops, ChangeListLayout, CHANGE_SCROLL_CLASS, HEADING_CLASS, HEADING_HEIGHT } from "./changeSectionHeading";
+import { collectionIndex, emptyCollectionIndex } from "../collectionIndex";
+import { ChangeListLayout, CHANGE_SCROLL_CLASS } from "./changeListLayout";
+import { ChangeSectionHeading, ChangeSectionHeadingStops, HEADING_CLASS, HEADING_HEIGHT } from "./changeSectionHeading";
 import { RowActions } from "../RowActions";
 import { shortCommit } from "./shortCommit";
 import { BrowserListMotion, useBrowserListMotion } from "../useBrowserListMotion";
@@ -75,41 +77,18 @@ export function ChangeTree({
   // leaving them out of what is decided here is what makes that beside the point.
   const shown = useMemo(() => groups.filter((group) => !collapsed.has(sectionKey(group.section))), [groups, collapsed]);
   const foldable = useMemo(() => shown.flatMap((group) => foldableKeys(group.nodes)), [shown]);
-  const byKey = useMemo(() => {
-    const map = new Map<Key, ChangeNode>();
-    const walk = (nodes: readonly ChangeNode[]) =>
-      nodes.forEach((node) => {
-        map.set(node.key, node);
-        if (node.type !== "change") walk(node.children);
-      });
-    shown.forEach((group) => walk(group.nodes));
-    return map;
-  }, [shown]);
   const expanded = useMemo(() => new Set<Key>(foldable.filter((key) => !collapsed.has(key))), [foldable, collapsed]);
 
-  const { visibleKeys, folds } = useMemo(() => {
-    const keys = new Set<string>();
-    const parents = new Map<string, string>();
-    const open = new Set<string>();
-    const walk = (nodes: readonly ChangeNode[], parent: string) => {
-      for (const node of nodes) {
-        keys.add(node.key);
-        parents.set(node.key, parent);
-        if (node.type !== "change" && expanded.has(node.key)) {
-          open.add(node.key);
-          walk(node.children, node.key);
-        }
-      }
-    };
+  const { byKey, visibleKeys, folds } = useMemo(() => {
+    const index = emptyCollectionIndex<ChangeNode>();
     for (const group of groups) {
       const heading = `heading:${group.section}`;
-      keys.add(heading);
-      if (!collapsed.has(sectionKey(group.section))) {
-        open.add(heading);
-        walk(group.nodes, heading);
-      }
+      index.visibleKeys.add(heading);
+      if (collapsed.has(sectionKey(group.section))) continue;
+      index.folds.open.add(heading);
+      collectionIndex(group.nodes, (node) => (node.type !== "change" ? node.children : []), (node) => node.type !== "change" && expanded.has(node.key), { parent: heading, into: index });
     }
-    return { visibleKeys: keys, folds: { parents, open } };
+    return index;
   }, [groups, expanded, collapsed]);
   const motion = useBrowserListMotion(listRef, visibleKeys, folds);
   const collectionRef = useCollectionOptionTab(motion.ref);

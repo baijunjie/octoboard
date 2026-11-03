@@ -6,7 +6,7 @@ import { branchGone, changesStatus, partsLoading } from "./changesStatus";
 import type { Comparison } from "./useBranchComparison";
 import type { BranchList } from "./useBranchList";
 import type { CommitList } from "./useCommitList";
-import type { CommittedState, UncommittedState } from "./useGitReview";
+import type { CommittedState, UncommittedState } from "./gitReviewState";
 
 const message = "boom" as unknown as ErrorPresentation;
 const tree = (head: string | null, scopePresent = true): WorktreeInfo => ({ id: "w", root: "/home/me/code/repo", main: false, head, branch: "topic", scope_present: scopePresent });

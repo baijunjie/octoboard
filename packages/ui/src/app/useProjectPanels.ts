@@ -3,7 +3,7 @@ import type { HostPath } from "../components/host/useHostPathActions";
 import type { AsideOwner } from "../layout/asideOwner";
 import { openPanel, OWNER_KINDS, type OwnerKind, type PanelStack, type PanelStacks } from "../panels/stackState";
 import type { PanelKind } from "../layout/panelKind";
-import { setProjectBrowserMode } from "../project-browser/browserState";
+import { setProjectBrowserMode } from "../project-browser/browserPreferences";
 import type { Project } from "../protocol";
 import type { ProjectPanelKind } from "../sidebar/types";
 import { useDaemon } from "../store";

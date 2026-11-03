@@ -1,10 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
+import { listLane } from "../../browse/budget";
+import { useLatestRequest } from "../../components/hooks/useLatestRequest";
 import type { ErrorPresentation } from "../../errors/errorPresentation";
-import { useCurrentLanguage, useT } from "../../i18n/react";
-import { useDaemon, useDaemonStore } from "../../store";
-import { projectBrowseFailure } from "../browseError";
-import { sendBrowseListRequest } from "../browseListRequests";
+import { useDaemon } from "../../store";
 
 export type FileSearch =
   | { state: "loading" }
@@ -14,17 +13,14 @@ export type FileSearch =
 /** A debounced project-wide file-name search, leaving out the files Git ignores unless
  * `includeIgnored`; changing that repeats the search at once rather than after the debounce. A reply
  * only belongs to the query and the setting that requested it, even during the debounce before the
- * next request supersedes it in the daemon. */
+ * next request supersedes it in the daemon. A reconnect searches again at once. */
 export function useFileSearch(project: string, query: string, active: boolean, includeIgnored = false): { result: FileSearch; refresh: () => Promise<void> } {
-  const t = useT();
-  const language = useCurrentLanguage();
-  const { request, store } = useDaemon();
-  const snapshotEpoch = useDaemonStore((s) => s.snapshotEpoch);
-  const [held, setHeld] = useState<{ query: string; includeIgnored: boolean; result: FileSearch }>();
-  const live = useRef({ alive: true, query, includeIgnored, sequence: 0, pending: 0 });
-  useLayoutEffect(() => {
-    live.current.query = query;
-    live.current.includeIgnored = includeIgnored;
+  const { request } = useDaemon();
+  const latest = useLatestRequest<FileSearch>({
+    scope: `${includeIgnored}\0${query}`,
+    initial: { state: "loading" },
+    project,
+    onReconnect: () => void send(),
   });
   // The setting the last search sent was made with, to tell a toggle from typing. Only `send` and
   // an inactive effect write it, so an effect that runs twice (StrictMode) reads the same answer
@@ -33,27 +29,21 @@ export function useFileSearch(project: string, query: string, active: boolean, i
 
   const send = (): Promise<void> => {
     if (!active) return Promise.resolve();
-    const s = live.current;
     sentWith.current = includeIgnored;
-    const sequence = ++s.sequence;
-    s.pending += 1;
-    const current = () => s.alive && s.query === query && s.includeIgnored === includeIgnored && s.sequence === sequence;
     const slot = `file-search:${project}`;
-    setHeld((now) => now?.query === query && now.includeIgnored === includeIgnored && now.result.state === "loaded" ? now : { query, includeIgnored, result: { state: "loading" } });
     // Searches share the bounded list-request lane with Git, so switching modes cannot add
     // unbounded browse requests beside the directory listings and the viewer.
-    return sendBrowseListRequest(slot, () => current() ? request({ type: "search_project_files", project, query, ...(includeIgnored && { include_ignored: true }), slot }) : undefined)
-      .then((reply) => {
-        if (!current() || reply?.type !== "project_file_matches" || reply.project !== project || reply.query !== query) return;
-        setHeld({ query, includeIgnored, result: { state: "loaded", paths: reply.paths, ignored: new Set(reply.ignored), complete: reply.complete } });
-      })
-      .catch((err: unknown) => {
-        if (!current()) return;
-        const failure = projectBrowseFailure(t, language, err, store.getState(), project);
-        if (failure.kind === "superseded" || failure.kind === "disconnected") return;
-        setHeld({ query, includeIgnored, result: { state: "error", message: failure.kind === "failed" ? failure.message : t("browser.error.folderChanged") } });
-      })
-      .finally(() => { s.pending -= 1; });
+    return latest.send({
+      lane: listLane,
+      slot,
+      request: () => request({ type: "search_project_files", project, query, ...(includeIgnored && { include_ignored: true }), slot }),
+      pending: (result) => (result.state === "loaded" ? result : { state: "loading" }),
+      accept: (reply) =>
+        reply.type === "project_file_matches" && reply.project === project && reply.query === query
+          ? () => ({ state: "loaded", paths: reply.paths, ignored: new Set(reply.ignored), complete: reply.complete })
+          : undefined,
+      failed: (failure, _held, t) => ({ state: "error", message: failure.kind === "failed" ? failure.message : t("browser.error.folderChanged") }),
+    });
   };
 
   useEffect(() => {
@@ -64,13 +54,7 @@ export function useFileSearch(project: string, query: string, active: boolean, i
     const toggled = sentWith.current !== includeIgnored;
     const timer = setTimeout(() => void send(), toggled ? 0 : 250);
     return () => clearTimeout(timer);
-  }, [query, active, snapshotEpoch, includeIgnored]);
+  }, [query, active, includeIgnored]);
 
-  useEffect(() => {
-    const s = live.current;
-    s.alive = true;
-    return () => { s.alive = false; };
-  }, []);
-
-  return { result: held?.query === query && held.includeIgnored === includeIgnored ? held.result : { state: "loading" }, refresh: send };
+  return { result: latest.value, refresh: send };
 }

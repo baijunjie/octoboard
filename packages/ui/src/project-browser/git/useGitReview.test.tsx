@@ -5,8 +5,10 @@ import { afterEach, expect, it, vi } from "vitest";
 
 import { DaemonRequestError } from "../../daemon-client";
 import type { ChangeEntry, CommitChanges, Event, RequestBody, UpstreamInfo, WorktreeInfo } from "../../protocol";
-import { createStateStore, DaemonProvider, type Daemon } from "../../store";
-import { noteSessionSwitch, useProjectBrowserState } from "../browserState";
+import { DaemonProvider } from "../../store";
+import { testDaemon } from "../../test/testDaemon";
+import { useProjectBrowserState } from "../browserState";
+import { noteSessionSwitch } from "./sessionFollow";
 import { directoryKey, sectionKey, type ChangeItem } from "./changes";
 import { useFileFilterState } from "../FileFilterField";
 import { useGitReview } from "./useGitReview";
@@ -22,16 +24,10 @@ afterEach(async () => {
   await act(async () => pending.splice(0).forEach((request) => request.reject(new Error("test over"))));
 });
 
-const daemon: Daemon = {
-  store: createStateStore({ connectionState: "open", snapshotEpoch: 1 }),
+const daemon = testDaemon({
+  state: { connectionState: "open", snapshotEpoch: 1 },
   request: (body) => new Promise((resolve, reject) => pending.push({ body, resolve, reject })),
-  raiseError: () => {},
-  toastNotice: () => {},
-  onToast: () => () => {},
-  dismissTrustPrompt: () => {},
-  reconnect: () => {},
-  terminalUrl: () => "",
-};
+});
 
 /** Answers the request of `type` still out with what `reply` makes of it. */
 async function answer(type: RequestBody["type"], reply: (body: RequestBody) => Event): Promise<RequestBody> {

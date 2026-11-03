@@ -254,7 +254,7 @@ export function createPreviewScenario(
           projectFocusIncludeConsoleSessions: true,
         }
         : {}),
-      changeLayout: "tree",
+      projectBrowsers: Object.fromEntries(projects.map((project) => [project.id, { mode: "files", layouts: { changes: "tree" } } as const])),
     },
     configuration: { unavailable: true },
     steps: [

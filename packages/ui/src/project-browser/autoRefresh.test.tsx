@@ -7,7 +7,8 @@ import { DaemonRequestError } from "../daemon-client";
 import { errorText } from "../errors/errorText";
 import { setLanguage } from "../i18n/language";
 import type { Event, RequestBody } from "../protocol";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { DaemonProvider, type Daemon } from "../store";
+import { testDaemon } from "../test/testDaemon";
 import { AUTO_REFRESH_MS } from "./autoRefresh";
 import { useDirectoryListings } from "./files/useDirectoryListings";
 import { useBranchList } from "./git/useBranchList";
@@ -22,19 +23,13 @@ let roots: Root[] = [];
 let visibility: DocumentVisibilityState = "visible";
 
 function daemon(): Daemon {
-  return {
-    store: createStateStore({ connectionState: "open", snapshotEpoch: 1 }),
+  return testDaemon({
+    state: { connectionState: "open", snapshotEpoch: 1 },
     request: (body) =>
       new Promise((resolve, reject) => {
         pending.push({ body, resolve, reject });
       }),
-    raiseError: () => {},
-    toastNotice: () => {},
-    onToast: () => () => {},
-    dismissTrustPrompt: () => {},
-    reconnect: () => {},
-    terminalUrl: () => "",
-  };
+  });
 }
 
 /** Mounts `use` as the browser would, and starts it: what it returns is how the browser asks for the

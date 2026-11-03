@@ -8,7 +8,8 @@ import { isolate } from "../i18n/isolate";
 import { DaemonRequestError } from "../daemon-client";
 import { PlatformProvider } from "../platform/react";
 import type { Event, GitStatus, Project, RequestBody } from "../protocol";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { DaemonProvider } from "../store";
+import { testDaemon } from "../test/testDaemon";
 import { useProjectBrowserState } from "./browserState";
 import { ProjectBrowser } from "./ProjectBrowser";
 
@@ -33,16 +34,10 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-const daemon: Daemon = {
-  store: createStateStore({ connectionState: "open", snapshotEpoch: 1 }),
+const daemon = testDaemon({
+  state: { connectionState: "open", snapshotEpoch: 1 },
   request: (body) => new Promise((resolve, reject) => pending.push({ body, resolve, reject })),
-  raiseError: () => {},
-  toastNotice: () => {},
-  onToast: () => () => {},
-  dismissTrustPrompt: () => {},
-  reconnect: () => {},
-  terminalUrl: () => "",
-};
+});
 
 /** Answers the request of `type` still out with `event`. */
 async function answer(type: RequestBody["type"], event: Event): Promise<void> {

@@ -4,20 +4,20 @@ import { InlineReference } from "../i18n/InlineReference";
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
-import type { MessageParams } from "../protocol";
 import { displayWirePath } from "../format/wirePath";
 import { BodyView } from "./BodyView";
-import { DiffSurface } from "./CodeSurface";
+import { DiffSurface } from "./code/CodeSurface";
 import {
   bodiesFailure,
   ChangeBodiesError,
   changePresentation,
+  type BodiesFailure,
   type ChangeBodies,
   type ViewerChange,
   type ViewerChangeSide,
 } from "./content";
-import type { DiffLayout } from "./diffLayout";
-import { hasTwoSides } from "./patch";
+import type { DiffLayout } from "./code/diffLayout";
+import { hasTwoSides } from "./code/patch";
 import { FileNotice, FIRST_ANNOUNCEMENT_DELAY_MS, NoticeSlotBoxes, NoticeSlotsProvider } from "./notices";
 import { Failure, Loading, NotFile, Unchanged, Unreadable, Unsupported } from "./viewerStates";
 import { BodiesFailureReason } from "./ViewerErrorMessage";
@@ -112,13 +112,13 @@ export function ChangeView({
  * A change with no lines to draw but content worth showing: the two sides hold the same text, under
  * one name or two. A patch with no hunk carries no body of its own (see "Changes and comparisons"
  * in `apps/daemon/PROTOCOL.md`), so the content is read the way a diff's collapsed lines are, once
- * as the change opens. Without that read the viewer would say the file is unchanged and show none
- * of it, while a rename across the project's boundary — which cannot be diffed either — shows the
- * whole file; the two are the same kind of change and now look it.
+ * as the change opens. The content is shown so that this change reads like a rename across the
+ * project's boundary, which cannot be diffed either and shows the whole file; saying only that the
+ * file is unchanged would show none of it.
  *
- * Where the bodies cannot be had after all, it falls back to the stand-in it used to be, with the
- * reason above it when there is one to give. A read that failed is a warning, not an error: the
- * stand-in is true (it comes from Git's empty patch) and only the preview of the content is lost.
+ * Where the bodies cannot be had after all, it shows the `Unchanged` panel alone, with the reason
+ * above it when there is one to give. A read that failed is a warning, not an error: the panel is
+ * true (it comes from Git's empty patch) and only the preview of the content is lost.
  */
 function UnchangedView({
   resetKey,
@@ -137,7 +137,7 @@ function UnchangedView({
   // What the read answered for this subject: its text, or why there is none. A read given up for a
   // newer one is left as `unavailable`, like any other content that is not to be had, rather than
   // as a spinner nothing would resolve.
-  const [read, setRead] = useState<{ key: string; text?: string; why?: "failed" | "unavailable" | "changed"; message?: string; detail?: string; failure?: { code: string; params: MessageParams } }>();
+  const [read, setRead] = useState<{ key: string; text?: string; why?: "failed" | "unavailable" | "changed" } & BodiesFailure>();
   useEffect(() => {
     if (!loadBodies) return;
     let current = true;
@@ -167,7 +167,7 @@ function UnchangedView({
   const said = t(kind === "identical" ? "viewer.change.identical.sentence" : "viewer.change.renamedUnchanged.sentence");
   // Keyed on the subject alone, so a re-read of the same one keeps what is on screen until it answers.
   const done = read?.key === resetKey ? read : undefined;
-  // The stand-in is true, so a failed read loses only the preview: a warning, in the application's
+  // The `Unchanged` panel is true, so a failed read loses only the preview: a warning, in the application's
   // words. A failure with no words of its own gives no cause (the generic "something unexpected"
   // sentence would say nothing); the raw text stays in the mark's popover alone. Where the cause sets
   // names as chips, the popover shows it so (`line`).
@@ -179,7 +179,7 @@ function UnchangedView({
         ? {
           tone: "warned" as const,
           text: cause === undefined ? t("viewer.change.contentNotShown") : t("viewer.change.contentNotShownBecause", { reason: isolate(cause) }),
-          line: cause !== undefined ? <Message id="viewer.change.contentNotShownBecause" params={{ reason: <BodiesFailureReason message={cause} failure={done.failure} /> }} /> : undefined,
+          line: cause !== undefined ? <Message id="viewer.change.contentNotShownBecause" params={{ reason: <BodiesFailureReason message={cause} messageKey={done.messageKey} failure={done.failure} /> }} /> : undefined,
           detail: done.detail,
         }
         : { tone: "explained" as const, text: t(done.why === "changed" ? "viewer.change.contentChanged" : "viewer.change.contentUnavailable"), line: undefined, detail: undefined };

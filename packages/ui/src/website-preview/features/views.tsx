@@ -17,7 +17,7 @@ import { delegatingSessionIds, sessionShownStatusKind } from "../../sessions/ses
 import { liveSessions } from "../../sessions/order";
 import { DaemonProvider } from "../../store";
 import { useNow } from "../../format/useNow";
-import { RenderedDiff, useRendererScope } from "../../viewer/codeRenderer";
+import { RenderedDiff, useRendererScope } from "../../viewer/code/codeRenderer";
 import { ChangeStatusBadge } from "../../viewer/ChangeStatusBadge";
 import { previewCopy as english } from "../locales/en";
 import { previewCopy as chinese } from "../locales/zh-Hans";

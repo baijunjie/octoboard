@@ -131,11 +131,11 @@ from the repository (see "Committed changes" in `docs/product/project-pane-git-c
 
 The branches are read while the Git mode is on screen, once the repository is found: when the Git mode is first shown
 after the project pane is put in the right pane, and then the way the uncommitted changes are listed again (see "Keeping
-the list up to date" in `docs/product/project-pane-git-change-list.md`) — every 10 seconds while it is on screen and the
-window is visible, when it comes back more than 5 seconds after the last reading, on Refresh, and after the connection
-to the daemon comes back; and, as the worktrees are, when one of the project's sessions is selected and when the
-worktree the changes are read from is found gone. A branch created, moved or deleted in the meantime shows in the
-selector then.
+the list up to date" in `docs/product/project-pane-git-change-list.md`) — 10 seconds after they were last read while it
+is on screen and the window is visible, when it comes back more than 5 seconds after the last reading, on Refresh, and
+after the connection to the daemon comes back; and, as the worktrees are, when one of the project's sessions is
+selected and when the worktree the changes are read from is found gone. A branch created, moved or deleted in the
+meantime shows in the selector then.
 
 When the branches cannot be read, the view says so: in place of the change list, as an empty-state failure with
 **Try again**, while no branch is shown and no list of branches has been read yet; otherwise as a red mark beside the

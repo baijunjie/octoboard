@@ -10,14 +10,14 @@ import { eventKey } from "../shortcuts/binding";
 import { FIND_BINDING } from "../shortcuts/commands";
 import { ThemeProvider } from "../preferences/theme";
 import type { ViewerSubject } from "./content";
-import * as findDom from "./findDom";
+import * as findDom from "./find/findDom";
 import { FileViewer } from "./FileViewer";
 import { ViewerHost } from "./viewerTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 // The rendering library does not run under jsdom; a stand-in draws the text it is handed.
-vi.mock("./renderer", async () => {
+vi.mock("./code/renderer", async () => {
   const { useEffect } = await import("react");
   return {
     HighlightedFile: ({ text, onDrawn }: { text: string; onDrawn?: () => void }) => {

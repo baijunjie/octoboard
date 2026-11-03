@@ -15,6 +15,7 @@ import { STATUS_LABELS, STATUS_MARKS, type StatusKey } from "../../viewer/status
 import { displayWirePath, wireBaseName } from "../../format/wirePath";
 import type { ChangeItem } from "./changes";
 import { RowActions } from "../RowActions";
+import { parentPath } from "../tree";
 
 // The lowercase words the row's accessible name is built from; the tooltip says the capitalised
 // `STATUS_LABELS` instead, which is what the viewer's header badge shows.
@@ -49,9 +50,9 @@ function rowDetail(t: Translate, item: ChangeItem, inFolder: boolean): { shown: 
     const sentence = t(prose.id, { path: isolate(prose.path) });
     return { shown: sentence, sentence };
   }
-  const slash = item.path.lastIndexOf("/");
-  if (inFolder || slash === -1) return { shown: "", sentence: "" };
-  const folder = displayWirePath(item.path.slice(0, slash));
+  const parent = parentPath(item.path);
+  if (inFolder || parent === "") return { shown: "", sentence: "" };
+  const folder = displayWirePath(parent);
   return { shown: folder, sentence: isolate(folder) };
 }
 

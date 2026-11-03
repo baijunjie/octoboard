@@ -7,7 +7,7 @@ import { useOctoboardTheme } from "../preferences/theme";
 import { BodyView } from "./BodyView";
 import { ChangeView } from "./ChangeView";
 import type { ViewerContent, ViewerSubject } from "./content";
-import type { DiffLayout } from "./diffLayout";
+import type { DiffLayout } from "./code/diffLayout";
 import { FIRST_ANNOUNCEMENT_DELAY_MS } from "./notices";
 import { Disconnected, DISCONNECTED, Failure, Loading, ViewerFirstContentContext, ViewerPaintedContext } from "./viewerStates";
 

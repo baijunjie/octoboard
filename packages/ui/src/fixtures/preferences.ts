@@ -4,7 +4,7 @@ import type { OwnerKind } from "../panels/stackState";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import type { UpdateChannel } from "../platform";
 import type { Overrides } from "../shortcuts/store";
-import type { MarkdownStyle } from "../viewer/markdownStyle";
+import type { MarkdownStyle } from "../viewer/markdown/markdownStyle";
 
 /** The user preferences a scenario starts from, each persisted in `localStorage` by the module the
  * key names. Anything not listed is unset, so the app's own default applies. */
@@ -27,11 +27,9 @@ export interface Preferences {
   sidebarFocus?: `project:${string}` | `consoleSession:${string}`;
   /** Include console-bound sessions as cards in project focus; off by default. */
   projectFocusIncludeConsoleSessions?: boolean;
-  /** How the Git mode's change lists show their changes. */
-  changeLayout?: "flat" | "tree";
-  /** What each project's browser is left at, by project id: the mode it opens in and whether the Git
-   * mode lists what is committed by commit. */
-  projectBrowsers?: Record<string, { mode: "files" | "git"; byCommit?: boolean }>;
+  /** What each project's browser is left at, by project id: the mode it opens in, how the Git mode lays
+   * out its changes and whether it lists what is committed by commit. */
+  projectBrowsers?: Record<string, { mode: "files" | "git"; layouts?: { changes?: "flat" | "tree" }; byCommit?: boolean }>;
   /** How a rendered Markdown document is styled; Tailwind, the original look, when unset. */
   markdownStyle?: MarkdownStyle;
   /** The layout diffs open in; unified when unset. */

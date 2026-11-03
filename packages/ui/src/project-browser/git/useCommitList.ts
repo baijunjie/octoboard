@@ -1,10 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 
+import { listLane } from "../../browse/budget";
+import { useLatestRequest } from "../../components/hooks/useLatestRequest";
 import type { ErrorPresentation } from "../../errors/errorPresentation";
-import { useCurrentLanguage, useT } from "../../i18n/react";
-import { useDaemon, useDaemonStore } from "../../store";
-import { projectBrowseFailure } from "../browseError";
-import { sendBrowseListRequest } from "../browseListRequests";
+import { useDaemon } from "../../store";
 import { commitItems, type ChangeItem } from "./changes";
 
 /**
@@ -37,38 +36,40 @@ export function useCommitList(
   range: { branch: string; baseBranch: string; base: string; tip: string } | undefined,
   active: boolean,
 ): { commits: CommitList; refresh: () => Promise<void> } {
-  const t = useT();
-  const language = useCurrentLanguage();
-  const { request, store } = useDaemon();
-  const snapshotEpoch = useDaemonStore((s) => s.snapshotEpoch);
-  // What is held, with the branch and the base branch it is of: a list of other commits of the
-  // same branch against the same base branch may stand in for the new one's, one of another line
-  // may not.
+  const { request } = useDaemon();
+  // What is held is scoped to the branch and the base branch it is of: a list of other commits of
+  // the same branch against the same base branch may stand in for the new one's, one of another
+  // line may not. The request is for the range, of which there is one per line at a time.
   const line = range === undefined ? undefined : `${range.baseBranch}\0${range.branch}`;
   const key = range === undefined ? undefined : `${line}\0${range.base}..${range.tip}`;
-  const [held, setHeld] = useState<{ line: string | undefined; list: CommitList }>({ line, list: { state: "loading" } });
-  const live = useRef({ alive: true, sequence: 0, key, lost: false, sent: undefined as string | undefined });
+  const latest = useLatestRequest<CommitList>({
+    scope: line,
+    initial: { state: "loading" },
+    project,
+    onReconnect: ({ lost }) => {
+      if (lost && active && key !== undefined) void send();
+    },
+  });
+  const sent = useRef<string | undefined>(undefined);
+  const liveKey = useRef(key);
   useLayoutEffect(() => {
-    live.current.key = key;
+    liveKey.current = key;
   });
 
   const send = (): Promise<void> => {
-    const s = live.current;
     if (range === undefined || key === undefined) return Promise.resolve();
     const { base, tip } = range;
-    const setList = (change: (list: CommitList) => CommitList) =>
-      setHeld((now) => ({ line, list: change(now.line === line ? now.list : { state: "loading" }) }));
-    const sequence = ++s.sequence;
-    s.sent = key;
-    s.lost = false;
-    const current = () => s.alive && s.sequence === sequence && s.key === key;
-    setList((list) => (list.state === "loaded" ? list : { state: "loading" }));
+    sent.current = key;
     const slot = `commits:${project}`;
-    return sendBrowseListRequest(slot, () => (current() ? request({ type: "list_project_commits", project, base, tip, slot }) : undefined))
-      .then((reply) => {
-        if (!reply || !current() || reply.type !== "project_commits" || reply.project !== project) return;
-        if (reply.base !== base || reply.tip !== tip) return;
-        setList(() => ({
+    return latest.send({
+      lane: listLane,
+      slot,
+      wanted: () => liveKey.current === key,
+      request: () => request({ type: "list_project_commits", project, base, tip, slot }),
+      pending: (list) => (list.state === "loaded" ? list : { state: "loading" }),
+      accept: (reply) => {
+        if (reply.type !== "project_commits" || reply.project !== project || reply.base !== base || reply.tip !== tip) return undefined;
+        return () => ({
           state: "loaded",
           base,
           tip,
@@ -76,40 +77,18 @@ export function useCommitList(
           count: reply.commits.length,
           complete: reply.complete,
           commitsComplete: reply.commits_complete,
-        }));
-      })
-      .catch((err: unknown) => {
-        if (!current()) return;
-        const failure = projectBrowseFailure(t, language, err, store.getState(), project);
-        if (failure.kind === "superseded") return;
-        if (failure.kind === "disconnected") {
-          // Left as it is; the reconnect asks again.
-          s.lost = true;
-          return;
-        }
-        setList(() => ({ state: "error", message: failure.kind === "failed" ? failure.message : t("git.error.changing") }));
-      });
+        });
+      },
+      failed: (failure, _held, t) => ({ state: "error", message: failure.kind === "failed" ? failure.message : t("git.error.changing") }),
+    });
   };
 
   useEffect(() => {
-    if (active && key !== undefined && live.current.sent !== key) send();
+    if (active && key !== undefined && sent.current !== key) void send();
   }, [active, key]);
 
-  const firstEpoch = useRef(snapshotEpoch);
-  useEffect(() => {
-    if (snapshotEpoch !== firstEpoch.current && live.current.lost && active && key !== undefined) send();
-  }, [snapshotEpoch]);
-
-  useEffect(() => {
-    const s = live.current;
-    s.alive = true;
-    return () => {
-      s.alive = false;
-    };
-  }, []);
-
   return {
-    commits: range === undefined ? { state: "idle" } : held.line === line ? held.list : { state: "loading" },
+    commits: range === undefined ? { state: "idle" } : latest.value,
     refresh: () => (active && key !== undefined ? send() : Promise.resolve()),
   };
 }

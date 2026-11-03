@@ -10,12 +10,7 @@ Git modes' change lists and diffs included). A request once sent stays outstandi
 sent it cancels nothing; only a newer request in the same `slot`, or the connection closing, ends it in the daemon. So
 a component that is gone, or stuck behind a volume that stopped answering, still holds its requests against the bound.
 
-Keep the concurrency limit for a kind of browse request in a count shared across the window at module level, as the
-listings' `MAX_WINDOW_IN_FLIGHT` in `packages/ui/src/project-browser/files/useDirectoryListings.ts` is, and size it together with the
-limits already there, the viewer's slots included, so that their sum stays under the daemon's bound. A limit per
-mounted component looks safe for one component and lets a few of them together run into `limit_exceeded`.
-
-A slot costs more than the one request in it: the daemon takes the outstanding unit for a request that claims a slot
-before it cancels the request holding it, and the cancelled one keeps its own unit until it stops. So the sum reserves
-a spare unit for each slot that can be replaced, not one for the window, since two slots can be replaced at the same
-moment — and adding a slot lowers what the other kinds of request may have out at once.
+So send every browse request through one of the window-wide lanes or slots of `packages/ui/src/browse/budget.ts`
+(the "Shared entry points" section of `docs/structure/ui.md`), and give a new kind of request a share there, sized with
+the others, rather than a concurrency limit of its own per mounted component: that looks safe for one component and
+lets a few of them together run into `limit_exceeded`.

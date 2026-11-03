@@ -183,6 +183,18 @@ export const terminalPanelScenarios: Scenario[] = [
     steps: [openWebsite, showTerminal, (ui) => ui.press(ui.t("shellTerminal.new"))],
   },
   {
+    id: "shell-panel-closing",
+    group: GROUP,
+    category: "normal",
+    title: "Terminal tab being closed",
+    description:
+      "Close terminal pressed on git log, an idle shell, while the daemon has not yet answered: the git log tab is still the selected one, with its tinted fill, and stays in the strip under a veil of the panel colour that also covers its 1px accent border. Its label and close mark must still read through the veil. The pnpm dev tab beside it stays unselected until the daemon answers.",
+    state: stateOf(severalShells),
+    preferences: WIDE_TERMINAL,
+    shellTerminalClose: "pending",
+    steps: [openWebsite, showTerminal, (ui) => terminalMenu(ui, "git log"), (ui) => ui.press(ui.t("shellTerminal.close"))],
+  },
+  {
     id: "shell-panel-floating",
     group: GROUP,
     category: "normal",

@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import type React from "react";
 
 import { LazyProjectBrowser } from "../project-browser/LazyProjectBrowser";
-import type { ViewedFile } from "../project-browser/files/TerminalFileViewer";
+import type { ViewedFile } from "../viewer/viewedFile";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { AsideOwner } from "../layout/asideOwner";

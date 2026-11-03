@@ -10,7 +10,7 @@ import { statusLabel } from "../sessions/sessionLabel";
 import { type ShownStatusKind } from "../sessions/sessionStatus";
 import { eventKey, type Binding } from "../shortcuts/binding";
 import type { Daemon, State } from "../store";
-import type { TerminalElement } from "../terminal/TerminalController";
+import type { TerminalElement } from "../terminal/terminalTextView";
 import { IS_MAC } from "../input/keys";
 import { STATUS_LABELS, type StatusKey } from "../viewer/statusMarks";
 

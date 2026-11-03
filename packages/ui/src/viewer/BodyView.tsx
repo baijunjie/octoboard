@@ -2,10 +2,10 @@ import React, { useState } from "react";
 
 import { PaneFailure } from "../components/alerts/PaneFailure";
 import { useT } from "../i18n/react";
-import { CodeSurface } from "./CodeSurface";
+import { CodeSurface } from "./code/CodeSurface";
 import { isMarkdownName, type ViewerBody } from "./content";
 import { FrameSurface } from "./FrameSurface";
-import { MarkdownSurface } from "./MarkdownSurface";
+import { MarkdownSurface } from "./markdown/MarkdownSurface";
 import { FileNotice } from "./notices";
 import { Unsupported } from "./viewerStates";
 

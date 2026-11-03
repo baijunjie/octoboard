@@ -10,11 +10,11 @@ import { Dialog } from "../components/dialog/Dialog";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { minWidthQuery, useMediaQuery } from "../components/hooks/breakpoint";
 import { displayWirePath, wireBaseName } from "../format/wirePath";
-import { useRendererScope } from "./codeRenderer";
+import { useRendererScope } from "./code/codeRenderer";
 import { changeStatus, type ViewerSubject } from "./content";
 import { ControlsSlot } from "./controlsSlot";
-import { diffLayout } from "./diffLayout";
-import { FindBar, FindToggle } from "./FindBar";
+import { diffLayout } from "./code/diffLayout";
+import { FindBar, FindToggle } from "./find/FindBar";
 import {
   CopyPathButton,
   DetailItem,
@@ -25,14 +25,14 @@ import {
   TitleStatusBadge,
 } from "./headerParts";
 import { formatFileSize } from "../format/fileSize";
-import { MarkdownLocationProvider, type MarkdownLocation } from "./markdownLocation";
+import { MarkdownLocationProvider, type MarkdownLocation } from "./markdown/markdownLocation";
 import { NoticeSlotBoxes, NoticeSlotsProvider } from "./notices";
 import { STATUS_LABELS, type StatusKey } from "./statusMarks";
-import { useFind } from "./useFind";
+import { useFind } from "./find/useFind";
 import { useNavigationFocus } from "./useNavigationFocus";
 import { isWaiting, ViewerContentView } from "./ViewerContentView";
 import type { ViewerNavigation } from "./viewerNavigation";
-import { useWrapClaims, WrapToggleHost } from "./wordWrap";
+import { useWrapClaims, WrapToggleHost } from "./code/wordWrap";
 
 /**
  * The read-only file viewer: a modal showing one subject — a file's text or image, a change between

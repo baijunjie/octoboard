@@ -8,10 +8,11 @@ import { forwardAlerts } from "../components/alerts/alertTestSupport";
 import { errorText } from "../errors/errorText";
 import { errorPresentation } from "../errors/errorPresentation";
 import type { PlatformAdapter } from "../platform";
-import { PlatformProvider } from "../platform/react";
 import { isolate } from "../i18n/isolate";
 import type { ChangeEntry, LineStats } from "../protocol";
-import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
+import type { Daemon, State } from "../store";
+import { TestHost } from "../test/TestHost";
+import { testDaemon } from "../test/testDaemon";
 import type { ChangeViewState } from "./git/changeView";
 
 /** Presses Tab on `element`, with Option held for `altKey`, and returns where the key put focus for
@@ -98,7 +99,7 @@ interface MountRowsOptions {
  * is being torn down: the scheduler then dies on the missing `window`, as an unhandled error the
  * whole run is blamed for.
  */
-export function mountRows(children: React.ReactNode, { request = () => Promise.reject(new Error("no daemon")), clipboard, toasts = { notice: () => {}, error: () => {} }, state }: MountRowsOptions = {}): HTMLElement {
+export function mountRows(children: React.ReactNode, { request, clipboard, toasts = { notice: () => {}, error: () => {} }, state }: MountRowsOptions = {}): HTMLElement {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -107,22 +108,7 @@ export function mountRows(children: React.ReactNode, { request = () => Promise.r
   });
   // The alerts raised without a daemon (`raiseError` from `components/alerts/raiseError`) go where the daemon's do.
   onTestFinished(forwardAlerts(toasts.error));
-  const daemon: Daemon = {
-    store: createStateStore(state),
-    request,
-    raiseError: (error) => toasts.error(errorText(errorPresentation(error))),
-    toastNotice: toasts.notice,
-    onToast: () => () => {},
-    dismissTrustPrompt: () => {},
-    reconnect: () => {},
-    terminalUrl: () => "",
-  };
-  act(() =>
-    root.render(
-      <PlatformProvider value={{ kind: "browser", clipboard }}>
-        <DaemonProvider value={daemon}>{children}</DaemonProvider>
-      </PlatformProvider>,
-    ),
-  );
+  const daemon = testDaemon({ state, request, raiseError: (error) => toasts.error(errorText(errorPresentation(error))), toastNotice: toasts.notice });
+  act(() => root.render(<TestHost daemon={daemon} platform={{ kind: "browser", clipboard }}>{children}</TestHost>));
   return container;
 }

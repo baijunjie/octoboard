@@ -5,7 +5,7 @@ import React, { useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom/client";
 
 import { LANGUAGES, LANGUAGE_NAMES, isLanguage, type Language } from "../i18n/languages";
-import { MARKDOWN_STYLES, parseMarkdownStyle, type MarkdownStyle } from "../viewer/markdownStyle";
+import { MARKDOWN_STYLES, parseMarkdownStyle, type MarkdownStyle } from "../viewer/markdown/markdownStyle";
 import { DEFAULT_SCENARIO, GROUPS, SCENARIOS } from "./fixtures";
 import { CATEGORIES } from "./fixtures/groups";
 import { DEFAULT_WIDTH, LIVE_CHANGE_EVENT, MIN_HEIGHT, type Scenario } from "./scenario";

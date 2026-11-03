@@ -1,22 +1,20 @@
 import type { ITheme } from "@xterm/xterm";
 
 /**
- * The two xterm colour themes the terminal switches between, one per resolved UI theme. xterm sets
- * no ANSI colour on its own — only `background`/`foreground`/`cursor`/`selectionBackground` did
- * anything before this file existed — so an agent printing a plain ANSI colour (most TUI output)
- * fell back to xterm's own defaults, which assume a dark background and are unreadable on a light
- * one. Both palettes below give every one of the 16 ANSI colours and the cursor pair a value
- * checked for contrast against that palette's own `background`, not borrowed from the other mode.
+ * The two xterm colour themes the terminal switches between, one per resolved UI theme. xterm's
+ * default ANSI colours assume a dark background, so an agent printing a plain ANSI colour (most
+ * TUI output) would be unreadable on a light one. Each palette therefore gives all 16 ANSI colours
+ * and the cursor pair a value checked for contrast against its own `background`, not borrowed from
+ * the other mode.
  *
- * `dark` keeps the background/foreground/cursor/selection this terminal already shipped with
- * (`#1e1f22`/`#e4e4e6`); only the 16 ANSI colours and `cursorAccent` are new, chosen in the style of
- * the "One Dark" terminal scheme. `light` is a parallel palette in the style of "One Light":
- * a light "paper" background with dark, saturated foregrounds.
+ * `dark` (background `#1e1f22`, foreground `#e4e4e6`) takes its ANSI colours from the "One Dark"
+ * terminal scheme. `light` is a parallel palette in the style of "One Light": a light "paper"
+ * background with dark, saturated foregrounds.
  *
- * ANSI black/white are the two colours that cannot simply mirror a well-known scheme unmodified:
- * printed verbatim as foreground text they would be close to invisible against a same-toned
- * background (black-on-near-black, white-on-near-white), so both are nudged a step away from their
- * theme's background rather than left at the textbook value.
+ * ANSI black/white cannot mirror a well-known scheme unmodified: printed verbatim as foreground
+ * text they would be close to invisible against a same-toned background (black-on-near-black,
+ * white-on-near-white), so both sit a step away from their theme's background rather than at the
+ * textbook value.
  */
 export const XTERM_THEMES: Record<"light" | "dark", ITheme> = {
   dark: {

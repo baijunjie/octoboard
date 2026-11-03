@@ -1,7 +1,7 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
-import { type IBuffer, type IBufferRange, Terminal } from "@xterm/xterm";
+import { type IBufferRange, Terminal } from "@xterm/xterm";
 
 import type { TermControl, TermEvent } from "../protocol";
 import { interactionIsTouch } from "../input/touchInput";
@@ -18,124 +18,21 @@ import {
   TERMINAL_URL_REGEX,
   terminalLinkHandler,
 } from "./links/terminalLinks";
+import { exposeReadOnlyView } from "./terminalTextView";
+import {
+  FOCUS_REPORT,
+  isButtonlessMotion,
+  MOUSE_REPORT,
+  planOutputWrites,
+  RESET_REPORTING_MODES,
+  type SelectionGuard,
+  writeInSlices,
+} from "./terminalOutput";
+import { keepModifiersFromArmingKeyDownSeen, watchUserInput } from "./xtermInternals";
 import { XTERM_THEMES } from "./xtermThemes";
-
-/** Shift, Ctrl, Alt: the keys xterm itself treats as modifier-only. */
-const MODIFIER_KEY_CODES = new Set([16, 17, 18]);
-
-/**
- * Returns a key-event observer that keeps a bare modifier keydown from arming xterm's private
- * `_keyDownSeen` flag. xterm sets that flag on every keydown, `Shift` included, and drops an input
- * method's direct `insertText` commit while it is set. With a CJK input method, WebKit delivers the
- * commit for a shifted full-width mark (`？` is Shift+/) *before* the mark's own keydown, so the
- * `Shift` keydown has already armed the flag and the first press is swallowed.
- *
- * xterm writes the flag before it calls the custom key handler, and clears it before it calls it on
- * keyup, so the observer can tell what the flag held before a modifier keydown and put that back.
- * It is restored rather than cleared: while another key is still down, that key's commit may still
- * be pending through xterm's own deferred path, and letting the `input` event through as well
- * would send it twice.
- *
- * It must run from the terminal's one custom key handler, since xterm accepts only one, and first
- * in it, ahead of any early return, so that it sees every keydown and keyup. It reaches into a
- * private field, so recheck it on every `@xterm/xterm` upgrade.
- *
- * TODO: remove once `@xterm/xterm` stops arming `_keyDownSeen` on a modifier-only keydown.
- */
-function keepModifiersFromArmingKeyDownSeen(term: Terminal): (event: KeyboardEvent) => void {
-  const core = (term as unknown as { _core?: { _keyDownSeen?: boolean } })._core;
-  // True after a non-modifier keydown and until the next keyup: xterm's flag, minus the modifiers.
-  let armed = false;
-  return (event) => {
-    if (event.type === "keyup") {
-      armed = false;
-    } else if (event.type === "keydown") {
-      if (!MODIFIER_KEY_CODES.has(event.keyCode)) armed = true;
-      else if (core && "_keyDownSeen" in core) core._keyDownSeen = armed;
-    }
-  };
-}
-
-/**
- * Calls `onUserInput` right before each `onData` that xterm marks as the user's: a key, a paste, an
- * input method's text, a wheel turned into arrow keys. xterm's own answers to queries in the output
- * (device attributes, cursor position, colours, focus and window reports) are not marked. Mouse
- * reports are marked too when they come through `onData` (the SGR and SGR-pixels encodings), as is
- * an Alt+click that moves the cursor; the default encoding comes through `onBinary`
- * unmarked. The controller itself tells the mouse reports apart (see `MOUSE_REPORT`, `onBinary`),
- * since they are not typing. The public API does not expose the mark, so this reaches
- * `coreService.onUserInput` through the private `_core`; recheck it on every `@xterm/xterm`
- * upgrade. Without it nothing is ever marked, so only the user's input typed while saved output is
- * still being parsed is lost, and xterm's answers go as input rather than as reply frames (see
- * `sendReply`). Returns whether the mark is watched.
- */
-function watchUserInput(term: Terminal, onUserInput: () => void): boolean {
-  const core = (
-    term as unknown as {
-      _core?: { coreService?: { onUserInput?: (listener: () => void) => unknown } };
-    }
-  )._core;
-  if (!core?.coreService?.onUserInput) return false;
-  core.coreService.onUserInput(onUserInput);
-  return true;
-}
-
-/** A focus report (`CSI I`, `CSI O`): xterm does not mark it as the user's, but it is this view
- * gaining or losing focus, not an answer to a query. */
-// eslint-disable-next-line no-control-regex -- Focus reports begin with the escape control character.
-const FOCUS_REPORT = /^\x1b\[[IO]$/;
-
-/** Whether `data` is a mouse report that reaches `onData`: SGR and SGR-pixels (`CSI < b;x;y M|m`),
- * with the button code `b` captured. xterm's default encoding always goes through `onBinary`, and
- * it has no urxvt encoding. */
-// eslint-disable-next-line no-control-regex -- Terminal mouse reports begin with the escape control character.
-const MOUSE_REPORT = /^\x1b\[<(\d+);\d+;\d+[Mm]$/;
-
-/** Turns off the mouse tracking (X10 to any-motion, and the SGR encoding) and focus reporting an
- * agent may have switched on, which xterm answers with input of its own. `?1015l` (urxvt) is a
- * no-op in xterm 6.0.0, which does not support that encoding; it is harmless and kept for an
- * xterm that does. */
-const RESET_REPORTING_MODES = "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l\x1b[?1015l";
-
-/** Output made of nothing but private mode sets and resets (`CSI ? Pm h`, `CSI ? Pm l`), with at
- * most charset designations (`ESC ( B`) and shifts (SI, SO) around them: what a program writes to
- * re-assert its modes, as Claude Code does after a pause in its input, on a resize and in other
- * cases. Of the modes, only the alternate screen's change the text on screen, by switching buffers,
- * which `keepSelectionThroughModes` checks for itself. */
-// eslint-disable-next-line no-control-regex -- Mode sequences begin with the escape control character.
-const MODES_ONLY = /^(?:\x1b\[\?\d+(?:;\d+)*[hl]|\x1b[()*+][0-9A-Za-z]|[\x0e\x0f])+$/;
-/** Longer output is never a bare re-assertion of modes; past this it is not even looked at. */
-const MODES_ONLY_MAX_BYTES = 256;
-
-/** Whether `data` only sets or resets modes (see `MODES_ONLY`). */
-function onlySetsModes(data: Uint8Array): boolean {
-  return data.length > 0 && data.length <= MODES_ONLY_MAX_BYTES && MODES_ONLY.test(String.fromCharCode(...data));
-}
-
-/** Whether `data` is an SGR report of the pointer moving with no button held: motion (32) with the
- * "no button" code (3), not the wheel (64), whatever modifiers (4, 8, 16) are held. */
-function isButtonlessMotion(data: string): boolean {
-  const code = MOUSE_REPORT.exec(data)?.[1];
-  return code !== undefined && (Number(code) & 0b110_0011) === 0b010_0011;
-}
-
-/** The most a single `write` hands xterm. xterm parses one write as one task, and a session's whole
- * replay arrives as one frame, which would hold the main thread for tens of milliseconds; between
- * writes it yields, and its decoders keep their state across them, so a character or an escape
- * sequence cut by a slice is still read whole. */
-const WRITE_SLICE_BYTES = 64 * 1024;
 
 /** How long the terminal's size must hold still before `syncSize` reports it to the daemon. */
 const RESIZE_SETTLE_MS = 120;
-
-/** What `exposeReadOnlyView` hangs on the terminal's element. */
-export interface TerminalTextView {
-  cols: () => number;
-  rows: () => number;
-  /** The text of viewport row `y`, one character per column. */
-  row: (y: number) => string;
-}
-export type TerminalElement = HTMLElement & { octoboardTerminalText?: TerminalTextView };
 
 export type TermStatus = "connecting" | "open" | "closed" | "not_running";
 
@@ -195,15 +92,15 @@ export const TERMINAL_FONT_FAMILY = '"SF Mono", Menlo, Consolas, "Noto Sans Mono
 
 /**
  * Owns the terminal pane end to end: the one `xterm.js` instance, the active session's socket,
- * the connection status, and keyboard focus — all four change together inside `attach()`, which
- * is the only place any of them is written. Splitting them across independent variables was tried
- * and produced two concrete defects: clicking anything in the UI moved DOM focus off xterm's hidden
- * textarea so keystrokes stopped reaching the agent while output kept flowing, and a superseded
- * socket's `close` event — arriving asynchronously after a session switch — stamped "closed" over
- * the new connection's "open". Routing every state change
- * through one method with a `generation` guard (below) closes off both: nothing reads or writes
- * `status`/`socket`/`sessionId` outside `attach()` and the listeners it installs, and a stale
- * socket's events are discarded by comparing against the generation they were opened for.
+ * the connection status, and keyboard focus. All four change together inside `attach()`, which
+ * is the only place any of them is written. They must not be independent variables: clicking
+ * anything in the UI moves DOM focus off xterm's hidden textarea, so keystrokes would stop reaching
+ * the agent while output kept flowing, and a superseded socket's `close` event, arriving
+ * asynchronously after a session switch, would stamp "closed" over the new connection's "open".
+ * Routing every state change through one method with a `generation` guard (below) closes off both:
+ * nothing reads or writes `status`/`socket`/`sessionId` outside `attach()` and the listeners it
+ * installs, and a stale socket's events are discarded by comparing against the generation they
+ * were opened for.
  *
  * This class only knows about one session's socket; it has no notion of whether that session's
  * process is still meant to be running. Automatic reconnection after a dropped socket is therefore
@@ -256,10 +153,12 @@ export class TerminalController {
    * xterm marks as theirs (keys, pastes, mouse reports other than the pointer moving with no button
    * held), Control-C, which the controller sends itself, and presses that cannot open the editing
    * menu. A selection is put back after a
-   * re-assertion of modes only if this has not moved (see `keepSelectionThroughModes`). Motion does
+   * re-assertion of modes only if this has not moved (see `writeInSlices` and its `SelectionGuard`). Motion does
    * not count: it is held back only while a selection is up, so once a re-assertion has cleared it
    * the pointer's next move would be reported and would cancel putting it back. */
   private userActs = 0;
+  /** What the output pipeline reads of this controller to put a selection back (see `writeInSlices`). */
+  private readonly selectionGuard: SelectionGuard = { userActs: () => this.userActs, disposed: () => this.disposed };
   /** Removes the listeners `mount` puts on the container. */
   private readonly mountListeners = new AbortController();
   /** Set by xterm's `onUserInput` right before the `onData` it belongs to, and consumed there:
@@ -434,7 +333,7 @@ export class TerminalController {
   mount(container: HTMLElement): void {
     this.container = container;
     this.term.open(container);
-    this.exposeReadOnlyView();
+    exposeReadOnlyView(this.term);
     const { signal } = this.mountListeners;
     container.addEventListener(
       "mousedown",
@@ -489,32 +388,6 @@ export class TerminalController {
       if (this.options.gpu) this.useWebglRenderer();
       this.fit();
     });
-  }
-
-  /**
-   * Hangs a read-only view of the screen's text on the terminal's element, for the gallery's pointer
-   * steps and the wkbench harness: the WebGL renderer leaves `.xterm-rows` empty, so the DOM no
-   * longer says what the terminal shows. It reads the buffer and changes nothing.
-   */
-  private exposeReadOnlyView(): void {
-    const { term } = this;
-    const view: TerminalTextView = {
-      cols: () => term.cols,
-      rows: () => term.rows,
-      // A wide character's second cell and an empty cell both read as a space, so a string index
-      // is a column (for text of single UTF-16 units).
-      row: (y) => {
-        const line = term.buffer.active.getLine(term.buffer.active.viewportY + y);
-        if (!line) return "";
-        let text = "";
-        for (let x = 0; x < term.cols; x++) {
-          const cell = line.getCell(x);
-          text += cell?.getChars() || " ";
-        }
-        return text;
-      },
-    };
-    if (term.element) (term.element as TerminalElement).octoboardTerminalText = view;
   }
 
   /**
@@ -790,19 +663,16 @@ export class TerminalController {
   }
 
   /** Writes a frame of this connection's output, noting the point in the output it ends at for the
-   * answers xterm gives while parsing it (see `parsing`). The replay is written in two: the output
-   * whose queries were answered already, and the rest. */
+   * answers xterm gives while parsing it (see `parsing`). */
   private writeOutput(data: Uint8Array, onParsed?: () => void): void {
-    const mark = this.replayMark;
+    const plan = planOutputWrites(data, this.replayMark, this.outputEnd);
     this.replayMark = undefined;
-    if (mark && mark.length === data.length) {
-      this.outputEnd = mark.offset;
-      this.writeParsed(data.subarray(0, mark.answered), undefined);
-      this.writeParsed(data.subarray(mark.answered), mark.offset, onParsed);
-      return;
+    this.outputEnd = plan.outputEnd;
+    for (const [index, write] of plan.writes.entries()) {
+      const last = index === plan.writes.length - 1;
+      // `onParsed` fires once the whole frame is parsed, so only the last write carries it.
+      this.writeParsed(write.data, write.offset, last ? onParsed : undefined);
     }
-    if (this.outputEnd !== undefined) this.outputEnd += data.length;
-    this.writeParsed(data, this.outputEnd, onParsed);
   }
 
   private writeParsed(data: Uint8Array, offset: number | undefined, onParsed?: () => void): void {
@@ -813,72 +683,8 @@ export class TerminalController {
     });
   }
 
-  /** Writes `data` to xterm in slices of at most `WRITE_SLICE_BYTES`, in order; `onParsed` is the
-   * last slice's write callback, so it fires once all of `data` has been parsed. `data` that only
-   * sets modes keeps the terminal's selection through it (`keepSelectionThroughModes`): it is looked
-   * at whole, so a re-assertion of modes counts only as output of its own, never inside a larger
-   * one. */
   private write(data: Uint8Array, onParsed?: () => void): void {
-    const keepSelection = onlySetsModes(data) ? this.keepSelectionThroughModes() : undefined;
-    let start = 0;
-    do {
-      const end = start + WRITE_SLICE_BYTES;
-      this.term.write(data.subarray(start, end), end >= data.length ? onParsed : undefined);
-      start = end;
-    } while (start < data.length);
-    if (keepSelection) this.term.write("", keepSelection);
-  }
-
-  /**
-   * Notes the selection as it stands right before the output written next is parsed, and returns
-   * the callback to write right after that output, which puts the selection back if parsing it
-   * cleared it. For output that only sets modes (`onlySetsModes`): xterm clears its selection
-   * whenever a mouse tracking mode is set, even one already on, so a program re-asserting its modes
-   * (Claude Code does so whenever input arrives after a few idle seconds, such as the focus report
-   * of the window coming back) would take away a selection forced under mouse reporting, which
-   * nothing on screen has invalidated.
-   *
-   * The selection is put back only when nothing else could have meant to clear it: the tracking
-   * mode and the active buffer are what they were, and the user has done nothing in between
-   * (`userActs`); xterm may parse queued output across tasks, letting a click or a key in. Output
-   * that comes with anything else, text included, is never looked at, so a selection is never put
-   * back over redrawn text.
-   */
-  private keepSelectionThroughModes(): () => void {
-    let kept:
-      | { range: IBufferRange; tracking: Terminal["modes"]["mouseTrackingMode"]; buffer: IBuffer["type"]; userActs: number }
-      | undefined;
-    this.term.write("", () => {
-      const range = this.term.getSelectionPosition();
-      kept = range && {
-        range,
-        tracking: this.term.modes.mouseTrackingMode,
-        buffer: this.term.buffer.active.type,
-        userActs: this.userActs,
-      };
-    });
-    return () => {
-      if (
-        !kept ||
-        this.disposed ||
-        this.term.hasSelection() ||
-        this.term.modes.mouseTrackingMode !== kept.tracking ||
-        this.term.buffer.active.type !== kept.buffer ||
-        this.userActs !== kept.userActs
-      ) {
-        return;
-      }
-      // The range's end is exclusive, and a selection that spans rows runs on through the ends of
-      // the rows in between, which is what a length counted in whole rows gives back. A selection
-      // ending at column 0 of a later row comes back ending at the end of the row before, without
-      // the line break the original ended with: `select` takes a length, and xterm maps one that
-      // reaches a row's end exactly to that end, never to the start of the next row. A column
-      // (block) selection keeps its mode through `select`, so it comes back as the same rectangle,
-      // except one whose end corner is at column 0: that end comes back at (cols, the row before),
-      // a different rectangle.
-      const { start, end } = kept.range;
-      this.term.select(start.x, start.y, (end.y - start.y) * this.term.cols + end.x - start.x);
-    };
+    writeInSlices(this.term, data, this.selectionGuard, onParsed);
   }
 
   /** Tells the daemon the terminal's current size once it has settled for `RESIZE_SETTLE_MS`, and

@@ -2,9 +2,9 @@ import { Spinner } from "@heroui/react";
 import React, { useEffect, useId, useMemo, useRef } from "react";
 import { Collection, ListLayout, Tree, TreeItem, TreeItemContent, Virtualizer, type Key } from "react-aria-components";
 
-import { Button } from "../../components/controls/Button";
-import { failureParam, FailureBody } from "../../components/alerts/errorParts";
+import { failureParam } from "../../components/alerts/errorParts";
 import { FadeOverflow } from "../../components/text/FadeOverflow";
+import { RetryStatusMark } from "../../components/status/RetryStatusMark";
 import { StatusMark } from "../../components/status/StatusMark";
 import { useCollectionOptionTab } from "../../components/focus/collectionOptionTab";
 import { useScrollFade } from "../../components/scroll/scrollFade";
@@ -19,6 +19,7 @@ import { RowActions } from "../RowActions";
 import { FileIcon } from "./FileIcon";
 import type { TreeNode } from "../tree";
 import { BrowserListMotion, useBrowserListMotion } from "../useBrowserListMotion";
+import { collectionIndex } from "../collectionIndex";
 import { DirectoryRow, IGNORED_ROW_CLASS, ROW_CLASS, ROW_HEIGHT, RowContent, RowName } from "../treeRow";
 
 /** The rows of the tree with their rendering kept for every row whose content did not change: the
@@ -67,6 +68,10 @@ function sameNode(before: TreeNode, next: TreeNode): boolean {
   return false;
 }
 
+/** The vertical padding the tree's scroller adds above its first row (the `py-1` of its class in `FileTree` below),
+ * which scrolling a row into view counts. */
+export const TREE_PADDING = 4;
+
 /**
  * A project's files as a tree: react-aria-components' `Tree`, virtualized. HeroUI 3 has no tree, so
  * this is built on the react-aria component HeroUI itself builds on, which brings the treegrid
@@ -105,28 +110,21 @@ export function FileTree({
   const language = useCurrentLanguage();
   const treeId = useId();
   const items = useStableNodes(nodes);
-  const { visibleKeys, folds } = useMemo(() => {
-    const keys = new Set<string>();
-    const parents = new Map<string, string>();
+  const { byKey, visibleKeys, folds } = useMemo(() => {
+    const index = collectionIndex(items, (node) => (node.type === "directory" ? node.children : []), (node) => node.type === "directory" && expanded.has(node.key) && node.failure === undefined);
     // A directory opens once its rows are listed: rows that arrive while it is still loading, or
-    // after it failed to list, unfold with it rather than entering one by one.
-    const open = new Set<string>();
-    const walk = (rows: TreeNode[], parent?: string) => {
-      for (const node of rows) {
-        keys.add(node.key);
-        if (parent !== undefined) parents.set(node.key, parent);
-        if (node.type === "directory" && expanded.has(node.key) && node.failure === undefined) {
-          if (node.children.some((child) => child.type !== "status" || child.status !== "loading")) open.add(node.key);
-          if (node.children.length > 0) walk(node.children, node.key);
-          else {
-            keys.add(`collapsed:${node.path}`);
-            parents.set(`collapsed:${node.path}`, node.key);
-          }
-        }
+    // after it failed to list, unfold with it rather than entering one by one. One with no rows
+    // yet is not open, and its stand-in row (`childrenOf` below) is the one under it.
+    for (const key of [...index.folds.open]) {
+      const node = index.byKey.get(key);
+      if (node?.type !== "directory") continue;
+      if (node.children.length === 0) {
+        index.visibleKeys.add(`collapsed:${node.path}`);
+        index.folds.parents.set(`collapsed:${node.path}`, node.key);
       }
-    };
-    walk(items);
-    return { visibleKeys: keys, folds: { parents, open } };
+      if (!node.children.some((child) => child.type !== "status" || child.status !== "loading")) index.folds.open.delete(key);
+    }
+    return index;
   }, [items, expanded]);
   const motion = useBrowserListMotion(treeRef, visibleKeys, folds);
   const collectionRef = useCollectionOptionTab(motion.ref);
@@ -148,17 +146,6 @@ export function FileTree({
     }
     return standIn;
   };
-  const byKey = useMemo(() => {
-    const map = new Map<Key, TreeNode>();
-    const walk = (list: TreeNode[]) =>
-      list.forEach((node) => {
-        map.set(node.key, node);
-        if (node.type === "directory") walk(node.children);
-      });
-    walk(items);
-    return map;
-  }, [items]);
-
   // The directories whose listing failed, drawn collapsed whatever `expanded` says.
   const failed = useMemo(() => new Set([...byKey].filter(([, node]) => node.type === "directory" && node.failure !== undefined).map(([key]) => key)), [byKey]);
   const shownExpanded = useMemo(() => new Set([...expanded].filter((key) => !failed.has(key))), [expanded, failed]);
@@ -324,27 +311,7 @@ function FileNodeRow({ node, onRetry, children }: {
  * is listed beneath the row. */
 function ListingFailureMark({ message, onRetry }: { message: ErrorPresentation; onRetry: () => void }): React.ReactElement {
   const t = useT();
-  const label = t("browser.tree.errorLabel");
-  return (
-    <StatusMark
-      label={label}
-      actions={retryCanHelp(message) ? (close) => (
-        <Button
-          size="sm"
-          variant="secondary"
-          preventFocusOnPress
-          onPress={() => {
-            close();
-            onRetry();
-          }}
-        >
-          {t("error.tryAgain")}
-        </Button>
-      ) : undefined}
-    >
-      <FailureBody error={message} summary={<Message id="browser.tree.error" params={{ message: failureParam(message) }} />} />
-    </StatusMark>
-  );
+  return <RetryStatusMark label={t("browser.tree.errorLabel")} error={message} summary={<Message id="browser.tree.error" params={{ message: failureParam(message) }} />} onRetry={onRetry} />;
 }
 
 /** A row that says what a directory's listing is: still loading or empty. */

@@ -1,5 +1,6 @@
 import { GitBranch } from "lucide-react";
 
+import { listLane } from "../browse/budget";
 import { ActionableError } from "../errors/actionableError";
 import { useStableHandler } from "../components/hooks/useLatest";
 import { copyText } from "../components/host/copyText";
@@ -63,8 +64,8 @@ export function useRowRequests() {
 
   const loadProjectBranches = async (project: Project): Promise<ActionMenuEntry[]> => {
     const [reply, source] = await Promise.all([
-      request({ type: "list_project_branches", project: project.id }),
-      request({ type: "get_project_source", project: project.id }),
+      listLane.send(() => request({ type: "list_project_branches", project: project.id })),
+      listLane.send(() => request({ type: "get_project_source", project: project.id })),
     ]);
     if (reply.type !== "project_branches") throw new Error(t("sidebar.project.branchesFailed"));
     const git = source.type === "project_source" ? source.source.git : undefined;

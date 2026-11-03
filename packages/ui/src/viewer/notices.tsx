@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { StatusMark } from "../components/status/StatusMark";
-import { useMarkBesideLink } from "./linkMarks";
+import { useMarkBesideLink } from "./markdown/linkMarks";
 
 /** How long any of the viewer's announcements (its loading, a `Failure`, a notice) wait before their first
  * text: the dialog takes focus as it opens. Moving to another file in an open viewer has no such focus

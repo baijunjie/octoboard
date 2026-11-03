@@ -21,7 +21,6 @@ export const PREFERENCE_KEYS = {
   projectBrowsers: "octoboard.projectBrowsers",
   diffLayout: "octoboard.diffLayout",
   wordWrap: "octoboard.wordWrap",
-  changeLayout: "octoboard.changeLayout",
   markdownView: "octoboard.markdownView",
   markdownStyle: "octoboard.markdownStyle",
   runInBackground: "octoboard.runInBackground",

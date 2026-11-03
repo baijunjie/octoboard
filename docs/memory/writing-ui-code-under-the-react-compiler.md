@@ -39,7 +39,10 @@ parent render as before, and for most causes the lint reports nothing. In this c
   as written, and logs nothing about it, so everything it returns is new on every call and whatever its caller
   passes on from it re-renders the children it reaches. Moving code out of a component into such a function
   un-memoizes it. A hook extracted from a component calls at least one React hook; code that needs none goes into a
-  plain function without the `use` prefix, whose call the compiled caller memoizes on its arguments.
+  plain function without the `use` prefix, whose call the compiled caller memoizes on its arguments — except code
+  that builds handlers reading refs: a ref passed to a plain function during render trips `react-hooks/refs` and
+  leaves the caller uncompiled, so such code goes into a hook whose handlers are each wrapped in `useStableHandler`
+  (as `packages/ui/src/terminal/shell/useShellTabFocus.ts` is).
 
 To see what did not compile, give the compiler a `logger` — temporarily as
 `reactCompilerPreset({ logger: { logEvent(filename, event) { … } } })` in `packages/ui/vite.config.ts`, then build —

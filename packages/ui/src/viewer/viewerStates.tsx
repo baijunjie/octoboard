@@ -3,17 +3,17 @@
 // spinner while any of it is on its way, with the contexts that tell them when they arrived. They are
 // all here so the three stay one family. What is said about content that is still shown is in
 // `notices.tsx`.
-import { Spinner } from "@heroui/react";
 import { Equal, FileQuestion, FolderGit2, Link, Unplug } from "lucide-react";
 import React, { createContext, useContext } from "react";
 
 import { CenteredEmptyPanel } from "../components/panel/EmptyPanel";
+import { LoadingState } from "../components/panel/LoadingState";
 import { PaneFailure } from "../components/alerts/PaneFailure";
 import type { ErrorPresentation } from "../errors/errorPresentation";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { formatFileSize, formatSideSize } from "../format/fileSize";
-import { FIND_SKIP } from "./findDom";
+import { FIND_SKIP } from "./find/findDom";
 import { FIRST_ANNOUNCEMENT_DELAY_MS } from "./notices";
 import { ViewerErrorMessage } from "./ViewerErrorMessage";
 
@@ -140,12 +140,7 @@ export function Failure({ message, title, path }: { message: ErrorPresentation; 
  * code goes unspoken. */
 export function Loading(): React.ReactElement {
   const t = useT();
-  return (
-    <div aria-hidden="true" className="flex min-h-0 flex-1 items-center justify-center gap-2 text-sm text-app-muted">
-      <Spinner size="sm" aria-hidden="true" />
-      {t("viewer.loading")}
-    </div>
-  );
+  return <LoadingState label={t("viewer.loading")} />;
 }
 
 /** `Loading` laid over the frame that holds the content, for it to be centred in the frame (it only

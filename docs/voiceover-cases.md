@@ -647,7 +647,7 @@ mapping.
 - **Location and state change.** The viewer's diff for a 180-line file with one modified line: pressing "Show all 86
   unmodified lines" expands the collapsed lines.
 - **Mechanism.** A `StatusAnnouncer` that stays mounted in the diff view, default delay long elapsed.
-  `packages/ui/src/viewer/CodeSurface.tsx` (`DiffSurface`: the expansion callback sets the loading text at once; the
+  `packages/ui/src/viewer/code/CodeSurface.tsx` (`DiffSurface`: the expansion callback sets the loading text at once; the
   visible notice, when there is one, is `aria-hidden`). Inside the viewer dialog.
 - **ARIA wiring as rendered.** The common mapping; the button was focused when the status was written.
 - **Result.** The status is spoken automatically: `Loading unmodified lines…`, in E4 and again in E5. What follows
@@ -734,7 +734,7 @@ mapping.
   image decoding fails. `packages/ui/src/viewer/notices.tsx` (`FileNotice`, `SpokenSentence`) portals the mark to the
   header and mounts a `StatusAnnouncer` beside the content, inside the open viewer dialog. The region starts empty, has
   `firstWriteDelayMs` of 1500 and `clearAfterRead`; source `READ_TIME_MS` is 5000 after writing.
-  `packages/ui/src/viewer/CodeSurface.tsx` (`CodeSurface`) supplies no `speak` for the large-file notice, so that branch
+  `packages/ui/src/viewer/code/CodeSurface.tsx` (`CodeSurface`) supplies no `speak` for the large-file notice, so that branch
   renders a mark without an announcement region. These lifecycle facts are source wiring, not a timing measurement of
   every intermediate render.
 - **ARIA wiring as rendered.** About 2 s after navigation to the SVG, an unnamed native `AXGroup` with subrole
@@ -827,11 +827,11 @@ mapping.
 
 - **Location and state change.** The viewer's diff of a 180-line file with one modified line: "Show all 86 unmodified
   lines" is pressed by an accessibility press (VoiceOver presses with a click), then the remaining "Show whole file".
-- **Mechanism.** `packages/ui/src/viewer/expansion.ts` (`Expansion.activate`: told whether the pressed control had
+- **Mechanism.** `packages/ui/src/viewer/code/expansion.ts` (`Expansion.activate`: told whether the pressed control had
   focus, decided in the click handler from the focused element and the event path; a mouse press takes no focus), with
-  `packages/ui/src/viewer/rendererDom.ts` (`refocusControl`, `focusControl`, `handFocusToCode`: the redraw restores the
+  `packages/ui/src/viewer/code/rendererDom.ts` (`refocusControl`, `focusControl`, `handFocusToCode`: the redraw restores the
   same or the nearest surviving control, and with none left hands focus to the named code frame with the keyboard
-  modality) and `packages/ui/src/viewer/CodeSurface.tsx` (`DiffSurface`: the loading status, see SA-K).
+  modality) and `packages/ui/src/viewer/code/CodeSurface.tsx` (`DiffSurface`: the loading status, see SA-K).
 - **ARIA wiring as rendered.** The destination separator button is a button named "Show whole file". The code-frame
   fallback is a region named "Contents of expand.txt"; it is not a live region.
 - **Result.** Three paths, all pass. First, an accessibility press on the focused "Show all 86 unmodified lines": native
@@ -924,7 +924,7 @@ mapping.
   `packages/ui/src/components/hint/hintPopover.tsx` (`PopoverHint`) names its pressed react-aria `Dialog` with
   `aria-label`, independently of the body text, and moves focus inside. Escape restores the existing trigger.
   `packages/ui/src/viewer/notices.tsx` (`FileNotice`) supplies the whole-file mark after the path.
-  `packages/ui/src/viewer/BodyView.tsx` (`ImageView`) and `packages/ui/src/viewer/CodeSurface.tsx` (`CodeSurface`)
+  `packages/ui/src/viewer/BodyView.tsx` (`ImageView`) and `packages/ui/src/viewer/code/CodeSurface.tsx` (`CodeSurface`)
   supplied the SVG fallback and large-file notice. This replaces the E6 body-text naming that failed in FOCUS-3; it is
   on-demand dialog speech, not a live-region repetition test.
 - **ARIA wiring as rendered.** For each Enter, the focused native `AXGroup` had subrole `AXApplicationDialog`, role
@@ -1508,9 +1508,9 @@ items, and was not itself heard. A candidate still has to pass the checks under 
 | `viewer/ChangeView.tsx`, `UnchangedView` | loading, read outcome | SA-J for the outcome after navigating; no match for its own loading text or other outcomes | Heard | 1500 ms first delay on a new child inside the open dialog with focus kept, heard for the unchanged outcome only. Its own "Loading…" (written when the read takes longer than the first delay), the failure and other outcomes, and a dialog that opens straight onto the view, were not heard; the `Loading…` heard came from the parent. Each text is emptied `READ_TIME_MS` after it was written (`clearAfterRead`), which was not heard either. |
 | `components/controls/CopyButton.tsx` | "Copied" | SA-G for the confirmation and the tooltip-driven clear, for a press made while the button has focus; no match for the 2 s automatic clear | Heard | Heard in the main window with focus kept. The 2000 ms branch without a tooltip, a repeat press and a failure were not heard. The copy button in the viewer dialog sets `preventFocusOnPress` (a pointer press does not move focus to it), carries its own "Path copied" text and sits in a dialog, so it is a candidate only for a keyboard press made while it has focus. |
 | `project-browser/git/GitView.tsx` | git loading, comparing, listing, spoken failures | SA-H for the first mount with focus kept; no match for the Changes-tab mount, replacement sequences or the failure sentences | Heard | Heard for the Changes loading at mount with focus on the panel toggle. The tab variant, which moves focus into the pane, captured no sentence, and the comparing and listing texts replacing one another in place were not heard. The failure sentences (`useSpokenFailures`) were not exercised. |
-| `project-browser/ProjectBrowser.tsx` | files loading | SA-H for the load when the Files panel is shown with focus kept; no match for the Files-tab mount or search loading | Candidate | Same hidden `div`, default delay and main window as the representative, but its own Files load finished too fast to sample, switching to the Files tab is the untested focus-move variant, and search-triggered loading was not recorded. |
+| `project-browser/files/FilesPanel.tsx` | files loading | SA-H for the load when the Files panel is shown with focus kept; no match for the Files-tab mount or search loading | Candidate | Same hidden `div`, default delay and main window as the representative, but its own Files load finished too fast to sample, switching to the Files tab is the untested focus-move variant, and search-triggered loading was not recorded. |
 | `components/menus/ActionMenu.tsx`, `LoadedMenuItems` | menu loading, load failed | SA-I for the loading text; no match for load failed | Heard | Heard with the submenu focused and the git list stretched to 2 s; a visible "Loading…" item says the same word, so attribution is shared. The failure update was masked by an error alert. |
-| `viewer/CodeSurface.tsx` | expansion loading and note | SA-K and FOCUS-2 for the loading text and the focus after an expansion; no match for the outcome notes | Heard | Loading heard while the pressed button had focus, and focus restored to the surviving control or the code frame on E5. Notes, failure and capped outcomes were not exercised, nor the emptying of each text `READ_TIME_MS` after it was written (`clearAfterRead`). |
+| `viewer/code/CodeSurface.tsx` | expansion loading and note | SA-K and FOCUS-2 for the loading text and the focus after an expansion; no match for the outcome notes | Heard | Loading heard while the pressed button had focus, and focus restored to the surviving control or the code frame on E5. Notes, failure and capped outcomes were not exercised, nor the emptying of each text `READ_TIME_MS` after it was written (`clearAfterRead`). |
 | `components/form/AdvancedSection.tsx`, `AdvancedSection` | models loading, unavailable, failed | SA-M for loading and failed; no match for the unavailable text | Heard | Region mounted with each opening outside the folded body, heard for a fresh opening and two reopenings. The unavailable text was not heard separately. |
 | `terminal/shell/ShellTerminalPanel.tsx` | shell starting | none | none | Text can be present at the first render at default delay and clears as a terminal appears and takes focus, a write at a focus move; the starting status was not observed populated. |
 | `terminal/TerminalPane.tsx`, cover and dormant status | loading, starting, resuming, reconnecting, disconnected and switching covers; the dormant bar's "Not running" or "This session is archived" | SA-A for the writes into the mounted regions (the pane always mounts with no session, so SA-H applies only to test and gallery mounts); no match for a write made as selecting a session moves focus into the terminal, and none for the dormant bar's button | Candidate | Two `StatusAnnouncer` regions mounted with the pane, default delay (browser-observed: regions inserted empty, text written 100 to 250 ms later). The bar's sentence is `aria-hidden` and its button stays reachable, so only the sentence is spoken, not sentence and button as PLAIN-2 heard. The bar's sentence is held while a modal is open (selecting an interrupted session on an incomplete account asks first) and written `AFTER_FOCUS_MOVE_DELAY_MS` after the close, so it is not written under the modal (KNW-2). A sentence already spoken stays in the region unchanged through a modal, so closing it says nothing. Nothing was heard on the pane itself. An archived bar and `SessionHistoryView`'s own region can both hold text while the history loads (different sentences, no duplicate). |
@@ -1533,12 +1533,12 @@ items, and was not itself heard. A candidate still has to pass the checks under 
 Totals: of 32 callers, 13 were heard for the writes named (`Sidebar`, `ConnectionBanner`, `AccountLoginDialog`,
 `AccountLoginAnnouncer`, `PermissionsSection`, `ViewerContentView`, `UnchangedView`, `CopyButton`, `GitView`,
 `ActionMenu`, `CodeSurface`, `AdvancedSection`, `FileNotice`), 5 are candidates (`ImportReview`, `ChangeList`,
-`ProjectBrowser`, `TerminalPane`, `ShellTerminalView`) and 14 have no complete match (`ShellTerminalPanel`,
+`FilesPanel`, `TerminalPane`, `ShellTerminalView`) and 14 have no complete match (`ShellTerminalPanel`,
 `SpotNotice`, `BlockFallback`, the account switch outcome in `app/useSessionRequests.ts`, and the ten callers listed
 after it). Of the heard callers, `ConnectionBanner` matches for every write it makes, and `AccountLoginAnnouncer`
 matches the E10 table and owned-account details paths recorded in SA-D; the other eleven match for some writes only,
 with SA-N's native-capture limits stated in that case. Of the candidates, `ImportReview` matches for every write it
-makes; `ChangeList`, `ProjectBrowser`, `TerminalPane` and `ShellTerminalView` for some.
+makes; `ChangeList`, `FilesPanel`, `TerminalPane` and `ShellTerminalView` for some.
 
 Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
 
@@ -1588,7 +1588,7 @@ Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
   `ViewerContentView`'s disconnected text (not exercised); `AdvancedSection`'s unavailable text (not separately
   recorded); `PermissionsSection`'s change while Settings is open (no permission was granted or revoked) and Settings
   opened directly onto Permissions (no production control opens it there, so it is untested); `GitView`'s replacement
-  sequences and failure sentences (not exercised); `ProjectBrowser`'s search loading (not recorded); the account switch
+  sequences and failure sentences (not exercised); `FilesPanel`'s search loading (not recorded); the account switch
   outcome in `app/useSessionRequests.ts` (the credential-free fixture does not produce conversation records to switch);
   `ShellTerminalPanel`'s starting status (not observed populated); the terminal statuses of `TerminalPane` and
   `ShellTerminalView` (see the open items below).

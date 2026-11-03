@@ -4,12 +4,13 @@ import { expect, it, vi } from "vitest";
 import { LayoutInfo, ListLayout, Rect } from "react-aria-components";
 
 import { isolate } from "../../i18n/isolate";
-import { ChangeList, changeRowOffset } from "./ChangeList";
+import { ChangeList } from "./ChangeList";
+import { ChangeListLayout, changeRowOffset } from "./changeListLayout";
 import { change, changeViewFixture, committedChange, mountRows } from "../browserTestSupport";
 import type { ChangeLayout } from "./changeLayout";
 import type { ChangeViewState } from "./changeView";
 import { changeItems, commitItems, commitKey, commitScope, directoryKey, sectionKey } from "./changes";
-import { ChangeListLayout, HEADING_HEIGHT } from "./changeSectionHeading";
+import { HEADING_HEIGHT } from "./changeSectionHeading";
 import { ROW_HEIGHT } from "../treeRow";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

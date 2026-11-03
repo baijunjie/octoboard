@@ -35,7 +35,7 @@ type GitRequest = Extract<RequestBody, { type: (typeof GIT_REQUESTS)[number] }>;
 const gitRequestTypes: ReadonlySet<string> = new Set(GIT_REQUESTS);
 
 /** How many lines a text holds: its newlines, and one more when the last line is unterminated. It
- * repeats `countLines` of `viewer/budgets.ts` on purpose: the fixture stands in for the daemon's
+ * repeats `countLines` of `viewer/code/budgets.ts` on purpose: the fixture stands in for the daemon's
  * count and does not depend on a viewer render-budget helper. */
 function lineCount(content: string): number {
   return content === "" ? 0 : content.split("\n").length - (content.endsWith("\n") ? 1 : 0);

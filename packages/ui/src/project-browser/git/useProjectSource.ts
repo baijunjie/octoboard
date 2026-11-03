@@ -1,12 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
 
+import { listLane } from "../../browse/budget";
+import { useLatestRequest } from "../../components/hooks/useLatestRequest";
 import type { ErrorPresentation } from "../../errors/errorPresentation";
-import { useCurrentLanguage, useT } from "../../i18n/react";
 import type { ProjectSourceInfo } from "../../protocol";
-import { useDaemon, useDaemonStore } from "../../store";
-import { projectBrowseFailure } from "../browseError";
+import { useDaemon } from "../../store";
 import { gitMoment } from "./gitRequests";
-import { sendBrowseListRequest } from "../browseListRequests";
 
 /** Where a project's files are read from, as far as the client knows: still asked for, known, or
  * failed with why. A known source stays while it is asked for again. */
@@ -24,54 +23,35 @@ export type SourceState =
  * when a newer request has taken its place.
  */
 export function useProjectSource(project: string, wanted: boolean): { source: SourceState; refresh: () => Promise<void> } {
-  const t = useT();
-  const language = useCurrentLanguage();
-  const { request, store } = useDaemon();
-  const snapshotEpoch = useDaemonStore((s) => s.snapshotEpoch);
-  const [source, setSource] = useState<SourceState>({ state: "loading" });
-  const live = useRef({ alive: true, sequence: 0, asked: false });
+  const { request } = useDaemon();
+  const latest = useLatestRequest<SourceState>({
+    scope: project,
+    initial: { state: "loading" },
+    project,
+    onReconnect: ({ asked }) => {
+      if (asked) void refresh();
+    },
+  });
 
   const refresh = (): Promise<void> => {
-    const s = live.current;
-    s.asked = true;
-    const sequence = ++s.sequence;
-    const current = () => s.alive && s.sequence === sequence;
     const slot = `source:${project}`;
     let sentAt = 0;
-    return sendBrowseListRequest(slot, () => {
-      if (!current()) return undefined;
-      sentAt = gitMoment();
-      return request({ type: "get_project_source", project, slot });
-    })
-      .then((reply) => {
-        if (!reply || !current() || reply.type !== "project_source" || reply.source.project !== project) return;
-        setSource({ state: "loaded", source: reply.source, sentAt });
-      })
-      .catch((err: unknown) => {
-        if (!current()) return;
-        const failure = projectBrowseFailure(t, language, err, store.getState(), project);
-        if (failure.kind === "superseded" || failure.kind === "disconnected") return;
-        const message = failure.kind === "failed" ? failure.message : t("browser.error.folderChanged");
-        setSource({ state: "error", message });
-      });
+    return latest.send({
+      lane: listLane,
+      slot,
+      request: () => {
+        sentAt = gitMoment();
+        return request({ type: "get_project_source", project, slot });
+      },
+      accept: (reply) =>
+        reply.type === "project_source" && reply.source.project === project ? () => ({ state: "loaded", source: reply.source, sentAt }) : undefined,
+      failed: (failure, _held, t) => ({ state: "error", message: failure.kind === "failed" ? failure.message : t("browser.error.folderChanged") }),
+    });
   };
 
   useEffect(() => {
-    if (wanted && !live.current.asked) refresh();
+    if (wanted && !latest.asked()) void refresh();
   }, [wanted]);
 
-  const firstEpoch = useRef(snapshotEpoch);
-  useEffect(() => {
-    if (snapshotEpoch !== firstEpoch.current && live.current.asked) refresh();
-  }, [snapshotEpoch]);
-
-  useEffect(() => {
-    const s = live.current;
-    s.alive = true;
-    return () => {
-      s.alive = false;
-    };
-  }, []);
-
-  return { source, refresh };
+  return { source: latest.value, refresh };
 }

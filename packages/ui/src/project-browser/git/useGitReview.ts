@@ -1,35 +1,27 @@
 import type React from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 
-import { FADE_SIZE } from "../../components/scroll/scrollFade";
-import type { WorktreeInfo } from "../../protocol";
 import type { ViewerSubject } from "../../viewer/content";
 import type { ViewerNavigation } from "../../viewer/viewerNavigation";
-import { sessionFollow, type ProjectBrowserState } from "../browserState";
+import type { ProjectBrowserState } from "../browserState";
+import type { FileFilterState } from "../FileFilterField";
+import { focusFirst } from "../focusRow";
+import { scrollRowIntoView } from "../treeRow";
 import { type ChangeLayout } from "./changeLayout";
-import { changeRowOffset } from "./ChangeList";
+import { changeRowOffset } from "./changeListLayout";
+import { filterChanges, type ChangeItem } from "./changes";
 import { changesScope } from "./changesScope";
 import { branchGone } from "./changesStatus";
 import { HEADING_HEIGHT } from "./changeSectionHeading";
-import { changeEvidence, changeNeighbours, filterChanges, rereadChange, visibleChanges, type ChangeEvidence, type ChangeItem } from "./changes";
-import { branchTip, comparisonNews } from "./comparisonNews";
-import type { FileFilterState } from "../FileFilterField";
-import { focusFirst, focusRow } from "../focusRow";
 import type { GitView } from "./GitView";
-import { gitMoment } from "./gitRequests";
-import { sessionBranch } from "./sessionBranch";
-import { ROW_HEIGHT } from "../treeRow";
-import { useBranchComparison } from "./useBranchComparison";
+import { committedState, uncommittedState } from "./gitViewModel";
 import { useBranchList } from "./useBranchList";
-import { useChangeList, type ChangeList } from "./useChangeList";
-import { useChangeReader, type ChangeOrigin } from "./useChangeReader";
-import { useCommitList } from "./useCommitList";
+import { useChangeList } from "./useChangeList";
+import { useChangeReader } from "./useChangeReader";
+import { useChangeViewerSync } from "./useChangeViewerSync";
+import { useCommittedChanges } from "./useCommittedChanges";
 import { useProjectSource } from "./useProjectSource";
-
-/** What a list with nothing in it is, so that one is no new array on every render. */
-const NO_ITEMS: ChangeItem[] = [];
-/** The uncommitted list while it is read, so that one is no new object on every render. */
-const LIST_LOADING: ChangeList = { state: "loading" };
+import { useSessionBranchFollow } from "./useSessionBranchFollow";
 
 export interface GitReview {
   /** What the Git mode's view shows and does, but for asking again after a failure. */
@@ -58,58 +50,46 @@ export interface GitReview {
  * per commit since the fork, in one Committed section. `active` is whether the Git mode is on
  * screen; only then is anything asked for.
  *
- * The comparison is of the commits the branches were at when it was made; once a branch list read
- * since shows either branch at another commit, it is made again, so the Committed section follows
- * the branch as it commits what was uncommitted. A chosen branch that a complete branch list no
- * longer has gives way to the default, whether the user or a session chose it; any other branch
- * that has gone keeps the comparison it had.
+ * A chosen branch that a complete branch list no longer has gives way to the default, whether the
+ * user or a session chose it; any other branch that has gone keeps the comparison it had. The
+ * selection is kept in view in the list.
  *
- * The viewer moves through the list's rows on screen, from one section into the next, and stops at
- * either end; the changes a file name filter hides have no row, nor do those in a folded section,
- * under a folded commit or, in the tree layout, under a folded directory, so it skips them. What it
- * shows is the list's selection, kept in view behind it, and closing it puts keyboard focus on that
- * row. While it is open, an uncommitted change is read again when a listing has news of it
- * (`rereadChange`); a committed change is read from the commits it was listed at, and follows the
- * comparison or the commit list when either is made again.
- *
- * `session` is the selected session when it belongs to this project, none otherwise. Selecting one
- * sets the branch, once, to the branch it most recently became responsible for, and from one
- * responsible for none, back to the default; no session leaves it as it is. Only what was read from
- * the daemon after the selection is weighed, so what a pane held from before it is asked for again.
+ * `useCommittedChanges` keeps the comparison and the commits current, `useChangeViewerSync` moves
+ * the change viewer through the list's rows, and `useSessionBranchFollow` sets the branch from
+ * `session`, the selected session when it belongs to this project, none otherwise.
  */
 export function useGitReview(project: string, browser: ProjectBrowserState, active: boolean, session: string | undefined, filterState: FileFilterState): GitReview {
   const source = useProjectSource(project, active);
   const git = source.source.state === "loaded" ? source.source.source.git : null;
   const branches = useBranchList(project, active && git !== null);
+  const branchList = branches.branches;
   // A chosen branch the repository no longer has, merged and deleted say, has nothing left to
   // review: the view goes back to what the worktree holding the project's directory has checked
   // out, from the render that finds it gone, so the gone branch is never shown as the one chosen.
   // A branch only taken out of its worktree is still there, and stays chosen.
-  const chosenGone = branchGone(browser.branch, branches.branches, git?.worktrees.find((w) => w.branch === browser.branch));
-  const { ownBranch, branch, holder, holderId, committed } = changesScope(git, chosenGone ? undefined : browser.branch, branches.branches);
-  const comparing = committed.state === "compare";
+  const chosenGone = branchGone(browser.branch, branchList, git?.worktrees.find((w) => w.branch === browser.branch));
+  const { ownBranch, branch, holder, holderId, committed } = changesScope(git, chosenGone ? undefined : browser.branch, branchList);
   const changes = useChangeList(project, holderId, active && holder !== undefined);
-  const worktreeGone = changes.list.state === "error" && changes.list.unavailable;
-  const comparisonHook = useBranchComparison(project, comparing ? committed.base : undefined, comparing ? committed.baseKind : "local", comparing ? committed.branch : undefined, active && git !== null);
-  const comparison = comparisonHook.comparison;
-  const shownComparison = comparison.state === "loaded" ? comparison : undefined;
+  const changeList = changes.list;
+  const worktreeGone = changeList.state === "error" && changeList.unavailable;
   const byCommit = browser.byCommit;
-  const forked = shownComparison && shownComparison.base !== shownComparison.right.commit ? { branch: shownComparison.right.branch, baseBranch: shownComparison.left.branch, base: shownComparison.base, tip: shownComparison.right.commit } : undefined;
-  const commitsHook = useCommitList(project, forked, active && byCommit);
-  const commits = commitsHook.commits;
+  const committedChanges = useCommittedChanges(project, committed, branchList, byCommit, active, git !== null);
+  const { comparison, forked, commits } = committedChanges;
   const listRef = useRef<HTMLDivElement>(null);
   const selectorsRef = useRef<HTMLDivElement>(null);
+  const { setSelectedChange, setBranch: storeBranch, setByCommit, setCollapsedChangeRows } = browser;
   // A change whose worktree is gone closes as one the list no longer has does.
   const changeReader = useChangeReader(project, () => {
-    browser.setSelectedChange(undefined);
+    setSelectedChange(undefined);
     focusFirst(listRef.current, selectorsRef.current);
   });
   const layout = browser.layout;
   const collapsed = browser.collapsedChangeRows;
+  const selectedChange = browser.selectedChange;
   const filter = filterState.filter.trim();
 
-  const uncommittedItems = holder !== undefined && changes.list.state === "loaded" ? changes.list.items : undefined;
-  const committedItems = !shownComparison ? undefined : !byCommit ? shownComparison.items : commits.state === "loaded" ? commits.items : forked ? undefined : NO_ITEMS;
+  const uncommittedItems = holder !== undefined && changeList.state === "loaded" ? changeList.items : undefined;
+  const committedItems = committedChanges.items;
   // The sections' ranks run uncommitted first, then the committed ones, each list already in order.
   const items = useMemo(() => [...(uncommittedItems ?? []), ...(committedItems ?? [])], [uncommittedItems, committedItems]);
 
@@ -119,114 +99,29 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
     if (!worktreeGone) return;
     void source.refresh();
     void branches.refresh();
-  }, [changes.list]);
-
-  // A branch list read since the comparison that shows either branch at another commit makes it
-  // again: what the branch has committed since moves from its uncommitted sections to its committed
-  // ones. It is asked once for the commits the branches are at, so a comparison that takes a while
-  // is not restarted by every list read meanwhile; branches at other commits are asked for again.
-  // One that failed has nothing on screen to read the news from, so it is asked for again only
-  // when a later list has the branches at commits other than the last ones seen or asked for in
-  // the background.
-  const askedFor = useRef<{ pair: string; tips: string } | undefined>(undefined);
-  const branchList = branches.branches;
-  useEffect(() => {
-    if (!active) return;
-    let pair: string;
-    let tips: string[];
-    if (shownComparison) {
-      const news = comparisonNews(branchList, shownComparison);
-      pair = JSON.stringify([shownComparison.left.branch, shownComparison.left.remote === true, shownComparison.right.branch]);
-      if (!news.moved) {
-        if (news.tips.length > 0) askedFor.current = { pair, tips: JSON.stringify(news.tips) };
-        return;
-      }
-      tips = news.tips;
-    } else if (comparing && comparison.state === "error" && branchList.state === "loaded") {
-      pair = JSON.stringify([committed.base, committed.baseKind === "remote", committed.branch]);
-      if (askedFor.current?.pair !== pair) return;
-      tips = [branchTip(branchList, committed.branch, false) ?? ""];
-      if (committed.baseKind !== "empty") tips.unshift(branchTip(branchList, committed.base, committed.baseKind === "remote") ?? "");
-      if (tips.includes("")) return;
-    } else {
-      return;
-    }
-    const asked = { pair, tips: JSON.stringify(tips) };
-    if (askedFor.current?.pair === pair && askedFor.current.tips === asked.tips) return;
-    askedFor.current = asked;
-    void comparisonHook.update();
-  }, [active, branchList, shownComparison, comparison]);
-
-  // What the list said of an uncommitted change when it was opened, and the list then: a later
-  // listing that says otherwise is news, and the change is read again (`rereadChange`).
-  const lastChangeEvidence = useRef<{ key: string; evidence: ChangeEvidence; list: unknown } | undefined>(undefined);
-  const originOf = (item: ChangeItem): ChangeOrigin | undefined => {
-    if (item.commit) return { kind: "commit", ...item.commit };
-    if (item.section !== "committed") return { kind: "worktree", worktree: holderId };
-    return shownComparison && { kind: "comparison", left: shownComparison.left, right: shownComparison.right, base: shownComparison.base };
-  };
-  const openChange = (item: ChangeItem) => {
-    const origin = originOf(item);
-    if (!origin) return;
-    browser.setSelectedChange(item.key);
-    if (origin.kind === "worktree") lastChangeEvidence.current = { key: item.key, evidence: { state: "listed", versions: item.versions }, list: evidenceList };
-    changeReader.open(item, origin);
-  };
+  }, [changeList]);
 
   const dismissViewer = () => {
     changeReader.close();
   };
 
-  const closeChange = () => {
-    changeReader.close();
-    if (browser.selectedChange !== undefined) focusRow(listRef.current, browser.selectedChange);
-  };
-
   // Another branch is another list: nothing selected or open from the previous one stands.
   const setBranch = (next: string | undefined) => {
     if ((next ?? ownBranch) !== branch) {
-      browser.setSelectedChange(undefined);
+      setSelectedChange(undefined);
       changeReader.close();
     }
-    browser.setBranch(next);
+    storeBranch(next);
   };
+  const settleFollow = useSessionBranchFollow(project, session, active, source, branches, setBranch);
   // A choice the user makes settles what the selected session set: it is not set over it later.
   const changeBranch = (next: string) => {
-    if (session !== undefined) sessionFollow(project, session).settled = true;
+    settleFollow();
     setBranch(next);
   };
 
-  // Selecting a session sets the branch once the repository's worktrees and branches have been read
-  // since, whichever state the view is in. A session with no branch yet leaves it at the default,
-  // and one that shows up in a later branch list is set then, unless the user has chosen in the
-  // meantime. A branch no worktree has checked out has the worktrees asked for once more: the
-  // worktree may have been made after the list was read.
-  useEffect(() => {
-    if (session === undefined || source.source.state !== "loaded" || branchList.state === "loading") return;
-    const follow = sessionFollow(project, session);
-    if (follow.settled) return;
-    const { sentAt: sourceSentAt, source: info } = source.source;
-    const fresh = { source: sourceSentAt > follow.sourceSince, branches: branchList.state !== "loaded" || branchList.sentAt > follow.since };
-    if (active && !follow.asked) {
-      follow.asked = true;
-      if (!fresh.source) void source.refresh();
-      if (!fresh.branches || branchList.state === "error") void branches.refresh();
-    }
-    if (!fresh.source || !fresh.branches || info.git === null) return;
-    const followed = sessionBranch(branchList.state === "loaded" ? branchList.branches : [], session);
-    setBranch(followed);
-    if (followed === undefined) return;
-    if (info.git.worktrees.some((w) => w.branch === followed) || follow.retried) {
-      follow.settled = true;
-    } else {
-      follow.retried = true;
-      follow.sourceSince = gitMoment();
-      void source.refresh();
-    }
-  }, [session, active, source.source, branchList]);
-
   const refresh = async () => {
-    await Promise.all([source.refresh(), branches.refresh(), changes.refresh(), comparisonHook.refresh(), commitsHook.refresh()]);
+    await Promise.all([source.refresh(), branches.refresh(), changes.refresh(), committedChanges.refresh()]);
   };
 
   // The selection is kept in view, while the viewer moves through the changes. The layout and the
@@ -234,109 +129,50 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
   // is a list with its own scroll.
   const scrolledToChange = useRef<string | undefined>(undefined);
   useLayoutEffect(() => {
-    const selected = browser.selectedChange;
-    const scrolled = selected && `${layout}:${filter}:${selected}`;
-    if (scrolled !== scrolledToChange.current && scrollToChange(listRef.current, filterChanges(items, filter), selected, layout, collapsed)) {
+    const scrolled = selectedChange && `${layout}:${filter}:${selectedChange}`;
+    if (scrolled !== scrolledToChange.current && scrollToChange(listRef.current, filterChanges(items, filter), selectedChange, layout, collapsed)) {
       scrolledToChange.current = scrolled;
     }
-  }, [browser.selectedChange, items, layout, collapsed, filter]);
+  }, [selectedChange, items, layout, collapsed, filter]);
 
-  // The uncommitted list's say about the change in the viewer, as `rereadFor` weighs the listings'
-  // say about a file; a fresh list counts as news only for a change whose sources kept moving.
-  const viewedChange = changeReader.item;
-  const viewedOrigin = changeReader.origin;
-  // A worktree found gone, or no longer the one the branch is checked out in, has no changes left
-  // here: the open change counts as gone from it, and is read again to say what it is now.
-  const viewedWorktree = viewedOrigin?.kind === "worktree" ? viewedOrigin.worktree : undefined;
-  const worktreeLeft = worktreeGone || holder === undefined || viewedWorktree !== holderId;
-  // The React Compiler cannot keep this memo and so leaves the hook uncompiled; the memo stays, as
-  // the list's identity is what tells the reread below that a fresh list arrived.
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization
-  const evidenceList = useMemo(
-    () => (worktreeLeft ? { items: [], complete: true, refreshing: false } : changes.list.state === "loaded" ? changes.list : undefined),
-    [worktreeLeft, changes.list],
-  );
-  useEffect(() => {
-    if (viewedChange === undefined || viewedOrigin?.kind !== "worktree" || changeReader.shown.state === "loading") return;
-    const evidence = changeEvidence(evidenceList, viewedChange.key);
-    const last = lastChangeEvidence.current?.key === viewedChange.key ? lastChangeEvidence.current : undefined;
-    if (rereadChange(changeReader.shown, evidence, last?.evidence, evidenceList !== last?.list)) {
-      // A change keeps its key through a status change (modified to type changed: the key names a
-      // present side by path only), so the reread opens the list's item, not the one held from
-      // the first open, whose status the chip would keep showing.
-      const listedItem = evidence.state === "listed" ? evidenceList?.items.find((item) => item.key === viewedChange.key) : undefined;
-      if (listedItem) changeReader.open(listedItem, viewedOrigin);
-      else changeReader.reload();
-    }
-    if (evidence.state !== "unknown") lastChangeEvidence.current = { key: viewedChange.key, evidence, list: evidenceList };
-  }, [evidenceList, viewedChange?.key, changeReader.shown.state]);
-
-  // A committed change follows the list it came from: the comparison made again at other commits
-  // reads it again from those, so the viewer never shows another pair than the list; a change the
-  // new comparison, or the commits listed again, do not have is no change between their commits:
-  // the viewer closes, and keyboard focus goes to the list's first row, or to the branch selector
-  // when it has none.
-  const closeGone = () => {
-    changeReader.close();
-    browser.setSelectedChange(undefined);
-    focusFirst(listRef.current, selectorsRef.current);
-  };
-  useEffect(() => {
-    if (viewedChange === undefined || viewedOrigin?.kind !== "comparison" || !shownComparison) return;
-    const { base, right } = viewedOrigin;
-    const now = shownComparison;
-    if (base === now.base && right.commit === now.right.commit) return;
-    const item = now.items.find((candidate) => candidate.key === viewedChange.key);
-    if (item) return changeReader.open(item, { kind: "comparison", left: now.left, right: now.right, base: now.base });
-    closeGone();
-  }, [shownComparison]);
-  const listedCommits = commits.state === "loaded" && forked && commits.base === forked.base && commits.tip === forked.tip ? commits : undefined;
-  useEffect(() => {
-    if (viewedChange === undefined || viewedOrigin?.kind !== "commit" || !listedCommits) return;
-    if (!listedCommits.items.some((candidate) => candidate.key === viewedChange.key)) closeGone();
-  }, [listedCommits]);
-
-  const navigation = useMemo(() => {
-    if (viewedChange === undefined) return undefined;
-    const { previous, next } = changeNeighbours(visibleChanges(filterChanges(items, filter), layout, collapsed), viewedChange);
-    return {
-      onPrevious: previous === undefined ? undefined : () => openChange(previous),
-      onNext: next === undefined ? undefined : () => openChange(next),
-    };
-  }, [items, viewedChange, layout, collapsed, filter]);
-
-  const changeView = {
+  const { openChange, closeChange, navigation } = useChangeViewerSync({
+    reader: changeReader,
+    selectedChange,
+    setSelectedChange,
+    listRef,
+    selectorsRef,
+    holder,
+    holderId,
+    worktreeGone,
+    list: changeList,
+    committed: committedChanges,
+    items,
+    filter,
     layout,
-    byCommit: forked ? { value: byCommit, onChange: browser.setByCommit } : undefined,
     collapsed,
-    onCollapsedChange: browser.setCollapsedChangeRows,
-    ...filterState,
-  };
-
-  // A worktree found gone is no failure of the list: the worktrees are being read again, and the
-  // list then follows the branch to wherever it is checked out, so until then it is still read.
-  const uncommittedList = worktreeGone ? LIST_LOADING : changes.list;
-  const uncommitted: UncommittedState =
-    branch === undefined
-      ? { state: "none" }
-      : holder === undefined
-        ? { state: "notCheckedOut", branch }
-        : { state: "listed", list: uncommittedList, worktree: holder, own: holderId === undefined };
+  });
 
   // The gone branch's choice is dropped for good, and nothing selected or open from its list stands.
   // A layout effect, so the old change is never painted over the default branch's list, and closing
   // comes before the worktree reread effect could read from the removed worktree.
   useLayoutEffect(() => {
     if (!chosenGone) return;
-    browser.setSelectedChange(undefined);
+    setSelectedChange(undefined);
     changeReader.close();
-    browser.setBranch(undefined);
+    storeBranch(undefined);
   }, [chosenGone]);
 
-  const committedState: CommittedState =
-    committed.state === "compare"
-      ? { state: "compare", branch: committed.branch, base: committed.base, baseKind: committed.baseKind, comparison, commits: byCommit && forked ? commits : undefined }
-      : committed;
+  // The toggle keeps its identity while the comparison has commits and the choice stands, as the
+  // list builds its sections again whenever it changes.
+  const hasCommits = forked !== undefined;
+  const byCommitToggle = hasCommits ? { value: byCommit, onChange: setByCommit } : undefined;
+  const changeView = {
+    layout,
+    byCommit: byCommitToggle,
+    collapsed,
+    onCollapsedChange: setCollapsedChangeRows,
+    ...filterState,
+  };
 
   return {
     view: {
@@ -344,10 +180,10 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
       branches: branchList,
       branch,
       onBranchChange: changeBranch,
-      uncommitted,
-      committed: committedState,
+      uncommitted: uncommittedState(branch, holder, holderId, changeList, worktreeGone),
+      committed: committedState(committed, comparison, commits, byCommit, hasCommits),
       items,
-      selectedChange: browser.selectedChange,
+      selectedChange,
       onOpen: openChange,
       listRef,
       selectorsRef,
@@ -359,29 +195,6 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
     dismissViewer,
   };
 }
-
-/** Where the uncommitted part of the list stands: no branch to read it for, a branch no worktree
- * has checked out, or the list read from the worktree that has (`own` when that is the worktree
- * holding the project's directory). */
-export type UncommittedState =
-  | { state: "none" }
-  | { state: "notCheckedOut"; branch: string }
-  | { state: "listed"; list: ChangeList; worktree: WorktreeInfo; own: boolean };
-
-/** Where the committed part of the list stands: no branch, or one of the two with no commit yet, a main working copy on no branch to
- * compare with (`noBase`), or the comparison with `base`, the main working copy's branch or, for
- * that branch itself, a remote-tracking branch (`baseKind`) or none, all its commits (an empty
- * `base`), and — grouped by commit — its commits. */
-export type CommittedState =
-  | { state: "none" | "noBase" }
-  | {
-    state: "compare";
-    branch: string;
-    base: string;
-    baseKind: "local" | "remote" | "empty";
-    comparison: ReturnType<typeof useBranchComparison>["comparison"];
-    commits: ReturnType<typeof useCommitList>["commits"] | undefined;
-  };
 
 /** Scrolls `list` so the row of change `key` among `items` is in view; false when there is no
  * such row on screen yet. Rows and headings are each one height, so where a row is follows from
@@ -396,8 +209,6 @@ function scrollToChange(
   if (key === undefined || !list) return false;
   const top = changeRowOffset(items, key, layout, collapsed);
   if (top === undefined) return false;
-  // Clear of the sticky heading and fade, as scroll padding keeps the rows react-aria scrolls.
-  if (top - HEADING_HEIGHT - FADE_SIZE < list.scrollTop) list.scrollTop = top - HEADING_HEIGHT - FADE_SIZE;
-  else if (top + ROW_HEIGHT + FADE_SIZE > list.scrollTop + list.clientHeight) list.scrollTop = top + ROW_HEIGHT + FADE_SIZE - list.clientHeight;
+  scrollRowIntoView(list, top, { stickyTop: HEADING_HEIGHT });
   return true;
 }

@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { useShallow } from "zustand/react/shallow";
 
-import { gitModeWorktree } from "../../project-browser/browserState";
+import { gitModeWorktree } from "../../project-browser/gitModeWorktree";
 import { t } from "../../i18n/language";
 import { hostPathRecovery } from "../../errors/errorRecovery";
 import { createPersistedPreference } from "../../preferences/persistedPreference";

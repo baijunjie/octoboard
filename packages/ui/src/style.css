@@ -69,10 +69,10 @@
 @import "@heroui/styles/utilities";
 @import "@heroui/styles/variants";
 
-@import "./viewer/markdown.css";
-@import "./viewer/markdown-github.css";
-@import "./viewer/markdown-newsprint.css";
-@import "./viewer/markdown-latex.css";
+@import "./viewer/markdown/markdown.css";
+@import "./viewer/markdown/markdown-github.css";
+@import "./viewer/markdown/markdown-newsprint.css";
+@import "./viewer/markdown/markdown-latex.css";
 @import "./terminal/history/sessionHistory.css";
 
 /* WebKit insets a focused input's outline by 2px. Keep HeroUI's invalid outline against its
@@ -1321,7 +1321,7 @@ html.pane-resizing * {
    `data-hovered` outlives `:hover` by a frame when the pointer leaves, and dimming in that frame starts an
    opacity transition that has WKWebView repaint the whole masked tab strip, shaking every tab's icon and label.
    An approved exception (`docs/ui-accessibility.md`'s "Confirmed visual choices"). In `@layer components`, after
-   HeroUI's rule, so a tab's own opacity utility still wins. */
+   HeroUI's rule. */
 @layer components {
   .tabs__tab:not([data-selected="true"]):not([data-disabled="true"]):hover,
   .tabs__tab[data-hovered="true"]:not([data-selected="true"]):not([data-disabled="true"]) {
@@ -1367,7 +1367,7 @@ html.pane-resizing * {
   }
 }
 
-/* The find bar's highlights in the file viewer (`src/viewer/useFind.ts`): every match, and the current one on
+/* The find bar's highlights in the file viewer (`src/viewer/find/useFind.ts`): every match, and the current one on
    top of it. The code the renderer draws is in shadow roots, which take the same rule from the renderer's own
    stylesheet (`findHighlightCss`), reading these properties through inheritance. A match is a pale fill the
    code's tokens keep their contrast on (the darkest-on-fill token of the code themes, measured against it, is
@@ -1387,7 +1387,7 @@ html.pane-resizing * {
   --find-current-fg: #111111;
 }
 
-/* While the viewer's find bar is open (`src/viewer/useFind.ts`), each searched scroller starts its text below
+/* While the viewer's find bar is open (`src/viewer/find/useFind.ts`), each searched scroller starts its text below
    the bar, which floats over the scroller's top trailing corner: the gap scrolls away with the text, so the
    bar covers the first lines only once the reader has scrolled past them. The gap holds the bar centred, measured
    from the scroller's top edge: its height (one 38px row) with its top offset (`top-2`) above it and the same

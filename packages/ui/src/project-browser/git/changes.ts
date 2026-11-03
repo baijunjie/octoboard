@@ -8,6 +8,7 @@ import type { StatusKey } from "../../viewer/statusMarks";
 import { displayWirePath, wireBaseName } from "../../format/wirePath";
 import type { ChangeLayout } from "./changeLayout";
 import { compareFilePaths } from "../tree";
+import type { Evidence } from "../viewedItem";
 
 /** A section of the change list: one of a worktree's change groups, the paths in conflict, or what a
  * branch has committed since it forked. */
@@ -150,18 +151,6 @@ export function filterChanges(items: ChangeItem[], text: string): ChangeItem[] {
   return items.filter((item) => wireBaseName(item.path).toLowerCase().includes(needle));
 }
 
-/** The changes before and after `current` among `items` (the list in order). Navigation crosses
- * from one section into the next, as the tree's crosses folders; a change the list no longer has is
- * placed where it would be, so moving on from it still reaches its neighbours. The ends do not
- * wrap. */
-export function changeNeighbours(items: readonly ChangeItem[], current: ChangeItem): { previous?: ChangeItem; next?: ChangeItem } {
-  const index = items.findIndex((item) => item.key === current.key);
-  if (index !== -1) return { previous: items[index - 1], next: items[index + 1] };
-  const after = items.findIndex((item) => compareChanges(current, item) < 0);
-  const insertAt = after === -1 ? items.length : after;
-  return { previous: items[insertAt - 1], next: items[insertAt] };
-}
-
 /** One section of the list as it is shown: its changes. */
 export interface SectionGroup {
   section: ChangeSection;
@@ -294,32 +283,12 @@ export function visibleChanges(items: readonly ChangeItem[], layout: ChangeLayou
 
 /** What the change list says of the change with `key`: listed, at `versions`; gone from a complete
  * list; or nothing yet (no list, a list being refreshed or one cut short before it). */
-export type ChangeEvidence = { state: "listed"; versions: string } | { state: "gone" } | { state: "unknown" };
-
 export function changeEvidence(
   list: { items: readonly ChangeItem[]; complete: boolean; refreshing: boolean } | undefined,
   key: string,
-): ChangeEvidence {
+): Evidence {
   if (!list || list.refreshing) return { state: "unknown" };
   const item = list.items.find((candidate) => candidate.key === key);
-  if (item) return { state: "listed", versions: item.versions };
+  if (item) return { state: "listed", version: item.versions };
   return list.complete ? { state: "gone" } : { state: "unknown" };
-}
-
-/** What the viewer shows of a change, as far as reading it again goes: read, failed (`changing`
- * when its sources kept moving as it was read), or nothing yet. */
-export type ShownChange = { state: "read" } | { state: "error"; changing?: boolean } | { state: "loading" };
-
-/**
- * Whether the change the viewer shows is read again, given what the list now says of it and what it
- * said when this was last asked for the same change. Only news counts: a listing at other versions,
- * or the change gone from the list (read again, it shows what is there now). A change whose sources
- * kept moving while it was read is read again at every fresh listing that still has it, so it
- * shows once they settle.
- */
-export function rereadChange(shown: ShownChange, evidence: ChangeEvidence, previous: ChangeEvidence | undefined, freshListing: boolean): boolean {
-  if (shown.state === "loading" || evidence.state === "unknown") return false;
-  if (shown.state === "error" && shown.changing) return freshListing && evidence.state === "listed";
-  const key = (e: ChangeEvidence | undefined) => (e?.state === "listed" ? `listed:${e.versions}` : e?.state);
-  return previous !== undefined && key(evidence) !== key(previous);
 }

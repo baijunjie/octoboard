@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { BrowseEntry } from "../protocol";
-import { buildTree, compareFilePaths, fileEvidence, hasOpenFolder, listingSaysDirectory, neighbours, rereadFor, treeEntries, type DirListing, type FileEvidence } from "./tree";
+import { buildTree, compareFilePaths, fileEvidence, hasOpenFolder, listingSaysDirectory, parseRowKey, rowKey, treeEntries, type DirListing } from "./tree";
 
 const file = (name: string, version = "v1"): BrowseEntry => ({ name, kind: "file", size: 1, version, target: null });
 const dir = (name: string): BrowseEntry => ({ name, kind: "directory", size: null, version: null, target: null });
@@ -92,17 +92,7 @@ describe("buildTree", () => {
   });
 });
 
-describe("neighbours", () => {
-  const files = ["a/x.ts", "a/y.ts", "b.ts"];
-
-  it.each([
-    ["the first file", "a/x.ts", { previous: undefined, next: "a/y.ts" }],
-    ["the last file", "b.ts", { previous: "a/y.ts", next: undefined }],
-    ["a file the tree does not show", "a/xa.ts", { previous: "a/x.ts", next: "a/y.ts" }],
-  ])("stops at the ends and places %s among the rest", (_, current, expected) => {
-    expect(neighbours(files, current)).toEqual(expected);
-  });
-
+describe("compareFilePaths", () => {
   it("orders paths as the tree does: a directory's files before the files beside it", () => {
     expect(["b.ts", "a/x.ts", "a/sub/z.ts"].sort(compareFilePaths)).toEqual(["a/sub/z.ts", "a/x.ts", "b.ts"]);
   });
@@ -129,26 +119,6 @@ describe("fileEvidence", () => {
   });
 });
 
-describe("rereadFor", () => {
-  const listed = (version: string): FileEvidence => ({ state: "listed", version });
-  it.each([
-    ["a body listed at its own version", { state: "file", version: "v1" }, listed("v1"), undefined, false],
-    ["a body rewritten at the same size", { state: "file", version: "v1" }, listed("v2"), listed("v1"), true],
-    ["a body whose file or directory is gone", { state: "file", version: "v1" }, { state: "gone" }, listed("v1"), true],
-    ["a body whose directory cannot be listed", { state: "file", version: "v1" }, { state: "unreadable" }, listed("v1"), true],
-    ["a failure whose file is listed again", { state: "error" }, listed("v2"), { state: "gone" }, true],
-    ["a failure the listings have nothing new about", { state: "error" }, listed("v2"), listed("v2"), false],
-    ["a file that kept changing as it was read, at every listing", { state: "error", changing: true }, listed("v2"), listed("v2"), true],
-    ["a read still out", { state: "loading" }, { state: "gone" }, undefined, false],
-  ] as const)("reads %s again: %s", (_, shown, evidence, previous, expected) => {
-    expect(rereadFor(shown, evidence, previous, true)).toBe(expected);
-  });
-
-  it("reads a file that kept changing again only at a new listing of its own directory", () => {
-    expect(rereadFor({ state: "error", changing: true }, listed("v2"), listed("v2"), false)).toBe(false);
-  });
-});
-
 describe("hasOpenFolder", () => {
   const listings = new Map<string, DirListing>([
     ["", loaded([dir("src"), dir("locked")])],
@@ -167,5 +137,19 @@ describe("hasOpenFolder", () => {
     expect(open("src/lib")).toBe(false);
     expect(open("locked")).toBe(false);
     expect(open("locked", "src")).toBe(true);
+  });
+});
+
+describe("parseRowKey", () => {
+  it("reads the path of an entry's row and the folder of a status row back", () => {
+    expect(parseRowKey(rowKey("src/a.ts"))).toEqual({ kind: "path", path: "src/a.ts" });
+    expect(parseRowKey(rowKey(""))).toEqual({ kind: "path", path: "" });
+    expect(parseRowKey("status:loading:src/lib")).toEqual({ kind: "status", status: "loading", dir: "src/lib" });
+    expect(parseRowKey("status:empty:a:b")).toEqual({ kind: "status", status: "empty", dir: "a:b" });
+  });
+
+  it("finds nothing in a key that is not a row of the tree", () => {
+    expect(parseRowKey("collapsed:src")).toBeUndefined();
+    expect(parseRowKey("heading:staged")).toBeUndefined();
   });
 });

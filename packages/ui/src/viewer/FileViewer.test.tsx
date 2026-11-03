@@ -11,7 +11,7 @@ import { t } from "../i18n/language";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import { ThemeProvider } from "../preferences/theme";
 import { ChangeBodiesError, type ViewerChangeSide, type ViewerContent, type ViewerSubject } from "./content";
-import { diffLayout } from "./diffLayout";
+import { diffLayout } from "./code/diffLayout";
 import { FileViewer } from "./FileViewer";
 import type { ViewerNavigation } from "./viewerNavigation";
 import { detailsButton } from "../components/alerts/detailsTestSupport";
@@ -19,7 +19,7 @@ import { enter, leave, openTooltip, press, tap } from "../components/hint/toolti
 import { markNames, ViewerHost } from "./viewerTestSupport";
 import { rawFailureText } from "../errors/errorText";
 import { viewerErrorText } from "./viewerError";
-import { wordWrap } from "./wordWrap";
+import { wordWrap } from "./code/wordWrap";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -27,7 +27,7 @@ import { wordWrap } from "./wordWrap";
 // what these tests look at, and reports it drawn as soon as it is mounted unless `drawing.held`.
 // That the library itself escapes repository text is checked in WebKit.
 const drawing = vi.hoisted(() => ({ held: false }));
-vi.mock("./renderer", async () => {
+vi.mock("./code/renderer", async () => {
   const { useEffect } = await import("react");
   const Stand = ({ text, wrap, onDrawn }: { text: string; wrap: boolean; onDrawn?: () => void }) => {
     useEffect(() => {
@@ -79,7 +79,7 @@ vi.mock("./renderer", async () => {
 
 // The library's markup is not there to scroll in; what is asked of it is what these tests look at.
 const scrolls = vi.hoisted(() => ({ toLine: vi.fn((_frame: HTMLElement, _line: number) => true) }));
-vi.mock("./rendererDom", async (importOriginal) => ({ ...(await importOriginal<typeof import("./rendererDom")>()), scrollToLine: scrolls.toLine }));
+vi.mock("./code/rendererDom", async (importOriginal) => ({ ...(await importOriginal<typeof import("./code/rendererDom")>()), scrollToLine: scrolls.toLine }));
 
 // jsdom has no `matchMedia`, which the theme needs.
 window.matchMedia ??= ((query: string) =>
@@ -923,13 +923,13 @@ it("opens later diffs in the layout last chosen, and stores it", async () => {
 });
 
 it("reports a user-triggered external Markdown link failure", async () => {
-  await import("./MarkdownDocument");
+  await import("./markdown/MarkdownDocument");
   const error = vi.fn();
   const cause = new Error("Browser launch failed");
   const links = { open: vi.fn(async () => { throw cause; }) };
   show({ key: "document-link", path: "README.md", content: { state: "file", body: { kind: "text", text: "[Documentation](https://example.com/docs)", size: 48 } } }, undefined, { links, toasts: { error, notice: vi.fn() } });
   // A cold document renderer can take longer to load than a fixed polling budget allows.
-  await act(async () => { await import("./MarkdownDocument"); });
+  await act(async () => { await import("./markdown/MarkdownDocument"); });
   await act(async () => document.querySelector<HTMLAnchorElement>('a[href="https://example.com/docs"]')!.click());
   expect(links.open).toHaveBeenCalledExactlyOnceWith("https://example.com/docs");
   expect(error).toHaveBeenCalledExactlyOnceWith("The link did not open in a browser. Its address is shown below.");
@@ -940,7 +940,7 @@ it("reads the stored layout, and falls back to unified for anything else", async
   const read = async (raw: string) => {
     vi.resetModules();
     localStorage.setItem(PREFERENCE_KEYS.diffLayout, raw);
-    return (await import("./diffLayout")).diffLayout.get();
+    return (await import("./code/diffLayout")).diffLayout.get();
   };
   expect(await read("split")).toBe("split");
   expect(await read("sideways")).toBe("unified");
@@ -1052,7 +1052,7 @@ it("reads the stored wrap choice, and falls back to unwrapped for anything else"
   const read = async (raw: string) => {
     vi.resetModules();
     localStorage.setItem(PREFERENCE_KEYS.wordWrap, raw);
-    return (await import("./wordWrap")).wordWrap.get();
+    return (await import("./code/wordWrap")).wordWrap.get();
   };
   expect(await read("true")).toBe(true);
   expect(await read("sideways")).toBe(false);

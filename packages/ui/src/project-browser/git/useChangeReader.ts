@@ -1,10 +1,14 @@
 import type React from "react";
 import { createElement, useEffect, useRef, useState } from "react";
 
-import { InlineReference } from "../../i18n/InlineReference";
+import { BROWSE_SLOTS } from "../../browse/budget";
+import { projectBrowseFailure } from "../../browse/failure";
 import { useLatest } from "../../components/hooks/useLatest";
+import { useLatestRequest } from "../../components/hooks/useLatestRequest";
+import { InlineReference } from "../../i18n/InlineReference";
 import { DaemonRequestError } from "../../daemon-client";
 import type { Translate } from "../../i18n/catalog";
+import type { Language } from "../../i18n/languages";
 import { isolate } from "../../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
 import type {
@@ -18,7 +22,7 @@ import type {
   SideVersion,
 } from "../../protocol";
 import { WORKTREE_UNAVAILABLE } from "../../protocol";
-import { useDaemon, useDaemonStore } from "../../store";
+import { useDaemon, type Daemon } from "../../store";
 import {
   bodyFromFileContent,
   ChangeBodiesError,
@@ -29,22 +33,17 @@ import {
 } from "../../viewer/content";
 import { changeBodiesFailure } from "../../viewer/viewerError";
 import { displayWirePath } from "../../format/wirePath";
-import { projectBrowseFailure } from "../browseError";
-import { CONFLICT_LABELS, SECTION_LABELS, type ChangeItem, type CommitRef, type ShownChange } from "./changes";
+import { CONFLICT_LABELS, SECTION_LABELS, type ChangeItem, type CommitRef } from "./changes";
 import { shortCommit } from "./shortCommit";
+import type { Shown as ShownRead } from "../viewedItem";
 
-/** How many times a read is asked again when what it read changed while it was read. */
-const CHANGED_RETRIES = 2;
-
-/** The one slot every viewer read goes in, the file reader's included: a window shows one subject
- * at a time, whichever project and mode it is from. */
-const READ_SLOT = "viewer";
+/** The window's viewer slot, which every viewer read goes in, the file reader's included. */
+const READ_SLOT = BROWSE_SLOTS.viewer;
 
 /** The slot of the request for a change's whole bodies, apart from `READ_SLOT` so that a click on a
  * separator never cancels the read of a patch still on its way (a background listing asks for one
- * while the viewer is open). The daemon's bound of outstanding requests counts it among the
- * viewer's two (see `useDirectoryListings.ts`). */
-const BODIES_SLOT = "viewer-bodies";
+ * while the viewer is open). */
+const BODIES_SLOT = BROWSE_SLOTS.viewerBodies;
 
 /** Where a change is read from: a worktree's uncommitted changes (`worktree` none for the one
  * holding the project's directory), a comparison of two branches at the commits it resolved — the
@@ -81,7 +80,7 @@ export interface ChangeReader {
   /** Where the change shown is read from. */
   origin?: ChangeOrigin;
   /** What is shown of the change, for telling from a listing whether to read it again. */
-  shown: ShownChange;
+  shown: ShownRead;
   /** Shows `item`, reading it from `origin`; opening the change already shown keeps what is shown
    * until the answer is in, as `reload` does. */
   open: (item: ChangeItem, origin: ChangeOrigin) => void;
@@ -145,7 +144,96 @@ const BODY_LIMITS = new Set(["file_bytes", "patch_bytes", "reply_bytes"]);
 /** The refusals that mean the same: this change has no whole sides to expand, however often it is asked for. */
 const BODIES_NEVER_DELIVERED = new Set(["unsupported_file_type", "invalid_change", "clean_filtered"]);
 
-type Shown = { key: string; content: ViewerContent; failed?: { changing: boolean } };
+/** What a bodies loader reads when it runs, which is as long as its patch is shown. At module level, as the React
+ * Compiler leaves a hook uncompiled that has a `throw` inside a `try`. */
+interface BodiesEnvironment {
+  project: string;
+  request: Daemon["request"];
+  store: Daemon["store"];
+  wording: { readonly current: { t: Translate; language: Language } };
+  /** Closes the viewer on a change whose worktree a read found gone. */
+  closeGone: (item: ChangeItem, origin: ChangeOrigin) => void;
+}
+
+/**
+ * How the change whose patch `reply` is gets its whole bodies, for expanding the lines the patch
+ * collapses: nothing where there is nothing to expand them from (a side that does not exist, or
+ * is not a file). The request names the versions `reply` reported, so a body of another revision
+ * is refused rather than shown beside this patch. It goes in a slot of its own, so a newer
+ * request for the bodies is the only one it cancels.
+ */
+function bodiesLoader(
+  { project, request, store, wording, closeGone }: BodiesEnvironment,
+  item: ChangeItem,
+  origin: ChangeOrigin,
+  reply: Extract<Event, { type: "project_change" | "project_comparison_change" | "project_commit_change" }>,
+): (() => Promise<ChangeBodies>) | undefined {
+  const { entry } = item;
+  const old = fileSideVersion(reply.old);
+  const next = fileSideVersion(reply.new);
+  if (entry.group === "conflicted" || !old || !next) return undefined;
+  const sides = { old: sideRef(entry.old), new: sideRef(entry.new) };
+  const versions = { old, new: next };
+  const where = origin.kind === "worktree" && origin.worktree !== undefined ? { worktree: origin.worktree } : {};
+  const text = (side: SideRead) => (side.state === "present" && side.file ? fileText(side.file) : undefined);
+  return async () => {
+    try {
+      let bodies: Event;
+      if (entry.group !== "committed") {
+        bodies = await request({
+          type: "read_project_change_bodies",
+          project,
+          ...where,
+          change: { group: entry.group, ...sides },
+          ...versions,
+          slot: BODIES_SLOT,
+        });
+      } else if (origin.kind === "comparison") {
+        const { left, right, base } = origin;
+        bodies = await request({ type: "read_project_comparison_change_bodies", project, left, right, base, change: sides, ...versions, slot: BODIES_SLOT });
+      } else if (origin.kind === "commit") {
+        const { commit, parent } = origin;
+        bodies = await request({ type: "read_project_commit_change_bodies", project, commit, parent, change: sides, ...versions, slot: BODIES_SLOT });
+      } else {
+        throw new ChangeBodiesError("unavailable");
+      }
+      if (bodies.type !== "project_change_bodies" && bodies.type !== "project_comparison_change_bodies" && bodies.type !== "project_commit_change_bodies") {
+        throw new ChangeBodiesError("unavailable");
+      }
+      const oldText = text(bodies.old);
+      const newText = text(bodies.new);
+      if (oldText === undefined || newText === undefined) throw new ChangeBodiesError("unavailable");
+      return { old: oldText, new: newText };
+    } catch (err) {
+      if (err instanceof ChangeBodiesError) throw err;
+      if (isWorktreeGone(err, origin)) {
+        closeGone(item, origin);
+        throw new ChangeBodiesError("superseded");
+      }
+      if (err instanceof DaemonRequestError && BODIES_NEVER_DELIVERED.has(err.code)) throw new ChangeBodiesError("unavailable");
+      if (err instanceof DaemonRequestError && err.code === "limit_exceeded" && BODY_LIMITS.has(err.params.limit ?? "")) {
+        throw new ChangeBodiesError("unavailable");
+      }
+      const state = store.getState();
+      const { t, language } = wording.current;
+      const failure = projectBrowseFailure(t, language, err, state, project);
+      switch (failure.kind) {
+        case "superseded":
+          throw new ChangeBodiesError("superseded");
+        case "changed":
+          throw new ChangeBodiesError("changed");
+        case "disconnected":
+          throw new ChangeBodiesError("failed", t("viewer.expand.disconnected"));
+        case "failed":
+          throw changeBodiesFailure(t, language, failure.message, item.path, state);
+      }
+    }
+  };
+}
+
+type Shown = { content: ViewerContent; failed?: { changing: boolean } };
+
+const LOADING: Shown = { content: { state: "loading" } };
 type Opened = { item: ChangeItem; origin: ChangeOrigin };
 
 /**
@@ -174,10 +262,9 @@ export function useChangeReader(project: string, onWorktreeGone?: () => void): C
   // loader lives as long as its patch is shown, and the language can change in between.
   const wording = useLatest({ t, language });
   const { request, store } = useDaemon();
-  const snapshotEpoch = useDaemonStore((s) => s.snapshotEpoch);
   const [opened, setOpened] = useState<Opened>();
-  const [shown, setShown] = useState<Shown>();
-  const live = useRef({ alive: true, sequence: 0, opened: undefined as Opened | undefined });
+  // The change shown as of the latest open or close, ahead of the render that shows it.
+  const live = useRef({ alive: true, opened: undefined as Opened | undefined });
   const worktreeGone = useLatest(onWorktreeGone);
 
   const subjectKey = (item: ChangeItem, origin: ChangeOrigin) => {
@@ -190,6 +277,13 @@ export function useChangeReader(project: string, onWorktreeGone?: () => void): C
         return `${project}\0commit\0${origin.parent ?? ""}\0${origin.commit}\0${item.key}`;
     }
   };
+
+  const latest = useLatestRequest<Shown>({
+    scope: opened && subjectKey(opened.item, opened.origin),
+    initial: LOADING,
+    project,
+    onReconnect: () => reload(),
+  });
 
   const send = (item: ChangeItem, origin: ChangeOrigin): Promise<Event> => {
     const { entry } = item;
@@ -225,131 +319,49 @@ export function useChangeReader(project: string, onWorktreeGone?: () => void): C
     return reply.type === "project_change" && reply.project === project && reply.group === entry.group;
   };
 
-  /**
-   * How the change whose patch `reply` is gets its whole bodies, for expanding the lines the patch
-   * collapses: nothing where there is nothing to expand them from (a side that does not exist, or
-   * is not a file). The request names the versions `reply` reported, so a body of another revision
-   * is refused rather than shown beside this patch. It goes in a slot of its own, so a newer
-   * request for the bodies is the only one it cancels.
-   */
-  const bodiesLoader = (
-    item: ChangeItem,
-    origin: ChangeOrigin,
-    reply: Extract<Event, { type: "project_change" | "project_comparison_change" | "project_commit_change" }>,
-  ): (() => Promise<ChangeBodies>) | undefined => {
+  const read = (item: ChangeItem, origin: ChangeOrigin) => {
     const { entry } = item;
-    const old = fileSideVersion(reply.old);
-    const next = fileSideVersion(reply.new);
-    if (entry.group === "conflicted" || !old || !next) return undefined;
-    const sides = { old: sideRef(entry.old), new: sideRef(entry.new) };
-    const versions = { old, new: next };
-    const where = origin.kind === "worktree" && origin.worktree !== undefined ? { worktree: origin.worktree } : {};
-    const text = (side: SideRead) => (side.state === "present" && side.file ? fileText(side.file) : undefined);
-    return async () => {
-      try {
-        let bodies: Event;
-        if (entry.group !== "committed") {
-          bodies = await request({
-            type: "read_project_change_bodies",
-            project,
-            ...where,
-            change: { group: entry.group, ...sides },
-            ...versions,
-            slot: BODIES_SLOT,
-          });
-        } else if (origin.kind === "comparison") {
-          const { left, right, base } = origin;
-          bodies = await request({ type: "read_project_comparison_change_bodies", project, left, right, base, change: sides, ...versions, slot: BODIES_SLOT });
-        } else if (origin.kind === "commit") {
-          const { commit, parent } = origin;
-          bodies = await request({ type: "read_project_commit_change_bodies", project, commit, parent, change: sides, ...versions, slot: BODIES_SLOT });
-        } else {
-          throw new ChangeBodiesError("unavailable");
-        }
-        if (bodies.type !== "project_change_bodies" && bodies.type !== "project_comparison_change_bodies" && bodies.type !== "project_commit_change_bodies") {
-          throw new ChangeBodiesError("unavailable");
-        }
-        const oldText = text(bodies.old);
-        const newText = text(bodies.new);
-        if (oldText === undefined || newText === undefined) throw new ChangeBodiesError("unavailable");
-        return { old: oldText, new: newText };
-      } catch (err) {
-        if (err instanceof ChangeBodiesError) throw err;
-        if (isWorktreeGone(err, origin)) {
-          closeGone(item, origin);
-          throw new ChangeBodiesError("superseded");
-        }
-        if (err instanceof DaemonRequestError && BODIES_NEVER_DELIVERED.has(err.code)) throw new ChangeBodiesError("unavailable");
-        if (err instanceof DaemonRequestError && err.code === "limit_exceeded" && BODY_LIMITS.has(err.params.limit ?? "")) {
-          throw new ChangeBodiesError("unavailable");
-        }
-        const state = store.getState();
-        const { t, language } = wording.current;
-        const failure = projectBrowseFailure(t, language, err, state, project);
-        switch (failure.kind) {
-          case "superseded":
-            throw new ChangeBodiesError("superseded");
-          case "changed":
-            throw new ChangeBodiesError("changed");
-          case "disconnected":
-            throw new ChangeBodiesError("failed", t("viewer.expand.disconnected"));
-          case "failed":
-            throw changeBodiesFailure(t, language, failure.message, item.path, state);
-        }
-      }
-    };
-  };
-
-  const read = (item: ChangeItem, origin: ChangeOrigin, attempt = 0) => {
-    const s = live.current;
-    const sequence = ++s.sequence;
-    const key = subjectKey(item, origin);
-    const current = () => s.alive && s.sequence === sequence && s.opened?.item.key === item.key && sameOrigin(s.opened.origin, origin);
-    const { entry } = item;
-    send(item, origin)
-      .then((reply) => {
-        if (!current() || !answers(reply, item, origin)) return;
+    void latest.send({
+      scope: subjectKey(item, origin),
+      wanted: () => live.current.opened?.item.key === item.key && sameOrigin(live.current.opened.origin, origin),
+      request: () => send(item, origin),
+      handled: (err) => {
+        if (!isWorktreeGone(err, origin)) return false;
+        closeGone(item, origin);
+        return true;
+      },
+      accept: (reply) => {
+        if (!answers(reply, item, origin)) return undefined;
         if (entry.group === "conflicted" && reply.type === "project_file") {
           const conflict = conflictText(t, entry.conflict);
-          setShown({ key, content: { state: "conflict", conflict, body: bodyFromFileContent(entry.path, reply.file) } });
-        } else if (entry.group !== "conflicted" && (reply.type === "project_change" || reply.type === "project_comparison_change" || reply.type === "project_commit_change")) {
+          return () => ({ content: { state: "conflict", conflict, body: bodyFromFileContent(entry.path, reply.file) } });
+        }
+        if (entry.group !== "conflicted" && (reply.type === "project_change" || reply.type === "project_comparison_change" || reply.type === "project_commit_change")) {
           const change = {
             old: readSide(reply.old, entry.old),
             new: readSide(reply.new, entry.new),
             patch: reply.patch ? fileText(reply.patch) : undefined,
-            loadBodies: bodiesLoader(item, origin, reply),
+            loadBodies: bodiesLoader({ project, request, store, wording, closeGone }, item, origin, reply),
           };
-          setShown({ key, content: { state: "change", change } });
+          return () => ({ content: { state: "change", change } });
         }
-      })
-      .catch((err: unknown) => {
-        if (!current()) return;
-        if (isWorktreeGone(err, origin)) return closeGone(item, origin);
-        const failure = projectBrowseFailure(t, language, err, store.getState(), project);
-        if (failure.kind === "superseded") return;
-        if (failure.kind === "changed" && attempt < CHANGED_RETRIES) return read(item, origin, attempt + 1);
-        if (failure.kind === "disconnected") {
-          setShown((held) =>
-            held?.key === key && !held.failed && held.content.state !== "loading"
-              ? held
-              : { key, failed: { changing: false }, content: { state: "disconnected", what: "change" } },
-          );
-          return;
-        }
+        return undefined;
+      },
+      disconnected: (held) =>
+        !held.failed && held.content.state !== "loading" ? held : { failed: { changing: false }, content: { state: "disconnected", what: "change" } },
+      failed: (failure, _held, t) => {
         const message = failure.kind === "failed" ? failure.message : t("git.error.changeChanging");
-        setShown(() => {
-          const failed = { changing: failure.kind === "changed" };
-          if (entry.group === "conflicted") return { key, failed, content: { state: "conflict", conflict: conflictText(t, entry.conflict), message } };
-          return { key, failed, content: { state: "change", change: { old: listedSide(entry.old), new: listedSide(entry.new), unavailable: message } } };
-        });
-      });
+        const failed = { changing: failure.kind === "changed" };
+        if (entry.group === "conflicted") return { failed, content: { state: "conflict", conflict: conflictText(t, entry.conflict), message } };
+        return { failed, content: { state: "change", change: { old: listedSide(entry.old), new: listedSide(entry.new), unavailable: message } } };
+      },
+    });
   };
 
   const open = (item: ChangeItem, origin: ChangeOrigin) => {
     live.current.opened = { item, origin };
     setOpened({ item, origin });
-    const key = subjectKey(item, origin);
-    setShown((held) => (held?.key === key ? held : { key, content: { state: "loading" } }));
+    latest.hold((held) => held, subjectKey(item, origin));
     read(item, origin);
   };
 
@@ -360,10 +372,18 @@ export function useChangeReader(project: string, onWorktreeGone?: () => void): C
 
   const close = () => {
     live.current.opened = undefined;
-    live.current.sequence += 1;
     setOpened(undefined);
-    setShown(undefined);
+    latest.reset();
   };
+
+  // A bodies loader outlives the reader's own requests: it is called while its patch is shown.
+  useEffect(() => {
+    const s = live.current;
+    s.alive = true;
+    return () => {
+      s.alive = false;
+    };
+  }, []);
 
   /** Closes the viewer on `item` from `origin`, whose worktree a read found gone, while it is still
    * the change shown. */
@@ -374,24 +394,11 @@ export function useChangeReader(project: string, onWorktreeGone?: () => void): C
     worktreeGone.current?.();
   }
 
-  const firstEpoch = useRef(snapshotEpoch);
-  useEffect(() => {
-    if (snapshotEpoch !== firstEpoch.current) reload();
-  }, [snapshotEpoch]);
-
-  useEffect(() => {
-    const s = live.current;
-    s.alive = true;
-    return () => {
-      s.alive = false;
-    };
-  }, []);
-
   if (!opened) return { shown: { state: "loading" }, open, reload, close };
   const { origin } = opened;
   const key = subjectKey(opened.item, origin);
-  const current = shown?.key === key ? shown : undefined;
-  const content = current?.content ?? { state: "loading" };
+  const current = latest.value;
+  const { content } = current;
   const isolatedWirePath = (name: string) => isolate(displayWirePath(name));
   // A worktree's change says where it is from in two ways: the stage of a staged or unstaged one, as
   // a tag of its own; and nothing for the rest, which their status chip already says (untracked,

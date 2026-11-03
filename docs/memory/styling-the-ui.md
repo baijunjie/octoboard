@@ -102,10 +102,16 @@ overridden token itself carries the local value:
 
 In the app's WKWebView, `opacity` below 1 on an ancestor of anything that fades (an opacity transition, such as a
 row's hover controls) or sits on its own GPU layer (HeroUI's buttons are `transform-gpu`) makes WebKit paint those
-descendants as blank tiles, and patching the descendants one by one did not hold. To dim a region, lay a veil of the
-surface colour over it instead: an `after:` pseudo-element with `after:pointer-events-none after:absolute
-after:inset-0` and a translucent fill such as `bg-surface/55` on a `relative` container, as the sidebar's inactive
-projects in `packages/ui/src/sidebar/Sidebar.tsx` do.
+descendants as blank tiles, and patching the descendants one by one did not hold. To dim a region, lay a veil over it
+instead: `INACTIVE_VEIL_CLASS` (`packages/ui/src/components/status/inactiveVeil.ts`) on the region, plus an
+`after:bg-<surface>/55` fill of its own.
+
+- The fill is the colour of the surface the region actually sits on, read from the nearest ancestor that paints a
+  background, never a guessed token: a panel card (the sidebar, every card of the right pane) is `bg-panel-sidebar`,
+  not `bg-panel` or `bg-surface`, and a popover is `bg-overlay`. A veil of another colour shows as a tinted box rather
+  than as dimming.
+- The veil (`after:inset-0`) covers the padding box only, so a region's own border stays undimmed under it. Where the
+  border should dim too, add `after:-m-px` (the border's width) and the region's rounding (`after:rounded-md`).
 
 ## Nothing may start a transition inside a collapsed disclosure: the browser never ends it, and focus waits on it
 

@@ -10,7 +10,7 @@ export type CodeOrigin = "daemon" | "client" | "ui";
 export interface MessageFacets {
   /** Params shown as code: a technical literal (an ID, a path) that reads better set apart from the sentence than
    * quoted inside it. The plain text of such a message carries the value bare; `DaemonErrorMessage` sets it as
-   * `InlineReference`. A code the browser panes show (`browseError.ts`) has its params reshaped first (`shownParams`),
+   * `InlineReference`. A code the browser panes show (`browse/failure.ts`) has its params reshaped first (`shownParams`),
    * so a structured render of it must be given those, never the daemon's raw ones. */
   codeParams?: readonly string[];
   /** Params shown as a name, which keeps the surrounding prose's typeface rather than the monospace used for paths. */

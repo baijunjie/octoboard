@@ -5,7 +5,7 @@ import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { setGitModeWorktree } from "../../project-browser/browserState";
+import { setGitModeWorktree } from "../../project-browser/gitModeWorktree";
 import { DaemonRequestError } from "../../daemon-client";
 import { presence, stubListMotion } from "../../components/motion/listMotionTestSupport";
 import { isolate } from "../../i18n/isolate";
@@ -13,6 +13,7 @@ import { PanelFrameProvider, type PanelFrame } from "../../components/panel/Pane
 import { PlatformProvider } from "../../platform/react";
 import type { Event, Project, RequestBody, ShellTerminal } from "../../protocol";
 import { applyDaemonEvent, createStateStore, DaemonProvider, seedShellTerminal, type Daemon } from "../../store";
+import { testDaemon } from "../../test/testDaemon";
 import { ShellTerminalPanel } from "./ShellTerminalPanel";
 import { startShellTerminal, takeShellTerminalFocus } from "./shellTerminals";
 
@@ -61,16 +62,7 @@ function mount(terminals: ShellTerminal[], { holdCreate, eventFirst = true, fram
     }
     return { type: "ack", id: null } as Event;
   });
-  const daemon: Daemon = {
-    store,
-    request,
-    raiseError: vi.fn(),
-    toastNotice: vi.fn(),
-    onToast: () => () => {},
-    dismissTrustPrompt: () => {},
-    reconnect: () => {},
-    terminalUrl: () => "",
-  };
+  const daemon = testDaemon({ store, request, raiseError: vi.fn(), toastNotice: vi.fn() });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   act(() =>

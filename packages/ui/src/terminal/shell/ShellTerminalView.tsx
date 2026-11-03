@@ -1,22 +1,20 @@
 import React, { useCallback, useEffect, useImperativeHandle, useRef } from "react";
 
 import "@xterm/xterm/css/xterm.css";
-import type { ViewedFile } from "../../project-browser/files/TerminalFileViewer";
+import type { ViewedFile } from "../../viewer/viewedFile";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../../components/announce/StatusAnnouncer";
 import { useFocusHandoff } from "../../components/focus/useFocusHandoff";
 import { useT } from "../../i18n/react";
 import type { ShellTerminal } from "../../protocol";
 import { useDaemon } from "../../store";
-import { useOctoboardTheme } from "../../preferences/theme";
 import { TerminalController, type TerminalControllerOptions } from "../TerminalController";
 import { TerminalCover } from "../TerminalCover";
 import { TerminalEditMenu } from "../TerminalEditMenu";
-import { TerminalLinkTooltip } from "../TerminalLinkTooltip";
 import { TerminalNoticeBar } from "../TerminalNoticeBar";
+import { TerminalSurface } from "../TerminalSurface";
 import { useTerminalController } from "../useTerminalController";
 import { useTerminalReconnect } from "../useTerminalReconnect";
 import type { HoveredTerminalLink } from "../links/terminalLinks";
-import { XTERM_THEMES } from "../xtermThemes";
 
 export interface ShellTerminalViewHandle {
   /** Puts keyboard focus on the terminal, or on the cover's Reconnect while it offers one, and says
@@ -71,7 +69,6 @@ export function ShellTerminalView({
 }): React.ReactElement {
   const t = useT();
   const { terminalUrl, terminalReconnectDelay } = useDaemon();
-  const { resolved: colorTheme } = useOctoboardTheme();
   const rootRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const coverRef = useRef<HTMLDivElement>(null);
@@ -135,20 +132,16 @@ export function ShellTerminalView({
   const troubleText = t(trouble === "disconnected" ? "terminal.disconnected" : "terminal.reconnecting");
 
   return (
-    <div
+    <TerminalSurface
       ref={rootRef}
       id={`shell-terminal-${terminal.id}`}
       className={`absolute inset-0 flex-col ${shown ? "flex" : "hidden"}`}
-      style={{ "--terminal-background": XTERM_THEMES[colorTheme].background, backgroundColor: "var(--terminal-background)" } as React.CSSProperties}
+      containerRef={containerRef}
+      setLinkRef={setLinkRef}
+      padding="ps-(--pane-inset) pe-2 py-2"
+      mountMarker="data-shell-terminal"
+      editMenu={<TerminalEditMenu sessionId={terminal.id} controllerRef={controllerRef} contextTargetRef={containerRef} />}
     >
-      {/* Padding on a wrapper, not on the element xterm is mounted in, which the fit addon sizes the
-          terminal from; isolation keeps xterm's link canvas below the overlays. */}
-      <div className="isolate min-h-0 flex-1 ps-(--pane-inset) pe-2 py-2">
-        {/* xterm lays its cells out left to right whatever the page's direction. */}
-        <div dir="ltr" data-shell-terminal className="h-full overflow-hidden" ref={containerRef} />
-      </div>
-      <TerminalEditMenu sessionId={terminal.id} controllerRef={controllerRef} contextTargetRef={containerRef} />
-      <TerminalLinkTooltip setLinkRef={setLinkRef} />
       {trouble && (
         <TerminalCover
           ref={coverRef}
@@ -174,6 +167,6 @@ export function ShellTerminalView({
           <TerminalNoticeBar sentence={t("shellTerminal.exited")} action={t("shellTerminal.close")} variant="secondary" onPress={onClose} />
         )}
       </div>
-    </div>
+    </TerminalSurface>
   );
 }

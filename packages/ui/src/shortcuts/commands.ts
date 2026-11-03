@@ -56,7 +56,7 @@ const REBINDABLE = [
 export type CommandId = (typeof REBINDABLE)[number]["id"];
 
 /** The file viewer's Find in file: its key acts nowhere else, so it is listed for no other command to take. The
- * viewer's dialog matches the key by hand (`isFind`, `viewer/useFind.ts`), held to this entry by a test. */
+ * viewer's dialog matches the key by hand (`isFind`, `viewer/find/useFind.ts`), held to this entry by a test. */
 export const FIND_BINDING: Binding = primary("KeyF");
 
 /** The keys the window, the native menu or one view owns, listed but not changeable. */

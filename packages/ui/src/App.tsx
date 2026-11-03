@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 
 import { ArchiveLayer } from "./archive/ArchiveLayer";
 import { forgetProjectsOtherThan } from "./project-browser/browserState";
-import { LazyTerminalFileViewer } from "./project-browser/files/LazyTerminalFileViewer";
+import { LazyLinkedFileViewer } from "./project-browser/files/LazyLinkedFileViewer";
 import { OpenShellTerminal } from "./project-browser/RowActions";
 import { ConnectionBanner } from "./shell/ConnectionBanner";
 import { ContentPanel } from "./shell/ContentPanel";
@@ -744,7 +744,7 @@ export function App(): React.ReactElement {
       )}
       {launchConfirmation}
       {linkedFile && (
-        <LazyTerminalFileViewer
+        <LazyLinkedFileViewer
           file={linkedFile}
           onOpenFile={setLinkedFile}
           onClose={closeLinkedFile}

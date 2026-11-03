@@ -300,9 +300,10 @@ while no nonempty file-name filter is active (see "Filtering by file name" above
 - the first time the Files mode is shown after the project pane is put in the right pane, which lists it afresh;
 - when a folder is expanded, if it had been listed before;
 - on the header's **Refresh**;
-- **every 10 seconds** while the Files mode is on screen — the Files panel docked, floating in or floating over the
-  terminal — and the window is
-  visible, skipping a turn while a listing of the pane is still out;
+- **10 seconds after the tree was last refreshed**, whatever refreshed it (Refresh, a reconnect, or the previous
+  refresh on its own), while the Files mode is on screen — the Files panel docked, floating in or floating over the
+  terminal — and the window is visible; one that falls due while a listing of the pane is still out waits another 10
+  seconds;
 - when the window comes back to the front or becomes visible again, with the Files mode on screen, or when it comes
   back on screen — the Files panel opened or floating in, or the Files tab chosen —
   either one more than 5 seconds after the last refresh, and unless a listing of the pane is still out;
@@ -434,6 +435,17 @@ file viewer's header already shows that path (see "Notices and stand-ins" in `do
 | A file kept changing while it was being read, after two more tries | it kept changing, and is read again at the next refresh |
 | A folder kept changing while it was being listed, after two more tries | it kept changing, and Refresh tries again |
 | The project's directory itself cannot be read | the folder cannot be read, with the reason |
+
+Two rules hold for every read the pane makes of the project, in Files and in the Git mode alike — a folder's listing, a
+file-name search, a file, the repository and its worktrees, the branches, the uncommitted changes, a comparison, the
+commits and a change — but for the read of the lines a diff is expanded from, which has its own rules (see
+"Expanding the collapsed lines" in `docs/product/project-pane-git-change-viewer.md`):
+
+- **What changed while it was being read is read again at once, twice.** Only when the third read finds it changing
+  too does the pane say it kept changing, in the words its own view gives that failure.
+- **A read lost with the connection to the daemon is not a failure.** What is on screen stays as it is, and the read
+  is made again after the connection comes back; a file or a change with nothing on screen yet says so in a neutral
+  stand-in (see "When the open file changes" in `docs/product/file-viewer.md`).
 
 ## Loading the project pane
 

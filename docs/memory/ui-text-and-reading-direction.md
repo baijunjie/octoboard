@@ -57,7 +57,7 @@ in from the start:
   WebKit lays such a container out in time quadratic in the document's size (a document of 10,000 of them held the
   main thread for 15 s as one task). So where blocks wrap their text in further elements, take each block's direction
   from the first strong directional character of its whole subtree and write that out as an explicit `dir`, with no
-  `dir` at all on a block that has none so that it inherits (`packages/ui/src/viewer/blockDirection.ts` does this for
+  `dir` at all on a block that has none so that it inherits (`packages/ui/src/viewer/markdown/blockDirection.ts` does this for
   the Markdown document).
 
 ## Fold case with `toLowerCase()` wherever the daemon folds the same text

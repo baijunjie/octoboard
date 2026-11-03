@@ -1,5 +1,5 @@
 import { isPrimaryModifier } from "../input/keys";
-import { renderedCodeRange } from "./rendererDom";
+import { renderedCodeRange } from "./code/rendererDom";
 
 /** Whether a key press is the platform's Select All: ⌘A on an Apple keyboard, Ctrl+A elsewhere. */
 export function isSelectAll(event: Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey">): boolean {

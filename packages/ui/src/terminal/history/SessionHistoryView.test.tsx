@@ -23,7 +23,7 @@ vi.mock("../../store", () => ({
 }));
 vi.mock("../../platform/react", () => ({ usePlatform: () => ({ links: undefined }) }));
 vi.mock("../../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "light" }) }));
-vi.mock("../../viewer/MarkdownDocument", () => ({
+vi.mock("../../viewer/markdown/MarkdownDocument", () => ({
   MarkdownDocument: ({ text }: { text: string }) => <div data-testid="markdown">{text}</div>,
 }));
 

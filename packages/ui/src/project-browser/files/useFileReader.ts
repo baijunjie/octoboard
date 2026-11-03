@@ -1,25 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
-import { useCurrentLanguage, useT } from "../../i18n/react";
+import { BROWSE_SLOTS } from "../../browse/budget";
+import { useLatestRequest } from "../../components/hooks/useLatestRequest";
 import type { Event } from "../../protocol";
-import { useDaemon, useDaemonStore } from "../../store";
+import { useDaemon } from "../../store";
 import { bodyFromFileContent, type ViewerContent, type ViewerSubject } from "../../viewer/content";
-import { projectBrowseFailure } from "../browseError";
-import type { ShownFile } from "../tree";
-
-/** How many times a read is asked again when the file changed while it was read. */
-const CHANGED_RETRIES = 2;
-
-/** The one slot every viewer read goes in, the Git mode's change reads included
- * (`useChangeReader.ts`): a window shows one subject at a time, whichever project and mode it is
- * from, so a read left behind by a viewer of another project is cancelled too. */
-const READ_SLOT = "viewer";
+import type { Shown as ShownRead } from "../viewedItem";
 
 export interface FileReader {
   /** What the viewer shows, or nothing while it is closed. */
   subject?: ViewerSubject;
   /** What is shown of the file, for telling from a listing whether to read it again. */
-  shown: ShownFile;
+  shown: ShownRead;
   /** Shows `path` (a wire path), reading it from disk. With `read`, the reply of an earlier read of
    * it, the file is shown at once from that and not read again until something asks, as a new
    * connection does. */
@@ -29,100 +21,79 @@ export interface FileReader {
   close: () => void;
 }
 
-type Shown = { path: string; content: ViewerContent; version?: string; changing?: boolean };
+type Shown = { content: ViewerContent; version?: string; changing?: boolean };
+
+const LOADING: Shown = { content: { state: "loading" } };
 
 /**
  * The file a project's viewer shows, read from the project's directory on demand. One read is out
- * at a time, in one slot, so moving through files quickly cancels the reads left behind in the
- * daemon as well; a reply is taken only for the latest read, of this project and of the path shown.
- * Moving to another file shows it loading, never the previous file's body under its name; a failed
- * read shows why, in place of whatever was shown. A read again that finds the same version keeps
- * what is shown as it is, and one lost with the connection keeps the body shown until the
- * reconnect, which reads the file again.
+ * at a time, in the window's viewer slot, so moving through files quickly cancels the reads left
+ * behind in the daemon as well; a reply is taken only for the latest read, of this project and of
+ * the path shown. Moving to another file shows it loading, never the previous file's body under its
+ * name; a failed read shows why, in place of whatever was shown. A read again that finds the same
+ * version keeps what is shown as it is, and one lost with the connection keeps the body shown until
+ * the reconnect, which reads the file again.
  *
  * The subject's key is the project, the source (the live file on disk, in a worktree when it is one
  * that is read) and the path: what makes it a different subject for the viewer.
  */
 export function useFileReader(project: string, worktree?: string): FileReader {
-  const t = useT();
-  const language = useCurrentLanguage();
-  const { request, store } = useDaemon();
-  const snapshotEpoch = useDaemonStore((s) => s.snapshotEpoch);
+  const { request } = useDaemon();
   const [path, setPath] = useState<string>();
-  const [content, setContent] = useState<Shown>();
-  const live = useRef({ alive: true, sequence: 0, path: undefined as string | undefined });
+  // The path shown as of the latest open or close, ahead of the render that shows it.
+  const opened = useRef<string | undefined>(undefined);
+  const latest = useLatestRequest<Shown>({
+    scope: path,
+    initial: LOADING,
+    project,
+    onReconnect: () => reload(),
+  });
 
-  const read = (target: string, attempt = 0) => {
-    const s = live.current;
-    const sequence = ++s.sequence;
-    const current = () => s.alive && s.sequence === sequence && s.path === target;
-    request({ type: "read_project_file", project, ...(worktree !== undefined && { worktree }), path: target, slot: READ_SLOT })
-      .then((reply) => {
-        if (!current() || reply.type !== "project_file" || reply.project !== project || reply.path !== target || (reply.worktree ?? undefined) !== worktree) return;
+  const read = (target: string) => {
+    void latest.send({
+      scope: target,
+      wanted: () => opened.current === target,
+      request: () => request({ type: "read_project_file", project, ...(worktree !== undefined && { worktree }), path: target, slot: BROWSE_SLOTS.viewer }),
+      accept: (reply) => {
+        if (reply.type !== "project_file" || reply.project !== project || reply.path !== target || (reply.worktree ?? undefined) !== worktree) return undefined;
         const version = reply.source.kind === "live" ? reply.source.version : undefined;
-        setContent((shown) =>
-          shown?.path === target && shown.content.state === "file" && version !== undefined && shown.version === version
+        return (shown) =>
+          shown.content.state === "file" && version !== undefined && shown.version === version
             ? shown
-            : { path: target, content: { state: "file", body: bodyFromFileContent(target, reply.file) }, version },
-        );
-      })
-      .catch((err: unknown) => {
-        if (!current()) return;
-        const failure = projectBrowseFailure(t, language, err, store.getState(), project);
-        if (failure.kind === "superseded") return;
-        if (failure.kind === "changed" && attempt < CHANGED_RETRIES) return read(target, attempt + 1);
-        if (failure.kind === "disconnected") {
-          setContent((shown) =>
-            shown?.path === target && shown.content.state === "file"
-              ? shown
-              : { path: target, content: { state: "disconnected", what: "file" } },
-          );
-          return;
-        }
-        const message = failure.kind === "failed" ? failure.message : t("browser.error.fileChanged");
-        setContent({ path: target, content: { state: "error", message }, changing: failure.kind === "changed" });
-      });
+            : { content: { state: "file", body: bodyFromFileContent(target, reply.file) }, version };
+      },
+      disconnected: (shown) => (shown.content.state === "file" ? shown : { content: { state: "disconnected", what: "file" } }),
+      failed: (failure, _held, t) => ({
+        content: { state: "error", message: failure.kind === "failed" ? failure.message : t("browser.error.fileChanged") },
+        changing: failure.kind === "changed",
+      }),
+    });
   };
 
   const open = (target: string, earlier?: Extract<Event, { type: "project_file" }>) => {
-    live.current.path = target;
+    opened.current = target;
     setPath(target);
     const from = earlier?.path === target && earlier.project === project && (earlier.worktree ?? undefined) === worktree ? earlier : undefined;
-    setContent((shown) =>
-      from
-        ? { path: target, content: { state: "file", body: bodyFromFileContent(target, from.file) }, version: from.source.kind === "live" ? from.source.version : undefined }
-        : shown?.path === target
-          ? shown
-          : { path: target, content: { state: "loading" } },
-    );
-    if (!from) read(target);
+    if (from) {
+      const version = from.source.kind === "live" ? from.source.version : undefined;
+      latest.hold(() => ({ content: { state: "file", body: bodyFromFileContent(target, from.file) }, version }), target);
+    } else {
+      latest.hold((shown) => shown, target);
+      read(target);
+    }
   };
 
   const reload = () => {
-    if (live.current.path !== undefined) read(live.current.path);
+    if (opened.current !== undefined) read(opened.current);
   };
 
   const close = () => {
-    live.current.path = undefined;
-    live.current.sequence += 1;
+    opened.current = undefined;
     setPath(undefined);
-    setContent(undefined);
+    latest.reset();
   };
 
-  const firstEpoch = useRef(snapshotEpoch);
-  useEffect(() => {
-    if (snapshotEpoch !== firstEpoch.current) reload();
-  }, [snapshotEpoch]);
-
-  useEffect(() => {
-    const s = live.current;
-    s.alive = true;
-    return () => {
-      s.alive = false;
-    };
-  }, []);
-
-  const shown = path !== undefined && content?.path === path ? content : undefined;
+  const shown = path === undefined ? undefined : latest.value;
   return {
     subject:
       path === undefined
@@ -130,7 +101,7 @@ export function useFileReader(project: string, worktree?: string): FileReader {
         : { key: `${project}\0live\0${worktree ?? ""}\0${path}`, path, host: { project, worktree, path }, content: shown?.content ?? { state: "loading" } },
     shown:
       shown?.content.state === "file" && shown.version !== undefined
-        ? { state: "file", version: shown.version }
+        ? { state: "read", version: shown.version }
         : shown?.content.state === "error" || shown?.content.state === "disconnected"
           ? { state: "error", changing: shown.changing }
           : { state: "loading" },

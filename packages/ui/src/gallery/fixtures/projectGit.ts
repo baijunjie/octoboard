@@ -305,11 +305,10 @@ const stateWithTasks = snapshotState({
   sessions: [...sessions, rankingSession].map((session) => (withTasks.has(session.id) ? { ...session, terminal_title: withTasks.get(session.id) } : session)),
 });
 
-/** The Git mode is where the project's browser opens, optionally with what is committed grouped by
- * commit, as a user's own choice would leave it. */
+/** The Git mode is where the project's browser opens, optionally with its changes in the tree layout
+ * or what is committed grouped by commit, as a user's own choice would leave it. */
 const gitMode = (options: { byCommit?: boolean; layout?: "tree" } = {}): Preferences => ({
-  projectBrowsers: { [web.id]: { mode: "git", ...(options.byCommit && { byCommit: true }) } },
-  ...(options.layout && { changeLayout: options.layout }),
+  projectBrowsers: { [web.id]: { mode: "git", ...(options.layout && { layouts: { changes: options.layout } }), ...(options.byCommit && { byCommit: true }) } },
 });
 const preferences = gitMode();
 

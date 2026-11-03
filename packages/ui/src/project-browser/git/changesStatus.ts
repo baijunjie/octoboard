@@ -7,7 +7,7 @@ import { displayWirePath, wireBaseName } from "../../format/wirePath";
 import { comparisonNews } from "./comparisonNews";
 import { shortCommit } from "./shortCommit";
 import type { BranchList } from "./useBranchList";
-import type { CommittedState, UncommittedState } from "./useGitReview";
+import type { CommittedState, UncommittedState } from "./gitReviewState";
 
 /** A line above the list, as the words it is made of; paths and branches are in display form, except
  * the worktree's `root`, a wire path, which the line's copy button turns into display form itself. `cut` is

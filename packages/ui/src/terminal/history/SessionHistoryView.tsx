@@ -1,9 +1,10 @@
-import { Spinner } from "@heroui/react";
 import { FileQuestion, MessageSquareOff } from "lucide-react";
-import React, { Suspense, lazy, useCallback, useId, useRef } from "react";
+import React, { Suspense, useCallback, useId, useRef } from "react";
 
+import { retryableLazy } from "../../components/hooks/retryableLazy";
 import { useHasPainted } from "../../components/motion/useHasPainted";
 import { EmptyPanel } from "../../components/panel/EmptyPanel";
+import { LoadingState } from "../../components/panel/LoadingState";
 import { FadeOverflow } from "../../components/text/FadeOverflow";
 import { PaneFailure } from "../../components/alerts/PaneFailure";
 import { PaneTitle } from "../../components/panel/PaneTitle";
@@ -19,14 +20,15 @@ import type { HistoryMessage, Session } from "../../protocol";
 import { sessionDisplayTitle } from "../../sessions/sessionLabel";
 import { useSession } from "../../store";
 import { useOctoboardTheme } from "../../preferences/theme";
-import { RendererBoundary } from "../../viewer/codeRenderer";
-import { FencedCode } from "../../viewer/FencedCode";
+import { RendererBoundary } from "../../viewer/code/codeRenderer";
+import { FencedCode } from "../../viewer/markdown/FencedCode";
 import { useSessionHistory } from "./useSessionHistory";
 
 type ConversationMessage = Omit<HistoryMessage, "speaker"> & { speaker: "user" | "agent" };
 
 // The Markdown renderer, with its library, loads the first time a reply is shown.
-const MarkdownDocument = lazy(() => import("../../viewer/MarkdownDocument").then((module) => ({ default: module.MarkdownDocument })));
+const markdownDocument = retryableLazy(() => import("../../viewer/markdown/MarkdownDocument").then((module) => ({ default: module.MarkdownDocument })));
+const MarkdownDocument = markdownDocument.Component;
 
 /**
  * What an archived session was about, in place of its terminal: the messages the user sent and
@@ -90,10 +92,7 @@ export function SessionHistoryView({
       </header>
       <StatusAnnouncer text={spoken} />
       {history.state === "loading" && (
-        <div aria-hidden="true" className="flex flex-1 flex-col items-center justify-center-safe gap-3 text-sm text-app-muted">
-          <Spinner size="md" color="current" aria-hidden="true" />
-          {t("history.loading")}
-        </div>
+        <LoadingState size="md" label={t("history.loading")} />
       )}
       {history.state === "failed" && <PaneFailure title={t("history.failed")} message={history.error} announce={painted} onRetry={() => reload()} />}
       {history.state === "unavailable" && (
@@ -213,7 +212,7 @@ function Message({ message }: { message: ConversationMessage }): React.ReactElem
       </div>
       <div data-speaker={message.speaker} className="history-message rounded-xl bg-default px-3 py-2 text-sm leading-6 shadow-(--panel-shadow)">
         {message.speaker === "agent" ? (
-          <RendererBoundary resetKey={message.text} fallback={plain}>
+          <RendererBoundary resetKey={message.text} fallback={plain} retry={markdownDocument.retry}>
             <Suspense fallback={plain}>
               <MarkdownDocument embedded text={message.text} path="" theme={theme} renderCode={renderCode} onOpenLink={links && onOpenLink} />
             </Suspense>

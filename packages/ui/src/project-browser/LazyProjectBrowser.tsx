@@ -1,6 +1,7 @@
-import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
+import React, { Suspense, useEffect, useRef } from "react";
 
 import { PaneFailure } from "../components/alerts/PaneFailure";
+import { retryableLazy } from "../components/hooks/retryableLazy";
 import { PanelHeader } from "../components/panel/PanelHeader";
 import { useT } from "../i18n/react";
 import type { ProjectBrowser as ProjectBrowserType } from "./ProjectBrowser";
@@ -10,10 +11,10 @@ type Props = React.ComponentProps<typeof ProjectBrowserType> & {
   focusTerminal: () => void;
 };
 
-const load = () => lazy(() => import("./ProjectBrowser").then((module) => ({ default: module.ProjectBrowser })));
 /** The component, loaded the first time a project's browser is shown, and loaded again after a
- * failed load is retried: `lazy` keeps a failure, so a retry needs a new one. */
-let Browser = load();
+ * failed load is retried. */
+const browser = retryableLazy(() => import("./ProjectBrowser").then((module) => ({ default: module.ProjectBrowser })));
+const Browser = browser.Component;
 
 /**
  * A project's browser, with the file viewer it opens, loaded the first time one is shown: most of
@@ -23,18 +24,11 @@ let Browser = load();
  * to the terminal when Try again replaces it by the empty pane of another load.
  */
 export function LazyProjectBrowser({ focusTerminal, ...props }: Props): React.ReactElement {
-  // Kept out of the React Compiler: a retry puts a new `Browser` in place of the module's, which its
-  // memoization would take for constant and so keep rendering the one that failed.
-  "use no memo";
-  const [, retried] = useState(0);
   return (
     <LoadBoundary
       title={props.project.name}
       focusTerminal={focusTerminal}
-      onRetry={() => {
-        Browser = load();
-        retried((count) => count + 1);
-      }}
+      onRetry={browser.retry}
     >
       <Suspense fallback={null}>
         <Browser {...props} />

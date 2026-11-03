@@ -35,12 +35,12 @@ const galleryFrameCsp: Plugin = {
 };
 
 // Keeps a build to the two highlighting themes the file viewer uses (see
-// `src/viewer/themeShim.ts`) by giving it the shim for the two modules that list them all: the
+// `src/viewer/code/themeShim.ts`) by giving it the shim for the two modules that list them all: the
 // renderer library's `@pierre/theming/themes`, and Shiki's own `themes.mjs`, which Shiki's entry
 // points import by that relative name. A dependency update that renames either would leave it
 // unredirected and quietly bring every theme back, so a build that still contains either real
 // module fails instead. The dev server's pre-bundled dependencies and the tests keep every theme.
-const themeShim = fileURLToPath(new URL("./src/viewer/themeShim.ts", import.meta.url));
+const themeShim = fileURLToPath(new URL("./src/viewer/code/themeShim.ts", import.meta.url));
 const THEME_LISTS = [/[\\/]@pierre[\\/]theming[\\/]dist[\\/]themes\.js$/, /[\\/]shiki[\\/]dist[\\/]themes\.mjs$/];
 const viewerThemes: Plugin = {
   name: "octoboard-viewer-themes",
@@ -53,7 +53,7 @@ const viewerThemes: Plugin = {
   buildEnd() {
     for (const id of this.getModuleIds()) {
       if (THEME_LISTS.some((list) => list.test(id))) {
-        this.error(`${id} is in the build: the file viewer's theme shim no longer replaces it (see src/viewer/themeShim.ts)`);
+        this.error(`${id} is in the build: the file viewer's theme shim no longer replaces it (see src/viewer/code/themeShim.ts)`);
       }
     }
   },
@@ -95,7 +95,7 @@ export default defineConfig(({ command }) => {
     define: { __OCTOBOARD_DEV_PROXY__: JSON.stringify(Boolean(daemonPort)) },
     // A build's CSS minifier lowers `:dir()` to `:lang()` lists for its default targets, so every
     // `:dir()` rule would follow the page's language instead of the element's own reading direction:
-    // the task-list rules in `src/viewer/markdown.css` then put a right-to-left item's box opposite
+    // the task-list rules in `src/viewer/markdown/markdown.css` then put a right-to-left item's box opposite
     // its list's markers. Keeping `:dir()` throughout (Tailwind's `rtl:`/`ltr:` variants and HeroUI's
     // rules too) makes a build match the dev server, and leaves browsers without `:dir()` to drop
     // the rules that rely on it alone, where the lowered form gets them wrong.

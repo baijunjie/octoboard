@@ -46,8 +46,8 @@ const layer = (dir, allowed, message, roots = ROOT_SHARED) => DEPTHS.map((depth)
   rules: { "no-restricted-imports": uiImports([onlyInto(depth, allowed, message), onlyRoot(depth, message, roots)]) },
 }));
 // The pure layers, which import no component, no store and no feature directory.
-const PURE_LAYERS = ["i18n", "platform", "preferences", "input", "format", "agents", "git", "sessions", "errors"];
-const PURE_MESSAGE = "the pure layers (i18n/, platform/, preferences/, input/, format/, agents/, git/, sessions/, errors/)";
+const PURE_LAYERS = ["i18n", "platform", "preferences", "input", "format", "agents", "git", "sessions", "errors", "browse"];
+const PURE_MESSAGE = "the pure layers (i18n/, platform/, preferences/, input/, format/, agents/, git/, sessions/, errors/, browse/)";
 const LEAF_MESSAGE = `components/ imports, outside itself, only ${PURE_MESSAGE} and the shared root files.`;
 const SHELL_MESSAGE = "Only the files at src/'s root and App's hooks put the window shell together; nothing else below src/ imports shell/.";
 const APP_MESSAGE = "app/ holds App's own hooks and logic: only App.tsx and the tests import it.";
@@ -123,6 +123,7 @@ export default [
   ...layer("sessions", ["i18n", "agents"], "sessions/ imports, outside itself, only i18n/, agents/ and protocol.", ["protocol"]),
   ...layer("accounts", ["i18n", "agents", "sessions", "format"], "accounts/ imports, outside itself, only i18n/, agents/, sessions/, format/ and protocol.", ["protocol"]),
   ...layer("errors", ["i18n", "agents", "sessions", "accounts", "format"], "errors/ imports, outside itself, only i18n/, agents/, sessions/, accounts/, format/, protocol, appConfig and daemon-client.", ["protocol", "appConfig", "daemon-client"]),
+  ...layer("browse", ["i18n", "errors", "format"], "browse/ imports, outside itself, only i18n/, errors/, format/, protocol and daemon-client.", ["protocol", "daemon-client"]),
   ...layer("store", ["i18n", "errors", "accounts", "sessions", "preferences", "git"], "store/ imports, outside itself, only i18n/, errors/, accounts/, sessions/, preferences/, git/, protocol, daemon and daemon-client.", ["protocol", "daemon", "daemon-client"]),
   ...layer("i18n", ["preferences"], "i18n/ imports, outside itself, only preferences/ and appConfig.", ["appConfig"]),
   ...layer("shortcuts", ["i18n", "preferences", "input", "components"], "shortcuts/ imports, outside itself, only i18n/, preferences/, input/ and components/.", []),

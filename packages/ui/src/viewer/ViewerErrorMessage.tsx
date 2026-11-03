@@ -4,7 +4,7 @@ import { DaemonErrorMessage } from "../components/alerts/DaemonErrorMessage";
 import { codedMessageNode } from "../components/alerts/errorParts";
 import { InlineReference } from "../i18n/InlineReference";
 import { hasCodeParams, type ErrorPresentation } from "../errors/errorPresentation";
-import { globalParam } from "../i18n/catalog";
+import { globalParam, type PlainMessageKey } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { MessageParams } from "../protocol";
@@ -21,12 +21,11 @@ export function ViewerErrorMessage({ error, path }: { error: ErrorPresentation; 
   return <DaemonErrorMessage error={error} part="summary" />;
 }
 
-/** Why a read of a change's bodies failed (`message`, the wording of a `ChangeBodiesError`), as a node for a sentence that
- * sets names as chips: the coded failure behind it where there is one, the viewer's own permission sentence with the
- * application's name as a chip, any other wording as the text it is. */
-export function BodiesFailureReason({ message, failure }: { message: string; failure?: { code: string; params: MessageParams } }): React.ReactElement {
-  const t = useT();
+/** Why a read of a change's bodies failed (`message`, the wording of a `ChangeBodiesError`, and `messageKey`, the
+ * viewer's own sentence it is), as a node for a sentence that sets names as chips: the coded failure behind it where
+ * there is one, the viewer's own sentence in the live language, any other wording as the text it is. */
+export function BodiesFailureReason({ message, messageKey, failure }: { message: string; messageKey?: PlainMessageKey; failure?: { code: string; params: MessageParams } }): React.ReactElement {
   if (failure && hasCodeParams(failure)) return <>{codedMessageNode(failure, message, "summary")}</>;
-  if (message === t("viewer.error.permissionDenied.summary")) return <Message id="viewer.error.permissionDenied.summary" />;
+  if (messageKey) return <Message id={messageKey} />;
   return <>{isolate(message)}</>;
 }

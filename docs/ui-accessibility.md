@@ -91,7 +91,7 @@ content". The stock `Alert.Description` keeps its colour on that fill; where it 
 text on HeroUI's own fill, not recoloured.
 
 Every unselected, enabled HeroUI tab keeps its label fully opaque on hover instead of dimming, by one shared rule in
-`packages/ui/src/style.css`; a tab's own opacity (a closing terminal tab's) still applies while hovered. The tab strips
+`packages/ui/src/style.css`. The tab strips
 in the app also take the foreground colour on hover. Preserve this shared visual treatment as an explicit product
 choice, while retaining the component's layout, selection and keyboard behaviour.
 
@@ -225,7 +225,7 @@ hover and keyboard focus, instead of the ghost variant's `--default-foreground`,
 up with the fields above, so its label sits in from theirs, and in their colour it would read as a field label out of
 line.
 
-The file viewer's find bar (`FindBar` in `packages/ui/src/viewer/FindBar.tsx`) draws two things of its own, both the
+The file viewer's find bar (`FindBar` in `packages/ui/src/viewer/find/FindBar.tsx`) draws two things of its own, both the
 user's decision. Its option switches — match case, whole word, regular expression — keep one icon each, so their
 pressed state is a fill with a 1px inset outline in `--app-muted` (at least 3:1 against the bar and the fill) rather
 than HeroUI's accent-soft selected look or an alternating icon; the outline is an inset ring of its own, not the
@@ -400,7 +400,7 @@ The diff viewer's separators of collapsed lines are drawn by `@pierre/diffs` int
 reaches, so a control made out of that markup is built by hand and every rule above is met by hand with it: the
 element takes `role="button"`, an explicit `tabindex`, an accessible name, a native `title` in place of the HeroUI
 tooltip that cannot be rendered there, and Enter / Space handling of the viewer's own
-(`packages/ui/src/viewer/rendererDom.ts`, which holds every read and write of that markup). The library draws each
+(`packages/ui/src/viewer/code/rendererDom.ts`, which holds every read and write of that markup). The library draws each
 separator more than once — in the gutter and in the code column, and once per side of a split diff — so only the first
 copy of a control is a tab stop and is named; the rest take `tabindex="-1"` and `aria-hidden="true"`, or the same
 control is announced several times over.
@@ -565,7 +565,7 @@ without a ring. Playwright's `webkit` matches it in those cases, so only the pac
 Inside a rendering library's shadow root the app's `useFocusVisibleProps` cannot be spread on an element either, so
 the ring is drawn from a `data-focus-visible` attribute set and cleared by hand, styled from the stylesheet injected
 into that root (`[data-expand-button][data-focus-visible]` and `[data-separator-content][data-focus-visible]` in
-`packages/ui/src/viewer/renderer.tsx`).
+`packages/ui/src/viewer/code/renderer.tsx`).
 
 ### Focus moved by a change the user did not make
 
@@ -615,13 +615,13 @@ A separator of collapsed lines taken off the screen is such a move: the bar for 
 once the daemon's reply says that hunk reaches the end of the file, and the hand-off to the code frame sets the
 modality itself. `handFocusOff` cannot be used there, since it looks at `document.activeElement` and cannot see into a
 shadow root. The redraw after an expansion that takes the pressed control away, with no separator control left to take
-focus, hands focus to the code frame the same way (`handFocusToCode` in `packages/ui/src/viewer/rendererDom.ts`), so
+focus, hands focus to the code frame the same way (`handFocusToCode` in `packages/ui/src/viewer/code/rendererDom.ts`), so
 focus never falls to the page.
 
 A focus restore after a press decides by whether the pressed control had focus, not by whether the press was a key:
 VoiceOver presses with a click (an accessibility press), so a restore keyed to Enter or Space misses the screen reader's
 press and leaves focus on the page when the control goes. The instance is `Expansion.activate` in
-`packages/ui/src/viewer/expansion.ts`, which is told whether the control used was the focused one; a mouse press on a
+`packages/ui/src/viewer/code/expansion.ts`, which is told whether the control used was the focused one; a mouse press on a
 control that did not have focus still takes none.
 
 A dialog opened from a control that never took focus, is disabled, or is gone by the time it closes cannot always hand
@@ -2049,7 +2049,7 @@ their proportion to the code, and the rendering library halves a bar carrying tw
 (`grid-template-rows: 50% 50%`, under `pointer: fine`). So it is the multiplier, not the drawn glyph, that sets such a
 control's target, and it is the thing to check whenever that line height changes.
 
-One shortfall sits here, kept on purpose and marked at its code (`diffCss` in `packages/ui/src/viewer/renderer.tsx`):
+One shortfall sits here, kept on purpose and marked at its code (`diffCss` in `packages/ui/src/viewer/code/renderer.tsx`):
 those bars take GitHub's own proportions, 1.4 lines for one control and 2 for a pair, which at a 20-pixel line is the
 28 and 40 pixels GitHub draws. Halved, the pair are 20-pixel targets, under this floor — as GitHub's own are. The user
 chose the proportions over the criterion knowing that. Every other control of a separator clears 24: the one-control

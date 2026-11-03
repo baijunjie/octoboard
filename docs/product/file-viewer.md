@@ -92,8 +92,10 @@ one's do not, or when one subject has the subtitle row and the next has none.
   or 1,000,000 characters is shown as plain text, with a notice saying it is shown without highlighting because it is
   large; within highlighted code, a line longer than 1,000 characters is left unhighlighted. Where the grammar a file
   needs cannot be loaded, or the code cannot be drawn at all, the file is shown as plain text with a failure notice
-  saying which of the two it was (see "Notices and stand-ins" below). A **Markdown** file opens as a rendered document
-  instead, with its source a choice away (see `docs/product/markdown-documents.md`).
+  saying which of the two it was (see "Notices and stand-ins" below). Where the part of Octoboard that draws code or
+  Markdown documents could not be loaded, it is loaded again once the viewer shows another file or change. A
+  **Markdown** file opens as a rendered document instead, with its source a choice away (see
+  `docs/product/markdown-documents.md`).
 - **Images** — PNG, JPEG, GIF, WebP, BMP, ICO and SVG; AVIF on macOS 13 and later — are shown scaled down to fit and
   never scaled up, on a checkerboard that shows their transparent areas. An image is only displayed: an SVG's scripts
   never run and nothing it refers to is fetched. An image that cannot be decoded is an error in its place (see "Notices

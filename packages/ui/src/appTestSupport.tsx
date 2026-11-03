@@ -13,8 +13,9 @@ import { usePanelStacks } from "./panels/usePanelStacks";
 import type { PlatformAdapter } from "./platform";
 import { PlatformProvider } from "./platform/react";
 import type { Event, RequestBody } from "./protocol";
-import { applyDaemonEvent, createStateStore, DaemonProvider, type Daemon, type State } from "./store";
+import { applyDaemonEvent, DaemonProvider, type Daemon, type State } from "./store";
 import { ThemeProvider } from "./preferences/theme";
+import { testDaemon } from "./test/testDaemon";
 
 const CSS_VARS = { "--rail-width": "48px", "--breakpoint-docked": "1168px", "--breakpoint-phone": "782px" };
 
@@ -41,12 +42,11 @@ export function stubWindow(width = 1400): void {
 
 /** A daemon whose store starts at `state` and whose requests `answer` replies to: an ack by default. */
 export function fakeDaemon(state: Partial<State>, answer: (body: RequestBody) => unknown = () => ({ type: "ack", id: null })): Daemon {
-  return {
-    store: createStateStore(state),
+  return testDaemon({
+    state,
     request: vi.fn(async (body: RequestBody) => answer(body)) as Daemon["request"],
-    raiseError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
-    dismissTrustPrompt: () => {}, reconnect: vi.fn(), terminalUrl: () => "",
-  };
+    raiseError: vi.fn(), toastNotice: vi.fn(), reconnect: vi.fn(),
+  });
 }
 
 /** Mounts the whole window over `daemon` until the test ends, inside `wrap` where given (a provider the window needs

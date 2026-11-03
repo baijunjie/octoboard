@@ -1805,6 +1805,13 @@ describe("the fixture daemon's shell terminals", () => {
     expect(daemon.store.getState().shellTerminals.size).toBe(0);
   });
 
+  it("leaves a close unanswered when the scenario says so", async () => {
+    const daemon = createFixtureDaemon({ shellTerminalClose: "pending", state: snapshotState({ consoles: [consoleOf("c", "Work")], projects: [projectOf("p", "c", "Site")], shellTerminals: [shellTerminalOf("sh-1", projectOf("p", "c", "Site"), "zsh", 0)] }) });
+    const outcome = await Promise.race([daemon.request({ type: "close_shell_terminal", shell_terminal: "sh-1" }).then(() => "answered"), new Promise((resolve) => setTimeout(() => resolve("pending"), 50))]);
+    expect(outcome).toBe("pending");
+    expect(daemon.store.getState().shellTerminals.size).toBe(1);
+  });
+
   it("drops the terminals of a deleted console's projects with them", async () => {
     const daemon = daemonWithProject();
     await daemon.request({ type: "create_shell_terminal", project: "p" });

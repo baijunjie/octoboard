@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DaemonRequestError } from "../../daemon-client";
 import type { ChangeEntry, ChangeSide, Event, RequestBody, SideRead, SideVersion } from "../../protocol";
-import { hasHunks, joinedPatch, linesAfterLastHunk } from "../../viewer/patch";
+import { hasHunks, joinedPatch, linesAfterLastHunk } from "../../viewer/code/patch";
 import { FixtureUnfillableError } from "../../fixtures/banner";
 import { createFixtureDaemon } from "../../fixtures/fixtureDaemon";
 import { EMPTY_TREE, listedCommits, type FixtureChange, type FixtureGit } from "../../fixtures/changeFixtures";

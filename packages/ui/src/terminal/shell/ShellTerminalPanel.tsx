@@ -1,14 +1,14 @@
-import { Spinner, Tabs } from "@heroui/react";
+import { Tabs } from "@heroui/react";
 import { Pencil, Plus, SquareTerminal, X } from "lucide-react";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useFocusVisible } from "react-aria";
 
 import { Button } from "../../components/controls/Button";
-import type { ViewedFile } from "../../project-browser/files/TerminalFileViewer";
+import type { ViewedFile } from "../../viewer/viewedFile";
 import { ActionMenu, type ActionMenuEntry } from "../../components/menus/ActionMenu";
 import { afterCollectionFocus } from "../../components/focus/afterCollectionFocus";
-import { AnchoredTooltip } from "../../components/hint/AnchoredTooltip";
 import { CenteredEmptyPanel } from "../../components/panel/EmptyPanel";
+import { LoadingState } from "../../components/panel/LoadingState";
 import { FadeOverflow } from "../../components/text/FadeOverflow";
 import { handFocusOff } from "../../components/focus/handFocusOff";
 import { HandOffOnUnmount } from "../../components/focus/HandOffOnUnmount";
@@ -17,6 +17,7 @@ import { PanelHeader } from "../../components/panel/PanelHeader";
 import { focusFellToPage } from "../../components/focus/regionFocus";
 import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../../components/controls/RowControls";
 import { StatusAnnouncer } from "../../components/announce/StatusAnnouncer";
+import { INACTIVE_VEIL_CLASS } from "../../components/status/inactiveVeil";
 import { useTabScrollLabels } from "../../components/tabs/tabScrollLabels";
 import { TitledControl } from "../../components/hint/TitledControl";
 import { useLatest, useStableHandler } from "../../components/hooks/useLatest";
@@ -25,14 +26,15 @@ import { ConfirmDialog } from "../../components/dialog/ConfirmDialog";
 import { dialogAround } from "../../components/dialog/dialogElement";
 import { RenameDialog } from "../../components/dialog/RenameDialog";
 import { isolate } from "../../i18n/isolate";
-import { t } from "../../i18n/language";
 import { Message, useT } from "../../i18n/react";
 import type { Project, ShellTerminal } from "../../protocol";
-import { useDaemon, type Daemon } from "../../store";
+import { useDaemon } from "../../store";
 import { ringForAutomaticFocus } from "../../input/touchInput";
 import { shellTerminalTitle } from "./shellTerminalTitle";
 import { setActiveShellTerminal, startShellTerminal, takeShellTerminalFocus, useActiveShellTerminal, useProjectShellTerminals, useShellTerminalStarting } from "./shellTerminals";
+import { closeShellTerminal, revealInScroller, TabCloseMark, TabContextMenu } from "./shellTerminalTabs";
 import { ShellTerminalView, type ShellTerminalViewHandle } from "./ShellTerminalView";
+import { useShellTabFocus } from "./useShellTabFocus";
 
 /**
  * The Terminal panel's content: a project's shell terminals as tabs, with a header action that
@@ -128,30 +130,7 @@ export function ShellTerminalPanel({
   }, [activeTab]);
   const latest = useLatest({ activeId, keyboard: useFocusVisible().isFocusVisible });
 
-  /** Focus for the panel once what held it has gone: the shown terminal, or New terminal
-   * when it has none. Deferred to the frame after the commit that changed the tabs. */
-  const focusShown = () =>
-    requestAnimationFrame(() => {
-      const view = latest.current.activeId === undefined ? undefined : views.current.get(latest.current.activeId);
-      if (view) view.focus();
-      else newRef.current?.focus();
-    });
-
-  /** The shown tab, or New terminal when no tab is left. */
-  const focusShownTabNow = () => {
-    const id = latest.current.activeId;
-    const tab = id === undefined ? undefined : tabs.current.get(id);
-    if (tab) tab.focus();
-    else newRef.current?.focus();
-  };
-
-  /** Focus for the strip once the tab that held it (or its context menu) has gone: the shown tab, or
-   * the panel's first control when no tab is left. After the strip's own re-aiming of focus, and only
-   * while focus has fallen to the page, so a place the user or a dialog has put it stays. */
-  const focusShownTab = () =>
-    afterCollectionFocus(() => {
-      if (focusFellToPage()) focusShownTabNow();
-    });
+  const { focusShown, focusShownTabNow, focusShownTab } = useShellTabFocus({ latest, views, tabs, newRef });
 
   // The terminal a start from here made, to be focused once its view is shown: its record can come
   // after the reply that names it.
@@ -300,7 +279,8 @@ export function ShellTerminalPanel({
                       aria-label={tabLabel(terminal, terminal.title)}
                       ref={registerTab}
                       data-list-motion={terminal.id}
-                      className={`h-8 w-auto flex-none scroll-mx-1.5 gap-2 rounded-md border border-transparent px-2 whitespace-nowrap hover:bg-default hover:text-foreground data-[selected=true]:border-accent data-[selected=true]:bg-accent-soft data-[selected=true]:text-accent-soft-foreground${closingIds.has(terminal.id) ? " opacity-50" : ""}${terminal.state === "exited" ? " text-app-muted" : ""}`}
+                      data-closing={closingIds.has(terminal.id) || undefined}
+                      className={tabClass(terminal)}
                     >
                       {/* First among what goes away with the tab, so focus inside it is still found. */}
                       <HandOffOnUnmount from={`[data-key="${CSS.escape(terminal.id)}"]`} to={focusShownTab} />
@@ -346,10 +326,7 @@ export function ShellTerminalPanel({
           ))}
           <StatusAnnouncer text={terminals.length === 0 && starting ? t("shellTerminal.starting") : undefined} />
           {terminals.length === 0 && starting && (
-            <div aria-hidden="true" className="flex min-h-0 flex-1 flex-col items-center justify-center-safe gap-3 text-sm text-app-muted">
-              <Spinner size="md" color="current" aria-hidden="true" />
-              {t("shellTerminal.starting")}
-            </div>
+            <LoadingState size="md" label={t("shellTerminal.starting")} />
           )}
           {terminals.length === 0 && !starting && (
             <CenteredEmptyPanel
@@ -407,84 +384,18 @@ export function ShellTerminalPanel({
   );
 }
 
+const TAB_CLASS = `${INACTIVE_VEIL_CLASS} h-8 w-auto flex-none scroll-mx-1.5 gap-2 rounded-md border border-transparent px-2 whitespace-nowrap after:-m-px after:rounded-md hover:bg-default hover:text-foreground data-[selected=true]:border-accent data-[selected=true]:bg-accent-soft data-[selected=true]:text-(--tint-accent-fg) data-closing:after:bg-panel-sidebar/55`;
+
+/** A tab's classes. Built from whole class names, none of them glued to an interpolation, which
+ * Tailwind's scanner would read as one unknown class and drop. A tab being closed (`data-closing`) is
+ * dimmed with a veil of the panel card's colour, not `opacity` (see `INACTIVE_VEIL_CLASS`): it holds a
+ * fading overflow mark and a close mark with a colour transition. The veil's negative margin grows it
+ * over the 1px border, so a selected tab's accent border dims with the rest. */
+function tabClass(terminal: ShellTerminal): string {
+  return terminal.state === "exited" ? `${TAB_CLASS} text-app-muted` : TAB_CLASS;
+}
+
 /** Where a close was asked from: a menu (a tab's context menu, the tab row's) or the terminal itself (its
  * tab's close mark, its view's Close button), which decides where focus goes once a confirmed close has
  * taken away what held it. */
 type CloseOrigin = "menu" | "terminal";
-
-/** Asks the daemon to close `terminal`; a refusal is reported as an error. Settles once it has answered. */
-async function closeShellTerminal(daemon: Pick<Daemon, "request" | "raiseError">, terminal: string): Promise<void> {
-  try {
-    await daemon.request({ type: "close_shell_terminal", shell_terminal: terminal });
-  } catch (err) {
-    daemon.raiseError(err, { title: t("shellTerminal.closeFailedTitle") });
-  }
-}
-
-/** A tab's context menu (a right-click, or Shift+F10 and the menu key on the focused tab), with the
- * actions the tab row's menu has for the shown tab. It attaches to `tab` as it mounts, so it is
- * mounted once the tab is. `onGone` is called when it unmounts with focus in its open menu, as the
- * tab goes while the menu is up. */
-function TabContextMenu({ label, items, tab, onGone }: { label: string; items: ActionMenuEntry[]; tab: HTMLElement; onGone: () => void }): React.ReactElement {
-  const [target] = useState<React.RefObject<HTMLElement | null>>(() => ({ current: tab }));
-  // Kept past the wrapper's unmount, whose ref is cleared before the hand-off looks for the menu.
-  const scope = useRef<HTMLDivElement | null>(null);
-  // Only this menu: another one open (the tab row's) keeps its focus when a tab goes. The menu is
-  // labelled by its hidden trigger, in the wrapper.
-  const ownMenu = () => {
-    const trigger = scope.current?.querySelector("button")?.id;
-    return trigger ? document.querySelector(`[role=menu][aria-labelledby="${CSS.escape(trigger)}"]`) : null;
-  };
-  return (
-    <div ref={(element) => { if (element) scope.current = element; }} className="contents">
-      <HandOffOnUnmount from={ownMenu} to={onGone} />
-      <ActionMenu label={label} items={items} contextTargetRef={target} contextOnly />
-    </div>
-  );
-}
-
-/** Scrolls `scroller` just far enough to bring `tab` into view, honouring the scroll padding and
- * margins the strip and the tab set. The pixel difference is between rects, so it holds in a
- * right-to-left strip, where `scrollLeft` counts from the right edge. */
-function revealInScroller(scroller: HTMLElement, tab: HTMLElement): void {
-  const px = (value: string) => parseFloat(value) || 0;
-  const strip = getComputedStyle(scroller);
-  const own = getComputedStyle(tab);
-  const box = scroller.getBoundingClientRect();
-  const rect = tab.getBoundingClientRect();
-  const beforeEdge = box.left + px(strip.scrollPaddingLeft);
-  const afterEdge = box.right - px(strip.scrollPaddingRight);
-  const behind = rect.left - px(own.scrollMarginLeft) - beforeEdge;
-  const ahead = rect.right + px(own.scrollMarginRight) - afterEdge;
-  if (behind < 0) scroller.scrollLeft += behind;
-  else if (ahead > 0) scroller.scrollLeft += Math.min(ahead, behind);
-}
-
-/** A tab's close mark, for the pointer only and kept out of the tab's own press so it closes rather
- * than selects: the keyboard closes a tab from the tab row's menu or the tab's context menu, as a
- * tab holds no control of its own. Drawn at 16 and hit at
- * 24 (`::after`), and its tooltip is anchored, as a tab cannot hold a trigger. */
-function TabCloseMark({ title, onClose }: { title: string; onClose: () => void }): React.ReactElement {
-  const ref = useRef<HTMLSpanElement>(null);
-  const [hovered, setHovered] = useState(false);
-  return (
-    <>
-      <span
-        ref={ref}
-        aria-hidden="true"
-        className="relative flex size-4 items-center justify-center rounded-sm text-app-muted after:absolute after:-inset-1 after:content-[''] transition-colors duration-100 hover:bg-foreground/15 hover:text-foreground active:bg-foreground/25 active:text-foreground motion-reduce:transition-none"
-        onPointerEnter={() => setHovered(true)}
-        onPointerLeave={() => setHovered(false)}
-        onPointerDown={(event) => event.stopPropagation()}
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={(event) => {
-          event.stopPropagation();
-          onClose();
-        }}
-      >
-        <X className="size-3" />
-      </span>
-      <AnchoredTooltip tooltip={title} anchor={ref} hovered={hovered} />
-    </>
-  );
-}

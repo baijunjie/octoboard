@@ -57,16 +57,16 @@ The row uses the panel's width, separately from the title and controls above it.
 **New terminal** and then the shown terminal's actions menu stay fixed at its trailing end, outside the tabs' scrolling
 area. With no terminal, the row holds only New terminal at that end.
 
-- **Tabs are rectangular with rounded corners and equal gaps**. The shown tab has a soft accent fill and an accent
-  border; the other tabs have a neutral background on hover.
+- **Tabs are rectangular with rounded corners and equal gaps**. The shown tab has a soft accent fill, an accent
+  border and accent-tinted text; the other tabs have a neutral background on hover.
 - **A tab's name follows its terminal's title**, which follows the title the shell sets until the user renames the
   terminal (see "Terminal title" in `docs/product/shell-terminals.md`). An automatic title that is an absolute path or
   a path beginning with `~/`, optionally prefixed by a host or `user@host` followed by a colon, shows only its final
   folder name. Without that prefix, a title containing whitespace is shown unchanged. Trailing slashes are ignored,
   and `/` and `~/` show as `/` and `~`. A shortened title's tooltip shows the full title, even when its name fits.
-  User-chosen names and other titles are shown unchanged. A tab whose shell has exited uses the muted colour and adds
-  "(exited)" to its name and tooltip. A name is at most 160 px wide; a longer one fades out at its cut edge, with its
-  full title as its tooltip.
+  User-chosen names and other titles are shown unchanged. A tab whose shell has exited adds "(exited)" to its name and
+  tooltip, and uses the muted colour unless it is the shown tab, which keeps its accent-tinted text. A name is at most
+  160 px wide; a longer one fades out at its cut edge, with its full title as its tooltip.
 - **When the tabs do not fit, the tab strip scrolls**, with scroll buttons at its ends, and the shown tab is kept in
   view in it — as it becomes the shown tab and whenever the strip changes width.
 - **Pressing a tab** with the pointer shows its terminal and puts keyboard focus in it. From the keyboard the arrow

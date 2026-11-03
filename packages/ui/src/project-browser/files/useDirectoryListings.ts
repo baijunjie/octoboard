@@ -1,33 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { listingLane } from "../../browse/budget";
+import { CHANGED_RETRIES, projectBrowseFailure } from "../../browse/failure";
+import { usePoll } from "../../components/hooks/usePoll";
 import { useCurrentLanguage, useT } from "../../i18n/react";
 import { useDaemon, useDaemonStore } from "../../store";
-import { useAutoRefresh } from "../autoRefresh";
-import { projectBrowseFailure } from "../browseError";
+import { AUTO_REFRESH_CATCH_UP_MS, AUTO_REFRESH_MS } from "../autoRefresh";
 import { treeEntries, type DirListing } from "../tree";
 
 /** How many listings a browser has out at once: the daemon reads four at a time across all its
- * clients, and the viewer's read must never wait behind a burst of directory expansions. */
+ * clients, and the viewer's read must never wait behind a burst of directory expansions. The
+ * window's lane of listings (`listingLane`), shared by every browser mounted, holds more than one
+ * browser's share, so a browser stalled on one project never starves the next. */
 const MAX_IN_FLIGHT = 3;
-/** How many listings are out at once in the window, every browser it has mounted counted, those
- * left out by a browser whose project's place was taken included (on a volume slow to answer, say),
- * and above one browser's own share, so a browser stalled on one project never starves the next.
- * Sized under the daemon's bound of 16 outstanding requests a connection together with the
- * viewer's read, its read of a change's bodies (a slot of its own, `useChangeReader.ts`), the
- * 2 shared search/Git list requests (`browseListRequests.ts`) and the read of a document's image
- * (`viewer/documentImageReads.ts`), with room for requests that replace another in their slot: the
- * daemon counts the newer one before it gives the older one up, so for that moment both are
- * outstanding. A unit is reserved for each slot that can be replaced, as the viewer's two and the
- * image read's can at the same moment, and so can the slots of the 2 search and Git list requests,
- * which send a request past their bound in a slot already busy. 6 + 2 + 2 + 2 + 4 = 16, the whole
- * bound: the listings, the viewer's read, the bodies slot's read and the image read each with the
- * unit for its replacement, and the search and Git list requests with theirs. A new kind of browse
- * request takes its share from these. */
-const MAX_WINDOW_IN_FLIGHT = 6;
-const shared = { inFlight: 0, pumps: new Set<() => void>() };
-
-/** How many times a listing is asked again when the directory changed while it was read. */
-const CHANGED_RETRIES = 2;
 
 export interface DirectoryListings {
   listings: ReadonlyMap<string, DirListing>;
@@ -75,6 +60,8 @@ export function useDirectoryListings(project: string, active: boolean): Director
     waiting: new Map<string, (() => void)[]>(),
     queue: [] as string[],
     inFlight: 0,
+    // Turns asked of the window's lane and not yet given: each takes the head of the queue then.
+    claimed: 0,
     // A browser lists what it wants as it first appears, which counts as its first refresh.
     // eslint-disable-next-line react-hooks/purity
     lastRefresh: Date.now(),
@@ -90,15 +77,13 @@ export function useDirectoryListings(project: string, active: boolean): Director
   };
 
   const pump = useRef<() => void>(() => {});
-  const send = (dir: string, attempt: number) => {
+  /** Lists `dir`, and again when it changed while it was read; settles once that is over. */
+  const send = (dir: string, attempt: number): Promise<void> => {
     const s = state.current;
     const sequence = s.sequence.get(dir) ?? 0;
-    s.inFlight += 1;
-    // eslint-disable-next-line react-hooks/immutability
-    shared.inFlight += 1;
     const current = () => s.alive && s.sequence.get(dir) === sequence;
     let retried = false;
-    request({ type: "list_project_dir", project, path: dir, slot: `list:${project}:${dir}` })
+    return request({ type: "list_project_dir", project, path: dir, slot: `list:${project}:${dir}` })
       .then((reply) => {
         if (!current() || reply.type !== "project_dir" || reply.project !== project || reply.path !== dir) return;
         // The project's directory was replaced by another: nothing listed from the old one stands.
@@ -116,7 +101,7 @@ export function useDirectoryListings(project: string, active: boolean): Director
         if (failure.kind === "superseded") return;
         if (failure.kind === "changed" && attempt < CHANGED_RETRIES) {
           retried = true;
-          return void send(dir, attempt + 1);
+          return send(dir, attempt + 1);
         }
         if (failure.kind === "disconnected") {
           // Left as it is; the reconnect lists it again.
@@ -129,22 +114,31 @@ export function useDirectoryListings(project: string, active: boolean): Director
         commit((next) => next.set(dir, { state: "error", message }));
       })
       .finally(() => {
-        s.inFlight -= 1;
-        shared.inFlight -= 1;
         // A listing that was asked for again meanwhile, or is being tried again, settles the
         // waiters when it does.
         if (current() && !retried) {
           for (const resolve of s.waiting.get(dir) ?? []) resolve();
           s.waiting.delete(dir);
         }
-        for (const other of [...shared.pumps]) other();
       });
   };
   // eslint-disable-next-line react-hooks/refs
   pump.current = () => {
     const s = state.current;
-    while (s.alive && s.inFlight < MAX_IN_FLIGHT && shared.inFlight < MAX_WINDOW_IN_FLIGHT && s.queue.length > 0) {
-      send(s.queue.shift()!, 0);
+    while (s.alive && s.inFlight + s.claimed < MAX_IN_FLIGHT && s.queue.length > s.claimed) {
+      s.claimed += 1;
+      void listingLane
+        .send(() => {
+          s.claimed -= 1;
+          const dir = s.queue.shift();
+          if (!s.alive || dir === undefined) return undefined;
+          s.inFlight += 1;
+          // A retry keeps the place in the lane.
+          return send(dir, 0).finally(() => {
+            s.inFlight -= 1;
+          });
+        })
+        .then(() => pump.current());
     }
   };
 
@@ -197,16 +191,19 @@ export function useDirectoryListings(project: string, active: boolean): Director
 
   // The periodic refresh, and one on coming back to the window, or to a pane that was hidden,
   // after a while.
-  useAutoRefresh(active, undefined, { busy: () => state.current.inFlight > 0, lastAt: () => state.current.lastRefresh, run: () => void refreshWanted(true) });
+  usePoll({
+    pace: active ? AUTO_REFRESH_MS : undefined,
+    catchUpAfter: AUTO_REFRESH_CATCH_UP_MS,
+    busy: () => state.current.inFlight > 0,
+    lastAt: () => state.current.lastRefresh,
+    run: () => void refreshWanted(true),
+  });
 
   useEffect(() => {
     const s = state.current;
-    const myPump = () => pump.current();
     s.alive = true;
-    shared.pumps.add(myPump);
     return () => {
       s.alive = false;
-      shared.pumps.delete(myPump);
     };
   }, []);
 

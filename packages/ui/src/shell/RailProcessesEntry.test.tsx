@@ -8,7 +8,7 @@ import { HOVER_CLOSE_DELAY_MS } from "../components/hint/hintPopover";
 import { activate, enter, leave, press, mountForTooltip, withFakeTimers } from "../components/hint/tooltipTestSupport";
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import { setLanguage } from "../i18n/language";
-import { POLL_MS } from "../process/usePolled";
+import { POLL_MS } from "../process/processPolling";
 import type { ProcessCount } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { RailProcessesEntry } from "./RailProcessesEntry";

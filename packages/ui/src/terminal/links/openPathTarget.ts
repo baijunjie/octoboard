@@ -1,6 +1,7 @@
+import { BROWSE_SLOTS } from "../../browse/budget";
 import { DaemonRequestError } from "../../daemon-client";
 import type { Event, RequestBody } from "../../protocol";
-import type { ViewedFile } from "../../project-browser/files/TerminalFileViewer";
+import type { ViewedFile } from "../../viewer/viewedFile";
 import { pathLinkRecovery } from "../../errors/errorRecovery";
 import type { Daemon } from "../../store";
 import { t } from "../../i18n/language";
@@ -55,7 +56,7 @@ export async function openPathTarget({
       project,
       ...(view.worktree !== undefined && { worktree: view.worktree }),
       path: view.path,
-      slot: "viewer",
+      slot: BROWSE_SLOTS.viewer,
     });
     // The viewer's own rule: text and the images it draws; any other binary is no use to it.
     if (reply.type === "project_file" && bodyFromFileContent(view.path, reply.file).kind !== "binary") viewFile({ ...file, read: reply });

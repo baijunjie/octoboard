@@ -353,9 +353,7 @@ change and the changes grouped under the folders they are in. It is a single ico
 the list is in and whose name says what pressing it will do, so the name alternates between "Group by folder" and
 "Show as flat list" (see "Two-state icon toggles" in `docs/product/labels-and-tooltips.md`). Each project keeps the
 Changes tab's layout across reloads and restarts (the Files tab has none: see "Always a folder tree" in
-`docs/product/project-pane.md`). Without one saved for the Changes tab, it takes the layout an earlier version of
-Octoboard saved for the project's uncommitted changes, or else a grouped preference retained from before per-tab
-choices were available, and otherwise starts flat.
+`docs/product/project-pane.md`). Without one saved for the project's Changes tab, it starts flat.
 
 Grouped by folder, the list keeps its sections and their counts, and within each section the changes sit under their
 folders — with Group by commit on, the committed changes under the folders inside each commit's row:
@@ -493,8 +491,9 @@ the pane as it does from any pane with nothing to hold it.
 Nothing tells Octoboard when a repository changes, so the uncommitted changes are listed again:
 
 - once the Git mode is shown and the repository and the worktree the branch is checked out in are known;
-- **every 10 seconds** while the Git mode is on screen — the Files panel docked or floating in —
-  and the window is visible, skipping a turn while a listing is still out;
+- **10 seconds after they were last listed**, whatever listed them (Refresh, a reconnect, or the previous listing on
+  its own), while the Git mode is on screen — the Files panel docked or floating in — and the window is visible; one
+  that falls due while a listing is still out waits another 10 seconds;
 - when the window comes back to the front or becomes visible again, with the Git mode on screen, or when it comes back
   on screen — a hidden pane shown, the Changes tab chosen — either one more than 5 seconds after the last listing;
 - on the header's **Refresh**, which reads the worktrees, the branches, the comparison and, grouped by commit, the
@@ -509,7 +508,8 @@ made again is not started over by later branch lists that show the branches at t
 failed is made again on its own only when a later branch list shows the branches at other commits than the last ones
 it was seen or made at; one that failed before any comparison of the same two branches was on screen waits for
 Refresh or Try again. Switching modes, or the connection coming back, does not make it again, except for a comparison
-whose reply was lost with the connection, which is asked for again once it is back.
+whose reply was lost with the connection, which is asked for again once it is back; so are the commits, grouped by
+commit, when their reply was lost with it.
 
 While the pane is hidden, or shows the Files mode, nothing is listed or compared on its own. When the connection is
 lost, the list on screen stays until it is back.

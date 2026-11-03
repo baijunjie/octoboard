@@ -123,6 +123,9 @@ export interface Fixture {
   /** `"pending"`: `create_shell_terminal` is never answered, so a start stays in flight and the
    * Terminal panel keeps its "Starting terminal…" state. */
   shellTerminalStart?: "pending";
+  /** `"pending"`: `close_shell_terminal` is never answered, so a close stays in flight and the tab being closed
+   * keeps its dimmed, closing look. */
+  shellTerminalClose?: "pending";
   /** A refusal of `create_shell_terminal`, for a start the window could not have seen coming (a folder that is gone
    * or no longer a folder, a place the system denies); left out, a start succeeds, in the folder it asked for. */
   shellTerminalStartError?: FixtureError;

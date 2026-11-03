@@ -4,6 +4,7 @@
 import type { ErrorPresentation } from "../errors/errorPresentation";
 import type { BrowseEntry } from "../protocol";
 import { displayWirePath } from "../format/wirePath";
+import type { Evidence } from "./viewedItem";
 
 /** One directory of the project as the client holds it. `loaded` keeps its entries while a newer
  * listing of it is on the way (`refreshing`), so a refresh never blanks the tree. */
@@ -135,6 +136,16 @@ export interface TreeModel {
 export const rowKey = (path: string): string => `path:${path}`;
 const statusKey = (dir: string, status: StatusRow): string => `status:${status}:${dir}`;
 
+/** What a row key of the tree names: the entry at a path, or the status row (loading, empty) of a
+ * directory. Nothing for a key that is neither. */
+export type ParsedRowKey = { kind: "path"; path: string } | { kind: "status"; status: StatusRow; dir: string };
+
+export function parseRowKey(key: string): ParsedRowKey | undefined {
+  if (key.startsWith(rowKey(""))) return { kind: "path", path: key.slice(rowKey("").length) };
+  const status = /^status:(loading|empty):(.*)$/.exec(key);
+  return status ? { kind: "status", status: status[1] as StatusRow, dir: status[2] } : undefined;
+}
+
 /**
  * The rows on screen for the listings held and the directories expanded. A directory's rows follow
  * its own, after its status while it is loading or empty (an unreadable one has no rows, and its own
@@ -197,23 +208,10 @@ export function buildTree(
   return { nodes: childrenOf(""), files, rows, wanted };
 }
 
-/** The files before and after `current` among `files` (the tree's file rows in order). A file the
- * tree does not show is placed where it would be, so moving on from it still goes to its neighbours;
- * the ends do not wrap. */
-export function neighbours(files: readonly string[], current: string): { previous?: string; next?: string } {
-  const index = files.indexOf(current);
-  if (index !== -1) return { previous: files[index - 1], next: files[index + 1] };
-  const after = files.findIndex((path) => compareFilePaths(current, path) < 0);
-  const insertAt = after === -1 ? files.length : after;
-  return { previous: files[insertAt - 1], next: files[insertAt] };
-}
-
 /** What the listings held say about the file at `path`: listed, with its version; gone from a
  * complete listing of its directory or of a directory above it; under a directory that cannot be
  * listed; or nothing yet (a listing still loading, refreshing or cut short before the name). */
-export type FileEvidence = { state: "listed"; version: string | null } | { state: "gone" } | { state: "unreadable" } | { state: "unknown" };
-
-export function fileEvidence(listings: ReadonlyMap<string, DirListing>, path: string): FileEvidence {
+export function fileEvidence(listings: ReadonlyMap<string, DirListing>, path: string): Evidence {
   const parts = path.split("/");
   for (let depth = 0; depth < parts.length; depth++) {
     const listing = listings.get(parts.slice(0, depth).join("/"));
@@ -224,27 +222,4 @@ export function fileEvidence(listings: ReadonlyMap<string, DirListing>, path: st
     if (depth === parts.length - 1) return { state: "listed", version: entry.version };
   }
   return { state: "unknown" };
-}
-
-/** What the viewer shows of a file, as far as reading it again goes: its body at `version`, a
- * failure (`changing` when the file kept changing while it was read), or nothing yet. */
-export type ShownFile = { state: "file"; version: string } | { state: "error"; changing?: boolean } | { state: "loading" };
-
-/**
- * Whether the file the viewer shows has to be read again, given what the listings now say of it
- * (`evidence`) and what they said when this was last asked for the same file (`previous`). Only news
- * counts, so a read that fails again is not repeated until the file changes once more: a body is read
- * again when its file is gone, cannot be reached, or is listed at another version (a rewrite of the
- * same size, or another file put in its place, included); a failure is read again when the file is
- * listed anew, so a file that comes back shows again, and at every new listing of its directory
- * (`freshListing`) that has it while it kept changing as it was read, so it shows once it settles.
- */
-export function rereadFor(shown: ShownFile, evidence: FileEvidence, previous: FileEvidence | undefined, freshListing: boolean): boolean {
-  if (shown.state === "loading" || evidence.state === "unknown") return false;
-  const key = (e: FileEvidence | undefined) => (e?.state === "listed" ? `listed:${e.version}` : e?.state);
-  if (shown.state === "error" && shown.changing) return freshListing && evidence.state === "listed";
-  if (key(evidence) === key(previous)) return false;
-  if (shown.state === "error") return evidence.state === "listed";
-  if (evidence.state !== "listed") return true;
-  return evidence.version !== null && evidence.version !== shown.version;
 }

@@ -9,7 +9,7 @@ import { format, type Translate } from "../../i18n/catalog";
 import { isolate } from "../../i18n/isolate";
 import type { Language } from "../../i18n/languages";
 import type { FileContent, LineStats } from "../../protocol";
-import { RENDER_BUDGETS } from "../../viewer/budgets";
+import { RENDER_BUDGETS } from "../../viewer/code/budgets";
 import { bodyFromFileContent, type ChangeBodies, ChangeBodiesError, type ViewerBody, type ViewerChangeSide, type ViewerSubject } from "../../viewer/content";
 import { describing, type Step, type Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";

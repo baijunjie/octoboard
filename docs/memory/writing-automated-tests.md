@@ -199,3 +199,8 @@ deleted or moved to the wrong place without a single failure.
   than a test host that calls the hook and attaches the listeners itself. Which component has to call the hook, and
   what the control has to carry for a selector to find it, are part of the rule; against a hand-wired host they are
   invisible, and the whole file stays green with the call back on the wrong element.
+- **Daemon failures**: a faked daemon request that fails rejects with exactly what `DaemonClient`
+  (`packages/ui/src/daemon-client.ts`) rejects with — a `DaemonRequestError` carrying the code — never a plain
+  `Error` with a telling message. A lost connection is `DaemonRequestError(…, "connection_closed", {})`; a plain
+  `new Error("connection closed")` is classified as an unexpected failure, so the test runs the error path instead of
+  the reconnect path it is named for, and passes whatever the reconnect does.

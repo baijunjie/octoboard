@@ -2,7 +2,7 @@ import React from "react";
 
 import { OptionSelect } from "../components/form/OptionSelect";
 import { useT } from "../i18n/react";
-import { MARKDOWN_STYLES, markdownStyle, type MarkdownStyle } from "../viewer/markdownStyle";
+import { MARKDOWN_STYLES, markdownStyle, type MarkdownStyle } from "../viewer/markdown/markdownStyle";
 import { SettingRow } from "./SettingRow";
 
 // The styles are named for what they imitate, so the names are proper names and the same in every language.

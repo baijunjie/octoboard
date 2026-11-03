@@ -5,7 +5,7 @@ import { useLatest } from "../components/hooks/useLatest";
 import { useT } from "../i18n/react";
 import { useOctoboardTheme } from "../preferences/theme";
 import { usePlatform } from "../platform/react";
-import type { ViewedFile } from "../project-browser/files/TerminalFileViewer";
+import type { ViewedFile } from "../viewer/viewedFile";
 import { useDaemon } from "../store";
 import { openPathTarget } from "./links/openPathTarget";
 import type { HoveredTerminalLink } from "./links/terminalLinks";

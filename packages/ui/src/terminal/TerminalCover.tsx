@@ -1,8 +1,8 @@
-import { Spinner } from "@heroui/react";
 import { Unplug } from "lucide-react";
 import React, { useEffect, type RefObject } from "react";
 
 import { EmptyPanel } from "../components/panel/EmptyPanel";
+import { LoadingState } from "../components/panel/LoadingState";
 import { useT } from "../i18n/react";
 
 /**
@@ -54,10 +54,7 @@ export function TerminalCover({
         // button vanishing some other way.
         <EmptyPanel icon={Unplug} message={text} action={canReconnect ? { label: t("terminal.reconnect"), onPress: onReconnect } : undefined} />
       ) : (
-        <div aria-hidden="true" className="flex flex-col items-center gap-3">
-          {spinner && <Spinner size="md" color="current" aria-hidden="true" />}
-          {text}
-        </div>
+        <LoadingState size="md" label={text} spinner={spinner} />
       )}
     </div>
   );

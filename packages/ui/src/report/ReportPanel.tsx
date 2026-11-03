@@ -1,12 +1,11 @@
 import { errorPresentation, type ErrorPresentation } from "../errors/errorPresentation";
-import { retryCanHelp } from "../errors/errorRecovery";
 import { ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import React, { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { Button } from "../components/controls/Button";
 import { PaneFailure } from "../components/alerts/PaneFailure";
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
-import { StatusMark } from "../components/status/StatusMark";
+import { RetryStatusMark } from "../components/status/RetryStatusMark";
 import { StatusBadge } from "../components/status/StatusBadge";
 import { HandOffOnUnmount } from "../components/focus/HandOffOnUnmount";
 import { handFocusToRegionStart } from "../components/focus/regionFocus";
@@ -15,7 +14,6 @@ import { EmptyPanel } from "../components/panel/EmptyPanel";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { TitledControl } from "../components/hint/TitledControl";
 import { ROW_ICON_BUTTON_CLASS } from "../components/controls/RowControls";
-import { FailureBody } from "../components/alerts/errorParts";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { PanePeek } from "../layout/usePaneToggles";
 import { usePlatform } from "../platform/react";
@@ -156,19 +154,9 @@ export function ReportPanel({
     <>
       {/* The mark goes as the listing answers; focus it or its popover held goes to the header's first control. */}
       <HandOffOnUnmount from={`[data-status-mark-id="${markId}"]`} to={() => handFocusToRegionStart("panel-report")} />
-      <StatusMark
-        tone="warning"
-        markId={markId}
-        label={t("report.listFailed")}
-        actions={retryCanHelp(listFailure) ? (close) => (
-          <Button size="sm" variant="secondary" preventFocusOnPress isPending={retrying} onPress={() => { close(); retryList(); }}>
-            {t("error.tryAgain")}
-          </Button>
-        ) : undefined}
-      >
+      <RetryStatusMark tone="warning" markId={markId} label={t("report.listFailed")} error={listFailure} retrying={retrying} onRetry={retryList}>
         <p>{t("report.listFailed.sentence")}</p>
-        <FailureBody error={listFailure} />
-      </StatusMark>
+      </RetryStatusMark>
     </>
   );
   // The panel keeps its place while the first `list_pages` is in flight: dropping out and back

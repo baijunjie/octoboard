@@ -9,9 +9,10 @@ import type { ErrorPresentation } from "../errors/errorPresentation";
 import { format, globalParam, type Translate } from "../i18n/catalog";
 import { setLanguage } from "../i18n/language";
 import type { Language } from "../i18n/languages";
-import { ViewerErrorMessage } from "./ViewerErrorMessage";
+import { BodiesFailureReason, ViewerErrorMessage } from "./ViewerErrorMessage";
 import { rawFailureText } from "../errors/errorText";
-import { viewerErrorText } from "./viewerError";
+import { changeBodiesFailure, viewerErrorText } from "./viewerError";
+import { bodiesFailure } from "./content";
 import { ViewerHost } from "./viewerTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -133,4 +134,24 @@ it.each<Language>(["en", "zh-Hans"])("words a failure of another path as its sum
   expect(other).not.toContain("Access denied");
   // With no reason to leave out, the full sentence stands.
   expect(text(new DaemonRequestError("raw", "file_not_found", { path: "other.ts" }))).toContain("other.ts");
+});
+
+it("knows the sentence of a body failure worded before the language changed", () => {
+  const t: Translate = (key, ...args) => format("en", key, args[0]);
+  const error = new DaemonRequestError("denied", "permission_denied", { path: "src/gone.ts", detail: "Access denied" });
+  const { message, messageKey } = bodiesFailure(changeBodiesFailure(t, "en", error, "src/gone.ts", NO_RECORDS));
+  expect(message).toBe(format("en", "viewer.error.permissionDenied.summary"));
+  setLanguage("zh-Hans");
+  const reason = renderContent(<BodiesFailureReason message={message!} messageKey={messageKey} />);
+  expect(reason.textContent).toBe(format("zh-Hans", "viewer.error.permissionDenied.summary"));
+});
+
+it("words any viewer sentence of a body failure in the live language", () => {
+  const t: Translate = (key, ...args) => format("en", key, args[0]);
+  const error = new DaemonRequestError("gone", "file_not_found", { path: "src/gone.ts" });
+  const { message, messageKey } = bodiesFailure(changeBodiesFailure(t, "en", error, "src/gone.ts", NO_RECORDS));
+  expect(messageKey).toBe("viewer.error.fileNotFound");
+  setLanguage("zh-Hans");
+  const reason = renderContent(<BodiesFailureReason message={message!} messageKey={messageKey} />);
+  expect(reason.textContent).toBe(format("zh-Hans", "viewer.error.fileNotFound"));
 });

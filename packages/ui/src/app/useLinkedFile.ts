@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 
-import type { ViewedFile } from "../project-browser/files/TerminalFileViewer";
+import type { ViewedFile } from "../viewer/viewedFile";
 
 /** The file a path in the terminal's output named, while the file viewer shows it over the window: `viewLinkedFile`
  * opens it, `setLinkedFile` replaces it from within the viewer, and `closeLinkedFile` closes it and puts focus back. */
