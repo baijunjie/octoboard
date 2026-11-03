@@ -183,6 +183,40 @@ async fn a_force_goes_no_further_than_what_was_shown() {
     assert_eq!(to_report(left, &shown, &[]).len(), 2);
 }
 
+/// A commit made on a forced unmerged branch after the user confirmed keeps the branch: the force
+/// is pinned to the commit the user was shown, and the branch is reported as left.
+#[tokio::test]
+async fn a_forced_branch_whose_tip_moved_since_it_was_shown_is_left() {
+    let fixture = Fixture::new("cleanup-tip-moved");
+    let root = fixture.worktree("work", "s1");
+    commit_in(&root);
+    let archived = [session("s1", SessionStatus::Archived)];
+    let shown: Vec<SessionBranchTarget> = fixture
+        .inspect(&archived)
+        .await
+        .iter()
+        .map(target)
+        .collect();
+    let branch = shown
+        .iter()
+        .find(|target| target.kind == SessionBranchKind::Branch)
+        .expect("the branch is shown");
+    assert_eq!(branch.state, SessionBranchState::Unmerged);
+    assert!(branch.tip.is_some());
+
+    std::fs::write(root.join("a.txt"), "three\n").unwrap();
+    git(&root, &["commit", "-qam", "three"]);
+    let left = fixture.remove(&archived, &shown).await;
+    assert!(!root.exists());
+    assert!(fixture.has_branch("work"));
+    assert_eq!(
+        summary(&left),
+        expect(&[(false, "work", SessionBranchState::Unmerged)])
+    );
+    assert_ne!(left[0].tip, branch.tip);
+    assert_eq!(to_report(left, &shown, &[]).len(), 1);
+}
+
 #[tokio::test]
 async fn a_worktree_whose_directory_is_gone_goes_with_its_branch() {
     let fixture = Fixture::new("cleanup-prunable");
@@ -319,6 +353,7 @@ fn the_user_is_told_of_what_was_not_kept_on_purpose() {
         session: Some("s1".to_string()),
         state,
         uncommitted,
+        tip: None,
         detail: None,
         cause: None,
     };
@@ -380,6 +415,17 @@ fn the_user_is_told_of_what_was_not_kept_on_purpose() {
             "{state:?}"
         );
     }
+
+    // An unmerged branch kept as shown is not reported, unless its tip has moved since.
+    let branch = |tip: &str| SessionBranchItem {
+        kind: SessionBranchKind::Branch,
+        path: None,
+        tip: Some(tip.to_string()),
+        ..item(SessionBranchState::Unmerged, false)
+    };
+    let kept = [target(&branch("aaaa"))];
+    assert!(to_report(vec![branch("aaaa")], &[], &kept).is_empty());
+    assert_eq!(to_report(vec![branch("bbbb")], &[], &kept).len(), 1);
 }
 
 #[test]
@@ -393,6 +439,7 @@ fn an_agent_is_told_each_item_left_in_plain_text_with_its_reason() {
         session: Some("s1".to_string()),
         state: SessionBranchState::Locked,
         uncommitted: true,
+        tip: None,
         detail: None,
         cause: None,
     };
@@ -418,6 +465,7 @@ fn a_client_is_told_each_item_left_as_structured_data() {
         session: None,
         state: SessionBranchState::Failed,
         uncommitted: false,
+        tip: None,
         detail: Some("error: refused".to_string()),
         cause: None,
     };

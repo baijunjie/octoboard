@@ -562,16 +562,13 @@ impl Session {
 /// One page a session pushed to its report panel: a console session, or a project session that
 /// faces the user (`show_page`). It belongs to that session, not to its console or project:
 /// `session_id` is the session that pushed it, of either kind. Every page is kept, so the
-/// panel can be paged back through; `anchor_message_id` records the conversation position the page
-/// was pushed at and is stored only (see "Data model" in `docs/architecture.md`), and no agent
-/// exposes a message id to put in it yet.
+/// panel can be paged back through.
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct Page {
     pub id: String,
     pub session_id: String,
     pub html: String,
-    pub anchor_message_id: Option<String>,
     pub created_at: i64,
 }
 

@@ -491,7 +491,7 @@ it("reinspects the expanded archive scope when a child binds during the prefligh
   await act(async () => dialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
   expect(daemon.request).toHaveBeenCalledWith({
     type: "archive_session", session: "s-archive", keep_process_ids: ["4300:2"],
-    keep: [{ kind: "branch", repository: "/r/.git", branch: "child-feature", path: null, state: "unmerged", uncommitted: false }],
+    keep: [{ kind: "branch", repository: "/r/.git", branch: "child-feature", path: null, state: "unmerged", uncommitted: false, tip: null }],
   });
 });
 

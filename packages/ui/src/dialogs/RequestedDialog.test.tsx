@@ -503,14 +503,14 @@ const UNCOMMITTED: SessionBranchItem = {
   kind: "worktree", repository: "/r/.git", branch: "feature", path: "/r-feature", project: project.id,
   session: owner.id, state: "uncommitted_changes", uncommitted: true, detail: null,
 };
-const UNMERGED: SessionBranchItem = { ...UNCOMMITTED, kind: "branch", path: null, state: "unmerged", uncommitted: false };
+const UNMERGED: SessionBranchItem = { ...UNCOMMITTED, kind: "branch", path: null, state: "unmerged", uncommitted: false, tip: "0123abcd" };
 const KEPT: SessionBranchItem = { ...UNMERGED, branch: "main", state: "checked_out" };
 const LOCKED: SessionBranchItem = { ...UNCOMMITTED, branch: "pinned", path: "/r-pinned", state: "locked", uncommitted: false };
 const PINNED: SessionBranchItem = { ...UNMERGED, branch: "pinned", state: "removable" };
 
 /** `item` as a request names it back. */
-function targetOf({ kind, repository, branch, path, state, uncommitted }: SessionBranchItem) {
-  return { kind, repository, branch, path, state, uncommitted };
+function targetOf({ kind, repository, branch, path, state, uncommitted, tip }: SessionBranchItem) {
+  return { kind, repository, branch, path, state, uncommitted, tip: tip ?? null };
 }
 
 /** A row's text as assistive technology reads it: what is hidden from it left out. */

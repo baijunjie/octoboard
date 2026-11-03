@@ -37,7 +37,7 @@ export function lockedWorktrees(items: SessionBranchItem[]): SessionBranchItem[]
 /** `items` as a request names them back: as each was shown, so that the daemon goes no further
  * than that. */
 export function branchTargets(items: SessionBranchItem[]): SessionBranchTarget[] {
-  return items.map(({ kind, repository, branch, path, state, uncommitted }) => ({ kind, repository, branch, path, state, uncommitted }));
+  return items.map(({ kind, repository, branch, path, state, uncommitted, tip }) => ({ kind, repository, branch, path, state, uncommitted, tip: tip ?? null }));
 }
 
 /** The `force_remove` and `keep` of a request that forces `forced` and keeps `kept`, each absent

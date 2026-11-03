@@ -177,6 +177,7 @@ pub(super) fn item_of(
         session: session.map(str::to_string),
         state,
         uncommitted: false,
+        tip: None,
         detail: None,
         cause: None,
     }
@@ -466,15 +467,18 @@ pub(super) fn survey(
             SessionBranchState::Removable
         };
         branches.push(BranchSurvey {
-            item: item_of(
-                &bound.repo,
-                SessionBranchKind::Branch,
-                Some(branch.branch.clone()),
-                None,
-                &branch.project,
-                Some(&branch.session),
-                state,
-            ),
+            item: SessionBranchItem {
+                tip: tip(git, &bound.repo, &name),
+                ..item_of(
+                    &bound.repo,
+                    SessionBranchKind::Branch,
+                    Some(branch.branch.clone()),
+                    None,
+                    &branch.project,
+                    Some(&branch.session),
+                    state,
+                )
+            },
             name,
             merged,
         });
@@ -483,6 +487,24 @@ pub(super) fn survey(
         worktrees,
         branches,
     })
+}
+
+/// The object id the branch `name` points at, `None` where it cannot be read.
+fn tip(git: &Runner, repo: &Path, name: &[u8]) -> Option<String> {
+    let reference = [b"refs/heads/".as_slice(), name].concat();
+    let stdout = git
+        .read(
+            repo,
+            &[
+                OsStr::new("rev-parse"),
+                OsStr::new("--verify"),
+                OsStr::new("--quiet"),
+                OsStr::from_bytes(&reference),
+            ],
+        )
+        .ok()?;
+    let oid = String::from_utf8(stdout).ok()?.trim().to_string();
+    (!oid.is_empty()).then_some(oid)
 }
 
 /// Whether the branch `name` exists.

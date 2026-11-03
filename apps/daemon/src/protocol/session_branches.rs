@@ -22,6 +22,11 @@ pub struct SessionBranchItem {
     /// Whether the worktree has modified or untracked files, whatever its state; false for a
     /// branch, and where it was not read.
     pub uncommitted: bool,
+    /// The commit a branch points at, as a full object id: what a forced removal is pinned to.
+    /// Absent for a worktree, and where it could not be read.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub tip: Option<String>,
     /// The project of the session the item was found through.
     pub project: String,
     /// The branch's responsible session; `None` for a worktree a project's removal takes although
@@ -100,4 +105,9 @@ pub struct SessionBranchTarget {
     #[serde(default)]
     #[cfg_attr(test, ts(optional = nullable))]
     pub uncommitted: bool,
+    /// The branch's `tip` as the user was shown it: an archive's or a deletion's forced
+    /// `git branch -D` goes only while the branch still points there.
+    #[serde(default)]
+    #[cfg_attr(test, ts(optional = nullable))]
+    pub tip: Option<String>,
 }

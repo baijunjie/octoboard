@@ -798,7 +798,6 @@ mod tests {
                 id: "page-1".to_string(),
                 session_id: "session-2".to_string(),
                 html: "<p>Distinctive page body</p>".to_string(),
-                anchor_message_id: None,
                 created_at: 0,
             })
             .unwrap();

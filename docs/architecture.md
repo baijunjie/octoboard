@@ -359,6 +359,3 @@ tests.
 - `Page.session_id` is the coordinator that pushed the page — a console session or a project coordinator —
   not its console or project: each session has its own page history. Deleting a session deletes its pages in the
   database, and deleting its project or console therefore deletes them too.
-- `Page.anchor_message_id` records the conversation position a page was pushed at. It is stored and never read; a
-  linkage that hid pages after the user rewinds the agent's conversation would read it, but no agent exposes a message
-  id to put in it yet.

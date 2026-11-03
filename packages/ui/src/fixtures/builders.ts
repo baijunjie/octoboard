@@ -232,7 +232,7 @@ export function keptOf(
 }
 
 export function pageOf(id: string, sessionId: string, html: string, minutes: number): Page {
-  return { id, session_id: sessionId, html, anchor_message_id: null, created_at: minutesAgo(minutes) };
+  return { id, session_id: sessionId, html, created_at: minutesAgo(minutes) };
 }
 
 export function gitStatusOf(projectId: string, extra: Partial<GitStatus> = {}): GitStatus {

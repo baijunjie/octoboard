@@ -1908,15 +1908,12 @@ export type Origin = "console" | "user";
  * One page a session pushed to its report panel: a console session, or a project session that
  * faces the user (`show_page`). It belongs to that session, not to its console or project:
  * `session_id` is the session that pushed it, of either kind. Every page is kept, so the
- * panel can be paged back through; `anchor_message_id` records the conversation position the page
- * was pushed at and is stored only (see "Data model" in `docs/architecture.md`), and no agent
- * exposes a message id to put in it yet.
+ * panel can be paged back through.
  */
 export type Page = {
   id: string,
   session_id: string,
   html: string,
-  anchor_message_id: string | null,
   created_at: number,
 };
 
@@ -3839,6 +3836,11 @@ export type SessionBranchItem = {
    */
   uncommitted: boolean,
   /**
+   * The commit a branch points at, as a full object id: what a forced removal is pinned to.
+   * Absent for a worktree, and where it could not be read.
+   */
+  tip?: string,
+  /**
    * The project of the session the item was found through.
    */
   project: string,
@@ -3878,6 +3880,11 @@ export type SessionBranchTarget = {
   path?: string | null,
   state: SessionBranchState,
   uncommitted?: boolean,
+  /**
+   * The branch's `tip` as the user was shown it: an archive's or a deletion's forced
+   * `git branch -D` goes only while the branch still points there.
+   */
+  tip?: string | null,
 };
 
 /**

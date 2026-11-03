@@ -14,7 +14,7 @@ use rusqlite::Connection;
 /// the schema of every past version stays as `schema/v{N}.sql` and is listed in the test-only
 /// `PAST_SCHEMAS`, for the test that migrates a database built from each and compares the result
 /// with a fresh one.
-pub(super) const SCHEMA_VERSION: i64 = 2;
+pub(super) const SCHEMA_VERSION: i64 = 3;
 
 /// The `application_id` of an Octoboard database, "OCTB" in ASCII, written into the file's header
 /// when it is created, so that a SQLite file of another program is told apart from one of ours.
@@ -31,7 +31,7 @@ const APPLICATION_ID_SINCE: i64 = 2;
 /// test compares the two). A step that rebuilds a table renames the old one aside and creates the
 /// new one under its final name: a table renamed into place is stored with its name quoted in
 /// `sqlite_master`, which no longer matches `SCHEMA`.
-pub(super) const MIGRATIONS: &[&str] = &[MIGRATE_V1_TO_V2];
+pub(super) const MIGRATIONS: &[&str] = &[MIGRATE_V1_TO_V2, MIGRATE_V2_TO_V3];
 
 /// Version 1 to 2: a project's path is unique within its console, the child-table lookups have
 /// indexes, and the `branch_origins` columns the code reads as present are `NOT NULL`.
@@ -83,6 +83,12 @@ INSERT INTO branch_origins
       AND responsible_session_id IS NOT NULL AND responsible_since IS NOT NULL
       AND responsible_title IS NOT NULL;
 DROP TABLE branch_origins_v1;
+"#;
+
+/// Version 2 to 3: pages no longer record the conversation position they were pushed at, which
+/// nothing read.
+const MIGRATE_V2_TO_V3: &str = r#"
+ALTER TABLE pages DROP COLUMN anchor_message_id;
 "#;
 
 /// Every table, index and trigger of the current schema.
@@ -296,14 +302,13 @@ CREATE TABLE trusted_directories (
     path TEXT PRIMARY KEY
 );
 CREATE TABLE pages (
-    id                TEXT PRIMARY KEY,
+    id         TEXT PRIMARY KEY,
     -- The session that pushed the page, a console session or a project session that
     -- faces the user; deleting it takes its pages, and deleting a console or a project
     -- therefore takes all of theirs.
-    session_id        TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-    html              TEXT NOT NULL,
-    anchor_message_id TEXT,
-    created_at        INTEGER NOT NULL
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    html       TEXT NOT NULL,
+    created_at INTEGER NOT NULL
 );
 CREATE INDEX pages_session_id ON pages (session_id);
 -- Messages for a session that was interrupted (shared information, and the reports and
@@ -758,8 +763,11 @@ mod tests {
     /// The schema of version 1, as it was before the first migration.
     const V1_SCHEMA: &str = include_str!("schema/v1.sql");
 
+    /// The schema of version 2, as it was before pages lost `anchor_message_id`.
+    const V2_SCHEMA: &str = include_str!("schema/v2.sql");
+
     /// The schema of every version before the current one: `PAST_SCHEMAS[n - 1]` is version `n`.
-    const PAST_SCHEMAS: [&str; (SCHEMA_VERSION - 1) as usize] = [V1_SCHEMA];
+    const PAST_SCHEMAS: [&str; (SCHEMA_VERSION - 1) as usize] = [V1_SCHEMA, V2_SCHEMA];
 
     /// The files next to `path` that are backups from before a migration.
     fn backups(path: &Path) -> Vec<PathBuf> {
@@ -905,6 +913,46 @@ mod tests {
         assert_eq!(master(&path), master(&fresh));
     }
 
+    /// A version 2 database keeps its pages, without the anchor they no longer carry, and has
+    /// exactly the shape a new one has.
+    #[test]
+    fn a_version_2_database_is_migrated_to_the_shape_of_a_new_one() {
+        let path = temp_db("migrate-v2");
+        {
+            let conn = Connection::open(&path).expect("v2 database");
+            conn.execute_batch(V2_SCHEMA).expect("v2 schema");
+            conn.execute_batch(
+                "INSERT INTO consoles (id, name, workdir, default_agent, created_at)
+                     VALUES ('console-1', 'One', '/w/1', 'claude', 0);
+                 INSERT INTO sessions (id, agent, console_id, project_id, host_id, role, origin,
+                                       title, status, orchestration_role, started_at, locked)
+                     VALUES ('s', 'claude', 'console-1', NULL, 'local', 'console', 'user', 't',
+                             'idle', 'coordinator', 0, 0);
+                 INSERT INTO pages (id, session_id, html, anchor_message_id, created_at)
+                     VALUES ('page-1', 's', '<p>kept</p>', 'message-1', 7);",
+            )
+            .expect("v2 rows");
+            conn.pragma_update(None, "user_version", 2)
+                .expect("version");
+            conn.pragma_update(None, "application_id", APPLICATION_ID)
+                .expect("application id");
+        }
+
+        let store = Store::open(&path).expect("migrated");
+        assert_eq!(user_version(&store.lock()).unwrap(), SCHEMA_VERSION);
+        let pages = store.list_pages("s").unwrap();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(
+            (pages[0].html.as_str(), pages[0].created_at),
+            ("<p>kept</p>", 7)
+        );
+        drop(store);
+
+        let fresh = temp_db("migrate-v2-fresh");
+        drop(Store::open(&fresh).expect("fresh"));
+        assert_eq!(master(&path), master(&fresh));
+    }
+
     /// An empty database at every past version, once migrated, has exactly the shape a new one has.
     #[test]
     fn every_past_schema_migrates_to_the_shape_of_a_new_database() {
@@ -918,6 +966,10 @@ mod tests {
                 conn.execute_batch(schema).expect("past schema");
                 conn.pragma_update(None, "user_version", version)
                     .expect("version");
+                if version >= APPLICATION_ID_SINCE {
+                    conn.pragma_update(None, "application_id", APPLICATION_ID)
+                        .expect("application id");
+                }
             }
             drop(Store::open(&path).unwrap_or_else(|e| panic!("v{version}: {e:#}")));
             assert_eq!(master(&path), master(&fresh), "v{version}");

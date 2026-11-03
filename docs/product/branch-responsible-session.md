@@ -117,8 +117,9 @@ the caller itself, and the two must differ. No approval is asked: the caller own
 - **Nothing else happens to the sessions meanwhile.** While a session other than the caller is being started,
   resumed, handed off, switched to another account or having its owner changed, a handover from or to it is refused,
   changing nothing; and none of that can begin on either of them while the handover is carried out. Messages for a
-  `from` other than the caller are queued meanwhile, and delivered once the branches have moved. The checks above are
-  made under that protection, so they still hold when the branches move.
+  `from` other than the caller are queued meanwhile, and delivered once the branches have moved; what the user types
+  into its terminal waits meanwhile too (see "Typing and the mouse" in `docs/product/session-terminal.md`). The checks
+  above are made under that protection, so they still hold when the branches move.
 - **Nothing in git or on disk changes.** A branch stays checked out wherever it is, with whatever uncommitted changes
   its worktree holds; uncommitted changes do not stop the move. The result carries `from`, `to`, and per branch moved,
   in `branches`: `branch`; `worktree`, the path of the worktree it is checked out in, or `null` when there is none or

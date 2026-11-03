@@ -156,6 +156,7 @@ fn target(item: &SessionBranchItem) -> SessionBranchTarget {
         path: item.path.clone(),
         state: item.state,
         uncommitted: item.uncommitted,
+        tip: item.tip.clone(),
     }
 }
 

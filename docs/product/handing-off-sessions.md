@@ -361,6 +361,10 @@ moved. The held queue is kept even if the original's process ends meanwhile.
   an input line. The exception is a forwarded message lost because the receiving session stopped taking input part way
   through a write: that is reported as any such loss is (see `docs/product/message-delivery.md`), not again as
   `handoff_messages_dropped`.
+- What the user types into the original's terminal meanwhile is held too, but is not part of the queue and is never
+  forwarded: it goes into the original if the hold is released with the original still running, and is reported as
+  lost terminal input once the original is archived (see "Typing and the mouse" in
+  `docs/product/session-terminal.md`).
 
 ## When a handoff fails
 

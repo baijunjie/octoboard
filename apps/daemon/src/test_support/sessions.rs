@@ -168,7 +168,6 @@ pub(crate) fn test_page(id: &str, session_id: &str, created_at: i64) -> Page {
         id: id.to_string(),
         session_id: session_id.to_string(),
         html: "<p>page</p>".to_string(),
-        anchor_message_id: None,
         created_at,
     }
 }

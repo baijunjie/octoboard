@@ -38,6 +38,17 @@ These mappings apply with only the modifier shown, outside input-method composit
 how it interprets the commands, including where they move in a multiline prompt. Other Option combinations retain
 their normal character input.
 
+**Typing waits while the session's messages are held.** While Octoboard holds the messages for a session — while it is
+being handed off (see "Messages for the original during a handoff" in `docs/product/handing-off-sessions.md`), while
+its owner's agent hands its branches over to another session (see "Handing branches between sessions of an owner" in
+`docs/product/branch-responsible-session.md`), and while a change of its account's sharing has claimed it (see "When a
+change is carried out" in `docs/product/sharing-the-default-configuration.md`) — what the user types or pastes into its
+terminal is not written into the agent, so it is not echoed and starts no turn. Answers to the program's queries still
+go in. When the hold ends with the session still running, what waited goes in, in order. When the terminal's
+connection ends first — the session archived, as a successful handoff archives the original, or its process ended for
+a restart — what waited is reported as lost, as "Typing a connection had not yet passed on is reported, not retried"
+under "Reconnecting" below says; it is never dropped silently.
+
 ## Copy, paste and selection
 
 With a session selected that is not archived, right-clicking its terminal opens an editing menu in both the desktop app

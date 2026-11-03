@@ -27,9 +27,6 @@ pub(in crate::mcp) fn show_page(
         id: Uuid::new_v4().to_string(),
         session_id: session.id.clone(),
         html,
-        // No agent exposes a message id to put here yet; the rewind linkage that would read it is
-        // not built.
-        anchor_message_id: None,
         created_at: now_millis(),
     };
     // The role is checked in the insert itself: this call's `session` was read before a binding

@@ -12,7 +12,7 @@ impl Store {
         let conn = self.lock();
         let page = conn
             .query_row(
-                "SELECT id, session_id, html, anchor_message_id, created_at
+                "SELECT id, session_id, html, created_at
                  FROM pages WHERE id = ?1",
                 params![id],
                 read_page,
@@ -28,15 +28,14 @@ impl Store {
     /// [`Session::is_worker`]: crate::protocol::Session::is_worker
     pub fn insert_page_unless_worker(&self, page: &Page) -> Result<bool> {
         let inserted = self.lock().execute(
-            "INSERT INTO pages (id, session_id, html, anchor_message_id, created_at)
-             SELECT ?1, ?2, ?3, ?4, ?5
+            "INSERT INTO pages (id, session_id, html, created_at)
+             SELECT ?1, ?2, ?3, ?4
              WHERE NOT EXISTS (SELECT 1 FROM sessions
-                               WHERE id = ?2 AND orchestration_role = ?6)",
+                               WHERE id = ?2 AND orchestration_role = ?5)",
             params![
                 page.id,
                 page.session_id,
                 page.html,
-                page.anchor_message_id,
                 page.created_at,
                 enum_to_text(&OrchestrationRole::Worker),
             ],
@@ -47,15 +46,9 @@ impl Store {
     #[cfg(test)]
     pub fn insert_page(&self, page: &Page) -> Result<()> {
         self.lock().execute(
-            "INSERT INTO pages (id, session_id, html, anchor_message_id, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![
-                page.id,
-                page.session_id,
-                page.html,
-                page.anchor_message_id,
-                page.created_at,
-            ],
+            "INSERT INTO pages (id, session_id, html, created_at)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![page.id, page.session_id, page.html, page.created_at],
         )?;
         Ok(())
     }
@@ -65,7 +58,7 @@ impl Store {
     pub fn list_pages(&self, session_id: &str) -> Result<Vec<Page>> {
         let conn = self.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, session_id, html, anchor_message_id, created_at
+            "SELECT id, session_id, html, created_at
              FROM pages WHERE session_id = ?1 ORDER BY created_at, id",
         )?;
         let rows = stmt
@@ -166,8 +159,7 @@ fn read_page(row: &Row<'_>) -> rusqlite::Result<Page> {
         id: row.get(0)?,
         session_id: row.get(1)?,
         html: row.get(2)?,
-        anchor_message_id: row.get(3)?,
-        created_at: row.get(4)?,
+        created_at: row.get(3)?,
     })
 }
 

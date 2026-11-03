@@ -143,8 +143,11 @@ line below the path, aligned with the path text.
   joining the scope, say — unchecks its checkbox again, so nothing the user has not seen listed is forced.
 - **A force goes only as far as the user was shown.** An item forced is removed only while it still stands as it was
   listed: a worktree in another state by then, or with uncommitted changes the confirmation did not show, is left and
-  reported. A branch merged in the meantime is deleted without force.
-- Unchecked, the listed items are kept, and are not reported afterwards while they stand as they were listed.
+  reported. An unmerged branch is forced only while it still points at the commit it pointed at when the confirmation
+  looked, so a branch that has gained commits since is left and reported, and those commits are not deleted with it.
+  A branch merged in the meantime is deleted without force.
+- Unchecked, the listed items are kept, and are not reported afterwards while they stand as they were listed; an
+  unmerged branch kept is reported again once it points at another commit.
 
 **An archive that asks nothing of the sessions** — a session at its prompt or interrupted, with no unarchived session
 under it (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`) — first asks
@@ -212,7 +215,8 @@ What is reported:
 
 What is not reported:
 
-- items the user chose to keep, while they stand as they were listed;
+- items the user chose to keep, while they stand as they were listed (an unmerged branch, while it points at the
+  commit it was listed at);
 - a branch checked out in a worktree that stays, unless the user forced that branch in an archive or deletion. After a
   project's removal, such a worktree is one the removal does not take — the main worktree, one not bound, or one that
   is or holds another project's folder, that is the home folder, the root of a disk or a folder holding Octoboard's

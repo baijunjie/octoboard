@@ -207,8 +207,10 @@ never part-written into a terminal, so the notice says nothing of an input line.
 
 **A draft typed but not sent is lost.** Text the user has typed into an idle session's terminal without sending it
 cannot be seen by Octoboard, so it does not make the session count as working, and it is lost when the session's
-process is ended for the change; a prompt submitted straight into the terminal in the moment before the process ends
-has its turn ended.
+process is ended for the change; a prompt submitted straight into the terminal in the moment before the session is
+claimed has its turn ended. What is typed once the session has been claimed is not written into it: it waits, goes in
+only if the session is still running when the change lets it go, and is otherwise reported as lost terminal input
+(see "Typing and the mouse" in `docs/product/session-terminal.md`).
 
 **A change stopped before it records its choice keeps the earlier failure.** The account's last `failure` stays as it
 was while a change waits or stops sessions, and after one refused or stopped before its choice is recorded; it is

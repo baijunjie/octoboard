@@ -157,12 +157,14 @@ pub(super) fn names(target: &SessionBranchTarget, item: &SessionBranchItem) -> b
 }
 
 /// Whether `target` names `item` as it stands now: a worktree in the same state, without changes
-/// the user was not shown; a branch in the same state, or merged by now, which takes no force.
+/// the user was not shown; a branch in the same state at the same commit, so that commits made
+/// after the user confirmed are not deleted with it, or merged by now, which takes no force.
 pub(super) fn consents(target: &SessionBranchTarget, item: &SessionBranchItem) -> bool {
     names(target, item)
         && match item.kind {
             SessionBranchKind::Branch => {
-                target.state == item.state || item.state == SessionBranchState::Removable
+                (target.state == item.state && target.tip == item.tip)
+                    || item.state == SessionBranchState::Removable
             }
             SessionBranchKind::Worktree => {
                 target.state == item.state && (!item.uncommitted || target.uncommitted)

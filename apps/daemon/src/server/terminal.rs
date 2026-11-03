@@ -251,6 +251,17 @@ async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, id: String) {
     let mut failure = None;
     loop {
         if writing.is_none() {
+            // While the session's messages are held (`OutboxHold`: a handoff, an agent's handover
+            // of a session it owns, a sharing change), what is typed waits here too: a turn it
+            // started now would run against work that is being moved. Released, it goes in as
+            // usual; never written, it is reported as lost when the socket ends.
+            if user_ready
+                && !deferred.frames.is_empty()
+                && matches!(terminal, Terminal::Session(_))
+                && state.outbox.is_held(&id)
+            {
+                user_ready = false;
+            }
             if let Some(frame) = deferred.next(user_ready) {
                 writing = Some(start_input_write(terminal.clone(), frame));
             }
@@ -513,6 +524,74 @@ mod tests {
         .await
         .expect("the write and its echo make progress together");
         assert_eq!(echoed, payload);
+        socket.close(None).await.unwrap();
+        server.abort();
+        let _ = server.await;
+        drop((live, dir));
+    }
+
+    /// What is typed while the session's messages are held for a handoff waits, unwritten, and goes
+    /// in once the hold ends.
+    #[tokio::test]
+    async fn typing_waits_while_the_sessions_messages_are_held_and_goes_in_after() {
+        use tokio_tungstenite::tungstenite::Message as Frame;
+
+        let (state, dir) = app_state("server-input-held");
+        let live = crate::test_support::fake_live_session(
+            "held",
+            Agent::Claude,
+            80,
+            24,
+            "stty raw -echo; printf READY; cat",
+        );
+        crate::session::spawn_reader_thread(live.clone(), 8 * 1024);
+        state.register_live(live.clone());
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let served = state.clone();
+        let server = tokio::spawn(async move { axum::serve(listener, router(served)).await });
+        let (mut socket, _) = tokio_tungstenite::connect_async(format!(
+            "ws://127.0.0.1:{port}/ws/term/held?key={TEST_KEY}"
+        ))
+        .await
+        .unwrap();
+        let mut output = Vec::new();
+        while !output.windows(5).any(|text| text == b"READY") {
+            if let Some(Ok(Frame::Binary(data))) =
+                tokio::time::timeout(PATIENCE, socket.next()).await.unwrap()
+            {
+                output.extend_from_slice(&data);
+            }
+        }
+        output.clear();
+
+        let hold = state.hold_outbox("held");
+        socket.send(Frame::Binary(b"typed".to_vec())).await.unwrap();
+        let waited = tokio::time::timeout(std::time::Duration::from_millis(400), async {
+            loop {
+                match socket.next().await {
+                    Some(Ok(Frame::Binary(data))) => output.extend_from_slice(&data),
+                    None => break,
+                    _ => {}
+                }
+            }
+        })
+        .await;
+        assert!(
+            waited.is_err() && output.is_empty(),
+            "held typing is not written"
+        );
+
+        drop(hold);
+        tokio::time::timeout(PATIENCE, async {
+            while !output.windows(5).any(|text| text == b"typed") {
+                if let Some(Ok(Frame::Binary(data))) = socket.next().await {
+                    output.extend_from_slice(&data);
+                }
+            }
+        })
+        .await
+        .expect("the typing goes in once the hold ends");
         socket.close(None).await.unwrap();
         server.abort();
         let _ = server.await;
