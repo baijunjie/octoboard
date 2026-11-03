@@ -1,4 +1,4 @@
-//! `handover_branches`: moving the responsibility for git branches from one session to another.
+//! `transfer_branches`: moving the responsibility for git branches from one session to another.
 //! Only the branch records move; no session is replaced (that is `handoff_session`), and nothing in
 //! git or on disk changes.
 
@@ -30,7 +30,7 @@ use super::{branch_names, held_by, refuse_if_at_work, untold_note, Parties};
 /// since it would go on working on branches that are no longer its own, and for a branch `from`
 /// is not responsible for. The sessions are claimed against a switch or handoff meanwhile, and
 /// `from`'s messages are held, while the checks are made again and the branches move.
-pub(in crate::mcp) async fn handover_branches(
+pub(in crate::mcp) async fn transfer_branches(
     state: &Arc<AppState>,
     caller: &Session,
     arguments: &Map<String, Value>,
@@ -369,7 +369,7 @@ mod tests {
         }
 
         async fn call(&self, caller: &str, input: Value) -> Result<Value> {
-            handover_branches(
+            transfer_branches(
                 &self.state,
                 &self.state.session_record(caller).unwrap(),
                 &arguments(input),

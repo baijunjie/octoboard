@@ -35,7 +35,7 @@ async fn writes_are_refused_for_sessions_the_caller_does_not_own() {
         ("archive_session", "loose", "not bound to any session"),
         ("archive_session", "a", "your own session"),
         (
-            "reopen_session",
+            "resume_session",
             "archived-of-b",
             "bound to another console session, `b`",
         ),
@@ -156,7 +156,7 @@ async fn an_unbound_project_session_acts_only_on_the_sessions_bound_to_it() {
         ("archive_session", "of-b", "bound to a console session, `b`"),
         ("archive_session", "loose", "not bound to any session"),
         (
-            "reopen_session",
+            "resume_session",
             "archived-of-a",
             "bound to a console session, `a`",
         ),
@@ -203,10 +203,10 @@ async fn an_unbound_project_session_acts_only_on_the_sessions_bound_to_it() {
     assert_eq!(archived.status, SessionStatus::Archived);
 }
 
-/// `send_message` is offered as the way to tell a session that is not the caller's only while
+/// `inform_session` is offered as the way to tell a session that is not the caller's only while
 /// it can take one: not for an archived session, which it refuses.
 #[test]
-fn the_refusal_to_act_on_a_session_offers_send_message_only_while_it_can_take_it() {
+fn the_refusal_to_act_on_a_session_offers_inform_session_only_while_it_can_take_it() {
     let (state, _dir) = shared_console_state("refusal-hint");
     let caller = state.session_record("a").unwrap();
     let refusal = |id: &str| {
@@ -226,16 +226,20 @@ fn the_refusal_to_act_on_a_session_offers_send_message_only_while_it_can_take_it
         ("archived-loose", false),
     ] {
         let message = refusal(id);
-        assert_eq!(message.contains("send_message"), offered, "{id}: {message}");
+        assert_eq!(
+            message.contains("inform_session"),
+            offered,
+            "{id}: {message}"
+        );
         assert!(message.contains("not yours to"), "{id}: {message}");
     }
 }
 
 /// A refusal to drive a session that is not the caller's says why and what the caller can still
-/// do, naming `send_message` as the caller's agent qualifies it; a session of the caller's own
-/// is told to say it to the user instead, since `send_message` is refused for it.
+/// do, naming `inform_session` as the caller's agent qualifies it; a session of the caller's own
+/// is told to say it to the user instead, since `inform_session` is refused for it.
 #[tokio::test]
-async fn a_refusal_to_drive_a_session_that_is_not_the_callers_names_send_message() {
+async fn a_refusal_to_drive_a_session_that_is_not_the_callers_names_inform_session() {
     let (state, _dir) = shared_console_state("tool-refusal-send-message");
     for target in ["of-b", "loose", "b"] {
         let message = refused(
@@ -246,7 +250,8 @@ async fn a_refusal_to_drive_a_session_that_is_not_the_callers_names_send_message
         )
         .await;
         assert!(
-            message.contains("You can still tell it something with `mcp__octoboard__send_message`"),
+            message
+                .contains("You can still tell it something with `mcp__octoboard__inform_session`"),
             "{target}: {message}"
         );
     }
@@ -273,9 +278,9 @@ async fn a_refusal_to_drive_a_session_that_is_not_the_callers_names_send_message
         json!({ "session": "loose", "text": "hi" }),
     )
     .await;
-    assert!(message.contains("`octoboard__send_message`"), "{message}");
+    assert!(message.contains("`octoboard__inform_session`"), "{message}");
     assert!(
-        !message.contains("mcp__octoboard__send_message"),
+        !message.contains("mcp__octoboard__inform_session"),
         "{message}"
     );
 
@@ -286,7 +291,7 @@ async fn a_refusal_to_drive_a_session_that_is_not_the_callers_names_send_message
         json!({ "session": "a", "text": "hi" }),
     )
     .await;
-    assert!(!message.contains("send_message"), "{message}");
+    assert!(!message.contains("inform_session"), "{message}");
 }
 
 /// `null` reads as absent for a text argument, as it does for the other optional ones; a value

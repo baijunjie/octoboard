@@ -1,7 +1,7 @@
 //! The reads every role has, with one scope: any session reads any session, and any console's
 //! projects and archives, whichever its role. `get_session`, `list_sessions`, `list_projects`,
-//! `list_consoles` and `list_archived` are here; the other reads every role has
-//! (`read_session_history`, `get_session_branches`, `list_agent_models`, `list_agents`) have
+//! `list_consoles` and `list_archived_sessions` are here; the other reads every role has
+//! (`read_session_history`, `list_session_branches`, `list_agent_models`, `list_agents`) have
 //! modules of their own. What a session may *do* to another is narrower, and is each write tool's
 //! own rule (`resolve_owned_session`); reads are not limited to the caller's console, writes are.
 
@@ -34,12 +34,12 @@ const DEFAULT_OUTPUT_TAIL: usize = 8 * 1024;
 /// The most output `get_session` hands back, however much is asked for.
 const MAX_OUTPUT_TAIL: usize = 64 * 1024;
 
-/// How many archived sessions `list_archived` returns when the caller names no `limit`: each comes
-/// with its whole description, so an unfiltered list of a long-lived install is not handed over
-/// whole.
+/// How many archived sessions `list_archived_sessions` returns when the caller names no `limit`:
+/// each comes with its whole description, so an unfiltered list of a long-lived install is not
+/// handed over whole.
 const DEFAULT_ARCHIVED_LIMIT: usize = 50;
 
-/// The most `list_archived` returns, however much is asked for.
+/// The most `list_archived_sessions` returns, however much is asked for.
 const MAX_ARCHIVED_LIMIT: usize = 200;
 
 /// Every console's id and name, and which is the caller's own.
@@ -182,7 +182,7 @@ pub(in crate::mcp) async fn get_session(
 }
 
 /// The process trees the running process of the session `id` started that are still running,
-/// as `handover_processes` names them; none for a session with no process. Listed as a client's
+/// as `transfer_processes` names them; none for a session with no process. Listed as a client's
 /// request for them is, so a recent listing answers again. A failed read is none, rather than an
 /// error that would take the rest of the answer down with it.
 async fn processes_of(state: &Arc<AppState>, id: &str) -> Vec<crate::protocol::ProcessTree> {
@@ -222,10 +222,10 @@ async fn recent_output(state: &Arc<AppState>, id: &str, tail: usize) -> Option<S
 }
 
 /// For each of `sessions`, whether the agent still holds its conversation, from the agent's own
-/// records in the way `reopen_session` reads them, though through the default [`Locator`] rather
+/// records in the way `resume_session` reads them, though through the default [`Locator`] rather
 /// than a launch's environment: `Some(true)` when it does (and for a session with no conversation,
 /// which relaunches into a fresh one), `Some(false)` when it is proven gone, so that
-/// `reopen_session` refuses it, and `None` when that cannot be told, which `reopen_session` lets
+/// `resume_session` refuses it, and `None` when that cannot be told, which `resume_session` lets
 /// through. Looks through the account's records directories, so it runs on the blocking pool.
 async fn resumable_of(sessions: Vec<Session>) -> Result<HashMap<String, Option<bool>>> {
     Ok(tokio::task::spawn_blocking(move || {
@@ -246,10 +246,10 @@ async fn resumable_of(sessions: Vec<Session>) -> Result<HashMap<String, Option<b
 }
 
 /// The `console`, `project`, `owner`, `yours`, `kind` and `branch` filters `list_sessions` and
-/// `list_archived` share, resolved once from the call's arguments. Each given one must hold, so
-/// they combine as AND; one that names nothing is refused rather than read as a filter that
-/// matches nothing. `branch` is matched against the branches a session is responsible for, which
-/// are read apart from the store's sessions, so [`SessionFilters::matches`] leaves it to the
+/// `list_archived_sessions` share, resolved once from the call's arguments. Each given one must
+/// hold, so they combine as AND; one that names nothing is refused rather than read as a filter
+/// that matches nothing. `branch` is matched against the branches a session is responsible for,
+/// which are read apart from the store's sessions, so [`SessionFilters::matches`] leaves it to the
 /// caller.
 struct SessionFilters {
     console: Option<Console>,
@@ -350,7 +350,7 @@ impl SessionFilters {
 /// after the page, which `before` reaches: the `next` the previous page answered with, a position
 /// in the order ([`archive_cursor`]) rather than a session, so it holds whatever has become of the
 /// session it was taken from.
-pub(in crate::mcp) async fn list_archived(
+pub(in crate::mcp) async fn list_archived_sessions(
     state: &Arc<AppState>,
     caller: &Session,
     arguments: &Map<String, Value>,
@@ -459,7 +459,7 @@ fn parse_archive_cursor(token: &str) -> Option<(Option<i64>, String)> {
 /// console and project, console sessions included: information may go to any of them, and an
 /// owner to hand a session to or bind to is one of them. `status` widens or changes that to the
 /// interrupted sessions, which have no process but are resumable; archived ones are
-/// `list_archived`'s.
+/// `list_archived_sessions`'s.
 ///
 /// `console`, `project`, `owner`, `yours`, `kind` and `branch` narrow the list; each given one must
 /// hold, so they combine as AND.

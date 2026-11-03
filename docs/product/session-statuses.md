@@ -2,7 +2,7 @@
 
 | Status | Wire value | Glyph | Meaning |
 |---|---|---|---|
-| Starting | `starting` | a grey arc turning | A newly opened session — from the dialog, by an agent's `new_session`, or by an approved session request — whose agent is still being launched; it has no process yet. Once the process is up it becomes *working* for a session started with a brief, *done* for one opened on an existing conversation, and *awaiting instructions* otherwise; it is removed again if the launch fails (see "Starting the session" in `docs/product/opening-sessions.md`). |
+| Starting | `starting` | a grey arc turning | A newly opened session — from the dialog, by an agent's `open_session`, or by an approved session request — whose agent is still being launched; it has no process yet. Once the process is up it becomes *working* for a session started with a brief, *done* for one opened on an existing conversation, and *awaiting instructions* otherwise; it is removed again if the launch fails (see "Starting the session" in `docs/product/opening-sessions.md`). |
 | Working | `working` | a solid blue (accent) dot pinging a fading copy of itself outward | The agent is executing a turn. |
 | Waiting for the user | `waiting_user` | an orange (warning) raised hand that waves now and then | The agent is waiting on a permission decision, including its folder-trust confirmation, or has asked the user a question through its own ask-the-user tool; or Octoboard is asking the user on the agent's behalf while the agent's call waits, which is a session request (see "Waiting for the answer" in `docs/product/session-requests.md`). |
 | Dormant | `dormant` | an orange (warning) "zz", two Zs rising | The terminal of a running Claude Code session shows one of its views of its background agents, and the session is held there until the user leaves it. See "Dormant" below. |
@@ -86,7 +86,7 @@ from the bare pause of *interrupted*.
 ## Transitions
 
 - Opening a session puts it in *starting*; once its process is up it moves to *working* when it is handed an opening
-  prompt (a session started with `new_session`, or on another session's request that the user approved), to *done*
+  prompt (a session started with `open_session`, or on another session's request that the user approved), to *done*
   when it was opened on an existing conversation (see "Opening a new session on a found conversation" in
   `docs/product/resuming-a-conversation-by-its-session-id.md`), and to *awaiting instructions* otherwise, unless the
   agent's own first report has already moved it on (see "Starting the session" in `docs/product/opening-sessions.md`).

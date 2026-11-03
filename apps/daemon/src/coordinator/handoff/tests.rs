@@ -334,7 +334,7 @@ async fn a_lead_session_is_replaced_by_a_lead_session_of_the_same_console_sessio
              calling `mcp__octoboard__report`. `done` with no open items archives you, and is \
              refused while a session you started is not archived; `needs_decision` or open items \
              leave you running. You keep your child sessions and go on driving them with \
-             `mcp__octoboard__new_session` and the tools that go with it."
+             `mcp__octoboard__open_session` and the tools that go with it."
         ),
         "{held}"
     );

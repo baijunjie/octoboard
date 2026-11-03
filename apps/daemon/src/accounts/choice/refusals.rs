@@ -14,7 +14,7 @@ use crate::time::now_millis;
 /// that determination is still pending, which the launch's own refusal of a missing binary already
 /// covers; see "When the agent or the account cannot open a session" in
 /// `docs/product/opening-sessions.md`. Checked here, ahead of everything that follows, so this is
-/// also what a console session's own `new_session` tool is refused through — it calls this same
+/// also what a console session's own `open_session` tool is refused through — it calls this same
 /// function.
 pub(crate) fn refuse_if_agent_unavailable(state: &Arc<AppState>, agent: Agent) -> Result<()> {
     if agent_is_available(state, agent) {

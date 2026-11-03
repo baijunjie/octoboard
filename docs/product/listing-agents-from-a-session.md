@@ -2,7 +2,7 @@
 
 Every session, of any kind, has the `list_agents` tool, so an agent can see which agents a session could be opened on,
 what the user noted each one is for and what each of their accounts has left, before it names an agent or an account —
-for `new_session` or `request_session`, or `switch_session_account` or `handoff_session`. It takes an optional `agent`
+for `open_session` or `request_session`, or `switch_session_account` or `handoff_session`. It takes an optional `agent`
 and an optional `refresh` (below), and answers:
 
 ```text

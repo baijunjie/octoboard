@@ -127,13 +127,13 @@ pub(super) fn describe_session_shown(
         "observed_effort": session.observed_effort,
         "default_effort": state.default_effort_of(&session.id),
         // Whether the agent has a conversation of this session to continue. It says a turn was
-        // taken, not that the agent still holds the record: a `reopen_session` that finds the
+        // taken, not that the agent still holds the record: a `resume_session` that finds the
         // record gone is refused as `conversation_unresumable`.
         "has_conversation": session.has_conversation,
         "pinned": session.pinned,
         // A locked session cannot be archived.
         "locked": session.locked,
-        // The names only: the worktree each stands in is `get_session_branches`'.
+        // The names only: the worktree each stands in is `list_session_branches`'.
         "branches": branches.get(&session.id).cloned().unwrap_or_default(),
         "role": session.role,
         "orchestration_role": session.orchestration_role,

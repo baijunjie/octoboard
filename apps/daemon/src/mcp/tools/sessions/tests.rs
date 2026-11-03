@@ -22,11 +22,11 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 /// The refusal `coordinator::open::open_session` raises for an unavailable agent is not only
-/// the control socket's — a console session reaches it through its own `new_session` tool, and
+/// the control socket's — a console session reaches it through its own `open_session` tool, and
 /// comes back with a tool error carrying the reason in prose, as "The console session's tools"
 /// in `docs/product/hub-orchestration.md` promises for any refusal.
 #[tokio::test]
-async fn an_unavailable_agent_refuses_the_console_sessions_own_new_session_tool() {
+async fn an_unavailable_agent_refuses_the_console_sessions_own_open_session_tool() {
     let (state, _dir) = crate::test_support::app_state("mcp-exec-new-session-agent-unavailable");
     state.store.insert_console(&console()).unwrap();
     state
@@ -65,16 +65,16 @@ async fn an_unavailable_agent_refuses_the_console_sessions_own_new_session_tool(
     .unwrap()
     .clone();
 
-    let err = call(&state, &owner.id, "new_session", &arguments)
+    let err = call(&state, &owner.id, "open_session", &arguments)
         .await
         .expect_err("refused");
     assert!(err.to_string().contains("Claude Code"), "{err}");
 }
 
-/// An agent that is not added is refused to an agent's own `new_session` and `request_session`
+/// An agent that is not added is refused to an agent's own `open_session` and `request_session`
 /// alike, the latter before the user is asked.
 #[tokio::test]
-async fn an_agent_that_is_not_added_is_refused_to_new_session_and_request_session() {
+async fn an_agent_that_is_not_added_is_refused_to_open_session_and_request_session() {
     let (state, _dir) = shared_console_state("new-session-agent-not-added");
     state
         .store
@@ -87,7 +87,7 @@ async fn an_agent_that_is_not_added_is_refused_to_new_session_and_request_sessio
     request.insert("kind".to_string(), json!("project"));
     request.insert("project".to_string(), json!("project-1"));
 
-    for (tool, args) in [("new_session", new), ("request_session", request)] {
+    for (tool, args) in [("open_session", new), ("request_session", request)] {
         let err = call(&state, "a", tool, &args).await.expect_err("refused");
         assert!(err.to_string().contains("is not added"), "{tool}: {err}");
         assert!(err.to_string().contains("Agent accounts"), "{tool}: {err}");
@@ -96,7 +96,7 @@ async fn an_agent_that_is_not_added_is_refused_to_new_session_and_request_sessio
 }
 
 /// A session request is refused before the user is asked whenever the same call to
-/// `new_session` would be, and so is one whose arguments do not say where the session would
+/// `open_session` would be, and so is one whose arguments do not say where the session would
 /// be.
 #[tokio::test]
 async fn a_session_request_is_refused_before_the_user_is_asked() {
@@ -276,11 +276,11 @@ async fn a_session_request_hands_over_only_branches_the_caller_is_responsible_fo
     );
 }
 
-/// `new_session`'s `branches` are the caller's to give as `request_session`'s are: anything
+/// `open_session`'s `branches` are the caller's to give as `request_session`'s are: anything
 /// else is refused before a session is started, and what is accepted moves to the new session
 /// once it is running, which the result says.
 #[tokio::test]
-async fn new_session_hands_the_callers_branches_to_the_session_it_starts() {
+async fn open_session_hands_the_callers_branches_to_the_session_it_starts() {
     use crate::test_support::{stand_in_launch, Launched, StandIn};
     use std::sync::Mutex;
 
@@ -324,7 +324,7 @@ async fn new_session_hands_the_callers_branches_to_the_session_it_starts() {
     let before = state.store.list_sessions().unwrap().len();
 
     let input = arguments(json!({ "brief": { "goal": "x" }, "branches": ["theirs"] }));
-    let err = new_session(
+    let err = open_session(
         &state,
         &caller,
         &input,
@@ -345,7 +345,7 @@ async fn new_session_hands_the_callers_branches_to_the_session_it_starts() {
         "brief": { "goal": "x" },
         "branches": ["mine", "also", "mine"],
     }));
-    let answer = new_session(
+    let answer = open_session(
         &state,
         &caller,
         &input,
@@ -387,7 +387,7 @@ async fn new_session_hands_the_callers_branches_to_the_session_it_starts() {
         "brief": { "goal": "x" },
         "branches": ["mine"],
     }));
-    let err = new_session(
+    let err = open_session(
         &state,
         &console,
         &input,
@@ -403,7 +403,7 @@ async fn new_session_hands_the_callers_branches_to_the_session_it_starts() {
 
     // Without `branches` the answer is what it was.
     let input = arguments(json!({ "brief": { "goal": "x" } }));
-    let answer = new_session(
+    let answer = open_session(
         &state,
         &caller,
         &input,
@@ -571,7 +571,7 @@ async fn an_unbound_project_session_cannot_start_a_session_in_another_project() 
         let err = call(
             &state,
             "starter",
-            "new_session",
+            "open_session",
             &arguments(json!({ "project": project, "brief": { "goal": "x" } })),
         )
         .await
@@ -587,7 +587,7 @@ async fn an_unbound_project_session_cannot_start_a_session_in_another_project() 
 /// Without a `project`, or naming the one the caller is in, the call gets as far as the launch
 /// the console session's tool uses: an unavailable agent is refused there, in prose.
 #[tokio::test]
-async fn an_unbound_project_sessions_new_session_reaches_the_launch_in_its_own_project() {
+async fn an_unbound_project_sessions_open_session_reaches_the_launch_in_its_own_project() {
     let (state, _dir) = peer_state("peer-start-launch");
     state.set_agent_availability(vec![AgentAvailability {
         agent: Agent::Claude,
@@ -599,7 +599,7 @@ async fn an_unbound_project_sessions_new_session_reaches_the_launch_in_its_own_p
         if let Some(project) = project {
             input.insert("project".to_string(), json!(project));
         }
-        let err = call(&state, "starter", "new_session", &input)
+        let err = call(&state, "starter", "open_session", &input)
             .await
             .expect_err("agent unavailable");
         assert!(
@@ -653,7 +653,7 @@ async fn only_the_owner_renames_or_pins_a_session() {
         ] {
             let message = refused(&state, "a", tool, args).await;
             assert!(
-                message.contains("send_message") || message.contains("your own"),
+                message.contains("inform_session") || message.contains("your own"),
                 "{message}"
             );
         }
@@ -672,10 +672,10 @@ async fn only_the_owner_renames_or_pins_a_session() {
     assert!(message.contains("not a tool"), "{message}");
 }
 
-/// `new_session`'s account must belong to the session's agent, and its model must be one the
+/// `open_session`'s account must belong to the session's agent, and its model must be one the
 /// agent offers; both are refused before anything is launched.
 #[tokio::test]
-async fn new_session_refuses_another_agents_account_and_a_model_not_offered() {
+async fn open_session_refuses_another_agents_account_and_a_model_not_offered() {
     let (state, _dir) = settings_state("new-session-overrides");
     for (extra, expected) in [
         (json!({ "account": "acct-codex" }), "unknown account"),
@@ -685,7 +685,7 @@ async fn new_session_refuses_another_agents_account_and_a_model_not_offered() {
         args.as_object_mut()
             .unwrap()
             .extend(extra.as_object().unwrap().clone());
-        let message = refused(&state, "a", "new_session", args).await;
+        let message = refused(&state, "a", "open_session", args).await;
         assert!(message.contains(expected), "{message}");
     }
     assert_eq!(state.store.list_sessions().unwrap().len(), 8);
@@ -1369,9 +1369,9 @@ fn a_started_session_takes_the_title_given_else_its_goals() {
     );
 }
 
-/// `new_session` says which account the session opened on.
+/// `open_session` says which account the session opened on.
 #[tokio::test]
-async fn new_session_returns_the_account_it_opened_on() {
+async fn open_session_returns_the_account_it_opened_on() {
     use crate::test_support::{stand_in_launch, Launched, StandIn};
     use std::sync::Mutex;
 
@@ -1395,7 +1395,7 @@ async fn new_session_returns_the_account_it_opened_on() {
         let mut input = input;
         input["project"] = json!("project-1");
         input["brief"] = json!({ "goal": "x" });
-        let answer = new_session(
+        let answer = open_session(
             &state,
             &caller,
             &arguments(input),
@@ -1415,7 +1415,7 @@ async fn a_new_session_refuses_a_brief_part_that_is_not_text() {
     let err = call(
         &state,
         "a",
-        "new_session",
+        "open_session",
         &arguments(json!({ "project": "project-1", "brief": { "goal": "x", "context": 5 } })),
     )
     .await
@@ -1431,7 +1431,7 @@ async fn a_reopen_refuses_a_model_that_is_not_text() {
         let err = call(
             &state,
             "a",
-            "reopen_session",
+            "resume_session",
             &arguments(json!({ "session": "archived-of-a", key: 5 })),
         )
         .await
@@ -1442,9 +1442,9 @@ async fn a_reopen_refuses_a_model_that_is_not_text() {
     assert_eq!(after.status, SessionStatus::Archived);
 }
 
-/// `reopen_session` answers with the account, model and effort the relaunch used.
+/// `resume_session` answers with the account, model and effort the relaunch used.
 #[tokio::test]
-async fn reopen_session_returns_the_account_model_and_effort_it_launched_with() {
+async fn resume_session_returns_the_account_model_and_effort_it_launched_with() {
     use crate::test_support::{stand_in_launch, Launched, StandIn};
     use std::sync::Mutex;
 
@@ -1460,7 +1460,7 @@ async fn reopen_session_returns_the_account_model_and_effort_it_launched_with() 
     let launches = Arc::new(Mutex::new(Vec::<Launched>::new()));
     let started = Arc::new(Mutex::new(Vec::<StandIn>::new()));
 
-    let answer = reopen_session(
+    let answer = resume_session(
         state,
         &caller,
         &arguments(json!({ "session": "kid" })),
@@ -1498,7 +1498,7 @@ async fn a_reopen_with_blank_text_carries_no_instruction() {
     state.store.update_session(&kid).unwrap();
     let caller = state.session_record("a").unwrap();
 
-    let refused = reopen_session(
+    let refused = resume_session(
         state,
         &caller,
         &arguments(json!({ "session": "kid", "text": 5 })),
@@ -1512,7 +1512,7 @@ async fn a_reopen_with_blank_text_carries_no_instruction() {
     let launches = Launches::default();
     let started = Started::default();
     let prompted = Arc::new(Mutex::new(None::<bool>));
-    reopen_session(
+    resume_session(
         state,
         &caller,
         &arguments(json!({ "session": "kid", "text": "  \n " })),
@@ -1538,10 +1538,10 @@ async fn a_reopen_with_blank_text_carries_no_instruction() {
     assert_eq!(launches[0].2, None);
 }
 
-/// While accounts are selected automatically, `new_session` names the account that was
+/// While accounts are selected automatically, `open_session` names the account that was
 /// picked, not the caller's, and the model and effort it launched with.
 #[tokio::test]
-async fn new_session_returns_the_account_automatic_selection_picked() {
+async fn open_session_returns_the_account_automatic_selection_picked() {
     use crate::protocol::{AccountQuota, QuotaWindow, QuotaWindowKind};
     use crate::test_support::{stand_in_launch, Launched, StandIn};
     use std::sync::Mutex;
@@ -1593,7 +1593,7 @@ async fn new_session_returns_the_account_automatic_selection_picked() {
     let launches = Arc::new(Mutex::new(Vec::<Launched>::new()));
     let started = Arc::new(Mutex::new(Vec::<StandIn>::new()));
 
-    let answer = new_session(
+    let answer = open_session(
         &state,
         &caller,
         &arguments(json!({ "project": "project-1", "brief": { "goal": "x" } })),
@@ -1608,10 +1608,10 @@ async fn new_session_returns_the_account_automatic_selection_picked() {
     assert_eq!(answer["effort"], "high");
 }
 
-/// With automatic selection on and no usable account, `new_session` is refused naming the
+/// With automatic selection on and no usable account, `open_session` is refused naming the
 /// account that becomes usable soonest, not the caller's own.
 #[tokio::test]
-async fn new_session_with_no_usable_account_is_refused_on_the_soonest_one() {
+async fn open_session_with_no_usable_account_is_refused_on_the_soonest_one() {
     use crate::protocol::{AccountQuota, QuotaWindow, QuotaWindowKind};
     use crate::test_support::{stand_in_launch, Launched, StandIn};
     use std::sync::Mutex;
@@ -1661,7 +1661,7 @@ async fn new_session_with_no_usable_account_is_refused_on_the_soonest_one() {
     let launches = Arc::new(Mutex::new(Vec::<Launched>::new()));
     let started = Arc::new(Mutex::new(Vec::<StandIn>::new()));
 
-    let err = new_session(
+    let err = open_session(
         &state,
         &caller,
         &arguments(json!({ "project": "project-1", "brief": { "goal": "x" } })),
@@ -1675,7 +1675,7 @@ async fn new_session_with_no_usable_account_is_refused_on_the_soonest_one() {
 }
 
 #[tokio::test]
-async fn new_session_automatic_agent_fallback_inherits_the_final_agents_launch_settings() {
+async fn open_session_automatic_agent_fallback_inherits_the_final_agents_launch_settings() {
     use crate::test_support::{stand_in_launch, Launched, StandIn};
     use std::sync::Mutex;
 
@@ -1694,7 +1694,7 @@ async fn new_session_automatic_agent_fallback_inherits_the_final_agents_launch_s
     let caller = state.session_record("a").unwrap();
     let launches = Arc::new(Mutex::new(Vec::<Launched>::new()));
     let started = Arc::new(Mutex::new(Vec::<StandIn>::new()));
-    let answer = new_session(
+    let answer = open_session(
         &state,
         &caller,
         &arguments(json!({"project": "project-1", "brief": {"goal": "x"}})),

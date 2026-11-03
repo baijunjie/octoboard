@@ -114,7 +114,7 @@ can escape that relationship. If it still carries the launch's identity, it can 
 ## Moving processes between sessions
 
 An owner moves process trees between itself and its sessions, or from one of its sessions to another, with the
-`handover_processes` agent tool, as `handover_branches` moves branches (see "Handing branches between sessions of an
+`transfer_processes` agent tool, as `transfer_branches` moves branches (see "Handing branches between sessions of an
 owner" in `docs/product/branch-responsible-session.md`): `from` and `to` are each the caller or a session it owns,
 either left out meaning the caller, and they must differ. No approval is asked. The trees keep running; only the session
 whose process end stops them changes, and they are listed under it from then on. Each tree named, by the id the

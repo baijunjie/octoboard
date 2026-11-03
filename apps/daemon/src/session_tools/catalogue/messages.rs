@@ -43,8 +43,8 @@ pub(super) const REPORT: ToolDef = ToolDef {
     },
 };
 
-pub(super) const SEND_MESSAGE: ToolDef = ToolDef {
-    name: "send_message",
+pub(super) const INFORM_SESSION: ToolDef = ToolDef {
+    name: "inform_session",
     description: "Tell a session something it may find useful: what you found, decided or \
                   changed that touches its work. Any session can be told, in any project or \
                   console, console sessions included; no session needs to own the other. It is \

@@ -119,7 +119,7 @@ closes as soon as the session is recorded, and the session's terminal says it is
 owner, an unavailable agent or one that is not added, a used-up account, a model the agent does not offer, the refusals
 about a conversation to resume (see "Opening a new session on a found conversation" in
 `docs/product/resuming-a-conversation-by-its-session-id.md`) — is still shown while the dialog is open, in an error
-alert over it, and the dialog stays open. A session an agent opens with `new_session`, and the session an approved
+alert over it, and the dialog stays open. A session an agent opens with `open_session`, and the session an approved
 request for one starts (see "On approval" in `docs/product/session-requests.md`), are listed as *starting* the same way,
 but the agent's call, or the approval, is answered only once the launch has settled, with the launch's own refusal when
 it fails.
@@ -127,7 +127,7 @@ it fails.
 The dialog takes no task: once up, a session the user opens by hand is in *awaiting instructions*, sitting at the
 agent's prompt, and is given its work by typing into its terminal; one opened on a found conversation is *done* instead,
 since it has a conversation from the start (see "Done, awaiting instructions and child sessions working" in
-`docs/product/session-statuses.md`). Only a session started with `new_session` — by a
+`docs/product/session-statuses.md`). Only a session started with `open_session` — by a
 console session or a project session — or on another session's request that the user approved is handed an opening
 prompt, the brief it is started with (see "Handing out a task: the brief" in `docs/product/hub-orchestration.md` and "On
 approval" in `docs/product/session-requests.md`); once up, it is in *working*.
@@ -149,10 +149,10 @@ which gives the reason, worded from the failure's own code in the UI's language,
 under **Error details** (see "The error alert" in `docs/product/error-alerts.md`); for a shell environment capture that
 ran out of time, the explanation is laid out beneath that line — the command that did not finish and its time limit, the
 likely cause, and what to fix. Should the session's record itself fail to be removed, it is left *interrupted* instead,
-and the error alert is shown all the same. For `new_session` and an approved session request the failure is reported
-through that call instead (see "When an approval cannot be carried out" in `docs/product/session-requests.md` for the
-latter). A missing config directory does not fail a brand new session for the other two agents: it has no conversation
-to lose, so Claude Code creates the directory itself and Octoboard creates it for Codex.
+and the error alert is shown all the same. For the `open_session` tool and an approved session request the failure is
+reported through that call instead (see "When an approval cannot be carried out" in `docs/product/session-requests.md`
+for the latter). A missing config directory does not fail a brand new session for the other two agents: it has no
+conversation to lose, so Claude Code creates the directory itself and Octoboard creates it for Codex.
 
 ## When no agent can open a session
 
@@ -185,18 +185,18 @@ change the agent selected for opening a session with defaults.
 ## When the agent or the account cannot open a session
 
 **The daemon refuses to open a session of an agent that is not added.** Whatever opens it — the dialog, a session opened
-with defaults, `open_session`, a console or project session's `new_session` (with `resume_agent_session_id` too), or an
-approved session request — a new session whose agent, once resolved (see "Which agent a session uses" below), is not on
-the list of added agents is refused with `agent_not_added`, and nothing is recorded. The refusal names the agent and
-says it is not added, pointing to Settings → Agent accounts; in the window it is shown in an error alert offering **Add
-agent** (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`). A session request is refused that way
-before the user is asked, and again on approval should the agent have been removed meanwhile (see
-`docs/product/session-requests.md`). Handing a session off to an agent that is not added is refused the same way (see
-"What can be handed off" in `docs/product/handing-off-sessions.md`). While the list is undecided (see "Added agents" in
-`docs/product/agent-accounts.md`) nothing is refused for it; a list the user has emptied refuses every agent. An agent
-that has been determined unavailable is refused as unavailable (`agent_not_available`) rather than as not added. Only a
-session being opened is checked: a session of an agent removed since keeps running, and resuming, reopening or
-restarting it is never refused for this.
+with defaults, the `open_session` request (with `resume_agent_session_id` too), a console or project session's
+`open_session` tool, or an approved session request — a new session whose agent, once resolved (see "Which agent a
+session uses" below), is not on the list of added agents is refused with `agent_not_added`, and nothing is recorded. The
+refusal names the agent and says it is not added, pointing to Settings → Agent accounts; in the window it is shown in an
+error alert offering **Add agent** (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`). A session
+request is refused that way before the user is asked, and again on approval should the agent have been removed meanwhile
+(see `docs/product/session-requests.md`). Handing a session off to an agent that is not added is refused the same way
+(see "What can be handed off" in `docs/product/handing-off-sessions.md`). While the list is undecided (see "Added
+agents" in `docs/product/agent-accounts.md`) nothing is refused for it; a list the user has emptied refuses every agent.
+An agent that has been determined unavailable is refused as unavailable (`agent_not_available`) rather than as not
+added. Only a session being opened is checked: a session of an agent removed since keeps running, and resuming,
+reopening or restarting it is never refused for this.
 
 **The daemon refuses to open a session on a turned-off account** (see "Turning an account off" in
 `docs/product/agent-accounts.md`). Whatever opens it — the same openings as for a used-up account below — a new session
@@ -227,13 +227,13 @@ Only a session being opened is checked: a session already on the account keeps r
 restarting it is never refused for this.
 
 **The daemon refuses to open a session on a used-up account.** Whatever opens it — the dialog, a session opened with
-defaults, `open_session`, a console or project session's `new_session` (with `resume_agent_session_id` too), a handoff's
-receiving session, or an approved session request — a new session whose account, once resolved (see "Which account a
-session uses" below), is used up by the reading the daemon holds at that moment (see "A used-up account" in
-`docs/product/account-quotas.md`) is refused with `account_quota_exhausted`, and nothing is recorded; the user's own
-request is refused too. The refusal carries `agent`, `account` (the account's name), `window` (the used-up window's name
-in English, the same for every agent: `5-hour`, `Weekly`, `Monthly` or `Credits`, or a window's own label when it
-carries one), `window_kind` (session, weekly or credit period), `window_minutes` (its length, when known),
+defaults, the `open_session` request (with `resume_agent_session_id` too), a console or project session's `open_session`
+tool, a handoff's receiving session, or an approved session request — a new session whose account, once resolved (see
+"Which account a session uses" below), is used up by the reading the daemon holds at that moment (see "A used-up
+account" in `docs/product/account-quotas.md`) is refused with `account_quota_exhausted`, and nothing is recorded; the
+user's own request is refused too. The refusal carries `agent`, `account` (the account's name), `window` (the used-up
+window's name in English, the same for every agent: `5-hour`, `Weekly`, `Monthly` or `Credits`, or a window's own label
+when it carries one), `window_kind` (session, weekly or credit period), `window_minutes` (its length, when known),
 `model_weekly` (when the same reading also has a model's own weekly window) and, when the agent gives a reset time,
 `resets_at` in milliseconds since the epoch. In the window it is shown in an error alert, in the UI's language, saying
 the account cannot run a session because it has reached that limit, the window named as everywhere else in the UI (see
@@ -255,10 +255,10 @@ this.
 **Nothing is opened while the daemon shuts down.** Once it has begun to, every opening above, and every resume, is
 refused with `daemon_shutting_down` (see "Quitting" in `docs/product/application-lifecycle.md`).
 
-With every agent determined unavailable, a console session's `new_session` tool is refused as well, with a reason it can
-report that says the same (see "The console session's tools" in `docs/product/hub-orchestration.md`). Nothing is refused
-for an agent being unavailable while availability is still being determined: a session then opens or fails exactly as
-described above.
+With every agent determined unavailable, a console session's `open_session` tool is refused as well, with a reason it
+can report that says the same (see "The console session's tools" in `docs/product/hub-orchestration.md`). Nothing is
+refused for an agent being unavailable while availability is still being determined: a session then opens or fails
+exactly as described above.
 
 ## Opening a session with defaults
 
@@ -350,12 +350,12 @@ default, described in "The agent and account of a session a session starts" in `
 While **Automatically select an account** is on, a new conversation without an explicit account tries all usable
 accounts of its initial agent before considering another agent. If none can open a session, it tries the other added,
 installed agents in added-agent order, applying the same account rules to each (see "Which account a session uses"
-below). Accounts of different agents are never ranked against each other. This applies to the dialog's untouched
-initial choice, quick creation, `open_session`, `new_session` and `request_session`. An explicitly named agent restricts
-automatic selection to that agent; an explicitly named account is used as given. A manual choice in the dialog also
-stays with that agent or account while its agent can still be picked and its account still exists. An agent with
-every account turned off is excluded from the launch pickers regardless of this setting. Turning automatic selection
-off adds no fallback to another agent for quota exhaustion, being logged out or a running sharing change.
+below). Accounts of different agents are never ranked against each other. This applies to the dialog's untouched initial
+choice, quick creation, `open_session` (the request or the tool) and `request_session`. An explicitly named agent
+restricts automatic selection to that agent; an explicitly named account is used as given. A manual choice in the dialog
+also stays with that agent or account while its agent can still be picked and its account still exists. An agent with
+every account turned off is excluded from the launch pickers regardless of this setting. Turning automatic selection off
+adds no fallback to another agent for quota exhaustion, being logged out or a running sharing change.
 
 Resuming a conversation, handing a session off to a specified agent and switching its account keep their specified
 agent; none silently changes it under automatic account selection.
@@ -401,7 +401,7 @@ Who makes the pick:
   "Handing off from the window" in `docs/product/handing-off-sessions.md`).
 - Opening a session with defaults uses the same account the dialog would open on, and sends it the same way (see
   "Opening a session with defaults" above).
-- `new_session` and `request_session`, when `account` is left out or blank, have the daemon make the same pick, in the
+- `open_session` and `request_session`, when `account` is left out or blank, have the daemon make the same pick, in the
   caller's own console and in another console (see "The agent and account of a session a session starts" in
   `docs/product/hub-orchestration.md`).
 - The **Resume conversation** tab does not follow the pick. It sends the agent and account that hold the conversation,
@@ -410,7 +410,7 @@ Who makes the pick:
 - `handoff_session`, when `account` is left out or blank, has the daemon make the same pick among its receiving
   agent's accounts only (see "Handing off from an owner's tool" in `docs/product/handing-off-sessions.md`).
 
-For `new_session`, `request_session` and `handoff_session`, the caller's usable account can take the place of the
+For `open_session`, `request_session` and `handoff_session`, the caller's usable account can take the place of the
 inherited account when both sessions are in the same console and use the same agent; see "The agent and account of a
 session a session starts" in `docs/product/hub-orchestration.md`. Their automatically chosen agent and account are
 settled when the call is made, so a session request keeps that pair while waiting for approval. A handoff's account
@@ -462,11 +462,11 @@ the initial agent that becomes usable soonest: of the accounts kept off only by 
 logged out, with no sharing change running), the one whose blocking window resets first. Where several windows of an
 account are used up, that is the one that resets last, and a blocking window with no reset time counts as never. Equal
 times keep the candidate order above. With none of those, or with automatic selection off, the dialog keeps the
-inherited account. The daemon settles the account the same way for a session that leaves it out (`new_session`,
-`request_session`, `handoff_session`): `new_session` and `request_session` are refused naming that account. An
-automatically approved handoff is refused naming it too; a handoff that asks the user starts its approval form on it.
-With no qualifying account, or with automatic selection off, the daemon falls back to the caller or project/console
-inheritance rules above.
+inherited account. The daemon settles the account the same way for a session that leaves it out (the tools
+`open_session`, `request_session`, `handoff_session`): the first two are refused naming that account. An automatically
+approved handoff is refused naming it too; a handoff that asks the user starts its approval form on it. With no
+qualifying account, or with automatic selection off, the daemon falls back to the caller or project/console inheritance
+rules above.
 
 ## Which model and reasoning effort a session uses
 

@@ -86,52 +86,51 @@ the launch environment described below:
   the agent, started fresh per session, and each session's tools are reachable only by that session. The agent's own and
   the project's own MCP servers keep working alongside it. Claude Code and Codex are told to run its tools without
   asking (see "Claude Code" and "Codex" in `docs/product/per-agent-launch-specifics.md`).
-- **A role description** — whether this is a console or project session, and, for a project session, its coordinator or
-  worker role and separate reporting relationship. Every project session's description opens with its responsibility
+- **A role description** — whether this is a console or project session, and, for a project session, its coordinator
+  or worker role and separate reporting relationship. Every project session's description opens with its responsibility
   for the current project's tasks under the project's own instructions, conventions and configuration. It then explains
-  its reporting relationship; an independent session's coordination capabilities follow in a separate section.
-  The description includes the corresponding reporting conventions. A console session's is short: it is the console
-  session, it decomposes requests on its console's projects, dispatches them,
-  follows up and summarizes, does itself any work that touches no project, and does not change a project itself, and the
-  rest is in its instruction file, which may end with the user's own instructions, which take precedence over the rest
-  of the file wherever they disagree but never let it change a project itself (see "The console session's instruction
-  file" below). A worker with a console parent is told that console session is waiting on its result and how to `report`
-  to it; one bound to a project session is told which project session, by its id, dispatched it and that it reports
-  there; either is told that its owner can hand it to another session, which Octoboard then tells it in a message. One
-  nobody owns — opened by hand without a console session to report to, or started on another session's request — is told
-  that no session dispatched it, that nobody but the user owns it, and not to call `report`; that it may start sessions
-  in its own project and drive them, which report back to it; and that if it binds itself to an owner, that call's
-  result tells it what changes. A coordinator with a parent, bound to a console session only after it was opened, is
-  given that same independent project session's text on every launch, as at its first (see "Coordinators with a parent
-  session" in `docs/product/hub-orchestration.md`). A worker's text also tells it how to find its own account
-  and to report when its quota runs low (see `docs/product/listing-agents-from-a-session.md`). Every
-  project session's text also sets out how it relates to other sessions: `new_session` for a session of its own where it
-  has it, together with when to start one and how to choose the session a task goes to (see "Choosing the session a task
-  goes to" in `docs/product/hub-orchestration.md`), `handoff_session`, `switch_session_account`, `transfer_session`,
-  `release_session` and `bind_to_session` where it has them, `request_session` for a session that is nobody's,
-  `request_resume_session` for resuming a conversation the user asked for, `list_agents` for the agents a session could
-  be opened on, with their tags, and what each account's quota has left, the reads every session has whatever its
-  kind — `get_session`, `read_session_history`, `list_consoles`, `list_projects` and `list_archived` — with the rule
-  that a session not its own is to be left alone whatever it can read of it, `list_agent_models` to check before
-  naming a model or effort, `list_sessions` and `send_message` for information, `get_session_branches` for where the
-  branches a session is responsible for are checked out and which branch each is to be merged into,
-  `list_project_branches` for a project's branches with the session responsible for each, and `list_project_changes`
-  and `read_project_diff` for what has changed in a project of its console — to be used, rather than `git status` or
-  `git diff`, for another session's worktree or branch and for the project's folder, which another session may be
-  working in, while in its own worktree it runs `git` as usual (see "Reading a project's changes" in
-  `docs/product/what-every-session-reads.md`). Where its project's effective git workflow settings have sessions develop
-  on a branch or in a worktree of their own at the launch, it also carries the development rule (see "The development
-  rule" in `docs/product/git-workflow-settings.md`), where **Ask questions as choices** is on at the launch, the
-  guidance on asking the user after it (see "The guidance on asking the user" below), and where the language the daemon
-  holds is not English, the guidance on the user's language after that (see "The guidance on the user's language"
-  below). Every project session's text then says that everything else is the ordinary work of the project, under its own
-  instructions, conventions and configuration. Every role description, for console and project sessions alike, ends with
-  a separated section on the scope of host instructions: they govern the assistant's behavior without establishing the
-  user's task context. Requests are interpreted through the current project, where applicable, and the conversation; a
-  concept mentioned in the host instructions alone does not make a request about the host unless the user explicitly
-  refers to it. Instruction priority resolves conflicts without determining what the user's request refers to. The text
-  is written from who the session reports to when it launches, and says that what Octoboard tells it of a later change
-  of owner replaces what it says (see "When a binding changes while a session runs" in
+  its reporting relationship; an independent session's coordination capabilities follow in a separate section. The
+  description includes the corresponding reporting conventions. A console session's is short: it is the console session,
+  it decomposes requests on its console's projects, dispatches them, follows up and summarizes, does itself any work
+  that touches no project, and does not change a project itself, and the rest is in its instruction file, which may end
+  with the user's own instructions, which take precedence over the rest of the file wherever they disagree but never let
+  it change a project itself (see "The console session's instruction file" below). A worker with a console parent is
+  told that console session is waiting on its result and how to `report` to it; one bound to a project session is told
+  which project session, by its id, dispatched it and that it reports there; either is told that its owner can hand it
+  to another session, which Octoboard then tells it in a message. One nobody owns — opened by hand without a console
+  session to report to, or started on another session's request — is told that no session dispatched it, that nobody but
+  the user owns it, and not to call `report`; that it may start sessions in its own project and drive them, which report
+  back to it; and that if it binds itself to an owner, that call's result tells it what changes. A coordinator with a
+  parent, bound to a console session only after it was opened, is given that same independent project session's text on
+  every launch, as at its first (see "Coordinators with a parent session" in `docs/product/hub-orchestration.md`). A
+  worker's text also tells it how to find its own account and to report when its quota runs low (see
+  `docs/product/listing-agents-from-a-session.md`). Every project session's text also sets out how it relates to other
+  sessions: `open_session` for a session of its own where it has it, together with when to start one and how to choose
+  the session a task goes to (see "Choosing the session a task goes to" in `docs/product/hub-orchestration.md`),
+  `handoff_session`, `switch_session_account`, `transfer_session`, `release_session` and `bind_to_session` where it has
+  them, `request_session` for a session that is nobody's, `request_resume_session` for resuming a conversation the user
+  asked for, `list_agents` for the agents a session could be opened on, with their tags, and what each account's quota
+  has left, the reads every session has whatever its kind — `get_session`, `read_session_history`, `list_consoles`,
+  `list_projects` and `list_archived_sessions` — with the rule that a session not its own is to be left alone whatever
+  it can read of it, `list_agent_models` to check before naming a model or effort, `list_sessions` and `inform_session`
+  for information, `list_session_branches` for where the branches a session is responsible for are checked out and which
+  branch each is to be merged into, `list_project_branches` for a project's branches with the session responsible for
+  each, and `list_project_changes` and `read_project_diff` for what has changed in a project of its console — to be
+  used, rather than `git status` or `git diff`, for another session's worktree or branch and for the project's folder,
+  which another session may be working in, while in its own worktree it runs `git` as usual (see "Reading a project's
+  changes" in `docs/product/what-every-session-reads.md`). Where its project's effective git workflow settings have
+  sessions develop on a branch or in a worktree of their own at the launch, it also carries the development rule (see
+  "The development rule" in `docs/product/git-workflow-settings.md`), where **Ask questions as choices** is on at the
+  launch, the guidance on asking the user after it (see "The guidance on asking the user" below), and where the language
+  the daemon holds is not English, the guidance on the user's language after that (see "The guidance on the user's
+  language" below). Every project session's text then says that everything else is the ordinary work of the project,
+  under its own instructions, conventions and configuration. Every role description, for console and project sessions
+  alike, ends with a separated section on the scope of host instructions: they govern the assistant's behavior without
+  establishing the user's task context. Requests are interpreted through the current project, where applicable, and the
+  conversation; a concept mentioned in the host instructions alone does not make a request about the host unless the
+  user explicitly refers to it. Instruction priority resolves conflicts without determining what the user's request
+  refers to. The text is written from who the session reports to when it launches, and says that what Octoboard tells it
+  of a later change of owner replaces what it says (see "When a binding changes while a session runs" in
   `docs/product/changing-session-owners.md`); a change made while the session was not running is told at its next
   launch, ahead of that launch's own instruction (see "A change of owner told at the next launch" in
   `docs/product/changing-session-owners.md`). The role and the session's binding as it stands decide which tools the

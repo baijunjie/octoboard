@@ -56,7 +56,13 @@ async fn sessions_are_filtered_by_kind_and_by_the_branch_they_are_responsible_fo
         call(state, "loose", "list_sessions", &arguments(filters)).await
     };
     let archived = |filters: Value| async move {
-        call(state, "loose", "list_archived", &arguments(filters)).await
+        call(
+            state,
+            "loose",
+            "list_archived_sessions",
+            &arguments(filters),
+        )
+        .await
     };
     assert_eq!(
         ids(&live(json!({ "branch": "lead-work" })).await.unwrap()),
@@ -86,7 +92,7 @@ async fn sessions_are_filtered_by_kind_and_by_the_branch_they_are_responsible_fo
     assert!(ids(&none).is_empty());
     assert_eq!(none["total"], 0);
 
-    for tool in ["list_sessions", "list_archived"] {
+    for tool in ["list_sessions", "list_archived_sessions"] {
         let err = call(state, "loose", tool, &arguments(json!({ "kind": "hub" })))
             .await
             .expect_err(tool);
@@ -145,7 +151,7 @@ async fn a_session_record_says_whether_it_is_paused_or_dormant() {
 
 /// An interrupted or archived session says whether its agent still holds the conversation:
 /// proven gone is `false`, one that cannot be told `null`, one with no conversation `true`; a
-/// running session has no such field, and `list_archived` adds it only when asked.
+/// running session has no such field, and `list_archived_sessions` adds it only when asked.
 #[tokio::test]
 async fn a_no_process_session_says_whether_it_can_be_resumed() {
     let fixture = RepoState::new("reads-resumable");
@@ -186,7 +192,7 @@ async fn a_no_process_session_says_whether_it_can_be_resumed() {
     let asked = call(
         state,
         "loose",
-        "list_archived",
+        "list_archived_sessions",
         &arguments(json!({ "check_resumable": true })),
     )
     .await
@@ -201,7 +207,7 @@ async fn a_no_process_session_says_whether_it_can_be_resumed() {
             .clone()
     };
     assert_eq!(entry_of(&asked)["resumable"], false);
-    let plain = call(state, "loose", "list_archived", &Map::new())
+    let plain = call(state, "loose", "list_archived_sessions", &Map::new())
         .await
         .unwrap();
     assert!(entry_of(&plain).get("resumable").is_none());
@@ -610,7 +616,7 @@ async fn list_sessions_can_select_the_interrupted_sessions() {
     assert!(err.to_string().contains("`status` must be"), "{err}");
 }
 
-/// `list_archived` needs no project: with none it lists every console's archive, console
+/// `list_archived_sessions` needs no project: with none it lists every console's archive, console
 /// sessions included, and `console`, `project`, `owner` and `kind` narrow it, all having to
 /// hold.
 #[tokio::test]
@@ -629,9 +635,14 @@ async fn the_archive_can_be_listed_without_a_project_and_narrowed() {
     let ids = |filters: Value| {
         let state = state.clone();
         async move {
-            let listed = call(&state, "loose", "list_archived", &arguments(filters))
-                .await
-                .unwrap();
+            let listed = call(
+                &state,
+                "loose",
+                "list_archived_sessions",
+                &arguments(filters),
+            )
+            .await
+            .unwrap();
             let mut ids: Vec<String> = listed["sessions"]
                 .as_array()
                 .unwrap()
@@ -696,9 +707,14 @@ async fn the_archive_can_be_listed_without_a_project_and_narrowed() {
              project",
         ),
     ] {
-        let err = call(&state, "loose", "list_archived", &arguments(filter.clone()))
-            .await
-            .expect_err(&filter.to_string());
+        let err = call(
+            &state,
+            "loose",
+            "list_archived_sessions",
+            &arguments(filter.clone()),
+        )
+        .await
+        .expect_err(&filter.to_string());
         assert_eq!(err.to_string(), refusal);
     }
 }
@@ -723,7 +739,7 @@ async fn a_project_name_is_resolved_within_the_console_given() {
     archived.status = SessionStatus::Archived;
     state.store.insert_session(&archived).unwrap();
 
-    for tool in ["list_archived", "list_sessions"] {
+    for tool in ["list_archived_sessions", "list_sessions"] {
         let filters = if tool == "list_sessions" {
             json!({ "console": "console-2", "project": "project-1", "status": "any" })
         } else {
@@ -738,7 +754,7 @@ async fn a_project_name_is_resolved_within_the_console_given() {
             .iter()
             .map(|session| session["session"].as_str().unwrap())
             .collect();
-        let expected: &[&str] = if tool == "list_archived" {
+        let expected: &[&str] = if tool == "list_archived_sessions" {
             &["archived-twin"]
         } else {
             &[]
@@ -749,7 +765,7 @@ async fn a_project_name_is_resolved_within_the_console_given() {
     let own = call(
         &state,
         "loose",
-        "list_archived",
+        "list_archived_sessions",
         &arguments(json!({ "project": "project-1" })),
     )
     .await
@@ -768,7 +784,7 @@ async fn a_project_name_is_resolved_within_the_console_given() {
     let err = call(
         &state,
         "loose",
-        "list_archived",
+        "list_archived_sessions",
         &arguments(json!({ "console": "console-2", "project": "project-1" })),
     )
     .await
@@ -778,7 +794,7 @@ async fn a_project_name_is_resolved_within_the_console_given() {
     let err = call(
         &state,
         "loose",
-        "list_archived",
+        "list_archived_sessions",
         &arguments(json!({ "console": "console-1", "project": "twin" })),
     )
     .await
@@ -804,7 +820,15 @@ async fn the_archive_is_newest_first_and_capped_by_limit() {
     }
     let list = |filters: Value| {
         let state = state.clone();
-        async move { call(&state, "loose", "list_archived", &arguments(filters)).await }
+        async move {
+            call(
+                &state,
+                "loose",
+                "list_archived_sessions",
+                &arguments(filters),
+            )
+            .await
+        }
     };
     let listed = list(json!({ "kind": "project", "limit": 3 }))
         .await
@@ -1034,7 +1058,7 @@ async fn every_role_reads_the_same_things_with_ownership_relative_to_itself() {
             let archive = call(
                 &state,
                 caller,
-                "list_archived",
+                "list_archived_sessions",
                 &arguments(json!({ "project": project })),
             )
             .await
@@ -1057,7 +1081,7 @@ async fn every_role_reads_the_same_things_with_ownership_relative_to_itself() {
         let err = call(
             &state,
             caller,
-            "list_archived",
+            "list_archived_sessions",
             &arguments(json!({ "project": "nowhere" })),
         )
         .await
@@ -1151,7 +1175,7 @@ async fn a_project_name_in_the_callers_console_wins_for_the_archive() {
         let listed = call(
             &state,
             "loose",
-            "list_archived",
+            "list_archived_sessions",
             &arguments(json!({ "project": wanted })),
         )
         .await
@@ -1180,7 +1204,7 @@ async fn an_ambiguous_project_name_is_refused_for_the_archive() {
     let err = call(
         &state,
         "loose",
-        "list_archived",
+        "list_archived_sessions",
         &arguments(json!({ "project": "twin" })),
     )
     .await
@@ -1189,7 +1213,7 @@ async fn an_ambiguous_project_name_is_refused_for_the_archive() {
     call(
         &state,
         "loose",
-        "list_archived",
+        "list_archived_sessions",
         &arguments(json!({ "project": "twin-1" })),
     )
     .await
@@ -1283,7 +1307,7 @@ async fn the_archive_lists_every_owners_sessions() {
     let listed = call(
         &state,
         "a",
-        "list_archived",
+        "list_archived_sessions",
         &arguments(json!({ "project": "project-1" })),
     )
     .await
@@ -1479,7 +1503,7 @@ async fn a_session_record_carries_its_identity_launch_choices_and_owned_count() 
     assert_eq!(plain["display_title"], plain["title"]);
 }
 
-/// `list_archived` pages with `before`, and `yours` narrows it as it does `list_sessions`.
+/// `list_archived_sessions` pages with `before`, and `yours` narrows it as it does `list_sessions`.
 #[tokio::test]
 async fn the_archive_is_paged_with_before_and_narrowed_to_yours() {
     let (state, _dir) = shared_console_state("archive-before");
@@ -1492,7 +1516,7 @@ async fn the_archive_is_paged_with_before_and_narrowed_to_yours() {
     let list = |filters: Value| {
         let state = state.clone();
         async move {
-            call(&state, "a", "list_archived", &arguments(filters))
+            call(&state, "a", "list_archived_sessions", &arguments(filters))
                 .await
                 .unwrap()
         }
@@ -1533,7 +1557,7 @@ async fn the_archive_is_paged_with_before_and_narrowed_to_yours() {
     let err = call(
         &state,
         "a",
-        "list_archived",
+        "list_archived_sessions",
         &arguments(json!({ "before": "tie" })),
     )
     .await

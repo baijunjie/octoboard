@@ -812,8 +812,9 @@ async fn a_release_by_the_user_tells_a_running_owner() {
         "{told}"
     );
     assert!(told.contains("left with the user"), "{told}");
-    let send_message = session_tools::catalogue::qualified_tool_name(Agent::Claude, "send_message");
-    assert!(told.contains(&format!("`{send_message}`")), "{told}");
+    let inform_session =
+        session_tools::catalogue::qualified_tool_name(Agent::Claude, "inform_session");
+    assert!(told.contains(&format!("`{inform_session}`")), "{told}");
     assert_eq!(
         state.store.get_session("plain").unwrap().unwrap().bound_to,
         None

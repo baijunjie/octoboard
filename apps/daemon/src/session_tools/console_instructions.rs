@@ -69,11 +69,11 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            effort (for console sessions and for project sessions). A change to your own model or \
            effort takes effect when this session is next launched. `get_settings` / \
            `update_settings` — read or change the application-wide settings.\n\
-         - `new_session` — start a session in a project and hand it a `brief`. Fill in `goal`, and \
-           `context`, `acceptance` and `constraints` wherever you actually have something to say; \
-           an empty field is omitted from the session's opening prompt rather than sent blank. \
-           Name it with `title`, in the user's language, not that of the project, its docs and \
-           code. It runs on the project's default agent. A left-out account is selected by the \
+         - `open_session` — start a session in a project and hand it a `brief`. Fill in `goal`, \
+           and `context`, `acceptance` and `constraints` wherever you actually have something to \
+           say; an empty field is omitted from the session's opening prompt rather than sent \
+           blank. Name it with `title`, in the user's language, not that of the project, its docs \
+           and code. It runs on the project's default agent. A left-out account is selected by the \
            server according to the configured policy. Name another account only when the user \
            asked for it, and another agent only when the user asked for it or its tags \
            (`list_agents`) fit the work. The result gives the session's id and the agent, account, \
@@ -88,7 +88,7 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          - `get_session` — a session's status, account, model, pin and lock, branch names and a \
            tail of its output (8 KiB, or up to 64 KiB if you ask for more); it reads any \
            session, in any console, and with no `session` it reads you, which is how you learn \
-           your own Octoboard id. `get_session_branches` — the branches a session is \
+           your own Octoboard id. `list_session_branches` — the branches a session is \
            responsible for, the worktree each is checked out in, the target branch it was \
            created from and what archiving would do with it (read it before `archive_session` \
            to decide on `keep`). \
@@ -96,7 +96,7 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            the agent's final replies, not its tool calls), a page at a time from the latest.\n\
          - `list_project_changes` — what has changed in a project of this console, without \
            running git there: the uncommitted changes of its worktree, of another worktree \
-           (`worktree`, a path `get_session_branches` gave for a session of this console, or the \
+           (`worktree`, a path `list_session_branches` gave for a session of this console, or the \
            branch checked out in it), or what a `branch` has changed since it forked from \
            `base` (left out, the target branch recorded for it), with the commits it made. \
            `read_project_diff` — one changed file's diff, a window of it at a time. \
@@ -105,14 +105,14 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            holds a branch. This is how you check what a session reports, rather than taking its \
            word or running git. Only this console's projects can be read.\n\
          - `rename_session` / `set_session_pinned` — retitle (in the user's conversation \
-           language, as for `new_session`) or pin a session of yours.\n\
+           language, as for `open_session`) or pin a session of yours.\n\
          - `archive_session` — end and archive a session you are done with; its branches and \
            worktrees are removed where git can do it without force, unless you pass `keep`.\n\
          - `archive_self` — end and archive yourself once your sessions are all archived.\n\
-         - `list_archived` / `reopen_session` — pick an earlier session back up instead of \
-           starting over, handing it its next task (`list_archived` is newest first: narrow it \
-           with `yours`, `owner`, `project` or `branch`, `limit` sets how many, and `before` \
-           takes the previous answer's `next` to read the next page; it can also say \
+         - `list_archived_sessions` / `resume_session` — pick an earlier session back up instead \
+           of starting over, handing it its next task (`list_archived_sessions` is newest first: \
+           narrow it with `yours`, `owner`, `project` or `branch`, `limit` sets how many, and \
+           `before` takes the previous answer's `next` to read the next page; it can also say \
            whether the agent still holds each conversation, as `resumable`).\n\
          - `list_agents` — the agents a session could be opened on, each with its tags (the user's \
            notes on what it is for) and how much plan quota each of its accounts has left, as \
@@ -121,9 +121,9 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            one, at most once a minute per account, and only when that matters.\n\
          - `handoff_session` — move a session of yours to a new session of another agent, for \
            instance when its account has run out of quota; the new session takes its place.\n\
-         - `handover_branches` — move the responsibility for git branches from one session of \
+         - `transfer_branches` — move the responsibility for git branches from one session of \
            yours to another, naming both as `from` and `to`; no session is replaced.\n\
-         - `handover_processes` — move process trees (a dev server, say) from one session of \
+         - `transfer_processes` — move process trees (a dev server, say) from one session of \
            yours to another, so they are stopped when the receiving session ends.\n\
          - `switch_session_account` — move a session of yours to another account of its own \
            agent, keeping its conversation.\n\
@@ -138,7 +138,7 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          - `request_resume_session` — ask the user to resume a conversation by its agent \
          conversation id: the session that holds it comes back, or an independent session is \
          opened on the agent's own record of it. For when the user asked for that conversation.\n\
-         - `list_sessions` / `send_message` — the running sessions everywhere (narrow them with \
+         - `list_sessions` / `inform_session` — the running sessions everywhere (narrow them with \
            `console`, `project`, `owner`, `yours`, `kind` or `branch`; `status` is `live` \
            (the running ones) by default, `interrupted` for the interrupted ones, or `any` for \
            both), and telling one of them something.\n\
@@ -190,7 +190,7 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          in `orchestration_role` and the parent in `owner` (`owner_kind` says console or \
          project).\n\
          \n\
-         - A session `new_session` starts is a worker reporting to you: you drive its whole \
+         - A session `open_session` starts is a worker reporting to you: you drive its whole \
          life — instruct it, archive it when it is done, reopen it when it has another task. No \
          approval is needed.\n\
          - `request_session` is for a session that should be independent: it reports to the \
@@ -198,7 +198,7 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          waits for their answer.\n\
          - `request_resume_session` resumes a conversation the user named, as the new-session \
            dialog's Resume tab does, and it can resume any session of a project, not only yours \
-           (`reopen_session` is for yours, and needs no approval). What it resumes keeps its \
+           (`resume_session` is for yours, and needs no approval). What it resumes keeps its \
            owner, or reports to the user, and is not yours to drive. The user approves it first; \
            the call waits for their answer.\n\
          - `handoff_session` moves a session of yours to a new session of another agent. The \
@@ -209,7 +209,7 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            is yours like the original was, and the original is archived. Only a session that is \
            not in the middle of a turn can be handed off; moving to another account of the same \
            agent is not a handoff.\n\
-         - `handover_branches` moves the responsibility for git branches from one session of yours \
+         - `transfer_branches` moves the responsibility for git branches from one session of yours \
            to another, without asking the user — to give a branch a session developed to a \
            different session, say. A branch's responsible session is the one working on it and the \
            one whose archiving cleans it up. You are responsible for none yourself, so name both \
@@ -217,7 +217,7 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            `to` may not. Nothing changes in git: the answer lists each branch's worktree and \
            whether it holds uncommitted changes. A session that is working or waiting for the \
            user cannot give branches up. It replaces no session; that is `handoff_session`.\n\
-         - `handover_processes` moves process trees a session of yours started (a dev server, a \
+         - `transfer_processes` moves process trees a session of yours started (a dev server, a \
            preview, a watcher) to another session of yours, without asking the user, so they keep \
            running until the receiving session's process ends instead of the giving one's. \
            `from` and `to` are each you or a session of yours, and each must have a process \
@@ -255,8 +255,8 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          report says so; it stays a coordinator, even with no children. Drive it like any child \
          session of yours. A session that comes with sessions of its own keeps them and drives \
          them itself: you can read those, not drive them.\n\
-         - `send_message` needs no relationship: it reaches any running session, in any console or \
-           project, as information rather than instruction. An interrupted session has it kept \
+         - `inform_session` needs no relationship: it reaches any running session, in any console \
+           or project, as information rather than instruction. An interrupted session has it kept \
            and takes it once resumed; an archived one is refused.\n\
          \n\
          ## Reporting to the user\n\
@@ -367,7 +367,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        assert!(text.contains("`new_session`"));
+        assert!(text.contains("`open_session`"));
         assert!(!text.contains("mcp__"));
         assert!(!text.contains("octoboard__"));
     }
@@ -464,7 +464,7 @@ mod tests {
             .filter(|token| token.contains('_'))
             .collect();
         assert!(
-            named.contains(&"new_session"),
+            named.contains(&"open_session"),
             "the instructions name no tool"
         );
         for tool in &named {

@@ -563,7 +563,7 @@ async fn handle_inner(
             }))
         }
 
-        RequestBody::HandOffSession {
+        RequestBody::HandoffSession {
             session,
             agent,
             account,

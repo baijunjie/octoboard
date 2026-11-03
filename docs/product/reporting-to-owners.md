@@ -101,7 +101,7 @@ running for another reason once the wait there is over, is not told, then or lat
 - **A session ended on its own.** When the process of a reporting session ends without anyone having asked for it — it
   crashed, or the user closed it in its terminal — its owner is told that the session ended on its own although nobody
   archived it, interrupted it or moved it to another account, that it is recorded as interrupted and the work it was
-  doing stopped with it, and to look at it with `get_session` and relaunch it with `reopen_session` if the work should
+  doing stopped with it, and to look at it with `get_session` and relaunch it with `resume_session` if the work should
   go on. An end somebody asked for is not told: an archive, the daemon shutting down, or an operation that stops the
   process itself, such as an account switch or a change of sharing. A process that ends by itself while such an
   operation holds the session is told all the same, unless that operation started it and reports its outcome (see

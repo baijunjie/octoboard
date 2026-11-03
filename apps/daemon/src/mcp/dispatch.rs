@@ -28,9 +28,9 @@ use crate::session_tools::catalogue::{runs_on_the_call, tool_by_name};
 use crate::state::AppState;
 
 use super::tools::archive::{archive_self, archive_session};
-use super::tools::messaging::{instruct_session, report, send_message};
+use super::tools::messaging::{inform_session, instruct_session, report};
 use super::tools::sessions::{
-    interrupt_session, new_session, rename_session, reopen_session, request_session,
+    interrupt_session, open_session, rename_session, request_session, resume_session,
     set_session_pinned,
 };
 use super::tools::settings::add_project;
@@ -88,8 +88,8 @@ async fn dispatch(
         "update_console" => settings::update_console(state, &session, arguments).await,
         "get_settings" => settings::get_settings(state),
         "update_settings" => settings::update_settings(state, arguments),
-        "new_session" => {
-            new_session(state, &session, arguments, crate::session::term::launch).await
+        "open_session" => {
+            open_session(state, &session, arguments, crate::session::term::launch).await
         }
         "instruct_session" => instruct_session(state, &session, arguments).await,
         "interrupt_session" => interrupt_session(state, &session, arguments).await,
@@ -98,9 +98,9 @@ async fn dispatch(
         "set_session_pinned" => set_session_pinned(state, &session, arguments).await,
         "archive_session" => archive_session(state, &session, arguments).await,
         "archive_self" => archive_self(state, &session).await,
-        "list_archived" => reads::list_archived(state, &session, arguments).await,
-        "reopen_session" => {
-            reopen_session(
+        "list_archived_sessions" => reads::list_archived_sessions(state, &session, arguments).await,
+        "resume_session" => {
+            resume_session(
                 state,
                 &session,
                 arguments,
@@ -109,8 +109,8 @@ async fn dispatch(
             )
             .await
         }
-        "handover_branches" => handover::handover_branches(state, &session, arguments).await,
-        "handover_processes" => handover::handover_processes(state, &session, arguments).await,
+        "transfer_branches" => handover::transfer_branches(state, &session, arguments).await,
+        "transfer_processes" => handover::transfer_processes(state, &session, arguments).await,
         "handoff_session" => {
             handoff::handoff_session(state, &session, arguments, crate::session::term::launch).await
         }
@@ -139,8 +139,8 @@ async fn dispatch(
         "delete_pages" => pages::delete_pages(state, &session, arguments),
         "report" => report(state, &session, arguments).await,
         "list_sessions" => reads::list_sessions(state, &session, arguments).await,
-        "get_session_branches" => {
-            session_branches::get_session_branches(state, &session, arguments).await
+        "list_session_branches" => {
+            session_branches::list_session_branches(state, &session, arguments).await
         }
         "list_project_changes" => {
             project_changes::list_project_changes(state, &session, arguments).await
@@ -153,7 +153,7 @@ async fn dispatch(
         "read_session_history" => history::read_session_history(state, &session, arguments).await,
         "get_project" => settings::get_project(state, &session, arguments).await,
         "list_agents" => agents::list_agents(state, arguments).await,
-        "send_message" => send_message(state, &session, arguments).await,
+        "inform_session" => inform_session(state, &session, arguments).await,
         "transfer_session" => bindings::transfer_session(state, &session, arguments).await,
         "release_session" => bindings::release_session(state, &session, arguments).await,
         "bind_to_session" => bindings::bind_to_session(state, &session, arguments).await,
@@ -213,7 +213,7 @@ mod tests {
     async fn only_an_unbound_project_session_may_call_the_orchestration_tools() {
         let (state, _dir) = peer_state("peer-tool-gating");
         for (caller, tool) in [
-            ("mine", "new_session"),
+            ("mine", "open_session"),
             ("mine", "instruct_session"),
             ("of-a", "archive_session"),
             ("starter", "add_project"),
@@ -244,10 +244,10 @@ mod tests {
         }
     }
 
-    /// A coordinator with a parent keeps the unbound project session's tools, so its `new_session`
+    /// A coordinator with a parent keeps the unbound project session's tools, so its `open_session`
     /// gets as far as the launch (an unavailable agent is refused there), binding the new session
     /// to it, and its `bind_to_session` is refused in prose; a session bound to it still has no
-    /// `new_session`.
+    /// `open_session`.
     #[tokio::test]
     async fn a_lead_session_keeps_its_tools_and_its_sessions_still_cannot_start_any() {
         let (state, _dir) = lead_state("lead-tools");
@@ -258,11 +258,11 @@ mod tests {
         }]);
         let brief = arguments(json!({ "brief": { "goal": "x" }, "agent": "claude" }));
 
-        let err = call(&state, "starter", "new_session", &brief)
+        let err = call(&state, "starter", "open_session", &brief)
             .await
             .expect_err("agent unavailable");
         assert!(err.to_string().contains("Claude Code"), "{err}");
-        let err = call(&state, "mine", "new_session", &brief)
+        let err = call(&state, "mine", "open_session", &brief)
             .await
             .expect_err("not offered");
         assert!(err.to_string().contains("is not a tool"), "{err}");

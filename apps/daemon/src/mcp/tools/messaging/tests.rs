@@ -20,7 +20,7 @@ async fn information_for_an_interrupted_session_is_kept_for_its_resume() {
             call(
                 &state,
                 "loose",
-                "send_message",
+                "inform_session",
                 &arguments(json!({ "session": target, "text": "the port moved" })),
             )
             .await
@@ -74,7 +74,7 @@ async fn the_copy_for_an_interrupted_owner_is_kept() {
     let result = call(
         &state,
         "loose",
-        "send_message",
+        "inform_session",
         &arguments(json!({ "session": "of-a", "text": "heads up" })),
     )
     .await
@@ -88,9 +88,9 @@ async fn the_copy_for_an_interrupted_owner_is_kept() {
 }
 
 /// A message for an interrupted session of the caller's is refused as before, and the refusal
-/// points at `reopen_session`, whose `text` delivers it on relaunch.
+/// points at `resume_session`, whose `text` delivers it on relaunch.
 #[tokio::test]
-async fn a_message_for_an_interrupted_session_points_at_reopen_session() {
+async fn a_message_for_an_interrupted_session_points_at_resume_session() {
     let (state, _dir) = shared_console_state("send-to-interrupted");
     with_status(&state, "of-a", SessionStatus::Interrupted);
     let err = call(
@@ -109,14 +109,14 @@ async fn a_message_for_an_interrupted_session_points_at_reopen_session() {
     let message = err.to_string();
     assert!(message.contains("interrupted"), "{message}");
     assert!(
-        message.contains(&qualified_tool_name(Agent::Claude, "reopen_session")),
+        message.contains(&qualified_tool_name(Agent::Claude, "resume_session")),
         "{message}"
     );
 }
 
 /// The same pointer, said for an archived session.
 #[tokio::test]
-async fn a_message_for_an_archived_session_points_at_reopen_session() {
+async fn a_message_for_an_archived_session_points_at_resume_session() {
     let (state, _dir) = shared_console_state("send-to-archived");
     with_status(&state, "of-a", SessionStatus::Archived);
     let err = call(
@@ -135,7 +135,7 @@ async fn a_message_for_an_archived_session_points_at_reopen_session() {
     let message = err.to_string();
     assert!(message.contains("archived"), "{message}");
     assert!(
-        message.contains(&qualified_tool_name(Agent::Claude, "reopen_session")),
+        message.contains(&qualified_tool_name(Agent::Claude, "resume_session")),
         "{message}"
     );
 }
@@ -143,7 +143,7 @@ async fn a_message_for_an_archived_session_points_at_reopen_session() {
 /// The tool the refusal points at is named as the caller's own agent shows it: Grok's prefix
 /// differs from Claude Code's.
 #[tokio::test]
-async fn the_pointer_to_reopen_session_is_named_as_the_callers_agent_shows_it() {
+async fn the_pointer_to_resume_session_is_named_as_the_callers_agent_shows_it() {
     let (state, _dir) = shared_console_state("send-to-archived-grok-caller");
     with_status(&state, "of-a", SessionStatus::Archived);
     let mut caller = state.store.get_session("a").unwrap().unwrap();
@@ -158,7 +158,7 @@ async fn the_pointer_to_reopen_session_is_named_as_the_callers_agent_shows_it() 
     .await
     .expect_err("refused");
     let message = err.to_string();
-    assert!(message.contains("`octoboard__reopen_session`"), "{message}");
+    assert!(message.contains("`octoboard__resume_session`"), "{message}");
     assert!(!message.contains("mcp__octoboard__"), "{message}");
 }
 
@@ -193,7 +193,7 @@ async fn information_reaches_any_running_session_but_the_caller() {
         let result = call(
             &state,
             caller,
-            "send_message",
+            "inform_session",
             &arguments(json!({ "session": target, "text": "the port moved" })),
         )
         .await
@@ -208,7 +208,7 @@ async fn information_reaches_any_running_session_but_the_caller() {
     let err = call(
         &state,
         "mine",
-        "send_message",
+        "inform_session",
         &arguments(json!({ "session": "mine", "text": "hello" })),
     )
     .await
@@ -228,7 +228,7 @@ async fn information_is_framed_and_copied_to_the_receivers_owner() {
             call(
                 &state,
                 caller,
-                "send_message",
+                "inform_session",
                 &arguments(json!({ "session": target, "text": "the port moved" })),
             )
             .await
@@ -286,7 +286,7 @@ async fn an_owner_that_cannot_be_copied_does_not_fail_the_delivery() {
     let result = call(
         &state,
         "loose",
-        "send_message",
+        "inform_session",
         &arguments(json!({ "session": "of-b", "text": "heads up" })),
     )
     .await
@@ -302,7 +302,7 @@ async fn an_owner_that_cannot_be_copied_does_not_fail_the_delivery() {
     let err = call(
         &state,
         "loose",
-        "send_message",
+        "inform_session",
         &arguments(json!({ "session": "of-a", "text": "heads up" })),
     )
     .await

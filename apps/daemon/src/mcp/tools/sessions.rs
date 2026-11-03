@@ -1,4 +1,4 @@
-//! Starting and steering sessions: `new_session`, `request_session`, the rename, pin, reopen and
+//! Starting and steering sessions: `open_session`, `request_session`, the rename, pin, reopen and
 //! interrupt tools, and the choices a session started on a caller's behalf is made from.
 
 use std::collections::HashMap;
@@ -27,7 +27,7 @@ use super::handover::{branch_names, held_by};
 
 /// Starts the session through `launch`: `term::launch` outside the tests, which cannot start an
 /// agent.
-pub(in crate::mcp) async fn new_session(
+pub(in crate::mcp) async fn open_session(
     state: &Arc<AppState>,
     caller: &Session,
     arguments: &Map<String, Value>,
@@ -86,7 +86,7 @@ pub(in crate::mcp) async fn new_session(
     Ok(answer)
 }
 
-/// Reads what `new_session` asks for into the project it starts in — the one the console session
+/// Reads what `open_session` asks for into the project it starts in — the one the console session
 /// names, or a project session's own — and the session to open there, unbound.
 fn session_to_start(
     state: &Arc<AppState>,
@@ -111,7 +111,7 @@ fn session_to_start(
     Ok((project, open))
 }
 
-/// Reads a brief, the title and the overrides — `new_session`'s arguments, and `request_session`'s
+/// Reads a brief, the title and the overrides — `open_session`'s arguments, and `request_session`'s
 /// alike — into the session `caller` asks to open, unbound, in `project` of `console`, or a console
 /// session of `console` for none.
 fn session_in(
@@ -229,7 +229,7 @@ pub(in crate::mcp) async fn set_session_pinned(
 
 /// Reopens through `launch` in the shell environment `snapshot` gives: `term::launch` and
 /// `env_shell::launch_snapshot` outside the tests, which cannot start an agent.
-pub(in crate::mcp) async fn reopen_session(
+pub(in crate::mcp) async fn resume_session(
     state: &Arc<AppState>,
     caller: &Session,
     arguments: &Map<String, Value>,
@@ -274,7 +274,7 @@ pub(in crate::mcp) async fn reopen_session(
 }
 
 /// Asks the user for a session with no owner, and waits for the answer; see
-/// `crate::session_request`. Read and checked as `new_session` is, in whichever project or
+/// `crate::session_request`. Read and checked as `open_session` is, in whichever project or
 /// console the call names.
 pub(in crate::mcp) async fn request_session(
     state: &Arc<AppState>,
@@ -345,7 +345,7 @@ pub(in crate::mcp) async fn request_session(
     .await
 }
 
-/// The branches `request_session` and `new_session` hand over, from their `branches` argument:
+/// The branches `request_session` and `open_session` hand over, from their `branches` argument:
 /// local branches of the repository `project` is in that the caller is responsible for, each
 /// named once. `None` when the argument names none. Refused before anything is started or asked,
 /// with the first branch that is not the caller's to give.

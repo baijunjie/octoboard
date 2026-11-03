@@ -43,8 +43,8 @@ function mount(session: Session, others: Session[] = [], branches: SessionBranch
     if (body.type === "inspect_session_branches" && branches === "failTwice") return { type: "session_branches_inspected", id: null, items: [] };
     if (body.type === "inspect_session_branches" && branches === "fail") throw new Error("git failed");
     if (body.type === "inspect_session_branches") return { type: "session_branches_inspected", id: null, items: branches };
-    if (body.type === "hand_off_session" && handoffError) throw handoffError;
-    if (body.type === "hand_off_session") return { type: "session_opened", id: null, session: sessionOf("s-new", parentConsole.id, session.project_id ?? undefined, session.title, "working", { agent: "codex" }) };
+    if (body.type === "handoff_session" && handoffError) throw handoffError;
+    if (body.type === "handoff_session") return { type: "session_opened", id: null, session: sessionOf("s-new", parentConsole.id, session.project_id ?? undefined, session.title, "working", { agent: "codex" }) };
     return { type: "ack", id: null };
   });
   const daemon = testDaemon({ state: initial, request: request as unknown as Daemon["request"], raiseError: vi.fn() });
@@ -76,8 +76,8 @@ it("says what moves for a project session, then hands off to another agent and s
 
   await act(async () => buttons().find((b) => b.textContent === "Hand off")?.click());
   await settle();
-  const sent = request.mock.calls.map(([body]) => body).find((body) => body.type === "hand_off_session");
-  expect(sent).toMatchObject({ type: "hand_off_session", session: "s-1", agent: "codex", account: null, terminal_appearance: "dark" });
+  const sent = request.mock.calls.map(([body]) => body).find((body) => body.type === "handoff_session");
+  expect(sent).toMatchObject({ type: "handoff_session", session: "s-1", agent: "codex", account: null, terminal_appearance: "dark" });
   expect(onHandedOff).toHaveBeenCalledExactlyOnceWith("s-new");
   expect(onClose).toHaveBeenCalledOnce();
 });
@@ -100,8 +100,8 @@ it.each([
   await settle();
   await act(async () => buttons().find((button) => button.textContent === "Hand off")?.click());
   await settle();
-  const sent = request.mock.calls.map(([body]) => body).find((body) => body.type === "hand_off_session");
-  expect(sent).toMatchObject({ type: "hand_off_session", agent: "codex", account: expected });
+  const sent = request.mock.calls.map(([body]) => body).find((body) => body.type === "handoff_session");
+  expect(sent).toMatchObject({ type: "handoff_session", agent: "codex", account: expected });
 });
 
 it("asks for no branches of a console session and says when nothing moves", async () => {
@@ -187,7 +187,7 @@ it("turns into an acknowledgement-only failure modal when no other agent can be 
   expect(Array.from(dialog?.querySelectorAll("button") ?? []).map((button) => button.textContent)).toEqual(["OK"]);
   expect(onClose).not.toHaveBeenCalled();
   expect(raiseError).not.toHaveBeenCalled();
-  expect(request.mock.calls.some(([body]) => body.type === "hand_off_session")).toBe(false);
+  expect(request.mock.calls.some(([body]) => body.type === "handoff_session")).toBe(false);
   await act(async () => buttons().find((b) => b.textContent === "OK")?.click());
   expect(onClose).toHaveBeenCalledOnce();
 });

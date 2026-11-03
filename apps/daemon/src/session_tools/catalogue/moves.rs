@@ -8,8 +8,8 @@ use super::ToolDef;
 
 /// How an owner moves the responsibility for git branches between sessions, without the user: the
 /// branch records change hands, and no session is replaced.
-pub(super) const HANDOVER_BRANCHES: ToolDef = ToolDef {
-    name: "handover_branches",
+pub(super) const TRANSFER_BRANCHES: ToolDef = ToolDef {
+    name: "transfer_branches",
     description: "Move the responsibility for git branches from one session to another; it only \
                   changes which session is responsible for the branches and replaces no \
                   session (to move a whole session to another agent, use `handoff_session`). \
@@ -30,7 +30,7 @@ pub(super) const HANDOVER_BRANCHES: ToolDef = ToolDef {
                   told. When a session is archived, the cleanup of its branches follows whoever \
                   is responsible for them by then. `branches` in `get_session` and \
                   `list_sessions` names the branches a session is responsible for, and \
-                  `get_session_branches` gives their worktrees, so read them first.",
+                  `list_session_branches` gives their worktrees, so read them first.",
     schema: || {
         object_schema(
             json!({
@@ -58,8 +58,8 @@ pub(super) const HANDOVER_BRANCHES: ToolDef = ToolDef {
 
 /// How an owner moves process trees between sessions, without the user: which session's end
 /// stops them changes, and they keep running.
-pub(super) const HANDOVER_PROCESSES: ToolDef = ToolDef {
-    name: "handover_processes",
+pub(super) const TRANSFER_PROCESSES: ToolDef = ToolDef {
+    name: "transfer_processes",
     description: "Move process trees a session started (a dev server, a preview, a watcher) from \
                   one session to another, so that they are stopped when the receiving session's \
                   process ends (its archive, an interrupt, its agent exiting) instead of the \
@@ -247,7 +247,7 @@ pub(super) const SET_SESSION_MODEL: ToolDef = ToolDef {
                   nothing, unless a change of its model is under way, which refuses the call. A \
                   `model` or `effort` the agent does not offer under the session's \
                   account is refused, changing nothing; `list_agent_models` lists them. Refused \
-                  too for an archived session (`reopen_session` takes a model and effort), one \
+                  too for an archived session (`resume_session` takes a model and effort), one \
                   that is starting or being switched, handed off or otherwise changed, and one \
                   waiting for the user or `dormant`, which the restart would take its prompt or \
                   view from — a usage-limit dialog alone is not such a wait: the restart ends \
@@ -319,10 +319,10 @@ pub(super) const TRANSFER_SESSION: ToolDef = ToolDef {
 pub(super) const RELEASE_SESSION: ToolDef = ToolDef {
     name: "release_session",
     description:
-        "Release one of your sessions (`yours: true`) from its binding to you, when it is \
-                  not yours to drive any more: it has no parent session afterwards and is the \
-                  user's own, taking work only from the user in its terminal. You can no longer \
-                  instruct or drive it, but `send_message` still lets either of you tell the other \
+        "Release one of your sessions (`yours: true`) from its binding to you, when it is not \
+                  yours to drive any more: it has no parent session afterwards and is the user's \
+                  own, taking work only from the user in its terminal. You can no longer instruct \
+                  or drive it, but `inform_session` still lets either of you tell the other \
                   something. Needs no approval. It stops reporting to anyone, becomes an \
                   independent coordinator that can create and manage child sessions, and is no \
                   longer archived with you or by its own `done` report. A coordinator keeps the \
@@ -365,7 +365,7 @@ pub(super) const BIND_TO_SESSION: ToolDef = ToolDef {
                   console session keeps them). The parent session must be running, and is sent \
                   `summary` as your first report. The result says which tools you have from then \
                   on. Refused once this session has a parent. To tell a session something without \
-                  changing the reporting relationship, use `send_message`.",
+                  changing the reporting relationship, use `inform_session`.",
     schema: || {
         object_schema(
             json!({

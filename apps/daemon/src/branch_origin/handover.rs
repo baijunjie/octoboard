@@ -1,6 +1,6 @@
 //! Moving the responsibility for git branches between sessions, for the callers that have checked
-//! the branches are the giver's: `request_session` on approval, `new_session` with `branches`, and
-//! the owner's `handover_branches`. The record move itself is [`hand_over`].
+//! the branches are the giver's: `request_session` on approval, `open_session` with `branches`, and
+//! the owner's `transfer_branches`. The record move itself is [`hand_over`].
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

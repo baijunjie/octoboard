@@ -31,7 +31,7 @@ export const REPLY_TYPES = {
   archive_session: "ack",
   switch_session_account: "ack",
   set_session_model: "session_model_set",
-  hand_off_session: "session_opened",
+  handoff_session: "session_opened",
   inspect_session_records: "session_records_inspected",
   read_session_history: "session_history",
   inspect_session_branches: "session_branches_inspected",

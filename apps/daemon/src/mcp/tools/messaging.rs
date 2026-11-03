@@ -1,5 +1,5 @@
-//! Talking to sessions: `instruct_session`, `send_message` and `report`, and how their delivery is
-//! told to the caller.
+//! Talking to sessions: `instruct_session`, `inform_session` and `report`, and how their delivery
+//! is told to the caller.
 
 use std::sync::Arc;
 
@@ -33,7 +33,7 @@ pub(in crate::mcp) async fn instruct_session(
 }
 
 /// A refusal for a session with no process, said with what the caller can do about it: the
-/// session is the caller's, so `reopen_session` relaunches it with the message. The code and the
+/// session is the caller's, so `resume_session` relaunches it with the message. The code and the
 /// params stay the refusal's own. `caller` is the agent of the session asking.
 fn point_to_reopen(err: anyhow::Error, caller: Agent, target: &Session) -> anyhow::Error {
     match err.downcast_ref::<CodedError>() {
@@ -51,7 +51,7 @@ fn point_to_reopen(err: anyhow::Error, caller: Agent, target: &Session) -> anyho
                     } else {
                         "interrupted"
                     },
-                    qualified_tool_name(caller, "reopen_session"),
+                    qualified_tool_name(caller, "resume_session"),
                 ),
                 params: coded.params.clone(),
             })
@@ -67,7 +67,7 @@ fn delivery_note(outcome: Delivery) -> String {
     outcome.note("The message", "this session", SentBy::Reader)
 }
 
-pub(in crate::mcp) async fn send_message(
+pub(in crate::mcp) async fn inform_session(
     state: &Arc<AppState>,
     caller: &Session,
     arguments: &Map<String, Value>,
@@ -89,7 +89,7 @@ pub(in crate::mcp) async fn send_message(
     Ok(json!({ "delivered": outcome == Delivery::Written, "note": note }))
 }
 
-/// What the result of `send_message` adds of the copy sent to the receiver's owner.
+/// What the result of `inform_session` adds of the copy sent to the receiver's owner.
 fn owner_copy_note(copy: &OwnerCopy) -> String {
     match copy {
         OwnerCopy::NotNeeded => String::new(),

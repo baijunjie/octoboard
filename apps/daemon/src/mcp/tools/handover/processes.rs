@@ -1,6 +1,6 @@
-//! The tool with which an owner moves process trees between sessions, `handover_processes`: from
+//! The tool with which an owner moves process trees between sessions, `transfer_processes`: from
 //! itself to a session of its own, from one to itself, or from one of its sessions to another, as
-//! `handover_branches` moves branches. The trees keep running; only the session whose end stops
+//! `transfer_branches` moves branches. The trees keep running; only the session whose end stops
 //! them changes (`crate::processes::ledger`).
 
 use std::sync::Arc;
@@ -28,7 +28,7 @@ use super::{refuse_if_at_work, untold_note, Parties};
 /// with no process has nothing to stop them with), and for a tree that is not `from`'s. The
 /// sessions are claimed against a launch, a switch or a handoff, and the messages of a `from` other
 /// than the caller are held, while it is checked again and the trees move.
-pub(in crate::mcp) async fn handover_processes(
+pub(in crate::mcp) async fn transfer_processes(
     state: &Arc<AppState>,
     caller: &Session,
     arguments: &Map<String, Value>,
@@ -312,7 +312,7 @@ mod tests {
     }
 
     async fn call(state: &Arc<AppState>, caller: &str, input: Value) -> Result<Value> {
-        handover_processes(
+        transfer_processes(
             state,
             &state.session_record(caller).unwrap(),
             &arguments(input),

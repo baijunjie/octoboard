@@ -3,7 +3,7 @@
 ## Problem and approach
 
 A project coordinator may start a session of another agent for a kind of work that agent handles better, and a session
-can name its agent in `new_session`. What another agent handles better is left entirely to the calling agent's own
+can name its agent in `open_session`. What another agent handles better is left entirely to the calling agent's own
 judgement. Octoboard gives the user no place to record, for example, that Codex is the one for reviews or Claude Code
 the one for UI work.
 
@@ -35,7 +35,7 @@ them. Tags are information for the agent; Octoboard itself does not select anyth
   account fields as before), keeping the `agent` and `refresh` arguments.
 - **The tags may lead a session to name an agent unasked.** The project coordinator's role description tells it to
   weigh an agent's tags when deciding whether another agent fits a piece of work better. A console session's
-  `new_session` and every session's `request_session`, which today name an agent only when the user asked, may also
+  `open_session` and every session's `request_session`, which today name an agent only when the user asked, may also
   name one whose tags fit the work. `handoff_session` is out of scope.
 
 ## Milestones

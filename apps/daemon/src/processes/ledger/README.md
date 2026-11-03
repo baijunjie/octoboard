@@ -40,7 +40,7 @@ signals that follow what started meanwhile, and `table.rs` the table as the ledg
 - `carry.rs`: `ProcessLedger::close`, `ProcessLedger::end_held_launches` — carry nothing over once the daemon is
   shutting down, and stop what was held.
 - `ProcessLedger::move_trees`, `MoveRefused` — move chosen trees of one session's running launch to another's (the
-  `handover_processes` tool).
+  `transfer_processes` tool).
 - `ProcessLedger::reconcile` — reconcile persisted attribution with the running process table.
 - `ProcessLedger::trees_of_sessions`, `ProcessLedger::trees_of_project` — produce the process-tree
   listings consumed by session and project requests.

@@ -52,7 +52,7 @@ transitions are in `docs/product/hub-orchestration.md` and `docs/product/changin
 
 The parent session is also called the `owner` in APIs and tools. A project session opened without a **Report to**
 choice, or on an approved `request_session`, is an independent coordinator. A session opened with that choice, or
-created by another session with `new_session`, is a worker. Every session can read other sessions and share
+created by another session with `open_session`, is a worker. Every session can read other sessions and share
 information with them, but information from a session other than its parent does not redirect its work (see
 `docs/product/information-between-sessions.md`). Every session can also ask the user to start an independent session
 in any project or console (see `docs/product/session-requests.md`).

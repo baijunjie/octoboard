@@ -16,8 +16,8 @@
 ## Notes
 
 - Tests already cover that `list_agents` returns each added agent's tags and that the coordinator's role description
-  and `new_session` description point to them (`apps/daemon/src/mcp/tools/agents.rs`, and the `session_tools/role.rs` and
-  `session_tools/catalogue/` tests). What is left is the live model's choice.
+  and `open_session` description point to them (`apps/daemon/src/mcp/tools/agents.rs`, and the `session_tools/role.rs`
+  and `session_tools/catalogue/` tests). What is left is the live model's choice.
 - If the coordinator does not pick Codex, the fix is in the wording of `session_choice_guidance`
-  (`apps/daemon/src/session_tools/role.rs`) or the coordinator's `new_session` description
+  (`apps/daemon/src/session_tools/role.rs`) or the coordinator's `open_session` description
   (`apps/daemon/src/session_tools/catalogue/sessions.rs`).

@@ -23,11 +23,11 @@ import { useLaunchChoice } from "./useLaunchChoice";
 import { useResponsibleBranches } from "./useBranchInspections";
 
 /**
- * Hands a session off to a new session of another agent (`hand_off_session`). The fields are the
+ * Hands a session off to a new session of another agent (`handoff_session`). The fields are the
  * session dialog's: the agent, which is never the session's own (moving to another account of the
  * same agent is Switch account), joined with its account, and the model and reasoning effort,
  * which follow what a new session of that agent and account would take from its project or
- * console until changed. Above them it says what moves with the session. `hand_off_session` is
+ * console until changed. Above them it says what moves with the session. `handoff_session` is
  * answered with `session_opened` for the receiving session, which `onHandedOff` selects; a
  * refusal or a late failure is an error alert, and the dialog stays for another try. A failure after the work
  * has moved (`handoff_archive_failed`, `handoff_move_failed`) is not a failed try: the dialog closes and
@@ -66,7 +66,7 @@ function HandoffForm({ session, console: parentConsole, project, onClose, onHand
       let reply;
       try {
         reply = await request({
-          type: "hand_off_session",
+          type: "handoff_session",
           session: session.id,
           agent: choice.agent,
           account: choice.account,

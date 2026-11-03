@@ -49,9 +49,9 @@ A branch has at most one responsible session at a time; a session can be respons
   over.
 - **It moves only by an explicit handover** of the branch to another session, in one of four ways: the approval of a
   `request_session` call that names the branch, which makes the session the approval starts its responsible
-  session (see "Handing branches over" in `docs/product/session-requests.md`); a `new_session` call that names the
+  session (see "Handing branches over" in `docs/product/session-requests.md`); an `open_session` call that names the
   branch, which makes the session it starts, owned by the caller, responsible for it (see "Handing branches to a
-  session the caller starts" below); an owner's `handover_branches` call, which moves it between the owner and a
+  session the caller starts" below); an owner's `transfer_branches` call, which moves it between the owner and a
   session of its own, or between two sessions of its own (see "Handing branches between sessions of an owner"
   below); or a handoff of the session to another agent, which makes the receiving session responsible for every
   branch the original was (see `docs/product/handing-off-sessions.md`). Nothing else moves it; handing a session to
@@ -71,7 +71,7 @@ A branch has at most one responsible session at a time; a session can be respons
 ## Handing branches to a session the caller starts
 
 A project coordinator (see "Project coordinators' tools" in `docs/product/hub-orchestration.md`) can pass `branches` to
-`new_session`: local branches of its own project's repository that **the caller itself** is responsible for. The rules
+`open_session`: local branches of its own project's repository that **the caller itself** is responsible for. The rules
 are `request_session`'s (see "Handing branches over" in `docs/product/session-requests.md`): the same input checks; the
 same refusal for a branch the caller is not responsible for, made before anything is started, so a refused call starts
 no session; the move made right after the new session has started, and only for a branch the caller is still responsible
@@ -89,12 +89,12 @@ branch it named. What differs is that the new session is owned by the caller and
   responsible for them or they were gone, staying as they were; or that the move could not be recorded and the caller
   is still responsible for them.
 - **Not for a console session.** A console session is responsible for no branch (see "Project sessions only" below):
-  its `new_session` does not offer `branches`, and a call that names a branch in it anyway is refused before anything
+  its `open_session` does not offer `branches`, and a call that names a branch in it anyway is refused before anything
   is started.
 
 ## Handing branches between sessions of an owner
 
-The `handover_branches` tool, offered to every session that can own sessions, moves the responsibility for branches
+The `transfer_branches` tool, offered to every session that can own sessions, moves the responsibility for branches
 without replacing any session (a handoff, by contrast, replaces a session with one of another agent). It takes
 `branches` (local branches of the repository, at least one), `from` and `to`; either of `from` and `to` left out is
 the caller itself, and the two must differ. No approval is asked: the caller owns the sessions concerned.
@@ -142,9 +142,9 @@ the caller itself, and the two must differ. No approval is asked: the caller own
 
 ## Reading the branches a session is responsible for
 
-Every session — a console session or a project coordinator or worker — has the read-only `get_session_branches` tool. It
-shows beforehand what `handover_branches`, and the `branches` of `new_session` and `request_session`, can take — each
-branch they name must be one the giving session is responsible for — and which branches and worktrees archiving the
+Every session — a console session or a project coordinator or worker — has the read-only `list_session_branches` tool.
+It shows beforehand what `transfer_branches`, and the `branches` of `open_session` and `request_session`, can take —
+each branch they name must be one the giving session is responsible for — and which branches and worktrees archiving the
 session would try to remove (see `docs/product/branch-and-worktree-cleanup.md`). Nothing in git or on disk changes.
 
 - **Any session can be read.** `session` is optional and names any session on record, of any console or project,
@@ -152,7 +152,7 @@ session would try to remove (see `docs/product/branch-and-worktree-cleanup.md`).
 - **What it answers.** `{ session, branches }`, `session` being the id of the session read and `branches` one entry
   per branch that session is responsible for:
   - `branch`, the branch's name, and `project`, the id of the project the session is in;
-  - `worktree`, `worktree_status` and `uncommitted_changes`, as the result of `handover_branches` gives them for each
+  - `worktree`, `worktree_status` and `uncommitted_changes`, as the result of `transfer_branches` gives them for each
     branch moved (see "Handing branches between sessions of an owner" above). When `git` cannot be run, or the
     worktrees cannot be listed, every branch is still listed, with `worktree_status` `unknown`, `worktree` `null` and
     `uncommitted_changes` `null`;
@@ -176,7 +176,7 @@ session would try to remove (see `docs/product/branch-and-worktree-cleanup.md`).
 
 The names alone are also part of every session record the orchestration tools give, as `branches` (see "Session
 records" in `docs/product/what-every-session-reads.md`); reading them there runs no `git`, while
-`get_session_branches` runs it to find the worktrees and to judge `archive`, and only when the session is responsible
+`list_session_branches` runs it to find the worktrees and to judge `archive`, and only when the session is responsible
 for a branch. The other way round — every branch of a project with the session responsible for each, a session that
 no longer exists included — is `list_project_branches` (see "Listing a project's branches" in
 `docs/product/what-every-session-reads.md`).

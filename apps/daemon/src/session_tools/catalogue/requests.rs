@@ -2,18 +2,18 @@
 
 use serde_json::{json, Value};
 
-use super::schemas::{new_session_schema, object_schema, NAMING_LANGUAGE};
+use super::schemas::{object_schema, open_session_schema, NAMING_LANGUAGE};
 use super::ToolDef;
 
 /// How every session, of whatever kind, has a session started that is nobody's: through a
-/// confirmation the user gives. The brief and the overrides are `new_session`'s, and are checked
+/// confirmation the user gives. The brief and the overrides are `open_session`'s, and are checked
 /// the same way before the user is asked.
 pub(super) const REQUEST_SESSION: ToolDef = ToolDef {
     name: "request_session",
     description: "Ask the user to start a session that is nobody's — neither yours nor your \
                   owner's: it reports to the user, and you and it can only exchange information \
-                  (`send_message`). It can be a project session in any project of any console, or \
-                  a console session. A session you want to drive yourself is one `new_session` \
+                  (`inform_session`). It can be a project session in any project of any console, \
+                  or a console session. A session you want to drive yourself is one `open_session` \
                   starts, where you have it. The user is asked first, and the call waits for their \
                   answer, for several minutes at most — unless the user has chosen to have such \
                   requests approved automatically, in which case the result says so and the call \
@@ -33,9 +33,9 @@ pub(super) const REQUEST_SESSION: ToolDef = ToolDef {
                   is selected by the server according to the configured policy. Automatic \
                   selection may choose another agent when neither agent nor account is named; a \
                   named agent limits selection to it, and a named account preserves both. \
-                  Unspecified model and effort follow the final agent. Pass an account only \
-                  when the user asked for one, and an agent only when the user asked for one or \
-                  its tags (`list_agents`) fit the work. Read the result for the actual session \
+                  Unspecified model and effort follow the final agent. Pass an account only when \
+                  the user asked for one, and an agent only when the user asked for one or its \
+                  tags (`list_agents`) fit the work. Read the result for the actual session \
                   started; a refusal explains why nothing was started.",
     schema: request_session_schema,
 };
@@ -49,30 +49,30 @@ pub(super) const REQUEST_RESUME_SESSION: ToolDef = ToolDef {
                   id (a UUID, in any spelling), not an Octoboard session id — as the user does in \
                   the new-session dialog's Resume conversation tab, with the same limits. If a \
                   session of the project holds the conversation, it is brought back: an archived \
-                  session is reopened (and renamed, with `title`), and an interrupted one \
-                  resumed, continuing its conversation, with the owner it has (it may come back \
-                  with its archived owners). It stays that owner's, or the user's: you do not own \
-                  it and cannot drive it. If a session that is already running holds it there is \
-                  nothing to resume, and the call is refused. If no session holds the \
-                  conversation but an agent's own record of it is on this machine, a new session \
-                  that is nobody's is opened on it, on the agent and account that hold the \
-                  record, and it reports to the user. A conversation held by a session of another \
-                  project, or by a console session, is refused. Where you have `reopen_session`, \
-                  it reopens only sessions that are yours and needs no approval; this can resume \
-                  any session. No text can be passed along, so afterwards `send_message` tells the \
-                  session what you need. The user is asked first, and the call waits for their \
-                  answer, for several minutes at most — unless the user has chosen to have such \
-                  requests approved automatically, in which case the result says so and the call \
-                  does not wait. Use it only when the user asked for that conversation to be \
-                  resumed, or you have been told to carry on work whose conversation they named. \
-                  A refusal, or no answer in time, comes back as an error and changes nothing. If \
-                  their intent is unclear, ask before acting.",
+                  session is reopened (and renamed, with `title`), and an interrupted one resumed, \
+                  continuing its conversation, with the owner it has (it may come back with its \
+                  archived owners). It stays that owner's, or the user's: you do not own it and \
+                  cannot drive it. If a session that is already running holds it there is nothing \
+                  to resume, and the call is refused. If no session holds the conversation but an \
+                  agent's own record of it is on this machine, a new session that is nobody's is \
+                  opened on it, on the agent and account that hold the record, and it reports to \
+                  the user. A conversation held by a session of another project, or by a console \
+                  session, is refused. Where you have `resume_session`, it reopens only sessions \
+                  that are yours and needs no approval; this can resume any session. No text can \
+                  be passed along, so afterwards `inform_session` tells the session what you need. \
+                  The user is asked first, and the call waits for their answer, for several \
+                  minutes at most — unless the user has chosen to have such requests approved \
+                  automatically, in which case the result says so and the call does not wait. Use \
+                  it only when the user asked for that conversation to be resumed, or you have \
+                  been told to carry on work whose conversation they named. A refusal, or no \
+                  answer in time, comes back as an error and changes nothing. If their intent is \
+                  unclear, ask before acting.",
     schema: request_resume_session_schema,
 };
 
-/// The schema of `request_session`: `new_session`'s, and where the new session is to be.
+/// The schema of `request_session`: `open_session`'s, and where the new session is to be.
 pub(super) fn request_session_schema() -> Value {
-    let mut schema = new_session_schema(false);
+    let mut schema = open_session_schema(false);
     schema["properties"]["kind"] = json!({
         "type": "string",
         "enum": ["project", "console"],

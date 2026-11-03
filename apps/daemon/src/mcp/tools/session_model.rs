@@ -53,7 +53,7 @@ pub(in crate::mcp) async fn set_session_model(
             "`{}` is archived; reopen it with `{}`, which takes a `model` and an `effort` of \
              its own",
             target.id,
-            qualified_tool_name(caller.agent, "reopen_session")
+            qualified_tool_name(caller.agent, "resume_session")
         );
     }
     let run = {
@@ -88,7 +88,7 @@ fn outcome(caller: &Session, changed: &Session, change: ModelChange) -> Value {
             "`{}` is interrupted, so nothing was restarted: it runs with these the next time it is \
              resumed, which `{}` does.",
             changed.id,
-            qualified_tool_name(caller.agent, "reopen_session")
+            qualified_tool_name(caller.agent, "resume_session")
         ),
         ModelChange::Restarted { continued } => {
             let mut note = format!(
@@ -310,7 +310,7 @@ mod tests {
             (json!({ "session": "of-b", "model": "opus" }), "`b`"),
             (
                 json!({ "session": "archived-of-a", "model": "opus" }),
-                "reopen_session",
+                "resume_session",
             ),
             (
                 json!({ "session": "of-a", "model": "opus" }),

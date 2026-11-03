@@ -1,7 +1,7 @@
 use serde_json::json;
 
 use super::requests::request_session_schema;
-use super::schemas::{new_session_schema, NAMING_LANGUAGE};
+use super::schemas::{open_session_schema, NAMING_LANGUAGE};
 use super::*;
 
 /// Only the calls withdrawn when cancelled, and the one that sees to its own end, run on the
@@ -13,10 +13,10 @@ fn only_the_withdrawn_calls_and_the_model_change_run_on_the_call() {
     }
     assert!(runs_on_the_call("set_session_model"));
     for tool in [
-        "new_session",
+        "open_session",
         "report",
         "transfer_session",
-        "handover_branches",
+        "transfer_branches",
     ] {
         assert!(!runs_on_the_call(tool), "{tool}");
     }
@@ -43,13 +43,13 @@ fn a_session_may_choose_another_agent_by_its_tags_but_an_account_only_when_asked
                 .to_string(),
         )
     };
-    let (description, agent, _) = text(Role::Project, "new_session");
+    let (description, agent, _) = text(Role::Project, "open_session");
     assert!(description.contains("fits the work better"));
     assert!(agent.contains("fits the work better"));
     assert!(description.contains("`list_agents`"));
     assert!(agent.contains("`list_agents`"));
     for (role, tool) in [
-        (Role::Console, "new_session"),
+        (Role::Console, "open_session"),
         (Role::Console, "request_session"),
         (Role::Project, "request_session"),
     ] {
@@ -91,7 +91,7 @@ fn the_tools_offered_follow_from_role_and_binding() {
             "report",
             "get_session",
             "list_sessions",
-            "get_session_branches",
+            "list_session_branches",
             "list_project_changes",
             "list_project_branches",
             "read_project_diff",
@@ -99,8 +99,8 @@ fn the_tools_offered_follow_from_role_and_binding() {
             "list_agent_models",
             "list_consoles",
             "list_projects",
-            "list_archived",
-            "send_message",
+            "list_archived_sessions",
+            "inform_session",
             "get_project",
             "list_agents",
             "request_session",
@@ -110,19 +110,19 @@ fn the_tools_offered_follow_from_role_and_binding() {
     assert_eq!(
         names(Role::Project, false),
         [
-            "new_session",
+            "open_session",
             "instruct_session",
             "interrupt_session",
             "get_session",
             "archive_session",
             "archive_self",
-            "list_archived",
-            "reopen_session",
+            "list_archived_sessions",
+            "resume_session",
             "rename_session",
             "set_session_pinned",
             "handoff_session",
-            "handover_branches",
-            "handover_processes",
+            "transfer_branches",
+            "transfer_processes",
             "switch_session_account",
             "set_session_model",
             "transfer_session",
@@ -132,7 +132,7 @@ fn the_tools_offered_follow_from_role_and_binding() {
             "request_resume_session",
             "report",
             "list_sessions",
-            "get_session_branches",
+            "list_session_branches",
             "list_project_changes",
             "list_project_branches",
             "read_project_diff",
@@ -140,7 +140,7 @@ fn the_tools_offered_follow_from_role_and_binding() {
             "list_agent_models",
             "list_consoles",
             "list_projects",
-            "send_message",
+            "inform_session",
             "get_project",
             "list_agents",
             "list_pages",
@@ -158,7 +158,7 @@ fn the_tools_offered_follow_from_role_and_binding() {
             "update_console",
             "get_settings",
             "update_settings",
-            "new_session",
+            "open_session",
             "instruct_session",
             "interrupt_session",
             "get_session",
@@ -166,11 +166,11 @@ fn the_tools_offered_follow_from_role_and_binding() {
             "set_session_pinned",
             "archive_session",
             "archive_self",
-            "list_archived",
-            "reopen_session",
+            "list_archived_sessions",
+            "resume_session",
             "handoff_session",
-            "handover_branches",
-            "handover_processes",
+            "transfer_branches",
+            "transfer_processes",
             "switch_session_account",
             "set_session_model",
             "transfer_session",
@@ -178,14 +178,14 @@ fn the_tools_offered_follow_from_role_and_binding() {
             "request_session",
             "request_resume_session",
             "list_sessions",
-            "get_session_branches",
+            "list_session_branches",
             "list_project_changes",
             "list_project_branches",
             "read_project_diff",
             "read_session_history",
             "list_agent_models",
             "list_consoles",
-            "send_message",
+            "inform_session",
             "list_agents",
             "list_pages",
             "show_page",
@@ -198,14 +198,14 @@ fn the_tools_offered_follow_from_role_and_binding() {
         "get_session",
         "list_sessions",
         "read_session_history",
-        "get_session_branches",
+        "list_session_branches",
         "list_project_changes",
         "list_project_branches",
         "read_project_diff",
         "list_agent_models",
         "list_consoles",
         "list_projects",
-        "list_archived",
+        "list_archived_sessions",
         "list_agents",
     ] {
         let described = |role, worker| {
@@ -229,11 +229,11 @@ fn the_tools_offered_follow_from_role_and_binding() {
 /// An unbound project session starts sessions only in its own project, so it is not asked
 /// which one.
 #[test]
-fn only_the_console_sessions_new_session_asks_for_a_project() {
+fn only_the_console_sessions_open_session_asks_for_a_project() {
     let schema = |tools: &'static [ToolDef]| {
         let tool = tools
             .iter()
-            .find(|tool| tool.name == "new_session")
+            .find(|tool| tool.name == "open_session")
             .unwrap();
         (tool.schema)()
     };
@@ -299,7 +299,7 @@ fn every_title_says_which_language_to_write_the_name_in() {
         naming,
         [
             "handoff_session",
-            "new_session",
+            "open_session",
             "rename_session",
             "request_resume_session",
             "request_session"
@@ -342,10 +342,10 @@ fn the_schemas_and_descriptions_name_what_the_tools_take_and_return() {
                 .contains("its own Octoboard id")
     );
     for (name, key) in [
-        ("list_archived", "before"),
-        ("list_archived", "yours"),
-        ("list_archived", "branch"),
-        ("list_archived", "check_resumable"),
+        ("list_archived_sessions", "before"),
+        ("list_archived_sessions", "yours"),
+        ("list_archived_sessions", "branch"),
+        ("list_archived_sessions", "check_resumable"),
         ("list_sessions", "kind"),
         ("list_sessions", "branch"),
         ("list_projects", "project"),
@@ -366,7 +366,7 @@ fn the_schemas_and_descriptions_name_what_the_tools_take_and_return() {
     // The new fields are named where the results carry them.
     for (name, fields) in [
         (
-            "get_session_branches",
+            "list_session_branches",
             &[
                 "`target_branch`",
                 "`fork_point`",
@@ -388,7 +388,7 @@ fn the_schemas_and_descriptions_name_what_the_tools_take_and_return() {
             ][..],
         ),
         ("get_session", &["`resumable`"][..]),
-        ("list_archived", &["`resumable`"][..]),
+        ("list_archived_sessions", &["`resumable`"][..]),
     ] {
         for field in fields {
             assert!(tool(name).description.contains(field), "{name}: {field}");
@@ -405,11 +405,11 @@ fn the_schemas_and_descriptions_name_what_the_tools_take_and_return() {
     assert!(tool("get_console").description.contains("`console`"));
     for field in ["`account_name`", "`account`"] {
         assert!(
-            tool("new_session").description.contains(field),
-            "new_session: {field}"
+            tool("open_session").description.contains(field),
+            "open_session: {field}"
         );
     }
-    assert!(tool("reopen_session").description.contains("`effort`"));
+    assert!(tool("resume_session").description.contains("`effort`"));
     for field in [
         "`owned_sessions`",
         "`agent_session_id`",
@@ -426,7 +426,7 @@ fn the_schemas_and_descriptions_name_what_the_tools_take_and_return() {
 /// A project session is pointed at `get_project` for what its project sets, a console session
 /// at `get_settings` for the accounts to choose from, and neither at what it cannot read.
 #[test]
-fn the_new_session_schema_points_each_role_at_what_it_can_read() {
+fn the_open_session_schema_points_each_role_at_what_it_can_read() {
     let text = |schema: &Value, field: &str| {
         schema["properties"][field]["description"]
             .as_str()
@@ -434,7 +434,7 @@ fn the_new_session_schema_points_each_role_at_what_it_can_read() {
             .to_string()
     };
 
-    let project = new_session_schema(false);
+    let project = open_session_schema(false);
     let account = text(&project, "account");
     assert!(
         account.contains("for the agent (`get_project` gives it in `effective.accounts`)."),
@@ -453,7 +453,7 @@ fn the_new_session_schema_points_each_role_at_what_it_can_read() {
         );
     }
 
-    let console = new_session_schema(true);
+    let console = open_session_schema(true);
     let account = text(&console, "account");
     assert!(
         account.contains("an account's id or name (see `get_settings`), or `default`"),
@@ -503,4 +503,37 @@ fn every_tool_announces_an_object_schema() {
             assert!(schema["required"].is_array(), "{}", tool.name);
         }
     }
+}
+
+/// PROTOCOL.md's table of the tools of each role names exactly the tools the catalogues announce,
+/// so a tool added, renamed or dropped in one place cannot be missed in the other.
+#[test]
+fn the_protocol_tools_table_names_every_tool_of_the_catalogues() {
+    use std::collections::BTreeSet;
+
+    let protocol = include_str!("../../../PROTOCOL.md");
+    let table = protocol
+        .split("### The tools of each role\n")
+        .nth(1)
+        .expect("PROTOCOL.md has the section \"The tools of each role\"");
+    let documented: BTreeSet<&str> = table
+        .lines()
+        .skip_while(|line| !line.starts_with('|'))
+        .take_while(|line| line.starts_with('|'))
+        .skip(2)
+        .flat_map(|row| {
+            let tools = row.split('|').nth(1).unwrap_or_default();
+            tools.split('`').skip(1).step_by(2)
+        })
+        .collect();
+    let catalogued: BTreeSet<&str> = [
+        CONSOLE_SESSION_TOOLS,
+        COORDINATOR_PROJECT_SESSION_TOOLS,
+        WORKER_PROJECT_SESSION_TOOLS,
+    ]
+    .into_iter()
+    .flatten()
+    .map(|tool| tool.name)
+    .collect();
+    assert_eq!(documented, catalogued);
 }

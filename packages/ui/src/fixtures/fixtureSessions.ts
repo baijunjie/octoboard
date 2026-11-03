@@ -154,7 +154,7 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
       applyDaemonEvent(store, { type: "session_upserted", session: { ...forgotten, status: "idle", model, effort } });
       return { type: "session_model_set", id: null, session: session.id, outcome: "restarted", continued: true };
     },
-    hand_off_session: (body) => {
+    handoff_session: (body) => {
       const current = store.getState();
       const session = current.sessions.get(body.session);
       if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });

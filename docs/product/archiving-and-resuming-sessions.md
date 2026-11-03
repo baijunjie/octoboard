@@ -74,21 +74,21 @@ as well as sessions started by the owner.
   nothing (see `docs/product/switching-session-accounts.md`).
 
 **Resuming** an interrupted session happens by selecting it, or by pressing "Resume" on its terminal's card (see
-"Interrupted and archived sessions" in `docs/product/session-terminal.md`, which also names the two ways of
-showing an interrupted session that do not resume it), or, for a project session, by giving its conversation's session
-ID in the session dialog's **Resume conversation** tab (see "Resuming or going to a session of this project from the
-tab" in `docs/product/resuming-a-conversation-by-its-session-id.md`). **Reopening** an archived session is the same
-relaunch, but selecting an archived session does not do it: the session is shown, still archived, with its history in
-place of its terminal (see `docs/product/session-history.md`), and is reopened by pressing "Reopen" on its terminal's
-card, in a focus mode's archived-row action menu (see "What both views show" in `docs/product/focus-mode.md`), in the
-archive view (see "The archive view" in `docs/product/archive-view.md`), or, for a project session, by giving its
-conversation's session ID in the session dialog's **Resume conversation** tab (see "Reopening an archived session from
-the tab" in `docs/product/resuming-a-conversation-by-its-session-id.md`). Each relaunches the same agent in the same
-directory and reassembles everything Octoboard injects. An owner session resumes or reopens a session of its own with
-`reopen_session`, optionally with another model or reasoning effort (see "The console session's tools" in
+"Interrupted and archived sessions" in `docs/product/session-terminal.md`, which also names the two ways of showing an
+interrupted session that do not resume it), or, for a project session, by giving its conversation's session ID in the
+session dialog's **Resume conversation** tab (see "Resuming or going to a session of this project from the tab" in
+`docs/product/resuming-a-conversation-by-its-session-id.md`). **Reopening** an archived session is the same relaunch,
+but selecting an archived session does not do it: the session is shown, still archived, with its history in place of its
+terminal (see `docs/product/session-history.md`), and is reopened by pressing "Reopen" on its terminal's card, in a
+focus mode's archived-row action menu (see "What both views show" in `docs/product/focus-mode.md`), in the archive view
+(see "The archive view" in `docs/product/archive-view.md`), or, for a project session, by giving its conversation's
+session ID in the session dialog's **Resume conversation** tab (see "Reopening an archived session from the tab" in
+`docs/product/resuming-a-conversation-by-its-session-id.md`). Each relaunches the same agent in the same directory and
+reassembles everything Octoboard injects. An owner session resumes or reopens a session of its own with
+`resume_session`, optionally with another model or reasoning effort (see "The console session's tools" in
 `docs/product/hub-orchestration.md`), finding its interrupted sessions with `list_sessions` and its archived ones with
-`list_archived` (see `docs/product/what-every-session-reads.md`); any other session can ask the user to resume or reopen
-a project session, by its conversation's session ID, with `request_resume_session` (see
+`list_archived_sessions` (see `docs/product/what-every-session-reads.md`); any other session can ask the user to resume
+or reopen a project session, by its conversation's session ID, with `request_resume_session` (see
 `docs/product/requests-to-resume-a-conversation.md`). Both relaunch it as above.
 
 - Where the agent has a stored conversation, that conversation is resumed.
@@ -205,7 +205,7 @@ reached:
   `docs/product/archive-view.md`;
 - from either focus mode, as that same preview, within that focus mode's scope;
 - from the archive view, with all of them;
-- by any session, with `list_archived`, newest archived first (see "Listing archived sessions" in
+- by any session, with `list_archived_sessions`, newest archived first (see "Listing archived sessions" in
   `docs/product/what-every-session-reads.md`).
 
 How each of those looks and behaves is in "Project rows" in `docs/product/sidebar-project-rows.md`, "The archive view"

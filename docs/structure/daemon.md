@@ -79,7 +79,7 @@ and records tests replay.
   over it), `reporting.rs`, `sharing.rs`, `naming.rs` (how a message names a session, a place, a quoted body),
   `owner_notices.rs` (every notice to an owner), `texts.rs` (fixed texts in Octoboard's own name).
 - `src/handoff/` — the handoff package built for a session another takes over: build, render and file. The
-  `hand_off_session` operation is `coordinator/handoff.rs`.
+  `handoff_session` operation is `coordinator/handoff.rs`.
 - `src/branch_origin/` — which session is responsible for a git branch: the record (`record.rs`, `target.rs`), the
   reconcile against the repository's branches (`reconcile.rs`), forks (`forks.rs`), handover (`handover.rs`), the
   listing, and `gate.rs` with `KeyedGates`, the keyed mutex branch cleanup shares.

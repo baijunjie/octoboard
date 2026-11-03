@@ -121,10 +121,10 @@ relaunching a session does not preserve messages held only in its running proces
    punctuation or already in backticks is not touched. Codex and Grok Build have not been measured for this.
 
 This holds for everything Octoboard writes into a running session — an instruction, a report, a report panel form
-submission, information shared by another session, the instruction `reopen_session` hands over, the prompt to continue
+submission, information shared by another session, the instruction `resume_session` hands over, the prompt to continue
 after an account switch — because all of them can be model-authored and none is reviewed first.
 
-**An instruction `reopen_session` hands a Claude Code session that resumes a conversation is not written at all**, nor
+**An instruction `resume_session` hands a Claude Code session that resumes a conversation is not written at all**, nor
 is the prompt to continue that an account switch sends one (see "Continuing after a switch" in
 `docs/product/switching-session-accounts.md`): it is given to the relaunched agent as the prompt its launch starts
 with, since Claude Code can ask "Resume this conversation?" at a resume launched without one, and a message written
@@ -160,7 +160,7 @@ session, which stays kept for the next resume.
 the agent's own folder-trust confirmation (see `docs/product/folder-trust.md`) — accepting it, and so trusting the
 folder, at Codex's and Grok Build's, and declining it, which exits the agent, at Claude Code's. So from every launch of
 a session, a resume included, everything Octoboard writes into it — an instruction, a report, information shared by
-another session, a report panel form submission, the instruction `reopen_session` hands over or the prompt to continue
+another session, a report panel form submission, the instruction `resume_session` hands over or the prompt to continue
 after an account switch when it is not the launch prompt — is queued as above until the confirmation can no longer be
 on screen and, for Claude Code, until the agent is reading its input:
 
@@ -334,7 +334,7 @@ message unsent is caught the same way.
 **The check.** When Octoboard writes a message into a Claude Code session whose agent is at its prompt — whichever
 status it shows there, not mid-turn — it waits up to about three seconds for the agent's hooks to report
 a prompt sent (`UserPromptSubmit`). This applies to every message Octoboard writes: an owner's instruction, a report,
-shared information, a report panel form submission, the instruction `reopen_session` hands over or the prompt to
+shared information, a report panel form submission, the instruction `resume_session` hands over or the prompt to
 continue after an account switch when it is written rather than given as the launch prompt, the messages of a
 handover or a handoff, and a client's own `send_message` request. A message that was queued is checked the same way
 when it is finally written. When several queued messages are written in one go, each is checked on its own, against the
@@ -380,14 +380,14 @@ it must not send it again. The same is said of a message a view of background ag
 discarded or a view took" below), and the tools' wording names both: the message is in the input box, or went to a view
 of the agent's background agents. How each tool words this, and what follows from it, is with the tool: the owner's
 `instruct_session` in "The console session's tools" in `docs/product/hub-orchestration.md`, `report` in
-`docs/product/reporting-to-owners.md`, the `send_message` tool in `docs/product/information-between-sessions.md`,
+`docs/product/reporting-to-owners.md`, the `inform_session` tool in `docs/product/information-between-sessions.md`,
 `transfer_session` in "Handing a session to another owner", `release_session` in "Releasing a session from its owner"
 and `bind_to_session` in "Setting a parent for an independent session", all in
 `docs/product/changing-session-owners.md`. A sender whose message arrives while the session is held behind an unsent one
 is told it was queued, as for a session that cannot take a message. A sender already told its message was queued learns
 nothing more if that message is later left unsent; the notice is what reports it.
 
-**A client's `send_message` request** (the daemon's client protocol, not the sessions' tool of that name) to a Claude
+**A client's `send_message` request** (the daemon's client protocol) to a Claude
 Code session at its prompt is answered once the check has ended — the second one too, for a message a dialog discarded
 and that is written again in the same delivery (see "A message a dialog discarded or a view took" below) — not as soon
 as the message is written. A message left unsent is not refused: the client is still answered with success, and, like

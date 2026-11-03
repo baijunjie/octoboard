@@ -57,7 +57,7 @@ take a message; see "Messages held until a session can take them" in `docs/produ
   sessions, with the list of the Octoboard tools it has left, and that any pages it pushed to the report panel were
   withdrawn with the tools for them.
 - **The new owner** is told which session handed which session over to it, by id, title and project, that the session is
-  its own from now on and is driven with `instruct_session`, `archive_session` and `reopen_session`, and, for a
+  its own from now on and is driven with `instruct_session`, `archive_session` and `resume_session`, and, for a
   coordinator with a parent, that it keeps its own sessions, which the new owner can read but not drive; then the
   caller's `note`, every line quoted, followed by a closing line.
 
@@ -75,7 +75,7 @@ with the reason, or was not told because the message was written
 into its input but its agent did not send it to the conversation — it is in the input box, or went to a view of the
 agent's background agents — the user having been told to check the session (see "A message written but not
 sent" in `docs/product/message-delivery.md`). When the new owner could not be told, the note says to tell it of the
-handover with `send_message`. Once the binding has changed the handover stands, whatever became of the messages.
+handover with `inform_session`. Once the binding has changed the handover stands, whatever became of the messages.
 
 ## Releasing a session from its owner
 
@@ -101,7 +101,7 @@ A released session is an **independent coordinator**, answering directly to the 
   the session is responsible for stay its own;
 - its former owner no longer instructs or drives it: archiving that owner no longer takes it along, and nothing archives
   it on a `done` report. Releasing cuts no communication: either of the two can still tell the other something with
-  `send_message`, which the receiver weighs rather than obeys (see `docs/product/information-between-sessions.md`).
+  `inform_session`, which the receiver weighs rather than obeys (see `docs/product/information-between-sessions.md`).
 
 A session can be released whatever its state — running, interrupted or archived. The call is refused and changes
 nothing:
@@ -123,25 +123,25 @@ take one; see "Messages held until a session can take them" in `docs/product/mes
 now, having been released from the session it reported to, and is the user's own session; that it takes work only from
 the user typing in its terminal and is not to call `report`, which is refused for a session with no owner; that this
 replaces what it was told of its owner when it was started; that it can start and drive sessions of its own with
-`new_session` and the tools that go with it, calling `get_session` once with no arguments first so that its tool list
+`open_session` and the tools that go with it, calling `get_session` once with no arguments first so that its tool list
 catches up (see "When a binding changes while a session runs" below), and can still tell its former owner something with
-`send_message`, which the former owner weighs rather than obeys; and the list of the Octoboard tools it now has. A
+`inform_session`, which the former owner weighs rather than obeys; and the list of the Octoboard tools it now has. A
 release made with a `note` ends that message with the note, marked as its former owner's, every line quoted, followed by
 a closing line. One with no process running is told when it next starts instead, and so is one whose message could not
 be written; the note is kept with what it is owed (see "A change of owner told at the next launch" below).
 
 **The former owner is told only of the user's release**: an owner that releases a session itself is sent nothing, since
 it made the call. When the user releases a session, its former owner, if it has a process running, is told by a message
-written through the same delivery (queued while it cannot take one) which session the user released from it — by
-kind, id and title — that the session has no owner now and answers only to the user, so it can no longer instruct,
-drive or archive it, and the session does not report to it; that it can still tell the session something with
-`send_message`, which the session weighs rather than obeys; that it should no longer count on the session; and that any
-work it handed the session is left with the user. A former owner with no process running is not told,
-then or later; a later attempt by it to drive the session is refused as for any session that is not its own.
+written through the same delivery (queued while it cannot take one) which session the user released from it — by kind,
+id and title — that the session has no owner now and answers only to the user, so it can no longer instruct, drive or
+archive it, and the session does not report to it; that it can still tell the session something with `inform_session`,
+which the session weighs rather than obeys; that it should no longer count on the session; and that any work it handed
+the session is left with the user. A former owner with no process running is not told, then or later; a later attempt by
+it to drive the session is refused as for any session that is not its own.
 
 The call returns `session`, `orchestration_role: "coordinator"` and a `note` saying that the session has no parent now,
 is no longer the caller's, is the user's own session, is no longer instructed or driven by the caller and no longer
-reports to it, though `send_message` can still tell it something, and whether it was told, will be told as soon as it
+reports to it, though `inform_session` can still tell it something, and whether it was told, will be told as soon as it
 can take a message, is not running and will be told when it next starts, or was not told because the message was written
 into its input but its agent did not send it to the conversation, the user having been told to check the session (see "A
 message written but not sent" in `docs/product/message-delivery.md`). Once the binding is cleared the release stands,
@@ -210,7 +210,7 @@ typing in its terminal, and reports to it with `report` once per round of work, 
 says about being independent and not calling `report`; that `done` with no open items archives it, subject to
 "Automatic archiving" in `docs/product/reporting-to-owners.md` — refused for a coordinator with a parent while a session
 it started is not archived and no lock blocks automatic archiving — while `needs_decision` or open items leave it
-running; that a coordinator with a parent keeps its child sessions and goes on driving them with `new_session` and the
+running; that a coordinator with a parent keeps its child sessions and goes on driving them with `open_session` and the
 tools that go with it, and that any other can no longer start or drive sessions, with the list of the Octoboard tools it
 has left, and that any pages it pushed to the report panel were withdrawn with the tools for them; what became of its
 summary as its first report; and not to call `bind_to_session` again. The first report is one of:
@@ -246,7 +246,7 @@ up to date. An agent that checks a tool's name against the last list it received
 is made, so the message telling a session it was released has it call `get_session` once with no arguments first (see
 "Releasing a session from its owner" above). Only two changes take tools away — setting a project coordinator as parent,
 and transferring a coordinator to a project parent — and they leave the worker's set: `report`, the reads every session
-has (see `docs/product/what-every-session-reads.md`), `send_message`, `get_project`, `request_session` and
+has (see `docs/product/what-every-session-reads.md`), `inform_session`, `get_project`, `request_session` and
 `request_resume_session`. Losing the report panel tools withdraws the pages the session pushed (see "When a session
 becomes a worker" in `docs/product/report-panel.md`). A release makes a worker an independent coordinator and gives it
 the coordinator's tools.
@@ -260,7 +260,7 @@ a restart of Octoboard, and is not part of the session record clients read.
 
 It is delivered when the session's process is next started — a resume, a reopen, or any other relaunch, such as one for
 a switch of account — ahead of the launch's own instruction, in the same text as that instruction where there is one (an
-owner's `reopen_session` text, say): a Claude Code session resuming a conversation has it in its launch prompt, any
+owner's `resume_session` text, say): a Claude Code session resuming a conversation has it in its launch prompt, any
 other session as a message delivered once it can take one (see "Messages held until a session can take them" in
 `docs/product/message-delivery.md`). Where it stands among the information kept for an interrupted session is in
 "Information for an interrupted session" in `docs/product/information-between-sessions.md`.

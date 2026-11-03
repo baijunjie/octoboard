@@ -93,7 +93,7 @@ give every agent, with `null` for an unset value.
 **The default agent and account settings are initial preferences, not a guarantee of what a session's own sessions
 run on.** The tools describe a project's `default_agent` and `accounts`, a console's `default_agent`,
 `project_session_agent` and `accounts`, and what `get_console` and `get_project` return — `get_project`'s `effective`
-included — as applying to sessions opened without a choice. A project session's `new_session`, and its
+included — as applying to sessions opened without a choice. A project session's `open_session`, and its
 `request_session` in its own console, instead prefer the caller's agent; a console session starting a project session
 prefers the project's default, and its request for a console session in its own console prefers its own agent. The
 final agent and account, including automatic fallback when enabled, follow "The agent and account of a session a

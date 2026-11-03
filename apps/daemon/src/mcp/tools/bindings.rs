@@ -78,7 +78,7 @@ pub(in crate::mcp) async fn transfer_session(
     if told_owner.is_err() {
         result_note.push_str(&format!(
             " Tell the new parent session of the handover yourself with `{}`.",
-            qualified_tool_name(caller.agent, "send_message")
+            qualified_tool_name(caller.agent, "inform_session")
         ));
     }
     Ok(json!({
@@ -124,9 +124,9 @@ pub(in crate::mcp) async fn release_session(
         "note": format!(
             "Released: `{id}` has no parent session now and is no longer yours. It is the \
              user's own session; you no longer instruct or drive it and it does not report to \
-             you, though `{send_message}` can still tell it something. {told}",
+             you, though `{inform_session}` can still tell it something. {told}",
             id = released.id,
-            send_message = qualified_tool_name(caller.agent, "send_message"),
+            inform_session = qualified_tool_name(caller.agent, "inform_session"),
             told = told(&delivery, "The notice of the release", "the session"),
         ),
     }))
@@ -288,7 +288,7 @@ mod tests {
              calling `mcp__octoboard__report`. `done` with no open items archives you, and is \
              refused while a session you started is not archived; `needs_decision` or open items \
              leave you running. You keep your child sessions and go on driving them with \
-             `mcp__octoboard__new_session` and the tools that go with it. Your summary, as your \
+             `mcp__octoboard__open_session` and the tools that go with it. Your summary, as your \
              first report, was delivered to your new parent session. You have a parent session \
              now, so do not call `mcp__octoboard__bind_to_session` again."
         );
@@ -377,7 +377,7 @@ mod tests {
         let note = result["note"].as_str().unwrap();
         assert!(note.contains("no longer yours"));
         assert!(
-            note.contains(&qualified_tool_name(Agent::Claude, "send_message")),
+            note.contains(&qualified_tool_name(Agent::Claude, "inform_session")),
             "{note}"
         );
         let released = state.store.get_session("of-a").unwrap().unwrap();
@@ -387,14 +387,14 @@ mod tests {
         );
         assert_eq!(released.bound_to, None);
         let told = output_containing(&of_a, "you have no parent session now");
-        assert!(told.contains("`mcp__octoboard__new_session`"), "{told}");
+        assert!(told.contains("`mcp__octoboard__open_session`"), "{told}");
         assert!(
             told.contains("do not call `mcp__octoboard__report`"),
             "{told}"
         );
         assert!(
             told.contains(
-                "tell your former parent session something with `mcp__octoboard__send_message`"
+                "tell your former parent session something with `mcp__octoboard__inform_session`"
             ),
             "{told}"
         );
@@ -579,7 +579,7 @@ mod tests {
         let err = call(
             &state,
             "loose",
-            "new_session",
+            "open_session",
             &arguments(json!({ "brief": { "goal": "x" } })),
         )
         .await

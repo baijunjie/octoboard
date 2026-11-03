@@ -11,14 +11,14 @@ changes" and "Listing a project's branches" below).
 | `get_session` | `session?`, `output_bytes?` | The record of any session, of any console, or with `session` left out of the caller itself, which is how a session learns its own id — status, title, agent, whether it is a console session, its console and project, which session owns it and whether that owner is a console session or a project session (or that it is independent), whether it is the caller's, timestamps, its account, the model and effort it is seen running with, whether it is pinned or locked, the names of the branches it is responsible for, and the rest of "Session records" below — plus a tail of what it has printed, and, for an interrupted or archived session, whether its conversation can still be resumed. |
 | `list_sessions` | `console?`, `project?`, `owner?`, `yours?`, `kind?`, `branch?`, `status?` | The running sessions other than the caller — or with `status` the interrupted ones, or both — in every console and project, optionally narrowed. See `docs/product/information-between-sessions.md`. |
 | `read_session_history` | `session?`, `limit?`, `before?` | What any session's conversation held, or with `session` left out the caller's own, a page at a time from the latest. See "Reading a session's history" below. |
-| `get_session_branches` | `session?` | The git branches any session is responsible for, each with its project, worktree, target branch and fork point, since when the session is responsible for it, and what archiving the session would do with it. See "Reading the branches a session is responsible for" in `docs/product/branch-responsible-session.md`. |
+| `list_session_branches` | `session?` | The git branches any session is responsible for, each with its project, worktree, target branch and fork point, since when the session is responsible for it, and what archiving the session would do with it. See "Reading the branches a session is responsible for" in `docs/product/branch-responsible-session.md`. |
 | `list_project_changes` | `project?`, `worktree?`, `branch?`, `base?`, `base_remote?`, `commit?`, `limit?`, `offset?` | What has changed in a project of the caller's own console, without running `git` there: the uncommitted changes of one of its worktrees, what a branch has changed since it forked from a base together with its commits, or one of those commits; a page at a time. See "Reading a project's changes" below. |
 | `list_project_branches` | `project?`, `limit?`, `offset?` | The local branches of a project of the caller's own console, without running `git` there, each with its tip, its worktree and the session responsible for it; a page at a time. See "Listing a project's branches" below. |
 | `read_project_diff` | `project?`, `path`, `old_path?`, `group?`, `worktree?`, `commit?`, `parent?`, `offset?`, `max_bytes?` | The diff of one change `list_project_changes` lists, a window of it at a time. See "Reading a project's changes" below. |
 | `list_agent_models` | `agent`, `account?` | The models an agent offers and the reasoning-effort levels of each. See "Reading the models an agent offers" below. |
 | `list_consoles` | — | Every console, each as `console` (its id), `name` and `yours` (whether it is the caller's own console). The id, or a name that names one console, is what a `console` argument takes. |
 | `list_projects` | `console?`, `project?`, `refresh?` | The projects of a console: the caller's own in full, another's only as far as needed to target one of its projects; optionally one project, and optionally with their git status checked first. See "Listing a console's projects" below. |
-| `list_archived` | `console?`, `project?`, `owner?`, `yours?`, `kind?`, `branch?`, `check_resumable?`, `limit?`, `before?` | The archived sessions of every console, console sessions included, whoever owns them, each with its owner, newest archived first, optionally narrowed, a page at a time. See "Listing archived sessions" below. |
+| `list_archived_sessions` | `console?`, `project?`, `owner?`, `yours?`, `kind?`, `branch?`, `check_resumable?`, `limit?`, `before?` | The archived sessions of every console, console sessions included, whoever owns them, each with its owner, newest archived first, optionally narrowed, a page at a time. See "Listing archived sessions" below. |
 | `list_agents` | `agent?`, `refresh?` | The agents a session could be opened on, each with its tags and its accounts' plan quota, optionally read again first. See `docs/product/listing-agents-from-a-session.md`. |
 
 The reads are not narrowed by role because sessions of any kind can work in the same project, and so the same working
@@ -81,14 +81,14 @@ The arguments choose one of three views:
 - **Neither `worktree` nor `branch`**: the uncommitted changes of the worktree holding the project's folder — not
   necessarily the caller's own worktree.
 - **`worktree`**: the uncommitted changes of that worktree of the project's repository, named by its path (as
-  `get_session_branches` gives it) or by the branch checked out in it. One that names no worktree of the repository is
+  `list_session_branches` gives it) or by the branch checked out in it. One that names no worktree of the repository is
   refused, the reason listing the worktrees there are.
 - **`branch`**: what the local branch `branch` has changed since it forked from `base` — as `git diff base...branch`
   shows it — and the commits it has made since. `base` is a local branch, or with `base_remote: true` a
   remote-tracking one such as `origin/main`, as the repository last fetched it; nothing contacts the remote. Unlike the
   Git mode, which compares with the branch the main working copy has checked out, the base is the caller's to name, or,
   left out, the **target branch recorded for `branch`** — the local branch a session's git created it from, as
-  `get_session_branches` and `list_project_branches` give it as `target_branch` (see "Target branches and fork points"
+  `list_session_branches` and `list_project_branches` give it as `target_branch` (see "Target branches and fork points"
   in `docs/product/revert-gate.md`). For a branch with none recorded, or to compare with another, the tool's
   description suggests the target branch of the session's report, or the branch the project's folder has checked out
   (`git_status.branch` in `list_projects`). With `commit` besides — the full id of one of the commits the branch view
@@ -116,7 +116,7 @@ Every answer carries:
 | `next_offset` | Where the next page starts, `null` on the last page. |
 | `complete` | `false` when the daemon cut the list short at its own limits (see "What the list says instead" in `docs/product/project-pane-git-change-list.md`), so `total` and the changes past the cut are not known. |
 
-The uncommitted views add `worktree`: `path` and `branch` as plain text, as `get_session_branches` gives them (`branch`
+The uncommitted views add `worktree`: `path` and `branch` as plain text, as `list_session_branches` gives them (`branch`
 `null` when `HEAD` is detached or unborn), and `head`, the commit the staged changes are against (`null` before the
 first commit). The branch view adds `branch`, `base` (the branch compared with: the recorded target branch when `base`
 was left out), `branch_commit` and `base_commit` (the full ids of the two tips), `merge_base` (the commit they forked
@@ -225,17 +225,17 @@ Each branch is:
 
 Listing the branches brings the repository's records up to date first, as the Git mode's listing does (see "What the
 record is" in `docs/product/branch-responsible-session.md`), so `origin` is as the records stand after that. A branch
-whose responsible session is `gone` cannot be handed over: `handover_branches` takes branches only from the caller or
+whose responsible session is `gone` cannot be handed over: `transfer_branches` takes branches only from the caller or
 a session it owns (see "Handing branches between sessions of an owner" in
 `docs/product/branch-responsible-session.md`), and no session can be named for one that no longer exists.
 
 ## Listing archived sessions
 
-`list_archived` lists archived sessions of every console, project sessions and console sessions alike, whichever
-session owns them; an interrupted session is not archived, and is listed by `list_sessions` with `status` (see
+`list_archived_sessions` lists archived sessions of every console, project sessions and console sessions alike,
+whichever session owns them; an interrupted session is not archived, and is listed by `list_sessions` with `status` (see
 "Narrowing the list of sessions" in `docs/product/information-between-sessions.md`). It answers with `sessions`, each a
-session record as in "Session records" below, `total`, `older` and `next`. Its optional arguments narrow the list, and
-a session is listed only when it matches every one given:
+session record as in "Session records" below, `total`, `older` and `next`. Its optional arguments narrow the list, and a
+session is listed only when it matches every one given:
 
 - `console`: only the sessions of that console, named by its id or by a name that names one console.
 - `project`: only the sessions of that project, named by its id, in any console, or by its name — looked for among the
@@ -312,10 +312,10 @@ a call runs nothing while an answer is fresh. The answer is `agent`, `account` (
 - `unavailable` is `null`, or, when the agent cannot be asked, `code` and `message` saying why (as in "While the list
   is being fetched, and when there is none" there), with `models` empty.
 
-The description of every `model` and `effort` a tool takes — `new_session`, `request_session`, `request_resume_session`,
-`handoff_session`, `reopen_session`, `set_session_model`, and the `launch` settings of `add_project`, `update_project`
-and `update_console` — points to it: a value given there must be one it lists, under the rules in "The Advanced section"
-in `docs/product/model-and-reasoning-effort.md`.
+The description of every `model` and `effort` a tool takes — `open_session`, `request_session`,
+`request_resume_session`, `handoff_session`, `resume_session`, `set_session_model`, and the `launch` settings of
+`add_project`, `update_project` and `update_console` — points to it: a value given there must be one it lists, under the
+rules in "The Advanced section" in `docs/product/model-and-reasoning-effort.md`.
 
 ## Session records
 
@@ -333,12 +333,13 @@ of its background agents, that a message to it is held until they leave and that
 it be.
 
 Every session record the session tools give — `list_projects`' sessions, `get_session`, `list_sessions`,
-`list_archived`, and the record `rename_session` and `set_session_pinned` answer with — carries `owner` (the id of the
-session it is bound to, or null when it is independent — always null for a console session, which is never bound),
-`owner_kind` (`console` or `project`, the kind of session that parent is; null when independent) and `yours` (whether
-that parent is the caller). `orchestration_role` is `coordinator` or `worker`: it describes the ability to create and
-manage child sessions, separately from the parent relationship. Console sessions read `coordinator`; project sessions
-use the roles described in `docs/product/hub-orchestration.md`. A coordinator can have a parent and no children.
+`list_archived_sessions`, and the record `rename_session` and `set_session_pinned` answer with — carries `owner` (the id
+of the session it is bound to, or null when it is independent — always null for a console session, which is never
+bound), `owner_kind` (`console` or `project`, the kind of session that parent is; null when independent) and `yours`
+(whether that parent is the caller). `orchestration_role` is `coordinator` or `worker`: it describes the ability to
+create and manage child sessions, separately from the parent relationship. Console sessions read `coordinator`; project
+sessions use the roles described in `docs/product/hub-orchestration.md`. A coordinator can have a parent and no
+children.
 
 Session records sent to windows carry `orchestration_role` too, always, and name the parent `bound_to`. A project
 session's role cannot be inferred from a non-null parent alone, since a coordinator can also have a parent: it is read
@@ -394,8 +395,8 @@ Each record also carries the facts the tools that act on a session depend on, so
   refuses a locked session.
 - `branches`, the names of the git branches the session is responsible for (see "The responsible session" in
   `docs/product/branch-responsible-session.md`): an empty list when it is responsible for none, and always for a
-  console session. These are the branches `handover_branches`, and the `branches` of `new_session` and
-  `request_session`, need the caller to be responsible for; where each is checked out is `get_session_branches`'
+  console session. These are the branches `transfer_branches`, and the `branches` of `open_session` and
+  `request_session`, need the caller to be responsible for; where each is checked out is `list_session_branches`'
   answer. Reading a record runs no `git`.
 
 And each record carries what tells sessions apart and what an owner decides on:
@@ -406,23 +407,24 @@ And each record carries what tells sessions apart and what an owner decides on:
 - `agent_session_id`, the agent's own id of the conversation, `null` until the agent has reported one. It is what
   `request_resume_session` takes as its `conversation` (see `docs/product/requests-to-resume-a-conversation.md`), which
   the tool's description still says to use only when the user asked for that conversation.
-- `origin`: `console` for a session started with `new_session`; `user` for one the user opened and for one opened
+- `origin`: `console` for a session started with `open_session`; `user` for one the user opened and for one opened
   through `request_session` or `request_resume_session`. A session that takes another's place in a handoff carries the
   original's.
 - `has_conversation`: whether a turn was ever taken in the session, or it was opened on an existing conversation. It
-  does not say that the agent still holds the conversation's record; a `reopen_session` that finds it gone is refused (`conversation_unresumable`).
-- `resumable`, in `get_session`'s record of an interrupted or archived session only — and in `list_archived`'s with
-  `check_resumable` (see "Listing archived sessions" above): whether the agent still holds the conversation, looked up
-  in its own records under the session's account as a reopen looks it up (see "When a conversation can no longer be
-  resumed" in `docs/product/archiving-and-resuming-sessions.md`). `true` when it does, and for a session with no
-  conversation, which a reopen starts afresh; `false` when the conversation is proven gone, so that `reopen_session`
-  would refuse it; `null` when that cannot be told, which `reopen_session` lets through. It is read in the daemon's own
-  environment rather than a launch's, so in rare cases a reopen can find otherwise. A running session's record has no
-  `resumable`.
+  does not say that the agent still holds the conversation's record; a `resume_session` that finds it gone is refused
+  (`conversation_unresumable`).
+- `resumable`, in `get_session`'s record of an interrupted or archived session only — and in
+  `list_archived_sessions`'s with `check_resumable` (see "Listing archived sessions" above): whether the agent still
+  holds the conversation, looked up in its own records under the session's account as a reopen looks it up (see "When a
+  conversation can no longer be resumed" in `docs/product/archiving-and-resuming-sessions.md`). `true` when it does, and
+  for a session with no conversation, which a reopen starts afresh; `false` when the conversation is proven gone, so
+  that `resume_session` would refuse it; `null` when that cannot be told, which `resume_session` lets through. It is
+  read in the daemon's own environment rather than a launch's, so in rare cases a reopen can find otherwise. A running
+  session's record has no `resumable`.
 - `processes`, in `get_session`'s record only: for a session with a process running, the process trees its launch
   holds (a dev server, a preview, a watcher), each with its `id`, `command`, `cwd`, `ports` and `started_at`, as the
   process list shows them (see "Process information and actions" in `docs/product/background-processes.md`); an empty
-  list for any other session. These are the trees `handover_processes` names by `id`, and those stopped when the
+  list for any other session. These are the trees `transfer_processes` names by `id`, and those stopped when the
   session's process ends.
 - `model` and `effort`, the session's own launch choices (see `docs/product/model-and-reasoning-effort.md`): a key is
   absent when the session follows its project's, else its console's, setting, and `null` when the session leaves the

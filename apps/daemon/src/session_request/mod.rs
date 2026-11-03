@@ -170,12 +170,12 @@ impl Drop for WithdrawOnDrop<'_> {
 /// `request_session`: asks the user to start a session with no owner — a project session in any
 /// project, or a console session — and waits up to `limit` for the answer, which is what the call
 /// returns. `open` must be unbound: a session with no owner is the point of the request, and the
-/// caller binding it is for `new_session`, or for the caller binding itself afterwards. What the
-/// session could never be started for is refused before the user is asked. The `Err` case is what
-/// the model is shown as the reason, so it is written for it. `handover` is moved to the session
-/// on approval and only then. `automatic` is whether the user's setting to approve requests
-/// without asking was on when the call was made, which the caller also words the session's
-/// opening prompt by: the request is then approved at once, without asking.
+/// caller binding it is for the `open_session` tool, or for the caller binding itself afterwards.
+/// What the session could never be started for is refused before the user is asked. The `Err` case
+/// is what the model is shown as the reason, so it is written for it. `handover` is moved to the
+/// session on approval and only then. `automatic` is whether the user's setting to approve requests
+/// without asking was on when the call was made, which the caller also words the session's opening
+/// prompt by: the request is then approved at once, without asking.
 ///
 /// A cancelled `request_session` is withdrawn by dropping this future (see `mcp::stdio`), so it
 /// can stop at any `.await`: work that must finish once started belongs on a task of its own.

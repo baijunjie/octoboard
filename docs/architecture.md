@@ -194,7 +194,7 @@ confirmations, settings and sessions would each need an owner and an authorizati
   on those turns.
 - **Information between sessions is a channel of its own, because "not an instruction" cannot be enforced.** A message
   is text written into the receiving terminal, so any session that can write to another could steer it. Commanding is
-  therefore the only hard-enforced boundary (`instruct_session`, `archive_session` and `reopen_session` act on the
+  therefore the only hard-enforced boundary (`instruct_session`, `archive_session` and `resume_session` act on the
   caller's own sessions). Sharing information is a separate tool, offered to every session and reaching any running
   session in any console or project, and keeping what it is given for an interrupted session until that session is
   resumed (see "Information for an interrupted session" in `docs/product/information-between-sessions.md`); it is
@@ -210,7 +210,7 @@ confirmations, settings and sessions would each need an owner and an authorizati
   verbatim and Grok Build stores its `--rules` in the session record, so the session would get a console session's
   tools while still being told it is a project session. What it does instead is bounded. `request_session`, offered to
   every session, asks the user to start a session with no owner — in any project, or a console session — and only the
-  user's approval starts it. `new_session` starts a session the caller owns, with no approval, where the caller
+  user's approval starts it. `open_session` starts a session the caller owns, with no approval, where the caller
   already has reach. A binding changes after launch by a call of a session concerned, or by the user: an owner hands a
   child session to another parent with `transfer_session` or releases it with `release_session`, an independent
   project coordinator sets a console session or a coordinator of its own project as its parent with `bind_to_session`
@@ -318,7 +318,7 @@ tests.
   status that must not undo another is a conditional write: a status the agent reports never moves a session out of
   `interrupted` or `archived`, and the process ending never moves it out of `archived`.
 - `Session.bound_to` is the id of a session's parent — a console session or a project coordinator of the same
-  project — or unset for an independent session. `new_session` sets it to the creating session; `transfer_session`
+  project — or unset for an independent session. `open_session` sets it to the creating session; `transfer_session`
   changes the parent; `bind_to_session` sets a parent for an independent project coordinator; and `release_session`
   clears it and makes the session a coordinator again, leaving an independent coordinator. A coordinator that sets a
   console session as its parent keeps its children and its ability to manage them. `Session.orchestration_role`

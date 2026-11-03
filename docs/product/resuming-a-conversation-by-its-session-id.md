@@ -8,8 +8,8 @@ sessions. The session dialog's **Resume conversation** tab, beside the default *
 the dialog, does this. The tabs are offered for a project session only, from the project list, the terminal's **New
 session** offer and a project's focus mode alike: the dialog for a console session has none, and neither has the dialog
 opened from a console session's focus mode, whose session always reports to that console session. A session started with
-`new_session` never resumes one. A session can ask the user to do what the tab does, with the same limits, through
-`request_resume_session` (see `docs/product/requests-to-resume-a-conversation.md`).
+the `open_session` tool never resumes one. A session can ask the user to do what the tab does, with the same limits,
+through `request_resume_session` (see `docs/product/requests-to-resume-a-conversation.md`).
 
 The tab first shows the required **Session ID** field alone. The fields after it appear only once the lookup of a valid
 ID has answered, and depend on what holds the conversation (see "Finding the conversation" below). **The agent and

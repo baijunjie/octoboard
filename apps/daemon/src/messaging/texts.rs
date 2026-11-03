@@ -163,7 +163,7 @@ pub(crate) const BRANCHES_OPENING: &str = "The session `";
 /// message that happens to begin like it.
 pub(crate) const BRANCHES_MARKER: &str = "\"), which started you, also handed the ";
 
-/// The opening prompt of a session `new_session` hands branches to: the brief, and that the
+/// The opening prompt of a session `open_session` hands branches to: the brief, and that the
 /// session starting it handed it the branches and it is now the one responsible for them.
 pub(crate) fn branches_opening_prompt(
     caller: &Session,

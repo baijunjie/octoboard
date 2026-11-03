@@ -1591,7 +1591,7 @@ export type RequestBody =
    * `open_session`. Answered with `session_opened` for the new session; a refusal, and a failure
    * after the new session is running (the error names it), come back as `error`. */
   | {
-    type: "hand_off_session";
+    type: "handoff_session";
     session: string;
     agent: Agent;
     account?: string | null;
@@ -1968,7 +1968,7 @@ export type Event =
    * once, when the session starts; nothing stores it, so a client that connects later never sees
    * it. */
   | { type: "session_notice"; session: string; code: string; params: MessageParams; message: string }
-  /** The reply to `open_session`, to `hand_off_session` and to an approving `answer_session_request`: the session that
+  /** The reply to `open_session`, to `handoff_session` and to an approving `answer_session_request`: the session that
    * was started. The same record is also broadcast as `session_upserted`, but that broadcast
    * carries no request id, so this is the only way the caller can tell which session in the tree
    * is the one it just opened. */

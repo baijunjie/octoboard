@@ -24,12 +24,12 @@ the archived sessions under them in the same way, and the confirmation says how 
 keeps its own sessions. Deleting an archived reporting session on its own leaves its owner alone, and neither deleting a
 project's archived sessions nor deleting the archived sessions under a console session touches a console session.
 
-- **Deleting removes Octoboard's record of the session**, for good, the last output Octoboard kept for it, the report
-  panel pages it pushed (see `docs/product/report-panel.md`), and, for a session that received a handoff, its handoff
-  package (see "The handoff package" in `docs/product/handing-off-sessions.md`). The session disappears from every
-  client, and the orchestration tools' `list_archived` and `reopen_session` no longer find it. The project's directory
-  is never touched. The agent's own record of the conversation, in the agent's own configuration directory, is handled
-  as described in "Moving the agent's own records to the Trash" below.
+- **Deleting removes Octoboard's record of the session**, for good, the last output Octoboard kept for it, the
+  report panel pages it pushed (see `docs/product/report-panel.md`), and, for a session that received a handoff, its
+  handoff package (see "The handoff package" in `docs/product/handing-off-sessions.md`). The session disappears from
+  every client, and the orchestration tools' `list_archived_sessions` and `resume_session` no longer find it. The
+  project's directory is never touched. The agent's own record of the conversation, in the agent's own configuration
+  directory, is handled as described in "Moving the agent's own records to the Trash" below.
 - Deleting a session that is neither archived nor unused (see "Deleting an unused session" below) is refused, saying
   that only an archived session, or one that has never been used, can be deleted, and not while it is starting. So is
   deleting an archived session that is being resumed at that moment. An archived session whose process is still on its
@@ -91,7 +91,7 @@ A session is unused, whatever its status, while all of these hold:
 - **It is bound to no owner, or the user opened it.** A session the user opened bound to an owner — choosing a
   console session under "Report to" in the session dialog, or opening it from a console session's focus mode (see
   "A console session's focus mode" in `docs/product/focus-mode.md`) — can be unused. A session an agent started with
-  `new_session`, a console session's or a project session's, keeps Archive even before its first prompt lands: its
+  `open_session`, a console session's or a project session's, keeps Archive even before its first prompt lands: its
   owner handed it work and expects it to exist.
 - **No session is bound to it.** A live owner with any session under it, in any status, keeps Archive.
 

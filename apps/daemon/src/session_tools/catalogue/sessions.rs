@@ -3,17 +3,17 @@
 
 use serde_json::json;
 
-use super::schemas::{new_session_schema, object_schema, NAMING_LANGUAGE};
+use super::schemas::{object_schema, open_session_schema, NAMING_LANGUAGE};
 use super::ToolDef;
 
-/// `new_session` as a console session has it: the session starts in whichever of the console's
+/// `open_session` as a console session has it: the session starts in whichever of the console's
 /// projects it names.
-pub(super) const CONSOLE_NEW_SESSION: ToolDef = ToolDef {
-    name: "new_session",
+pub(super) const CONSOLE_OPEN_SESSION: ToolDef = ToolDef {
+    name: "open_session",
     description: "Start a session in one of this console's projects and hand it a task. It is \
                   yours for its whole life: it reports to this console session, its owner, and \
                   you instruct it with `instruct_session`, archive it once it is done and \
-                  reopen it with `reopen_session` when it has another task. Needs no approval. \
+                  reopen it with `resume_session` when it has another task. Needs no approval. \
                   Returns the new session's id, its agent, the account it opened on \
                   (`account`, `account_name`) and the `model` and `effort` it was launched \
                   with (`null` is the agent's own default). The brief is rendered into the \
@@ -30,17 +30,17 @@ pub(super) const CONSOLE_NEW_SESSION: ToolDef = ToolDef {
                   next session, use `request_session`; if the user only wants handover notes \
                   and an end, leave the notes and end. Ask the user if their intent is \
                   unclear.",
-    schema: || new_session_schema(true),
+    schema: || open_session_schema(true),
 };
 
-/// `new_session` as a project session that can own sessions has it: the session starts in the
+/// `open_session` as a project session that can own sessions has it: the session starts in the
 /// caller's own project.
-pub(super) const PROJECT_NEW_SESSION: ToolDef = ToolDef {
-    name: "new_session",
+pub(super) const PROJECT_OPEN_SESSION: ToolDef = ToolDef {
+    name: "open_session",
     description: "Start a session in this project and hand it a task. It is yours for its \
                   whole life: it reports to this session, its owner, and you instruct it with \
                   `instruct_session`, archive it once it is done and reopen it with \
-                  `reopen_session` when it has another closely related task and room for it. \
+                  `resume_session` when it has another closely related task and room for it. \
                   Needs no approval. It prefers your own agent. A left-out account is selected \
                   by the server according to the configured policy. Automatic selection may \
                   choose another agent when neither agent nor account is named; an explicit \
@@ -58,25 +58,25 @@ pub(super) const PROJECT_NEW_SESSION: ToolDef = ToolDef {
                   A session started this way cannot start sessions of its own, and only this \
                   project is available; a session elsewhere, or one that should not report to \
                   you, is one `request_session` asks the user for. To give the new session a \
-                  branch you are responsible for, pass it in `branches`; `handover_branches` \
+                  branch you are responsible for, pass it in `branches`; `transfer_branches` \
                   moves the branches of any session of yours later. Use this only when you \
                   should keep directing the session and receiving its reports. To hand your \
                   own work to a peer in the next session, use `request_session`; if the user \
                   only wants handover notes and an end, leave the notes and end. Ask the user \
                   if their intent is unclear.",
-    schema: || new_session_schema(false),
+    schema: || open_session_schema(false),
 };
 
 pub(super) const INSTRUCT_SESSION: ToolDef = ToolDef {
     name: "instruct_session",
     description: "Append an instruction to a running session of yours: it directs the session; \
-                  to tell a session something without instructing it, use `send_message`. \
+                  to tell a session something without instructing it, use `inform_session`. \
                   Delivered straight away when the session is idle or mid-turn; held until the \
                   user is done when the session is waiting for them. The answer says if it was \
                   queued, or written but left unsent by the session's agent. Refused for a \
                   session that is not yours (`yours: false`): it is somebody else's, to be left \
                   alone. Refused for an interrupted or archived session of yours, which has no \
-                  process to take it: `reopen_session` with `text` relaunches it and delivers \
+                  process to take it: `resume_session` with `text` relaunches it and delivers \
                   the instruction.",
     schema: || {
         object_schema(
@@ -124,17 +124,17 @@ pub(super) const ARCHIVE_SESSION: ToolDef = ToolDef {
                   created, and the linked worktrees that have them checked out, are removed \
                   once their processes have ended, wherever git can do it without force; \
                   `branches_left` in the answer names any that stay, and why (`archive` in \
-                  `get_session_branches` says so beforehand, for each branch). With `keep` \
+                  `list_session_branches` says so beforehand, for each branch). With `keep` \
                   nothing is removed and nothing is waited for: they stay bound to their \
                   sessions and come back with them when those are reopened (a coordinator's \
                   child session is reopened by that coordinator), the answer carries \
                   `branches_kept: true`, and its `note` names the branches of the sessions \
-                  archived with it, a coordinator's child sessions (`get_session_branches` \
+                  archived with it, a coordinator's child sessions (`list_session_branches` \
                   lists the branches of the session itself). To move them to a session of yours \
-                  now, use `handover_branches` with `from` the session you archived; the \
+                  now, use `transfer_branches` with `from` the session you archived; the \
                   branches of the sessions archived with it are not yours to name as `from`, so \
-                  `reopen_session` the session you archived with a `text` asking it to \
-                  `handover_branches` them from each of those to itself, then hand them on with \
+                  `resume_session` the session you archived with a `text` asking it to \
+                  `transfer_branches` them from each of those to itself, then hand them on with \
                   `from` set to it once it is idle.",
     schema: || {
         object_schema(
@@ -205,8 +205,8 @@ pub(super) const SET_SESSION_PINNED: ToolDef = ToolDef {
     },
 };
 
-pub(super) const REOPEN_SESSION: ToolDef = ToolDef {
-    name: "reopen_session",
+pub(super) const RESUME_SESSION: ToolDef = ToolDef {
+    name: "resume_session",
     description: "Relaunch an archived or interrupted session of yours, continuing its \
                   conversation, and optionally hand it the next instruction or reopen it with \
                   another model or reasoning effort (it stays on its agent and its account; to \

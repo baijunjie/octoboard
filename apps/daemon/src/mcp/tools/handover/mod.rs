@@ -1,10 +1,10 @@
-//! The tools with which an owner moves the responsibility for git branches (`handover_branches`) or
-//! process trees (`handover_processes`) between sessions: from itself to a session of its own,
+//! The tools with which an owner moves the responsibility for git branches (`transfer_branches`) or
+//! process trees (`transfer_processes`) between sessions: from itself to a session of its own,
 //! from one to itself, or from one of its sessions to another.
 //!
 //! What the two share is here: the two sessions read under their claims (`Parties`), telling them
 //! what moved, and refusing a `from` in the middle of a turn. So are the checks on the branches
-//! named, which `new_session` and `request_session` make too.
+//! named, which `open_session` and `request_session` make too.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -25,8 +25,8 @@ use crate::wire_path;
 mod branches;
 mod processes;
 
-pub(in crate::mcp) use branches::handover_branches;
-pub(in crate::mcp) use processes::handover_processes;
+pub(in crate::mcp) use branches::transfer_branches;
+pub(in crate::mcp) use processes::transfer_processes;
 
 /// The names in the list argument `key`, each trimmed, as wire paths and named once. `None` when
 /// the argument is absent or names none; a blank name is refused.

@@ -473,16 +473,16 @@ pub(super) fn resolve_owned_session(
     wanted: &str,
 ) -> Result<Session> {
     let session = resolve_session(state, wanted)?;
-    // `send_message` refuses an archived session, so it is not offered for one.
-    let send_message =
-        crate::session_tools::catalogue::qualified_tool_name(caller.agent, "send_message");
+    // `inform_session` refuses an archived session, so it is not offered for one.
+    let inform_session =
+        crate::session_tools::catalogue::qualified_tool_name(caller.agent, "inform_session");
     let archived = session.status == SessionStatus::Archived;
     let tell_it = |tail: &str| {
         if archived {
             String::new()
         } else {
             format!(
-                " You can still tell it something with `{send_message}`, which it weighs rather \
+                " You can still tell it something with `{inform_session}`, which it weighs rather \
                  than obeys{tail}"
             )
         }

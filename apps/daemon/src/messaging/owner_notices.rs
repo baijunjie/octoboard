@@ -30,10 +30,10 @@ pub fn tell_owner_it_ended(state: &Arc<AppState>, session: &Session) {
              archived it, interrupted it or moved it to another account, whether it crashed or the \
              user closed it in its terminal. It is recorded as interrupted, and the work it was \
              doing stopped with it. Look at it with `{get_session}`, and relaunch it with \
-             `{reopen_session}` if the work should go on.",
+             `{resume_session}` if the work should go on.",
             session = named_session(session),
             get_session = catalogue::qualified_tool_name(owner.agent, "get_session"),
-            reopen_session = catalogue::qualified_tool_name(owner.agent, "reopen_session"),
+            resume_session = catalogue::qualified_tool_name(owner.agent, "resume_session"),
         )
     });
 }
@@ -57,11 +57,11 @@ pub fn tell_owner_the_switch_failed(state: &Arc<AppState>, session: &Session, re
             "{NOTICE_PREFIX}: {session} reached the usage limit of its account, and Octoboard \
              could neither switch it to another account nor bring it back up on the one it had \
              ({reason}). It is interrupted, and the work it was doing stopped with it. Look at it \
-             with `{get_session}`, and relaunch it with `{reopen_session}` if the work should go \
+             with `{get_session}`, and relaunch it with `{resume_session}` if the work should go \
              on.",
             session = named_session(session),
             get_session = catalogue::qualified_tool_name(owner.agent, "get_session"),
-            reopen_session = catalogue::qualified_tool_name(owner.agent, "reopen_session"),
+            resume_session = catalogue::qualified_tool_name(owner.agent, "resume_session"),
         )
     });
 }
@@ -264,7 +264,7 @@ pub(crate) fn duties_under_new_parent(agent: Agent, coordinator: bool) -> String
             "`done` with no open items archives you, and is refused while a session you started \
              is not archived; `needs_decision` or open items leave you running. You keep your \
              child sessions and go on driving them with `{}` and the tools that go with it.",
-            tool("new_session"),
+            tool("open_session"),
         )
     } else {
         format!(
@@ -326,10 +326,10 @@ pub(crate) fn new_owner_notice(owner_agent: Agent, lead: &str, rest: &str) -> St
     let tool = |name: &str| catalogue::qualified_tool_name(owner_agent, name);
     format!(
         "{NOTICE_PREFIX}: {lead} you drive it like any session of yours, with \
-         `{instruct_session}`, `{archive_session}` and `{reopen_session}`.{rest}",
+         `{instruct_session}`, `{archive_session}` and `{resume_session}`.{rest}",
         instruct_session = tool("instruct_session"),
         archive_session = tool("archive_session"),
-        reopen_session = tool("reopen_session"),
+        resume_session = tool("resume_session"),
     )
 }
 
@@ -520,10 +520,10 @@ pub(crate) async fn tell_former_owner(
         "{NOTICE_PREFIX}: the user released {released} from you. It is no longer yours: it has \
          no parent session now and answers only to the user, so you can no longer instruct, \
          drive or archive it, and it does not report to you. You can still tell it something \
-         with `{send_message}`, which it weighs rather than obeys. Do not count on it any more, \
+         with `{inform_session}`, which it weighs rather than obeys. Do not count on it any more, \
          and treat any work you handed it as left with the user.",
         released = named_session(released),
-        send_message = catalogue::qualified_tool_name(owner.agent, "send_message"),
+        inform_session = catalogue::qualified_tool_name(owner.agent, "inform_session"),
     );
     delivery::write_message_off_runtime(state, owner_id, text, WhenBlocked::Queue)
         .await
@@ -546,14 +546,14 @@ fn released_text(released: &Session, note: Option<&str>) -> String {
          work only from the user typing in this terminal, and do not call `{report}`, which is \
          refused for a session with no parent session. This replaces what you were told of your \
          parent session when you were started. You can start and drive sessions of your own with \
-         `{new_session}` and the tools that go with it (call `{get_session}` once with no \
+         `{open_session}` and the tools that go with it (call `{get_session}` once with no \
          arguments first, so that your tool list catches up), and you can still tell your former \
-         parent session something with `{send_message}`, which it weighs rather than obeys; of \
+         parent session something with `{inform_session}`, which it weighs rather than obeys; of \
          Octoboard's tools you now have {tools}.{note}",
         report = tool("report"),
         get_session = tool("get_session"),
-        new_session = tool("new_session"),
-        send_message = tool("send_message"),
+        open_session = tool("open_session"),
+        inform_session = tool("inform_session"),
         tools = project_tools(released.agent, false),
     )
 }
@@ -612,7 +612,7 @@ mod tests {
         assert!(heard.contains("ended on its own"), "{heard}");
         assert!(heard.contains("`worker`"), "{heard}");
         assert!(
-            heard.contains("`mcp__octoboard__reopen_session`"),
+            heard.contains("`mcp__octoboard__resume_session`"),
             "{heard}"
         );
         assert_eq!(heard.matches("ended on its own").count(), 1, "{heard}");
@@ -1015,7 +1015,7 @@ mod tests {
             "Message from Octoboard: `a` handed its session `s` (\"S\") over to you. It is yours \
              from now on: it reports to you, and you drive it like any session of yours, with \
              `octoboard__instruct_session`, `octoboard__archive_session` and \
-             `octoboard__reopen_session`. Its role is worker and it cannot manage child sessions."
+             `octoboard__resume_session`. Its role is worker and it cannot manage child sessions."
         );
         assert_eq!(
             new_owner_notice(
@@ -1027,7 +1027,7 @@ mod tests {
             "Message from Octoboard: `a`, which reported to you, was handed off to a session of \
              Codex. `b` took its place and reports to you from now on: you drive it like any \
              session of yours, with `mcp__octoboard__instruct_session`, \
-             `mcp__octoboard__archive_session` and `mcp__octoboard__reopen_session`. The original \
+             `mcp__octoboard__archive_session` and `mcp__octoboard__resume_session`. The original \
              is archived."
         );
     }
@@ -1064,7 +1064,7 @@ mod tests {
              `session-7` (\"Fix the build\") in the console \"Console\" over to you. It is yours \
              from now on: it reports to you, and you drive it like any session of yours, with \
              `mcp__octoboard__instruct_session`, `mcp__octoboard__archive_session` and \
-             `mcp__octoboard__reopen_session`. Its role is coordinator. It keeps its child \
+             `mcp__octoboard__resume_session`. Its role is coordinator. It keeps its child \
              sessions, which you can read but not drive. The handover note:\n\n> Half done.\n> \
              Next: tests.\n— end of the handover note —"
         );

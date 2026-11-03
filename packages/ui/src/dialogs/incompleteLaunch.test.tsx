@@ -114,11 +114,11 @@ it("handing off onto an incomplete account asks first, sends nothing on close an
   expect(document.body.querySelector(ASKING)).not.toBeNull();
   await close();
   await settle();
-  expect(sent(request, "hand_off_session")).toHaveLength(0);
+  expect(sent(request, "handoff_session")).toHaveLength(0);
   await press("Hand off");
   await press("Start anyway");
   await settle();
-  expect(sent(request, "hand_off_session")).toEqual([[expect.objectContaining({ type: "hand_off_session", agent: "codex", account: "codex-half" })]]);
+  expect(sent(request, "handoff_session")).toEqual([[expect.objectContaining({ type: "handoff_session", agent: "codex", account: "codex-half" })]]);
 });
 
 it("switching a session onto an incomplete account asks after the switch is confirmed, and switches only on Start anyway", async () => {
@@ -148,7 +148,7 @@ const switchedOnto = vi.fn(async () => {});
 
 it.each([
   ["opening a new session", () => render([complete("claude")], sessionDialog), "Open", async (request: ReturnType<typeof render>["request"]) => sent(request, "open_session").length],
-  ["handing off", () => render([complete("codex")], handoffDialog), "Hand off", async (request: ReturnType<typeof render>["request"]) => sent(request, "hand_off_session").length],
+  ["handing off", () => render([complete("codex")], handoffDialog), "Hand off", async (request: ReturnType<typeof render>["request"]) => sent(request, "handoff_session").length],
   ["switching", () => { switchedOnto.mockClear(); return render([complete("claude")], switchDialog(switchedOnto), [switching]); }, "Switch", async () => switchedOnto.mock.calls.length],
 ])("does not ask when %s onto a complete account", async (_name, mount, button, launches) => {
   const { request } = mount();

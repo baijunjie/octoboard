@@ -465,7 +465,7 @@ pub enum RequestBody {
     /// `open_session`. The session must exist, not be archived, locked or starting, and not be in
     /// the middle of a turn. Answered with `session_opened` for the receiving session once it is
     /// running and the place has moved. See `crate::coordinator::handoff`.
-    HandOffSession {
+    HandoffSession {
         session: String,
         agent: Agent,
         #[serde(default, deserialize_with = "present_option")]

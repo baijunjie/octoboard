@@ -122,7 +122,7 @@ pub(super) async fn git_source(state: &Arc<AppState>, project: &Project) -> Resu
 }
 
 /// A name the daemon spells as a wire path, as the agent knows it: plain text, as
-/// `get_session_branches` gives paths and branch names.
+/// `list_session_branches` gives paths and branch names.
 pub(super) fn plain(wire: &str) -> String {
     wire_path::decode(wire).map_or_else(
         || wire.to_string(),

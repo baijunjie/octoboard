@@ -108,7 +108,7 @@ describe("the fixture daemon's session handoff", () => {
 
   it("starts the receiving session in the original's place and archives the original", async () => {
     const daemon = createFixtureDaemon(scenario);
-    const reply = await daemon.request({ type: "hand_off_session", session: lead.id, agent: "codex" });
+    const reply = await daemon.request({ type: "handoff_session", session: lead.id, agent: "codex" });
     if (reply.type !== "session_opened") throw new Error("expected session_opened");
     const sessions = daemon.store.getState().sessions;
     expect(reply.session).toMatchObject({ agent: "codex", project_id: "p", role: "project", title: "Lead", bound_to: hub.id, pinned: true, status: "working" });
@@ -119,7 +119,7 @@ describe("the fixture daemon's session handoff", () => {
 
   it("gives a console session's receiving session the next ordinal and a colour no live session wears", async () => {
     const daemon = createFixtureDaemon(scenario);
-    const reply = await daemon.request({ type: "hand_off_session", session: hub.id, agent: "grok" });
+    const reply = await daemon.request({ type: "handoff_session", session: hub.id, agent: "grok" });
     if (reply.type !== "session_opened") throw new Error("expected session_opened");
     expect(reply.session).toMatchObject({ role: "console", ordinal: 2, colour: "red" });
   });
@@ -134,7 +134,7 @@ describe("the fixture daemon's session handoff", () => {
     const interrupted = sessionOf("hub-2", "c", undefined, "Hub 2", "interrupted", { colour: "red", ordinal: 2 });
     const archived = sessionOf("hub-3", "c", undefined, "Hub 3", "archived", { colour: "orange", ordinal: 3 });
     const daemon = createFixtureDaemon({ ...scenario, state: snapshotState({ consoles: [consoleOf("c", "Main")], sessions: [hub, interrupted, archived] }) });
-    const reply = await daemon.request({ type: "hand_off_session", session: hub.id, agent: "codex" });
+    const reply = await daemon.request({ type: "handoff_session", session: hub.id, agent: "codex" });
     if (reply.type !== "session_opened") throw new Error("expected session_opened");
     expect(reply.session.colour).toBe("orange");
   });
@@ -145,14 +145,14 @@ describe("the fixture daemon's session handoff", () => {
     const locked = sessionOf("locked", "c", "p", "Locked", "idle", { locked: true });
     const staged = { code: "session_working", params: { session: lead.id }, message: "mid-turn" };
     const daemon = createFixtureDaemon({ ...scenario, state: snapshotState({ consoles: [consoleOf("c", "Main")], projects: [projectOf("p", "c", "Website")], sessions: [lead, working, archived, locked] }), sessionHandoffs: { [lead.id]: staged } });
-    await expect(daemon.request({ type: "hand_off_session", session: lead.id, agent: "codex" })).rejects.toMatchObject({ code: "session_working" });
-    await expect(daemon.request({ type: "hand_off_session", session: working.id, agent: "codex" })).rejects.toMatchObject({ code: "session_working" });
-    await expect(daemon.request({ type: "hand_off_session", session: archived.id, agent: "codex" })).rejects.toMatchObject({ code: "session_archived" });
-    await expect(daemon.request({ type: "hand_off_session", session: locked.id, agent: "codex" })).rejects.toMatchObject({ code: "session_locked" });
-    await expect(daemon.request({ type: "hand_off_session", session: "missing", agent: "codex" })).rejects.toMatchObject({ code: "unknown_session" });
+    await expect(daemon.request({ type: "handoff_session", session: lead.id, agent: "codex" })).rejects.toMatchObject({ code: "session_working" });
+    await expect(daemon.request({ type: "handoff_session", session: working.id, agent: "codex" })).rejects.toMatchObject({ code: "session_working" });
+    await expect(daemon.request({ type: "handoff_session", session: archived.id, agent: "codex" })).rejects.toMatchObject({ code: "session_archived" });
+    await expect(daemon.request({ type: "handoff_session", session: locked.id, agent: "codex" })).rejects.toMatchObject({ code: "session_locked" });
+    await expect(daemon.request({ type: "handoff_session", session: "missing", agent: "codex" })).rejects.toMatchObject({ code: "unknown_session" });
     const plain = createFixtureDaemon(scenario);
-    await expect(plain.request({ type: "hand_off_session", session: lead.id, agent: "claude" })).rejects.toMatchObject({ code: "handoff_to_same_agent", params: { agent: "Claude Code" } });
-    await expect(plain.request({ type: "hand_off_session", session: lead.id, agent: "codex", account: "nobody" })).rejects.toMatchObject({ code: "unknown_account" });
+    await expect(plain.request({ type: "handoff_session", session: lead.id, agent: "claude" })).rejects.toMatchObject({ code: "handoff_to_same_agent", params: { agent: "Claude Code" } });
+    await expect(plain.request({ type: "handoff_session", session: lead.id, agent: "codex", account: "nobody" })).rejects.toMatchObject({ code: "unknown_account" });
   });
 });
 
@@ -208,7 +208,7 @@ describe("the fixture daemon's added agents", () => {
   it("refuses to open a session or hand one off to an agent that is not added", async () => {
     const daemon = withAdded(["claude"]);
     await expect(daemon.request(open("codex"))).rejects.toMatchObject({ code: "agent_not_added", params: { agent: "Codex" } });
-    await expect(daemon.request({ type: "hand_off_session", session: lead.id, agent: "grok" })).rejects.toMatchObject({ code: "agent_not_added", params: { agent: "Grok Build" } });
+    await expect(daemon.request({ type: "handoff_session", session: lead.id, agent: "grok" })).rejects.toMatchObject({ code: "agent_not_added", params: { agent: "Grok Build" } });
     await expect(daemon.request(open("claude"))).resolves.toMatchObject({ type: "session_opened" });
   });
 
@@ -1374,7 +1374,7 @@ describe("the fixture daemon's account sharing", () => {
     await expect(daemon.request({ type: "resume_session", session: "stopped" })).rejects.toMatchObject(refused);
     await expect(daemon.request({ type: "switch_session_account", session: "hub", account: null })).rejects.toMatchObject(refused);
     await expect(daemon.request({ type: "switch_session_account", session: "other", account: "claude" })).rejects.toMatchObject(refused);
-    await expect(daemon.request({ type: "hand_off_session", session: "hub", agent: "codex" })).rejects.toMatchObject(refused);
+    await expect(daemon.request({ type: "handoff_session", session: "hub", agent: "codex" })).rejects.toMatchObject(refused);
     await expect(daemon.request({ type: "open_session", console_id: "c", agent: "claude", account: null })).resolves.toMatchObject({ type: "session_opened" });
   });
 
@@ -1877,7 +1877,7 @@ describe("the fixture daemon's quota gate", () => {
     const claudeRefusal = await daemon().request({ type: "open_session", console_id: "c", project_id: "p", account: null }).catch((error) => error);
     expect(claudeRefusal).toMatchObject({ params: { agent: "Claude Code", window: "5-hour", window_kind: "session" } });
     expect(claudeRefusal.message).toContain("session limit");
-    const codexRefusal = await daemon([], codex).request({ type: "hand_off_session", session: "s", agent: "codex" }).catch((error) => error);
+    const codexRefusal = await daemon([], codex).request({ type: "handoff_session", session: "s", agent: "codex" }).catch((error) => error);
     expect(codexRefusal).toMatchObject({ params: { agent: "Codex", window: "5-hour", window_kind: "session", window_minutes: "300" } });
     expect(codexRefusal.message).toContain("5h limit");
   });
@@ -1907,7 +1907,7 @@ describe("the fixture daemon's quota gate", () => {
     await expect(daemon().request({ type: "switch_session_account", session: "s", account: "a-spent" })).rejects.toMatchObject({ code: "account_quota_exhausted" });
     await expect(daemon().request({ type: "switch_session_account", session: "s", account: "a-free" })).resolves.toEqual({ type: "ack", id: null });
     const grok = [quotaOf("grok", null, "SuperGrok", [quotaWindow("credit_period", 100, 60)])];
-    await expect(daemon([], grok).request({ type: "hand_off_session", session: "s", agent: "grok" })).rejects.toMatchObject({ code: "account_quota_exhausted", params: { window: "Weekly", window_kind: "credit_period", window_minutes: "10080" } });
+    await expect(daemon([], grok).request({ type: "handoff_session", session: "s", agent: "grok" })).rejects.toMatchObject({ code: "account_quota_exhausted", params: { window: "Weekly", window_kind: "credit_period", window_minutes: "10080" } });
   });
 });
 
@@ -1940,7 +1940,7 @@ describe("the fixture daemon's disabled accounts", () => {
   });
 
   it("refuses a switch to an account that is off and a handoff onto one, and lets the running session's own account be left", async () => {
-    await expect(daemon(["codex"]).request({ type: "hand_off_session", session: "s", agent: "codex", account: null })).rejects.toMatchObject({ code: "account_disabled", params: { agent: "Codex" } });
+    await expect(daemon(["codex"]).request({ type: "handoff_session", session: "s", agent: "codex", account: null })).rejects.toMatchObject({ code: "account_disabled", params: { agent: "Codex" } });
     await expect(daemon().request({ type: "switch_session_account", session: "s", account: "a-on" })).resolves.toEqual({ type: "ack", id: null });
     await expect(daemon(["claude"]).request({ type: "switch_session_account", session: "s", account: null })).rejects.toMatchObject({ code: "account_disabled" });
   });
@@ -1992,7 +1992,7 @@ describe("the fixture daemon's accounts that are not logged in", () => {
   });
 
   it("refuses a handoff to such an account of another agent", async () => {
-    await expect(daemon().request({ type: "hand_off_session", session: "s", agent: "codex", account: "a-team" })).rejects.toMatchObject({ code: "account_not_signed_in", params: { agent: "Codex", account: "Team" } });
+    await expect(daemon().request({ type: "handoff_session", session: "s", agent: "codex", account: "a-team" })).rejects.toMatchObject({ code: "account_not_signed_in", params: { agent: "Codex", account: "Team" } });
   });
 
   it("lets a reading that failed for another reason through", async () => {

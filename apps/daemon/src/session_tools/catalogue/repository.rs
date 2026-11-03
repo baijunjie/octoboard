@@ -6,11 +6,11 @@ use serde_json::json;
 use super::schemas::object_schema;
 use super::ToolDef;
 
-/// The branches a session is responsible for, with their worktrees: what `handover_branches`
+/// The branches a session is responsible for, with their worktrees: what `transfer_branches`
 /// needs the caller to be responsible for, and the branches and worktrees archiving would try to
 /// remove. Any session may read any session's.
-pub(super) const GET_SESSION_BRANCHES: ToolDef = ToolDef {
-    name: "get_session_branches",
+pub(super) const LIST_SESSION_BRANCHES: ToolDef = ToolDef {
+    name: "list_session_branches",
     description: "The git branches a session is responsible for, read-only, each with the \
                   project (`project`) it is in and the worktree it is checked out in: \
                   `worktree_status` is `checked_out`, `gone` (git's record of the worktree is \
@@ -32,8 +32,8 @@ pub(super) const GET_SESSION_BRANCHES: ToolDef = ToolDef {
                   `removable`, `uncommitted_changes`, `submodules`, `unmerged`, `checked_out`, \
                   `locked`, `project_folder` or `failed`, and everything but `removable` stays. \
                   `archive` is null when that could not be judged. Read it before archiving to \
-                  decide on `keep`. Use it also to see which branches `handover_branches`, or the \
-                  `branches` of `new_session` and `request_session`, can take (each must be one \
+                  decide on `keep`. Use it also to see which branches `transfer_branches`, or the \
+                  `branches` of `open_session` and `request_session`, can take (each must be one \
                   the session is responsible for). `session` is any session, of any console or \
                   project, and defaults to this one. A console session is responsible for no \
                   branch, so its list is empty. `branches` in `get_session` and `list_sessions` \
@@ -88,7 +88,7 @@ pub(super) const LIST_PROJECT_CHANGES: ToolDef = ToolDef {
                   `unstaged`, `untracked` or `conflicted`; one path can be \
                   in two groups, and a conflicted path has no diff to read. The uncommitted \
                   views add `worktree`: `path` and `branch` as plain text, as \
-                  `get_session_branches` gives them (`branch` is `null` when HEAD is detached or \
+                  `list_session_branches` gives them (`branch` is `null` when HEAD is detached or \
                   unborn), and `head`, the commit the staged changes are against (`null` before \
                   the first commit). The `branch` view adds `branch`, `base`, `branch_commit` \
                   and `base_commit` (the full ids of the two tips), `merge_base` (the commit \
@@ -101,7 +101,7 @@ pub(super) const LIST_PROJECT_CHANGES: ToolDef = ToolDef {
                   with `read_project_diff`. Reading a changing worktree twice can give \
                   different lists, so a page of one is not a page of the other. To check a \
                   branch a session reports, give the branch alone: `base` is then its recorded \
-                  target branch, the `target_branch` of `get_session_branches` and \
+                  target branch, the `target_branch` of `list_session_branches` and \
                   `list_project_branches`, which is refused as missing for a branch no session's \
                   git created from another local branch. For such a branch, or to compare with \
                   another, give the `base` it was made against, usually the target branch in \
@@ -123,7 +123,7 @@ pub(super) const LIST_PROJECT_CHANGES: ToolDef = ToolDef {
                     "type": "string",
                     "description": "Uncommitted changes of this worktree of the project's \
                                     repository instead of the one holding the project's \
-                                    directory: its path (`worktree` in `get_session_branches`) \
+                                    directory: its path (`worktree` in `list_session_branches`) \
                                     or the branch checked out in it. It must be a worktree of \
                                     this project's repository. Not with `branch`.",
                 },
@@ -189,7 +189,7 @@ pub(super) const LIST_PROJECT_BRANCHES: ToolDef = ToolDef {
          it into; null when it was created from something that is no local branch) and \
          `fork_point` (the commit it was created at). Use it to see who holds a branch, or \
          whether the session that did is gone, instead of searching every session; a branch of a \
-         session that is `gone` cannot be taken with `handover_branches`. The answer has \
+         session that is `gone` cannot be taken with `transfer_branches`. The answer has \
          `project`, `total` (all the branches there are), `offset`, `next_offset` (`null` on the \
          last page), `complete` (false when the daemon cut the list at its own limit), \
          `upstreams_complete` (false when the lookup of the main working copy's upstream was cut \

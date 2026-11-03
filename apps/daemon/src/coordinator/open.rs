@@ -84,7 +84,7 @@ struct StartingSession {
 
 /// Opens a session and returns it once it has launched: running, or with the launch's refusal
 /// as the error and nothing left behind. For a caller that has nothing to show before the agent
-/// is up — an agent's `new_session` tool, or the approval of a session request — which
+/// is up — an agent's `open_session` tool, or the approval of a session request — which
 /// would otherwise be told of a session that may yet vanish. The user's own request is
 /// [`open_session_detached`].
 pub async fn open_session(state: &Arc<AppState>, request: OpenRequest) -> Result<Session> {

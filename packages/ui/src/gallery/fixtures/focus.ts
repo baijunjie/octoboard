@@ -288,7 +288,7 @@ const hierarchyState = {
 };
 
 // Two sessions bound to `hub1` in which nothing was ever said: one the user opened in its focus mode
-// and one an agent started with `new_session`. Only the first is deleted outright; the second was
+// and one an agent started with `open_session`. Only the first is deleted outright; the second was
 // dispatched by its owner, which expects it to exist, so it is archived. Started most recently, so
 // they sit at the top of the idle cards, within sight without scrolling.
 const unusedBoundSessions = [

@@ -130,7 +130,7 @@ async fn plan(
         bail!(
             "{named} holds this conversation and is yours, so it needs no approval: reopen it with \
              `{}` while it is archived or interrupted, and instruct it with `{}` while it runs",
-            qualified_tool_name(caller.agent, "reopen_session"),
+            qualified_tool_name(caller.agent, "resume_session"),
             qualified_tool_name(caller.agent, "instruct_session")
         );
     }
@@ -139,7 +139,7 @@ async fn plan(
             "{named} holds this conversation and is running, so there is nothing to resume. It \
              reports to {}; `{}` tells it something",
             reports_to_words(state, &holder),
-            qualified_tool_name(caller.agent, "send_message")
+            qualified_tool_name(caller.agent, "inform_session")
         );
     }
     match state.claim_kind(&holder.id) {
@@ -352,7 +352,7 @@ mod tests {
         let reason = refusal(planned(&state, "loose", args.clone(), held_by("loose", false)).await);
         assert!(reason.contains("your own"), "{reason}");
 
-        // Archived and bound to the caller: `reopen_session` needs no approval.
+        // Archived and bound to the caller: `resume_session` needs no approval.
         let reason = refusal(
             planned(
                 &state,
@@ -363,7 +363,7 @@ mod tests {
             .await,
         );
         assert!(
-            reason.contains(&qualified_tool_name(Agent::Claude, "reopen_session")),
+            reason.contains(&qualified_tool_name(Agent::Claude, "resume_session")),
             "{reason}"
         );
 

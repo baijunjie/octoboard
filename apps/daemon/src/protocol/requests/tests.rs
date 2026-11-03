@@ -195,9 +195,9 @@ fn an_envelope_id_never_shadows_what_a_request_acts_on() {
             },
         ),
         (
-            r#"{"type":"hand_off_session","id":"request-1","session":"session-7","agent":"codex"}"#,
+            r#"{"type":"handoff_session","id":"request-1","session":"session-7","agent":"codex"}"#,
             |body| match body {
-                RequestBody::HandOffSession { session, .. } => Some(session),
+                RequestBody::HandoffSession { session, .. } => Some(session),
                 _ => None,
             },
         ),

@@ -1,8 +1,8 @@
 //! The tool with which a session reads the git branches a session is responsible for,
-//! `get_session_branches`, each with the worktree it stands in, where it came from (its target
+//! `list_session_branches`, each with the worktree it stands in, where it came from (its target
 //! branch and fork point) and what archiving the session would do with it. It reads only: the
-//! responsibility is `handover_branches`' to move, and the branch names alone are part of every
-//! session record. The worktree part of one branch's entry is shared with `handover_branches`'
+//! responsibility is `transfer_branches`' to move, and the branch names alone are part of every
+//! session record. The worktree part of one branch's entry is shared with `transfer_branches`'
 //! answer.
 
 use std::path::PathBuf;
@@ -24,7 +24,7 @@ use crate::mcp::lookup::session_or_caller;
 /// (`archive`, `null` when that could not be judged). A console session is in no project and is
 /// responsible for none, so its list is empty. Reading only; git runs on the blocking pool, and
 /// only when the session is responsible for a branch.
-pub(in crate::mcp) async fn get_session_branches(
+pub(in crate::mcp) async fn list_session_branches(
     state: &Arc<AppState>,
     caller: &Session,
     arguments: &Map<String, Value>,
@@ -116,7 +116,7 @@ mod tests {
         call(
             &fixture.state,
             caller,
-            "get_session_branches",
+            "list_session_branches",
             &arguments(input),
         )
         .await
@@ -199,7 +199,7 @@ mod tests {
         let err = call(
             &fixture.state,
             "a",
-            "get_session_branches",
+            "list_session_branches",
             &arguments(json!({ "session": "absent" })),
         )
         .await

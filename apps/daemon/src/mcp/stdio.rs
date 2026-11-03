@@ -489,7 +489,7 @@ mod tests {
         for worker in [true, false] {
             let project = server(Role::Project, worker);
             assert!(project.is_known_tool("report"));
-            assert!(project.is_known_tool("new_session"));
+            assert!(project.is_known_tool("open_session"));
             assert!(!project.is_known_tool("no_such_tool"));
         }
         assert!(!server(Role::Console, false).is_known_tool("report"));

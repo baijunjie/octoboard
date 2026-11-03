@@ -2571,7 +2571,7 @@ export type Request = {
   terminal_appearance?: TerminalAppearance,
 }
   | {
-  "type": "hand_off_session",
+  "type": "handoff_session",
   session: string,
   agent: Agent,
   account?: string | null,
@@ -3259,7 +3259,7 @@ export type RequestBody = {
   terminal_appearance?: TerminalAppearance,
 }
 | {
-  "type": "hand_off_session",
+  "type": "handoff_session",
   session: string,
   agent: Agent,
   account?: string | null,

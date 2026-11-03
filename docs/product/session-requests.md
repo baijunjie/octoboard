@@ -3,8 +3,8 @@
 A **session request** is a session's `request_session` call asking the user to start a session that has **no owner**:
 it reports to the user, and neither the caller nor the caller's owner drives it (see "Which sessions an owner drives"
 in `docs/product/hub-orchestration.md`). It can be a project session in any project of any console, or a console
-session. A session the caller wants to drive itself is one its `new_session` starts, which needs no approval; a
-request is for a session that should be nobody's, or for one in a place `new_session` does not reach.
+session. A session the caller wants to drive itself is one its `open_session` starts, which needs no approval; a
+request is for a session that should be nobody's, or for one in a place `open_session` does not reach.
 
 A session's `request_resume_session` call is a session request too, asking the user to resume a conversation by its id
 (see `docs/product/requests-to-resume-a-conversation.md`). The two share the approval, automatic approval (each under a
@@ -39,7 +39,7 @@ The console session's instructions and every project session's role description 
   and necessary context; `branches` names the branches the caller is responsible for that the peer should take over.
 - A request to leave handover notes and finish, or permission to end without asking for a successor, means leaving
   the notes and ending work, without creating or transferring sessions or continuing work in the background.
-- `new_session` is for a recipient the caller should keep directing and receiving reports from. `handoff_session`
+- `open_session` is for a recipient the caller should keep directing and receiving reports from. `handoff_session`
   replaces an existing session the caller owns; it does not hand the caller's own work to a peer. Only a session
   launched with those tools — a console session, or a project session launched unbound, as every launch of a lead
   session is — is given this rule; a project session launched bound to an owner is not, and its text names neither
@@ -59,20 +59,20 @@ still controls whether a `request_session` call starts anything.
 | `kind` | yes | `project` for a session in a project, `console` for a console session. No other value is accepted. |
 | `project` | no | For `project`: the project, by id in any console, or by a name that is unambiguous among the caller's own console's projects, else among every console's. Defaults to a project session's own project; a console session has to give it. Refused with `kind: console`. |
 | `console` | no | For `console`: the console, by id or by an unambiguous name. Defaults to the caller's own console. Refused with `kind: project`, whose session is in its project's console. |
-| `brief` | yes | The task, as `new_session`'s brief (see "Handing out a task: the brief" in `docs/product/hub-orchestration.md`). |
-| `title` | no | The new session's name, as `new_session` takes it: left out or blank, it is titled from its goal (see "Naming the sessions a session starts" in `docs/product/hub-orchestration.md`). |
-| `agent`, `account`, `model`, `effort` | no | The new session's agent, account, model and reasoning effort, exactly as `new_session` takes them (see "The console session's tools" in `docs/product/hub-orchestration.md`); `account` is read among the accounts of the agent the new session will run. Left out, `agent` and `account` are settled as "The agent and account of a session a session starts" in `docs/product/hub-orchestration.md` describes, including automatic selection of a usable account and, when neither choice is explicit, fallback to another added agent while that setting is on, in the caller's own console and in another. |
+| `brief` | yes | The task, as `open_session`'s brief (see "Handing out a task: the brief" in `docs/product/hub-orchestration.md`). |
+| `title` | no | The new session's name, as `open_session` takes it: left out or blank, it is titled from its goal (see "Naming the sessions a session starts" in `docs/product/hub-orchestration.md`). |
+| `agent`, `account`, `model`, `effort` | no | The new session's agent, account, model and reasoning effort, exactly as `open_session` takes them (see "The console session's tools" in `docs/product/hub-orchestration.md`); `account` is read among the accounts of the agent the new session will run. Left out, `agent` and `account` are settled as "The agent and account of a session a session starts" in `docs/product/hub-orchestration.md` describes, including automatic selection of a usable account and, when neither choice is explicit, fallback to another added agent while that setting is on, in the caller's own console and in another. |
 | `branches` | no | For `project`: local branches, by name, to hand over to the new session (see "Handing branches over" below). Left out, or an empty list, the request hands nothing over and behaves as one without it. |
 
 **A request that could never be carried out is refused before the user is asked**, with the reason in prose and no
-dialog shown: whatever `new_session` would refuse for the same brief and overrides — a missing brief or a blank goal, an
-unknown agent or account, an account of another agent, an agent determined unavailable on this machine (never while that
-determination is still pending), an agent that is not added, an account that is turned off, whose quota is used up or
-that is not logged in (see "When the agent or the account cannot open a session" in
-`docs/product/opening-sessions.md`), a model or effort the
-agent does not offer — and a `kind` that is neither value, a `project` or `console` given for the other kind, a project
-or console that does not exist, a name that names more than one, a console session asking for a project session without
-naming the project, and `branches` the request cannot hand over (see "Handing branches over" below).
+dialog shown: whatever `open_session` would refuse for the same brief and overrides — a missing brief or a blank goal,
+an unknown agent or account, an account of another agent, an agent determined unavailable on this machine (never while
+that determination is still pending), an agent that is not added, an account that is turned off, whose quota is used up
+or that is not logged in (see "When the agent or the account cannot open a session" in
+`docs/product/opening-sessions.md`), a model or effort the agent does not offer — and a `kind` that is neither value, a
+`project` or `console` given for the other kind, a project or console that does not exist, a name that names more than
+one, a console session asking for a project session without naming the project, and `branches` the request cannot hand
+over (see "Handing branches over" below).
 
 ## Approving requests automatically
 
@@ -88,7 +88,7 @@ made before the user is asked, is **approved at once**, without asking:
   and raises no hand, and no notification is fired. The call does not wait for an answer, so nothing in "Waiting for
   the answer" below applies to it: it returns once the approval has been carried out.
 - **The approval is carried out exactly as an approval from the dialog** (see "On approval" below): the session is
-  started as `new_session` would start it, with no owner, the branches the request named are handed over, the call
+  started as `open_session` would start it, with no owner, the branches the request named are handed over, the call
   returns the same result and the same outcome message is written into the caller's session. The only difference in
   what is said is who approved: the paragraph opening the new session's prompt, and the result's note, say the request
   was approved automatically under the user's setting to approve session requests without asking, rather than by the
@@ -203,7 +203,7 @@ A request is **withdrawn** on the signals Octoboard sees for every agent alike:
   `request_session`, `request_resume_session`, `switch_session_account` and `handoff_session` only. A switch or a
   handoff made without asking is left to finish (see "Approving requests automatically" above), and so is a call of any
   other Octoboard tool, cancelled or not, even when its connection to the daemon goes part-way, as when the agent's
-  process exits mid-call: a `new_session` that opened its session still hands over its branches, a `report` already
+  process exits mid-call: an `open_session` that opened its session still hands over its branches, a `report` already
   delivered still goes on to archive its session where it would (`set_session_model` sees to its own end, see "Changing
   a session's model and effort" in `docs/product/model-and-reasoning-effort.md`);
 - the same session makes another request that takes its place (see below).
@@ -227,7 +227,7 @@ waiting.
 Once the user approves, the dialog closes everywhere at once, and then — as for an automatic approval, which has no
 dialog (see "Approving requests automatically" above):
 
-1. **The session is started where the request named, exactly as `new_session` would start it** with the same brief and
+1. **The session is started where the request named, exactly as `open_session` would start it** with the same brief and
    overrides: named by the request's `title`, else titled from its goal, on the agent and account the call named or
    defaulted to when the call was made, the other overrides applied, listed as *starting* until its launch settles,
    and its folder-trust confirmation handled the same way (see "Handing out a task: the brief", "Naming the sessions a
@@ -250,8 +250,8 @@ dialog (see "Approving requests automatically" above):
 4. **The branches the request named are handed to it** once it has started (see "Handing branches over" below).
 5. **The approval does not archive the caller.** It keeps running, and the approval does not count as a report.
    The result tells the caller to follow the user's direction on continuing its own work or ending after the
-   handover. It does not own the new session, so `instruct_session`, `archive_session`, `reopen_session` and the other
-   tools that act on a session of the caller's own refuse it; `send_message` reaches it (see
+   handover. It does not own the new session, so `instruct_session`, `archive_session`, `resume_session` and the other
+   tools that act on a session of the caller's own refuse it; `inform_session` reaches it (see
    `docs/product/information-between-sessions.md`), and `get_session` reads it, as it reads any session.
 
 The call returns:
@@ -264,7 +264,7 @@ The call returns:
 | `title` | Its title. |
 | `console` | The console it is in. |
 | `project` | The project it is in, or null for a console session. |
-| `note` | Prose telling the caller that the user approved — or, for an automatic approval, that Octoboard approved the request automatically because the user has chosen to have session requests approved without asking — and which session was started — its kind, id, title, agent and project or console; that it has no owner and reports to the user, not to the caller; that it is not the caller's to drive and the caller should follow the user's direction on continuing its own work or ending after the handover; where the request named branches, what became of them (see "Handing branches over" below); that `send_message` tells it something that touches its work, and, where the caller has `get_session`, that it reads it. Where the caller is independent, has `bind_to_session`, and could be bound to the new session under the rules a binding keeps, the note adds that `bind_to_session` with the new session as `owner` makes the caller one of its sessions — the way a project session comes to be driven by a console session it asked for (see "Coordinators with a parent session" in `docs/product/hub-orchestration.md`). |
+| `note` | Prose telling the caller that the user approved — or, for an automatic approval, that Octoboard approved the request automatically because the user has chosen to have session requests approved without asking — and which session was started — its kind, id, title, agent and project or console; that it has no owner and reports to the user, not to the caller; that it is not the caller's to drive and the caller should follow the user's direction on continuing its own work or ending after the handover; where the request named branches, what became of them (see "Handing branches over" below); that `inform_session` tells it something that touches its work, and, where the caller has `get_session`, that it reads it. Where the caller is independent, has `bind_to_session`, and could be bound to the new session under the rules a binding keeps, the note adds that `bind_to_session` with the new session as `owner` makes the caller one of its sessions — the way a project session comes to be driven by a console session it asked for (see "Coordinators with a parent session" in `docs/product/hub-orchestration.md`). |
 
 **No window follows the new session.** Approving selects nothing and changes no window's view or focus mode.
 
@@ -275,7 +275,7 @@ A request for a project session can hand the new session branches the requester 
 the work on them. Only the branches named in `branches` are handed over; nothing is inferred, so a request without
 them hands over none, whichever branch the requester has checked out. The tool's description tells the agent to pass
 `branches` when it is handing over the work on a branch it is responsible for, and to leave it out when it is only
-working on whatever branch is checked out. A project session's `new_session` takes the same `branches`, for a session
+working on whatever branch is checked out. A project session's `open_session` takes the same `branches`, for a session
 the caller owns, without the user's approval (see "Handing branches to a session the caller starts" in
 `docs/product/branch-responsible-session.md`).
 

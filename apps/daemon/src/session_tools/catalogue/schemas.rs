@@ -21,9 +21,9 @@ pub(super) const NAMING_LANGUAGE: &str =
 /// tools' `&'static str` descriptions can take it with `concat!`.
 macro_rules! started_by_a_session {
     () => {
-        "A session a project session starts itself (`new_session`, or `request_session` in its \
+        "A session a project session starts itself (`open_session`, or `request_session` in its \
          own console) runs on that session's own agent unless it chooses another, and one a \
-         console session starts for a project (`new_session` or `request_session`) on the \
+         console session starts for a project (`open_session` or `request_session`) on the \
          project's default agent; a console session's request for a console session runs on the \
          requester's own agent. A left-out account is selected by the server according to the \
          configured policy. Automatic selection may choose another agent when neither agent nor \
@@ -38,9 +38,9 @@ pub(super) use started_by_a_session;
 
 pub(super) const STARTED_BY_A_SESSION: &str = started_by_a_session!();
 
-/// The schema of `new_session`. `with_project` is for the console session, which chooses a
+/// The schema of `open_session`. `with_project` is for the console session, which chooses a
 /// project; a project session always starts in its own, so it is not asked.
-pub(super) fn new_session_schema(with_project: bool) -> Value {
+pub(super) fn open_session_schema(with_project: bool) -> Value {
     let launch_pointer = if with_project {
         ""
     } else {

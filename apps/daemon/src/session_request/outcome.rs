@@ -225,8 +225,8 @@ fn reach_note(state: &Arc<AppState>, caller: &Session, session: &Session) -> Str
         String::new()
     };
     format!(
-        "`{send_message}` tells it something that touches its work{reads}.{bind}",
-        send_message = tool("send_message"),
+        "`{inform_session}` tells it something that touches its work{reads}.{bind}",
+        inform_session = tool("inform_session"),
     )
 }
 

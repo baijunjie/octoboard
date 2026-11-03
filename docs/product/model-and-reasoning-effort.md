@@ -85,7 +85,7 @@ the session dialog explicitly chooses the agent's own default for that value.
 
 What is stored is what was given, trimmed, with a blank value treated as the agent's own default. A value is checked
 when it is saved for a console or a project, or given to a session as it is opened or as its owner reopens it with
-`reopen_session`, or changed with `set_session_model` (see "Changing a session's model and effort" below): a model must
+`resume_session`, or changed with `set_session_model` (see "Changing a session's model and effort" below): a model must
 be one the list in "The models offered" holds, and an effort one of the levels "The reasoning effort offered" gives for
 the model the console, project or session ends up with, both read for the account that agent's sessions would run under
 there. Where a project or a session sets an effort but no model of its own, the model it ends up with is the one it

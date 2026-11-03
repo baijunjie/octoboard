@@ -37,7 +37,7 @@ pub(in crate::mcp) async fn archive_session(
     let mut answer = json!({ "session": target.id, "status": SessionStatus::Archived });
     if keep {
         // Nothing is removed, so nothing is waited for: the records stay bound to the archived
-        // sessions, which `get_session_branches` lists and `handover_branches` can move.
+        // sessions, which `list_session_branches` lists and `transfer_branches` can move.
         answer["branches_kept"] = json!(true);
         let kept = branch_names_of(state, archived.clone()).await?;
         answer["note"] = json!(keep_note(caller.agent, &target, &archived, &kept));
@@ -69,7 +69,7 @@ pub(in crate::mcp) async fn archive_session(
 /// What the caller is told of the branches `keep` left bound to the sessions an archive ended:
 /// `kept` is the names by session id. An archive of a project coordinator takes the sessions under
 /// it too, each of which keeps its own branches, and those are not the caller's to name as `from`
-/// to `handover_branches`, which takes the caller itself or a session bound to it: the archived
+/// to `transfer_branches`, which takes the caller itself or a session bound to it: the archived
 /// session, once reopened, hands them to itself first.
 fn keep_note(
     caller: Agent,
@@ -78,13 +78,13 @@ fn keep_note(
     kept: &HashMap<String, Vec<String>>,
 ) -> String {
     let tool = |name: &str| qualified_tool_name(caller, name);
-    let handover_branches = tool("handover_branches");
+    let transfer_branches = tool("transfer_branches");
     let mut note = format!(
         "Archived. Its git branches and worktrees were left as they are, as asked. They stay \
          bound to the sessions that are responsible for them (`{}` lists them) and come back \
          with those sessions when they are reopened; a session under a project coordinator is \
          reopened by that coordinator.",
-        tool("get_session_branches")
+        tool("list_session_branches")
     );
     let holders = |under: bool| {
         archived
@@ -95,7 +95,7 @@ fn keep_note(
     if holders(false).next().is_some() {
         note.push_str(&format!(
             " To move the branches of `{id}` itself to a session of yours now, use \
-             `{handover_branches}` with `from` `{id}`.",
+             `{transfer_branches}` with `from` `{id}`.",
             id = target.id
         ));
     }
@@ -113,10 +113,10 @@ fn keep_note(
             .join(", ");
         note.push_str(&format!(
             " The sessions archived with it keep theirs: {kept_by}. They are not yours to name \
-             as `from`. To move them now, `{reopen_session}` `{id}` with a `text` asking it to \
-             `{handover_branches}` them from each of {ids} to itself, then hand them on with \
-             `{handover_branches}` `from` `{id}` once it is idle.",
-            reopen_session = tool("reopen_session"),
+             as `from`. To move them now, `{resume_session}` `{id}` with a `text` asking it to \
+             `{transfer_branches}` them from each of {ids} to itself, then hand them on with \
+             `{transfer_branches}` `from` `{id}` once it is idle.",
+            resume_session = tool("resume_session"),
             id = target.id
         ));
     }
@@ -337,7 +337,7 @@ mod tests {
         assert!(archived["note"]
             .as_str()
             .unwrap()
-            .contains("handover_branches"));
+            .contains("transfer_branches"));
         assert!(exists("kept"));
 
         let archived = call(
@@ -391,13 +391,13 @@ mod tests {
         assert!(
             note.contains(&format!(
                 "`{}` with `from` `mid`",
-                tool("handover_branches")
+                tool("transfer_branches")
             )),
             "{note}"
         );
         assert!(note.contains("come back with those sessions"), "{note}");
         assert!(
-            note.contains(&format!("`{}` `mid` with a `text`", tool("reopen_session")))
+            note.contains(&format!("`{}` `mid` with a `text`", tool("resume_session")))
                 && note.contains("from each of `mid-kid`, `mid-kid-2` to itself"),
             "{note}"
         );

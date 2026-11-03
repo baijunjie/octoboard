@@ -90,8 +90,8 @@ impl ConsoleSessionColour {
 #[serde(rename_all = "snake_case")]
 pub enum SessionStatus {
     /// Recorded and shown, its agent process still being launched; the status of a session
-    /// opened by `open_session` until the process is up (one opened for an agent's own
-    /// `new_session` or for an approved session request is recorded the same way, though
+    /// opened by the `open_session` request until the process is up (one opened for an agent's
+    /// `open_session` tool or for an approved session request is recorded the same way, though
     /// its caller is answered only once the launch has settled). No agent has reported anything
     /// yet.
     Starting,

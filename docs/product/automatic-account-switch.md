@@ -166,7 +166,7 @@ it to carry on or to wait for its next instruction. No report is synthesised for
     the code `account_switch_automatically_failed`, carrying the failure's own code and params;
   - its owner, when it has one that is not archived, is written a message saying the session reached its account's
     usage limit and Octoboard could neither switch it nor bring it back up, with the reason, that it is interrupted
-    and its work stopped, and to look at it with `get_session` and relaunch it with `reopen_session` if the work
+    and its work stopped, and to look at it with `get_session` and relaunch it with `resume_session` if the work
     should go on; it is kept or waited for as the message for a success is.
 - **A process that had already exited by itself** before the switch stopped it is not the switch's: the session is
   neither restored nor reported by the switch, and its owner is told it ended on its own (see "Notices to an owner" in

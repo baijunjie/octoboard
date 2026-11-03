@@ -6,7 +6,7 @@ itself does not move: the new session — the **receiving session** — starts b
 the original's records. Moving a session to another account of the same agent, which keeps the conversation itself, is
 switching its account instead (see `docs/product/switching-session-accounts.md`).
 
-A handoff is made with the daemon client protocol's `hand_off_session` request, which names the session, the receiving
+A handoff is made with the daemon client protocol's `handoff_session` request, which names the session, the receiving
 agent, and optionally the receiving session's account, model and reasoning effort. In the window it is made from a
 session's **Hand off** menu item (see "Handing off from the window" below). An owner hands off a session of its own
 with the `handoff_session` tool, once the user approves it unless they have chosen to have handoffs approved without
@@ -54,7 +54,7 @@ soonest (see "Handing off from the window" below); an owner's `handoff_session` 
 account automatic selection picks for a session the owner starts, limited to the receiving agent (see "Handing off from
 an owner's tool" below). When the switch is off, the handoff dialog opens on the account the project or console
 resolves, and `handoff_session` takes the owner's own account when the receiving agent is the owner's own and that
-account can still open a session, otherwise the project's or console's. A `hand_off_session` request that leaves the
+account can still open a session, otherwise the project's or console's. A `handoff_session` request that leaves the
 account out does not apply the pick: the account comes from the project, else the console.
 
 From the moment a handoff is accepted until it ends, the original cannot be resumed, switched to another account or
@@ -124,7 +124,7 @@ into a failure modal titled that the session cannot be handed off, saying that n
 the session over, with nothing but its
 acknowledgement, which closes the dialog (see "The failure modal" in `docs/product/error-alerts.md`).
 
-Pressing **Hand off** sends `hand_off_session`, once the user has confirmed starting on the chosen account when its
+Pressing **Hand off** sends `handoff_session`, once the user has confirmed starting on the chosen account when its
 last change of sharing is incomplete (see "Starting a session on an account whose last change is incomplete" in
 `docs/product/sharing-the-default-configuration.md`). When it succeeds the dialog closes and the receiving session is
 selected. A refusal or failure is shown as an error alert (see `docs/product/error-alerts.md`) and the dialog stays

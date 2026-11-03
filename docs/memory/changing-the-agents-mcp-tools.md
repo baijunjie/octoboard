@@ -31,3 +31,13 @@ lose their cancel path:
 - A tool that runs its operation through `session_request::run_to_the_end`, so that the caller is told the outcome by
   message when the call is gone, goes into `runs_on_the_call`: wrapped in the outer task, the call's reply receiver
   outlives the connection, the reply never fails, and the caller is never told.
+
+## An MCP tool and the control request for one operation share one name, chosen once
+
+Applies when adding an MCP tool or choosing its name (`apps/daemon/src/session_tools/catalogue/`). Name it by
+`apps/daemon/PROTOCOL.md` "Names", rule 1: a tool that runs the same coordinator operation as a control request takes
+that request's name exactly, even when the tool reaches only the caller's own sessions or project; a tool whose
+operation differs in any way (whether a message is queued or refused, how it is marked, who gets a copy) gets a name of
+its own and never reuses a request's name. Settle the name when the tool is added: once released, the server key and
+the qualified tool names are frozen (`apps/daemon/PROTOCOL.md` "The MCP server as a contract"), so a later rename is
+not an option.

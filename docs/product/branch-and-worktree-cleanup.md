@@ -247,18 +247,18 @@ along with that worktree. No error alert is shown for what an agent's archive le
   removed, judged the same way.
 
 Beforehand, any session can read what such an archive would do with each branch a session is responsible for, and
-with the worktree that has it checked out, as `archive` in `get_session_branches` (see "Reading the branches a session
+with the worktree that has it checked out, as `archive` in `list_session_branches` (see "Reading the branches a session
 is responsible for" in `docs/product/branch-responsible-session.md`); the tool's description tells the agent to read it
 before archiving to decide on `keep`.
 
 **`archive_session` with `keep`** (`true` or `false`, `false` when left out) removes nothing and waits for nothing:
 every branch and worktree stays as it is, bound to the session it was bound to, and comes back with that session when it
 is reopened — a worker being reopened by its coordinator. The answer has no `branches_left`; it carries `branches_kept:
-true` and a `note` saying the branches and worktrees were left as asked and that `get_session_branches` lists them.
+true` and a `note` saying the branches and worktrees were left as asked and that `list_session_branches` lists them.
 Archiving a coordinator with a parent archives the sessions under it too, and the note names the branches each of those
 keeps, by session id. It also says how to have the branches now: those of the archived session itself move to a session
-of the caller's with `handover_branches` with `from` set to it; those of the sessions archived with it are not the
-caller's to name as `from`, so the caller reopens the archived session with `reopen_session` and a `text` asking it to
+of the caller's with `transfer_branches` with `from` set to it; those of the sessions archived with it are not the
+caller's to name as `from`, so the caller reopens the archived session with `resume_session` and a `text` asking it to
 hand them over to itself, then hands them on from it once it is idle. The tool's description tells the agent to use
 `keep` when the work on the branches is not done with or someone may want it. Nothing an agent sends forces a removal:
 there is no `force_remove`, forcing being left to the user's confirmation (see "The confirmation" above).

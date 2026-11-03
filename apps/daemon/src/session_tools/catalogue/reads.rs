@@ -35,40 +35,39 @@ macro_rules! session_context_field {
 macro_rules! session_record_fields {
     () => {
         "`status` is `starting` (its agent is still launching), `working` (in a turn), \
-         `waiting_user` (needs the user's answer), `dormant` (the user is in its \
-         background-agents view: it holds its messages and takes none until they leave, so \
-         leave it alone), `idle` (awaiting instructions), `interrupted` (its process ended) or \
-         `archived`; `reopen_session` reopens either when it is yours. `paused` is true for an \
-         `idle` session whose last turn ended abnormally (cancelled, declined, stopped on a \
-         usage limit, failed, or cut short by its process ending mid-turn, which a reopen \
-         brings back): it takes messages like any idle session. `account` is the \
-         account the session runs on, an account's id or `default` for the agent's default \
-         account as `list_agents` lists them, with its `account_name`; \
-         `switch_session_account` refuses the account a session is on already. \
-         `observed_model` and `observed_effort` are what the agent's records show the session \
-         running with, null until reported; `default_effort` is the effort the agent runs that \
-         model at by itself, given when the records name the model but no effort. `pinned` is \
+         `waiting_user` (needs the user's answer), `dormant` (the user is in its background-agents \
+         view: it holds its messages and takes none until they leave, so leave it alone), `idle` \
+         (awaiting instructions), `interrupted` (its process ended) or `archived`; \
+         `resume_session` reopens either when it is yours. `paused` is true for an `idle` session \
+         whose last turn ended abnormally (cancelled, declined, stopped on a usage limit, failed, \
+         or cut short by its process ending mid-turn, which a reopen brings back): it takes \
+         messages like any idle session. `account` is the account the session runs on, an \
+         account's id or `default` for the agent's default account as `list_agents` lists them, \
+         with its `account_name`; `switch_session_account` refuses the account a session is on \
+         already. `observed_model` and `observed_effort` are what the agent's records show the \
+         session running with, null until reported; `default_effort` is the effort the agent runs \
+         that model at by itself, given when the records name the model but no effort. `pinned` is \
          whether the session is pinned (`set_session_pinned`), and `locked` whether the user \
          locked it, which archiving refuses. `branches` names the git branches the session is \
-         responsible for; `handover_branches`, and the `branches` of `new_session` and \
+         responsible for; `transfer_branches`, and the `branches` of `open_session` and \
          `request_session`, need the caller to be responsible for each, and \
-         `get_session_branches` gives each one's worktree. `display_title` is the name the \
-         user's session list shows (the agent's current task before `title`), \
-         `agent_session_id` the agent's own id of the conversation (null until reported), which \
-         `request_resume_session` takes as its `conversation`, and only when the user asked for \
-         that conversation, `origin` is `console` for a session started with `new_session`, \
-         `user` for the user's own and for one opened through `request_session` or \
-         `request_resume_session`, and a handoff's replacement copies the original's, and \
-         `has_conversation` says a turn was taken, not that the agent still holds the record: a \
-         `reopen_session` that finds it gone is refused (`resumable` in `get_session`, and in \
-         `list_archived` with `check_resumable`, tells beforehand). `model` and `effort`, when \
-         present, are the session's own choices, `null` leaving them to the agent's default; \
-         absent, it follows its project's (else console's) setting; \
-         `set_session_model` changes them for a session of yours. `orchestration_role` is \
-         `coordinator` (can manage child sessions) or `worker` (cannot); `owner` is the parent \
-         session, null when independent, and `owner_kind` its kind. A coordinator may have a \
-         parent and no child sessions. `owned_sessions` counts child sessions in any status, \
-         archived ones included, which is what decides whom it can be transferred to."
+         `list_session_branches` gives each one's worktree. `display_title` is the name the user's \
+         session list shows (the agent's current task before `title`), `agent_session_id` the \
+         agent's own id of the conversation (null until reported), which `request_resume_session` \
+         takes as its `conversation`, and only when the user asked for that conversation, `origin` \
+         is `console` for a session started with `open_session`, `user` for the user's own and for \
+         one opened through `request_session` or `request_resume_session`, and a handoff's \
+         replacement copies the original's, and `has_conversation` says a turn was taken, not that \
+         the agent still holds the record: a `resume_session` that finds it gone is refused \
+         (`resumable` in `get_session`, and in `list_archived_sessions` with `check_resumable`, \
+         tells beforehand). `model` and `effort`, when present, are the session's own choices, \
+         `null` leaving them to the agent's default; absent, it follows its project's (else \
+         console's) setting; `set_session_model` changes them for a session of yours. \
+         `orchestration_role` is `coordinator` (can manage child sessions) or `worker` (cannot); \
+         `owner` is the parent session, null when independent, and `owner_kind` its kind. A \
+         coordinator may have a parent and no child sessions. `owned_sessions` counts child \
+         sessions in any status, archived ones included, which is what decides whom it can be \
+         transferred to."
     };
 }
 
@@ -94,11 +93,11 @@ pub(super) const GET_SESSION: ToolDef = ToolDef {
          when it is resumed (shared information, and the reports and notices for an owner). An \
          interrupted or archived session also has `resumable`, whether its agent still holds the \
          conversation: `true` when it does, and for a session with no conversation yet, `false` \
-         when it is proven gone, so that `reopen_session` would refuse it, `null` when that cannot \
-         be told (`reopen_session` goes ahead then). Always carries `processes`, the process \
+         when it is proven gone, so that `resume_session` would refuse it, `null` when that cannot \
+         be told (`resume_session` goes ahead then). Always carries `processes`, the process \
          trees the session started that are still running (a dev server, a preview, a watcher), \
          each with its `id`, `command`, `cwd`, `ports` and `started_at`: they are stopped when \
-         its process ends, unless `handover_processes` moves them to another session first; an \
+         its process ends, unless `transfer_processes` moves them to another session first; an \
          empty list for a session with no process running. ",
         session_record_fields!(),
         session_context_field!()
@@ -206,8 +205,8 @@ pub(super) const LIST_CONSOLES: ToolDef = ToolDef {
 };
 
 /// The archived sessions of a project of any console, whichever role asks.
-pub(super) const LIST_ARCHIVED: ToolDef = ToolDef {
-    name: "list_archived",
+pub(super) const LIST_ARCHIVED_SESSIONS: ToolDef = ToolDef {
+    name: "list_archived_sessions",
     description: concat!(
         "List archived sessions, in any console, whichever session owns them: those of one \
          project, or with `project` left out those of every project and the console sessions too. \
@@ -217,7 +216,7 @@ pub(super) const LIST_ARCHIVED: ToolDef = ToolDef {
          by name (their `branches` name it). With `check_resumable` each session also carries \
          `resumable`, whether its agent still holds the conversation: `true` when it does, \
          and for a session with no conversation yet, `false` when it is proven gone, so that \
-         `reopen_session` would refuse it, `null` when that cannot be told (`reopen_session` \
+         `resume_session` would refuse it, `null` when that cannot be told (`resume_session` \
          goes ahead then); it is off by default because it looks through the agents' record \
          directories for every session listed. The newest archived come first, at most `limit` \
          of them; `total` is how many match, and `older` how many of them come after the page: \
@@ -294,7 +293,7 @@ pub(super) const LIST_ARCHIVED: ToolDef = ToolDef {
 };
 
 /// The models an agent offers, and the efforts of each: what the `model` and `effort` that
-/// `new_session`, `request_session`, `request_resume_session` and the `launch` settings take must
+/// `open_session`, `request_session`, `request_resume_session` and the `launch` settings take must
 /// be among. Offered to every role, since every role can pass them.
 pub(super) const LIST_AGENT_MODELS: ToolDef = ToolDef {
     name: "list_agent_models",
@@ -441,8 +440,8 @@ pub(super) const LIST_SESSIONS: ToolDef = ToolDef {
                                     (each record's `status` is then `starting`, `working`, \
                                     `waiting_user`, `dormant` or `idle`). `interrupted`: the \
                                     ones whose process ended without being archived, \
-                                    resumable with `reopen_session` when they are yours. \
-                                    `any`: both. Archived sessions are `list_archived`'s.",
+                                    resumable with `resume_session` when they are yours. \
+                                    `any`: both. Archived sessions are `list_archived_sessions`'s.",
                 },
             }),
             &[],
