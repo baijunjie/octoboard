@@ -52,6 +52,16 @@ which resets the dev app's `octoboard.*` preferences (hence port 5175 for `pnpm 
   in a subdirectory. Those scenarios are listed, swept and held by the gallery's tests in that checkout only. Such files
   import fixtures from their own modules, never from `fixtures/index.ts` (an import cycle).
 
+## Preview widths
+
+The Width presets use CSS viewport pixels: Desktop (1440), Tablet landscape (1024), Tablet portrait (768), and Phone
+(390). The tablet widths match the iPad Mini in landscape and portrait; the phone width matches the iPhone 13. Desktop
+is a representative desktop window width. These presets change only the width; Height remains independent.
+
+Use the numeric width field for other devices or layout boundaries, such as 1393/1394 and 593/594. Device presets do
+not define the app's responsive breakpoints. A scenario with `minWidth` raises a narrower selection to that minimum,
+so a view that only exists in a docked window remains docked; the numeric field shows the actual preview width.
+
 Nothing in `packages/ui/src/fixtures/` or `packages/ui/src/website-preview/` imports this directory (enforced by the
 `no-restricted-imports` blocks in `eslint.config.mjs`). How the fixture daemon answers, and the rules for teaching it a
 new reply, are in [`../fixtures/README.md`](../fixtures/README.md).

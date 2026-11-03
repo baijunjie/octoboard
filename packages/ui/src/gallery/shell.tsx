@@ -11,10 +11,10 @@ import { CATEGORIES } from "./fixtures/groups";
 import { DEFAULT_WIDTH, LIVE_CHANGE_EVENT, MIN_HEIGHT, type Scenario } from "./scenario";
 
 const WIDTHS = [
-  { label: "Wide", width: DEFAULT_WIDTH },
-  { label: "Docked", width: 1394 },
-  { label: "Narrow", width: 800 },
-  { label: "Phone", width: 420 },
+  { label: "Desktop", width: DEFAULT_WIDTH },
+  { label: "Tablet landscape", width: 1024 },
+  { label: "Tablet portrait", width: 768 },
+  { label: "Phone", width: 390 },
 ];
 
 /** The window heights offered besides fitting the space the page has: one short enough that a

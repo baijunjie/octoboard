@@ -90,7 +90,7 @@ export const aboutScenarios: Scenario[] = [
     category: "normal",
     title: "About, a platform that cannot update itself",
     description:
-      "The icon and the application's name with no version line under it, then no update rows at all: straight to the Website, GitHub repository and Issue tracker links, License with its View license link, Copyright, and Third-party licenses with View licenses. Compare with the Updates group's up-to-date scenario, the same section where the platform can update. Choose Phone (420px) to see the Website, GitHub repository and Issue tracker links sit beneath their labels against the end edge, while View license and View licenses stay beside theirs.",
+      "The icon and the application's name with no version line under it, then no update rows at all: straight to the Website, GitHub repository and Issue tracker links, License with its View license link, Copyright, and Third-party licenses with View licenses. Compare with the Updates group's up-to-date scenario, the same section where the platform can update. Choose Phone (390px) to see the Website, GitHub repository and Issue tracker links sit beneath their labels against the end edge, while View license and View licenses stay beside theirs.",
     state,
     steps: openAbout,
   },
